@@ -9,7 +9,7 @@ variable "data_private_subnet_cidrs" {
   type        = map(string)
 
   default = {
-    "us-east-1a" = "10.0.10.0/24"
-    "us-east-1b" = "10.0.12.0/24"
+    "us-east-1a" = "10.0.32.0/24"
+    "us-east-1b" = "10.0.33.0/24"
   }
 }
