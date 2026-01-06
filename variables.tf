@@ -4,9 +4,19 @@ variable "main_vpc_cidr" {
   type        = string
 }
 
+variable "public_subnet_cidrs" {
+  description = "Map of AZ -> CIDR for Public Subnets"
+  type        = map(string)
+
+  default = {
+    "us-east-1a" = "10.0.0.0/24"
+    "us-east-1b" = "10.0.0.1/24"
+  }
+}
+
 variable "compute_private_subnet_cidrs" {
   description = "Map of AZ -> CIDR for Compute Private Subnets"
-  type = map(string)
+  type        = map(string)
 
   default = {
     "us-east-1a" = "10.0.16.0/24"
@@ -26,7 +36,7 @@ variable "data_private_subnet_cidrs" {
 
 variable "serverless_private_subnet_cidrs" {
   description = "Map of AZ -> CIDR for Serverless Private Subnets"
-  type = map(string)
+  type        = map(string)
 
   default = {
     "us-east-1a" = "10.0.48.0/24"
