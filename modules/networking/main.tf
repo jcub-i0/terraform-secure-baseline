@@ -2,7 +2,7 @@
 resource "aws_vpc" "main" {
   cidr_block = var.main_vpc_cidr
   tags = {
-    Name = "Main-TF-Secure-Baseline"
+    Name      = "Main-TF-Secure-Baseline"
     Terraform = "true"
   }
 }
@@ -12,8 +12,8 @@ resource "aws_vpc" "main" {
 resource "aws_subnet" "public" {
   for_each = var.public_subnet_cidrs
 
-  vpc_id = aws_vpc.main.id
-  cidr_block = each.value
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = each.value
   availability_zone = each.key
 }
 
@@ -21,40 +21,40 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "compute_private" {
   for_each = var.compute_private_subnet_cidrs
 
-  vpc_id = aws_vpc.main.id
-  cidr_block = each.value
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = each.value
   availability_zone = each.key
 
   tags = {
-    Name = "Compute-Private-${each.key}"
+    Name      = "Compute-Private-${each.key}"
     Terraform = "true"
   }
 }
 
 ## DATA PRIVATE SUBNETS
 resource "aws_subnet" "data_private" {
-    for_each = var.data_private_subnet_cidrs
+  for_each = var.data_private_subnet_cidrs
 
-    vpc_id = aws_vpc.main.id
-    cidr_block = each.value
-    availability_zone = each.key
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = each.value
+  availability_zone = each.key
 
-    tags = {
-      Name = "Data-Private-${each.key}"
-      Terraform = "true"
-    }
+  tags = {
+    Name      = "Data-Private-${each.key}"
+    Terraform = "true"
+  }
 }
 
 ## SERVERLESS PRIVATE SUBNETS
 resource "aws_subnet" "serverless_private" {
   for_each = var.serverless_private_subnet_cidrs
-  
-  vpc_id = aws_vpc.main.id
-  cidr_block = each.value
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = each.value
   availability_zone = each.key
 
   tags = {
-    Name = "Serverless-Private-${each.key}"
+    Name      = "Serverless-Private-${each.key}"
     Terraform = "true"
   }
 }
@@ -65,7 +65,7 @@ resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "IGW"
+    Name      = "IGW"
     Terraform = "true"
   }
 }
@@ -75,7 +75,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "NAT-EIP"
+    Name      = "NAT-EIP"
     Terraform = "true"
   }
 }
@@ -83,12 +83,12 @@ resource "aws_eip" "nat" {
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
   allocation_id = aws_eip.nat.id
-  subnet_id = aws_subnet.public.id
+  subnet_id     = aws_subnet.public.id
 
   depends_on = [aws_internet_gateway.igw]
 
   tags = {
-    Name = "NAT-Gateway"
+    Name      = "NAT-Gateway"
     Terraform = "true"
   }
 }
