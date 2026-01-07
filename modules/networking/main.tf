@@ -104,12 +104,12 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "Public-Route-Table"
+    Name      = "Public-Route-Table"
     Terraform = "true"
   }
 }
 
 resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
-  subnet_id = aws_subnet.public.id
+  subnet_id      = aws_subnet.public.id
 }
