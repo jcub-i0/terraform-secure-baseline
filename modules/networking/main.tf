@@ -58,3 +58,14 @@ resource "aws_subnet" "serverless_private" {
     Terraform = "true"
   }
 }
+
+# CREATE IGW, EIP, and NATGW
+## IGW
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "Main-IGW"
+    Terraform = "true"
+  }
+}
