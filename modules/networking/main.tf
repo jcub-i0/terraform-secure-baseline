@@ -69,3 +69,9 @@ resource "aws_internet_gateway" "igw" {
     Terraform = "true"
   }
 }
+
+## EIP
+resource "aws_eip" "nat" {
+  domain = "vpc"
+}
+
