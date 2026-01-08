@@ -135,6 +135,7 @@ resource "aws_route_table" "private" {
   }
 }
 
+## CREATE PRIVATE ROUTE TABLE ASSOCIATIONS
 resource "aws_route_table_association" "compute_private" {
   for_each = aws_subnet.compute_private
 
