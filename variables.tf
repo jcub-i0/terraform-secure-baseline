@@ -1,7 +1,7 @@
 variable "primary_region" {
   description = "Primary Region used"
-  type = string
-  default = "us-east-1"
+  type        = string
+  default     = "us-east-1"
 }
 
 variable "main_vpc_cidr" {
