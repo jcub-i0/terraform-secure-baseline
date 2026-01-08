@@ -7,3 +7,9 @@ module "networking" {
   data_private_subnet_cidrs       = var.data_private_subnet_cidrs
   serverless_private_subnet_cidrs = var.serverless_private_subnet_cidrs
 }
+
+module "compute" {
+  source = "./modules/compute"
+
+  vpc_id = module.networking.vpc_id
+}
