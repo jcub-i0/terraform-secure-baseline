@@ -125,12 +125,33 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   route {
-    cidr_block = "0.0.0.0/0"
+    cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.natgw.id
   }
 
   tags = {
-    Name = "Private-Route-Table"
+    Name      = "Private-Route-Table"
     Terraform = "true"
   }
+}
+
+resource "aws_route_table_association" "compute_private" {
+  for_each = aws_subnet.compute_private
+
+  route_table_id = aws_route_table.private.id
+  subnet_id      = each.value.id
+}
+
+resource "aws_route_table_association" "data_private" {
+  for_each = aws_subnet.data_private
+
+  route_table_id = aws_route_table.private.id
+  subnet_id      = each.value.id
+}
+
+resource "aws_route_table_association" "serverless_private" {
+  for_each = aws_subnet.serverless_private
+
+  route_table_id = aws_route_table.private.id
+  subnet_id      = each.value.id
 }
