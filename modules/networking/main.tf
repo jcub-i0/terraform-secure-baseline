@@ -113,8 +113,9 @@ resource "aws_route_table" "public" {
   }
 }
 
+## PUBLIC ROUTE TABLE ASSOCIATION
 resource "aws_route_table_association" "public" {
-  for_each = var.public_subnet_cidrs
+  for_each = aws_subnet.public
 
   route_table_id = aws_route_table.public.id
   subnet_id      = each.value.id
@@ -135,7 +136,7 @@ resource "aws_route_table" "private" {
   }
 }
 
-## CREATE PRIVATE ROUTE TABLE ASSOCIATIONS
+## PRIVATE ROUTE TABLE ASSOCIATIONS
 resource "aws_route_table_association" "compute_private" {
   for_each = aws_subnet.compute_private
 
