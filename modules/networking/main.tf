@@ -19,6 +19,11 @@ resource "aws_subnet" "public" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = each.value
   availability_zone = each.key
+
+  tags = {
+    Name = "Public-Subnet"
+    Terraform = "true"
+  }
 }
 
 ## COMPUTE PRIVATE SUBNETS
