@@ -1,3 +1,7 @@
+locals {
+  nat_az = keys(var.public_subnet_cidrs)[0]
+}
+
 # CREATE MAIN VPC
 resource "aws_vpc" "main" {
   cidr_block = var.main_vpc_cidr
@@ -83,7 +87,7 @@ resource "aws_eip" "nat" {
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
+  subnet_id     = aws_subnet.public[local.nat_az].id
 
   depends_on = [aws_internet_gateway.igw]
 
@@ -110,6 +114,8 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
+  for_each = var.public_subnet_cidrs
+
   route_table_id = aws_route_table.public.id
-  subnet_id      = aws_subnet.public.id
+  subnet_id      = each.value.id
 }
