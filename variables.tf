@@ -10,42 +10,19 @@ variable "main_vpc_cidr" {
   type        = string
 }
 
-variable "public_subnet_cidrs" {
-  description = "Map of AZ -> CIDR for Public Subnets"
-  type        = map(string)
-
-  default = {
-    "us-east-1a" = "10.0.0.0/24"
-    "us-east-1b" = "10.0.1.0/24"
-  }
+variable "azs" {
+  description = "List of Availability Zones for deployment"
+  type = list(string)
+  default = ["us-east-1a", "us-east-1b"]
 }
 
-variable "compute_private_subnet_cidrs" {
-  description = "Map of AZ -> CIDR for Compute Private Subnets"
-  type        = map(string)
-
+variable "subnet_cidrs" {
+  description = "CIDR blocks for each subnet type"
+  type = map(list(string))
   default = {
-    "us-east-1a" = "10.0.16.0/24"
-    "us-east-1b" = "10.0.17.0/24"
-  }
-}
-
-variable "data_private_subnet_cidrs" {
-  description = "Map of AZ -> CIDR for Data Private Subnets"
-  type        = map(string)
-
-  default = {
-    "us-east-1a" = "10.0.32.0/24"
-    "us-east-1b" = "10.0.33.0/24"
-  }
-}
-
-variable "serverless_private_subnet_cidrs" {
-  description = "Map of AZ -> CIDR for Serverless Private Subnets"
-  type        = map(string)
-
-  default = {
-    "us-east-1a" = "10.0.48.0/24"
-    "us-east-1b" = "10.0.49.0/24"
+    "public" = ["10.0.0.0/24", "10.0.1.0/24"]
+    "compute_private" = ["10.0.16.0/24", "10.0.17.0/24"]
+    "data_private" = ["10.0.32.0/24","10.0.33.0/24"]
+    "serverless_private" = ["10.0.48.0/24","10.0.49.0/24"]
   }
 }
