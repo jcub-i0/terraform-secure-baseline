@@ -104,7 +104,7 @@ resource "aws_nat_gateway" "natgw" {
     Terraform = "true"
   }
 }
-/*
+
 # CREATE AND ASSOCIATE ROUTE TABLES
 ## PUBLIC ROUTE TABLE
 resource "aws_route_table" "public" {
@@ -131,11 +131,12 @@ resource "aws_route_table_association" "public" {
 
 ## COMPUTE PRIVATE ROUTE TABLE
 resource "aws_route_table" "private" {
+  for_each = local.az_index_map
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.natgw.id
+    nat_gateway_id = aws_nat_gateway.natgw[each.key].id
   }
 
   tags = {
@@ -143,7 +144,7 @@ resource "aws_route_table" "private" {
     Terraform = "true"
   }
 }
-
+/*
 ## PRIVATE ROUTE TABLE ASSOCIATIONS
 resource "aws_route_table_association" "compute_private" {
   for_each = aws_subnet.compute_private
@@ -164,5 +165,4 @@ resource "aws_route_table_association" "serverless_private" {
 
   route_table_id = aws_route_table.private.id
   subnet_id      = each.value.id
-}
-*/
+}*/
