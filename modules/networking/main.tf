@@ -91,11 +91,11 @@ resource "aws_eip" "nat" {
   }
 }
 
-/*
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[local.nat_az].id
+  for_each = local.az_index_map
+  allocation_id = aws_eip.nat[each.key].id
+  subnet_id     = aws_subnet.public[each.key].id
 
   depends_on = [aws_internet_gateway.igw]
 
@@ -104,7 +104,7 @@ resource "aws_nat_gateway" "natgw" {
     Terraform = "true"
   }
 }
-
+/*
 # CREATE AND ASSOCIATE ROUTE TABLES
 ## PUBLIC ROUTE TABLE
 resource "aws_route_table" "public" {
