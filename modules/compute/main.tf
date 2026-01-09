@@ -36,8 +36,12 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "ec2" {
-  ami           = data.aws_ami.ubuntu.id
-  instance_type = "t3.micro"
+  for_each = var.compute_private_subnets
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro"
+  subnet_id              = each.value.id
+  vpc_security_group_ids = [aws_security_group.compute.id]
+  monitoring             = true
 
   tags = {
     Name      = "EC2"
