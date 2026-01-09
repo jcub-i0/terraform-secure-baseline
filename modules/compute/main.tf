@@ -1,4 +1,6 @@
-/*resource "aws_security_group" "compute" {
+# CREATE SECURITY GROUPS
+## COMPUTE SECURITY GROUP
+resource "aws_security_group" "compute" {
   name        = "Compute-SG"
   description = "Security Group for EC2 compute instances"
   vpc_id      = var.vpc_id
@@ -36,10 +38,10 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "ec2" {
-  for_each = var.compute_private_subnets
+  for_each = var.compute_private_subnet_ids
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
-  subnet_id              = each.value.id
+  subnet_id              = each.value
   vpc_security_group_ids = [aws_security_group.compute.id]
   monitoring             = true
 
@@ -48,4 +50,3 @@ resource "aws_instance" "ec2" {
     Terraform = "true"
   }
 }
-*/
