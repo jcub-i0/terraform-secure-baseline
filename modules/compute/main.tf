@@ -1,4 +1,4 @@
-# CREATE SECURITY GROUPS
+# CREATE SECURITY GROUPS FOR EC2
 ## COMPUTE SECURITY GROUP
 resource "aws_security_group" "compute" {
   name        = "Compute-SG"
@@ -48,7 +48,8 @@ resource "aws_security_group" "quarantine" {
   }
 }
 
-data "aws_ami" "ubuntu" {
+# CREATE EC2 INSTANCES
+data "aws_ami" "ec2" {
   most_recent = true
   owners      = ["099720109477"]
 
@@ -69,5 +70,6 @@ resource "aws_instance" "ec2" {
   tags = {
     Name      = "EC2"
     Terraform = "true"
+    Purpose = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
   }
 }
