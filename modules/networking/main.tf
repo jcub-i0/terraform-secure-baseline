@@ -144,25 +144,25 @@ resource "aws_route_table" "private" {
     Terraform = "true"
   }
 }
-/*
+
 ## PRIVATE ROUTE TABLE ASSOCIATIONS
 resource "aws_route_table_association" "compute_private" {
-  for_each = aws_subnet.compute_private
+  for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private.id
-  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private[each.key].id
+  subnet_id      = aws_subnet.compute_private[each.key].id
 }
 
 resource "aws_route_table_association" "data_private" {
-  for_each = aws_subnet.data_private
+  for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private.id
-  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private[each.key].id
+  subnet_id      = aws_subnet.data_private[each.key].id
 }
 
 resource "aws_route_table_association" "serverless_private" {
-  for_each = aws_subnet.serverless_private
+  for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private.id
-  subnet_id      = each.value.id
-}*/
+  route_table_id = aws_route_table.private[each.key].id
+  subnet_id      = aws_subnet.serverless_private[each.key].id
+}
