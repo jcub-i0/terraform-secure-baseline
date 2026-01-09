@@ -49,6 +49,7 @@ resource "aws_security_group" "quarantine" {
 }
 
 # CREATE EC2 INSTANCES
+## EC2 INSTANCE AMI
 data "aws_ami" "ec2" {
   most_recent = true
   owners      = ["099720109477"]
@@ -59,6 +60,7 @@ data "aws_ami" "ec2" {
   }
 }
 
+## EC2 INSTANCE
 resource "aws_instance" "ec2" {
   for_each = var.compute_private_subnet_ids
   ami                    = data.aws_ami.ec2.id
