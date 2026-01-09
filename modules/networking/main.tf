@@ -18,7 +18,7 @@ resource "aws_subnet" "public" {
   availability_zone = each.key
 
   tags = {
-    Name = "Public-Subnet"
+    Name = "Public-Subnet-${each.key}"
     Terraform = "true"
   }
 }
