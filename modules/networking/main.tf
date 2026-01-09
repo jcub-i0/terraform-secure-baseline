@@ -1,3 +1,8 @@
+locals {
+  # Loop over var.azs using the index (indx) to pick the CIDR for that AZ
+  az_index_map = {for indx, az in var.azs : az => indx}
+}
+
 # CREATE MAIN VPC
 resource "aws_vpc" "main" {
   cidr_block = var.main_vpc_cidr
@@ -10,8 +15,7 @@ resource "aws_vpc" "main" {
 # CREATE SUBNETS
 ## PUBLIC SUBNETS
 resource "aws_subnet" "public" {
-  # Loop over var.azs using the index (indx) to pick the CIDR for that AZ
-  for_each = {for indx, az in var.azs : az => indx}
+  for_each = local.az_index_map
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.public[each.value]
@@ -25,8 +29,7 @@ resource "aws_subnet" "public" {
 
 ## COMPUTE PRIVATE SUBNETS
 resource "aws_subnet" "compute_private" {
-  # Loop over var.azs using the index to pick the CIDR for that AZ
-  for_each = {for indx, az in var.azs : az => indx}
+  for_each = local.az_index_map
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.compute_private[each.value]
@@ -40,8 +43,7 @@ resource "aws_subnet" "compute_private" {
 
 ## DATA PRIVATE SUBNETS
 resource "aws_subnet" "data_private" {
-  # Loop over var.azs using the index to pick the CIDR for that AZ
-  for_each = {for indx, az in var.azs : az => indx}
+  for_each = local.az_index_map
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.data_private[each.value]
@@ -55,8 +57,7 @@ resource "aws_subnet" "data_private" {
 
 ## SERVERLESS PRIVATE SUBNETS
 resource "aws_subnet" "serverless_private" {
-  # Loop over var.azs using the index to pick the CIDR for that AZ
-  for_each = {for indx, az in var.azs : az => indx}
+  for_each = local.az_index_map
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.serverless_private[each.value]
@@ -68,7 +69,6 @@ resource "aws_subnet" "serverless_private" {
   }
 }
 
-/*
 # CREATE IGW, EIP, and NATGW
 ## IGW
 resource "aws_internet_gateway" "igw" {
@@ -80,8 +80,10 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
+/*
 ## EIP
 resource "aws_eip" "nat" {
+  for_each = var.subnet_cidrs.public
   domain = "vpc"
 
   tags = {
