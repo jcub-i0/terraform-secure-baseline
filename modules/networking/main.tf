@@ -1,7 +1,3 @@
-locals {
-  nat_az = keys(var.public_subnet_cidrs)[0]
-}
-
 # CREATE MAIN VPC
 resource "aws_vpc" "main" {
   cidr_block = var.main_vpc_cidr
@@ -14,10 +10,11 @@ resource "aws_vpc" "main" {
 # CREATE SUBNETS
 ## PUBLIC SUBNETS
 resource "aws_subnet" "public" {
-  for_each = var.public_subnet_cidrs
+  # Loop over var.azs using the index (indx) to pick the CIDR for that AZ
+  for_each = {for indx, az in var.azs : az => indx}
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = each.value
+  cidr_block        = var.subnet_cidrs.public[each.value]
   availability_zone = each.key
 
   tags = {
@@ -28,10 +25,11 @@ resource "aws_subnet" "public" {
 
 ## COMPUTE PRIVATE SUBNETS
 resource "aws_subnet" "compute_private" {
-  for_each = var.compute_private_subnet_cidrs
+  # Loop over var.azs using the index to pick the CIDR for that AZ
+  for_each = {for indx, az in var.azs : az => indx}
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = each.value
+  cidr_block        = var.subnet_cidrs.compute_private[each.value]
   availability_zone = each.key
 
   tags = {
@@ -42,10 +40,11 @@ resource "aws_subnet" "compute_private" {
 
 ## DATA PRIVATE SUBNETS
 resource "aws_subnet" "data_private" {
-  for_each = var.data_private_subnet_cidrs
+  # Loop over var.azs using the index to pick the CIDR for that AZ
+  for_each = {for indx, az in var.azs : az => indx}
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = each.value
+  cidr_block        = var.subnet_cidrs.data_private[each.value]
   availability_zone = each.key
 
   tags = {
@@ -56,10 +55,11 @@ resource "aws_subnet" "data_private" {
 
 ## SERVERLESS PRIVATE SUBNETS
 resource "aws_subnet" "serverless_private" {
-  for_each = var.serverless_private_subnet_cidrs
+  # Loop over var.azs using the index to pick the CIDR for that AZ
+  for_each = {for indx, az in var.azs : az => indx}
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = each.value
+  cidr_block        = var.subnet_cidrs.serverless_private[each.value]
   availability_zone = each.key
 
   tags = {
@@ -68,6 +68,7 @@ resource "aws_subnet" "serverless_private" {
   }
 }
 
+/*
 # CREATE IGW, EIP, and NATGW
 ## IGW
 resource "aws_internet_gateway" "igw" {
@@ -162,3 +163,4 @@ resource "aws_route_table_association" "serverless_private" {
   route_table_id = aws_route_table.private.id
   subnet_id      = each.value.id
 }
+*/
