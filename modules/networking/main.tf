@@ -80,10 +80,9 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-/*
 ## EIP
 resource "aws_eip" "nat" {
-  for_each = var.subnet_cidrs.public
+  for_each = local.az_index_map
   domain = "vpc"
 
   tags = {
@@ -92,6 +91,7 @@ resource "aws_eip" "nat" {
   }
 }
 
+/*
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
   allocation_id = aws_eip.nat.id
