@@ -2,6 +2,7 @@ variable "vpc_id" {
   type = string
 }
 
-variable "compute_private_subnets" {
-  type = map(any)
+variable "compute_private_subnet_ids" {
+  description = "map(string) of Compute Private Subnet IDs (az => subnet.id)"
+  type = map(string)
 }
