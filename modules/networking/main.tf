@@ -140,7 +140,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name      = "Private-Route-Table"
+    Name      = "Private-RT-${each.key}"
     Terraform = "true"
   }
 }
