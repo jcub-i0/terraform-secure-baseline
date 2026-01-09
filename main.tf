@@ -11,4 +11,5 @@ module "compute" {
 
   vpc_id = module.networking.vpc_id
   compute_private_subnet_ids = module.networking.compute_private_subnet_ids
+  ec2_ami_name = var.ec2_ami_name
 }
