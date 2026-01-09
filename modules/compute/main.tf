@@ -61,7 +61,7 @@ data "aws_ami" "ec2" {
 
 resource "aws_instance" "ec2" {
   for_each = var.compute_private_subnet_ids
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = data.aws_ami.ec2.id
   instance_type          = "t3.micro"
   subnet_id              = each.value
   vpc_security_group_ids = [aws_security_group.compute.id]
