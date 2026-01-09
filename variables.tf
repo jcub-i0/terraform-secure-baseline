@@ -26,3 +26,9 @@ variable "subnet_cidrs" {
     "serverless_private" = ["10.0.48.0/24","10.0.49.0/24"]
   }
 }
+
+variable "ec2_ami_name" {
+  description = "'name' attribute of the AMI of your choosing"
+  type = string
+  default = "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server*"
+}
