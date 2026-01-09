@@ -1,6 +1,6 @@
 locals {
   # Loop over var.azs using the index (indx) to pick the CIDR for that AZ
-  az_index_map = {for indx, az in var.azs : az => indx}
+  az_index_map = { for indx, az in var.azs : az => indx }
 }
 
 # CREATE MAIN VPC
@@ -22,7 +22,7 @@ resource "aws_subnet" "public" {
   availability_zone = each.key
 
   tags = {
-    Name = "Public-Subnet-${each.key}"
+    Name      = "Public-Subnet-${each.key}"
     Terraform = "true"
   }
 }
@@ -83,7 +83,7 @@ resource "aws_internet_gateway" "igw" {
 ## EIP
 resource "aws_eip" "nat" {
   for_each = local.az_index_map
-  domain = "vpc"
+  domain   = "vpc"
 
   tags = {
     Name      = "NAT-EIP-${each.key}"
@@ -93,7 +93,7 @@ resource "aws_eip" "nat" {
 
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
-  for_each = local.az_index_map
+  for_each      = local.az_index_map
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.public[each.key].id
 
@@ -132,7 +132,7 @@ resource "aws_route_table_association" "public" {
 ## COMPUTE PRIVATE ROUTE TABLE
 resource "aws_route_table" "private" {
   for_each = local.az_index_map
-  vpc_id = aws_vpc.main.id
+  vpc_id   = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
