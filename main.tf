@@ -10,5 +10,5 @@ module "compute" {
   source = "./modules/compute"
 
   vpc_id = module.networking.vpc_id
-  compute_private_subnets = module.networking.compute_private_subnets
+  compute_private_subnet_ids = module.networking.compute_private_subnet_ids
 }
