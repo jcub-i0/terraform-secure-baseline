@@ -86,7 +86,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name      = "NAT-EIP"
+    Name      = "NAT-EIP-${each.key}"
     Terraform = "true"
   }
 }
@@ -100,7 +100,7 @@ resource "aws_nat_gateway" "natgw" {
   depends_on = [aws_internet_gateway.igw]
 
   tags = {
-    Name      = "NAT-Gateway"
+    Name      = "NAT-Gateway-${each.key}"
     Terraform = "true"
   }
 }

@@ -1,4 +1,4 @@
-resource "aws_security_group" "compute" {
+/*resource "aws_security_group" "compute" {
   name        = "Compute-SG"
   description = "Security Group for EC2 compute instances"
   vpc_id      = var.vpc_id
@@ -48,3 +48,4 @@ resource "aws_instance" "ec2" {
     Terraform = "true"
   }
 }
+*/
