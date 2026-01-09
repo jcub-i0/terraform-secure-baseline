@@ -27,13 +27,34 @@ resource "aws_security_group" "compute" {
   }
 }
 
+## QUARANTINE SECURITY GROUP
+resource "aws_security_group" "quarantine" {
+  name = "Quarantine-SG"
+  description = "Security Group for isolating EC2 instances suspected of compromisation so that security triage and remediation can be performed safely without allowing unrestricted network access"
+  vpc_id = var.vpc_id
+
+  egress {
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow ONLY HTTPS egress for SSM and forensics"
+  }
+
+  tags = {
+    Name = "EC2-Quarantine-SG"
+    Terraform = "true"
+    Purpose = "IncidentResponse"
+  }
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"]
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server*"]
+    values = [var.ec2_ami_name]
   }
 }
 
