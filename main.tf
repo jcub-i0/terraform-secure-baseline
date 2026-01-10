@@ -10,6 +10,14 @@ module "compute" {
   source = "./modules/compute"
 
   vpc_id = module.networking.vpc_id
-  compute_private_subnet_ids = module.networking.compute_private_subnet_ids
+  compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   ec2_ami_name = var.ec2_ami_name
+}
+
+module "storage" {
+  source = "./modules/storage"
+  vpc_id = module.networking.vpc_id
+  db_port = var.db_port
+  compute_sg_id = module.compute.compute_sg_id
+  data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
 }
