@@ -62,7 +62,7 @@ data "aws_ami" "ec2" {
 
 ## EC2 INSTANCE
 resource "aws_instance" "ec2" {
-  for_each = var.compute_private_subnet_ids
+  for_each = var.compute_private_subnet_ids_map
   ami                    = data.aws_ami.ec2.id
   instance_type          = "t3.micro"
   subnet_id              = each.value
