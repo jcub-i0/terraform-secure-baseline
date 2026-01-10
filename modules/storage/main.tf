@@ -64,7 +64,7 @@ resource "aws_db_instance" "main" {
   password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
 
   deletion_protection = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
-  skip_final_snapshot = false
+  skip_final_snapshot = true # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
   backup_retention_period = 14
   backup_window = "03:00-04:00"
   maintenance_window = "sun:05:00-sun:06:00"
