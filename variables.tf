@@ -32,3 +32,9 @@ variable "ec2_ami_name" {
   type = string
   default = "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server*"
 }
+
+variable "db_port" {
+  description = "Port used by the database (Postgres=5432, MySQL=3306)"
+  type = string
+  default = "5432"
+}
