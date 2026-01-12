@@ -26,3 +26,9 @@ resource "aws_iam_role_policy_attachment" "cloudwatch" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
+
+## Create EC2 Instance Profile to attach the ec2_role IAM Role, thus allowing EC2 compute instance(s) to inherit the role
+resource "aws_iam_instance_profile" "name" {
+  name = "ec2_compute_instance_profile"
+  role = aws_iam_role.ec2_role.name
+}
