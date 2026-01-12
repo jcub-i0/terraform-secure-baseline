@@ -61,7 +61,9 @@ resource "aws_db_instance" "main" {
 
   db_name = "appdb"
   username = var.db_username
-  password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
+  password = var.db_password
+  # UNCOMMENT THIS IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE (AND ALSO DELETE THE ABOVE LINE)
+  # password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
 
   deletion_protection = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
   skip_final_snapshot = true # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
@@ -82,6 +84,8 @@ resource "aws_db_instance" "main" {
   }
 }
 
+# UNCOMMENT THIS IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE
+/*
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
 ## Create a secret in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "rds_master" {
@@ -105,4 +109,4 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
 ## Access the generated secret inside the AWS Secrets Manager secret
 data "aws_secretsmanager_secret_version" "rds_master" {
   secret_id = aws_secretsmanager_secret.rds_master.id
-}
+}*/
