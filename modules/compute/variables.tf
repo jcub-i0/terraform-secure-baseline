@@ -4,7 +4,7 @@ variable "vpc_id" {
 
 variable "compute_private_subnet_ids_map" {
   description = "map(string) of Compute Private Subnet IDs (az => subnet.id)"
-  type = map(string)
+  type        = map(string)
 }
 
 variable "ec2_ami_name" {

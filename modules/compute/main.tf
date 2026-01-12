@@ -68,7 +68,7 @@ resource "aws_instance" "ec2" {
   subnet_id              = each.value
   vpc_security_group_ids = [aws_security_group.compute.id]
   monitoring             = true
-  iam_instance_profile = var.instance_profile_name
+  iam_instance_profile   = var.instance_profile_name
 
   metadata_options {
     http_tokens                 = "required"
