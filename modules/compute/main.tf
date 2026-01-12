@@ -71,6 +71,7 @@ resource "aws_instance" "ec2" {
 
   metadata_options {
     http_tokens = "required"
+    http_put_response_hop_limit = 2
   }
 
   tags = {
