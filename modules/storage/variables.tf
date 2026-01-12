@@ -18,3 +18,8 @@ variable "data_private_subnet_ids_list" {
 variable "db_username" {
   type = string
 }
+
+variable "db_password" {
+  type = string
+  sensitive = true
+}
