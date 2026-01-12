@@ -29,22 +29,22 @@ resource "aws_security_group" "compute" {
 
 ## QUARANTINE SECURITY GROUP
 resource "aws_security_group" "quarantine" {
-  name = "Quarantine-SG"
+  name        = "Quarantine-SG"
   description = "Security Group for isolating EC2 instances suspected of compromisation so that security triage and remediation can be performed safely without allowing unrestricted network access"
-  vpc_id = var.vpc_id
+  vpc_id      = var.vpc_id
 
   egress {
-    from_port = 443
-    to_port = 443
-    protocol = "tcp"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow ONLY HTTPS egress for SSM and forensics"
   }
 
   tags = {
-    Name = "EC2-Quarantine-SG"
+    Name      = "EC2-Quarantine-SG"
     Terraform = "true"
-    Purpose = "IncidentResponse"
+    Purpose   = "IncidentResponse"
   }
 }
 
@@ -62,7 +62,7 @@ data "aws_ami" "ec2" {
 
 ## EC2 INSTANCE
 resource "aws_instance" "ec2" {
-  for_each = var.compute_private_subnet_ids_map
+  for_each               = var.compute_private_subnet_ids_map
   ami                    = data.aws_ami.ec2.id
   instance_type          = "t3.micro"
   subnet_id              = each.value
@@ -70,13 +70,13 @@ resource "aws_instance" "ec2" {
   monitoring             = true
 
   metadata_options {
-    http_tokens = "required"
+    http_tokens                 = "required"
     http_put_response_hop_limit = 2
   }
 
   tags = {
     Name      = "EC2"
     Terraform = "true"
-    Purpose = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
+    Purpose   = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
   }
 }
