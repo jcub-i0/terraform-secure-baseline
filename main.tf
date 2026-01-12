@@ -12,6 +12,7 @@ module "compute" {
   vpc_id                         = module.networking.vpc_id
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   ec2_ami_name                   = var.ec2_ami_name
+  instance_profile_name = module.iam.instance_profile_name
 }
 
 module "storage" {
@@ -22,4 +23,8 @@ module "storage" {
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
   db_username                  = var.db_username
   db_password                  = var.db_password
+}
+
+module "iam" {
+  source = "./modules/iam"
 }
