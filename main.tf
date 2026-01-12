@@ -21,4 +21,5 @@ module "storage" {
   compute_sg_id = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
   db_username = var.db_username
+  db_password = var.db_password
 }
