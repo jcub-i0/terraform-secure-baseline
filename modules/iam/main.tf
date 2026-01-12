@@ -29,6 +29,6 @@ resource "aws_iam_role_policy_attachment" "cloudwatch" {
 
 ## Create EC2 Instance Profile to attach the ec2_role IAM Role, thus allowing EC2 compute instance(s) to inherit the role
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2_compute_instance_profile"
+  name = "tf_sec_baseline_ec2_compute_instance_profile"
   role = aws_iam_role.ec2_role.name
 }
