@@ -31,11 +31,11 @@ resource "aws_security_group" "data" {
 
 ## DB SUBNET GROUP
 resource "aws_db_subnet_group" "data" {
-  name = "data-db-subnet-group"
+  name       = "data-db-subnet-group"
   subnet_ids = var.data_private_subnet_ids_list
 
   tags = {
-    Name = "Data-DB-Subnet-Group"
+    Name      = "Data-DB-Subnet-Group"
     Terraform = "true"
   }
 }
@@ -44,32 +44,32 @@ resource "aws_db_subnet_group" "data" {
 resource "aws_db_instance" "main" {
   identifier = "saas-data-db"
 
-  engine = "postgres"
+  engine         = "postgres"
   engine_version = "16.6"
   instance_class = "db.t4g.medium"
 
-  allocated_storage = 50
+  allocated_storage     = 50
   max_allocated_storage = 200
-  storage_type = "gp3"
-  storage_encrypted = true
+  storage_type          = "gp3"
+  storage_encrypted     = true
 
-  db_subnet_group_name = aws_db_subnet_group.data.name
+  db_subnet_group_name   = aws_db_subnet_group.data.name
   vpc_security_group_ids = [aws_security_group.data.id]
 
-  multi_az = true
+  multi_az            = true
   publicly_accessible = false
 
-  db_name = "appdb"
+  db_name  = "appdb"
   username = var.db_username
   password = var.db_password
   # UNCOMMENT THIS IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE (AND ALSO DELETE THE ABOVE LINE)
   # password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
 
-  deletion_protection = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
-  skip_final_snapshot = true # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
+  deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
+  skip_final_snapshot     = true  # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
   backup_retention_period = 14
-  backup_window = "03:00-04:00"
-  maintenance_window = "sun:05:00-sun:06:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:05:00-sun:06:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
@@ -79,7 +79,7 @@ resource "aws_db_instance" "main" {
   auto_minor_version_upgrade = true
 
   tags = {
-    Name = "SaaS-RDS"
+    Name      = "SaaS-RDS"
     Terraform = "true"
   }
 }

@@ -11,8 +11,8 @@ variable "compute_sg_id" {
 }
 
 variable "data_private_subnet_ids_list" {
-    description = "list(string) of Data Private Subnet IDs"
-  type = list(string)
+  description = "list(string) of Data Private Subnet IDs"
+  type        = list(string)
 }
 
 variable "db_username" {
@@ -20,6 +20,6 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  type = string
+  type      = string
   sensitive = true
 }
