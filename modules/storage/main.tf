@@ -112,8 +112,8 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 }
 */
 
-# S3 Resources
-## Centralized Logs S3 bucket
+# S3 RESOURCES
+## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
   bucket        = "tf-baseline-centralized-logs"
   force_destroy = true # DELETE THIS FOR PRODUCTION ENVIRONMENT
@@ -124,7 +124,7 @@ resource "aws_s3_bucket" "centralized_logs" {
   }
 }
 
-## Block Public Access to the Centralized Logs S3 bucket
+## BLOCK PUBLIC ACCESS TO THE CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket_public_access_block" "centralized_logs" {
   bucket = aws_s3_bucket.centralized_logs.id
 
