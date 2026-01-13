@@ -133,3 +133,16 @@ resource "aws_s3_bucket_public_access_block" "centralized_logs" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+## ENABLE SSE FOR THE CENTRALIZED LOGS S3 BUCKET
+resource "aws_s3_bucket_server_side_encryption_configuration" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = var.logs_kms_key_arn
+    }
+    bucket_key_enabled = true
+  }
+}
