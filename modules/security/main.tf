@@ -26,7 +26,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "AllowCloudTrail"
         Effect = "Allow"
         Principal = {
-          Service = "cloudtrail.amazon.com"
+          Service = "cloudtrail.amazonaws.com"
         }
         Action = [
           "kms:GenerateDataKey*",
@@ -73,7 +73,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "AllowS3UseOfKey"
         Effect = "Allow"
         Principal = {
-          Service = "s3.amazon.com"
+          Service = "s3.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
