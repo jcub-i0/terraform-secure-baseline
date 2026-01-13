@@ -23,3 +23,7 @@ variable "db_password" {
   type      = string
   sensitive = true
 }
+
+variable "logs_kms_key_arn" {
+  type = string
+}
