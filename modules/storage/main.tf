@@ -84,7 +84,7 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# UNCOMMENT THIS IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE
+# UNCOMMENT THIS AND REMOVE var.db_password (AND ITS REFERENCES) IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE
 /*
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
 ## Create a secret in AWS Secrets Manager
@@ -109,4 +109,15 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
 ## Access the generated secret inside the AWS Secrets Manager secret
 data "aws_secretsmanager_secret_version" "rds_master" {
   secret_id = aws_secretsmanager_secret.rds_master.id
-}*/
+}
+*/
+
+resource "aws_s3_bucket" "centralized_logs" {
+  bucket        = "tf-baseline-centralized-logs"
+  force_destroy = true # DELETE THIS FOR PRODUCTION ENVIRONMENT
+
+  tags = {
+    Name      = "TF-Baseline-Centralized-Logs"
+    Terraform = "true"
+  }
+}
