@@ -146,3 +146,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "centralized_logs"
     bucket_key_enabled = true
   }
 }
+
+## ENABLE VERSIONING FOR THE CENTRALIZED LOGS S3 BUCKET
+resource "aws_s3_bucket_versioning" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
