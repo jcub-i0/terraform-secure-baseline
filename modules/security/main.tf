@@ -60,7 +60,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "AllowLogs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
