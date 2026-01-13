@@ -11,7 +11,6 @@ resource "aws_kms_key" "logs" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-
       ### FULL ACCESS FOR ROOT ACCOUNT
       {
         Sid    = "EnableRootPermissions"
@@ -22,7 +21,6 @@ resource "aws_kms_key" "logs" {
         Action   = "kms:*"
         Resource = "*"
       },
-
       ### CLOUDTRAIL
       {
         Sid    = "AllowCloudTrail"
@@ -54,7 +52,6 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
-
       ### VPC FLOW LOGS / CLOUDWATCH LOGS
       {
         Sid    = "AllowLogs"
@@ -71,7 +68,6 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
-
       ### ALLOW S3 TO USE THE KEY
       {
         Sid    = "AllowS3UseOfKey"
