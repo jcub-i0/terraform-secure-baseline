@@ -23,8 +23,13 @@ module "storage" {
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
   db_username                  = var.db_username
   db_password                  = var.db_password
+  logs_kms_key_arn             = module.security.logs_kms_key_arn
 }
 
 module "iam" {
   source = "./modules/iam"
+}
+
+module "security" {
+  source = "./modules/security"
 }
