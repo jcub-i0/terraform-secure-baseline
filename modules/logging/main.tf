@@ -16,7 +16,7 @@ resource "aws_cloudtrail" "cloudtrail" {
   enable_log_file_validation    = true
   include_global_service_events = true
 
-  cloud_watch_logs_group_arn = aws_cloudwatch_log_group.cloudtrail.arn
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
   cloud_watch_logs_role_arn  = var.cloudtrail_role_arn
 
   event_selector {
