@@ -32,3 +32,20 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "tf_sec_baseline_ec2_compute_instance_profile"
   role = aws_iam_role.ec2_role.name
 }
+
+# CLOUDTRAIL
+## CLOUDTRAIL ROLE
+resource "aws_iam_role" "cloudtrail" {
+  name = "cloudtrail-cloudwatch-role"
+
+  assume_role_policy = jsondecode({
+    Version = "2012-10-17"
+    Statement = [{
+        Effect = "Allow"
+        Principal = {
+            Service = "cloudtrail.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+    }]
+  })
+}
