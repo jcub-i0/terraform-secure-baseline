@@ -27,7 +27,7 @@ module "storage" {
 }
 
 module "iam" {
-  source = "./modules/iam"
+  source                   = "./modules/iam"
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
 }
 
@@ -36,8 +36,8 @@ module "security" {
 }
 
 module "logging" {
-  source = "./modules/logging"
+  source                     = "./modules/logging"
   centralized_logs_bucket_id = module.storage.centralized_logs_bucket_id
-  logs_kms_key_arn = module.security.logs_kms_key_arn
-  cloudtrail_role_arn = module.iam.cloudtrail_role_arn
+  logs_kms_key_arn           = module.security.logs_kms_key_arn
+  cloudtrail_role_arn        = module.iam.cloudtrail_role_arn
 }
