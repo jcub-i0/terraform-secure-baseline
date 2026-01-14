@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 # CREATE DATA SECURITY GROUP, DB Subnet Group, AND RDS INSTANCE
 ## DATA SECURITY GROUP
 resource "aws_security_group" "data" {
