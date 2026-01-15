@@ -167,3 +167,76 @@ resource "aws_s3_bucket_ownership_controls" "centralized_logs" {
     object_ownership = "BucketOwnerEnforced"
   }
 }
+
+## S3 BUCKET POLICIES
+### CENTRALIZED LOGS S3 BUCKET POLICY
+resource "aws_s3_bucket_policy" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+        #### ALLOW CLOUDTRAIL TO VERIFY BUCKET ACL
+        {
+            Sid = "AWSCloudTrailAclCheck"
+            Effect = "Allow"
+            Principal = {
+                Service = "cloudtrail.amazonaws.com"
+            }
+            Action = "s3:GetBucketAcl"
+            Resource = aws_s3_bucket.centralized_logs.arn
+            Condition = {
+                StringEquals = {
+                    "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+                }
+            }
+        },
+        #### ALLOW CLOUDTRAIL TO WRITE LOGS
+        {
+            Sid = "AWSCloudTrailWrite"
+            Effect = "Allow"
+            Principal = {
+                Service = "cloudtrail.amazonaws.com"
+            }
+            Action = "s3:PutObject"
+            Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+            Condition = {
+                StringEquals = {
+                    "s3:x-amz-acl" = "bucket-owner-full-control"
+                    "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+                    "s3:x-amz-server-side-encryption" = "aws:kms"
+                }
+            }
+        },
+        #### ENFORCE TLS
+        {
+            Sid = "DenyInsecureTransport"
+            Effect = "Deny"
+            Principal = "*"
+            Action = "s3:*"
+            Resource = [
+                aws_s3_bucket.centralized_logs.arn,
+                "${aws_s3_bucket.centralized_logs.arn}/*"
+            ]
+            Condition = {
+                Bool = {
+                    "aws:SecureTransport" = "false"
+                }
+            }
+        },
+        #### ENFORCE KMS ENCRYPTION
+        {
+            Sid = "DenyUnencryptedUplaods"
+            Effect = "Deny"
+            Principal = "*"
+            Action = "s3:PutObject"
+            Resource = "${aws_s3_bucket.centralized_logs.arn}/*"
+            Condition = {
+                StringNotEquals = {
+                    "s3:x-amz-server-side-encryption" = "aws:kms"
+                }
+            }
+        }
+    ]
+  })
+}
