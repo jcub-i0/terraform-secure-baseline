@@ -6,19 +6,19 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   kms_key_id        = var.logs_kms_key_arn
 
   tags = {
-    Name = "CloudTrail-Logs"
+    Name      = "CloudTrail-Logs"
     Terraform = "true"
   }
 }
 
 ## EC2 LOG GROUP
 resource "aws_cloudwatch_log_group" "ec2" {
-  name = "/aws/ec2/tf-secure-baseline"
+  name              = "/aws/ec2/tf-secure-baseline"
   retention_in_days = 90
-  kms_key_id = var.logs_kms_key_arn
+  kms_key_id        = var.logs_kms_key_arn
 
   tags = {
-    Name = "EC2-Logs"
+    Name      = "EC2-Logs"
     Terraform = "true"
   }
 }
@@ -52,7 +52,7 @@ resource "aws_cloudtrail" "cloudtrail" {
   depends_on = [aws_cloudwatch_log_group.cloudtrail]
 
   tags = {
-    Name = "CloudTrail"
+    Name      = "CloudTrail"
     Terraform = "true"
   }
 }
