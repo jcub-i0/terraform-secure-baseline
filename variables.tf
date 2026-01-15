@@ -27,6 +27,7 @@ variable "subnet_cidrs" {
   }
 }
 
+# MUST BE DEBIAN-BASED
 variable "ec2_ami_name" {
   description = "'name' attribute of the AMI of your choosing"
   type        = string
