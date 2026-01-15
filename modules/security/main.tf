@@ -6,6 +6,11 @@ data "aws_region" "current" {}
 resource "aws_config_configuration_recorder" "config" {
   name = "tf-secure-baseline"
   role_arn = var.config_role_arn
+
+  recording_group {
+    all_supported = true
+    include_global_resource_types = true
+  }
 }
 
 ## DELIVERY CHANNEL
