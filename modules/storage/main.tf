@@ -195,7 +195,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/Config/*"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/config/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"                    = "bucket-owner-full-control"
@@ -233,36 +233,6 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           StringEquals = {
             "s3:x-amz-acl"                    = "bucket-owner-full-control"
             "aws:SourceAccount"               = data.aws_caller_identity.current.account_id
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      },
-      # ENCRYPTION
-      ## ENFORCE TLS
-      {
-        Sid       = "DenyInsecureTransport"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.centralized_logs.arn,
-          "${aws_s3_bucket.centralized_logs.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      },
-      ## ENFORCE KMS ENCRYPTION
-      {
-        Sid       = "DenyUnencryptedUplaods"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.centralized_logs.arn}/*"
-        Condition = {
-          StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }

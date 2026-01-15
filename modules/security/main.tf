@@ -64,13 +64,19 @@ resource "aws_kms_key" "logs" {
         }
         Action = [
           "kms:GenerateDataKey*",
-          "kms:Decrypt"
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey",
+          "kms:ReEncrypt*"
         ]
         Resource = "*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
           }
+            StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+            }          
         }
       },
       ### AWS CONFIG
@@ -98,7 +104,7 @@ resource "aws_kms_key" "logs" {
         Action = [
           "kms:Encrypt",
           "kms:Decrypt",
-          "kms:ReEncrypt",
+          "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
           "kms:DescribeKey"
         ]
@@ -114,8 +120,8 @@ resource "aws_kms_key" "logs" {
         Action = [
           "kms:Encrypt",
           "kms:Decrypt",
-          "ksm:ReEncrypt",
-          "ksm:GenerateDataKey*"
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*"
         ]
         Resource = "*"
       }
