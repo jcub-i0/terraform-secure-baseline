@@ -56,7 +56,7 @@ data "aws_ami" "ec2" {
 
   filter {
     name   = "name"
-    values = [var.ec2_ami_name]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server*"]
   }
 }
 

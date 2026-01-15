@@ -7,10 +7,6 @@ variable "compute_private_subnet_ids_map" {
   type        = map(string)
 }
 
-variable "ec2_ami_name" {
-  type = string
-}
-
 variable "instance_profile_name" {
   type = string
 }
