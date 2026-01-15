@@ -50,6 +50,7 @@ resource "aws_iam_role" "cloudtrail" {
   })
 }
 
+##CLOUDTRAIL ROLE POLICY
 resource "aws_iam_role_policy" "cloudtrail" {
   role = aws_iam_role.cloudtrail.id
 
@@ -62,6 +63,23 @@ resource "aws_iam_role_policy" "cloudtrail" {
         "logs:PutLogEvents"
       ]
       Resource = "${var.cloudtrail_log_group_arn}:*"
+    }]
+  })
+}
+
+# CONFIG
+## CONFIG ROLE
+resource "aws_iam_role" "config" {
+  name = "aws-config-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+        Effect = "Allow"
+        Principal = {
+            Service = "config.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
     }]
   })
 }
