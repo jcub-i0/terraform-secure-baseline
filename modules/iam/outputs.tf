@@ -6,3 +6,7 @@ output "instance_profile_name" {
 output "cloudtrail_role_arn" {
   value = aws_iam_role.cloudtrail.arn
 }
+
+output "config_role_arn" {
+  value = aws_iam_role.config.arn
+}
