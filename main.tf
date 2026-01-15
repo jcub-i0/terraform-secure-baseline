@@ -32,6 +32,9 @@ module "iam" {
 
 module "security" {
   source = "./modules/security"
+
+  config_role_arn = module.iam.config_role_arn
+  centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 }
 
 module "logging" {
