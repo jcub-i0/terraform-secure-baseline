@@ -22,6 +22,12 @@ resource "aws_config_delivery_channel" "config" {
   depends_on = [aws_config_configuration_recorder.config]
 }
 
+## CONFIGURATION RECORDER STATUS
+resource "aws_config_configuration_recorder_status" "config" {
+  name = aws_config_configuration_recorder.config.name
+  is_enabled = true
+}
+
 # KMS
 ## KMS KEY FOR LOGS
 resource "aws_kms_key" "logs" {
