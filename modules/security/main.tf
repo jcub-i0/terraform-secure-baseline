@@ -4,11 +4,11 @@ data "aws_region" "current" {}
 # CONFIG
 ## CONFIGURATION RECORDER
 resource "aws_config_configuration_recorder" "config" {
-  name = "tf-secure-baseline"
+  name     = "tf-secure-baseline"
   role_arn = var.config_role_arn
 
   recording_group {
-    all_supported = true
+    all_supported                 = true
     include_global_resource_types = true
   }
 }
@@ -16,7 +16,7 @@ resource "aws_config_configuration_recorder" "config" {
 ## DELIVERY CHANNEL
 resource "aws_config_delivery_channel" "config" {
   s3_bucket_name = var.centralized_logs_bucket_name
-  s3_key_prefix = "config"
+  s3_key_prefix  = "config"
   s3_kms_key_arn = aws_kms_key.logs.arn
   # sns_topic_arn = 
 
@@ -25,7 +25,7 @@ resource "aws_config_delivery_channel" "config" {
 
 ## CONFIGURATION RECORDER STATUS
 resource "aws_config_configuration_recorder_status" "config" {
-  name = aws_config_configuration_recorder.config.name
+  name       = aws_config_configuration_recorder.config.name
   is_enabled = true
 }
 
