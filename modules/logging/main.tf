@@ -1,9 +1,16 @@
-# CLOUDWATCH
-## CLOUDWATCH LOG GROUP
+# CLOUDWATCH LOG GROUPS
+## CLOUDTRAIL LOG GROUP
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/tf-secure-baseline"
   retention_in_days = 90
   kms_key_id        = var.logs_kms_key_arn
+}
+
+## EC2 LOG GROUP
+resource "aws_cloudwatch_log_group" "ec2" {
+  name = "/aws/ec2/tf-secure-baseline"
+  retention_in_days = 90
+  kms_key_id = var.logs_kms_key_arn
 }
 
 # CLOUDTRAIL
