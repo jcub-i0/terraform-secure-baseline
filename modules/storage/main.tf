@@ -176,7 +176,8 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-        #### ALLOW CLOUDTRAIL TO VERIFY BUCKET ACL
+        # CLOUDTRAIL
+        ## ALLOW CLOUDTRAIL TO VERIFY BUCKET ACL
         {
             Sid = "AWSCloudTrailAclCheck"
             Effect = "Allow"
@@ -191,7 +192,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
                 }
             }
         },
-        #### ALLOW CLOUDTRAIL TO WRITE LOGS
+        ## ALLOW CLOUDTRAIL TO WRITE LOGS
         {
             Sid = "AWSCloudTrailWrite"
             Effect = "Allow"
@@ -208,7 +209,8 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
                 }
             }
         },
-        #### ENFORCE TLS
+        # ENCRYPTION
+        ## ENFORCE TLS
         {
             Sid = "DenyInsecureTransport"
             Effect = "Deny"
@@ -224,7 +226,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
                 }
             }
         },
-        #### ENFORCE KMS ENCRYPTION
+        ## ENFORCE KMS ENCRYPTION
         {
             Sid = "DenyUnencryptedUplaods"
             Effect = "Deny"
