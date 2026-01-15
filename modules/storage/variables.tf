@@ -27,7 +27,3 @@ variable "db_password" {
 variable "logs_kms_key_arn" {
   type = string
 }
-
-variable "cloudtrail_arn" {
-  type = string
-}
