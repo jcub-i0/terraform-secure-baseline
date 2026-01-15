@@ -1,6 +1,22 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# CONFIG
+## CONFIGURATION RECORDER
+resource "aws_config_configuration_recorder" "config" {
+  name = "tf-secure-baseline"
+  role_arn = var.config_role_arn
+}
+
+## DELIVERY CHANNEL
+resource "aws_config_delivery_channel" "config" {
+  s3_bucket_name = var.centralized_logs_bucket_name
+  s3_key_prefix = "config"
+  # sns_topic_arn = 
+
+  depends_on = [aws_config_configuration_recorder.config]
+}
+
 # KMS
 ## KMS KEY FOR LOGS
 resource "aws_kms_key" "logs" {
