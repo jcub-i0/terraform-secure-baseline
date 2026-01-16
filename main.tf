@@ -45,8 +45,8 @@ module "security" {
   config_role_arn              = module.iam.config_role_arn
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
   current_region               = data.aws_region.current.region
-  account_id                   = data.aws_caller_identity.current.account_id
-  config_topic_arn = module.monitoring.config_topic_arn
+  account_id                   = data.aws_caller_identity.current.account_id  
+  compliance_topic_arn = module.monitoring.compliance_topic_arn
 }
 
 module "logging" {
@@ -55,6 +55,7 @@ module "logging" {
   logs_kms_key_arn           = module.security.logs_kms_key_arn
   cloudtrail_role_arn        = module.iam.cloudtrail_role_arn
   account_id                 = data.aws_caller_identity.current.account_id
+  security_topic_arn = module.monitoring.security_topic_arn
 }
 
 module "monitoring" {
