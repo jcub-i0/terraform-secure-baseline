@@ -1,5 +1,6 @@
 # SNS
 ## SNS RESOURCES FOR CONFIG
+### CONFIG DOES NOT HAVE AN SNS SUBSCRIPTION (YET)
 ### CONFIG SNS TOPIC
 resource "aws_sns_topic" "compliance" {
   name = "compliance-notifications"
@@ -27,10 +28,11 @@ resource "aws_sns_topic_policy" "compliance" {
   })
 }
 
-## SNS RESOURCES FOR CLOUDTRAIL
-### CLOUDTRAIL SNS TOPIC
+## SNS RESOURCES FOR SECURITY
+### SECURITY SNS TOPIC
 resource "aws_sns_topic" "security" {
   name = "security-notifications"
+  kms_master_key_id = var.logs_kms_key_arn
 
   tags = {
     Name = "CloudtrailNotifications"
@@ -38,7 +40,7 @@ resource "aws_sns_topic" "security" {
   }
 }
 
-### CLOUDTRAIL SNS TOPIC POLICY
+### SECURITY SNS TOPIC POLICY
 resource "aws_sns_topic_policy" "security" {
   arn = aws_sns_topic.security.arn
 
