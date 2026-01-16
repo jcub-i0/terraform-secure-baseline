@@ -1,3 +1,10 @@
+# GLOBAL RESOURCES
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+resource "random_id" "random_id" {byte_length = 4}
+
+
+# MODULES
 module "networking" {
   source = "./modules/networking"
 
@@ -23,6 +30,8 @@ module "storage" {
   db_username                  = var.db_username
   db_password                  = var.db_password
   logs_kms_key_arn             = module.security.logs_kms_key_arn
+  account_id = data.aws_caller_identity.current.account_id
+  random_id = random_id.random_id.hex
 }
 
 module "iam" {
@@ -35,6 +44,8 @@ module "security" {
 
   config_role_arn = module.iam.config_role_arn
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
+  current_region = data.aws_region.current.region
+  account_id = data.aws_caller_identity.current.account_id
 }
 
 module "logging" {
@@ -43,3 +54,4 @@ module "logging" {
   logs_kms_key_arn           = module.security.logs_kms_key_arn
   cloudtrail_role_arn        = module.iam.cloudtrail_role_arn
 }
+
