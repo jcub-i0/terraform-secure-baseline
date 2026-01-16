@@ -1,3 +1,7 @@
+variable "primary_region" {
+  type = string
+}
+
 variable "config_role_arn" {
   type = string
 }
@@ -16,4 +20,8 @@ variable "account_id" {
 
 variable "compliance_topic_arn" {
   type = string
+}
+
+variable "guardduty_features" {
+  type = list(string)
 }
