@@ -1,3 +1,15 @@
+locals {
+  # SecurityHub standards for securityhub_standards_subscriptions resource to loop through
+  ## Select the SecurityHub standards you want by uncommenting the respective standard(s)
+  securityhub_standards = {
+    aws_fsbp = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0",
+    #aws_tagging = "arn:aws:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0",
+    #cis = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0",
+    #nist_800 = "arn:aws:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0",
+    #pci_dss = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
+  }
+}
+
 # CONFIG
 ## CONFIGURATION RECORDER
 resource "aws_config_configuration_recorder" "config" {
@@ -30,6 +42,40 @@ resource "aws_config_configuration_recorder_status" "config" {
   depends_on = [
     aws_config_delivery_channel.config
   ]
+}
+
+# GUARDDUTY
+resource "aws_guardduty_detector" "main" {
+  enable = true
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+  region = var.primary_region
+}
+
+## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
+resource "aws_guardduty_detector_feature" "main" {
+  for_each = toset(var.guardduty_features)
+  detector_id = aws_guardduty_detector.main.id
+  name = each.value
+  status = "ENABLED"
+
+  lifecycle {
+    ignore_changes = [
+      additional_configuration,
+      status
+    ]
+  }
+}
+
+# SECURITY HUB
+resource "aws_securityhub_account" "main" {
+  depends_on = [aws_guardduty_detector.main]
+}
+
+## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
+resource "aws_securityhub_standards_subscription" "main" {
+  for_each = local.securityhub_standards
+  standards_arn = each.value
+  depends_on = [aws_securityhub_account.main]
 }
 
 # KMS
