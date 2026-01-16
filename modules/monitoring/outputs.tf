@@ -1,3 +1,7 @@
-output "config_topic_arn" {
-  value = aws_sns_topic.config.arn
+output "compliance_topic_arn" {
+  value = aws_sns_topic.compliance.arn
+}
+
+output "security_topic_arn" {
+  value = aws_sns_topic.security.arn
 }
