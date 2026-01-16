@@ -177,7 +177,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
       # CONFIG
       ## ALLOW CONFIG TO CHECK ACL
       {
-        Sid    = "AWSConfigBucketPermissionsCheck"
+        Sid    = "AWSConfigAclCheck"
         Effect = "Allow"
         Principal = {
           Service = "config.amazonaws.com"
