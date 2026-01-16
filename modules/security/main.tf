@@ -1,6 +1,3 @@
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
 # CONFIG
 ## CONFIGURATION RECORDER
 resource "aws_config_configuration_recorder" "config" {
@@ -50,7 +47,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+          AWS = "arn:aws:iam::${var.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -72,10 +69,10 @@ resource "aws_kms_key" "logs" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceAccount" = var.account_id
           }
             StringLike = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${var.account_id}:trail/*"
             }          
         }
       },
@@ -99,7 +96,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "AllowLogs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.region}.amazonaws.com"
+          Service = "logs.${var.current_region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
