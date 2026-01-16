@@ -27,7 +27,7 @@ resource "aws_config_delivery_channel" "config" {
   s3_bucket_name = var.centralized_logs_bucket_name
   s3_key_prefix  = "Config"
   s3_kms_key_arn = aws_kms_key.logs.arn
-  sns_topic_arn = var.compliance_topic_arn
+  sns_topic_arn  = var.compliance_topic_arn
 
   depends_on = [
     aws_config_configuration_recorder.config
@@ -46,17 +46,17 @@ resource "aws_config_configuration_recorder_status" "config" {
 
 # GUARDDUTY
 resource "aws_guardduty_detector" "main" {
-  enable = true
+  enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
-  region = var.primary_region
+  region                       = var.primary_region
 }
 
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
-  for_each = toset(var.guardduty_features)
+  for_each    = toset(var.guardduty_features)
   detector_id = aws_guardduty_detector.main.id
-  name = each.value
-  status = "ENABLED"
+  name        = each.value
+  status      = "ENABLED"
 
   lifecycle {
     ignore_changes = [
@@ -73,9 +73,9 @@ resource "aws_securityhub_account" "main" {
 
 ## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
 resource "aws_securityhub_standards_subscription" "main" {
-  for_each = local.securityhub_standards
+  for_each      = local.securityhub_standards
   standards_arn = each.value
-  depends_on = [aws_securityhub_account.main]
+  depends_on    = [aws_securityhub_account.main]
 }
 
 # KMS

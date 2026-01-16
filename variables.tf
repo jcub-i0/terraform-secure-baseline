@@ -48,24 +48,24 @@ variable "db_password" {
 
 variable "security_emails" {
   description = "List of emails to send security-related notifications to"
-  type = list(string)
-  default = []
+  type        = list(string)
+  default     = []
 
   # VALIDATE EMAIL FORMATS
   validation {
-    condition = alltrue([for e in var.security_emails : can(regex("^.+@.+\\..+$", e))])
+    condition     = alltrue([for e in var.security_emails : can(regex("^.+@.+\\..+$", e))])
     error_message = "Each entry in security_emails must be a valid email address."
   }
 }
 
 variable "guardduty_features" {
   description = "List of GuardDuty features that dictate what data GuardDuty analyzes"
-  type = list(string)
+  type        = list(string)
   default = [
     "S3_DATA_EVENTS",
     "EBS_MALWARE_PROTECTION",
     "LAMBDA_NETWORK_LOGS",
     "RUNTIME_MONITORING"
-    ]
+  ]
 }
 
