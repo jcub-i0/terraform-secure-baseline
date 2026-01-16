@@ -13,3 +13,7 @@ variable "cloudtrail_role_arn" {
 variable "account_id" {
   type = string
 }
+
+variable "security_topic_arn" {
+  type = string
+}
