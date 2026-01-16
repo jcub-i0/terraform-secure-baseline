@@ -30,10 +30,10 @@ variable "logs_kms_key_arn" {
 
 variable "account_id" {
   description = "The ID of the AWS account Terraform is using"
-  type = string
+  type        = string
 }
 
 variable "random_id" {
   description = "Random string of characters"
-  type = string
+  type        = string
 }

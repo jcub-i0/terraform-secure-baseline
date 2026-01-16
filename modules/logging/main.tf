@@ -15,7 +15,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 resource "aws_cloudtrail" "cloudtrail" {
   name                          = "CloudTrail"
   s3_bucket_name                = var.centralized_logs_bucket_id
-  s3_key_prefix = "CloudTrail"
+  s3_key_prefix                 = "CloudTrail"
   kms_key_id                    = var.logs_kms_key_arn
   is_multi_region_trail         = true
   enable_logging                = true

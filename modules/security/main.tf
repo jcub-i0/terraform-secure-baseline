@@ -71,9 +71,9 @@ resource "aws_kms_key" "logs" {
           StringEquals = {
             "aws:SourceAccount" = var.account_id
           }
-            StringLike = {
+          StringLike = {
             "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${var.account_id}:trail/*"
-            }          
+          }
         }
       },
       ### AWS CONFIG
