@@ -53,5 +53,6 @@ module "logging" {
   centralized_logs_bucket_id = module.storage.centralized_logs_bucket_id
   logs_kms_key_arn           = module.security.logs_kms_key_arn
   cloudtrail_role_arn        = module.iam.cloudtrail_role_arn
+  account_id = data.aws_caller_identity.current.account_id
 }
 
