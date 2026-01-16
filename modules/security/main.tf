@@ -15,7 +15,7 @@ resource "aws_config_delivery_channel" "config" {
   s3_bucket_name = var.centralized_logs_bucket_name
   s3_key_prefix  = "Config"
   s3_kms_key_arn = aws_kms_key.logs.arn
-  # sns_topic_arn = 
+  sns_topic_arn = var.config_topic_arn
 
   depends_on = [
     aws_config_configuration_recorder.config
