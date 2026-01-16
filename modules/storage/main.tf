@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 # CREATE DATA SECURITY GROUP, DB Subnet Group, AND RDS INSTANCE
 ## DATA SECURITY GROUP
 resource "aws_security_group" "data" {
@@ -117,7 +115,7 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 # S3 RESOURCES
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
-  bucket        = "tf-baseline-centralized-logs"
+  bucket        = "centralized-logs-${var.random_id}"
   force_destroy = true # DELETE THIS FOR PRODUCTION ENVIRONMENT
 
   tags = {
@@ -195,7 +193,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/config/*"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.account_id}/config/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"                    = "bucket-owner-full-control"
@@ -216,7 +214,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceAccount" = var.account_id
           }
         }
       },
@@ -228,11 +226,11 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/CloudTrail/*"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.account_id}/CloudTrail/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"                    = "bucket-owner-full-control"
-            "aws:SourceAccount"               = data.aws_caller_identity.current.account_id
+            "aws:SourceAccount"               = var.account_id
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
