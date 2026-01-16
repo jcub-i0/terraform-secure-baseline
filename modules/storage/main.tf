@@ -193,7 +193,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.account_id}/config/*"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/Config/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"                    = "bucket-owner-full-control"
@@ -226,7 +226,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.account_id}/CloudTrail/*"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/CloudTrail/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"                    = "bucket-owner-full-control"
