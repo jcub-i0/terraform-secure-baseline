@@ -9,3 +9,7 @@ variable "logs_kms_key_arn" {
 variable "cloudtrail_role_arn" {
   type = string
 }
+
+variable "account_id" {
+  type = string
+}
