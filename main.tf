@@ -47,6 +47,8 @@ module "security" {
   current_region               = data.aws_region.current.region
   account_id                   = data.aws_caller_identity.current.account_id  
   compliance_topic_arn = module.monitoring.compliance_topic_arn
+  primary_region = var.primary_region
+  guardduty_features = var.guardduty_features
 }
 
 module "logging" {
@@ -61,4 +63,6 @@ module "logging" {
 module "monitoring" {
   source = "./modules/monitoring"
   logs_kms_key_arn = module.security.logs_kms_key_arn
+  cloudtrail_log_group_name = module.logging.cloudtrail_logs_group_name
+  security_emails = var.security_emails
 }
