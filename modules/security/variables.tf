@@ -14,6 +14,6 @@ variable "account_id" {
   type = string
 }
 
-variable "config_topic_arn" {
+variable "compliance_topic_arn" {
   type = string
 }
