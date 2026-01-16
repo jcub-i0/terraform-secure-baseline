@@ -13,3 +13,7 @@ variable "current_region" {
 variable "account_id" {
   type = string
 }
+
+variable "config_topic_arn" {
+  type = string
+}
