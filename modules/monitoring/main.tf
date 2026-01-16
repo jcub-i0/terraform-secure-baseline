@@ -56,3 +56,121 @@ resource "aws_sns_topic_policy" "security" {
     }]
   })
 }
+
+### SECURITY SNS SUBSCRIPTION
+resource "aws_sns_topic_subscription" "security" {
+  for_each = toset(var.security_emails)
+
+  topic_arn = aws_sns_topic.security.arn
+  protocol = "email"
+  endpoint = each.value
+}
+
+### CLOUDTRAIL LOG METRIC FILTERS AND ALARMS
+#### ROOT ACTIVITY
+resource "aws_cloudwatch_log_metric_filter" "root_activity" {
+  name = "RootActivity"
+  log_group_name = var.cloudtrail_log_group_name
+
+  pattern = "{$.userIdentity.type = \"Root\"}"
+
+  metric_transformation {
+    name = "RootActivityCount"
+    namespace = "SecurityBaseline"
+    value = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "root_activity" {
+  alarm_name = "Root-User-Activity"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods = 1
+  metric_name = "RootActivityCount"
+  namespace = "SecurityBaseline"
+  period = 300
+  statistic = "Sum"
+  threshold = 1
+  alarm_description = "Detect Root-level activity"
+  alarm_actions = [aws_sns_topic.security.arn]
+}
+
+### UNAUTHORIZED API CALLS
+resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
+  name           = "Unauthorized-API-Calls"
+  log_group_name = var.cloudtrail_log_group_name
+
+  pattern        = "{($.errorCode = \"UnauthorizedOperation\") || ($.errorCode = \"AccessDenied\")}"
+
+  metric_transformation {
+    name      = "UnauthorizedAPICallCount"
+    namespace = "SecurityBaseline"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
+  alarm_name                = "Unauthorized_API_Calls"
+  comparison_operator       = "GreaterThanOrEqualToThreshold"
+  evaluation_periods        = 1
+  metric_name               = "UnauthorizedAPICallCount"
+  namespace                 = "SecurityBaseline"
+  period                    = 300
+  statistic                 = "Sum"
+  threshold                 = 1
+  alarm_description         = "Detect unauthorized API activity"
+  alarm_actions             = [aws_sns_topic.security.arn]
+}
+
+### CLOUDTRAIL DISABLED
+resource "aws_cloudwatch_log_metric_filter" "cloudtrail_disabled" {
+  name = "CloudTrail-Disabled"
+  log_group_name = var.cloudtrail_log_group_name
+
+  pattern = "{($.eventName = \"StopLogging\") || ($.eventName = \"DeleteTrail\")}"
+
+  metric_transformation {
+    name = "CloudTrailDisabled"
+    namespace = "SecurityBaseline"
+    value = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
+  alarm_name = "CloudTrailDisabled"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods = 1
+  metric_name = "CloudTrailDisabled"
+  namespace = "SecurityBaseline"
+  period = 300
+  statistic = "Sum"
+  threshold = 1
+  alarm_description = "Detect if CloudTrail is disabled"
+  alarm_actions = [aws_sns_topic.security.arn]
+}
+
+### IAM POLICY CHANGES (CONSIDER ALSO ADDING 'DeletePolicy', 'DetachRolePolicy', and 'UpdateAssumeRolePolicy')
+resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
+  name = "IamPolicyChanges"
+  log_group_name = var.cloudtrail_log_group_name
+
+  pattern = "{ ($.eventSource = \"iam.amazonaws.com\") && (($.eventName = \"CreatePolicy\") || ($.eventName = \"PutRolePolicy\") || ($.eventName = \"AttachRolePolicy\"))}"
+
+  metric_transformation {
+    name = "IamPolicyChanges"
+    namespace = "SecurityBaseline"
+    value = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "iam_changes" {
+  alarm_name = "IamPolicyChanges"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods = 1
+  metric_name = "IamPolicyChanges"
+  namespace = "SecurityBaseline"
+  period = 300
+  statistic = "Sum"
+  threshold = 1
+  alarm_description = "Detect any changes made to IAM"
+  alarm_actions = [aws_sns_topic.security.arn]
+}
