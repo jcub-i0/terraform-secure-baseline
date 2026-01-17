@@ -17,6 +17,9 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
         compliance = {
             status = ["FAILED"]
         }
+        workflow = {
+            status = ["FAILED"]
+        }
     }
   })
 }
