@@ -66,3 +66,7 @@ module "monitoring" {
   cloudtrail_log_group_name = module.logging.cloudtrail_logs_group_name
   security_emails           = var.security_emails
 }
+
+module "automation" {
+  source = "./modules/automation"
+}
