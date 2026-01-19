@@ -91,6 +91,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 }
 
 # LAMBDA
+# EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
   name = "lambda_ec2_isolation"
 
