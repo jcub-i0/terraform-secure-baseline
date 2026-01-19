@@ -90,8 +90,9 @@ resource "aws_iam_role_policy_attachment" "config" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
-# LAMBDA
-# EC2 ISOLATION LAMBDA EXECUTION ROLE
+# LAMBDA ROLES
+## EC2 ISOLATION LAMBDA
+### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
   name = "lambda_ec2_isolation"
 
