@@ -141,3 +141,8 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
     ]
   })
 }
+
+resource "aws_iam_role_policy_attachment" "lambda_ec2_isolation" {
+  role = aws_iam_role.lambda_ec2_isolation.name
+  policy_arn = aws_iam_policy.lambda_ec2_isolation.arn
+}
