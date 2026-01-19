@@ -107,3 +107,37 @@ resource "aws_iam_role" "lambda_ec2_isolation" {
     }]
   })
 }
+
+### EC2 ISOLATION IAM POLICY
+resource "aws_iam_policy" "lambda_ec2_isolation" {
+  name = "lambda-ec2-isolation"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+
+      # EC2 CONTROL
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:DescribeSecurityGroups",
+          "ec2:CreateTags"
+        ]
+        Resource = "*"
+      },
+
+      # CLOUDWATCH LOGS
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
