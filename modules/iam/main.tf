@@ -89,3 +89,19 @@ resource "aws_iam_role_policy_attachment" "config" {
   role = aws_iam_role.config.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
+
+# LAMBDA
+resource "aws_iam_role" "lambda_ec2_isolation" {
+  name = "lambda_ec2_isolation"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
