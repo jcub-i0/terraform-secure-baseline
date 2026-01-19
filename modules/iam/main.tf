@@ -142,6 +142,7 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
   })
 }
 
+### ATTACH EC2 ISOLATION POLICY TO EC2 ISOLATION EXECUTION ROLE
 resource "aws_iam_role_policy_attachment" "lambda_ec2_isolation" {
   role       = aws_iam_role.lambda_ec2_isolation.name
   policy_arn = aws_iam_policy.lambda_ec2_isolation.arn
