@@ -69,4 +69,6 @@ module "monitoring" {
 
 module "automation" {
   source = "./modules/automation"
+
+  vpc_id = module.networking.vpc_id
 }
