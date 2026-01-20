@@ -1,34 +1,34 @@
 # EC2 ISOLATION LAMBDA RESOURCES
 ## PACKAGE EC2 ISOLATION LAMBDA
 data "archive_file" "lambda_ec2_isolation" {
-  type = "zip"
-  source_dir = "${path.module}/lambda/ec2_isolation"
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/ec2_isolation"
   output_path = "${path.module}/lambda/ec2_isolation.zip"
 }
 
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
   function_name = "ec2-isolation"
-  role = var.lambda_ec2_isolation_role_arn
-  handler = "lambda_function.lambda_handler"
-  runtime = "python3.12"
-  filename = data.archive_file.lambda_ec2_isolation.output_path
-  timeout = 60
-  memory_size = 256
+  role          = var.lambda_ec2_isolation_role_arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.12"
+  filename      = data.archive_file.lambda_ec2_isolation.output_path
+  timeout       = 60
+  memory_size   = 256
 
   vpc_config {
-    subnet_ids = var.serverless_private_subnet_ids
+    subnet_ids         = var.serverless_private_subnet_ids
     security_group_ids = [aws_security_group.lambda_ec2_isolation_sg.id]
   }
 
   environment {
     variables = {
-        QUARANTINE_SG_ID = var.quarantine_sg_id
+      QUARANTINE_SG_ID = var.quarantine_sg_id
     }
   }
 
   tags = {
-    Name = "EC2-Isolation"
+    Name      = "EC2-Isolation"
     Terraform = "true"
   }
 }
@@ -59,16 +59,16 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
 ### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_isolation" {
   rule = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
-  arn = aws_lambda_function.ec2_isolation.arn
+  arn  = aws_lambda_function.ec2_isolation.arn
 }
 
 ### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
 resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
-  statement_id = "AllowExecutionFromEventBridgeEc2Isolation"
-  action = "lambda:InvokeFunction"
+  statement_id  = "AllowExecutionFromEventBridgeEc2Isolation"
+  action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ec2_isolation.function_name
-  principal = "events.amazonaws.com"
-  source_arn = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
 }
 
 ## EC2 ISOLATION SECURITY GROUP
