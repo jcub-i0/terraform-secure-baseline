@@ -18,7 +18,7 @@ resource "aws_lambda_function" "ec2_isolation" {
 
   vpc_config {
     subnet_ids = var.serverless_private_subnet_ids
-    security_group_ids = [aws_security_group.Lambda_EC2_Isolation-SG.id]
+    security_group_ids = [aws_security_group.lambda_ec2_isolation_sg.id]
   }
 
   environment {
