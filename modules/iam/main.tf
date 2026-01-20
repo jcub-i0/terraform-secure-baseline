@@ -91,6 +91,15 @@ resource "aws_iam_role_policy_attachment" "config" {
 }
 
 # LAMBDA ROLES
+## AWS-MANAGED POLICIES FOR LAMBDA LOGGING & VPC ENI ACCESS
+data "aws_iam_policy" "lambda_vpc" {
+  arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+data "aws_iam_policy" "lambda_logs" {
+  arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
 ## EC2 ISOLATION LAMBDA
 ### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
@@ -116,7 +125,7 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
     Version = "2012-10-17"
     Statement = [
 
-      # EC2 CONTROL
+      # CUSTOM POLICY FOR EC2 CONTROL
       {
         Effect = "Allow"
         Action = [
@@ -124,17 +133,6 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
           "ec2:ModifyInstanceAttribute",
           "ec2:DescribeSecurityGroups",
           "ec2:CreateTags"
-        ]
-        Resource = "*"
-      },
-
-      # CLOUDWATCH LOGS
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
         ]
         Resource = "*"
       }
@@ -146,4 +144,16 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
 resource "aws_iam_role_policy_attachment" "lambda_ec2_isolation" {
   role       = aws_iam_role.lambda_ec2_isolation.name
   policy_arn = aws_iam_policy.lambda_ec2_isolation.arn
+}
+
+### ATTACH AWS-MANAGED POLICY FOR LAMBDA VPC ENI ACCESS
+resource "aws_iam_role_policy_attachment" "lambda_vpc_attach" {
+  role = aws_iam_role.lambda_ec2_isolation.name
+  policy_arn = data.aws_iam_policy.lambda_vpc.arn
+}
+
+### ATTACH AWS-MANAGED POLICY FOR LAMBDA LOGGING
+resource "aws_iam_role_policy_attachment" "lambda_logs_attach" {
+  role = aws_iam_role.lambda_ec2_isolation.name
+  policy_arn = data.aws_iam_policy.lambda_logs.arn
 }
