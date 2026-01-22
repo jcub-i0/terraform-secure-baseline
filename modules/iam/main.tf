@@ -135,6 +135,13 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
           "ec2:CreateTags"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "sns:Publish"
+        ],
+        Resource = var.security_topic_arn
       }
     ]
   })
