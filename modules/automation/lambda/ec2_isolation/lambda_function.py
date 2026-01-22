@@ -40,4 +40,18 @@ def lambda_handler(event, context):
 
 
 def isolate_instance(instance_id, finding_id):
+    response = ec2.describe_instances(InstanceIds=[instance_id])
+    instance = response["Reservations"][0]["Instances"][0]
+    state = instance["State"]["Name"]
+
+    if state not in ['running', 'stopped']:
+        print("Instance not in isolatable state")
+        return
+    
+    tags = {t["Key"]: t["Value"] for t in instance.get("Tags", [])}
+
+    if tags.get[PROTECTION_TAG, ""].lower() == "false":
+        print("Instance is protected from isolation")
+        return
+    
     pass
