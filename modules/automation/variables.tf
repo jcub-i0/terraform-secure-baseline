@@ -13,3 +13,7 @@ variable "serverless_private_subnet_ids" {
 variable "quarantine_sg_id" {
   type = string
 }
+
+variable "security_topic_arn" {
+  type = string
+}
