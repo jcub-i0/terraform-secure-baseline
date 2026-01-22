@@ -2,15 +2,15 @@
 ## PACKAGE EC2 ISOLATION LAMBDA
 data "archive_file" "lambda_ec2_isolation" {
   type        = "zip"
-  source_file  = "${path.module}/lambda/ec2_isolation/ec2_isolation.py"
-  output_path = "${path.module}/lambda/ec2_isolation/ec2_isolation.zip"
+  source_file  = "${path.module}/lambda/ec2_isolation.py"
+  output_path = "${path.module}/lambda/ec2_isolation.zip"
 }
 
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
   function_name = "ec2-isolation"
   role          = var.lambda_ec2_isolation_role_arn
-  handler       = "lambda_function.lambda_handler"
+  handler       = "ec2_isolation.lambda_handler"
   runtime       = "python3.12"
   filename      = data.archive_file.lambda_ec2_isolation.output_path
   timeout       = 60
