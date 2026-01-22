@@ -2,8 +2,8 @@
 ## PACKAGE EC2 ISOLATION LAMBDA
 data "archive_file" "lambda_ec2_isolation" {
   type        = "zip"
-  source_dir  = "${path.module}/lambda/ec2_isolation"
-  output_path = "${path.module}/lambda/ec2_isolation.zip"
+  source_file  = "${path.module}/lambda/ec2_isolation/ec2_isolation.py"
+  output_path = "${path.module}/lambda/ec2_isolation/ec2_isolation.zip"
 }
 
 ## EC2 ISOLATION LAMBDA FUNCTION
