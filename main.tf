@@ -37,6 +37,7 @@ module "storage" {
 module "iam" {
   source                   = "./modules/iam"
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
+  security_topic_arn = module.monitoring.security_topic_arn
 }
 
 module "security" {
