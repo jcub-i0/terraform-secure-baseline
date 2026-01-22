@@ -24,6 +24,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   environment {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
+      SNS_TOPIC_ARN = var.security_topic_arn
     }
   }
 
