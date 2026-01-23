@@ -2,7 +2,7 @@
 ## PACKAGE EC2 ISOLATION LAMBDA
 data "archive_file" "lambda_ec2_isolation" {
   type        = "zip"
-  source_file  = "${path.module}/lambda/ec2_isolation.py"
+  source_file = "${path.module}/lambda/ec2_isolation.py"
   output_path = "${path.module}/lambda/ec2_isolation.zip"
 }
 
@@ -24,7 +24,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   environment {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
-      SNS_TOPIC_ARN = var.security_topic_arn
+      SNS_TOPIC_ARN    = var.security_topic_arn
     }
   }
 
