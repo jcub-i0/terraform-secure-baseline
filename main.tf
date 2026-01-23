@@ -37,7 +37,7 @@ module "storage" {
 module "iam" {
   source                   = "./modules/iam"
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
-  security_topic_arn = module.monitoring.security_topic_arn
+  security_topic_arn       = module.monitoring.security_topic_arn
 }
 
 module "security" {
@@ -71,9 +71,9 @@ module "monitoring" {
 module "automation" {
   source = "./modules/automation"
 
-  vpc_id = module.networking.vpc_id
+  vpc_id                        = module.networking.vpc_id
   lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
   serverless_private_subnet_ids = module.networking.serverless_subnet_ids_list
-  quarantine_sg_id = module.compute.quarantine_sg_id
-  security_topic_arn = module.monitoring.security_topic_arn
+  quarantine_sg_id              = module.compute.quarantine_sg_id
+  security_topic_arn            = module.monitoring.security_topic_arn
 }
