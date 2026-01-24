@@ -2,7 +2,7 @@
 ## PACKAGE EC2 ISOLATION LAMBDA
 data "archive_file" "lambda_ec2_isolation" {
   type        = "zip"
-  source_file = "${path.module}/lambda/ec2_isolation.py"
+  source_file  = "${path.module}/lambda/ec2_isolation.py"
   output_path = "${path.module}/lambda/ec2_isolation.zip"
 }
 
@@ -15,6 +15,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   filename      = data.archive_file.lambda_ec2_isolation.output_path
   timeout       = 60
   memory_size   = 256
+  source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
 
   vpc_config {
     subnet_ids         = var.serverless_private_subnet_ids
@@ -24,7 +25,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   environment {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
-      SNS_TOPIC_ARN    = var.security_topic_arn
+      SNS_TOPIC_ARN = var.security_topic_arn
     }
   }
 
