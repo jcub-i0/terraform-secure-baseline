@@ -155,7 +155,7 @@ resource "aws_kms_key" "logs" {
       },
       ### ALLOW S3 TO USE THE KEY
       {
-        Sid    = "AllowS3UseOfKey"
+        Sid    = "AllowS3"
         Effect = "Allow"
         Principal = {
           Service = "s3.amazonaws.com"
