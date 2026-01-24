@@ -20,6 +20,7 @@ How to use:
 * SNS notification sent to configured SNS topic
 * No errors in logs
 #### Event JSON
+```json
 {
   "version": "0",
   "id": "abcd-1234",
