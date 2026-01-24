@@ -36,6 +36,7 @@ How to use:
     ]
   }
 }
+```
 
 ### TEST 2 -- CRITICAL EC2 SECURITY HUB FINDING
 #### Expected Outcome:
@@ -45,6 +46,7 @@ How to use:
 * SNS notification sent to configured SNS topic
 * No errors in logs
 #### Event JSON
+```json
 {
   "version": "0",
   "id": "abcd-1234",
@@ -60,6 +62,7 @@ How to use:
     ]
   }
 }
+```
 
 ### TEST 3 -- HIGH NON-EC2 FINDING (i.e. S3, Config, etc.)
 #### Expected Outcome:
@@ -69,6 +72,7 @@ How to use:
 * No Security Groups modified
 * No errors in logs
 #### Event JSON
+```json
 {
   "version": "0",
   "id": "abcd-1234",
@@ -84,6 +88,7 @@ How to use:
     ]
   }
 }
+```
 
 ### TEST 4 -- MEDIUM EC2 FINDING (i.e. S3, Config, etc.)
 #### Expected Outcome:
@@ -93,6 +98,7 @@ How to use:
 * No Security Groups modified
 * No errors in logs
 #### Event JSON
+```json
 {
   "version": "0",
   "id": "abcd-1234",
@@ -108,3 +114,4 @@ How to use:
     ]
   }
 }
+```
