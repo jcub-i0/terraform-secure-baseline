@@ -136,6 +136,7 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
         ]
         Resource = "*"
       },
+      # ALLOW LAMBDA TO CALL SNS
       {
         Effect = "Allow",
         Action = [
