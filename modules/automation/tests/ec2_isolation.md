@@ -5,8 +5,7 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 How to use:
 * Replace "<YOUR-ACCOUNT-ID>" with your AWS account ID
-* From AWS Security Hub, copy a real Security Hub finding JSON in accordance with the title of the test (i.e. HIGH EC2 SECURITY HUB FINDING)
-* Replace "<SECURITY-HUB-FINDING>" with the finding JSON you copied
+* Replace "
 * Run the test
 * Confirm Expected Outcome based on 'Expected Outcome' section of each test
 
@@ -32,7 +31,21 @@ How to use:
   "resources": [],
   "detail": {
     "findings": [
-      <SECURITY-HUB-FINDING-JSON>
+      {
+        "Id": "test-finding-001",
+        "Severity": {
+          "Label": "HIGH"
+        },
+        "Workflow": {
+          "Status": "NEW"
+        },
+        "Resources": [
+          {
+            "Type": "AwsEc2Instance",
+            "Id": "<ARN-OF-EC2-INSTANCE-TO-ISOLATE>"
+          }
+        ]
+      }
     ]
   }
 }
@@ -58,7 +71,21 @@ How to use:
   "resources": [],
   "detail": {
     "findings": [
-      <SECURITY-HUB-FINDING-JSON>
+      {
+        "Id": "test-finding-001",
+        "Severity": {
+          "Label": "CRITICAL"
+        },
+        "Workflow": {
+          "Status": "NEW"
+        },
+        "Resources": [
+          {
+            "Type": "AwsEc2Instance",
+            "Id": "<ARN-OF-EC2-INSTANCE>"
+          }
+        ]
+      }
     ]
   }
 }
@@ -84,13 +111,27 @@ How to use:
   "resources": [],
   "detail": {
     "findings": [
-      <SECURITY-HUB-FINDING-JSON>
+      {
+        "Id": "test-finding-001",
+        "Severity": {
+          "Label": "HIGH"
+        },
+        "Workflow": {
+          "Status": "NEW"
+        },
+        "Resources": [
+          {
+            "Type": "AwsEc2SecurityGroup",
+            "Id": "<ARN-OF-SECURITY-GROUP>"
+          }
+        ]
+      }
     ]
   }
 }
 ```
 
-### TEST 4 -- MEDIUM EC2 FINDING (i.e. S3, Config, etc.)
+### TEST 4 -- MEDIUM EC2 FINDING
 #### Expected Outcome:
 * Lambda executes
 * No EC2 instances modified
@@ -110,7 +151,21 @@ How to use:
   "resources": [],
   "detail": {
     "findings": [
-      <SECURITY-HUB-FINDING-JSON>
+      {
+        "Id": "test-finding-001",
+        "Severity": {
+          "Label": "MEDIUM"
+        },
+        "Workflow": {
+          "Status": "NEW"
+        },
+        "Resources": [
+          {
+            "Type": "AwsEc2Instance",
+            "Id": "<ARN-OF-EC2-INSTANCE>"
+          }
+        ]
+      }
     ]
   }
 }
