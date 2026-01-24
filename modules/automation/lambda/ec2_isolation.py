@@ -20,7 +20,7 @@ SNS_TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
 
 def lambda_handler(event, context):
     if not QUARANTINE_SG:
-        logger.error(f"QURANTINE_SG not set. Aborting isolation.")
+        logger.error(f"QUARANTINE_SG not set. Aborting isolation.")
         return
     
     logger.info(f"Received event: {json.dumps(event, indent=2)}")
@@ -46,20 +46,71 @@ def lambda_handler(event, context):
 
                 logger.info(f"Processing instance: {instance_id}")
 
+                # SNAPSHOT INSTANCE VOLUME BEFORE EC2 ISOLATION
+                snapshot_attached_volumes(instance_id)
+
                 isolate_instance(instance_id, finding["Id"])
 
         except Exception as e:
             logger.error(f"ERROR PROCESSING FINDING: {str(e)}")
 
+def snapshot_attached_volumes(instance_id):
+    logger.info(f"Describing volumes for instance {instance_id}")
 
-def isolate_instance(instance_id, finding_id):
     try:
-        response = ec2.describe_instances(InstanceIds=[instance_id])
-    except Exception as e:
-        logger.error(f"Described FAILED for instance {instance_id}: {str(e)}")
-        return
+        # GET INSTANCE DETAILS
+        reservations = ec2.describe_instances(InstanceIds=[instance_id])["Reservations"]
+        instances = [i for r in reservations for i in r["Instances"]]
 
-    instance = response["Reservations"][0]["Instances"][0]
+        if not instances:
+            logger.warning(f"No instance found with ID {instance_id}")
+            return
+        
+        instance = instances[0]
+
+        # SKIP SNAPSHOT IF INSTANCE IS ALREADY QUARANTINED
+        tags = {tag["Key"]: tag["Value"] for tag in instance.get("Tags", [])}
+        if tags.get("Isolated", "") == "true":
+            logger.info(f"Instance {instance_id} is already quarantined; skipping snapshot")
+            return
+        
+        for device in instance.get("BlockDeviceMappings", []):
+            volume_id = device.get("Ebs", {}).get("VolumeId")
+            device_name = device.get("DeviceName")
+
+            if volume_id:
+                logger.info(f"Creating snapshot for EBS volume {volume_id} ({device_name})")
+                description = f"Snapshot of {volume_id} from instance {instance_id} prior to EC2 isolation"
+
+                # CREATE VOLUME SNAPSHOT
+                response = ec2.create_snapshot(
+                    Description = description,
+                    VolumeId = volume_id
+                )
+
+                snapshot_id = response["SnapshotId"]
+                logger.info(f"Snapshot {snapshot_id}")
+
+                # APPLY TAGS
+                ec2.create_tags(
+                    Resources=[snapshot_id],
+                    Tags=[
+                        {"Key": "Name", "Value": f"{instance_id}-{volume_id}"},
+                        {"Key": "CreatedBy", "Value": "LambdaAutoResponse"},
+                        {"Key": "InstanceId", "Value": instance_id}
+                    ]
+                )
+
+                logger.info(f"Snapshot {snapshot_id} for {volume_id} tagged successfully.")
+
+    except Exception as e:
+        logger.error(f"Failed to create snapshot: {str(e)}")
+        raise
+
+    return instance
+
+def isolate_instance(instance, finding_id):
+    instance_id = instance["InstanceId"]
     state = instance["State"]["Name"]
 
     if state not in ['running', 'stopped']:
@@ -102,7 +153,7 @@ def isolate_instance(instance_id, finding_id):
             },
             {
                 "Key": "IsolatedBy",
-                "Value": "Lambda"
+                "Value": "LambdaAutoResponse"
             },
             {
                 "Key": "IsolationFinding",
@@ -136,7 +187,7 @@ def publish_to_sns(instance_id, finding_id, original_sgs):
         f"Quarantine SG: {QUARANTINE_SG}\n"
         f"Timestamp: {datetime.now(timezone.utc).isoformat()}"
     )
-    
+
     logger.info(f"Publishing to SNS Topic {SNS_TOPIC_ARN} with message:\n{message}")
 
     try:
