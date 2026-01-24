@@ -47,9 +47,12 @@ def lambda_handler(event, context):
                 logger.info(f"Processing instance: {instance_id}")
 
                 # SNAPSHOT INSTANCE VOLUME BEFORE EC2 ISOLATION
-                snapshot_attached_volumes(instance_id)
+                instance = snapshot_attached_volumes(instance_id)
+                if instance is None:
+                    logger.warning(f"Skipping isolation for {instance_id} due to snapshot failure")
+                    continue
 
-                isolate_instance(instance_id, finding["Id"])
+                isolate_instance(instance, finding["Id"])
 
         except Exception as e:
             logger.error(f"ERROR PROCESSING FINDING: {str(e)}")
