@@ -136,6 +136,9 @@ def publish_to_sns(instance_id, finding_id, original_sgs):
         f"Quarantine SG: {QUARANTINE_SG}\n"
         f"Timestamp: {datetime.now(timezone.utc).isoformat()}"
     )
+    
+    logger.info(f"Publishing to SNS Topic {SNS_TOPIC_ARN} with message:\n{message}")
+
     try:
         sns.publish(
             TopicArn = SNS_TOPIC_ARN,
