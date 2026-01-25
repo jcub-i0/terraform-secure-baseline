@@ -133,7 +133,6 @@ resource "aws_cloudwatch_event_rule" "ec2_rollback" {
   description = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
   event_pattern = jsonencode({
     "source" = ["custom.rollback"]
-    "detail-type" = ["Ec2Rollback"]
   })
 }
 
