@@ -17,6 +17,7 @@ sns = boto3.client("sns")
 QUARANTINE_SG = os.environ["QUARANTINE_SG_ID"]
 PROTECTION_TAG = "IsolationAllowed"
 SNS_TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
+EBS_KMS_ALIAS_ARN = os.environ["EBS_KMS_ALIAS_ARN"]
 
 def lambda_handler(event, context):
     if not QUARANTINE_SG:
@@ -88,7 +89,13 @@ def snapshot_attached_volumes(instance_id):
                 # CREATE VOLUME SNAPSHOT
                 response = ec2.create_snapshot(
                     Description = description,
-                    VolumeId = volume_id
+                    VolumeId = volume_id,
+                    Encrypted = True,
+                    KmsKeyId = EBS_KMS_ALIAS_ARN
+                )
+                logger.info(
+                    f"Created encrypted snapshot {snapshot_id} for volume {volume_id} "
+                    f"of instance {instance_id} using KMS key {EBS_KMS_ALIAS_ARN}"
                 )
 
                 snapshot_id = response["SnapshotId"]
