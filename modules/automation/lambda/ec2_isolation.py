@@ -88,16 +88,23 @@ def snapshot_attached_volumes(instance_id):
                 # CREATE VOLUME SNAPSHOT
                 response = ec2.create_snapshot(
                     Description = description,
-                    VolumeId = volume_id,
-                    TagSpecifications = [
+                    VolumeId = volume_id
+                )
+
+                snapshot_id = response["SnapshotId"]
+                logger.info(f"Snapshot {snapshot_id}")
+
+                # APPLY TAGS
+                ec2.create_tags(
+                    Resources=[snapshot_id],
+                    Tags=[
                         {"Key": "Name", "Value": f"{instance_id}-{volume_id}"},
                         {"Key": "CreatedBy", "Value": "LambdaAutoResponse"},
                         {"Key": "InstanceId", "Value": instance_id}
                     ]
                 )
 
-                snapshot_id = response["SnapshotId"]
-                logger.info(f"Snapshot {snapshot_id} successfully created for instance {instance_id}")
+                logger.info(f"Snapshot {snapshot_id} for {volume_id} tagged successfully.")
 
     except Exception as e:
         logger.error(f"Failed to create snapshot: {str(e)}")
