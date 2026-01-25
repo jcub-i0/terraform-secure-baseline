@@ -132,7 +132,8 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
           "ec2:DescribeInstances",
           "ec2:ModifyInstanceAttribute",
           "ec2:DescribeSecurityGroups",
-          "ec2:CreateTags"
+          "ec2:CreateTags",
+          "ec2:CreateSnapshot"
         ]
         Resource = "*"
       },
