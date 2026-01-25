@@ -52,3 +52,14 @@ def validate_security_groups(group_ids):
     except Exception as e:
         logger.error(f"Security group validation failed: {str(e)}")
         raise
+
+def restore_security_groups(instance_id, group_ids):
+    logger.info(f"Restoring SGs on {instance_id}: {group_ids}")
+
+    ec2.modify_instance_attribute(
+        InstanceId = instance_id,
+        Groups = group_ids
+    )
+
+    logger.info("Security groups restored successfully.")
+
