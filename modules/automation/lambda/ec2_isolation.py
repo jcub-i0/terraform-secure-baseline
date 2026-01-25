@@ -17,7 +17,6 @@ sns = boto3.client("sns")
 QUARANTINE_SG = os.environ["QUARANTINE_SG_ID"]
 PROTECTION_TAG = "IsolationAllowed"
 SNS_TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
-EBS_KMS_ALIAS_ARN = os.environ["EBS_KMS_ALIAS_ARN"]
 
 def lambda_handler(event, context):
     if not QUARANTINE_SG:
@@ -90,28 +89,15 @@ def snapshot_attached_volumes(instance_id):
                 response = ec2.create_snapshot(
                     Description = description,
                     VolumeId = volume_id,
-                    Encrypted = True,
-                    KmsKeyId = EBS_KMS_ALIAS_ARN
-                )
-                logger.info(
-                    f"Created encrypted snapshot {snapshot_id} for volume {volume_id} "
-                    f"of instance {instance_id} using KMS key {EBS_KMS_ALIAS_ARN}"
-                )
-
-                snapshot_id = response["SnapshotId"]
-                logger.info(f"Snapshot {snapshot_id}")
-
-                # APPLY TAGS
-                ec2.create_tags(
-                    Resources = [snapshot_id],
-                    Tags = [
+                    TagSpecifications = [
                         {"Key": "Name", "Value": f"{instance_id}-{volume_id}"},
                         {"Key": "CreatedBy", "Value": "LambdaAutoResponse"},
                         {"Key": "InstanceId", "Value": instance_id}
                     ]
                 )
 
-                logger.info(f"Snapshot {snapshot_id} for {volume_id} tagged successfully.")
+                snapshot_id = response["SnapshotId"]
+                logger.info(f"Snapshot {snapshot_id} successfully created for instance {instance_id}")
 
     except Exception as e:
         logger.error(f"Failed to create snapshot: {str(e)}")
