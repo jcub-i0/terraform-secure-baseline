@@ -96,8 +96,8 @@ def snapshot_attached_volumes(instance_id):
 
                 # APPLY TAGS
                 ec2.create_tags(
-                    Resources=[snapshot_id],
-                    Tags=[
+                    Resources = [snapshot_id],
+                    Tags = [
                         {"Key": "Name", "Value": f"{instance_id}-{volume_id}"},
                         {"Key": "CreatedBy", "Value": "LambdaAutoResponse"},
                         {"Key": "InstanceId", "Value": instance_id}
