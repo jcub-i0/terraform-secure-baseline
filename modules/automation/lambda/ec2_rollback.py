@@ -89,3 +89,23 @@ def tag_release(instance_id, approved_by, ticket_id, reason):
     )
 
     logger.info(f"Release tags applied to {instance_id}")
+
+def publish_to_sns(instance_id, sgs, approved_by, ticket_id):
+    if not SNS_TOPIC_ARN:
+        logger.warning("SNS_TOPIC_ARN not set. Skipping SNS notification.")
+
+    message = (
+        f"✅ EC2 instance {instance_id} was RELEASED from quarantine. \n\n"
+        f"Approved by: {approved_by}\n"
+        f"Ticket: {ticket_id}\n"
+        f"Restored SGs: {sgs}\n"
+        f"Timestamp: {datetime.now(timezone.utc).isoformat()}"
+    )
+
+    sns.publish(
+        TopicArn = SNS_TOPIC_ARN,
+        Subject = "EC2 QUARANTINE RELEASED",
+        Message = message
+    )
+
+    logger.info("SNS notification sent.")
