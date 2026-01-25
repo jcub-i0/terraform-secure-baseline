@@ -34,12 +34,32 @@ def lambda_handler(event, context):
     instance = get_instances(instance_id)
     if not instance:
         return
+    
+    tags = {t["Key"]: t["Value"] for t in instance.get("Tags", [])}
 
+    if tags.get("Isolated") != "true":
+        logger.warning(f"Instance {instance_id} is not isolated. Aborting.")
+        return
+    
+    original_sgs = tags.get("OriginalSecurityGroups")
+    if not original_sgs:
+        logger.error(f"OriginalSecurityGroups tag missing. Cannot rollback safely.")
+        return
+    
+    original_sg_list = original_sgs.split(",")
+    
+    validate_security_groups(original_sg_list)
+
+    restore_security_groups(instance_id, original_sg_list)
+
+    tag_release(instance_id, approved_by, ticket_id, reason)
+
+    notify(instance_id, original_sg_list, approved_by, ticket_id)
 
 def get_instances(instance_id):
     try:
         response = ec2.describe_instances(InstanceIds=[instance_id])
-        return response["Reservations"]
+        return response["Reservations"][0]["Instances"][0]
 
     except Exception as e:
         logger.error(f"Could not retrieve instance {instance_id}: {str(e)}")
@@ -47,7 +67,7 @@ def get_instances(instance_id):
 
 def validate_security_groups(group_ids):
     try:
-        ec2.describe_security_groups(GroupIds=[group_ids])
+        ec2.describe_security_groups(GroupIds=group_ids)
         logger.info("All original security groups validated")
     except Exception as e:
         logger.error(f"Security group validation failed: {str(e)}")
@@ -90,7 +110,7 @@ def tag_release(instance_id, approved_by, ticket_id, reason):
 
     logger.info(f"Release tags applied to {instance_id}")
 
-def publish_to_sns(instance_id, sgs, approved_by, ticket_id):
+def notify(instance_id, original_sg_list, approved_by, ticket_id):
     if not SNS_TOPIC_ARN:
         logger.warning("SNS_TOPIC_ARN not set. Skipping SNS notification.")
 
@@ -98,7 +118,7 @@ def publish_to_sns(instance_id, sgs, approved_by, ticket_id):
         f"✅ EC2 instance {instance_id} was RELEASED from quarantine. \n\n"
         f"Approved by: {approved_by}\n"
         f"Ticket: {ticket_id}\n"
-        f"Restored SGs: {sgs}\n"
+        f"Restored SGs: {original_sg_list}\n"
         f"Timestamp: {datetime.now(timezone.utc).isoformat()}"
     )
 
