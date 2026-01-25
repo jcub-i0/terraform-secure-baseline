@@ -10,3 +10,7 @@ variable "compute_private_subnet_ids_map" {
 variable "instance_profile_name" {
   type = string
 }
+
+variable "ebs_kms_key_arn" {
+  type = string
+}
