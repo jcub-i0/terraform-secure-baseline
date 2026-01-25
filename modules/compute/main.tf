@@ -75,6 +75,13 @@ resource "aws_instance" "ec2" {
     http_put_response_hop_limit = 2
   }
 
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+    encrypted = true
+    kms_key_id = var.ebs_kms_key_arn
+  }
+
   tags = {
     Name             = "EC2-${each.key}"
     Terraform        = "true"
