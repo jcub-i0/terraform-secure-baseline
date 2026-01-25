@@ -63,3 +63,29 @@ def restore_security_groups(instance_id, group_ids):
 
     logger.info("Security groups restored successfully.")
 
+def tag_release(instance_id, approved_by, ticket_id, reason):
+    ec2.create_tags(
+        Resources = [instance_id],
+        Tags = [
+            {
+                "Key": "Isolated", "Value": "false"
+            },
+            {
+                "Key": "IsolationReleased", "Value": "true"
+            },
+            {
+                "Key": "ReleaseTime", "Value": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "Key": "ReleaseApprovedBy", "Value": approved_by
+            },
+            {
+                "Key": "ReleaseTicket", "Value": ticket_id
+            },
+            {
+                "Key": "ReleaseReason", "Value": reason
+            }
+        ]
+    )
+
+    logger.info(f"Release tags applied to {instance_id}")
