@@ -167,6 +167,21 @@ resource "aws_kms_key" "logs" {
           "kms:GenerateDataKey*"
         ]
         Resource = "*"
+      },
+      ### ALLOW SNS TO USE THE KEY
+      {
+        Sid = "AllowSns"
+        Effect = "Allow"
+        Principal = {
+          Service = "sns.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
