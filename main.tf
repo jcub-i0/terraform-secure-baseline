@@ -19,6 +19,7 @@ module "compute" {
   vpc_id                         = module.networking.vpc_id
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   instance_profile_name          = module.iam.instance_profile_name
+  ebs_kms_key_arn = module.security.ebs_kms_key_arn
 }
 
 module "storage" {
@@ -38,6 +39,7 @@ module "iam" {
   source                   = "./modules/iam"
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   security_topic_arn       = module.monitoring.security_topic_arn
+  logs_kms_key_arn = module.security.logs_kms_key_arn
 }
 
 module "security" {
