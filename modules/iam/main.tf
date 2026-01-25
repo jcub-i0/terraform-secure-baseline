@@ -235,3 +235,21 @@ resource "aws_iam_policy" "lambda_ec2_rollback" {
     ]
   })
 }
+
+### ATTACH EC2 ROLLBACK POLICY TO EC2 ROLLBACK EXECUTION ROLE
+resource "aws_iam_role_policy_attachment" "lambda_ec2_rollback" {
+  role = aws_iam_role.lambda_ec2_rollback.name
+  policy_arn = aws_iam_policy.lambda_ec2_rollback.arn
+}
+
+### ATTACH AWS-MANAGED POLICY FOR LAMBDA VPC ENI ACCESS
+resource "aws_iam_role_policy_attachment" "ec2_rollback_vpc_attach" {
+  role       = aws_iam_role.lambda_ec2_rollback.name
+  policy_arn = data.aws_iam_policy.lambda_vpc.arn
+}
+
+### ATTACH AWS-MANAGED POLICY FOR LAMBDA LOGGING
+resource "aws_iam_role_policy_attachment" "ec2_rollback_logs_attach" {
+  role       = aws_iam_role.lambda_ec2_rollback.name
+  policy_arn = data.aws_iam_policy.lambda_logs.arn
+} 
