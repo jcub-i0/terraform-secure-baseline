@@ -177,3 +177,61 @@ resource "aws_iam_role_policy_attachment" "lambda_logs_attach" {
   role       = aws_iam_role.lambda_ec2_isolation.name
   policy_arn = data.aws_iam_policy.lambda_logs.arn
 }
+
+## EC2 ROLLBACK LAMBDA
+### EC2 ROLLBACK LAMBDA EXECUTION ROLE
+resource "aws_iam_role" "lambda_ec2_rollback" {
+  name = "lambda-ec2-rollback"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+### EC2 ROLLBACK IAM POLICY
+resource "aws_iam_policy" "lambda_ec2_rollback" {
+  name = "lambda-rollback-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # CUSTOM POLICY FOR EC2 CONTROL
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:DescribeSecurityGroups",
+          "ec2:CreateTags"
+        ],
+        Resource = "*"
+      },
+      # ALLOW LAMBDA TO CALL SNS
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ],
+        Resource = var.security_topic_arn
+      },
+      # ALLOW LAMBDA TO CALL LOGS KMS KEY
+      {
+        Effect = "Allow",
+        Action = [
+          "kms:GenerateDataKey",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ],
+        Resource = var.logs_kms_key_arn
+      }
+    ]
+  })
+}
