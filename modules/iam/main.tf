@@ -145,7 +145,7 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
         ],
         Resource = var.security_topic_arn
       },
-      # ALLOW LAMBDA TO CALL KMS
+      # ALLOW LAMBDA TO CALL LOGS KMS KEY
       {
         Effect = "Allow",
         Action = [
