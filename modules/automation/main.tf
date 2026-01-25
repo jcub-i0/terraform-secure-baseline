@@ -63,6 +63,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
 ### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_isolation" {
   rule = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
+  target_id = "Ec2Isolation"
   arn  = aws_lambda_function.ec2_isolation.arn
 }
 
