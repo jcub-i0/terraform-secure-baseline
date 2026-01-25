@@ -143,6 +143,17 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
           "sns:Publish"
         ],
         Resource = var.security_topic_arn
+      },
+      # ALLOW LAMBDA TO CALL KMS
+      {
+        Effect = "Allow",
+        Action = [
+          "kms:GenerateDataKey",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ],
+        Resource = var.logs_kms_key_arn
       }
     ]
   })
