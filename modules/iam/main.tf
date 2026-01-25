@@ -167,13 +167,13 @@ resource "aws_iam_role_policy_attachment" "lambda_ec2_isolation" {
 }
 
 ### ATTACH AWS-MANAGED POLICY FOR LAMBDA VPC ENI ACCESS
-resource "aws_iam_role_policy_attachment" "lambda_vpc_attach" {
+resource "aws_iam_role_policy_attachment" "ec2_isolation_vpc_attach" {
   role       = aws_iam_role.lambda_ec2_isolation.name
   policy_arn = data.aws_iam_policy.lambda_vpc.arn
 }
 
 ### ATTACH AWS-MANAGED POLICY FOR LAMBDA LOGGING
-resource "aws_iam_role_policy_attachment" "lambda_logs_attach" {
+resource "aws_iam_role_policy_attachment" "ec2_isolation_logs_attach" {
   role       = aws_iam_role.lambda_ec2_isolation.name
   policy_arn = data.aws_iam_policy.lambda_logs.arn
 }
