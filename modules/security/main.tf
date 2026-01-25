@@ -192,8 +192,58 @@ resource "aws_kms_key" "logs" {
   }
 }
 
-## ALIAS FOR LOGS KMS KEY
+### ALIAS FOR LOGS KMS KEY
 resource "aws_kms_alias" "logs" {
   name          = "alias/tf-baseline-logs"
   target_key_id = aws_kms_key.logs.key_id
+}
+
+## EBS KMS KEY
+resource "aws_kms_key" "ebs" {
+  description             = "CMK for encrypting EBS volumes and snapshots"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # FULL ACCESS FOR ROOT ACCOUNT
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      # ALLOW EC2/EBS
+      {
+        Sid = "AllowEc2Ebs"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "EBS-CMK"
+    Terraform = "true"
+  }
+}
+
+### EBS KMS KEY ALIAS
+resource "aws_kms_alias" "ebs" {
+  name = "alias/ebs-cmk"
+  target_key_id = aws_kms_key.ebs.id
 }
