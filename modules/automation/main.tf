@@ -185,7 +185,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
 }
 
-## EC2 ISOLATION SECURITY GROUP
+## EC2 ROLLBACK SECURITY GROUP
 resource "aws_security_group" "lambda_ec2_rollback_sg" {
   name        = "Lambda-EC2-Rollback-SG"
   description = "Security Group for the EC2 Rollback Lambda function"
