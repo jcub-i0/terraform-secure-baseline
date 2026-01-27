@@ -40,6 +40,8 @@ module "iam" {
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   security_topic_arn       = module.monitoring.security_topic_arn
   logs_kms_key_arn = module.security.logs_kms_key_arn
+  account_id = data.aws_caller_identity.current.account_id
+  primary_region = var.primary_region
 }
 
 module "security" {
@@ -79,4 +81,7 @@ module "automation" {
   serverless_private_subnet_ids = module.networking.serverless_subnet_ids_list
   quarantine_sg_id              = module.compute.quarantine_sg_id
   security_topic_arn            = module.monitoring.security_topic_arn
+  account_id                 = data.aws_caller_identity.current.account_id
+  secops_role_arn = module.iam.secops_role_arn
+  primary_region = var.primary_region
 }
