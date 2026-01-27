@@ -104,6 +104,7 @@ data "archive_file" "lambda_ec2_rollback" {
   output_path = "${path.module}/lambda/ec2_rollback.zip"
 }
 
+## EC2 ROLLBACK LAMBDA FUCNTION
 resource "aws_lambda_function" "ec2_rollback" {
   function_name = "ec2-rollback"
   role = var.lambda_ec2_rollback_role_arn
@@ -127,18 +128,50 @@ resource "aws_lambda_function" "ec2_rollback" {
 }
 
 ## EVENTBRIDGE RESOURCES
+### CUSTOM EVENT BUS TO LIMIT ONLY SECURITY OPERATIONS USERS TO TRIGGER EC2 ROLLBACK
+resource "aws_cloudwatch_event_bus" "secops" {
+  name = "security-operations-bus"
+}
+
+### SECURITY OPERATIONS EVENT BUS POLICY
+resource "aws_cloudwatch_event_bus_policy" "allow_secops_rollback" {
+  event_bus_name = aws_cloudwatch_event_bus.secops.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid = "AllowSecOpsRollbackOnly"
+      Effect = "Allow"
+      Principal = {
+        AWS = var.secops_role_arn
+      }
+      Action = "events:PutEvents"
+      Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
+      Condition = {
+        StringEquals = {
+          "events:source" = "custom.rollback"
+        }
+      }
+    }]
+  })
+}
+
 ### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
 resource "aws_cloudwatch_event_rule" "ec2_rollback" {
   name = "ec2-rollback-rule"
   description = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
+  event_bus_name = aws_cloudwatch_event_bus.secops.name
+
   event_pattern = jsonencode({
     "source" = ["custom.rollback"]
   })
+
+  force_destroy = true
 }
 
 ### EVENT TARGET FOR EC2 ROLLBACK EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_rollback" {
   rule = aws_cloudwatch_event_rule.ec2_rollback.name
+  event_bus_name = aws_cloudwatch_event_bus.secops.name
   target_id = "Ec2RollbackLambda"
   arn = aws_lambda_function.ec2_rollback.arn
 }
