@@ -21,3 +21,15 @@ variable "quarantine_sg_id" {
 variable "security_topic_arn" {
   type = string
 }
+
+variable "account_id" {
+  type = string
+}
+
+variable "secops_role_arn" {
+  type = string
+}
+
+variable "primary_region" {
+  type = string
+}
