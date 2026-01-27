@@ -9,3 +9,11 @@ variable "security_topic_arn" {
 variable "logs_kms_key_arn" {
   type = string
 }
+
+variable "account_id" {
+  type = string
+}
+
+variable "primary_region" {
+  type = string
+}
