@@ -276,7 +276,7 @@ resource "aws_iam_policy" "secops_rollback_trigger" {
         Sid = "AllowEc2RollbackEventOnly"
         Effect = "Allow"
         Action = "events:PutEvents"
-        Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/default"
+        Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
       }
     ]
   })
