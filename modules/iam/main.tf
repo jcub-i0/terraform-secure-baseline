@@ -234,4 +234,56 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_vpc_attach" {
 resource "aws_iam_role_policy_attachment" "ec2_rollback_logs_attach" {
   role       = aws_iam_role.lambda_ec2_rollback.name
   policy_arn = data.aws_iam_policy.lambda_logs.arn
-} 
+}
+
+# SECURITY OPERATIONS IAM RESOURCES
+## SECOPS IAM ROLE TRUST POLICY
+resource "aws_iam_role" "secops" {
+  name = "SecOpsRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::${var.account_id}:root"
+      }
+      Action = "sts:AssumeRole"
+      Condition = {
+        StringLike = {
+          "aws:PrincipalArn": [
+            "arn:aws:iam::${var.account_id}:user/baseline-admin",
+            "arn:aws:iam::${var.account_id}:role/SecOps-*"
+          ]
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Role = "SecurityOperations"
+  }
+}
+
+### ROLLBACK TRIGGER POLICY
+resource "aws_iam_policy" "secops_rollback_trigger" {
+  name = "SecOpsRollbackTriggerPolicy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid = "AllowEc2RollbackEventOnly"
+        Effect = "Allow"
+        Action = "events:PutEvents"
+        Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/default"
+      }
+    ]
+  })
+}
+
+### ATTACH SECURITY OPERATIONS POLICY TO SECURITY OPERATIONS ROLE
+resource "aws_iam_role_policy_attachment" "secops_rollback_attach" {
+  role = aws_iam_role.secops.name
+  policy_arn = aws_iam_policy.secops_rollback_trigger.arn
+}
