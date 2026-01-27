@@ -18,3 +18,7 @@ output "lambda_ec2_isolation_role_arn" {
 output "lambda_ec2_rollback_role_arn" {
   value = aws_iam_role.lambda_ec2_rollback.arn
 }
+
+output "secops_role_arn" {
+  value = aws_iam_role.secops.arn
+}
