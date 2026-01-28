@@ -170,7 +170,7 @@ resource "aws_kms_key" "logs" {
       },
       ### ALLOW SNS TO USE THE KEY
       {
-        Sid = "AllowSns"
+        Sid    = "AllowSns"
         Effect = "Allow"
         Principal = {
           Service = "sns.amazonaws.com"
@@ -219,7 +219,7 @@ resource "aws_kms_key" "ebs" {
       },
       # ALLOW EC2/EBS
       {
-        Sid = "AllowEc2Ebs"
+        Sid    = "AllowEc2Ebs"
         Effect = "Allow"
         Principal = {
           Service = "ec2.amazonaws.com"
@@ -237,13 +237,13 @@ resource "aws_kms_key" "ebs" {
   })
 
   tags = {
-    Name = "EBS-CMK"
+    Name      = "EBS-CMK"
     Terraform = "true"
   }
 }
 
 ### EBS KMS KEY ALIAS
 resource "aws_kms_alias" "ebs" {
-  name = "alias/ebs-cmk"
+  name          = "alias/ebs-cmk"
   target_key_id = aws_kms_key.ebs.id
 }
