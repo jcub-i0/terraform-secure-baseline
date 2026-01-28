@@ -19,7 +19,7 @@ module "compute" {
   vpc_id                         = module.networking.vpc_id
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   instance_profile_name          = module.iam.instance_profile_name
-  ebs_kms_key_arn = module.security.ebs_kms_key_arn
+  ebs_kms_key_arn                = module.security.ebs_kms_key_arn
 }
 
 module "storage" {
@@ -39,9 +39,9 @@ module "iam" {
   source                   = "./modules/iam"
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   security_topic_arn       = module.monitoring.security_topic_arn
-  logs_kms_key_arn = module.security.logs_kms_key_arn
-  account_id = data.aws_caller_identity.current.account_id
-  primary_region = var.primary_region
+  logs_kms_key_arn         = module.security.logs_kms_key_arn
+  account_id               = data.aws_caller_identity.current.account_id
+  primary_region           = var.primary_region
 }
 
 module "security" {
@@ -77,11 +77,11 @@ module "automation" {
 
   vpc_id                        = module.networking.vpc_id
   lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn = module.iam.lambda_ec2_rollback_role_arn
+  lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
   serverless_private_subnet_ids = module.networking.serverless_subnet_ids_list
   quarantine_sg_id              = module.compute.quarantine_sg_id
   security_topic_arn            = module.monitoring.security_topic_arn
-  account_id                 = data.aws_caller_identity.current.account_id
-  secops_role_arn = module.iam.secops_role_arn
-  primary_region = var.primary_region
+  account_id                    = data.aws_caller_identity.current.account_id
+  secops_role_arn               = module.iam.secops_role_arn
+  primary_region                = var.primary_region
 }
