@@ -2,19 +2,19 @@
 ## PACKAGE EC2 ISOLATION LAMBDA
 data "archive_file" "lambda_ec2_isolation" {
   type        = "zip"
-  source_file  = "${path.module}/lambda/ec2_isolation.py"
+  source_file = "${path.module}/lambda/ec2_isolation.py"
   output_path = "${path.module}/lambda/ec2_isolation.zip"
 }
 
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
-  function_name = "ec2-isolation"
-  role          = var.lambda_ec2_isolation_role_arn
-  handler       = "ec2_isolation.lambda_handler"
-  runtime       = "python3.12"
-  filename      = data.archive_file.lambda_ec2_isolation.output_path
-  timeout       = 60
-  memory_size   = 256
+  function_name    = "ec2-isolation"
+  role             = var.lambda_ec2_isolation_role_arn
+  handler          = "ec2_isolation.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.lambda_ec2_isolation.output_path
+  timeout          = 60
+  memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
 
   vpc_config {
@@ -25,7 +25,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   environment {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
-      SNS_TOPIC_ARN = var.security_topic_arn
+      SNS_TOPIC_ARN    = var.security_topic_arn
     }
   }
 
@@ -45,16 +45,16 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
     source      = ["aws.securityhub"],
     detail-type = ["Security Hub Findings - Imported"],
     detail = {
-        findings = {
-            Severity = {
-                Label = ["HIGH", "CRITICAL"]
-            },
-            Resources = {
-                Type = ["AwsEc2Instance"]
-            },
-            Workflow = {
-                Status = ["NEW"]
-            }
+      findings = {
+        Severity = {
+          Label = ["HIGH", "CRITICAL"]
+        },
+        Resources = {
+          Type = ["AwsEc2Instance"]
+        },
+        Workflow = {
+          Status = ["NEW"]
+        }
       }
     }
   })
@@ -62,9 +62,9 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
 
 ### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_isolation" {
-  rule = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
+  rule      = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
   target_id = "Ec2Isolation"
-  arn  = aws_lambda_function.ec2_isolation.arn
+  arn       = aws_lambda_function.ec2_isolation.arn
 }
 
 ### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
@@ -99,24 +99,24 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
 data "archive_file" "lambda_ec2_rollback" {
-    type = "zip"
+  type        = "zip"
   source_file = "${path.module}/lambda/ec2_rollback.py"
   output_path = "${path.module}/lambda/ec2_rollback.zip"
 }
 
 ## EC2 ROLLBACK LAMBDA FUCNTION
 resource "aws_lambda_function" "ec2_rollback" {
-  function_name = "ec2-rollback"
-  role = var.lambda_ec2_rollback_role_arn
-  handler = "ec2_rollback.lambda_handler"
-  runtime = "python3.12"
-  filename = data.archive_file.lambda_ec2_rollback.output_path
-  timeout       = 60
-  memory_size   = 256
+  function_name    = "ec2-rollback"
+  role             = var.lambda_ec2_rollback_role_arn
+  handler          = "ec2_rollback.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.lambda_ec2_rollback.output_path
+  timeout          = 60
+  memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_rollback.output_base64sha256
 
   vpc_config {
-    subnet_ids = var.serverless_private_subnet_ids
+    subnet_ids         = var.serverless_private_subnet_ids
     security_group_ids = [aws_security_group.lambda_ec2_rollback_sg.id]
   }
 
@@ -139,12 +139,12 @@ resource "aws_cloudwatch_event_bus_policy" "allow_secops_rollback" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid = "AllowSecOpsRollbackOnly"
+      Sid    = "AllowSecOpsRollbackOnly"
       Effect = "Allow"
       Principal = {
         AWS = var.secops_role_arn
       }
-      Action = "events:PutEvents"
+      Action   = "events:PutEvents"
       Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
       Condition = {
         StringEquals = {
@@ -157,8 +157,8 @@ resource "aws_cloudwatch_event_bus_policy" "allow_secops_rollback" {
 
 ### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
 resource "aws_cloudwatch_event_rule" "ec2_rollback" {
-  name = "ec2-rollback-rule"
-  description = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
+  name           = "ec2-rollback-rule"
+  description    = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
   event_bus_name = aws_cloudwatch_event_bus.secops.name
 
   event_pattern = jsonencode({
@@ -170,10 +170,10 @@ resource "aws_cloudwatch_event_rule" "ec2_rollback" {
 
 ### EVENT TARGET FOR EC2 ROLLBACK EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_rollback" {
-  rule = aws_cloudwatch_event_rule.ec2_rollback.name
+  rule           = aws_cloudwatch_event_rule.ec2_rollback.name
   event_bus_name = aws_cloudwatch_event_bus.secops.name
-  target_id = "Ec2RollbackLambda"
-  arn = aws_lambda_function.ec2_rollback.arn
+  target_id      = "Ec2RollbackLambda"
+  arn            = aws_lambda_function.ec2_rollback.arn
 }
 
 ### ALLOW EVENTBRIDGE TO INVOKE EC2 ROLLBACK LAMBDA
