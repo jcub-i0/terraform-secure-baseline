@@ -35,6 +35,26 @@ resource "aws_lambda_function" "ec2_isolation" {
   }
 }
 
+## EC2 ISOLATION SECURITY GROUP
+resource "aws_security_group" "lambda_ec2_isolation_sg" {
+  name        = "Lambda-EC2-Isolation-SG"
+  description = "Security Group for the EC2 Isolation Lambda function"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "AWS API Access"
+  }
+
+  tags = {
+    Name      = "Lambda-EC2-Isolation-SG"
+    Terraform = "true"
+  }
+}
+
 ## EVENTBRIDGE RESOURCES
 ### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
@@ -76,26 +96,6 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   source_arn    = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
 }
 
-## EC2 ISOLATION SECURITY GROUP
-resource "aws_security_group" "lambda_ec2_isolation_sg" {
-  name        = "Lambda-EC2-Isolation-SG"
-  description = "Security Group for the EC2 Isolation Lambda function"
-  vpc_id      = var.vpc_id
-
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "AWS API Access"
-  }
-
-  tags = {
-    Name      = "Lambda-EC2-Isolation-SG"
-    Terraform = "true"
-  }
-}
-
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
 data "archive_file" "lambda_ec2_rollback" {
@@ -124,6 +124,26 @@ resource "aws_lambda_function" "ec2_rollback" {
     variables = {
       SNS_TOPIC_ARN = var.secops_topic_arn
     }
+  }
+}
+
+## EC2 ROLLBACK SECURITY GROUP
+resource "aws_security_group" "lambda_ec2_rollback_sg" {
+  name        = "Lambda-EC2-Rollback-SG"
+  description = "Security Group for the EC2 Rollback Lambda function"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "AWS API Access"
+  }
+
+  tags = {
+    Name      = "Lambda-EC2-Rollback-SG"
+    Terraform = "true"
   }
 }
 
@@ -183,24 +203,4 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   function_name = aws_lambda_function.ec2_rollback.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
-}
-
-## EC2 ROLLBACK SECURITY GROUP
-resource "aws_security_group" "lambda_ec2_rollback_sg" {
-  name        = "Lambda-EC2-Rollback-SG"
-  description = "Security Group for the EC2 Rollback Lambda function"
-  vpc_id      = var.vpc_id
-
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "AWS API Access"
-  }
-
-  tags = {
-    Name      = "Lambda-EC2-Rollback-SG"
-    Terraform = "true"
-  }
 }
