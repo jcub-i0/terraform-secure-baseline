@@ -46,15 +46,15 @@ variable "db_password" {
   sensitive   = true
 }
 
-variable "security_emails" {
+variable "secops_emails" {
   description = "List of emails to send security-related notifications to"
   type        = list(string)
   default     = []
 
   # VALIDATE EMAIL FORMATS
   validation {
-    condition     = alltrue([for e in var.security_emails : can(regex("^.+@.+\\..+$", e))])
-    error_message = "Each entry in security_emails must be a valid email address."
+    condition     = alltrue([for e in var.secops_emails : can(regex("^.+@.+\\..+$", e))])
+    error_message = "Each entry in secops_emails must be a valid email address."
   }
 }
 

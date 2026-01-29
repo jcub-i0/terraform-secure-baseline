@@ -125,7 +125,7 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
         Action = [
           "sns:Publish"
         ],
-        Resource = var.security_topic_arn
+        Resource = var.secops_topic_arn
       },
       # ALLOW LAMBDA TO CALL LOGS KMS KEY
       {
@@ -201,7 +201,7 @@ resource "aws_iam_policy" "lambda_ec2_rollback" {
         Action = [
           "sns:Publish"
         ],
-        Resource = var.security_topic_arn
+        Resource = var.secops_topic_arn
       },
       # ALLOW LAMBDA TO CALL LOGS KMS KEY
       {

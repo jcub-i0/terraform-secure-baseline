@@ -14,6 +14,6 @@ variable "account_id" {
   type = string
 }
 
-variable "security_topic_arn" {
+variable "secops_topic_arn" {
   type = string
 }

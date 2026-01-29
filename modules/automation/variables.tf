@@ -18,7 +18,7 @@ variable "quarantine_sg_id" {
   type = string
 }
 
-variable "security_topic_arn" {
+variable "secops_topic_arn" {
   type = string
 }
 

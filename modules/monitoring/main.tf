@@ -30,7 +30,7 @@ resource "aws_sns_topic_policy" "compliance" {
 
 ## SNS RESOURCES FOR SECURITY
 ### SECURITY SNS TOPIC
-resource "aws_sns_topic" "security" {
+resource "aws_sns_topic" "secops" {
   name              = "security-notifications"
   kms_master_key_id = var.logs_kms_key_arn
 
@@ -41,8 +41,8 @@ resource "aws_sns_topic" "security" {
 }
 
 ### SECURITY SNS TOPIC POLICY
-resource "aws_sns_topic_policy" "security" {
-  arn = aws_sns_topic.security.arn
+resource "aws_sns_topic_policy" "secops" {
+  arn = aws_sns_topic.secops.arn
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -52,16 +52,16 @@ resource "aws_sns_topic_policy" "security" {
         "Service" = "cloudtrail.amazonaws.com"
       }
       Action   = "sns:Publish"
-      Resource = aws_sns_topic.security.arn
+      Resource = aws_sns_topic.secops.arn
     }]
   })
 }
 
 ### SECURITY SNS SUBSCRIPTION
-resource "aws_sns_topic_subscription" "security" {
-  for_each = toset(var.security_emails)
+resource "aws_sns_topic_subscription" "secops" {
+  for_each = toset(var.secops_emails)
 
-  topic_arn = aws_sns_topic.security.arn
+  topic_arn = aws_sns_topic.secops.arn
   protocol  = "email"
   endpoint  = each.value
 }
@@ -91,7 +91,7 @@ resource "aws_cloudwatch_metric_alarm" "root_activity" {
   statistic           = "Sum"
   threshold           = 1
   alarm_description   = "Detect Root-level activity"
-  alarm_actions       = [aws_sns_topic.security.arn]
+  alarm_actions       = [aws_sns_topic.secops.arn]
 }
 
 ### UNAUTHORIZED API CALLS
@@ -118,7 +118,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   statistic           = "Sum"
   threshold           = 1
   alarm_description   = "Detect unauthorized API activity"
-  alarm_actions       = [aws_sns_topic.security.arn]
+  alarm_actions       = [aws_sns_topic.secops.arn]
 }
 
 ### CLOUDTRAIL DISABLED
@@ -145,7 +145,7 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
   statistic           = "Sum"
   threshold           = 1
   alarm_description   = "Detect if CloudTrail is disabled"
-  alarm_actions       = [aws_sns_topic.security.arn]
+  alarm_actions       = [aws_sns_topic.secops.arn]
 }
 
 ### IAM POLICY CHANGES (CONSIDER ALSO ADDING 'DeletePolicy', 'DetachRolePolicy', and 'UpdateAssumeRolePolicy')
@@ -172,5 +172,5 @@ resource "aws_cloudwatch_metric_alarm" "iam_changes" {
   statistic           = "Sum"
   threshold           = 1
   alarm_description   = "Detect any changes made to IAM"
-  alarm_actions       = [aws_sns_topic.security.arn]
+  alarm_actions       = [aws_sns_topic.secops.arn]
 }

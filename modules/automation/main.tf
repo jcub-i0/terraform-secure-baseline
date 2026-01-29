@@ -25,7 +25,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   environment {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
-      SNS_TOPIC_ARN    = var.security_topic_arn
+      SNS_TOPIC_ARN    = var.secops_topic_arn
     }
   }
 
@@ -122,7 +122,7 @@ resource "aws_lambda_function" "ec2_rollback" {
 
   environment {
     variables = {
-      SNS_TOPIC_ARN = var.security_topic_arn
+      SNS_TOPIC_ARN = var.secops_topic_arn
     }
   }
 }

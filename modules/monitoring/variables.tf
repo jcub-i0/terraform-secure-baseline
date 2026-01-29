@@ -6,6 +6,6 @@ variable "cloudtrail_log_group_name" {
   type = string
 }
 
-variable "security_emails" {
+variable "secops_emails" {
   type = list(string)
 }
