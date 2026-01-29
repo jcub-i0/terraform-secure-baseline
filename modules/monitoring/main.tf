@@ -46,14 +46,26 @@ resource "aws_sns_topic_policy" "secops" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        "Service" = "cloudtrail.amazonaws.com"
-      }
-      Action   = "sns:Publish"
-      Resource = aws_sns_topic.secops.arn
-    }]
+    Statement = [
+        {
+          Sid = "AllowCloudTrailPublish"
+          Effect = "Allow"
+          Principal = {
+            "Service" = "cloudtrail.amazonaws.com"
+          }
+          Action   = "sns:Publish"
+          Resource = aws_sns_topic.secops.arn
+        },
+        {
+          Sid = "AllowCloudWatchPublish"
+          Effect = "Allow"
+          Principal = {
+            "Service" = "cloudwatch.amazonaws.com"
+          }
+          Action = "sns:Publish"
+          Resource = aws_sns_topic.secops.arn
+        }
+      ]
   })
 }
 
