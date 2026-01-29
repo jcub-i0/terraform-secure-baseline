@@ -72,6 +72,45 @@ resource "aws_iam_service_linked_role" "config" {
   aws_service_name = "config.amazonaws.com"
 }
 
+# CONFIG REMEDIATION ROLE
+resource "aws_iam_role" "config_remediation" {
+  name = "ConfigRemediationRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ssm.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+## PROHIBIT S3 PUBLIC ACCESS CONFIG REMEDIATION POLICY
+resource "aws_iam_policy" "s3_public_remediation" {
+  name = "S3PublicAccessRemediation"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutBucketAcl",
+          "s3:PutBucketPolicy",
+          "s3:PutPublicAccessBlock",
+          "s3:GetBucketPolicy",
+          "s3:GetBucketAcl",
+          "s3:GetPublicAccessBlock"
+        ]
+      }
+    ]
+    Resource = "*"
+  })
+}
+
 # LAMBDA ROLES
 ## AWS-MANAGED POLICIES FOR LAMBDA LOGGING & VPC ENI ACCESS
 data "aws_iam_policy" "lambda_vpc" {
