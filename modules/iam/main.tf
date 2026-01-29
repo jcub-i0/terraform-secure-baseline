@@ -105,9 +105,9 @@ resource "aws_iam_policy" "s3_public_remediation" {
           "s3:GetBucketAcl",
           "s3:GetPublicAccessBlock"
         ]
+        Resource = "*"
       }
     ]
-    Resource = "*"
   })
 }
 
