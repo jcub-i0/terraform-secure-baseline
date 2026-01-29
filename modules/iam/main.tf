@@ -111,6 +111,12 @@ resource "aws_iam_policy" "s3_public_remediation" {
   })
 }
 
+## ATTACH S3 PUBLIC ACCESS BLOCK POLICY TO CONFIG REMEDIATIONS ROLE
+resource "aws_iam_role_policy_attachment" "attach_s3_public_remediation" {
+  role = aws_iam_role.config_remediation.name
+  policy_arn = aws_iam_policy.s3_public_remediation.arn
+}
+
 # LAMBDA ROLES
 ## AWS-MANAGED POLICIES FOR LAMBDA LOGGING & VPC ENI ACCESS
 data "aws_iam_policy" "lambda_vpc" {
