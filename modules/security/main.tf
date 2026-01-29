@@ -44,6 +44,21 @@ resource "aws_config_configuration_recorder_status" "config" {
   ]
 }
 
+# CONFIG REMEDIATIONS
+## PROHIBIT S3 PUBLIC ACCESS CONFIG RULE
+resource "aws_config_config_rule" "s3_public_read_prohibited" {
+  name = "s3-bucket-public-read-prohibited"
+
+  source {
+    owner = "AWS"
+    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+  }
+
+  scope {
+    compliance_resource_types = ["AWS:S3::Bucket"]
+  }
+}
+
 # GUARDDUTY
 resource "aws_guardduty_detector" "main" {
   enable                       = true
