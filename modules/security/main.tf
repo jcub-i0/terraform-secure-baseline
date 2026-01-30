@@ -16,11 +16,17 @@ resource "aws_config_configuration_recorder" "config" {
   name     = "tf-secure-baseline"
   role_arn = var.config_role_arn
 
+  ### THIS ONLY RECORDS EC2 AND S3 RESOURCES -- CHANGE FOR PRODUCTION ENV
   recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
+    all_supported                 = false
+    include_global_resource_types = false
   }
 }
+
+/*resource "aws_config_configuration_recorder_status" "config_rec_state" {
+  name = aws_config_configuration_recorder.config.name
+  is_enabled = true
+}*/
 
 ## DELIVERY CHANNEL
 resource "aws_config_delivery_channel" "config" {
@@ -45,9 +51,9 @@ resource "aws_config_configuration_recorder_status" "config" {
 }
 
 # CONFIG REMEDIATIONS
-## PROHIBIT S3 PUBLIC ACCESS CONFIG RULE
-resource "aws_config_config_rule" "s3_public_read_prohibited" {
-  name = "s3-bucket-public-read-prohibited"
+
+resource "aws_config_config_rule" "s3_public_access_block" {
+  name = "s3-bucket-public-read-block"
 
   source {
     owner = "AWS"
