@@ -84,6 +84,11 @@ resource "aws_iam_role" "config_remediation" {
         Service = "ssm.amazonaws.com"
       }
       Action = "sts:AssumeRole"
+      Condition = {
+        StringEquals = {
+          "aws:SourceAccount" = var.account_id
+        }
+      }
     }]
   })
 }
