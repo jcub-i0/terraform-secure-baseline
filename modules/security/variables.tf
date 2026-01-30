@@ -25,3 +25,7 @@ variable "compliance_topic_arn" {
 variable "guardduty_features" {
   type = list(string)
 }
+
+variable "config_remediation_role_arn" {
+  type = string
+}
