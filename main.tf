@@ -54,6 +54,7 @@ module "security" {
   compliance_topic_arn         = module.monitoring.compliance_topic_arn
   primary_region               = var.primary_region
   guardduty_features           = var.guardduty_features
+  config_remediation_role_arn = module.iam.config_remediation_role_arn
 }
 
 module "logging" {
