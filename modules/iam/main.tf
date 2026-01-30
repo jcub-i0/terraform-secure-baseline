@@ -93,9 +93,19 @@ resource "aws_iam_role" "config_remediation" {
   })
 }
 
-## PROHIBIT S3 PUBLIC ACCESS CONFIG REMEDIATION POLICY
-resource "aws_iam_policy" "s3_public_remediation" {
-  name = "S3PublicAccessRemediation"
+data "aws_iam_policy" "ssm_automation" {
+  name = "AmazonSSMAutomationRole"
+}
+
+resource "aws_iam_role_policy" "config_ssm_automation" {
+  role = aws_iam_role.config_remediation.arn
+  policy = data.aws_iam_policy.ssm_automation
+}
+
+## CONFIG REMEDIATION S3 PUBLIC ACCESS BLOCK POLICY
+resource "aws_iam_role_policy" "s3_public_remediation" {
+  name = "S3PublicAccessBlockRemediation"
+  role = aws_iam_role.config_remediation.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -114,12 +124,6 @@ resource "aws_iam_policy" "s3_public_remediation" {
       }
     ]
   })
-}
-
-## ATTACH S3 PUBLIC ACCESS BLOCK POLICY TO CONFIG REMEDIATIONS ROLE
-resource "aws_iam_role_policy_attachment" "attach_s3_public_remediation" {
-  role = aws_iam_role.config_remediation.name
-  policy_arn = aws_iam_policy.s3_public_remediation.arn
 }
 
 # LAMBDA ROLES
