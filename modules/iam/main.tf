@@ -97,9 +97,9 @@ data "aws_iam_policy" "ssm_automation" {
   name = "AmazonSSMAutomationRole"
 }
 
-resource "aws_iam_role_policy" "config_ssm_automation" {
-  role = aws_iam_role.config_remediation.arn
-  policy = data.aws_iam_policy.ssm_automation
+resource "aws_iam_role_policy_attachment" "config_ssm_automation" {
+  role       = aws_iam_role.config_remediation.name
+  policy_arn = data.aws_iam_policy.ssm_automation.arn
 }
 
 ## CONFIG REMEDIATION S3 PUBLIC ACCESS BLOCK POLICY
