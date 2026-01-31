@@ -16,10 +16,9 @@ resource "aws_config_configuration_recorder" "config" {
   name     = "tf-secure-baseline"
   role_arn = var.config_role_arn
 
-  ### THIS ONLY RECORDS EC2 AND S3 RESOURCES -- CHANGE FOR PRODUCTION ENV
   recording_group {
-    all_supported                 = false
-    include_global_resource_types = false
+    all_supported                 = true
+    include_global_resource_types = true
   }
 }
 
@@ -77,11 +76,7 @@ resource "aws_config_config_rule" "s3_public_access_block" {
 
   source {
     owner = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
-  }
-
-  scope {
-    compliance_resource_types = ["AWS:S3::Bucket"]
+    source_identifier = "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED"
   }
 }
 
