@@ -124,6 +124,28 @@ resource "aws_iam_role_policy" "s3_public_remediation" {
   })
 }
 
+## CONFIG REMEDIATION PUBLIC IP POLICY
+### ALLOWS SSM AUTOMATION TO REMOVE PUBLIC IPs FROM EC2 INSTANCES
+resource "aws_iam_role_policy" "ec2_public_ip_remediation" {
+  name = "EC2PublicIpRemediation"
+  role = aws_iam_role.config_remediation.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:ModifyNetworkInterfaceAttribute",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeInstances"
+        ]
+        Resources = "*"
+      }
+    ]
+  })
+}
+
 # LAMBDA ROLES
 ## AWS-MANAGED POLICIES FOR LAMBDA LOGGING & VPC ENI ACCESS
 data "aws_iam_policy" "lambda_vpc" {
