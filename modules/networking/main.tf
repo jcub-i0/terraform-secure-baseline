@@ -20,6 +20,7 @@ resource "aws_subnet" "public" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.public[each.value]
   availability_zone = each.key
+  map_public_ip_on_launch = false
 
   tags = {
     Name      = "Public-Subnet-${each.key}"
@@ -34,6 +35,7 @@ resource "aws_subnet" "compute_private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.compute_private[each.value]
   availability_zone = each.key
+  map_public_ip_on_launch = false
 
   tags = {
     Name      = "Compute-Private-${each.key}"
@@ -48,6 +50,7 @@ resource "aws_subnet" "data_private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.data_private[each.value]
   availability_zone = each.key
+  map_public_ip_on_launch = false
 
   tags = {
     Name      = "Data-Private-${each.key}"
@@ -58,6 +61,7 @@ resource "aws_subnet" "data_private" {
 ## SERVERLESS PRIVATE SUBNETS
 resource "aws_subnet" "serverless_private" {
   for_each = local.az_index_map
+  map_public_ip_on_launch = false
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidrs.serverless_private[each.value]
