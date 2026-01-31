@@ -113,12 +113,10 @@ resource "aws_iam_role_policy" "s3_public_remediation" {
       {
         Effect = "Allow"
         Action = [
-          "s3:PutBucketAcl",
-          "s3:PutBucketPolicy",
-          "s3:PutPublicAccessBlock",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:PutBucketPublicAccessBlock",
           "s3:GetBucketPolicy",
-          "s3:GetBucketAcl",
-          "s3:GetPublicAccessBlock"
+          "s3:PutBucketPolicy"
         ]
         Resource = "*"
       }
