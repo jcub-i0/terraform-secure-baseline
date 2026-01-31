@@ -136,11 +136,12 @@ resource "aws_iam_role_policy" "ec2_public_ip_remediation" {
       {
         Effect = "Allow"
         Action = [
-          "ec2:ModifyNetworkInterfaceAttribute",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DescribeInstances"
+          "ssm:StartAutomationExecution",
+          "ssm:GetAutomationExecution",
+          "ec2:ModifySubnetAttribute",
+          "ec2:DescribeNetworkInterfaces"
         ]
-        Resources = "*"
+        Resource = "*"
       }
     ]
   })
