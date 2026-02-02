@@ -57,3 +57,18 @@ resource "aws_cloudtrail" "cloudtrail" {
     Terraform = "true"
   }
 }
+
+# VPC FLOWLOGS
+resource "aws_flow_log" "flowlogs" {
+  vpc_id = var.vpc_id
+
+  iam_role_arn = var.flowlogs_role_arn
+  log_destination_type = "cloud-watch-logs"
+  log_destination = aws_cloudwatch_log_group.flowlogs.arn
+  traffic_type = "ALL"
+
+  tags = {
+    Name = "VPC-Flow-Logs"
+    Terraform = "true"
+  }
+}
