@@ -67,6 +67,27 @@ resource "aws_iam_role_policy" "cloudtrail" {
   })
 }
 
+# VPC FLOWLOGS
+## FLOWLOGS ROLE
+resource "aws_iam_role" "flowlogs" {
+  name = "VpcFlowLogsRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "vpc-flow-logs.amazonaws.com"
+      }
+      Actions = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Role = "VPCFlowLogs"
+  }
+}
+
 # CONFIG SERVICE-LINKED ROLE
 resource "aws_iam_service_linked_role" "config" {
   aws_service_name = "config.amazonaws.com"
