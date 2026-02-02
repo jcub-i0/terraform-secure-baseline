@@ -11,6 +11,18 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   }
 }
 
+## FLOWLOGS LOG GROUP
+resource "aws_cloudwatch_log_group" "flowlogs" {
+  name = "/aws/flowlogs/tf-secure-baseline"
+  retention_in_days = 90
+  kms_key_id = var.logs_kms_key_arn
+
+  tags = {
+    Name = "FlowLogs"
+    Terraform = "true"
+  }
+}
+
 # CLOUDTRAIL
 resource "aws_cloudtrail" "cloudtrail" {
   name                          = "CloudTrail"
