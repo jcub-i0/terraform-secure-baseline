@@ -88,6 +88,27 @@ resource "aws_iam_role" "flowlogs" {
   }
 }
 
+## FLOWLOGS POLICY
+resource "aws_iam_role_policy" "flowlogs" {
+  name = "VpcFlowLogsPolicy"
+  role = aws_iam_role.flowlogs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 # CONFIG SERVICE-LINKED ROLE
 resource "aws_iam_service_linked_role" "config" {
   aws_service_name = "config.amazonaws.com"
