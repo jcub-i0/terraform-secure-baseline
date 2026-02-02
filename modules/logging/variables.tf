@@ -10,6 +10,10 @@ variable "cloudtrail_role_arn" {
   type = string
 }
 
+variable "flowlogs_role_arn" {
+  type = string
+}
+
 variable "account_id" {
   type = string
 }
