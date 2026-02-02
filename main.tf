@@ -64,6 +64,7 @@ module "logging" {
   cloudtrail_role_arn        = module.iam.cloudtrail_role_arn
   account_id                 = data.aws_caller_identity.current.account_id
   secops_topic_arn           = module.monitoring.secops_topic_arn
+  flowlogs_role_arn = module.iam.flowlogs_role_arn
 }
 
 module "monitoring" {
