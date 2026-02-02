@@ -7,6 +7,10 @@ output "cloudtrail_role_arn" {
   value = aws_iam_role.cloudtrail.arn
 }
 
+output "flowlogs_role_arn" {
+  value = aws_iam_role.flowlogs.arn
+}
+
 output "config_role_arn" {
   value = aws_iam_service_linked_role.config.arn
 }
