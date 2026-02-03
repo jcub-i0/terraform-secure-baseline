@@ -88,7 +88,7 @@ resource "aws_iam_role" "flowlogs" {
   }
 }
 
-## FLOWLOGS POLICY
+### POLICY FOR FLOWLOGS ROLE
 resource "aws_iam_role_policy" "flowlogs" {
   name = "VpcFlowLogsPolicy"
   role = aws_iam_role.flowlogs.id
@@ -105,6 +105,39 @@ resource "aws_iam_role_policy" "flowlogs" {
         "logs:DescribeLogStreams"
       ]
       Resource = "*"
+    }]
+  })
+}
+
+## CLOUDWATCH TO FIREHOSE ROLE
+resource "aws_iam_role" "cw_to_firehose" {
+  name = "CloudWatchLogsToFirehose"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "logs.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+### POLICY FOR CLOUDWATCH TO FIREHOSE ROLE
+resource "aws_iam_role_policy" "cw_to_firehose" {
+  role = aws_iam_role.cw_to_firehose.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "firehose:PutRecord",
+        "firehose:PutRecordBatch"
+      ]
+      Resource = var.flowlogs_firehose_delivery_stream_arn
     }]
   })
 }
@@ -170,14 +203,6 @@ resource "aws_iam_role_policy" "firehose_flow_logs" {
           var.centralized_logs_bucket_arn,
           "${var.centralized_logs_bucket_arn}/*"
         ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:DescribeLogStreams",
-          "logs:GetLogEvents"
-        ]
-        Resource = "*"
       }
     ]
   })
