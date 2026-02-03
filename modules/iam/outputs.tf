@@ -34,3 +34,7 @@ output "config_remediation_role_arn" {
 output "firehose_flow_logs_role_arn" {
   value = aws_iam_role.firehose_flow_logs.arn
 }
+
+output "cw_to_firehose_role_arn" {
+  value = aws_iam_role.cw_to_firehose.arn
+}
