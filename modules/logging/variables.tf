@@ -33,3 +33,7 @@ variable "firehose_flow_logs_role_arn" {
 variable "centralized_logs_bucket_arn" {
   type = string
 }
+
+variable "cw_to_firehose_role_arn" {
+  type = string
+}
