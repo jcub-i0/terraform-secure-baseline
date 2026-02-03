@@ -67,7 +67,7 @@ module "logging" {
   secops_topic_arn           = module.monitoring.secops_topic_arn
   flowlogs_role_arn = module.iam.flowlogs_role_arn
   vpc_id = module.networking.vpc_id
-  firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_arn
+  firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
 }
 
