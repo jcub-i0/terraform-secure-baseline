@@ -30,3 +30,7 @@ output "secops_role_arn" {
 output "config_remediation_role_arn" {
   value = aws_iam_role.config_remediation.arn
 }
+
+output "firehose_flow_logs_role_arn" {
+  value = aws_iam_role.firehose_flow_logs.arn
+}
