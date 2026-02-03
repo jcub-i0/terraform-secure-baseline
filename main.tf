@@ -43,6 +43,7 @@ module "iam" {
   account_id               = data.aws_caller_identity.current.account_id
   primary_region           = var.primary_region
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
+  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
 }
 
 module "security" {
@@ -69,6 +70,7 @@ module "logging" {
   vpc_id = module.networking.vpc_id
   firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
+  cw_to_firehose_role_arn = module.iam.cw_to_firehose_role_arn
 }
 
 module "monitoring" {
