@@ -100,4 +100,6 @@ resource "aws_cloudwatch_log_subscription_filter" "flowlogs" {
   destination_arn = aws_kinesis_firehose_delivery_stream.flowlogs.arn
   role_arn = var.cw_to_firehose_role_arn
   filter_pattern = ""
+
+  depends_on = [aws_kinesis_firehose_delivery_stream.flowlogs]
 }
