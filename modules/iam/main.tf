@@ -142,32 +142,6 @@ resource "aws_iam_role_policy" "cw_to_firehose" {
   })
 }
 
-# CONFIG SERVICE-LINKED ROLE
-resource "aws_iam_service_linked_role" "config" {
-  aws_service_name = "config.amazonaws.com"
-}
-
-# CONFIG REMEDIATION ROLE
-resource "aws_iam_role" "config_remediation" {
-  name = "ConfigRemediationRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ssm.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-      Condition = {
-        StringEquals = {
-          "aws:SourceAccount" = var.account_id
-        }
-      }
-    }]
-  })
-}
-
 # KINESIS FIREHOSE
 ## FIREHOSE FLOW LOGS ROLE
 resource "aws_iam_role" "firehose_flow_logs" {
@@ -205,6 +179,32 @@ resource "aws_iam_role_policy" "firehose_flow_logs" {
         ]
       }
     ]
+  })
+}
+
+# CONFIG SERVICE-LINKED ROLE
+resource "aws_iam_service_linked_role" "config" {
+  aws_service_name = "config.amazonaws.com"
+}
+
+# CONFIG REMEDIATION ROLE
+resource "aws_iam_role" "config_remediation" {
+  name = "ConfigRemediationRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ssm.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+      Condition = {
+        StringEquals = {
+          "aws:SourceAccount" = var.account_id
+        }
+      }
+    }]
   })
 }
 
