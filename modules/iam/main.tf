@@ -171,7 +171,8 @@ resource "aws_iam_role_policy" "firehose_flow_logs" {
         Action = [
           "s3:PutObject",
           "s3:AbortMultipartUpload",
-          "s3:ListBucket"
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
         ]
         Resource = [
           var.centralized_logs_bucket_arn,
