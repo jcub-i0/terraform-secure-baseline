@@ -17,3 +17,7 @@ variable "account_id" {
 variable "primary_region" {
   type = string
 }
+
+variable "centralized_logs_bucket_arn" {
+  type = string
+}
