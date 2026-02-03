@@ -152,6 +152,36 @@ resource "aws_iam_role" "firehose_flow_logs" {
   })
 }
 
+## FIREHOSE FLOW LOGS POLICY
+resource "aws_iam_role_policy" "firehose_flow_logs" {
+  role = aws_iam_role.firehose_flow_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.centralized_logs_bucket_arn,
+          "${var.centralized_logs_bucket_arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
 
 data "aws_iam_policy" "ssm_automation" {
   name = "AmazonSSMAutomationRole"
