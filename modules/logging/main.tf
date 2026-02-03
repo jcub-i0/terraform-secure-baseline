@@ -83,6 +83,8 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
     role_arn = var.firehose_flow_logs_role_arn
     bucket_arn = var.centralized_logs_bucket_arn
 
+    kms_key_arn = var.logs_kms_key_arn
+
     prefix = "vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
     error_output_prefix = "errors/vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/!{firehose:error-output-type}/"
 
