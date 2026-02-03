@@ -72,3 +72,22 @@ resource "aws_flow_log" "flowlogs" {
     Terraform = "true"
   }
 }
+
+# KINESIS FIREHOSE FOR VPC FLOWLOGS
+## FLOWLOGS FIREHOSE DELIVERITY STREAM
+resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
+  name = "vpc-flow-logs-to-s3"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn = var.firehose_flow_logs_role_arn
+    bucket_arn = var.centralized_logs_bucket_arn
+
+    prefix = "vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
+
+    buffering_interval = 300
+    buffering_size = 5
+
+    compression_format = "GZIP"
+  }
+}
