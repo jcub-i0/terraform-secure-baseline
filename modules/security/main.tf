@@ -231,6 +231,21 @@ resource "aws_kms_key" "logs" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      ### ALLOW CLOUDWATCH ALARMS
+      {
+        Sid = "AllowCloudwatchAlarms"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudwatch.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
