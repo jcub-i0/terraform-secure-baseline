@@ -83,7 +83,8 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
     role_arn = var.firehose_flow_logs_role_arn
     bucket_arn = var.centralized_logs_bucket_arn
 
-    prefix = "vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/"
+    prefix = "vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
+    error_output_prefix = "errors/vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/!{firehose:error-output-type}/"
 
     buffering_interval = 300
     buffering_size = 5
@@ -97,5 +98,6 @@ resource "aws_cloudwatch_log_subscription_filter" "flowlogs" {
   name = "vpc-flow-logs-to-firehose"
   log_group_name = aws_cloudwatch_log_group.flowlogs.name
   destination_arn = aws_kinesis_firehose_delivery_stream.flowlogs.arn
+  role_arn = var.cw_to_firehose_role_arn
   filter_pattern = ""
 }
