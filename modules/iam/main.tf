@@ -166,6 +166,7 @@ resource "aws_iam_role_policy" "firehose_flow_logs" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # ALLOW FIREHOSE TO USE CENTRALIZED LOGS S3 BUCKET
       {
         Effect = "Allow"
         Action = [
@@ -178,6 +179,17 @@ resource "aws_iam_role_policy" "firehose_flow_logs" {
           var.centralized_logs_bucket_arn,
           "${var.centralized_logs_bucket_arn}/*"
         ]
+      },
+      # ALLOW FIREHOSE TO USE LOGS KMS KEY
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = var.logs_kms_key_arn
       }
     ]
   })
