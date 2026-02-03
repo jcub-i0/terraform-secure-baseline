@@ -25,3 +25,11 @@ variable "account_id" {
 variable "secops_topic_arn" {
   type = string
 }
+
+variable "firehose_flow_logs_role_arn" {
+  type = string
+}
+
+variable "centralized_logs_bucket_arn" {
+  type = string
+}
