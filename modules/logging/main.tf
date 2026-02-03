@@ -91,3 +91,11 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
     compression_format = "GZIP"
   }
 }
+
+## CLOUDWATCH LOGS SUBSCRIPTION FILTER FOR FLOWLOGS FIREHOSE
+resource "aws_cloudwatch_log_subscription_filter" "flowlogs" {
+  name = "vpc-flow-logs-to-firehose"
+  log_group_name = aws_cloudwatch_log_group.flowlogs.name
+  destination_arn = aws_kinesis_firehose_delivery_stream.flowlogs.arn
+  filter_pattern = ""
+}
