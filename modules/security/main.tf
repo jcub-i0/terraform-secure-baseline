@@ -246,6 +246,29 @@ resource "aws_kms_key" "logs" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      ### ALLOW KINESIS FIREHOSE
+      {
+        Sid = "AllowKinesisFirehose"
+        Effect = "Allow"
+        Principal = {
+          Service = "firehose.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:firehose:${var.primary_region}:${var.account_id}:deliverystream/*"
+          }
+        }
       }
     ]
   })
