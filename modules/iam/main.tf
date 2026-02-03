@@ -79,7 +79,7 @@ resource "aws_iam_role" "flowlogs" {
       Principal = {
         Service = "vpc-flow-logs.amazonaws.com"
       }
-      Actions = "sts:AssumeRole"
+      Action = "sts:AssumeRole"
     }]
   })
 
