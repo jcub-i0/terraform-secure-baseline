@@ -135,6 +135,24 @@ resource "aws_iam_role" "config_remediation" {
   })
 }
 
+# KINESIS FIREHOSE
+## FIREHOSE FLOW LOGS ROLE
+resource "aws_iam_role" "firehose_flow_logs" {
+  name = "FirehoseFlowLogsRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "firehose.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+
 data "aws_iam_policy" "ssm_automation" {
   name = "AmazonSSMAutomationRole"
 }
