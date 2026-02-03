@@ -42,6 +42,7 @@ module "iam" {
   logs_kms_key_arn         = module.security.logs_kms_key_arn
   account_id               = data.aws_caller_identity.current.account_id
   primary_region           = var.primary_region
+  centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
 }
 
 module "security" {
