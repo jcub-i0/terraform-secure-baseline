@@ -21,3 +21,7 @@ variable "primary_region" {
 variable "centralized_logs_bucket_arn" {
   type = string
 }
+
+variable "flowlogs_firehose_delivery_stream_arn" {
+  type = string
+}
