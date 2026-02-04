@@ -9,3 +9,7 @@ output "cloudtrail_logs_group_name" {
 output "flowlogs_firehose_delivery_stream_arn" {
   value = aws_kinesis_firehose_delivery_stream.flowlogs.arn
 }
+
+output "flowlogs_log_group_arn" {
+  value = aws_cloudwatch_log_group.flowlogs.arn
+}
