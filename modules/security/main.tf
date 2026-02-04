@@ -234,7 +234,7 @@ resource "aws_kms_key" "logs" {
       },
       ### ALLOW CLOUDWATCH ALARMS
       {
-        Sid = "AllowCloudwatchAlarms"
+        Sid    = "AllowCloudwatchAlarms"
         Effect = "Allow"
         Principal = {
           Service = "cloudwatch.amazonaws.com"
@@ -249,7 +249,7 @@ resource "aws_kms_key" "logs" {
       },
       ### ALLOW KINESIS FIREHOSE
       {
-        Sid = "AllowKinesisFirehose"
+        Sid    = "AllowKinesisFirehose"
         Effect = "Allow"
         Principal = {
           Service = "firehose.amazonaws.com"
