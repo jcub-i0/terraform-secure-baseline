@@ -25,3 +25,7 @@ variable "centralized_logs_bucket_arn" {
 variable "flowlogs_firehose_delivery_stream_arn" {
   type = string
 }
+
+variable "flowlogs_log_group_arn" {
+  type = string
+}
