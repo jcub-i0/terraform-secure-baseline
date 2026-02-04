@@ -44,6 +44,7 @@ module "iam" {
   primary_region           = var.primary_region
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
   flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
+  flowlogs_log_group_arn = module.logging.flowlogs_log_group_arn
 }
 
 module "security" {
