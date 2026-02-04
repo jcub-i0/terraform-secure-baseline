@@ -104,7 +104,7 @@ resource "aws_iam_role_policy" "flowlogs" {
         "logs:DescribeLogGroups",
         "logs:DescribeLogStreams"
       ]
-      Resource = "*"
+      Resource = "${var.flowlogs_log_group_arn}:*"
     }]
   })
 }
