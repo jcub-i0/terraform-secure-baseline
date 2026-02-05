@@ -29,7 +29,7 @@ output "public_subnet_ids_list" {
   value       = [for subnet in aws_subnet.public : subnet.id]
 }
 
-output "compute_subnet_ids_list" {
+output "compute_private_subnet_ids_list" {
   description = "list(string) of Compute Private Subnet IDs"
   value       = [for subnet in aws_subnet.compute_private : subnet.id]
 }
