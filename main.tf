@@ -87,10 +87,21 @@ module "automation" {
   vpc_id                        = module.networking.vpc_id
   lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
-  serverless_private_subnet_ids = module.networking.serverless_subnet_ids_list
+  serverless_private_subnet_ids = module.networking.serverless_private_subnet_ids_list
   quarantine_sg_id              = module.compute.quarantine_sg_id
   secops_topic_arn              = module.monitoring.secops_topic_arn
   account_id                    = data.aws_caller_identity.current.account_id
   secops_role_arn               = module.iam.secops_role_arn
   primary_region                = var.primary_region
+}
+
+module "vpc_endpoints" {
+  source = "./modules/vpc_endpoints"
+
+  vpc_id = module.networking.vpc_id
+  account_id = data.aws_caller_identity.current.account_id
+  primary_region = var.primary_region
+  compute_subnet_ids_list = module.networking.compute_subnet_ids_list
+  data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
+  serverless_private_subnet_ids_list = module.networking.serverless_private_subnet_ids_list
 }
