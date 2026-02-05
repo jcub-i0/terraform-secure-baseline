@@ -11,7 +11,7 @@ data "aws_route_table" "private" {
   subnet_id = each.value
 }
 
-# GATEWAY ENDPOINTS (S3)
+# GATEWAY ENDPOINTS (S3, DYNAMODB)
 resource "aws_vpc_endpoint" "s3" {
   vpc_id = var.vpc_id
   service_name = "com.amazonaws.${var.primary_region}.s3"
