@@ -11,14 +11,14 @@ variable "primary_region" {
 }
 
 # SUBNET VARIABLES
-variable "compute_private_subnet_ids_list" {
-  type = list(string)
+variable "compute_private_subnet_ids_map" {
+  type = map(string)
 }
 
-variable "data_private_subnet_ids_list" {
-  type = list(string)
+variable "serverless_private_subnet_ids_map" {
+  type = map(string)
 }
 
-variable "serverless_private_subnet_ids_list" {
-  type = list(string)
+variable "subnet_cidrs" {
+  type = map(list(string))
 }
