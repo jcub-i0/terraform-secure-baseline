@@ -1,14 +1,20 @@
 locals {
   private_subnet_ids = concat(
-    var.compute_subnet_ids_list,
+    var.compute_private_subnet_ids_list,
     var.data_private_subnet_ids_list,
     var.serverless_private_subnet_ids_list
   )
 }
 
+# GET ROUTE TABLE FOR EACH PRIVATE SUBNET
 data "aws_route_table" "private" {
   for_each = toset(local.private_subnet_ids)
   subnet_id = each.value
+}
+
+# GET ROUTE TABLE FOR EACH PUBLIC SUBNET
+data "aws_route_table" "public" {
+  
 }
 
 # GATEWAY ENDPOINTS (S3, DYNAMODB)

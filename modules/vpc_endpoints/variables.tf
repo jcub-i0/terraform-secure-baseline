@@ -11,7 +11,7 @@ variable "primary_region" {
 }
 
 # SUBNET VARIABLES
-variable "compute_subnet_ids_list" {
+variable "compute_private_subnet_ids_list" {
   type = list(string)
 }
 
