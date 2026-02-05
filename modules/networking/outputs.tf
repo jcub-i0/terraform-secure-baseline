@@ -39,7 +39,7 @@ output "data_private_subnet_ids_list" {
   value       = [for subnet in aws_subnet.data_private : subnet.id]
 }
 
-output "serverless_subnet_ids_list" {
+output "serverless_private_subnet_ids_list" {
   description = "list(string) of Serverless Private Subnet IDs"
   value       = [for subnet in aws_subnet.serverless_private : subnet.id]
 }
