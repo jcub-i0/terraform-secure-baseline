@@ -1,6 +1,6 @@
 # IAM ACCESS ANALYZER
 resource "aws_accessanalyzer_analyzer" "main" {
-  analyzer_name = "org-access-analyzer"
+  analyzer_name = "account-access-analyzer"
   type = "ACCOUNT"
 
   tags = {
