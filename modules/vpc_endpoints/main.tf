@@ -1,12 +1,13 @@
 locals {
-  endpoint_subnet_ids = concat(
-    values(var.compute_private_subnet_ids_map),
-    values(var.serverless_private_subnet_ids_map)
-  )
-  endpoint_subnet_cidrs = concat([
-    var.subnet_cidrs["compute_private"],
-    var.subnet_cidrs["serverless_private"]
+  # Take only the first compute private subnet in each AZ for endpoints
+  endpoint_subnet_ids = [
+    for az, subnet in var.compute_private_subnet_ids_map : subnet
+  ]
+
+  endpoint_subnet_cidrs = flatten([
+    var.subnet_cidrs["compute_private"]
   ])
+
   interface_endpoints = [
     "sts",
     "logs",
@@ -30,7 +31,7 @@ resource "aws_vpc_endpoint" "s3" {
   service_name = "com.amazonaws.${var.primary_region}.s3"
   vpc_endpoint_type = "Gateway"
 
-  route_table_ids = [for rt in values(data.aws_route_table.private) : rt.id]
+  route_table_ids = [for rt in values(data.aws_route_table.endpoint) : rt.id]
 
   tags = {
     Name = "S3-Gateway-Endpoint"
@@ -64,6 +65,20 @@ resource "aws_security_group" "interface_endpoints_sg" {
 
   tags = {
     Name = "VPC-Endpoints-SG"
+    Terraform = "true"
+  }
+}
+
+resource "aws_vpc_endpoint" "interface" {
+  for_each = toset(local.interface_endpoints)
+  vpc_id = var.vpc_id
+  service_name = "com.amazonaws.${var.primary_region}.${each.key}"
+  vpc_endpoint_type = "Interface"
+  subnet_ids = local.endpoint_subnet_ids
+  security_group_ids = [aws_security_group.interface_endpoints_sg.id]
+  private_dns_enabled = true
+  tags = {
+    Name = "VPC-Endpoint-${each.key}"
     Terraform = "true"
   }
 }
