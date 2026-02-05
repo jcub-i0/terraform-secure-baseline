@@ -8,6 +8,15 @@ locals {
     for subnet, cidr in var.subnet_cidrs :
     cidr if endswith(subnet, "_private")
   ])
+  interface_endpoints = [
+    "sts",
+    "logs",
+    "ssm",
+    "ssmmessages",
+    "ec2messages",
+    "secretsmanager",
+    "kms"
+  ]
 }
 
 # GET ROUTE TABLE FOR EACH PRIVATE SUBNET
