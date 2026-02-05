@@ -101,7 +101,7 @@ module "vpc_endpoints" {
   vpc_id = module.networking.vpc_id
   account_id = data.aws_caller_identity.current.account_id
   primary_region = var.primary_region
-  compute_subnet_ids_list = module.networking.compute_subnet_ids_list
+  compute_private_subnet_ids_list = module.networking.compute_private_subnet_ids_list
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
   serverless_private_subnet_ids_list = module.networking.serverless_private_subnet_ids_list
 }
