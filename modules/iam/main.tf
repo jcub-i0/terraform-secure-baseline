@@ -1,3 +1,13 @@
+# IAM ACCESS ANALYZER
+resource "aws_accessanalyzer_analyzer" "main" {
+  analyzer_name = "org-access-analyzer"
+  type = "ACCOUNT"
+
+  tags = {
+    Terraform = "true"
+  }
+}
+
 # EC2 Roles and Policies
 ## EC2 Role
 resource "aws_iam_role" "ec2_role" {
