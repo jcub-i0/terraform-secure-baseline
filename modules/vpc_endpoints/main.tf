@@ -1,7 +1,6 @@
 locals {
-  private_subnet_ids = concat(
+  endpoint_subnet_ids = concat(
     var.compute_private_subnet_ids_list,
-    var.data_private_subnet_ids_list,
     var.serverless_private_subnet_ids_list
   )
   private_subnet_cidrs = flatten([
@@ -20,8 +19,8 @@ locals {
 }
 
 # GET ROUTE TABLE FOR EACH PRIVATE SUBNET
-data "aws_route_table" "private" {
-  for_each = toset(local.private_subnet_ids)
+data "aws_route_table" "endpoint" {
+  for_each = toset(local.endpoint_subnet_ids)
   subnet_id = each.value
 }
 
@@ -67,22 +66,4 @@ resource "aws_security_group" "interface_endpoints_sg" {
     Name = "VPC-Endpoints-SG"
     Terraform = "true"
   }
-}
-
-resource "aws_vpc_endpoint" "sts" {
-  vpc_id = var.vpc_id
-  service_name = "com.amazonaws.${var.primary_region}.sts"
-  vpc_endpoint_type = "Interface"
-  subnet_ids = local.private_subnet_ids
-  security_group_ids = [aws_security_group.interface_endpoints_sg.id]
-  private_dns_enabled = true
-}
-
-resource "aws_vpc_endpoint" "logs" {
-  vpc_id = var.vpc_id
-  service_name = "com.amazonaws.${var.primary_region}.logs"
-  vpc_endpoint_type = "Interface"
-  subnet_ids = local.private_subnet_cidrs
-  security_group_ids = [aws_security_group.interface_endpoints_sg.id]
-  private_dns_enabled = true
 }
