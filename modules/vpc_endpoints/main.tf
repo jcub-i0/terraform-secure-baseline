@@ -1,11 +1,11 @@
 locals {
   endpoint_subnet_ids = concat(
-    var.compute_private_subnet_ids_list,
-    var.serverless_private_subnet_ids_list
+    values(var.compute_private_subnet_ids_map),
+    values(var.serverless_private_subnet_ids_map)
   )
-  private_subnet_cidrs = flatten([
-    for subnet, cidr in var.subnet_cidrs :
-    cidr if endswith(subnet, "_private")
+  endpoint_subnet_cidrs = concat([
+    var.subnet_cidrs["compute_private"],
+    var.subnet_cidrs["serverless_private"]
   ])
   interface_endpoints = [
     "sts",
@@ -50,7 +50,7 @@ resource "aws_security_group" "interface_endpoints_sg" {
     from_port = 443
     to_port = 443
     protocol = "tcp"
-    cidr_blocks = local.private_subnet_cidrs
+    cidr_blocks = local.endpoint_subnet_cidrs
     description = "Allow AWS services to communicate with VPC Endpoints"
   }
 
@@ -58,7 +58,7 @@ resource "aws_security_group" "interface_endpoints_sg" {
     from_port = 443
     to_port = 443
     protocol = "tcp"
-    cidr_blocks = local.private_subnet_cidrs
+    cidr_blocks = local.endpoint_subnet_cidrs
     description = "Allow VPC Endpoints to communicate with AWS services"
   }
 
