@@ -44,15 +44,27 @@ jobs:
       - name: Install tflint
         uses: terraform-linters/setup-tflint@v4
 
-      - name: Initialize and Run tflint
-        run: tflint --init && tflint -f junit > reports/tflint-junit.xml || true
+      - name: Initialize tflint
+        run: tflint --init
+
+      - name: Run tflint (compact)
+        run: |
+          tflint -f compact 2>&1 | tee reports/tflint-compact.txt || true
+
+      - name: Run tflint (JUnit)
+        run: |
+          tflint -f junit > reports/tflint-jsunit.xml || true
 
       - name: Install Checkov
         run: pip install checkov
 
-      - name: Run Checkov scan
+      - name: Run Checkov Scan (JUNIT)
         run: |
           checkov -d . -o junitxml --soft-fail > reports/checkov-junit.xml || true
+
+      - name: Run Checkov Scan (JSON)
+        run: |
+          checkov -d . -o json --soft-fail > reports/checkov-junit.txt || true
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
