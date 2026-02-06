@@ -22,6 +22,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+        # CREATE CLEAN EVIDENCE DIRECTORY
+      - name: Prepare Report Directory
+        run: |
+          rm -rf reports
+          mkdir -p reports
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
