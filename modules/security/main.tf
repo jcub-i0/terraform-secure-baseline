@@ -130,14 +130,14 @@ resource "aws_securityhub_standards_subscription" "main" {
 # INSPECTOR RESOURCES
 ## ENABLE INSPECTORv2
 resource "aws_inspector2_enabler" "main" {
-  account_ids = [var.account_id]
-  resource_types = ["EC2","LAMBDA","LAMBDA_CODE"]
+  account_ids    = [var.account_id]
+  resource_types = ["EC2", "LAMBDA", "LAMBDA_CODE"]
 }
 
 ## SUBSCRIBE SECURITY HUB TO AMAZON INSPECTOR PRODUCT
 resource "aws_securityhub_product_subscription" "inspector" {
   product_arn = "arn:aws:securityhub:${var.primary_region}::product/aws/inspector"
-  depends_on = [aws_securityhub_account.main]
+  depends_on  = [aws_securityhub_account.main]
 }
 
 # KMS
