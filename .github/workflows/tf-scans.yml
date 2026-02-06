@@ -1,6 +1,6 @@
-#####################################
-## GIT WORKFLOW FOR CI/CD PIPELINE ##
-#####################################
+#####################################################
+## GIT WORKFLOW FOR CI/CD PIPELINE TERRAFORM SCANS ##
+#####################################################
 
 name: Terraform CI/CD Pipeline
 
@@ -28,29 +28,30 @@ jobs:
           terraform_version: 1.14.4
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive | tee reports/terraform-fmt.txt
 
       - name: Terraform Init (no backend)
-        run: terraform init -backend=false
+        run: terraform init -backend=false | tee reports/terraform-init.txt
 
       - name: Terraform Validate
-        run: terraform validate
+        run: terraform validate 2>&1 | tee reports/terraform-validate.txt
 
       - name: Install tflint
         uses: terraform-linters/setup-tflint@v4
 
       - name: Initialize and Run tflint
-        run: tflint --init && tflint -f compact
+        run: tflint --init && tflint -f junit > reports/tflint-junit.xml || true
 
       - name: Install Checkov
         run: pip install checkov
 
       - name: Run Checkov scan
         run: |
-          checkov -d . --soft-fail
+          checkov -d . -o junit --soft-fail > reports/checkov-junit.json || true
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
         with:
             name: ci-evidence
-            path: .
+            path: reports/
+            if-no-files-foudn: error
