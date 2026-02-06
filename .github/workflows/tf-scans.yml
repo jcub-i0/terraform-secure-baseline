@@ -47,7 +47,7 @@ jobs:
 
       - name: Run Checkov scan
         run: |
-          checkov -d . --severity HIGH,CRITICAL
+          checkov -d . --severity-threshold HIGH
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
