@@ -12,7 +12,9 @@ locals {
     "ssmmessages",
     "ec2messages",
     "secretsmanager",
-    "kms"
+    "kms",
+    "config",
+    "sns"
   ]
 }
 
