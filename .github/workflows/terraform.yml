@@ -40,7 +40,7 @@ jobs:
         run: terraform validate
 
       - name: Install tflint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+        uses: terraform-linters/setup-tflint@v4
 
       - name: Initialize and Run tflint
         run: tflint --init && tflint -f compact
