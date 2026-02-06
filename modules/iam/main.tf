@@ -1,7 +1,7 @@
 # IAM ACCESS ANALYZER
 resource "aws_accessanalyzer_analyzer" "main" {
   analyzer_name = "account-access-analyzer"
-  type = "ACCOUNT"
+  type          = "ACCOUNT"
 
   tags = {
     Terraform = "true"
