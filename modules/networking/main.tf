@@ -5,8 +5,8 @@ locals {
 
 # CREATE MAIN VPC
 resource "aws_vpc" "main" {
-  cidr_block = var.main_vpc_cidr
-  enable_dns_support = true
+  cidr_block           = var.main_vpc_cidr
+  enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
     Name      = "Main-TF-Secure-Baseline"
@@ -19,9 +19,9 @@ resource "aws_vpc" "main" {
 resource "aws_subnet" "public" {
   for_each = local.az_index_map
 
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.subnet_cidrs.public[each.value]
-  availability_zone = each.key
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.subnet_cidrs.public[each.value]
+  availability_zone       = each.key
   map_public_ip_on_launch = false
 
   tags = {
@@ -34,9 +34,9 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "compute_private" {
   for_each = local.az_index_map
 
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.subnet_cidrs.compute_private[each.value]
-  availability_zone = each.key
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.subnet_cidrs.compute_private[each.value]
+  availability_zone       = each.key
   map_public_ip_on_launch = false
 
   tags = {
@@ -49,9 +49,9 @@ resource "aws_subnet" "compute_private" {
 resource "aws_subnet" "data_private" {
   for_each = local.az_index_map
 
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.subnet_cidrs.data_private[each.value]
-  availability_zone = each.key
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.subnet_cidrs.data_private[each.value]
+  availability_zone       = each.key
   map_public_ip_on_launch = false
 
   tags = {
@@ -62,7 +62,7 @@ resource "aws_subnet" "data_private" {
 
 ## SERVERLESS PRIVATE SUBNETS
 resource "aws_subnet" "serverless_private" {
-  for_each = local.az_index_map
+  for_each                = local.az_index_map
   map_public_ip_on_launch = false
 
   vpc_id            = aws_vpc.main.id
