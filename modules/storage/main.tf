@@ -273,6 +273,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           StringEquals = {
             "s3:x-amz-acl"                    = "bucket-owner-full-control"
             "aws:SourceAccount"               = var.account_id
+            "aws:SourceArn"                   = var.cloudtrail_arn
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
