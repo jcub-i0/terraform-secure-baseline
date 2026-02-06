@@ -59,4 +59,4 @@ jobs:
         with:
             name: ci-evidence
             path: reports/
-            if-no-files-foudn: error
+            if-no-files-found: error
