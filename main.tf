@@ -33,6 +33,7 @@ module "storage" {
   logs_kms_key_arn             = module.security.logs_kms_key_arn
   account_id                   = data.aws_caller_identity.current.account_id
   random_id                    = random_id.random_id.hex
+  cloudtrail_arn               = module.logging.cloudtrail_arn
 }
 
 module "iam" {
