@@ -115,8 +115,8 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 # S3 RESOURCES
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
-  bucket        = "centralized-logs-${var.random_id}"
-  force_destroy = true # DELETE THIS FOR PRODUCTION ENVIRONMENT
+  bucket              = "centralized-logs-${var.random_id}"
+  object_lock_enabled = true
 
   tags = {
     Name      = "TF-Baseline-Centralized-Logs"
