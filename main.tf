@@ -36,15 +36,15 @@ module "storage" {
 }
 
 module "iam" {
-  source                   = "./modules/iam"
-  cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
-  secops_topic_arn         = module.monitoring.secops_topic_arn
-  logs_kms_key_arn         = module.security.logs_kms_key_arn
-  account_id               = data.aws_caller_identity.current.account_id
-  primary_region           = var.primary_region
-  centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
+  source                                = "./modules/iam"
+  cloudtrail_log_group_arn              = module.logging.cloudtrail_log_group_arn
+  secops_topic_arn                      = module.monitoring.secops_topic_arn
+  logs_kms_key_arn                      = module.security.logs_kms_key_arn
+  account_id                            = data.aws_caller_identity.current.account_id
+  primary_region                        = var.primary_region
+  centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
   flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
-  flowlogs_log_group_arn = module.logging.flowlogs_log_group_arn
+  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
 }
 
 module "security" {
@@ -61,17 +61,17 @@ module "security" {
 }
 
 module "logging" {
-  source                     = "./modules/logging"
-  centralized_logs_bucket_id = module.storage.centralized_logs_bucket_id
-  logs_kms_key_arn           = module.security.logs_kms_key_arn
-  cloudtrail_role_arn        = module.iam.cloudtrail_role_arn
-  account_id                 = data.aws_caller_identity.current.account_id
-  secops_topic_arn           = module.monitoring.secops_topic_arn
-  flowlogs_role_arn = module.iam.flowlogs_role_arn
-  vpc_id = module.networking.vpc_id
+  source                      = "./modules/logging"
+  centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
+  logs_kms_key_arn            = module.security.logs_kms_key_arn
+  cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
+  account_id                  = data.aws_caller_identity.current.account_id
+  secops_topic_arn            = module.monitoring.secops_topic_arn
+  flowlogs_role_arn           = module.iam.flowlogs_role_arn
+  vpc_id                      = module.networking.vpc_id
   firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
-  cw_to_firehose_role_arn = module.iam.cw_to_firehose_role_arn
+  cw_to_firehose_role_arn     = module.iam.cw_to_firehose_role_arn
 }
 
 module "monitoring" {
@@ -98,10 +98,10 @@ module "automation" {
 module "vpc_endpoints" {
   source = "./modules/vpc_endpoints"
 
-  vpc_id = module.networking.vpc_id
-  account_id = data.aws_caller_identity.current.account_id
-  primary_region = var.primary_region
-  compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
+  vpc_id                            = module.networking.vpc_id
+  account_id                        = data.aws_caller_identity.current.account_id
+  primary_region                    = var.primary_region
+  compute_private_subnet_ids_map    = module.networking.compute_private_subnet_ids_map
   serverless_private_subnet_ids_map = module.networking.serverless_private_subnet_ids_map
-  subnet_cidrs = var.subnet_cidrs
+  subnet_cidrs                      = var.subnet_cidrs
 }
