@@ -27,9 +27,6 @@ jobs:
         with:
           terraform_version: 1.14.4
 
-      - name: Terraform Plan
-        run: terraform plan -no-color
-
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
@@ -38,6 +35,9 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
 
       - name: Install tflint
         uses: terraform-linters/setup-tflint@v4
