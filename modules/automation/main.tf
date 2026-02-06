@@ -120,7 +120,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_rollback.output_base64sha256
 
-  # ENABLE X-RAY TRACING1
+  # ENABLE X-RAY TRACING
   tracing_config {
     mode = "Active"
   }
