@@ -178,6 +178,36 @@ resource "aws_s3_bucket_object_lock_configuration" "centralized_logs" {
   }
 }
 
+## LIFECYCLE RETENTION FOR CENTRALIZED LOGS BUCKET (COST REDUCTION)
+resource "aws_s3_bucket_lifecycle_configuration" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  rule {
+    id     = "centralized-logs-retention"
+    status = "Enabled"
+
+    filter {} # ENTIRE BUCKET -- CAN BE SCOPED
+
+    transition {
+      days          = 30
+      storage_class = "GLACIER_IR"
+    }
+
+    transition {
+      days          = 180
+      storage_class = "DEEP_ARCHIVE"
+    }
+
+    expiration {
+      days = 2555 # 7 YEARS
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 2555
+    }
+  }
+}
+
 ## S3 BUCKET POLICIES
 ### CENTRALIZED LOGS S3 BUCKET POLICY
 resource "aws_s3_bucket_policy" "centralized_logs" {
