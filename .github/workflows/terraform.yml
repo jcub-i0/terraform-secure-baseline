@@ -55,5 +55,5 @@ jobs:
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
         with:
-            name: security-reports
+            name: ci-evidence
             path: .
