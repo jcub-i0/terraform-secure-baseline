@@ -51,3 +51,9 @@ jobs:
       - name: Run Checkov scan
         run: |
           checkov -d . --severity HIGH,CRITICAL
+
+      - name: Upload Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+            name: security-reports
+            path: .
