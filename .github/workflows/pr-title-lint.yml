@@ -1,3 +1,7 @@
+################################
+## GIT WORKFLOW FOR PR TITLES ##
+################################
+
 name: 'Lint PR'
 
 on:
@@ -11,7 +15,7 @@ on:
 jobs:
   main:
     name: Validate PR title
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     permissions:
       pull-requests: read
     steps:
