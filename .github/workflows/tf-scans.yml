@@ -18,6 +18,9 @@ on:
 jobs:
   terraform_static_analysis:
     runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_PLUGIN_CACHE_DIR: "/home/runner/.terraform.d/plugin-cache"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,14 +35,17 @@ jobs:
         with:
           terraform_version: 1.14.4
 
+      - name: Create Plugin Cache Directory
+        run: mkdir -p ~/.terraform.d/plugin-cache
+
       - name: Terraform Format Check
         run: terraform fmt -check -recursive | tee reports/terraform-fmt.txt
 
       - name: Terraform Init (no backend)
-        run: terraform init -backend=false | tee reports/terraform-init.txt
+        run: terraform init -backend=false -input=false -no-color | tee reports/terraform-init.txt
 
       - name: Terraform Validate
-        run: terraform validate 2>&1 | tee reports/terraform-validate.txt
+        run: terraform validate -no-color 2>&1 | tee reports/terraform-validate.txt
 
       - name: Install tflint
         uses: terraform-linters/setup-tflint@v4
@@ -53,7 +59,7 @@ jobs:
 
       - name: Run tflint (JUnit)
         run: |
-          tflint -f junit > reports/tflint-jsunit.xml || true
+          tflint -f junit > reports/tflint-junit.xml || true
 
       - name: Install Checkov
         run: pip install checkov
@@ -64,7 +70,7 @@ jobs:
 
       - name: Run Checkov Scan (JSON)
         run: |
-          checkov -d . -o json --soft-fail > reports/checkov-json.txt || true
+          checkov -d . -o json --soft-fail > reports/checkov.json || true
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
