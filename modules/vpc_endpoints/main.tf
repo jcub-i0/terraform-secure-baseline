@@ -1,8 +1,5 @@
 locals {
-  # Take only the first compute private subnet in each AZ for endpoints
-  endpoint_subnet_ids = [
-    for az, subnet in var.compute_private_subnet_ids_map : subnet
-  ]
+  endpoint_subnets = var.compute_private_subnet_ids_map
 
   endpoint_subnet_cidrs = flatten([
     var.subnet_cidrs["compute_private"]
@@ -21,7 +18,7 @@ locals {
 
 # GET ROUTE TABLE FOR EACH PRIVATE SUBNET
 data "aws_route_table" "endpoint" {
-  for_each = toset(local.endpoint_subnet_ids)
+  for_each = local.endpoint_subnets
   subnet_id = each.value
 }
 
@@ -74,7 +71,7 @@ resource "aws_vpc_endpoint" "interface" {
   vpc_id = var.vpc_id
   service_name = "com.amazonaws.${var.primary_region}.${each.key}"
   vpc_endpoint_type = "Interface"
-  subnet_ids = local.endpoint_subnet_ids
+  subnet_ids = values(local.endpoint_subnets)
   security_group_ids = [aws_security_group.interface_endpoints_sg.id]
   private_dns_enabled = true
   tags = {
