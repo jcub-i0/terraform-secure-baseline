@@ -52,7 +52,7 @@ jobs:
 
       - name: Run Checkov scan
         run: |
-          checkov -d . -o junitxml --soft-fail > reports/checkov-junit.json || true
+          checkov -d . -o junitxml --soft-fail > reports/checkov-junit.xml || true
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v4
