@@ -27,6 +27,9 @@ jobs:
         with:
           terraform_version: latest
 
+      - name: Terraform Plan
+        run: terraform plan -no-color
+
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
