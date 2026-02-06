@@ -166,6 +166,18 @@ resource "aws_s3_bucket_ownership_controls" "centralized_logs" {
   }
 }
 
+## CONFIGURE DEFAULT RETENTION FOR CENTRALIZED LOGS BUCKET
+resource "aws_s3_bucket_object_lock_configuration" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  rule {
+    default_retention {
+      mode = "COMPLIANCE"
+      days = 90
+    }
+  }
+}
+
 ## S3 BUCKET POLICIES
 ### CENTRALIZED LOGS S3 BUCKET POLICY
 resource "aws_s3_bucket_policy" "centralized_logs" {
