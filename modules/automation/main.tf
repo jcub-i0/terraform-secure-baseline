@@ -17,6 +17,11 @@ resource "aws_lambda_function" "ec2_isolation" {
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
 
+  # ENABLE X-RAY TRACING
+  tracing_config {
+    mode = "Active"
+  }
+
   vpc_config {
     subnet_ids         = var.serverless_private_subnet_ids
     security_group_ids = [aws_security_group.lambda_ec2_isolation_sg.id]
@@ -114,6 +119,11 @@ resource "aws_lambda_function" "ec2_rollback" {
   timeout          = 60
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_rollback.output_base64sha256
+  
+  # ENABLE X-RAY TRACING
+  tracing_config {
+    mode = "Active"
+  }
 
   vpc_config {
     subnet_ids         = var.serverless_private_subnet_ids
