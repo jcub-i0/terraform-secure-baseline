@@ -217,14 +217,18 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
     Version = "2012-10-17"
     Statement = [
       # CONFIG
-      ## ALLOW CONFIG TO CHECK ACL
+      ## ALLOW CONFIG TO CHECK ACL AND GET BUCKET
       {
-        Sid    = "AWSConfigAclCheck"
+        Sid    = "AWSConfigBucketChecks"
         Effect = "Allow"
         Principal = {
           Service = "config.amazonaws.com"
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = [
+          "s3:GetBucketAcl",
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
+        ]
         Resource = aws_s3_bucket.centralized_logs.arn
       },
       ## ALLOW CONFIG TO WRITE OBJECTS
@@ -235,10 +239,12 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/Config/*"
+        Resource = [
+          "${aws_s3_bucket.centralized_logs.arn}/Config/*",
+          "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.account_id}/Config/*"
+        ]
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"                    = "bucket-owner-full-control"
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
@@ -271,7 +277,6 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = "${aws_s3_bucket.centralized_logs.arn}/CloudTrail/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"                    = "bucket-owner-full-control"
             "aws:SourceAccount"               = var.account_id
             "aws:SourceArn"                   = var.cloudtrail_arn
             "s3:x-amz-server-side-encryption" = "aws:kms"

@@ -46,6 +46,7 @@ module "iam" {
   centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
   flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
   flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
+  secops_event_bus_arn = module.automation.secops_event_bus_arn
 }
 
 module "security" {
@@ -59,6 +60,8 @@ module "security" {
   primary_region               = var.primary_region
   guardduty_features           = var.guardduty_features
   config_remediation_role_arn  = module.iam.config_remediation_role_arn
+  secops_event_bus_name        = module.automation.secops_event_bus_name
+  secops_topic_arn             = module.monitoring.secops_topic_arn
 }
 
 module "logging" {
@@ -94,6 +97,7 @@ module "automation" {
   account_id                    = data.aws_caller_identity.current.account_id
   secops_role_arn               = module.iam.secops_role_arn
   primary_region                = var.primary_region
+  eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
 }
 
 module "vpc_endpoints" {

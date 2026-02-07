@@ -38,3 +38,7 @@ output "firehose_flow_logs_role_arn" {
 output "cw_to_firehose_role_arn" {
   value = aws_iam_role.cw_to_firehose.arn
 }
+
+output "eventbridge_putevents_to_secops_role_arn" {
+  value = aws_iam_role.eventbridge_putevents_to_secops.arn
+}

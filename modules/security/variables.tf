@@ -29,3 +29,11 @@ variable "guardduty_features" {
 variable "config_remediation_role_arn" {
   type = string
 }
+
+variable "secops_event_bus_name" {
+  type = string
+}
+
+variable "secops_topic_arn" {
+  type = string
+}
