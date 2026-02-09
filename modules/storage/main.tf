@@ -230,7 +230,6 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           }
         }
       },
-
       # CLOUDTRAIL
       ## ALLOW CLOUDTRAIL TO VERIFY BUCKET ACL
       {
