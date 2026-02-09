@@ -485,9 +485,9 @@ resource "aws_iam_role" "eventbridge_putevents_to_secops" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Principal = {Service = "events.amazonaws.com"}
-      Action = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -498,10 +498,10 @@ resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow"
-      Action = "events:PutEvents"
+      Effect   = "Allow"
+      Action   = "events:PutEvents"
       Resource = var.secops_event_bus_arn
     }]
-    
+
   })
 }

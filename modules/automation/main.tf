@@ -186,12 +186,12 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
       },
       # ALLOW EVENTBRIDGE FORWARDING ROLE TO PUT EVENTS ON BUS
       {
-        Sid = "AllowEventBridgeForwardingRole"
+        Sid    = "AllowEventBridgeForwardingRole"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action = "events:PutEvents"
+        Action   = "events:PutEvents"
         Resource = aws_cloudwatch_event_bus.secops.arn
         Condition = {
           StringEquals = {
