@@ -166,18 +166,6 @@ resource "aws_s3_bucket_ownership_controls" "centralized_logs" {
   }
 }
 
-## CONFIGURE DEFAULT RETENTION FOR CENTRALIZED LOGS BUCKET
-resource "aws_s3_bucket_object_lock_configuration" "centralized_logs" {
-  bucket = aws_s3_bucket.centralized_logs.id
-
-  rule {
-    default_retention {
-      mode = "COMPLIANCE"
-      days = 90
-    }
-  }
-}
-
 ## LIFECYCLE RETENTION FOR CENTRALIZED LOGS BUCKET (COST REDUCTION)
 resource "aws_s3_bucket_lifecycle_configuration" "centralized_logs" {
   bucket = aws_s3_bucket.centralized_logs.id
@@ -217,18 +205,14 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
     Version = "2012-10-17"
     Statement = [
       # CONFIG
-      ## ALLOW CONFIG TO CHECK ACL AND GET BUCKET
+      ## ALLOW CONFIG TO CHECK ACL
       {
-        Sid    = "AWSConfigBucketChecks"
+        Sid    = "AWSConfigAclCheck"
         Effect = "Allow"
         Principal = {
           Service = "config.amazonaws.com"
         }
-        Action   = [
-          "s3:GetBucketAcl",
-          "s3:GetBucketLocation",
-          "s3:ListBucket"
-        ]
+        Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.centralized_logs.arn
       },
       ## ALLOW CONFIG TO WRITE OBJECTS
@@ -239,10 +223,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = [
-          "${aws_s3_bucket.centralized_logs.arn}/Config/*",
-          "${aws_s3_bucket.centralized_logs.arn}/AWSLogs/${var.account_id}/Config/*"
-        ]
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/Config/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -278,7 +259,6 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount"               = var.account_id
-            "aws:SourceArn"                   = var.cloudtrail_arn
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
