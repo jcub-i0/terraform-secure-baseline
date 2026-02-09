@@ -115,8 +115,8 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 # S3 RESOURCES
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
-  bucket        = "centralized-logs-${var.random_id}"
-  force_destroy = true # DELETE THIS FOR PRODUCTION ENVIRONMENT
+  bucket              = "centralized-logs-${var.random_id}"
+  object_lock_enabled = true
 
   tags = {
     Name      = "TF-Baseline-Centralized-Logs"
@@ -166,6 +166,36 @@ resource "aws_s3_bucket_ownership_controls" "centralized_logs" {
   }
 }
 
+## LIFECYCLE RETENTION FOR CENTRALIZED LOGS BUCKET (COST REDUCTION)
+resource "aws_s3_bucket_lifecycle_configuration" "centralized_logs" {
+  bucket = aws_s3_bucket.centralized_logs.id
+
+  rule {
+    id     = "centralized-logs-retention"
+    status = "Enabled"
+
+    filter {} # ENTIRE BUCKET -- CAN BE SCOPED
+
+    transition {
+      days          = 30
+      storage_class = "GLACIER_IR"
+    }
+
+    transition {
+      days          = 180
+      storage_class = "DEEP_ARCHIVE"
+    }
+
+    expiration {
+      days = 2555 # 7 YEARS
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 2555
+    }
+  }
+}
+
 ## S3 BUCKET POLICIES
 ### CENTRALIZED LOGS S3 BUCKET POLICY
 resource "aws_s3_bucket_policy" "centralized_logs" {
@@ -196,7 +226,6 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = "${aws_s3_bucket.centralized_logs.arn}/Config/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"                    = "bucket-owner-full-control"
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
@@ -229,7 +258,6 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = "${aws_s3_bucket.centralized_logs.arn}/CloudTrail/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"                    = "bucket-owner-full-control"
             "aws:SourceAccount"               = var.account_id
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }

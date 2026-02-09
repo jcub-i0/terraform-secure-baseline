@@ -477,3 +477,31 @@ resource "aws_iam_role_policy_attachment" "secops_rollback_attach" {
   role       = aws_iam_role.secops.name
   policy_arn = aws_iam_policy.secops_rollback_trigger.arn
 }
+
+# EVENTBRIDGE ROLE
+resource "aws_iam_role" "eventbridge_putevents_to_secops" {
+  name = "EventBridgePutEventsToSecopsBus"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+# ALLOW EVENTBRIDGE TO PUT EVENTS TO SECOPS BUS
+resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
+  role = aws_iam_role.eventbridge_putevents_to_secops.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "events:PutEvents"
+      Resource = var.secops_event_bus_arn
+    }]
+
+  })
+}

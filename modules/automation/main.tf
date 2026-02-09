@@ -17,7 +17,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
 
-  # ENABLE X-RAY TRACING
+  # ENABLE X-RAY TRACING FOR LAMBDA FUNC
   tracing_config {
     mode = "Active"
   }
@@ -164,24 +164,42 @@ resource "aws_cloudwatch_event_bus" "secops" {
 }
 
 ### SECURITY OPERATIONS EVENT BUS POLICY
-resource "aws_cloudwatch_event_bus_policy" "allow_secops_rollback" {
+resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
   event_bus_name = aws_cloudwatch_event_bus.secops.name
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid    = "AllowSecOpsRollbackOnly"
-      Effect = "Allow"
-      Principal = {
-        AWS = var.secops_role_arn
-      }
-      Action   = "events:PutEvents"
-      Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
-      Condition = {
-        StringEquals = {
-          "events:source" = "custom.rollback"
+    Statement = [
+      # ALLOW MANUAL EC2 ROLLBACK INJECTION FROM SECOPS
+      {
+        Sid    = "AllowSecOpsRollbackOnly"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.secops_role_arn
+        }
+        Action   = "events:PutEvents"
+        Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
+        Condition = {
+          StringEquals = {
+            "events:source" = "custom.rollback"
+          }
+        }
+      },
+      # ALLOW EVENTBRIDGE FORWARDING ROLE TO PUT EVENTS ON BUS
+      {
+        Sid    = "AllowEventBridgeForwardingRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action   = "events:PutEvents"
+        Resource = aws_cloudwatch_event_bus.secops.arn
+        Condition = {
+          StringEquals = {
+            "events:source" = "aws.securityhub"
+          }
         }
       }
-    }]
+    ]
   })
 }
 

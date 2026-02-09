@@ -21,6 +21,10 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_PLUGIN_CACHE_DIR: "/home/runner/.terraform.d/plugin-cache"
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,13 +43,19 @@ jobs:
         run: mkdir -p ~/.terraform.d/plugin-cache
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive | tee reports/terraform-fmt.txt
+        run: |
+          set -o pipefail
+          terraform fmt -check -recursive | tee reports/terraform-fmt.txt
 
       - name: Terraform Init (no backend)
-        run: terraform init -backend=false -input=false -no-color | tee reports/terraform-init.txt
+        run: |
+          set -o pipefail
+          terraform init -backend=false -input=false -no-color | tee reports/terraform-init.txt
 
       - name: Terraform Validate
-        run: terraform validate -no-color 2>&1 | tee reports/terraform-validate.txt
+        run: |
+          set -o pipefail
+          terraform validate -no-color 2>&1 | tee reports/terraform-validate.txt
 
       - name: Install tflint
         uses: terraform-linters/setup-tflint@v4
@@ -55,10 +65,12 @@ jobs:
 
       - name: Run tflint (compact)
         run: |
+          set -o pipefail
           tflint -f compact 2>&1 | tee reports/tflint-compact.txt || true
 
       - name: Run tflint (JUnit)
         run: |
+          set -o pipefail
           tflint -f junit > reports/tflint-junit.xml || true
 
       - name: Install Checkov
@@ -66,10 +78,12 @@ jobs:
 
       - name: Run Checkov Scan (JUNIT)
         run: |
+          set -o pipefail
           checkov -d . -o junitxml --soft-fail > reports/checkov-junit.xml || true
 
       - name: Run Checkov Scan (JSON)
         run: |
+          set -o pipefail
           checkov -d . -o json --soft-fail > reports/checkov.json || true
 
       - name: Upload Scan Results

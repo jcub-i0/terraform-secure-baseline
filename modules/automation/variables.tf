@@ -33,3 +33,7 @@ variable "secops_role_arn" {
 variable "primary_region" {
   type = string
 }
+
+variable "eventbridge_putevents_to_secops_role_arn" {
+  type = string
+}

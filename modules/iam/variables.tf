@@ -29,3 +29,7 @@ variable "flowlogs_firehose_delivery_stream_arn" {
 variable "flowlogs_log_group_arn" {
   type = string
 }
+
+variable "secops_event_bus_arn" {
+  type = string
+}

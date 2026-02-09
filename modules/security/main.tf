@@ -127,6 +127,46 @@ resource "aws_securityhub_standards_subscription" "main" {
   depends_on    = [aws_securityhub_account.main]
 }
 
+# INSPECTOR RESOURCES
+## ENABLE INSPECTORv2
+resource "aws_inspector2_enabler" "main" {
+  account_ids    = [var.account_id]
+  resource_types = ["EC2", "LAMBDA", "LAMBDA_CODE"]
+}
+
+## SUBSCRIBE SECURITY HUB TO AMAZON INSPECTOR PRODUCT
+resource "aws_securityhub_product_subscription" "inspector" {
+  product_arn = "arn:aws:securityhub:${var.primary_region}::product/aws/inspector"
+  depends_on  = [aws_securityhub_account.main]
+}
+
+## ALERT ON HIGH/CRITICAL INSPECTOR FINDINGS VIA SECURITY HUB
+resource "aws_cloudwatch_event_rule" "securityhub_inspector_high_critical" {
+  name           = "securityhub-inspector-high-critical"
+  description    = "Alert on HIGH/CRITICAL Inspector findings in Security Hub"
+  event_bus_name = var.secops_event_bus_name
+
+  event_pattern = jsonencode({
+    source      = ["aws.securityhub"],
+    detail-type = ["Security Hub Findings - Imported"],
+    detail = {
+      findings = {
+        ProductName = ["Inspector"],
+        Severity    = { Label = ["HIGH", "CRITICAL"] },
+        RecordState = ["ACTIVE"]
+      }
+    }
+  })
+}
+
+## EVENT TARGET TO SEND SNS NOTIFICATION
+resource "aws_cloudwatch_event_target" "securityhub_inspector_high_critical_to_sns" {
+  event_bus_name = var.secops_event_bus_name
+  rule           = aws_cloudwatch_event_rule.securityhub_inspector_high_critical.name
+  target_id      = "send-to-sns"
+  arn            = var.secops_topic_arn
+}
+
 # KMS
 ## KMS KEY FOR LOGS
 resource "aws_kms_key" "logs" {

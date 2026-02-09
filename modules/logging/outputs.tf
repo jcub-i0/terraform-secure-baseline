@@ -13,3 +13,7 @@ output "flowlogs_firehose_delivery_stream_arn" {
 output "flowlogs_log_group_arn" {
   value = aws_cloudwatch_log_group.flowlogs.arn
 }
+
+output "cloudtrail_arn" {
+  value = aws_cloudtrail.cloudtrail.arn
+}

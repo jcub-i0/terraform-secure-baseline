@@ -37,3 +37,7 @@ variable "random_id" {
   description = "Random string of characters"
   type        = string
 }
+
+variable "cloudtrail_arn" {
+  type = string
+}
