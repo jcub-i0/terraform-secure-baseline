@@ -17,7 +17,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
 
-  # ENABLE X-RAY TRACING
+  # ENABLE X-RAY TRACING FOR LAMBDA FUNC
   tracing_config {
     mode = "Active"
   }
