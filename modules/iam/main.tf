@@ -485,9 +485,36 @@ resource "aws_iam_policy" "logs_s3_readonly" {
   })
 }
 
+## ALLOW DECRYPTION OF OBJECTS ENCRYPTED WITH THE LOGS CMK
+resource "aws_iam_policy" "logs_kms_decrypt" {
+  name = "LogsKmsDecrypt"
+  description = "Allow decryption of objects encrypted with the Logs CMK"
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid = "AllowDecryptLogsKey"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = var.logs_kms_key_arn
+      }
+    ]
+  })
+}
+
 ## ATTACH CENTRALIZED LOGS READ ONLY POLICY TO SECOPS ROLE
 resource "aws_iam_role_policy_attachment" "logs_s3_readonly_secops" {
   policy_arn = aws_iam_policy.logs_s3_readonly.arn
+  role = aws_iam_role.secops.name
+}
+
+## ATTACH LogsKmsReadOnly POLICY TO SECOPS ROLE
+resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops" {
+  policy_arn = aws_iam_policy.logs_kms_decrypt.arn
   role = aws_iam_role.secops.name
 }
 
