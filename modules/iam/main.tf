@@ -449,10 +449,6 @@ resource "aws_iam_role" "secops" {
       }
     }]
   })
-
-  tags = {
-    Role = "SecurityOperations"
-  }
 }
 
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
