@@ -117,6 +117,10 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 resource "aws_s3_bucket" "centralized_logs" {
   bucket              = "centralized-logs-${var.random_id}"
   object_lock_enabled = true
+  
+  lifecycle {
+    prevent_destroy = true
+  }
 
   tags = {
     Name      = "TF-Baseline-Centralized-Logs"
