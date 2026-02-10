@@ -69,3 +69,7 @@ variable "guardduty_features" {
   ]
 }
 
+variable "bucket_admin_principles" {
+  description = "Principals allowed to manage the Centralized Logs Bucket guardrails (polish/versioning)"
+  type        = list(string)
+}
