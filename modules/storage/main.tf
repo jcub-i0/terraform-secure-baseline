@@ -206,8 +206,8 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
     Statement = [
       # DENY DELETING ANY OBJECTS/VERSIONS (IMMUTABILITY)
       {
-        Sid = "DenyDeleteLogs"
-        Effect = "Deny"
+        Sid       = "DenyDeleteLogs"
+        Effect    = "Deny"
         Principal = "*"
         Action = [
           "s3:DeleteObject",
@@ -217,8 +217,8 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
       },
       # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
       {
-        Sid = "DenyBucketPolicyChanges"
-        Effect = "Deny"
+        Sid       = "DenyBucketPolicyChanges"
+        Effect    = "Deny"
         Principal = "*"
         Action = [
           "s3:PutBucketPolicy",
@@ -227,14 +227,14 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn": var.bucket_admin_principals
+            "aws:PrincipalArn" : var.bucket_admin_principles
           }
         }
       },
       #DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
       {
-        Sid = "DenyVersioningChanges"
-        Effect = "Deny"
+        Sid       = "DenyVersioningChanges"
+        Effect    = "Deny"
         Principal = "*"
         Action = [
           "s3:PutBucketVersioning"
@@ -242,17 +242,17 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn": var.bucket_admin_principals
+            "aws:PrincipalArn" : var.bucket_admin_principles
           }
         }
       },
       # ENFORCE ENCRYPTION ON ALL PUTS
       {
-        Sid = "DenyUnencryptedObjectUploads"
-        Effect = "Deny"
+        Sid       = "DenyUnencryptedObjectUploads"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.centralized_logs.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -261,11 +261,11 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
       },
       # DENY ANYTHING LACKING ENCRYPTION
       {
-        Sid = "DenyMissingEncryptionHeader"
-        Effect = "Deny"
+        Sid       = "DenyMissingEncryptionHeader"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.centralized_logs.arn}/*"
         Condition = {
           Null = {
             "s3:x-amz-server-side-encryption" = "true"
