@@ -34,6 +34,7 @@ module "storage" {
   account_id                   = data.aws_caller_identity.current.account_id
   random_id                    = random_id.random_id.hex
   cloudtrail_arn               = module.logging.cloudtrail_arn
+  bucket_admin_principles      = var.bucket_admin_principles
 }
 
 module "iam" {

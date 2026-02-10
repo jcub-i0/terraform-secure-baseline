@@ -41,3 +41,7 @@ variable "random_id" {
 variable "cloudtrail_arn" {
   type = string
 }
+
+variable "bucket_admin_principles" {
+  type = list(string)
+}
