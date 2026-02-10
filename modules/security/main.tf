@@ -174,7 +174,7 @@ resource "aws_kms_key" "logs" {
   enable_key_rotation     = true
   deletion_window_in_days = 30
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false # CHANGE THIS IN PROD
   }
 
   policy = jsonencode({
@@ -333,8 +333,9 @@ resource "aws_kms_key" "ebs" {
   description             = "CMK for encrypting EBS volumes and snapshots"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false # CHANGE THIS IN PROD
   }
 
   policy = jsonencode({

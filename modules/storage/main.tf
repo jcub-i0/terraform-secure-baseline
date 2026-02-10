@@ -116,10 +116,11 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
   bucket              = "centralized-logs-${var.random_id}"
-  object_lock_enabled = true
+  object_lock_enabled = false # CHANGE THIS IN PROD
+  force_destroy = true # CHANGE THIS IN PROD
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false # CHANGE THIS IN PROD
   }
 
   tags = {
