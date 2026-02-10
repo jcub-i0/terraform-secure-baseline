@@ -173,6 +173,9 @@ resource "aws_kms_key" "logs" {
   description             = "CMK for centralized logging (CloudTrail, Config, Flow Logs)"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+  lifecycle {
+    prevent_destroy = true
+  }
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -330,6 +333,9 @@ resource "aws_kms_key" "ebs" {
   description             = "CMK for encrypting EBS volumes and snapshots"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+  lifecycle {
+    prevent_destroy = true
+  }
 
   policy = jsonencode({
     Version = "2012-10-17"
