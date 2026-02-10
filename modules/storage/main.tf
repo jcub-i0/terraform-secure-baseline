@@ -117,7 +117,7 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 resource "aws_s3_bucket" "centralized_logs" {
   bucket              = "centralized-logs-${var.random_id}"
   object_lock_enabled = false # CHANGE THIS IN PROD
-  force_destroy = true # CHANGE THIS IN PROD
+  force_destroy       = true  # CHANGE THIS IN PROD
 
   lifecycle {
     prevent_destroy = false # CHANGE THIS IN PROD
