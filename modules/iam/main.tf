@@ -453,7 +453,7 @@ resource "aws_iam_role" "secops" {
 
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
 resource "aws_iam_policy" "logs_s3_readonly" {
-  name = "CentralizedLogsS3ReadOnly"
+  name        = "CentralizedLogsS3ReadOnly"
   description = "Read-only access to Centralized Logs S3 bucket (no delete, no write)"
 
   policy = jsonencode({
@@ -461,7 +461,7 @@ resource "aws_iam_policy" "logs_s3_readonly" {
     Statement = [
       # LIST BUCKET + READ BUCKET METADATA
       {
-        Sid = "ListCentralizedLogsBucket"
+        Sid    = "ListCentralizedLogsBucket"
         Effect = "Allow"
         Action = [
           "s3:ListBucket",
@@ -471,7 +471,7 @@ resource "aws_iam_policy" "logs_s3_readonly" {
       },
       # READ OBJECTS + VERSIONS
       {
-        Sid = "ReadCentralizedLogsObjects"
+        Sid    = "ReadCentralizedLogsObjects"
         Effect = "Allow"
         Action = [
           "s3:GetObject",
@@ -487,14 +487,14 @@ resource "aws_iam_policy" "logs_s3_readonly" {
 
 ## ALLOW DECRYPTION OF OBJECTS ENCRYPTED WITH THE LOGS CMK
 resource "aws_iam_policy" "logs_kms_decrypt" {
-  name = "LogsKmsDecrypt"
+  name        = "LogsKmsDecrypt"
   description = "Allow decryption of objects encrypted with the Logs CMK"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid = "AllowDecryptLogsKey"
+        Sid    = "AllowDecryptLogsKey"
         Effect = "Allow"
         Action = [
           "kms:Decrypt",
@@ -509,13 +509,13 @@ resource "aws_iam_policy" "logs_kms_decrypt" {
 ## ATTACH CENTRALIZED LOGS READ ONLY POLICY TO SECOPS ROLE
 resource "aws_iam_role_policy_attachment" "logs_s3_readonly_secops" {
   policy_arn = aws_iam_policy.logs_s3_readonly.arn
-  role = aws_iam_role.secops.name
+  role       = aws_iam_role.secops.name
 }
 
 ## ATTACH LogsKmsReadOnly POLICY TO SECOPS ROLE
 resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops" {
   policy_arn = aws_iam_policy.logs_kms_decrypt.arn
-  role = aws_iam_role.secops.name
+  role       = aws_iam_role.secops.name
 }
 
 ### ROLLBACK TRIGGER POLICY
