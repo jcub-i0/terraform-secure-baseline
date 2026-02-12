@@ -49,6 +49,7 @@ resource "aws_security_group" "interface_endpoints_sg" {
   name        = "vpc-endpoints-sg"
   description = "Security Group for Interface VPC Endpoints (AWS PrivateLink)"
   vpc_id      = var.vpc_id
+  revoke_rules_on_delete = true
 
   tags = {
     Name      = "VPC-Endpoints-SG"

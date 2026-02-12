@@ -4,6 +4,7 @@ resource "aws_security_group" "compute" {
   name        = "Compute-SG"
   description = "Security Group for EC2 compute instances"
   vpc_id      = var.vpc_id
+  revoke_rules_on_delete = true
 
   tags = {
     Name      = "Compute-SG"
