@@ -13,6 +13,14 @@ resource "aws_security_group" "compute" {
     description = "Allow outbound HTTPS only to Interface VPC Endpoints"
   }
 
+  egress {
+    from_port = 5432
+    to_port = 5432
+    protocol = "tcp"
+    security_groups = [var.data_sg_id]
+    description = "Allow DB access"
+  }
+
   tags = {
     Name      = "Compute-SG"
     Terraform = "true"
