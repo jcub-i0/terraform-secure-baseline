@@ -47,9 +47,9 @@ resource "aws_security_group" "interface_endpoints_sg" {
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    from_port = 443
+    to_port   = 443
+    protocol  = "tcp"
     security_groups = [
       var.compute_sg_id,
       var.lambda_ec2_isolation_sg_id,

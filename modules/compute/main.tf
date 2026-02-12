@@ -6,19 +6,19 @@ resource "aws_security_group" "compute" {
   vpc_id      = var.vpc_id
 
   egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
     security_groups = [var.interface_endpoints_sg_id]
-    description = "Allow outbound HTTPS only to Interface VPC Endpoints"
+    description     = "Allow outbound HTTPS only to Interface VPC Endpoints"
   }
 
   egress {
-    from_port = var.db_port
-    to_port = var.db_port
-    protocol = "tcp"
+    from_port       = var.db_port
+    to_port         = var.db_port
+    protocol        = "tcp"
     security_groups = [var.data_sg_id]
-    description = "Allow DB access"
+    description     = "Allow DB access"
   }
 
   tags = {
