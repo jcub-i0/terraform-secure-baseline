@@ -12,3 +12,7 @@ output "centralized_logs_bucket_id" {
   description = "The ID of the Centralized Logs S3 bucket"
   value       = aws_s3_bucket.centralized_logs.id
 }
+
+output "data_sg_id" {
+  value = aws_security_group.data.id
+}
