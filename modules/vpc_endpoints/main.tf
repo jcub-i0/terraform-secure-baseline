@@ -50,8 +50,8 @@ resource "aws_security_group" "interface_endpoints_sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = local.endpoint_subnet_cidrs
-    description = "Allow AWS services to communicate with VPC Endpoints"
+    security_groups = [var.compute_sg_id]
+    description = "Allow Compute workloads to reach VPC Endpoints over port 443"
   }
 
   egress {
