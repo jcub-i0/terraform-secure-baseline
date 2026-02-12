@@ -429,3 +429,9 @@ resource "aws_kms_key" "lambda" {
     Terraform = "true"
   }
 }
+
+## ALIAS FOR LAMBDA KMS KEY
+resource "aws_kms_alias" "lambda" {
+  name = "alias/lambda-cmk"
+  target_key_id = aws_kms_key.lambda.id
+}
