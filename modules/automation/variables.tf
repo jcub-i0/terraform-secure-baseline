@@ -41,3 +41,7 @@ variable "eventbridge_putevents_to_secops_role_arn" {
 variable "lambda_kms_key_arn" {
   type = string
 }
+
+variable "interface_endpoints_sg_id" {
+  type = string
+}
