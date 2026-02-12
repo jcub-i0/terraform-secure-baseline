@@ -62,6 +62,14 @@ resource "aws_security_group" "interface_endpoints_sg" {
     description = "Allow Compute workloads to reach VPC Endpoints over port 443"
   }
 
+  egress {
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow endpoint ENIs to reach AWS services over port 443"
+  }
+
   tags = {
     Name      = "VPC-Endpoints-SG"
     Terraform = "true"
