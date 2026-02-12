@@ -48,11 +48,11 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   vpc_id      = var.vpc_id
 
   egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
     security_groups = [var.interface_endpoints_sg_id]
-    description = "AWS API Access"
+    description     = "AWS API Access"
   }
 
   tags = {
@@ -146,11 +146,11 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
   vpc_id      = var.vpc_id
 
   egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
     security_groups = [var.interface_endpoints_sg_id]
-    description = "AWS API Access"
+    description     = "AWS API Access"
   }
 
   tags = {
