@@ -9,8 +9,8 @@ resource "aws_security_group" "compute" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound HTTPS traffic"
+    security_groups = [var.interface_endpoints_sg_id]
+    description = "Allow outbound HTTPS only to Interface VPC Endpoints"
   }
 
   tags = {
