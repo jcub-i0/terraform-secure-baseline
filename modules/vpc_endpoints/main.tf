@@ -63,9 +63,9 @@ resource "aws_security_group" "interface_endpoints_sg" {
   }
 
   egress {
-    from_port = 443
-    to_port = 443
-    protocol = "tcp"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow endpoint ENIs to reach AWS services over port 443"
   }
