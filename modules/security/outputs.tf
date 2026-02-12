@@ -15,5 +15,5 @@ output "ebs_kms_alias_arn" {
 
 output "lambda_kms_key_arn" {
   description = "ARN of the Lambda CMK KMS key used to encrypt environment variables"
-  value = aws_kms_key.lambda.arn
+  value       = aws_kms_key.lambda.arn
 }

@@ -16,7 +16,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   timeout          = 60
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
-  kms_key_arn = var.lambda_kms_key_arn
+  kms_key_arn      = var.lambda_kms_key_arn
 
   # ENABLE X-RAY TRACING FOR LAMBDA FUNC
   tracing_config {
@@ -120,7 +120,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   timeout          = 60
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_rollback.output_base64sha256
-  kms_key_arn = var.lambda_kms_key_arn
+  kms_key_arn      = var.lambda_kms_key_arn
 
   # ENABLE X-RAY TRACING
   tracing_config {

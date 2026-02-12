@@ -384,8 +384,8 @@ resource "aws_kms_alias" "ebs" {
 
 # KMS KEY FOR LAMBDA
 resource "aws_kms_key" "lambda" {
-  description = "CMK for Lambda environment variable encryption"
-  enable_key_rotation = true
+  description             = "CMK for Lambda environment variable encryption"
+  enable_key_rotation     = true
   deletion_window_in_days = 30
 
   policy = jsonencode({
@@ -393,17 +393,17 @@ resource "aws_kms_key" "lambda" {
     Statement = [
       # ROOT/ADMIN
       {
-        Sid = "EnableRootPermissions"
+        Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action = "kms:*"
+        Action   = "kms:*"
         Resource = "*"
       },
       # ALLOW LAMBDA SERVICE TO USE THE KEY FOR ENV VAR ENCRYPTION
       {
-        Sid = "AllowLambdaUse"
+        Sid    = "AllowLambdaUse"
         Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
@@ -425,13 +425,13 @@ resource "aws_kms_key" "lambda" {
     ]
   })
   tags = {
-    Name = "lambda-cmk"
+    Name      = "lambda-cmk"
     Terraform = "true"
   }
 }
 
 ## ALIAS FOR LAMBDA KMS KEY
 resource "aws_kms_alias" "lambda" {
-  name = "alias/lambda-cmk"
+  name          = "alias/lambda-cmk"
   target_key_id = aws_kms_key.lambda.id
 }
