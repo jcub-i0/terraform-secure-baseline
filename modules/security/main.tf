@@ -229,6 +229,21 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
+      ### AWS CONFIG SERVICE LINKED ROLE
+      {
+        Sid    = "AllowConfig"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
       ### VPC FLOW LOGS / CLOUDWATCH LOGS
       {
         Sid    = "AllowLogs"
