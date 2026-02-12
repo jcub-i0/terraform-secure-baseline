@@ -14,15 +14,6 @@ resource "aws_security_group" "data" {
     description     = "Allow DB access from compute tier"
   }
 
-  # Egress -- outbound to AWS services
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Outbound HTTPS for AWS services"
-  }
-
   tags = {
     Name      = "Data-SG"
     Terraform = "true"
