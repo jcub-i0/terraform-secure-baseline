@@ -51,7 +51,7 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = [var.interface_endpoints_sg]
     description = "AWS API Access"
   }
 
@@ -149,7 +149,7 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = [var.interface_endpoints_sg]
     description = "AWS API Access"
   }
 
