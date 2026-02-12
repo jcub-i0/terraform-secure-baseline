@@ -61,3 +61,36 @@ resource "aws_security_group_rule" "compute_egress_to_db" {
   source_security_group_id = var.data_sg_id
   description = "Compute -> DB"
 }
+
+## DATA SG RULES
+resource "aws_security_group_rule" "db_ingress_from_compute" {
+  type = "ingress"
+  security_group_id = var.data_sg_id
+  from_port = var.db_port
+  to_port = var.db_port
+  protocol = "tcp"
+  source_security_group_id = var.data_sg_id
+  description = "Compute -> DB"
+}
+
+## LAMBDA EC2 ISOLATION SG RULES
+resource "aws_security_group_rule" "lambda_isolation_egress_to_endpoints" {
+  type = "egress"
+  security_group_id = var.lambda_ec2_isolation_sg_id
+  from_port = 443
+  to_port = 443
+  protocol = "tcp"
+  source_security_group_id = var.lambda_ec2_isolation_sg_id
+  description = "Lambda EC2 Isolation -> VPC Endpoints over HTTPS"
+}
+
+## LAMBDA EC2 ROLLBACK SG RULES
+resource "aws_security_group_rule" "lambda_rollback_egress_to_endpoints" {
+  type = "egress"
+  security_group_id = var.lambda_ec2_rollback_sg_id
+  from_port = 443
+  to_port = 443
+  protocol = "tcp"
+  source_security_group_id = var.lambda_ec2_rollback_sg_id
+  description = "Lambda EC2 Rollback -> VPC Endpoints over HTTPS"
+}
