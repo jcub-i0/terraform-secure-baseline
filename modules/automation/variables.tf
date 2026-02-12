@@ -37,3 +37,7 @@ variable "primary_region" {
 variable "eventbridge_putevents_to_secops_role_arn" {
   type = string
 }
+
+variable "lambda_kms_key_arn" {
+  type = string
+}
