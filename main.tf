@@ -16,12 +16,12 @@ module "networking" {
 module "security_policy" {
   source = "./modules/networking/security_policy"
 
-  compute_sg_id = module.compute.compute_sg_id
-  data_sg_id = module.storage.data_sg_id
+  compute_sg_id              = module.compute.compute_sg_id
+  data_sg_id                 = module.storage.data_sg_id
   lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
-  lambda_ec2_rollback_sg_id = module.automation.lambda_ec2_rollback_sg_id
-  interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
-  db_port = var.db_port
+  lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
+  interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
+  db_port                    = var.db_port
 }
 
 module "compute" {
