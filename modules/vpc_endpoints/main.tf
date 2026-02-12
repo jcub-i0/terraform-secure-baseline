@@ -50,26 +50,6 @@ resource "aws_security_group" "interface_endpoints_sg" {
   description = "Security Group for Interface VPC Endpoints (AWS PrivateLink)"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port = 443
-    to_port   = 443
-    protocol  = "tcp"
-    security_groups = [
-      var.compute_sg_id,
-      var.lambda_ec2_isolation_sg_id,
-      var.lambda_ec2_rollback_sg_id
-    ]
-    description = "Allow Compute workloads to reach VPC Endpoints over port 443"
-  }
-
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow endpoint ENIs to reach AWS services over port 443"
-  }
-
   tags = {
     Name      = "VPC-Endpoints-SG"
     Terraform = "true"
