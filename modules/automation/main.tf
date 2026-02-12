@@ -43,9 +43,9 @@ resource "aws_lambda_function" "ec2_isolation" {
 
 ## EC2 ISOLATION SECURITY GROUP
 resource "aws_security_group" "lambda_ec2_isolation_sg" {
-  name        = "Lambda-EC2-Isolation-SG"
-  description = "Security Group for the EC2 Isolation Lambda function"
-  vpc_id      = var.vpc_id
+  name                   = "Lambda-EC2-Isolation-SG"
+  description            = "Security Group for the EC2 Isolation Lambda function"
+  vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
 
   tags = {
@@ -134,9 +134,9 @@ resource "aws_lambda_function" "ec2_rollback" {
 
 ## EC2 ROLLBACK SECURITY GROUP
 resource "aws_security_group" "lambda_ec2_rollback_sg" {
-  name        = "Lambda-EC2-Rollback-SG"
-  description = "Security Group for the EC2 Rollback Lambda function"
-  vpc_id      = var.vpc_id
+  name                   = "Lambda-EC2-Rollback-SG"
+  description            = "Security Group for the EC2 Rollback Lambda function"
+  vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
 
   tags = {

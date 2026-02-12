@@ -1,9 +1,9 @@
 # CREATE DATA SECURITY GROUP, DB Subnet Group, AND RDS INSTANCE
 ## DATA SECURITY GROUP
 resource "aws_security_group" "data" {
-  name        = "Data-SG"
-  description = "Security Group for the RDS database"
-  vpc_id      = var.vpc_id
+  name                   = "Data-SG"
+  description            = "Security Group for the RDS database"
+  vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
 
   tags = {
