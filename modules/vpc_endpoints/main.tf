@@ -14,7 +14,11 @@ locals {
     "secretsmanager",
     "kms",
     "config",
-    "sns"
+    "sns",
+    "ec2",
+    "events",
+    "securityhub",
+    "lambda"
   ]
 }
 
