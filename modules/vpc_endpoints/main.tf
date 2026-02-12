@@ -14,7 +14,11 @@ locals {
     "secretsmanager",
     "kms",
     "config",
-    "sns"
+    "sns",
+    "ec2",
+    "events",
+    "securityhub",
+    "lambda"
   ]
 }
 
@@ -42,25 +46,10 @@ resource "aws_vpc_endpoint" "s3" {
 
 ## SECURITY GROUP FOR ALL INTERFACE VPC ENDPOINTS
 resource "aws_security_group" "interface_endpoints_sg" {
-  name        = "vpc-endpoints-sg"
-  description = "Security Group for Interface VPC Endpoints (AWS PrivateLink)"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = local.endpoint_subnet_cidrs
-    description = "Allow AWS services to communicate with VPC Endpoints"
-  }
-
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = local.endpoint_subnet_cidrs
-    description = "Allow VPC Endpoints to communicate with AWS services"
-  }
+  name                   = "vpc-endpoints-sg"
+  description            = "Security Group for Interface VPC Endpoints (AWS PrivateLink)"
+  vpc_id                 = var.vpc_id
+  revoke_rules_on_delete = true
 
   tags = {
     Name      = "VPC-Endpoints-SG"

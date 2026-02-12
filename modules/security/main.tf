@@ -229,6 +229,21 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
+      ### AWS CONFIG SERVICE LINKED ROLE
+      {
+        Sid    = "AllowConfig"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
       ### VPC FLOW LOGS / CLOUDWATCH LOGS
       {
         Sid    = "AllowLogs"
@@ -380,4 +395,58 @@ resource "aws_kms_key" "ebs" {
 resource "aws_kms_alias" "ebs" {
   name          = "alias/ebs-cmk"
   target_key_id = aws_kms_key.ebs.id
+}
+
+# KMS KEY FOR LAMBDA
+resource "aws_kms_key" "lambda" {
+  description             = "CMK for Lambda environment variable encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # ROOT/ADMIN
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      # ALLOW LAMBDA SERVICE TO USE THE KEY FOR ENV VAR ENCRYPTION
+      {
+        Sid    = "AllowLambdaUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
+      }
+    ]
+  })
+  tags = {
+    Name      = "lambda-cmk"
+    Terraform = "true"
+  }
+}
+
+## ALIAS FOR LAMBDA KMS KEY
+resource "aws_kms_alias" "lambda" {
+  name          = "alias/lambda-cmk"
+  target_key_id = aws_kms_key.lambda.id
 }

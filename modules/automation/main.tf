@@ -16,6 +16,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   timeout          = 60
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
+  kms_key_arn      = var.lambda_kms_key_arn
 
   # ENABLE X-RAY TRACING FOR LAMBDA FUNC
   tracing_config {
@@ -42,17 +43,10 @@ resource "aws_lambda_function" "ec2_isolation" {
 
 ## EC2 ISOLATION SECURITY GROUP
 resource "aws_security_group" "lambda_ec2_isolation_sg" {
-  name        = "Lambda-EC2-Isolation-SG"
-  description = "Security Group for the EC2 Isolation Lambda function"
-  vpc_id      = var.vpc_id
-
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "AWS API Access"
-  }
+  name                   = "Lambda-EC2-Isolation-SG"
+  description            = "Security Group for the EC2 Isolation Lambda function"
+  vpc_id                 = var.vpc_id
+  revoke_rules_on_delete = true
 
   tags = {
     Name      = "Lambda-EC2-Isolation-SG"
@@ -119,6 +113,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   timeout          = 60
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ec2_rollback.output_base64sha256
+  kms_key_arn      = var.lambda_kms_key_arn
 
   # ENABLE X-RAY TRACING
   tracing_config {
@@ -139,17 +134,10 @@ resource "aws_lambda_function" "ec2_rollback" {
 
 ## EC2 ROLLBACK SECURITY GROUP
 resource "aws_security_group" "lambda_ec2_rollback_sg" {
-  name        = "Lambda-EC2-Rollback-SG"
-  description = "Security Group for the EC2 Rollback Lambda function"
-  vpc_id      = var.vpc_id
-
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "AWS API Access"
-  }
+  name                   = "Lambda-EC2-Rollback-SG"
+  description            = "Security Group for the EC2 Rollback Lambda function"
+  vpc_id                 = var.vpc_id
+  revoke_rules_on_delete = true
 
   tags = {
     Name      = "Lambda-EC2-Rollback-SG"
