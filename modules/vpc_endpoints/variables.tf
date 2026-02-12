@@ -22,3 +22,15 @@ variable "serverless_private_subnet_ids_map" {
 variable "subnet_cidrs" {
   type = map(list(string))
 }
+
+variable "compute_sg_id" {
+  type = string
+}
+
+variable "lambda_ec2_isolation_sg_id" {
+  type = string
+}
+
+variable "lambda_ec2_rollback_sg_id" {
+  type = string
+}
