@@ -99,6 +99,7 @@ module "automation" {
   secops_role_arn                          = module.iam.secops_role_arn
   primary_region                           = var.primary_region
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
+  lambda_kms_key_arn = module.security.lambda_kms_key_arn
 }
 
 module "vpc_endpoints" {
