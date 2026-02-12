@@ -5,15 +5,6 @@ resource "aws_security_group" "data" {
   description = "Security Group for the RDS database"
   vpc_id      = var.vpc_id
 
-  # Ingress from Compute EC2 instances
-  ingress {
-    from_port       = var.db_port
-    to_port         = var.db_port
-    protocol        = "tcp"
-    security_groups = [var.compute_sg_id]
-    description     = "Allow DB access from compute tier"
-  }
-
   tags = {
     Name      = "Data-SG"
     Terraform = "true"
