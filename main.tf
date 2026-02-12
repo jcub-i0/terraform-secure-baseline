@@ -13,6 +13,11 @@ module "networking" {
   subnet_cidrs  = var.subnet_cidrs
 }
 
+module "rules" {
+  source = "./modules/networking/rules"
+
+}
+
 module "compute" {
   source = "./modules/compute"
 
