@@ -69,7 +69,7 @@ resource "aws_security_group_rule" "db_ingress_from_compute" {
   from_port                = var.db_port
   to_port                  = var.db_port
   protocol                 = "tcp"
-  source_security_group_id = var.data_sg_id
+  source_security_group_id = var.compute_sg_id
   description              = "Compute to DB"
 }
 
