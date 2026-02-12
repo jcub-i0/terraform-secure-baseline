@@ -14,8 +14,8 @@ resource "aws_security_group" "compute" {
   }
 
   egress {
-    from_port = 5432
-    to_port = 5432
+    from_port = var.db_port
+    to_port = var.db_port
     protocol = "tcp"
     security_groups = [var.data_sg_id]
     description = "Allow DB access"
