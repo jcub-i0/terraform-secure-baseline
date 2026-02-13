@@ -433,21 +433,18 @@ resource "aws_iam_role" "secops" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        AWS = "arn:aws:iam::${var.account_id}:root"
-      }
-      Action = "sts:AssumeRole"
-      Condition = {
-        StringLike = {
-          "aws:PrincipalArn" : [
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = [
             "arn:aws:iam::${var.account_id}:user/baseline-admin",
-            "arn:aws:iam::${var.account_id}:role/SecOps-*"
+            "arn:aws:iam::${var.account_id}:role/SecOps-Operator"
           ]
         }
+        Action = "sts:AssumeRole"
       }
-    }]
+    ]
   })
 }
 
