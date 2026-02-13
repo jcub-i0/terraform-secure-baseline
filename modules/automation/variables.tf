@@ -26,7 +26,7 @@ variable "account_id" {
   type = string
 }
 
-variable "secops_role_arn" {
+variable "secops_operator_role_arn" {
   type = string
 }
 
