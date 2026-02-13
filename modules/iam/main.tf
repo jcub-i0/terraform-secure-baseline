@@ -598,3 +598,23 @@ resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
 
   })
 }
+
+# INSPECTOR
+## ALLOW INSPECTOR2 TO USE LOGS KMS KEY
+resource "aws_iam_role_policy" "inspector_kms_decrypt_logs_key" {
+  name = "InspectorDecryptLogsKey"
+  role = "AWSServiceRoleForAmazonInspector2"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "AllowDecryptLogsKey"
+      Effect = "Allow"
+      Action = [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ]
+      Resource = var.logs_kms_key_arn
+    }]
+  })
+}
