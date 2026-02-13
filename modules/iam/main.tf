@@ -608,7 +608,7 @@ resource "aws_iam_role_policy" "inspector_kms_decrypt_logs_key" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid = "AllowDecryptLogsKey"
+      Sid    = "AllowDecryptLogsKey"
       Effect = "Allow"
       Action = [
         "kms:Decrypt",
