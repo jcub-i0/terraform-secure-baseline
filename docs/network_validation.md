@@ -78,7 +78,6 @@ Expected:
 ```bash
 RDS_HOST="<RDS_ENDPOINT_DNS_NAME>"
 DB_PORT="<DB_PORT>"
-
 timeout 3 bash -c "cat < /dev/null > /dev/tcp/${RDS_HOST}/${DB_PORT}" \
   && echo "OK  DB reachable" || echo "FAIL DB unreachable"
 ```
@@ -86,12 +85,9 @@ Expected:
 - 'OK DB reachable'
 
 ## 6. Validate EC2 API Reachability (Recommended for SOAR)
-
-**Froom inside the SSM session:**
-
+**From inside the SSM session:**
 ```bash
 getent hosts ec2.us-east-1.amazonaws.com
 timeout 3 bash -c "cat < /dev/null > /dev/tcp/ec2.us-east-1.amazonaws.com/443" \
   && echo "OK EC2 API reachable" || echo "FAIL EC2 API unreachable"
 ```
-
