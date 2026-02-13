@@ -500,6 +500,22 @@ resource "aws_iam_role_policy_attachment" "securityhub_readonly_secops_engineer"
   policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
 }
 
+## SECOPS-ANALSYT ROLE
+resource "aws_iam_role" "secops_analyst" {
+  name = "SecOps-Analyst"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::${var.account_id}:root"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
 resource "aws_iam_policy" "logs_s3_readonly" {
   name        = "CentralizedLogsS3ReadOnly"
