@@ -11,20 +11,26 @@ How to use:
 ## EC2 ROLLBACK LAMBDA TESTS
 
 ### PREQUESITES:
-You must assume the 'SecOpsRole' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace '<ACCOUNT_ID>' with your AWS account ID.
+You must assume the 'SecOps-Operator' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace '<ACCOUNT_ID>' with your AWS account ID.
 
-Run the following to assume the 'SecOpsRole' IAM role:
+> The following commands require 'jq' to be installed on your machine.
+> Install 'jq' on Debian:
+> ```bash
+> sudo apt-get install -y jq
+> ```
+
+Run the following to assume the 'SecOps-Operator' IAM role:
 ```bash
-aws sts assume-role \
-  --role-arn arn:aws:iam::<ACCOUNT_ID>:role/SecOpsRole \
-  --role-session-name secops-test \
-  --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
-  --output text
-```
-Confirm that you have successfully assumed the role by running the following:
-```bash
+export AWS_ACCOUNT_ID="<ACCOUNT_ID>"
+ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/SecOps-Operator"
+SESSION_NAME="secops-$(date +%Y%m%d-%H%M%S)"
+CREDS=$(aws sts assume-role --role-arn "$ROLE_ARN" --role-session-name "$SESSION_NAME")
+export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r '.Credentials.AccessKeyId')
+export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r '.Credentials.SecretAccessKey')
+export AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')
 aws sts get-caller-identity
 ```
+You should see '/SecOps-Operator/*' in the last 'Arn' line of the output.
 > To 'unassume' this role / go back to the principle you were using before, run:
 > ```bash
 > unset AWS_ACCESS_KEY_ID
