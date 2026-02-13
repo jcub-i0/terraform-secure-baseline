@@ -327,6 +327,19 @@ resource "aws_kms_key" "logs" {
             "aws:SourceArn" = "arn:aws:firehose:${var.primary_region}:${var.account_id}:deliverystream/*"
           }
         }
+      },
+      ### ALLOW INSPECTORv2
+      {
+        Sid    = "AllowInspectorDecrypt"
+        Effect = "Allow"
+        Principal = {
+          Service = "inspector2.amazonaws.com"
+        }
+        Action = [
+          "kms:DescribeKey",
+          "kms:Decrypt",
+        ]
+        Resource = "*"
       }
     ]
   })
