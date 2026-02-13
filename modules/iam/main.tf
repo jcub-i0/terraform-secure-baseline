@@ -488,12 +488,13 @@ resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops_engineer" {
   policy_arn = aws_iam_policy.logs_kms_decrypt.arn
 }
 
-### ATTACH SECURITY OPERATIONS POLICY TO SECOPS-ENGINEER ROLE
+### ATTACH EC2 ROLLBACK POLICY TO SECOPS-ENGINEER ROLE
 resource "aws_iam_role_policy_attachment" "ec2_rollback_secops_engineer" {
   role       = aws_iam_role.secops_engineer.name
   policy_arn = aws_iam_policy.secops_rollback_trigger.arn
 }
 
+### READ ACCESS FOR SECOPS-ENGINEER ROLE
 resource "aws_iam_role_policy_attachment" "securityhub_readonly_secops_engineer" {
   role       = aws_iam_role.secops_engineer.name
   policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
