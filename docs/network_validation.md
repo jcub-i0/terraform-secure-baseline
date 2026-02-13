@@ -24,3 +24,13 @@ aws ssm describe-instance-information \
   --query "InstanceInformationList[].[InstanceId,PingStatus,PlatformName,AgentVersion]" \
   --output table
 ```
+
+## 1. Validate SSM connectivity (no SSH required)
+
+**Start a Session Manager session**
+```bash
+aws ssm start-session --target <INSTANCE_ID>
+```
+Expected:
+- Session starts successfully
+- No SSH required
