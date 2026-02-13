@@ -135,7 +135,7 @@ resource "aws_route_table_association" "public" {
   subnet_id      = each.value.id
 }
 
-## COMPUTE PRIVATE ROUTE TABLE
+## PRIVATE ROUTE TABLES
 resource "aws_route_table" "private" {
   for_each = local.az_index_map
   vpc_id   = aws_vpc.main.id
