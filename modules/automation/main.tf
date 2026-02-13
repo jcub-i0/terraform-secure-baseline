@@ -159,12 +159,12 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # ALLOW MANUAL EC2 ROLLBACK INJECTION FROM SECOPS
+      # ALLOW MANUAL EC2 ROLLBACK INJECTION FROM SECOPS-OPERATOR
       {
         Sid    = "AllowSecOpsRollbackOnly"
         Effect = "Allow"
         Principal = {
-          AWS = var.secops_role_arn
+          AWS = var.secops_operator_role_arn
         }
         Action   = "events:PutEvents"
         Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"

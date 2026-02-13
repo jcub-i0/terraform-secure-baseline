@@ -180,7 +180,7 @@ resource "aws_kms_key" "logs" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      ### FULL ACCESS FOR ROOT ACCOUNT
+      ### ALLOW FULL ACCESS FOR ROOT ACCOUNT
       {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
@@ -190,7 +190,7 @@ resource "aws_kms_key" "logs" {
         Action   = "kms:*"
         Resource = "*"
       },
-      ### CLOUDTRAIL
+      ### ALLOW CLOUDTRAIL
       {
         Sid    = "AllowCloudTrail"
         Effect = "Allow"
@@ -214,7 +214,7 @@ resource "aws_kms_key" "logs" {
           }
         }
       },
-      ### AWS CONFIG
+      ### ALLOW AWS CONFIG
       {
         Sid    = "AllowConfig"
         Effect = "Allow"
@@ -229,7 +229,7 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
-      ### AWS CONFIG SERVICE LINKED ROLE
+      ### ALLOW AWS CONFIG SERVICE LINKED ROLE
       {
         Sid    = "AllowConfig"
         Effect = "Allow"
@@ -244,7 +244,7 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
-      ### VPC FLOW LOGS / CLOUDWATCH LOGS
+      ### ALLOW VPC FLOW LOGS / CLOUDWATCH LOGS
       {
         Sid    = "AllowLogs"
         Effect = "Allow"
@@ -260,7 +260,7 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
-      ### ALLOW S3 TO USE THE KEY
+      ### ALLOW S3
       {
         Sid    = "AllowS3"
         Effect = "Allow"
@@ -275,7 +275,7 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
-      ### ALLOW SNS TO USE THE KEY
+      ### ALLOW SNS
       {
         Sid    = "AllowSns"
         Effect = "Allow"
