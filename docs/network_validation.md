@@ -93,3 +93,37 @@ timeout 3 bash -c "cat < /dev/null > /dev/tcp/ec2.us-east-1.amazonaws.com/443" \
 ```
 Expected:
 - 'OK EC2 API reachable'
+
+## 7. Validate SOAR (EC2 Isolation and EC2 Rollback) -- High-Level
+### 7a. Verify EC2 Instance Isolation Lambda executes properly
+Refer to the lambda_tests/ec2_isolation.md file and trigger the EC2 Isolation Lambda function
+**Verify the instance SG(s) changed:**
+```bash
+aws ec2 describe-instances \
+  --instance-ids <INSTANCE_ID> \
+  --query "Reservations[0].Instances[0].SecurityGroups" \
+  --output table
+```
+Expected:
+- EC2 instance belongs to the 'Quarantine' SG
+### 7b. Verify EC2 Rollback Lambda executes properly
+Refer to the lambda_tests/ec2_rollback.md file and trigger the EC2 Rollback Lambda function via a manual event. Remember, you must assume the 'SecOps' IAM role to send the event and trigger EC2 Rollback.
+Expected:
+- EC2 instance belongs to its original SG (NOT 'Quarantine')
+
+## 8. Quick Failure Triage Guide
+**SSM session fails:**
+- Check interface endpoints exist: ssm, ssmmessages, ec2messages
+- Check compute egress to endpoint SG (443)
+- Check endpoint SG ingress from compute SG (443)
+- Check instance IAM role includes AmazonSSMManagedInstanceCore
+**AWS service 443 checks fail:**
+- Check endpoint Private DNS enabled
+- Check endpoint is deployed in the correct subnets / AZs
+- Check endpoint SG ingress allows the workload SG
+**DB connectivity fails:**
+- Confirm compute SG egress allows DB port to RDS SG
+- Confirm RDS SG ingress allows DB port from compute SG
+- Confirm RDS is in the correct subnets and available
+**EC2 API check fails:**
+- Add interface endpoint 'ec2' (common requirement for VPC-only automation)
