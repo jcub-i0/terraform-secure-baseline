@@ -10,6 +10,28 @@ How to use:
 
 ## EC2 ROLLBACK LAMBDA TESTS
 
+### PREQUESITES:
+You must assume the 'SecOpsRole' IAM role in order to trigger the EC2 Rollback Lambda function.
+
+Run the following to assume the 'SecOpsRole' IAM role:
+```bash
+aws sts assume-role \
+  --role-arn arn:aws:iam::<ACCOUNT_ID>:role/SecOpsRole \
+  --role-session-name secops-test \
+  --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+  --output text
+```
+Confirm that you have successfully assumed the role by running the following:
+```bash
+aws sts get-caller-identity
+```
+> To go 'unassume' this role / go back to the principle you were using before, run:
+> ```bash
+> unset AWS_ACCESS_KEY_ID
+> unset AWS_SECRET_ACCESS_KEY
+> unset AWS_SESSION_TOKEN
+> ```
+
 ### TEST 1 -- MANUAL ROLLBACK EVENT FROM AWS CLI
 #### Expected Outcome:
 * Lambda executes
@@ -23,7 +45,7 @@ $ aws events put-events --entries '[
   {
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
-    "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\", \"ticket_id\":\"t-abc123\", \"reason\":\"Test rollback\"}",
+    "Detail": "{\"instance_id\":\"i-09a36ac74789353c5\",\"approved_by\":\"secops@company.com\", \"ticket_id\":\"t-abc123\", \"reason\":\"Test rollback\"}",
     "EventBusName": "security-operations-bus"
   }
 ]'
