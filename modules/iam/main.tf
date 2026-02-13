@@ -426,10 +426,10 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_logs_attach" {
   policy_arn = data.aws_iam_policy.lambda_logs.arn
 }
 
-# SECURITY OPERATIONS IAM RESOURCES
-## SECOPS IAM ROLE TRUST POLICY
-resource "aws_iam_role" "secops" {
-  name = "SecOpsRole"
+# SECOPS IAM RESOURCES
+## SECOPS-OPERATOR IAM ROLE TRUST POLICY
+resource "aws_iam_role" "secops_operator" {
+  name = "SecOps-Operator"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -439,13 +439,64 @@ resource "aws_iam_role" "secops" {
         Principal = {
           AWS = [
             "arn:aws:iam::${var.account_id}:user/baseline-admin",
-            "arn:aws:iam::${var.account_id}:role/SecOps-Operator"
+            "${aws_iam_role.secops_engineer.arn}"
           ]
         }
         Action = "sts:AssumeRole"
       }
     ]
   })
+}
+
+### ATTACH SECURITY OPERATIONS POLICY TO SECOPS-OPERATOR ROLE
+resource "aws_iam_role_policy_attachment" "ec2_rollback_secops" {
+  role       = aws_iam_role.secops_operator.name
+  policy_arn = aws_iam_policy.secops_rollback_trigger.arn
+}
+
+### ATTACH LogsKmsReadOnly POLICY TO SECOPS-OPERATOR ROLE
+resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops" {
+  policy_arn = aws_iam_policy.logs_kms_decrypt.arn
+  role       = aws_iam_role.secops_operator.name
+}
+
+## SECOPS-ENGINEER ROLE
+resource "aws_iam_role" "secops_engineer" {
+  name = "SecOps-Engineer"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::${var.account_id}:root"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+### ATTACH CENTRALIZED LOGS READ ONLY POLICY TO SECOPS-ENGINEER ROLE
+resource "aws_iam_role_policy_attachment" "logs_s3_readonly_secops_engineer" {
+  role = aws_iam_role.secops_engineer.name
+  policy_arn = aws_iam_policy.logs_s3_readonly.arn
+}
+
+### ATTACH LogsKmsReadOnly POLICY TO SECOPS-ENGINEER ROLE
+resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops_engineer" {
+  role       = aws_iam_role.secops_engineer.name
+  policy_arn = aws_iam_policy.logs_kms_decrypt.arn
+}
+
+### ATTACH SECURITY OPERATIONS POLICY TO SECOPS-ENGINEER ROLE
+resource "aws_iam_role_policy_attachment" "ec2_rollback_secops_engineer" {
+  role       = aws_iam_role.secops_engineer.name
+  policy_arn = aws_iam_policy.secops_rollback_trigger.arn
+}
+
+resource "aws_iam_role_policy_attachment" "securityhub_readonly_secops_engineer" {
+  role = aws_iam_role.secops_engineer.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
 }
 
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
@@ -503,19 +554,7 @@ resource "aws_iam_policy" "logs_kms_decrypt" {
   })
 }
 
-## ATTACH CENTRALIZED LOGS READ ONLY POLICY TO SECOPS ROLE
-resource "aws_iam_role_policy_attachment" "logs_s3_readonly_secops" {
-  policy_arn = aws_iam_policy.logs_s3_readonly.arn
-  role       = aws_iam_role.secops.name
-}
-
-## ATTACH LogsKmsReadOnly POLICY TO SECOPS ROLE
-resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops" {
-  policy_arn = aws_iam_policy.logs_kms_decrypt.arn
-  role       = aws_iam_role.secops.name
-}
-
-### ROLLBACK TRIGGER POLICY
+### EC2 ROLLBACK TRIGGER POLICY
 resource "aws_iam_policy" "secops_rollback_trigger" {
   name = "SecOpsRollbackTriggerPolicy"
 
@@ -530,12 +569,6 @@ resource "aws_iam_policy" "secops_rollback_trigger" {
       }
     ]
   })
-}
-
-### ATTACH SECURITY OPERATIONS POLICY TO SECURITY OPERATIONS ROLE
-resource "aws_iam_role_policy_attachment" "secops_rollback_attach" {
-  role       = aws_iam_role.secops.name
-  policy_arn = aws_iam_policy.secops_rollback_trigger.arn
 }
 
 # EVENTBRIDGE ROLE
