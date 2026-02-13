@@ -478,7 +478,7 @@ resource "aws_iam_role" "secops_engineer" {
 
 ### ATTACH CENTRALIZED LOGS READ ONLY POLICY TO SECOPS-ENGINEER ROLE
 resource "aws_iam_role_policy_attachment" "logs_s3_readonly_secops_engineer" {
-  role = aws_iam_role.secops_engineer.name
+  role       = aws_iam_role.secops_engineer.name
   policy_arn = aws_iam_policy.logs_s3_readonly.arn
 }
 
@@ -495,7 +495,7 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_secops_engineer" {
 }
 
 resource "aws_iam_role_policy_attachment" "securityhub_readonly_secops_engineer" {
-  role = aws_iam_role.secops_engineer.name
+  role       = aws_iam_role.secops_engineer.name
   policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
 }
 

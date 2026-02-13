@@ -110,7 +110,7 @@ module "automation" {
   quarantine_sg_id                         = module.compute.quarantine_sg_id
   secops_topic_arn                         = module.monitoring.secops_topic_arn
   account_id                               = data.aws_caller_identity.current.account_id
-  secops_operator_role_arn                          = module.iam.secops_operator_role_arn
+  secops_operator_role_arn                 = module.iam.secops_operator_role_arn
   primary_region                           = var.primary_region
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
   lambda_kms_key_arn                       = module.security.lambda_kms_key_arn
