@@ -112,18 +112,18 @@ Expected:
 - EC2 instance belongs to its original SG (NOT 'Quarantine')
 
 ## 8. Quick Failure Triage Guide
-**SSM session fails:**
+### SSM session fails:
 - Check interface endpoints exist: ssm, ssmmessages, ec2messages
 - Check compute egress to endpoint SG (443)
 - Check endpoint SG ingress from compute SG (443)
 - Check instance IAM role includes AmazonSSMManagedInstanceCore
-**AWS service 443 checks fail:**
+### AWS service 443 checks fail:
 - Check endpoint Private DNS enabled
 - Check endpoint is deployed in the correct subnets / AZs
 - Check endpoint SG ingress allows the workload SG
-**DB connectivity fails:**
+### DB connectivity fails:
 - Confirm compute SG egress allows DB port to RDS SG
 - Confirm RDS SG ingress allows DB port from compute SG
 - Confirm RDS is in the correct subnets and available
-**EC2 API check fails:**
+### EC2 API check fails:
 - Add interface endpoint 'ec2' (common requirement for VPC-only automation)
