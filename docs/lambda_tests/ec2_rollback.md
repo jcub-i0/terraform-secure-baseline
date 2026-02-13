@@ -11,7 +11,7 @@ How to use:
 ## EC2 ROLLBACK LAMBDA TESTS
 
 ### PREQUESITES:
-You must assume the 'SecOpsRole' IAM role in order to trigger the EC2 Rollback Lambda function.
+You must assume the 'SecOpsRole' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace '<ACCOUNT_ID>' with your AWS account ID.
 
 Run the following to assume the 'SecOpsRole' IAM role:
 ```bash
@@ -45,7 +45,7 @@ $ aws events put-events --entries '[
   {
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
-    "Detail": "{\"instance_id\":\"i-09a36ac74789353c5\",\"approved_by\":\"secops@company.com\", \"ticket_id\":\"t-abc123\", \"reason\":\"Test rollback\"}",
+    "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\", \"ticket_id\":\"t-abc123\", \"reason\":\"Test rollback\"}",
     "EventBusName": "security-operations-bus"
   }
 ]'
