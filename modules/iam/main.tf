@@ -516,6 +516,30 @@ resource "aws_iam_role" "secops_analyst" {
   })
 }
 
+### ALLOW SECOPS-ANALYST SECURITY HUB READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_securityhub_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
+}
+
+### ALLOW SECOPS-ANALYST GUARDDUTY READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_guardduty_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonGuardDutyReadOnlyAccess"
+}
+
+### ALLOW SECOPS-ANALYST CONFIG READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_config_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSConfigUserAccess"
+}
+
+### ALLOW SECOPS-ANALYST CLOUDWATCH READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_cloudwatch_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+}
+
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
 resource "aws_iam_policy" "logs_s3_readonly" {
   name        = "CentralizedLogsS3ReadOnly"
