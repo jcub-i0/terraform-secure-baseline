@@ -80,7 +80,7 @@ resource "aws_security_group_rule" "lambda_isolation_egress_to_endpoints" {
   from_port                = 443
   to_port                  = 443
   protocol                 = "tcp"
-  source_security_group_id = var.lambda_ec2_isolation_sg_id
+  source_security_group_id = var.interface_endpoints_sg_id
   description              = "Lambda EC2 Isolation to VPC Endpoints over HTTPS"
 }
 
@@ -91,6 +91,6 @@ resource "aws_security_group_rule" "lambda_rollback_egress_to_endpoints" {
   from_port                = 443
   to_port                  = 443
   protocol                 = "tcp"
-  source_security_group_id = var.lambda_ec2_rollback_sg_id
+  source_security_group_id = var.interface_endpoints_sg_id
   description              = "Lambda EC2 Rollback to VPC Endpoints over HTTPS"
 }
