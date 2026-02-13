@@ -91,3 +91,5 @@ getent hosts ec2.us-east-1.amazonaws.com
 timeout 3 bash -c "cat < /dev/null > /dev/tcp/ec2.us-east-1.amazonaws.com/443" \
   && echo "OK EC2 API reachable" || echo "FAIL EC2 API unreachable"
 ```
+Expected:
+- 'OK EC2 API reachable'
