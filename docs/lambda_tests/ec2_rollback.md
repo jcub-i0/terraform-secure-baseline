@@ -25,7 +25,7 @@ Confirm that you have successfully assumed the role by running the following:
 ```bash
 aws sts get-caller-identity
 ```
-> To go 'unassume' this role / go back to the principle you were using before, run:
+> To 'unassume' this role / go back to the principle you were using before, run:
 > ```bash
 > unset AWS_ACCESS_KEY_ID
 > unset AWS_SECRET_ACCESS_KEY
