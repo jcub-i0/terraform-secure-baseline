@@ -96,7 +96,7 @@ Expected:
 
 ## 7. Validate SOAR (EC2 Isolation and EC2 Rollback) -- High-Level
 ### 7a. Verify EC2 Instance Isolation Lambda executes properly
-Refer to the lambda_tests/ec2_isolation.md file and trigger the EC2 Isolation Lambda function
+Refer to the lambda_tests/ec2_isolation.md file and trigger the EC2 Isolation Lambda function.
 **Verify the instance SG(s) changed:**
 ```bash
 aws ec2 describe-instances \
@@ -107,7 +107,7 @@ aws ec2 describe-instances \
 Expected:
 - EC2 instance belongs to the 'Quarantine' SG
 ### 7b. Verify EC2 Rollback Lambda executes properly
-Refer to the lambda_tests/ec2_rollback.md file and trigger the EC2 Rollback Lambda function via a manual event. Remember, you must assume the 'SecOps' IAM role to send the event and trigger EC2 Rollback.
+Refer to the lambda_tests/ec2_rollback.md file and trigger the EC2 Rollback Lambda function via manual event push.
 Expected:
 - EC2 instance belongs to its original SG (NOT 'Quarantine')
 
