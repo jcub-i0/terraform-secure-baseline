@@ -28,7 +28,7 @@ resource "aws_config_configuration_recorder" "config" {
     recording_strategy {
       use_only = "EXCLUSION_BY_RESOURCE_TYPES"
     }
-    
+
   }
 }
 
