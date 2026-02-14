@@ -104,6 +104,9 @@ def tag_release(instance_id, approved_by, ticket_id, reason):
             },
             {
                 "Key": "ReleaseReason", "Value": reason
+            },
+            {
+                "Key": "IsolationAllowed", "Value": "true"
             }
         ]
     )
