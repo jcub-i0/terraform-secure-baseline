@@ -17,8 +17,18 @@ resource "aws_config_configuration_recorder" "config" {
   role_arn = var.config_role_arn
 
   recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
+    all_supported                 = false
+    include_global_resource_types = false
+    exclusion_by_resource_types {
+      resource_types = [
+        "AWS::FraudDetector::EntityType",
+        "AWS::FraudDetector::Label"
+      ]
+    }
+    recording_strategy {
+      use_only = "EXCLUSION_BY_RESOURCE_TYPES"
+    }
+    
   }
 }
 
