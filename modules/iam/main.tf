@@ -540,6 +540,12 @@ resource "aws_iam_role_policy_attachment" "secops_analyst_cloudwatch_read" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
 }
 
+### ALLOW SECOPS-ANALYST CLOUDTRAIL READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_cloudtrail_read" {
+  role = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSCloudTrail_ReadOnlyAccess"
+}
+
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
 resource "aws_iam_policy" "logs_s3_readonly" {
   name        = "CentralizedLogsS3ReadOnly"
