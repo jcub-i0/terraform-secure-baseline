@@ -488,15 +488,56 @@ resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops_engineer" {
   policy_arn = aws_iam_policy.logs_kms_decrypt.arn
 }
 
-### ATTACH SECURITY OPERATIONS POLICY TO SECOPS-ENGINEER ROLE
+### ATTACH EC2 ROLLBACK POLICY TO SECOPS-ENGINEER ROLE
 resource "aws_iam_role_policy_attachment" "ec2_rollback_secops_engineer" {
   role       = aws_iam_role.secops_engineer.name
   policy_arn = aws_iam_policy.secops_rollback_trigger.arn
 }
 
+### READ ACCESS FOR SECOPS-ENGINEER ROLE
 resource "aws_iam_role_policy_attachment" "securityhub_readonly_secops_engineer" {
   role       = aws_iam_role.secops_engineer.name
   policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
+}
+
+## SECOPS-ANALSYT ROLE
+resource "aws_iam_role" "secops_analyst" {
+  name = "SecOps-Analyst"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::${var.account_id}:root"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+### ALLOW SECOPS-ANALYST SECURITY HUB READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_securityhub_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
+}
+
+### ALLOW SECOPS-ANALYST GUARDDUTY READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_guardduty_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonGuardDutyReadOnlyAccess"
+}
+
+### ALLOW SECOPS-ANALYST CONFIG READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_config_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSConfigUserAccess"
+}
+
+### ALLOW SECOPS-ANALYST CLOUDWATCH READONLY ACCESS
+resource "aws_iam_role_policy_attachment" "secops_analyst_cloudwatch_read" {
+  role       = aws_iam_role.secops_analyst.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
 }
 
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
@@ -596,25 +637,5 @@ resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
       Resource = var.secops_event_bus_arn
     }]
 
-  })
-}
-
-# INSPECTOR
-## ALLOW INSPECTOR2 TO USE LOGS KMS KEY
-resource "aws_iam_role_policy" "inspector_kms_decrypt_logs_key" {
-  name = "InspectorDecryptLogsKey"
-  role = "AWSServiceRoleForAmazonInspector2"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid    = "AllowDecryptLogsKey"
-      Effect = "Allow"
-      Action = [
-        "kms:Decrypt",
-        "kms:DescribeKey"
-      ]
-      Resource = var.logs_kms_key_arn
-    }]
   })
 }
