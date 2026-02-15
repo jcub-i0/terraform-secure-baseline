@@ -134,7 +134,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   }
 }
 
-## EC2 ROLLBACK SECURITY GROUP
+## EC2 ROLLBACK SG
 resource "aws_security_group" "lambda_ec2_rollback_sg" {
   name                   = "Lambda-EC2-Rollback-SG"
   description            = "Security Group for the EC2 Rollback Lambda function"
