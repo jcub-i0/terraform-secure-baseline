@@ -343,13 +343,22 @@ resource "aws_kms_key" "logs" {
         Sid    = "AllowInspectorDecrypt"
         Effect = "Allow"
         Principal = {
-          Service = "inspector2.amazonaws.com"
+          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
         }
         Action = [
           "kms:DescribeKey",
+          "kms:Encrypt",
           "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
       }
     ]
   })

@@ -11,7 +11,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   }
 }
 
-## FLOWLOGS LOG GROUP
+## FLOW LOGS LOG GROUP
 resource "aws_cloudwatch_log_group" "flowlogs" {
   name              = "/aws/flowlogs/tf-secure-baseline"
   retention_in_days = 90
