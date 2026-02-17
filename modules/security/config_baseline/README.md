@@ -153,3 +153,63 @@ enable_rules = {
   iam_baseline        = false
   ec2_baseline        = true
 }
+```
+
+## Inputs
+
+| Variable | Description |
+| --- | --- |
+| `config_role_arn` | IAM role used by AWS Config |
+| `centralized_logs_bucket_name` | S3 bucket for Config history |
+| `compliance_topic_arn` | SNS topic for notifications |
+| `config_remediation_role_arn` | IAM role used for auto-remediation |
+| `logs_kms_key_arn` | KMS key used for encryption |
+| `enable_rules` | Toggle rule families |
+| `config_rule_name_prefix` | Naming prefix for rules |
+| `tags` | Tags applied to Config rules |
+
+## Outputs
+
+The module exposes:
+- Managed rule names
+- Recorder name
+- Remediation rule names
+
+These can be used for:
+- Compliance reporting
+- Monitoring integration
+- Downstream automation
+
+---
+
+## Design Philosophy
+
+This module intentionally avoids:
+- Overly aggressive auto-remediation
+- Application-breaking controls
+- Operational-level enforcement (patching, AMI selection, etc.)
+
+---
+
+## Compliance Alignment
+
+This baseline supports common security control expectations such as:
+- Logging integrity
+- Encryption enforcement
+- Public exposure prevention
+- Identity hygiene
+- Compute hardening
+
+Applicable to:
+- SOC 2
+- ISO 27001
+- HIPAA-style environments
+
+---
+
+## Intended Use
+
+This module is designed as a foundational layer for:
+- Secure-by-default SaaS infrastructure
+- Cloud security consulting engagements
+- Continuous compliance monitoring
