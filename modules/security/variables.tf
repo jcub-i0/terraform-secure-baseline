@@ -46,7 +46,7 @@ variable "enable_rules" {
     ebs_baseline        = bool
     sg_baseline         = bool
     iam_baseline        = bool
-    ec2_baseline = bool
+    ec2_baseline        = bool
   })
 
   default = {
@@ -56,6 +56,6 @@ variable "enable_rules" {
     ebs_baseline        = true
     sg_baseline         = true
     iam_baseline        = false
-    ec2_baseline = true
+    ec2_baseline        = true
   }
 }

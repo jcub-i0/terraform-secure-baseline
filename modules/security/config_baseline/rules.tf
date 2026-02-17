@@ -103,19 +103,19 @@ locals {
     # EC2 BASELINE
     # ------------------------
     ec2_ebs_optimized = {
-        family = "ec2_baseline"
-        name_suffix = "ebs-optimized-instance"
-        identifier = "EBS_OPTIMIZED_INSTANCE"
+      family      = "ec2_baseline"
+      name_suffix = "ebs-optimized-instance"
+      identifier  = "EBS_OPTIMIZED_INSTANCE"
     }
     ec2_imdsv2_required = {
-        family = "ec2_baseline"
-        name_suffix = "ec2-imdsv2-required"
-        identifier = "EC2_IMDSV2_CHECK"
+      family      = "ec2_baseline"
+      name_suffix = "ec2-imdsv2-required"
+      identifier  = "EC2_IMDSV2_CHECK"
     }
     ec2_volume_inuse_check = {
-        family = "ec2_baseline"
-        name_suffix = "ec2-volume-inuse-check"
-        identifier = "EC2_VOLUME_INUSE_CHECK"
+      family      = "ec2_baseline"
+      name_suffix = "ec2-volume-inuse-check"
+      identifier  = "EC2_VOLUME_INUSE_CHECK"
     }
   }
 
@@ -127,7 +127,7 @@ locals {
     ebs_baseline        = var.enable_rules.ebs_baseline
     sg_baseline         = var.enable_rules.sg_baseline
     iam_baseline        = var.enable_rules.iam_baseline
-    ec2_baseline = var.enable_rules.ec2_baseline
+    ec2_baseline        = var.enable_rules.ec2_baseline
   }
 
   # FILTER RULE CATALOG FOR ONLY ENABLED FAMILIES
