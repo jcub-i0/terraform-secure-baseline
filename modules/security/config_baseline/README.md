@@ -113,7 +113,7 @@ Includes:
 
 ---
 
-### IAM Baseline *(Optional)*
+### IAM Baseline
 
 Improves identity security.
 
