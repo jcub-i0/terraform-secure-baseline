@@ -77,7 +77,7 @@ module "security" {
   config_remediation_role_arn  = module.iam.config_remediation_role_arn
   secops_event_bus_name        = module.automation.secops_event_bus_name
   secops_topic_arn             = module.monitoring.secops_topic_arn
-  enable_rules = var.enable_rules
+  enable_rules                 = var.enable_rules
 }
 
 module "logging" {

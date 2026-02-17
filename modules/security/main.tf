@@ -398,6 +398,6 @@ module "config_baseline" {
   compliance_topic_arn         = var.compliance_topic_arn
   config_remediation_role_arn  = var.config_remediation_role_arn
   centralized_logs_bucket_name = var.centralized_logs_bucket_name
-  logs_kms_key_arn = aws_kms_key.logs.arn
-  enable_rules = var.enable_rules
+  logs_kms_key_arn             = aws_kms_key.logs.arn
+  enable_rules                 = var.enable_rules
 }
