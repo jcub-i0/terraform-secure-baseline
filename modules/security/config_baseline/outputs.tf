@@ -17,3 +17,8 @@ output "config_recorder_name" {
   description = "AWS Config configuration recorder name"
   value = aws_config_configuration_recorder.config.name
 }
+
+output "enabled_rule_families" {
+  description = "Rule families enabled in this baseline"
+  value = local.enabled_families
+}
