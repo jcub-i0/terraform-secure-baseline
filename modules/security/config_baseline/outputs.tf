@@ -5,7 +5,7 @@ output "managed_config_rule_names" {
 
 output "managed_config_rule_arns" {
   description = "ARNs of AWS-managed Config rules created by this baseline pack"
-  value       = [for r in aws_aws_config_config_rule.managed : r.arn]
+  value       = [for r in aws_config_config_rule.managed : r.arn]
 }
 
 output "s3_public_access_remediation_rule_name" {
