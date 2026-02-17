@@ -7,3 +7,8 @@ output "managed_config_rule_arns" {
   description = "ARNs of AWS-managed Config rules created by this baseline pack"
   value = [for r in aws_aws_config_config_rule.managed : r.arn]
 }
+
+output "s3_public_access_remediation_rule_name" {
+  description = "Config rule name for S3 public access prohibition (auto-remediation target)."
+  value       = aws_config_config_rule.s3_public_access_block.name
+}
