@@ -32,11 +32,6 @@ resource "aws_config_configuration_recorder" "config" {
   }
 }
 
-/*resource "aws_config_configuration_recorder_status" "config_rec_state" {
-  name = aws_config_configuration_recorder.config.name
-  is_enabled = true
-}*/
-
 ## DELIVERY CHANNEL
 resource "aws_config_delivery_channel" "config" {
   s3_bucket_name = var.centralized_logs_bucket_name
