@@ -73,3 +73,23 @@ variable "bucket_admin_principles" {
   description = "Principals allowed to manage the Centralized Logs Bucket guardrails (polish/versioning)"
   type        = list(string)
 }
+
+variable "enable_rules" {
+  type = object({
+    s3_baseline         = bool
+    cloudtrail_baseline = bool
+    rds_baseline        = bool
+    ebs_baseline        = bool
+    sg_baseline         = bool
+    iam_baseline        = bool
+  })
+
+  default = {
+    s3_baseline         = true
+    cloudtrail_baseline = true
+    rds_baseline        = true
+    ebs_baseline        = true
+    sg_baseline         = true
+    iam_baseline        = false
+  }
+}
