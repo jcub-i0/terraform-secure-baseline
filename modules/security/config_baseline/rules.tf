@@ -117,6 +117,11 @@ locals {
       name_suffix = "ec2-volume-inuse-check"
       identifier  = "EC2_VOLUME_INUSE_CHECK"
     }
+    ec2_no_public_ip = {
+        family = "ec2_baseline"
+        name_suffix = "ec2-instance-no-public-ip"
+        identifier = "EC2_INSTANCE_NO_PUBLIC_IP"
+    }
   }
 
   # DECIDE WHICH FAMILIES ARE ENABLED VIA THE TOGGLE OBJECT
@@ -149,14 +154,4 @@ resource "aws_config_config_rule" "managed" {
   }
 
   tags = var.tags
-}
-
-## RULE TO DETECT EC2 INSTANCES WITH PUBLIC IP ADDRESSES
-resource "aws_config_config_rule" "ec2_no_public_ip" {
-  name = "ec2-no-public-ip"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "EC2_INSTANCE_NO_PUBLIC_IP"
-  }
 }
