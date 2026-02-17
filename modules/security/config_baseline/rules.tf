@@ -118,9 +118,9 @@ locals {
       identifier  = "EC2_VOLUME_INUSE_CHECK"
     }
     ec2_no_public_ip = {
-        family = "ec2_baseline"
-        name_suffix = "ec2-instance-no-public-ip"
-        identifier = "EC2_INSTANCE_NO_PUBLIC_IP"
+      family      = "ec2_baseline"
+      name_suffix = "ec2-instance-no-public-ip"
+      identifier  = "EC2_INSTANCE_NO_PUBLIC_IP"
     }
   }
 
