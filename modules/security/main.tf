@@ -401,3 +401,10 @@ module "config_baseline" {
   logs_kms_key_arn             = aws_kms_key.logs.arn
   enable_rules                 = var.enable_rules
 }
+
+# TAMPER DETECTION MODULE
+module "tamper_detection" {
+  source = "./tamper_detection"
+
+  alert_topic_arn = var.secops_topic_arn
+}
