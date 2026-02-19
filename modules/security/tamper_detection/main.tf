@@ -30,9 +30,6 @@ locals {
   ]
 }
 
-# ALLOW EVENTBRIDGE TO PUBLISH TO THE SNS TOPIC
-
-
 # TAMPER DETECTION EVENTBRIDGE RULE
 resource "aws_cloudwatch_event_rule" "tamper_detection" {
   name = "${var.name_prefix}-tamper-detection"
