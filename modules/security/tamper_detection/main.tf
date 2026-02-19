@@ -5,28 +5,28 @@
 locals {
   tamper_actions = [
     # CLOUDTRAIL TAMPERING
-    "cloudtrail:StopLogging",
-    "cloudtrail:DeleteTrail",
-    "cloudtrail:UpdateTrail",
-    "cloudtrail:PutEventSelectors",
-    "cloudtrail:PutInsightSelectors",
+    "StopLogging",
+    "DeleteTrail",
+    "UpdateTrail",
+    "PutEventSelectors",
+    "PutInsightSelectors",
 
     # GUARDDUTY TAMPERING
-    "guardduty:DeleteDetector",
-    "guardduty:UpdateDetector",
-    "guardduty:DisassociateFromMasterAccount",
-    "guardduty:DisassociateMembers",
+    "DeleteDetector",
+    "UpdateDetector",
+    "DisassociateFromMasterAccount",
+    "DisassociateMembers",
 
     # SECURITY HUB TAMPERING
-    "securityhub:DisableSecurityHub",
-    "securityhub:DeleteMembers",
-    "securityhub:DisassociateFromMasterAccount",
+    "DisableSecurityHub",
+    "DeleteMembers",
+    "DisassociateFromMasterAccount",
 
     # KMS TAMPERING
-    "kms:ScheduleKeyDeletion",
-    "kms:DisableKey",
-    "kms:PutKeyPolicy",
-    "kms:UpdateKeyDescription"
+    "ScheduleKeyDeletion",
+    "DisableKey",
+    "PutKeyPolicy",
+    "UpdateKeyDescription"
   ]
 }
 
