@@ -56,7 +56,7 @@ resource "aws_instance" "ec2" {
   iam_instance_profile   = var.instance_profile_name
 
   metadata_options {
-    http_tokens                 = "optional" # Temporary - using this as a sample 'HIGH' finding in Security Hub
+    http_tokens                 = "required"
     http_put_response_hop_limit = 2
   }
 
