@@ -99,6 +99,7 @@ module "monitoring" {
   logs_kms_key_arn          = module.security.logs_kms_key_arn
   cloudtrail_log_group_name = module.logging.cloudtrail_logs_group_name
   secops_emails             = var.secops_emails
+  tamper_detection_rule_arn = module.security.tamper_detection_rule_arn
 }
 
 module "automation" {
