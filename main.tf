@@ -100,6 +100,7 @@ module "monitoring" {
   cloudtrail_log_group_name = module.logging.cloudtrail_logs_group_name
   secops_emails             = var.secops_emails
   tamper_detection_rule_arn = module.security.tamper_detection_rule_arn
+  account_id = data.aws_caller_identity.current.account_id
 }
 
 module "automation" {
