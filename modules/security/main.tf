@@ -48,7 +48,11 @@ resource "aws_securityhub_standards_subscription" "main" {
 ## ENABLE INSPECTORv2
 resource "aws_inspector2_enabler" "main" {
   account_ids    = [var.account_id]
-  resource_types = ["EC2", "LAMBDA", "LAMBDA_CODE"]
+  resource_types = [
+    "EC2",
+    "LAMBDA",
+    "LAMBDA_CODE"
+  ]
 }
 
 ## SUBSCRIBE SECURITY HUB TO AMAZON INSPECTOR PRODUCT
