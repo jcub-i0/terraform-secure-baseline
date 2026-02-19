@@ -10,6 +10,12 @@ locals {
   }
 }
 
+# ENABLE 'BLOCK PUBLIC SHARING' ON SSM DOCUMENTS
+resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
+  setting_id = "/ssm/documents/console/public-sharing-permission"
+  setting_value = "Disable"
+}
+
 # GUARDDUTY
 resource "aws_guardduty_detector" "main" {
   enable                       = true
