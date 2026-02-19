@@ -73,7 +73,7 @@ resource "aws_sns_topic_policy" "secops" {
         Resource = aws_sns_topic.secops.arn
         Condition = {
           ArnEquals = {
-            "aws:SourceArn" = aws_cloudwatch_event_rule.tamper_detection.arn
+            "aws:SourceArn" = var.tamper_detection_rule_arn
           }
         }
       }
