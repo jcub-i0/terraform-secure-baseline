@@ -390,7 +390,7 @@ resource "aws_kms_alias" "lambda" {
   target_key_id = aws_kms_key.lambda.id
 }
 
-# CONFIG MODULE
+# CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
 
