@@ -72,8 +72,8 @@ resource "aws_sns_topic_policy" "secops" {
         Action    = "sns:Publish"
         Resource  = aws_sns_topic.secops.arn
         Condition = {
-          ArnEquals = {
-            "aws:SourceArn" = var.tamper_detection_rule_arn
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
           }
         }
       }
