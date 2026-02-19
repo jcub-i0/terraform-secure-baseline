@@ -13,3 +13,7 @@ variable "secops_emails" {
 variable "tamper_detection_rule_arn" {
   type = string
 }
+
+variable "account_id" {
+  type = string
+}
