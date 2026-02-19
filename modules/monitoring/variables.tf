@@ -9,3 +9,11 @@ variable "cloudtrail_log_group_name" {
 variable "secops_emails" {
   type = list(string)
 }
+
+variable "tamper_detection_rule_arn" {
+  type = string
+}
+
+variable "account_id" {
+  type = string
+}

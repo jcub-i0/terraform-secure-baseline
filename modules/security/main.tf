@@ -390,7 +390,7 @@ resource "aws_kms_alias" "lambda" {
   target_key_id = aws_kms_key.lambda.id
 }
 
-# CONFIG MODULE
+# CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
 
@@ -400,4 +400,11 @@ module "config_baseline" {
   centralized_logs_bucket_name = var.centralized_logs_bucket_name
   logs_kms_key_arn             = aws_kms_key.logs.arn
   enable_rules                 = var.enable_rules
+}
+
+# TAMPER DETECTION MODULE
+module "tamper_detection" {
+  source = "./tamper_detection"
+
+  alert_topic_arn = var.secops_topic_arn
 }
