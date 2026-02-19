@@ -132,6 +132,11 @@ resource "aws_lambda_function" "ec2_rollback" {
       SNS_TOPIC_ARN = var.secops_topic_arn
     }
   }
+
+  tags = {
+    Name = "EC2-Rollback"
+    Terraform = "true"
+  }
 }
 
 ## EC2 ROLLBACK SG
