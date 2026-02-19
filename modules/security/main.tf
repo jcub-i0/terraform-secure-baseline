@@ -12,7 +12,7 @@ locals {
 
 # ENABLE 'BLOCK PUBLIC SHARING' ON SSM DOCUMENTS
 resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
-  setting_id = "/ssm/documents/console/public-sharing-permission"
+  setting_id    = "/ssm/documents/console/public-sharing-permission"
   setting_value = "Disable"
 }
 
@@ -53,7 +53,7 @@ resource "aws_securityhub_standards_subscription" "main" {
 # INSPECTOR RESOURCES
 ## ENABLE INSPECTORv2
 resource "aws_inspector2_enabler" "main" {
-  account_ids    = [var.account_id]
+  account_ids = [var.account_id]
   resource_types = [
     "EC2",
     "LAMBDA",
