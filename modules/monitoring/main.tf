@@ -40,7 +40,7 @@ resource "aws_sns_topic" "secops" {
   }
 }
 
-### SECURITY SNS TOPIC POLICY
+### SECOPS SNS TOPIC POLICY
 resource "aws_sns_topic_policy" "secops" {
   arn = aws_sns_topic.secops.arn
 
@@ -64,6 +64,18 @@ resource "aws_sns_topic_policy" "secops" {
         }
         Action   = "sns:Publish"
         Resource = aws_sns_topic.secops.arn
+      },
+      {
+        Sid    = "AllowEventBridgePublish"
+        Effect = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_cloudwatch_event_rule.tamper_detection.arn
+          }
+        }
       }
     ]
   })
