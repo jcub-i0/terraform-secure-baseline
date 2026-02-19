@@ -66,11 +66,11 @@ resource "aws_sns_topic_policy" "secops" {
         Resource = aws_sns_topic.secops.arn
       },
       {
-        Sid    = "AllowEventBridgePublish"
-        Effect = "Allow"
+        Sid       = "AllowEventBridgePublish"
+        Effect    = "Allow"
         Principal = { Service = "events.amazonaws.com" }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
+        Action    = "sns:Publish"
+        Resource  = aws_sns_topic.secops.arn
         Condition = {
           ArnEquals = {
             "aws:SourceArn" = var.tamper_detection_rule_arn
