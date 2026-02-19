@@ -19,6 +19,7 @@ locals {
 
     # SECURITY HUB TAMPERING
     "DisableSecurityHub",
+    "DisableSecurityHubV2",
     "DeleteMembers",
     "DisassociateFromMasterAccount",
 
