@@ -17,3 +17,11 @@ output "lambda_kms_key_arn" {
   description = "ARN of the Lambda CMK KMS key used to encrypt environment variables"
   value       = aws_kms_key.lambda.arn
 }
+
+output "tamper_detection_rule_name" {
+  value = module.tamper_detection.tamper_detection_rule_name
+}
+
+output "tamper_detection_rule_arn" {
+  value = module.tamper_detection.tamper_detection_rule_arn
+}
