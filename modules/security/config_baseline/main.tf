@@ -8,21 +8,8 @@ resource "aws_config_configuration_recorder" "config" {
   role_arn = var.config_role_arn
 
   recording_group {
-    all_supported                 = false
+    all_supported                 = true
     include_global_resource_types = true
-
-    resource_types = [
-      "AWS::S3::Bucket",
-      "AWS::CloudTrail::Trail",
-      "AWS::RDS::DBInstance",
-      "AWS::EC2::Volume",
-      "AWS::EC2::SecurityGroup",
-      "AWS::EC2::Instance",
-    ]
-
-    recording_strategy {
-      use_only = "INCLUSION_BY_RESOURCE_TYPES"
-    }
   }
 }
 
