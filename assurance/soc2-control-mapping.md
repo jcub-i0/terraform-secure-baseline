@@ -222,6 +222,8 @@ Attempts to alter encryption controls are detected and escalated.
 **Baseline Control**
 
 - Logs encrypted via KMS
+- Object-Lock enabled
+- Versioning enabled
 - Key rotation enabled
 
 **SOC2 Alignment**
