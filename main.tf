@@ -78,6 +78,7 @@ module "security" {
   secops_event_bus_name        = module.automation.secops_event_bus_name
   secops_topic_arn             = module.monitoring.secops_topic_arn
   enable_rules                 = var.enable_rules
+  config_enabled = var.config_enabled
 }
 
 module "logging" {
