@@ -98,5 +98,5 @@ variable "enable_rules" {
 
 variable "config_enabled" {
   type    = bool
-  default = false
+  default = true
 }
