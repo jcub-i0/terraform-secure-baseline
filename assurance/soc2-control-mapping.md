@@ -296,3 +296,20 @@ tf-secure-baseline supports:
 - Encryption protection
 
 These capabilities align with SOC 2 CC6, CC7, and CC8 expectations and support audit readiness for cloud infrastructure environments.
+
+---
+
+# Assurance Position
+
+tf-secure-baseline implements infrastructure-level controls that:
+
+- Restrict system access
+- Enable continuous monitoring
+- Detect security-relevant events
+- Support automated containment
+- Maintain configuration integrity
+- Protect operational data through encryption
+
+These capabilities align with SOC 2 CC6, CC7, and CC8 expectations and support infrastructure readiness for security-focused audits.
+
+This baseline should be considered an enabling technical foundation within a broader compliance program.
