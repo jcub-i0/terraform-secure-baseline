@@ -429,7 +429,7 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_logs_attach" {
 # SECOPS IAM RESOURCES
 ## SECOPS-OPERATOR IAM ROLE TRUST POLICY
 resource "aws_iam_role" "secops_operator" {
-  name = "SecOps-Operator"
+  name        = "SecOps-Operator"
   description = "Role exclusively assumed to trigger the EC2 Rollback Lambda function"
 
   assume_role_policy = jsonencode({

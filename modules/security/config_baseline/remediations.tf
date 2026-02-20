@@ -6,7 +6,7 @@
 ### S3 PUBLIC ACCESS REMEDIATION RULE
 resource "aws_config_config_rule" "s3_public_access_block" {
   count = var.config_enabled ? 1 : 0
-  name = "s3-bucket-public-read-block"
+  name  = "s3-bucket-public-read-block"
 
   source {
     owner             = "AWS"
@@ -16,7 +16,7 @@ resource "aws_config_config_rule" "s3_public_access_block" {
 
 ### REMEDIATION TO AUTOMATICALLY DISABLE S3 PUBLIC READ AND WRITE
 resource "aws_config_remediation_configuration" "s3_public_access_block" {
-  count = var.config_enabled ? 1 : 0
+  count                      = var.config_enabled ? 1 : 0
   config_rule_name           = aws_config_config_rule.s3_public_access_block[0].name
   resource_type              = "AWS::S3::Bucket"
   target_type                = "SSM_DOCUMENT"

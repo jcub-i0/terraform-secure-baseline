@@ -134,7 +134,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   }
 
   tags = {
-    Name = "EC2-Rollback"
+    Name      = "EC2-Rollback"
     Terraform = "true"
   }
 }
