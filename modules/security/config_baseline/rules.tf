@@ -34,7 +34,6 @@ locals {
       name_suffix = "s3-bucket-versioning-enabled"
       identifier  = "S3_BUCKET_VERSIONING_ENABLED"
     }
-
     # ------------------------
     # CLOUDTRAIL BASELINE
     # ------------------------
@@ -53,7 +52,6 @@ locals {
       name_suffix = "cloudtrail-log-file-validation-enabled"
       identifier  = "CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED"
     }
-
     # ------------------------
     # RDS BASELINE
     # ------------------------
@@ -67,7 +65,6 @@ locals {
       name_suffix = "rds-instance-public-access-check"
       identifier  = "RDS_INSTANCE_PUBLIC_ACCESS_CHECK"
     }
-
     # ------------------------
     # EBS BASELINE
     # ------------------------
@@ -76,7 +73,6 @@ locals {
       name_suffix = "ebs-encrypted-volumes"
       identifier  = "ENCRYPTED_VOLUMES"
     }
-
     # ------------------------
     # SECURITY GROUP BASELINE
     # ------------------------
@@ -85,7 +81,6 @@ locals {
       name_suffix = "incoming-ssh-disabled"
       identifier  = "INCOMING_SSH_DISABLED"
     }
-
     # ------------------------
     # IAM BASELINE
     # ------------------------
@@ -122,6 +117,29 @@ locals {
       name_suffix = "ec2-instance-no-public-ip"
       identifier  = "EC2_INSTANCE_NO_PUBLIC_IP"
     }
+    # ------------------------
+    # KMS BASELINE
+    # ------------------------
+    cmk_backing_key_rotation_enabled = {
+      family      = "kms_baseline"
+      name_suffix = "cmk-backing-key-rotation-enabled"
+      identifier  = "CMK_BACKING_KEY_ROTATION_ENABLED"
+    }
+    kms_cmk_not_scheduled_for_deletion = {
+      family      = "kms_baseline"
+      name_suffix = "kms-cmk-not-scheduled-for-deletion"
+      identifier  = "KMS_CMK_NOT_SCHEDULED_FOR_DELETION"
+    }
+    kms_key_policy_no_public_access = {
+      family      = "kms_baseline"
+      name_suffix = "kms-key-policy-no-public-access"
+      identifier  = "KMS_KEY_POLICY_NO_PUBLIC_ACCESS"
+    }
+    kms_key_tagged = {
+      family      = "kms_baseline"
+      name_suffix = "kms-key-tagged"
+      identifier  = "KMS_KEY_TAGGED"
+    }
   }
 
   # DECIDE WHICH FAMILIES ARE ENABLED VIA THE TOGGLE OBJECT
@@ -133,6 +151,7 @@ locals {
     sg_baseline         = var.enable_rules.sg_baseline
     iam_baseline        = var.enable_rules.iam_baseline
     ec2_baseline        = var.enable_rules.ec2_baseline
+    kms_baseline        = var.enable_rules.kms_baseline
   }
 
   # FILTER RULE CATALOG FOR ONLY ENABLED FAMILIES
