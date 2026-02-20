@@ -38,6 +38,10 @@ variable "secops_topic_arn" {
   type = string
 }
 
+variable "config_enabled" {
+  type = bool
+}
+
 variable "enable_rules" {
   type = object({
     s3_baseline         = bool
