@@ -404,6 +404,7 @@ resource "aws_kms_alias" "lambda" {
 module "config_baseline" {
   source = "./config_baseline"
 
+  config_enabled = var.config_enabled
   config_role_arn              = var.config_role_arn
   compliance_topic_arn         = var.compliance_topic_arn
   config_remediation_role_arn  = var.config_remediation_role_arn
