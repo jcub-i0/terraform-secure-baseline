@@ -101,7 +101,7 @@ resource "aws_kms_key" "logs" {
   enable_key_rotation     = true
   deletion_window_in_days = 30
   lifecycle {
-    prevent_destroy = false # CHANGE THIS IN PROD
+    prevent_destroy = true
   }
 
   policy = jsonencode({
@@ -299,7 +299,7 @@ resource "aws_kms_key" "ebs" {
   deletion_window_in_days = 30
 
   lifecycle {
-    prevent_destroy = false # CHANGE THIS IN PROD
+    prevent_destroy = true
   }
 
   policy = jsonencode({
