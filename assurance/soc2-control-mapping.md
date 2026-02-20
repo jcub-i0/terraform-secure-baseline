@@ -11,6 +11,24 @@ It demonstrates how deployed controls support audit-aligned expectations.
 
 ---
 
+## Shared Responsibility Boundary
+
+tf-secure-baseline provides infrastructure-level technical safeguards.
+
+It does NOT replace organizational, administrative, or procedural controls required for SOC 2.
+
+Examples of controls outside the scope of this baseline include:
+
+- HR onboarding/offboarding
+- Vendor management
+- Application-level security
+- Incident response policies
+- Change management procedures
+
+This baseline supports infrastructure security criteria and must be paired with organizational controls to achieve SOC 2 compliance.
+
+---
+
 # Control Alignment Overview
 
 | Category | SOC2 Domain | Description |
@@ -222,8 +240,7 @@ Attempts to alter encryption controls are detected and escalated.
 **Baseline Control**
 
 - Logs encrypted via KMS
-- Object-Lock enabled
-- Versioning enabled
+- Object-Lock and Versioning enabled on S3 buckets
 - Key rotation enabled
 
 **SOC2 Alignment**
