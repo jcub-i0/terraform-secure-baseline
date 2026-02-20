@@ -41,6 +41,18 @@ This baseline supports infrastructure security criteria and must be paired with 
 
 ---
 
+# Control Function Classification
+
+| Function | Description |
+|----------|-------------|
+| Preventative | Reduces likelihood of misconfiguration or exposure |
+| Detective | Identifies security-relevant events |
+| Responsive | Enables containment or remediation |
+
+tf-secure-baseline implements controls across all three categories.
+
+---
+
 # CC6 — Logical & Network Access Controls
 
 ## Private Workload Isolation
