@@ -48,8 +48,8 @@ resource "aws_db_instance" "main" {
   # UNCOMMENT THIS IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE (AND ALSO DELETE THE ABOVE LINE)
   # password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
 
-  deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
-  skip_final_snapshot     = true  # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
+  deletion_protection     = true
+  skip_final_snapshot     = false
   backup_retention_period = 14
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:05:00-sun:06:00"
@@ -99,11 +99,10 @@ data "aws_secretsmanager_secret_version" "rds_master" {
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
   bucket              = "centralized-logs-${var.random_id}"
-  object_lock_enabled = false # CHANGE THIS IN PROD
-  force_destroy       = true  # CHANGE THIS IN PROD
+  object_lock_enabled = true
 
   lifecycle {
-    prevent_destroy = false # CHANGE THIS IN PROD
+    prevent_destroy = true
   }
 
   tags = {
