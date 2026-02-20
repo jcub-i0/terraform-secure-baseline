@@ -51,7 +51,7 @@ variable "enable_rules" {
     sg_baseline         = bool
     iam_baseline        = bool
     ec2_baseline        = bool
-    kms_baseline = bool
+    kms_baseline        = bool
   })
 
   default = {
@@ -62,6 +62,6 @@ variable "enable_rules" {
     sg_baseline         = true
     iam_baseline        = false
     ec2_baseline        = true
-    kms_baseline = true
+    kms_baseline        = true
   }
 }

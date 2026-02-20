@@ -121,24 +121,24 @@ locals {
     # KMS BASELINE
     # ------------------------
     cmk_backing_key_rotation_enabled = {
-      family = "kms_baseline"
+      family      = "kms_baseline"
       name_suffix = "cmk-backing-key-rotation-enabled"
-      identifier = "CMK_BACKING_KEY_ROTATION_ENABLED"
+      identifier  = "CMK_BACKING_KEY_ROTATION_ENABLED"
     }
     kms_cmk_not_scheduled_for_deletion = {
-      family = "kms_baseline"
+      family      = "kms_baseline"
       name_suffix = "kms-cmk-not-scheduled-for-deletion"
-      identifier = "KMS_CMK_NOT_SCHEDULED_FOR_DELETION"
+      identifier  = "KMS_CMK_NOT_SCHEDULED_FOR_DELETION"
     }
     kms_key_policy_no_public_access = {
-      family = "kms_baseline"
+      family      = "kms_baseline"
       name_suffix = "kms-key-policy-no-public-access"
-      identifier = "KMS_KEY_POLICY_NO_PUBLIC_ACCESS"
+      identifier  = "KMS_KEY_POLICY_NO_PUBLIC_ACCESS"
     }
     kms_key_tagged = {
-      family = "kms_baseline"
+      family      = "kms_baseline"
       name_suffix = "kms-key-tagged"
-      identifier = "KMS_KEY_TAGGED"
+      identifier  = "KMS_KEY_TAGGED"
     }
   }
 
@@ -151,7 +151,7 @@ locals {
     sg_baseline         = var.enable_rules.sg_baseline
     iam_baseline        = var.enable_rules.iam_baseline
     ec2_baseline        = var.enable_rules.ec2_baseline
-    kms_baseline = var.enable_rules.kms_baseline
+    kms_baseline        = var.enable_rules.kms_baseline
   }
 
   # FILTER RULE CATALOG FOR ONLY ENABLED FAMILIES
