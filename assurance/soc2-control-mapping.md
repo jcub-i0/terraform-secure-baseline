@@ -86,7 +86,7 @@ Misconfigured storage access is automatically corrected to prevent unintended pu
 - CloudTrail enabled
 - Multi-region logging
 - Log validation enabled
-- Logs stored centrally with encryption
+- Logs stored centrally with encryption, versioning, and object-lock
 
 **SOC2 Alignment**
 
