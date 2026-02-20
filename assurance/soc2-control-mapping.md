@@ -232,6 +232,7 @@ Tamper detection monitors:
 - CloudTrail modification attempts
 - Security Hub disablement
 - GuardDuty configuration changes
+- KMS configuration changes
 
 **SOC2 Alignment**
 
