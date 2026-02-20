@@ -223,6 +223,24 @@ CC8.1 — Secure configurations are maintained.
 
 Configuration monitoring ensures systems remain aligned with defined security standards.
 
+## Logging Configuration Protection
+
+**Baseline Control**
+
+Tamper detection monitors:
+
+- CloudTrail modification attempts
+- Security Hub disablement
+- GuardDuty configuration changes
+
+**SOC2 Alignment**
+
+CC8.1 — Critical monitoring controls are protected from unauthorized change.
+
+**Narrative**
+
+Security monitoring services are protected through real-time detection of configuration changes.
+
 ---
 
 ## KMS Protection
