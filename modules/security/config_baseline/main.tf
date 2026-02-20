@@ -9,17 +9,20 @@ resource "aws_config_configuration_recorder" "config" {
 
   recording_group {
     all_supported                 = false
-    include_global_resource_types = false
-    exclusion_by_resource_types {
-      resource_types = [
-        "AWS::FraudDetector::EntityType",
-        "AWS::FraudDetector::Label"
-      ]
-    }
-    recording_strategy {
-      use_only = "EXCLUSION_BY_RESOURCE_TYPES"
-    }
+    include_global_resource_types = true
 
+    resource_types = [
+      "AWS::S3::Bucket",
+      "AWS::CloudTrail::Trail",
+      "AWS::RDS::DBInstance",
+      "AWS::EC2::Volume",
+      "AWS::EC2::SecurityGroup",
+      "AWS::EC2::Instance",
+    ]
+
+    recording_strategy {
+      use_only = "INCLUSION_BY_RESOURCE_TYPES"
+    }
   }
 }
 
@@ -43,7 +46,7 @@ resource "time_sleep" "wait_for_config_recorder" {
 ## CONFIGURATION RECORDER STATUS
 resource "aws_config_configuration_recorder_status" "config" {
   name       = aws_config_configuration_recorder.config.name
-  is_enabled = true
+  is_enabled = var.config_enabled
 
   depends_on = [
     time_sleep.wait_for_config_recorder

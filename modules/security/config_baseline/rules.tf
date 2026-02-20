@@ -144,7 +144,7 @@ locals {
 
 # CREATE ALL ENABLED AWS-MANAGED CONFIG RULES
 resource "aws_config_config_rule" "managed" {
-  for_each = local.enabled_managed_rules
+  for_each = var.config_enabled ? local.enabled_managed_rules : {}
 
   name = "${var.config_rule_name_prefix}-${each.value.name_suffix}"
 

@@ -1,3 +1,8 @@
+variable "config_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "enable_rules" {
   type = object({
     s3_baseline         = bool

@@ -95,3 +95,8 @@ variable "enable_rules" {
     ec2_baseline        = true
   }
 }
+
+variable "config_enabled" {
+  type    = bool
+  default = false
+}

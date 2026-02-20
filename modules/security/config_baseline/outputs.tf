@@ -10,7 +10,7 @@ output "managed_config_rule_arns" {
 
 output "s3_public_access_remediation_rule_name" {
   description = "Config rule name for S3 public access prohibition (auto-remediation target)."
-  value       = aws_config_config_rule.s3_public_access_block.name
+  value       = try(aws_config_config_rule.s3_public_access_block[0].name, null)
 }
 
 output "config_recorder_name" {
