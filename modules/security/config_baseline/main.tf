@@ -9,7 +9,7 @@ resource "aws_config_configuration_recorder" "config" {
 
   recording_group {
     all_supported                 = false
-    include_global_resource_types = true
+    include_global_resource_types = false
 
     resource_types = [
       "AWS::S3::Bucket",
