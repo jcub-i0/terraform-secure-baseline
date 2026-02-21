@@ -1,10 +1,15 @@
 # VALIDATION CHECKLIST (POST-DEPLOY)
 
-This checklist verifies the baseline's core security properties after running 'terraform apply', with a focus on the following:
+## Purpose
+
+This checklist verifies that terraform-secure-baseline has successfully deployed a private-by-default environment after running `terraform apply`.
+
+It focuses on validating:
+
 - Private AWS access via VPC Endpoints (no NAT/IGW dependency)
-- No general internet egress from workloads
+- Absence of general internet egress from workloads
 - Workload-to-database connectivity
-- SOAR/isolation readiness
+- Operational readiness for automated containment workflows (SOAR)
 
 > Assumptions:
 > - You can reach EC2 via SSM Session Manager.
@@ -111,7 +116,25 @@ Refer to the lambda_tests/ec2_rollback.md file and trigger the EC2 Rollback Lamb
 Expected:
 - EC2 instance belongs to its original SG (NOT 'Quarantine')
 
-## 8. Quick Failure Triage Guide
+## 8. Validate Monitoring Integrity (Tamper Detection)
+Trigger a test event that simulates modification of a protected service.
+These monitored actions are defined by the 'local.tamper_actions' variable in 'modules/security/tamper_detection/main.tf'
+**From your local terminal:**
+```bash
+aws cloudtrail stop-logging --name <TRAIL-NAME>
+```
+Expected:
+- EventBridge rule detects the change
+- SNS alert is generated
+- Defined SNS topic's notification path is exercised
+> NOTE:
+> This is a controlled validation step.
+> Restart CloudTrail logging immediately after the test:
+> ```bash
+> aws cloudtrail start-logging --name <TRAIL_NAME>
+> ```
+
+## 9. Quick Failure Triage Guide
 ### SSM session fails:
 - Check interface endpoints exist: ssm, ssmmessages, ec2messages
 - Check compute egress to endpoint SG (443)
