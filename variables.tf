@@ -39,7 +39,6 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
-# IF USING RANDOMLY-GENERATED EPHEMERAL PASSWORD IN STORAGE MODULE'S MAIN.TF, COMMENT THIS OUT
 variable "db_password" {
   description = "The password for the RDS database"
   type        = string
