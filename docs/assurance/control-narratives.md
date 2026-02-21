@@ -70,6 +70,17 @@ This provides visibility into:
 - Misconfigurations
 - Policy violations
 
+In addition to monitoring system activity, the baseline protects the integrity of monitoring services themselves.
+
+The Tamper Detection module generates alerts when attempts are made to modify or disable critical security services, including:
+
+- CloudTrail
+- GuardDuty
+- Security Hub
+- KMS encryption controls
+
+This helps ensure that detection capabilities remain operational and cannot be silently degraded.
+
 ---
 
 # Automated Incident Containment
