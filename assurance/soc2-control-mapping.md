@@ -1,4 +1,4 @@
-# SOC2 Control Mapping — tf-secure-baseline
+# SOC 2 Control Mapping — tf-secure-baseline
 
 ## Purpose
 
@@ -11,15 +11,45 @@ It demonstrates how deployed controls support audit-aligned expectations.
 
 ---
 
+## Shared Responsibility Boundary
+
+tf-secure-baseline provides infrastructure-level technical safeguards.
+
+It does not address organizational, administrative, or procedural controls required for SOC 2.
+
+Examples of controls outside the scope of this baseline include:
+
+- HR onboarding/offboarding
+- Vendor management
+- Application-level security
+- Incident response policies
+- Change management procedures
+
+This baseline supports infrastructure security criteria and must be paired with organizational controls to achieve SOC 2 compliance.
+
+---
+
 # Control Alignment Overview
 
-| Category | SOC2 Domain | Description |
+| Category | SOC 2 Domain | Description |
 |----------|-------------|-------------|
 | Access Restriction | CC6 | Limits system exposure and enforces least privilege |
 | Monitoring & Detection | CC7 | Enables visibility and threat detection |
 | Response & Containment | CC7.4 | Supports timely incident response |
 | Configuration Integrity | CC8 | Maintains secure system configurations |
 | Encryption & Data Protection | CC6.7 | Protects data confidentiality |
+
+---
+
+# Control Function Classification
+
+| Function | Description |
+|----------|-------------|
+| Preventative | Reduces likelihood of misconfiguration or exposure |
+| Detective | Identifies security-relevant events |
+| Responsive | Enables containment or remediation |
+
+tf-secure-baseline implements controls across all three categories.
 
 ---
 
@@ -33,7 +63,7 @@ It demonstrates how deployed controls support audit-aligned expectations.
 - Access to AWS services occurs via VPC Interface Endpoints
 - Outbound traffic is restricted to approved services and databases
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC6.1 — Logical access to systems is restricted.
 
@@ -50,7 +80,7 @@ Network exposure is minimized by eliminating direct internet access to workloads
 - Security groups restrict outbound traffic
 - No default 0.0.0.0/0 egress allowed
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC6.6 — Network access is limited to authorized endpoints.
 
@@ -67,7 +97,7 @@ Outbound communication is limited to explicitly approved services, reducing risk
 - AWS Config rules detect public exposure
 - Auto-remediation removes violations
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC6.1 — Unauthorized access is prevented.
 
@@ -88,7 +118,7 @@ Misconfigured storage access is automatically corrected to prevent unintended pu
 - Log validation enabled
 - Logs stored centrally with encryption, versioning, and object-lock
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC7.2 — System activity is logged and monitored.
 
@@ -110,7 +140,7 @@ EventBridge detects:
 
 Alerts routed to SecOps.
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC7.3 — Monitoring cannot be silently disabled.
 
@@ -127,7 +157,7 @@ Attempts to modify or disable logging are detected in near real-time and escalat
 - GuardDuty enabled
 - Security Hub aggregates findings
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC7.2 — Security events are identified.
 
@@ -146,7 +176,7 @@ Automated threat detection provides continuous monitoring of suspicious activity
 - HIGH/CRITICAL EC2 findings trigger isolation
 - Instance is moved to quarantine security group
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC7.4 — Security incidents are responded to.
 
@@ -162,7 +192,7 @@ Security findings can trigger automated containment actions to limit potential i
 
 - SecOps-Operator can restore quarantined instances
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC7.4 — Remediation actions are supported.
 
@@ -185,13 +215,32 @@ AWS Config monitors:
 - Logging status
 - Resource posture
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC8.1 — Secure configurations are maintained.
 
 **Narrative**
 
 Configuration monitoring ensures systems remain aligned with defined security standards.
+
+## Logging Configuration Protection
+
+**Baseline Control**
+
+Tamper detection monitors:
+
+- CloudTrail modification attempts
+- Security Hub disablement
+- GuardDuty configuration changes
+- KMS configuration changes
+
+**SOC 2 Alignment**
+
+CC8.1 — Critical monitoring controls are protected from unauthorized change.
+
+**Narrative**
+
+Security monitoring services are protected through real-time detection of configuration changes.
 
 ---
 
@@ -205,7 +254,7 @@ Tamper detection alerts on:
 - DisableKey  
 - Policy changes  
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC8.1 — Critical services are protected from unauthorized modification.
 
@@ -222,11 +271,10 @@ Attempts to alter encryption controls are detected and escalated.
 **Baseline Control**
 
 - Logs encrypted via KMS
-- Object-Lock enabled
-- Versioning enabled
+- Object-Lock and Versioning enabled on S3 buckets
 - Key rotation enabled
 
-**SOC2 Alignment**
+**SOC 2 Alignment**
 
 CC6.7 — Data is protected cryptographically.
 
@@ -236,15 +284,17 @@ Sensitive operational logs are protected using managed encryption.
 
 ---
 
-# Summary
+# Assurance Position
 
-tf-secure-baseline supports:
+tf-secure-baseline implements infrastructure-level controls that:
 
-- Access restriction
-- Continuous monitoring
-- Automated detection
-- Incident containment
-- Configuration enforcement
-- Encryption protection
+- Restrict system access
+- Enable continuous monitoring
+- Detect security-relevant events
+- Support automated containment
+- Maintain configuration integrity
+- Protect operational data through encryption
 
-These capabilities align with SOC 2 CC6, CC7, and CC8 expectations and support audit readiness for cloud infrastructure environments.
+These capabilities align with SOC 2 CC6, CC7, and CC8 expectations and support infrastructure readiness for security-focused audits.
+
+This baseline should be considered an enabling technical foundation within a broader compliance program.
