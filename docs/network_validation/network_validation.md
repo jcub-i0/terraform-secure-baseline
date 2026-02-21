@@ -1,10 +1,15 @@
 # VALIDATION CHECKLIST (POST-DEPLOY)
 
-This checklist verifies the baseline's core security properties after running 'terraform apply', with a focus on the following:
+## Purpose
+
+This checklist verifies that terraform-secure-baseline has successfully deployed a private-by-default environment after running `terraform apply`.
+
+It focuses on validating:
+
 - Private AWS access via VPC Endpoints (no NAT/IGW dependency)
-- No general internet egress from workloads
+- Absence of general internet egress from workloads
 - Workload-to-database connectivity
-- SOAR/isolation readiness
+- Operational readiness for automated containment workflows (SOAR)
 
 > Assumptions:
 > - You can reach EC2 via SSM Session Manager.
