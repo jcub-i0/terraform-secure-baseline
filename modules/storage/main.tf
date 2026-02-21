@@ -44,9 +44,8 @@ resource "aws_db_instance" "main" {
 
   db_name  = "appdb"
   username = var.db_username
-  password = var.db_password
-  # UNCOMMENT THIS IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE (AND ALSO DELETE THE ABOVE LINE)
-  # password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
+  # SET 'password' TO var.db_password IF NOT USING AUTO-GENERATED PASSWORD FOR RDS
+  password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
 
   deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
   skip_final_snapshot     = true  # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
@@ -67,8 +66,8 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# UNCOMMENT THIS AND REMOVE var.db_password (AND ITS REFERENCES) IF YOU WANT A RANDOMLY-GENERATED EPHEMERAL PASSWORD THAT IS NEVER PERSISTED TO STATE
-/*
+# COMMENT THIS OUT IF USING 'var.db_password' INSTEAD OF A RANDOMLY-GENERATED PASSWORD
+
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
 ## Create a secret in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "rds_master" {
@@ -93,7 +92,6 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
 data "aws_secretsmanager_secret_version" "rds_master" {
   secret_id = aws_secretsmanager_secret.rds_master.id
 }
-*/
 
 # S3 RESOURCES
 ## CENTRALIZED LOGS S3 BUCKET
