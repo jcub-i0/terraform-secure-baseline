@@ -85,7 +85,7 @@ This helps ensure that detection capabilities remain operational and cannot be s
 
 # Automated Incident Containment
 
-High-severity EC2 security findings can trigger automated containment actions.
+HIGH- and CRITICAL-severity EC2 security findings can trigger automated containment actions.
 
 Affected instances are:
 
