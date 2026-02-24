@@ -272,6 +272,10 @@ data "aws_iam_policy" "lambda_logs" {
   arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+data "aws_iam_policy" "lambda_xray" {
+  arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 ## EC2 ISOLATION LAMBDA
 ### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
@@ -491,6 +495,12 @@ resource "aws_iam_role_policy_attachment" "ip_enrichment" {
 resource "aws_iam_role_policy_attachment" "ip_enrichment_logs_attach" {
   role       = aws_iam_role.lambda_ip_enrichment.name
   policy_arn = data.aws_iam_policy.lambda_logs.arn
+}
+
+### ATTACH AWS-MANAGED X-RAY POLICY TO LAMBDA
+resource "aws_iam_role_policy_attachment" "ip_enrichment_xray_attach" {
+  role = aws_iam_role.lambda_ip_enrichment.name
+  policy_arn = data.aws_iam_policy.lambda_xray.arn
 }
 
 # SECOPS IAM RESOURCES
