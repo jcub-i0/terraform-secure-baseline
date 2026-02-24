@@ -285,7 +285,7 @@ resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
 }
 
 resource "aws_cloudwatch_event_rule" "securityhub_high_critical" {
-  name        = "securityhub-ec2-high-critical"
+  name        = "securityhub-high-critical"
   description = "New High/Critical Security Hub findings"
 
   event_pattern = jsonencode({
