@@ -33,3 +33,7 @@ variable "flowlogs_log_group_arn" {
 variable "secops_event_bus_arn" {
   type = string
 }
+
+variable "threat_intel_api_keys_arn" {
+  type = string
+}
