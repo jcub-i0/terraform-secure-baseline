@@ -426,6 +426,27 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_logs_attach" {
   policy_arn = data.aws_iam_policy.lambda_logs.arn
 }
 
+## IP ENRICHMENT LAMBDA
+### IP ENRICHMENT LAMBDA EXECUTION ROLE
+resource "aws_iam_role" "lambda_ip_enrichment" {
+  name = "lambda-ip-enrichment"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+  tags = {
+    Name = "Lambda-IP-Enrichment-Role"
+    Terraform = "true"
+  }
+}
+
 # SECOPS IAM RESOURCES
 ## SECOPS-OPERATOR IAM ROLE TRUST POLICY
 resource "aws_iam_role" "secops_operator" {
