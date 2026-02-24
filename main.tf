@@ -62,7 +62,7 @@ module "iam" {
   flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
   flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
   secops_event_bus_arn                  = module.automation.secops_event_bus_arn
-  threat_intel_api_keys_arn = module.automation.threat_intel_api_keys_arn
+  threat_intel_api_keys_arn             = module.automation.threat_intel_api_keys_arn
 }
 
 module "security" {

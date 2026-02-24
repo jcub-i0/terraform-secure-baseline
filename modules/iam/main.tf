@@ -448,7 +448,7 @@ resource "aws_iam_role" "lambda_ip_enrichment" {
 }
 
 resource "aws_iam_policy" "lambda_ip_enrichment" {
-  name = "lambda-ip-enrichment-policy"
+  name        = "lambda-ip-enrichment-policy"
   description = "Permissions for IP Enrichment Lambda"
 
   policy = jsonencode({
