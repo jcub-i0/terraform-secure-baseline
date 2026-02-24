@@ -10,6 +10,10 @@ variable "lambda_ec2_rollback_role_arn" {
   type = string
 }
 
+variable "lambda_ip_enrichment_role_arn" {
+  type = string
+}
+
 variable "serverless_private_subnet_ids" {
   type = list(string)
 }
