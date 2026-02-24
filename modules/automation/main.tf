@@ -322,7 +322,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
 resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   name              = "/aws/lambda/ip-enrichment"
   retention_in_days = 30
-  kms_key_id        = var.lambda_kms_key_arn
+  kms_key_id        = var.logs_kms_key_arn
 
   tags = {
     Name      = "Lambda-IP-Enrichment-Logs"
