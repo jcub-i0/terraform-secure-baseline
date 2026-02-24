@@ -442,7 +442,7 @@ resource "aws_iam_role" "lambda_ip_enrichment" {
     }]
   })
   tags = {
-    Name = "Lambda-IP-Enrichment-Role"
+    Name      = "Lambda-IP-Enrichment-Role"
     Terraform = "true"
   }
 }

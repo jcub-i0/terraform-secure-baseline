@@ -256,7 +256,7 @@ resource "aws_lambda_function" "ip_enrichment" {
 
   environment {
     variables = {
-      SNS_TOPIC_ARN = var.secops_topic_arn
+      SNS_TOPIC_ARN      = var.secops_topic_arn
       ABUSE_IPDB_API_KEY = aws_secretsmanager_secret.threat_intel_api_keys.arn
     }
   }
@@ -268,12 +268,12 @@ resource "aws_lambda_function" "ip_enrichment" {
 }
 
 resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
-  name = "tf-secure-baseline/threat-intel/api-keys"
+  name        = "tf-secure-baseline/threat-intel/api-keys"
   description = "API keys for external threat intel providers (AbuseIPDB, VirusTotal, etc.)"
-  kms_key_id = var.lambda_kms_key_arn
+  kms_key_id  = var.lambda_kms_key_arn
 
   tags = {
-    Name = "Threat-Intel-API-Keys"
+    Name      = "Threat-Intel-API-Keys"
     Terraform = "true"
   }
 }
