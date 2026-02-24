@@ -256,9 +256,9 @@ resource "aws_lambda_function" "ip_enrichment" {
 
   environment {
     variables = {
-      SNS_TOPIC_ARN      = var.secops_topic_arn
+      SNS_TOPIC_ARN           = var.secops_topic_arn
       THREAT_INTEL_SECRET_ARN = aws_secretsmanager_secret.threat_intel_api_keys.arn
-      SECURITYHUB_REGION = var.primary_region
+      SECURITYHUB_REGION      = var.primary_region
     }
   }
 
@@ -311,11 +311,11 @@ resource "aws_cloudwatch_event_target" "ip_enrichment" {
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
-  statement_id = "AllowExecutionFromEventBridgeIpEnrichment"
-  action = "lambda:InvokeFunction"
+  statement_id  = "AllowExecutionFromEventBridgeIpEnrichment"
+  action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ip_enrichment.function_name
-  principal = "events.amazonaws.com"
-  source_arn = aws_cloudwatch_event_rule.securityhub_high_critical.arn
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.securityhub_high_critical.arn
 }
 
 ### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA
