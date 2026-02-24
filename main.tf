@@ -123,6 +123,7 @@ module "automation" {
   lambda_kms_key_arn                       = module.security.lambda_kms_key_arn
   interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
   logs_kms_key_arn                         = module.security.logs_kms_key_arn
+  ip_enrichment_write_to_securityhub = var.ip_enrichment_write_to_securityhub
 }
 
 module "vpc_endpoints" {
