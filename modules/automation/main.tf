@@ -59,7 +59,7 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
 ### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   name        = "securityhub-ec2-high-critical"
-  description = "High/Critical Security Hub EC2 findings"
+  description = "New High/Critical Security Hub EC2 findings"
 
   event_pattern = jsonencode({
     source      = ["aws.securityhub"],
@@ -252,7 +252,7 @@ resource "aws_lambda_function" "ip_enrichment" {
     mode = "Active"
   }
 
-  # NO VPC_CONFIG HERE (SO IT CAN REACH INTERNET WITHOUT NAT)
+  # NO VPC_CONFIG HERE (SO THE FUNCTION CAN REACH INTERNET WITHOUT NAT)
 
   environment {
     variables = {
@@ -276,4 +276,24 @@ resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
     Name      = "Threat-Intel-API-Keys"
     Terraform = "true"
   }
+}
+
+resource "aws_cloudwatch_event_rule" "securityhub_high_critical" {
+  name        = "securityhub-ec2-high-critical"
+  description = "New High/Critical Security Hub findings"
+
+  event_pattern = jsonencode({
+    source      = ["aws.securityhub"],
+    detail-type = ["Security Hub Findings - Imported"],
+    detail = {
+      findings = {
+        Severity = {
+          Label = ["HIGH", "CRITICAL"]
+        },
+        Workflow = {
+          Status = ["NEW"]
+        }
+      }
+    }
+  })
 }
