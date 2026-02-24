@@ -354,6 +354,12 @@ resource "aws_iam_role_policy_attachment" "ec2_isolation_logs_attach" {
   policy_arn = data.aws_iam_policy.lambda_logs.arn
 }
 
+### ATTACH AWS-MANAGED X-RAY POLICY TO LAMBDA
+resource "aws_iam_role_policy_attachment" "ec2_isolation_xray_attach" {
+  role       = aws_iam_role.lambda_ec2_isolation.name
+  policy_arn = data.aws_iam_policy.lambda_xray.arn
+}
+
 ## EC2 ROLLBACK LAMBDA
 ### EC2 ROLLBACK LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_rollback" {
@@ -428,6 +434,12 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_vpc_attach" {
 resource "aws_iam_role_policy_attachment" "ec2_rollback_logs_attach" {
   role       = aws_iam_role.lambda_ec2_rollback.name
   policy_arn = data.aws_iam_policy.lambda_logs.arn
+}
+
+### ATTACH AWS-MANAGED X-RAY POLICY TO LAMBDA
+resource "aws_iam_role_policy_attachment" "ec2_rollback_xray_attach" {
+  role       = aws_iam_role.lambda_ec2_rollback.name
+  policy_arn = data.aws_iam_policy.lambda_xray.arn
 }
 
 ## IP ENRICHMENT LAMBDA
