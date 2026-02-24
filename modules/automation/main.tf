@@ -104,7 +104,7 @@ data "archive_file" "lambda_ec2_rollback" {
   output_path = "${path.module}/lambda/ec2_rollback.zip"
 }
 
-## EC2 ROLLBACK LAMBDA FUCNTION
+## EC2 ROLLBACK LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_rollback" {
   function_name    = "ec2-rollback"
   description      = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
@@ -226,4 +226,54 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   function_name = aws_lambda_function.ec2_rollback.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
+}
+
+# IP ENRICHMENT LAMBDA RESOURCES
+data "archive_file" "lambda_ip_enrichment" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/ip_enrichment.py"
+  output_path = "${path.module}/lambda/ip_enrichment.zip"
+}
+
+resource "aws_lambda_function" "ip_enrichment" {
+  function_name    = "ip-enrichment"
+  description      = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"
+  role             = var.lambda_ip_enrichment_role_arn
+  handler          = "ip_enrichment.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.lambda_ip_enrichment.output_path
+  timeout          = 60
+  memory_size      = 256
+  source_code_hash = data.archive_file.lambda_ip_enrichment.output_base64sha256
+  kms_key_arn      = var.lambda_kms_key_arn
+
+  # ENABLE X-RAY TRACING
+  tracing_config {
+    mode = "Active"
+  }
+
+  # NO VPC_CONFIG HERE (SO IT CAN REACH INTERNET WITHOUT NAT)
+
+  environment {
+    variables = {
+      SNS_TOPIC_ARN = var.secops_topic_arn
+      ABUSE_IPDB_API_KEY = aws_secretsmanager_secret.threat_intel_api_keys.arn
+    }
+  }
+
+  tags = {
+    Name      = "IP-Enrichment"
+    Terraform = "true"
+  }
+}
+
+resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
+  name = "tf-secure-baseline/threat-intel/api-keys"
+  description = "API keys for external threat intel providers (AbuseIPDB, VirusTotal, etc.)"
+  kms_key_id = var.lambda_kms_key_arn
+
+  tags = {
+    Name = "Threat-Intel-API-Keys"
+    Terraform = "true"
+  }
 }
