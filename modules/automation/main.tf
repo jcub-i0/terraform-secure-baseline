@@ -297,3 +297,9 @@ resource "aws_cloudwatch_event_rule" "securityhub_high_critical" {
     }
   })
 }
+
+resource "aws_cloudwatch_event_target" "ip_enrichment" {
+  rule = aws_cloudwatch_event_rule.securityhub_high_critical.name
+  target_id = "IpEnrichment"
+  arn = aws_lambda_function.ip_enrichment.arn
+}
