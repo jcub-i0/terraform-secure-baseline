@@ -447,6 +447,41 @@ resource "aws_iam_role" "lambda_ip_enrichment" {
   }
 }
 
+resource "aws_iam_policy" "lambda_ip_enrichment" {
+  name = "lambda-ip-enrichment-policy"
+  description = "Permissions for IP Enrichment Lambda"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # READ API KEY SECRET
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = var.threat_intel_api_keys_arn
+      },
+      # PUBLISH ENRICHED ALERT TO SNS
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = var.secops_topic_arn
+      },
+      # ALLOW WRITING ENRICHMENT NOTES TO FINDINGS
+      {
+        Effect = "Allow"
+        Action = [
+          "securityhub:BatchUpdateFindings"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # SECOPS IAM RESOURCES
 ## SECOPS-OPERATOR IAM ROLE TRUST POLICY
 resource "aws_iam_role" "secops_operator" {
