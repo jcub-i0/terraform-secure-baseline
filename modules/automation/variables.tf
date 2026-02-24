@@ -53,3 +53,7 @@ variable "interface_endpoints_sg_id" {
 variable "logs_kms_key_arn" {
   type = string
 }
+
+variable "ip_enrichment_write_to_securityhub" {
+  type = bool
+}
