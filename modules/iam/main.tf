@@ -499,7 +499,7 @@ resource "aws_iam_role_policy_attachment" "ip_enrichment" {
 ### ATTACH BASIC LAMBDA EXECUTION ROLE (X-RAY + BASELINE LOGGING)
 resource "aws_iam_role_policy_attachment" "ip_enrichment_logs_attach" {
   role       = aws_iam_role.lambda_ip_enrichment.name
-  policy_arn = data.aws_iam_policy.lambda_logs
+  policy_arn = data.aws_iam_policy.lambda_logs.arn
 }
 
 # SECOPS IAM RESOURCES
