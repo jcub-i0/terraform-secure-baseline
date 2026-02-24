@@ -49,3 +49,7 @@ variable "lambda_kms_key_arn" {
 variable "interface_endpoints_sg_id" {
   type = string
 }
+
+variable "logs_kms_key_arn" {
+  type = string
+}
