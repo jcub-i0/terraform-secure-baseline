@@ -477,6 +477,15 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
           "securityhub:BatchUpdateFindings"
         ]
         Resource = "*"
+      },
+      # CLOUDWATCH LOGS
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${var.lambda_ip_enrichment_log_group_arn}:*"
       }
     ]
   })
