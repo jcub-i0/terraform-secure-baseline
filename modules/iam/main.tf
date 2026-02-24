@@ -470,7 +470,7 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
         ]
         Resource = var.secops_topic_arn
       },
-      # ALLOW WRITING ENRICHMENT NOTES TO FINDINGS
+      # ALLOW LAMBDA TO WRITE ENRICHMENT NOTES TO FINDINGS
       {
         Effect = "Allow"
         Action = [
