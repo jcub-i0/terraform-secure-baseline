@@ -261,6 +261,10 @@ resource "aws_lambda_function" "ip_enrichment" {
     }
   }
 
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_ip_enrichment
+  ]
+
   tags = {
     Name      = "IP-Enrichment"
     Terraform = "true"
