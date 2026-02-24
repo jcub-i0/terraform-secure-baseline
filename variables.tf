@@ -101,3 +101,9 @@ variable "config_enabled" {
   type    = bool
   default = false
 }
+
+variable "ip_enrichment_write_to_securityhub" {
+  description = "Define whether you want the IP Enrichment Lambda function to write its enrichments to SecurityHub findings"
+  type = bool
+  default = true
+}
