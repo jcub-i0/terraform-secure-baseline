@@ -122,6 +122,7 @@ module "automation" {
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
   lambda_kms_key_arn                       = module.security.lambda_kms_key_arn
   interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
+  logs_kms_key_arn = module.security.logs_kms_key_arn
 }
 
 module "vpc_endpoints" {
