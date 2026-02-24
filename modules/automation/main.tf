@@ -258,6 +258,7 @@ resource "aws_lambda_function" "ip_enrichment" {
     variables = {
       SNS_TOPIC_ARN      = var.secops_topic_arn
       ABUSE_IPDB_API_KEY = aws_secretsmanager_secret.threat_intel_api_keys.arn
+      SECURITYHUB_REGION = var.primary_region
     }
   }
 
