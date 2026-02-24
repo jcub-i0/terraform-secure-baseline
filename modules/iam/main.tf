@@ -499,7 +499,7 @@ resource "aws_iam_role_policy_attachment" "ip_enrichment_logs_attach" {
 
 ### ATTACH AWS-MANAGED X-RAY POLICY TO LAMBDA
 resource "aws_iam_role_policy_attachment" "ip_enrichment_xray_attach" {
-  role = aws_iam_role.lambda_ip_enrichment.name
+  role       = aws_iam_role.lambda_ip_enrichment.name
   policy_arn = data.aws_iam_policy.lambda_xray.arn
 }
 
