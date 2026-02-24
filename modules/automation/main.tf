@@ -304,3 +304,15 @@ resource "aws_cloudwatch_event_target" "ip_enrichment" {
   target_id = "IpEnrichment"
   arn       = aws_lambda_function.ip_enrichment.arn
 }
+
+### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA
+resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
+  name = "/aws/lambda/ip-enrichment"
+  retention_in_days = 30
+  kms_key_id = var.lambda_kms_key_arn
+
+  tags = {
+    Name = "Lambda-IP-Enrichment-Logs"
+    Terraform = "true"
+  }
+}
