@@ -344,7 +344,7 @@ resource "aws_iam_role_policy_attachment" "ec2_isolation_vpc_attach" {
   policy_arn = data.aws_iam_policy.lambda_vpc.arn
 }
 
-### ATTACH AWS-MANAGED POLICY FOR LAMBDA LOGGING
+### ATTACH BASIC LAMBDA EXECUTION ROLE (X-RAY + BASELINE LOGGING)
 resource "aws_iam_role_policy_attachment" "ec2_isolation_logs_attach" {
   role       = aws_iam_role.lambda_ec2_isolation.name
   policy_arn = data.aws_iam_policy.lambda_logs.arn
@@ -420,7 +420,7 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_vpc_attach" {
   policy_arn = data.aws_iam_policy.lambda_vpc.arn
 }
 
-### ATTACH AWS-MANAGED POLICY FOR LAMBDA LOGGING
+### ATTACH BASIC LAMBDA EXECUTION ROLE (X-RAY + BASELINE LOGGING)
 resource "aws_iam_role_policy_attachment" "ec2_rollback_logs_attach" {
   role       = aws_iam_role.lambda_ec2_rollback.name
   policy_arn = data.aws_iam_policy.lambda_logs.arn
@@ -480,6 +480,17 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
       }
     ]
   })
+}
+
+resource "aws_iam_role_policy_attachment" "ip_enrichment" {
+  role = aws_iam_role.lambda_ip_enrichment.name
+  policy_arn = aws_iam_policy.lambda_ip_enrichment.arn
+}
+
+### ATTACH BASIC LAMBDA EXECUTION ROLE (X-RAY + BASELINE LOGGING)
+resource "aws_iam_role_policy_attachment" "ip_enrichment_logs_attach" {
+  role = aws_iam_role.lambda_ip_enrichment.name
+  policy_arn = data.aws_iam_policy.lambda_logs
 }
 
 # SECOPS IAM RESOURCES
