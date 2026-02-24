@@ -310,6 +310,14 @@ resource "aws_cloudwatch_event_target" "ip_enrichment" {
   arn       = aws_lambda_function.ip_enrichment.arn
 }
 
+resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
+  statement_id = "AllowExecutionFromEventBridgeIpEnrichment"
+  action = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ip_enrichment.function_name
+  principal = "events.amazonaws.com"
+  source_arn = aws_cloudwatch_event_rule.securityhub_high_critical.arn
+}
+
 ### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   name              = "/aws/lambda/ip-enrichment"
