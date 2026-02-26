@@ -81,6 +81,8 @@ def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
             if ":" in ip and len(ip) >= 3:
                 found.add(ip)
 
+def extract_ips_and_map_findings(): # DEFINE THIS FUNCTION -- IT IS NOT DONE.
+    pass
 
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
