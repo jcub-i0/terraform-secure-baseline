@@ -30,3 +30,34 @@ _IPV6_RE = re.compile(r"\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b")
 # GUARDRAILS
 MAX_IPS_PER_EVENT = int(os.environ.get("MAX_IPS_PER_EVENT", "25"))
 ABUSEIPDB_MAX_AGE_DAYS = os.environ.get("ABUSEIPDB_MAX_AGE_DAYS", "90")
+
+
+def _get_abuseipdb_api_key() -> Optional[str]:
+    global _cached_abuseipdb_key
+
+    if _cached_abuseipdb_key:
+        return _cached_abuseipdb_key
+    
+    if not THREAT_INTEL_SECRET_ARN:
+        logger.error("THREAT_INTEL_SECRET_ARN is not set.")
+        return None
+    
+    try:
+        resp = secretsmanager.get_secret_value(SecretId=THREAT_INTEL_SECRET_ARN)
+        secret_str = resp.get("SecretString","")
+        if not secret_str:
+            logger.error("SecretString is empty for THREAT_INTEL_SECRET_ARN.")
+            return None
+        
+        secret_json = json.loads(secret_str)
+        key = secret_json.get("ABUSEIPDB_API_KEY") or secret_json.get("abuseipdb_api_key")
+        if not key:
+            logger.error("Secret does not contain ABUSEIPDB_API_KEY.")
+            return None
+        
+        _cached_abuseipdb_key = key
+        return key
+    
+    except Exception as e:
+        logger.exception(f"Failed to read threat intel secret: {e}")
+        return None
