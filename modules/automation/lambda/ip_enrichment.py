@@ -61,3 +61,21 @@ def _get_abuseipdb_api_key() -> Optional[str]:
     except Exception as e:
         logger.exception(f"Failed to read threat intel secret: {e}")
         return None
+    
+def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
+    """Recursively scan strings in dict/list structures for IP-like patterns"""
+    if obj is None:
+        return
+    if isinstance(obj, dict):
+        for _, v in obj.items():
+            _find_ips_in_obj(v, found)
+    elif isinstance(obj, list):
+        for v in obj:
+            _find_ips_in_obj(v, found)
+    elif isinstance(obj, str):
+        for ip in _IPV4_RE.findall(obj):
+            found.add(ip)
+        for ip in _IPV6_RE.findall(obj):
+            # FILTER OBVIOUS FALSE POSITIVES, LIKE "::::"
+            if ":" in ip and len(ip) >= 3:
+                found.add(ip)
