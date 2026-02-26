@@ -62,6 +62,7 @@ def _get_abuseipdb_api_key() -> Optional[str]:
         logger.exception(f"Failed to read threat intel secret: {e}")
         return None
     
+
 def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
     """Recursively scan strings in dict/list structures for IP-like patterns"""
     if obj is None:
@@ -79,3 +80,25 @@ def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
             # FILTER OBVIOUS FALSE POSITIVES, LIKE "::::"
             if ":" in ip and len(ip) >= 3:
                 found.add(ip)
+
+
+def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
+    url = "https://api.abuseipdb.com/api/v2/check"
+    params = {
+        "Accept": "application/json",
+        "Key": api_key,
+        "User-Agent": "tf-secure-baseline-ip-enrichment/1.0",
+    }
+
+    full_url = f"{url}?{urllib.parse.urlencode(params)}"
+
+    try:
+        req = urllib.request.Request(full_url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8")
+            parsed = json.loads(body)
+            return parsed.get("data", {})
+        
+    except Exception as e:
+        logger.error(f"Error querying AbuseIPDB for {ip}: {e}")
+        return None
