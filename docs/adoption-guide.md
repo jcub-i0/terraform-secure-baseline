@@ -60,7 +60,7 @@ This baseline may be less relevant for:
 
 ---
 
-## Role In A Security Program
+## Role In a Security Program
 
 terraform-secure-baseline should be viewed as:
 
