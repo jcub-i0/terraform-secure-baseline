@@ -286,6 +286,15 @@ resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
   }
 }
 
+#### STORE THREAT INTEL API KEYS FOR IP ENRICHMENT FUNCTION IN AWS SECRETS MANAGER
+resource "aws_secretsmanager_secret_version" "threat_intel_api_keys" {
+  secret_id = aws_secretsmanager_secret.threat_intel_api_keys.id
+
+  secret_string = jsonencode({
+    ABUSEIPDB_API_KEY = var.abuseipdb_api_key
+  })
+}
+
 resource "aws_cloudwatch_event_rule" "securityhub_high_critical" {
   name        = "securityhub-high-critical"
   description = "New High/Critical Security Hub findings"
