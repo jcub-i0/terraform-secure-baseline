@@ -261,6 +261,7 @@ resource "aws_lambda_function" "ip_enrichment" {
       WRITE_TO_SECURITYHUB    = var.ip_enrichment_write_to_securityhub
       MAX_IPS_PER_EVENT       = "25"
       ABUSEIPDB_MAX_AGE_DAYS  = "90"
+      MAX_IPS_EXTRACTED = "200"
     }
   }
 
