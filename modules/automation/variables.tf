@@ -59,6 +59,6 @@ variable "ip_enrichment_write_to_securityhub" {
 }
 
 variable "abuseipdb_api_key" {
-  type = string
+  type      = string
   sensitive = true
 }

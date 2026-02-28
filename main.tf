@@ -123,7 +123,7 @@ module "automation" {
   interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
   logs_kms_key_arn                         = module.security.logs_kms_key_arn
   ip_enrichment_write_to_securityhub       = var.ip_enrichment_write_to_securityhub
-  abuseipdb_api_key = var.abuseipdb_api_key
+  abuseipdb_api_key                        = var.abuseipdb_api_key
 }
 
 module "vpc_endpoints" {
