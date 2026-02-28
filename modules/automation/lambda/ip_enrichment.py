@@ -31,7 +31,6 @@ _IPV6_RE = re.compile(r"\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b")
 MAX_IPS_PER_EVENT = int(os.environ.get("MAX_IPS_PER_EVENT", "25"))
 ABUSEIPDB_MAX_AGE_DAYS = int(os.environ.get("ABUSEIPDB_MAX_AGE_DAYS", "90"))
 
-
 def _get_abuseipdb_api_key() -> Optional[str]:
     global _cached_abuseipdb_key
 
@@ -119,6 +118,13 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
             break
 
     return all_ips, ip_to_finding_ids
+
+def is_public_ip(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+        return not (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_multicast or addr.is_reserved)
+    except ValueError:
+        return False
 
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
@@ -215,6 +221,8 @@ def lambda_handler(event, context):
 
     enriched: List[Dict[str, Any]] = []
     for ip in list(all_ips)[:MAX_IPS_PER_EVENT]:
+        if not is_public_ip(ip):
+            continue
         result = query_abuse_ipdb(ip, api_key)
         if not result:
             continue
