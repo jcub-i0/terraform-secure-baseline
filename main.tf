@@ -124,6 +124,7 @@ module "automation" {
   logs_kms_key_arn                         = module.security.logs_kms_key_arn
   ip_enrichment_write_to_securityhub       = var.ip_enrichment_write_to_securityhub
   abuseipdb_api_key                        = var.abuseipdb_api_key
+  random_id = random_id.random_id.hex
 }
 
 module "vpc_endpoints" {
