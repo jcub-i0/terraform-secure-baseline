@@ -5,6 +5,7 @@ import json
 import re
 import urllib.request
 import urllib.parse
+import urllib.error
 import ipaddress
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -149,6 +150,23 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
             parsed = json.loads(body)
             return parsed.get("data", {})
         
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode("utf-8", errors="replace")
+        except Exception:
+            err_body = "<unable to read error body>"
+        
+        err_body = err_body[:500]
+
+        logger.warning(
+            f"AbuseIPDB HTTPError for {ip}: status={e.code} reason={e.reason} body={err_body}"
+        )
+        return None
+    
+    except urllib.error.URLError as e:
+        logger.warning(f"AbuseIPDB URLError for {ip}: {e.reason}")
+        return None
+        
     except Exception as e:
         logger.exception(f"Error querying AbuseIPDB for {ip}: {e}")
         return None
@@ -156,7 +174,7 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
     lines.append(f"Findings in event: {len(set(fid for entry in enriched for fid in entry.get('findingIds', [])))}")
-    lines.append(f"IPs enriched: {sum(1 for _ in enriched)} (public-only)")
+    lines.append(f"IPs enriched: {len(enriched)} (public-only)")
     lines.append(f"Writeback enabled: {WRITE_TO_SECURITYHUB}")
     lines.append("")
     lines.append("🧠 IP Threat Intel Enrichment")
