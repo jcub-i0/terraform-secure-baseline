@@ -57,3 +57,8 @@ variable "logs_kms_key_arn" {
 variable "ip_enrichment_write_to_securityhub" {
   type = bool
 }
+
+variable "abuseipdb_api_key" {
+  type = string
+  sensitive = true
+}
