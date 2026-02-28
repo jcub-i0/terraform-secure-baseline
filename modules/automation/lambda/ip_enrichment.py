@@ -137,3 +137,31 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error querying AbuseIPDB for {ip}: {e}")
         return None
+    
+def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
+    lines: List[str] = []
+    lines.append("🧠 IP Threat Intel Enrichment")
+    lines.append("")
+    lines.append(f"Enriched IPs: {len(enriched)}")
+    lines.append("")
+
+    for entry in enriched:
+        ip = entry.get("ip", "N/A")
+        score = entry.get("abuseConfidenceScore", "N/A")
+        country = entry.get("countryName", "N/A")
+        isp = entry.get("isp", "N/A")
+        usage = entry.get("usageType", "N/A")
+        tor = entry.get("isTor", "N/A")
+        reports = entry.get("reports", "N/A")
+        last = entry.get("lastReportedAt", "N/A")
+        finding_ids = entry.get("findingIds", [])
+
+        lines.append(f"🌐 {ip}")
+        lines.append(f"    • Abuse score: {score}")
+        lines.append(f"    • Country: {country} | ISP: {isp} | Usage: {usage} | Tor: {tor}")
+        lines.append(f"    • Reports: {reports} | Last reported: {last}")
+        if finding_ids:
+            lines.append(f"    • Finding IDs: {', '.join(finding_ids[:5])}{'…' if len(finding_ids) > 5 else ''}")
+        lines.append("")
+    
+    return "\n".join(lines)
