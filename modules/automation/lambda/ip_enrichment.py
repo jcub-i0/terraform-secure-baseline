@@ -104,8 +104,9 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
         product_fields = f.get("ProductFields") or {}
         _find_ips_in_obj(product_fields, local_ips)
 
-        # 3) GENERIC SCAN OF THE FINDING (SAFE FALLBACK)
-        _find_ips_in_obj(f, local_ips)
+        # 3) GENERIC SCAN OF THE FINDING (ONLY IF LOCAL_IPS IS EMPTY)
+        if not local_ips:
+            _find_ips_in_obj(f, local_ips)
 
         # NORMALIZE / RECORD FINDINGS
         for ip in local_ips:
