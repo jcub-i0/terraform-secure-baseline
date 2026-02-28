@@ -5,6 +5,7 @@ import json
 import re
 import urllib.request
 import urllib.parse
+import ipaddress
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger()
