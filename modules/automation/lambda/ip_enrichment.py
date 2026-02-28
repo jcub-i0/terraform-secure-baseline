@@ -123,7 +123,7 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
     params = {
         "ipAddress": ip,
-        "maxAgeInDays": ABUSEIPDB_MAX_AGE_DAYS
+        "maxAgeInDays": str(ABUSEIPDB_MAX_AGE_DAYS)
     }
 
     headers = {
