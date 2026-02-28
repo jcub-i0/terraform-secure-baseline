@@ -195,17 +195,6 @@ def publish_to_sns(subject: str, message: str) -> None:
     except Exception as e:
         logger.error(f"Failed to publish to SNS: {e}")
 
-def write_back_to_securityhub_note(finding_ids: Set[str], note_text: str) -> None:
-    note_text = note_text
-
-    try:
-        # BatchUpdateFindings requires identifiers (Id + ProductArn)
-        # Ids here are from the event; ProductArn is present in each finding.
-        # Identifiers will be reconstructed from event payload in handler.
-        pass
-    except Exception as e:
-        logger.error(f"Failed to write back to Security Hub: {e}")
-
 def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
     if not findings:
