@@ -17,7 +17,12 @@ securityhub = boto3.client("securityhub")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 THREAT_INTEL_SECRET_ARN = os.environ.get("THREAT_INTEL_SECRET_ARN")
 SECURITYHUB_REGION = os.environ.get("SECURITYHUB_REGION")
-WRITE_TO_SECURITYHUB = os.environ.get("WRITE_TO_SECURITYHUB", "true")
+
+def _env_truthy(name: str, default: str = "true") -> bool:
+    v = os.environ.get(name, default).strip().lower()
+    return v in ("1", "true", "yes", "y", "on")
+
+WRITE_TO_SECURITYHUB = _env_truthy("WRITE_TO_SECURITYHUB", "true")
 
 # CACHE SECRET ACROSS INVOCATIONS
 _cached_abuseipdb_key: Optional[str] = None
