@@ -203,11 +203,11 @@ def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
     if not findings:
         logger.warning("No findings in event.")
-        return {"statuscode": 400, "body": json.dumps({"message": "No findings in event"})}
+        return {"statusCode": 400, "body": json.dumps({"message": "No findings in event"})}
     
     api_key = _get_abuseipdb_api_key()
     if not api_key:
-        return {"statuscode": 500, "body": json.dumps({"message": "Missing AbuseIPDB API key"})}
+        return {"statusCode": 500, "body": json.dumps({"message": "Missing AbuseIPDB API key"})}
     
     all_ips, ip_to_finding_ids = extract_ips_and_map_findings(findings)
     logger.info(f"Unique IPs extracted: {len(all_ips)}")
