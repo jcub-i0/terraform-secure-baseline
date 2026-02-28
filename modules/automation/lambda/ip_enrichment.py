@@ -77,7 +77,7 @@ def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
             found.add(ip)
         for ip in _IPV6_RE.findall(obj):
             # FILTER OBVIOUS FALSE POSITIVES, LIKE "::::"
-            if ":" in ip and len(ip) >= 3:
+            if ip.count(":") >= 2 and re.search(r"[0-9a-fA-F]", ip) and len(ip) >= 8:
                 found.add(ip)
 
 def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[str], Dict[str, Set[str]]]:
