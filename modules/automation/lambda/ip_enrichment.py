@@ -165,3 +165,19 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         lines.append("")
     
     return "\n".join(lines)
+
+def publish_to_sns(subject: str, message: str) -> None:
+    if not SNS_TOPIC_ARN:
+        logger.warning("SNS_TOPIC_ARN not set; skipping publish.")
+        return
+    
+    try:
+        sns.publish(
+            TopicArn = SNS_TOPIC_ARN,
+            Subject = subject[:100], # SNS subject line is 100 chars
+            Message = message
+        )
+        logger.info("SNS notification sent.")
+    except Exception as e:
+        logger.error(f"Failed to publish to SNS: {e}")
+
