@@ -81,8 +81,41 @@ def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
             if ":" in ip and len(ip) >= 3:
                 found.add(ip)
 
-def extract_ips_and_map_findings(): # DEFINE THIS FUNCTION -- IT IS NOT DONE.
-    pass
+def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[str], Dict[str, Set[str]]]:
+    """
+    Returns:
+        all_ips: unique set of IPs discovered across findings
+        ip_to_finding_ids: map ip -> set of finding IDs that referenced it
+    """
+    all_ips: Set[str] = set()
+    ip_to_finding_ids: Dict[str, Set[str]] = {}
+
+    for f in findings:
+        finding_id = f.get("Id", "Unknown")
+        local_ips: Set[str] = set()
+
+        # 1) NETWORK SECTION (COMMON IN GUARDDUTY-STYLE FINDINGS)
+        network = f.get("Network") or {}
+        for k in ("SourceIpV4", "SourceIpV6", "DesitinationIpV4", "DestinationIpV6"):
+            v = network.get(k)
+            if isinstance(v, str) and v:
+                local_ips.add(v)
+
+        # 2) PRODUCTFIELDS (OFTEN CONTAIN IP-RELATED STRINGS)
+        product_fields = f.get("ProductFields") or {}
+        _find_ips_in_obj(product_fields, local_ips)
+
+        # 3) GENERIC SCAN OF THE FINDING (SAFE FALLBACK)
+        _find_ips_in_obj(f, local_ips)
+
+        # NORMALIZE / RECORD FINDINGS
+        for ip in local_ips:
+            all_ips.add(ip)
+            ip_to_finding_ids.setdefault(ip, set()).add(finding_id)
+
+        if len(all_ips) >= MAX_IPS_PER_EVENT:
+            logger.warning(f"Hit MAX_IPS_PER_EVENT={MAX_IPS_PER_EVENT}. Truncating.")
+            break
 
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
