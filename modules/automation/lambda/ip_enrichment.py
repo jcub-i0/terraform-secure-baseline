@@ -18,6 +18,7 @@ securityhub = boto3.client("securityhub")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 THREAT_INTEL_SECRET_ARN = os.environ.get("THREAT_INTEL_SECRET_ARN")
 WRITE_TO_SECURITYHUB = os.environ.get("WRITE_TO_SECURITYHUB", "true").lower() in ("1", "true", "yes")
+MAX_IPS_EXTRACTED = int(os.environ.get("MAX_IPS_EXTRACTED", "200"))
 
 # CACHE SECRET ACROSS INVOCATIONS
 _cached_abuseipdb_key: Optional[str] = None
@@ -113,8 +114,8 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
             all_ips.add(ip)
             ip_to_finding_ids.setdefault(ip, set()).add(finding_id)
 
-        if len(all_ips) >= MAX_IPS_PER_EVENT:
-            logger.warning(f"Hit MAX_IPS_PER_EVENT={MAX_IPS_PER_EVENT}. Truncating.")
+        if len(all_ips) >= MAX_IPS_EXTRACTED:
+            logger.warning(f"Hit MAX_IPS_EXTRACTED={MAX_IPS_EXTRACTED}. Truncating exctraction.")
             break
 
     return all_ips, ip_to_finding_ids
