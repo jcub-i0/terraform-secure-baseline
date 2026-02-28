@@ -117,6 +117,8 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
             logger.warning(f"Hit MAX_IPS_PER_EVENT={MAX_IPS_PER_EVENT}. Truncating.")
             break
 
+    return all_ips, ip_to_finding_ids
+
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
     params = {
