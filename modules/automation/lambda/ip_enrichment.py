@@ -154,6 +154,10 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
+    lines.append(f"Findings in event: {len(set(fid for entry in enriched for fid in entry.get('findingIds', [])))}")
+    lines.append(f"IPs extracted: {sum(1 for _ in enriched)} (public-only)")
+    lines.append(f"Writeback enabled: {WRITE_TO_SECURITYHUB}")
+    lines.append("")
     lines.append("🧠 IP Threat Intel Enrichment")
     lines.append("")
     lines.append(f"Enriched IPs: {len(enriched)}")
