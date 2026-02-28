@@ -159,7 +159,7 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         isp = entry.get("isp", "N/A")
         usage = entry.get("usageType", "N/A")
         tor = entry.get("isTor", "N/A")
-        reports = entry.get("reports", "N/A")
+        reports = entry.get("totalReports", "N/A")
         last = entry.get("lastReportedAt", "N/A")
         finding_ids = entry.get("findingIds", [])
 
