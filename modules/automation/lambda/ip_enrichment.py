@@ -16,7 +16,6 @@ securityhub = boto3.client("securityhub")
 
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 THREAT_INTEL_SECRET_ARN = os.environ.get("THREAT_INTEL_SECRET_ARN")
-SECURITYHUB_REGION = os.environ.get("SECURITYHUB_REGION")
 WRITE_TO_SECURITYHUB = os.environ.get("WRITE_TO_SECURITYHUB", "true").lower() in ("1", "true", "yes")
 
 # CACHE SECRET ACROSS INVOCATIONS
