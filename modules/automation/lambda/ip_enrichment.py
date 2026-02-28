@@ -115,7 +115,7 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
             ip_to_finding_ids.setdefault(ip, set()).add(finding_id)
 
         if len(all_ips) >= MAX_IPS_EXTRACTED:
-            logger.warning(f"Hit MAX_IPS_EXTRACTED={MAX_IPS_EXTRACTED}. Truncating exctraction.")
+            logger.warning(f"Hit MAX_IPS_EXTRACTED={MAX_IPS_EXTRACTED}. Truncating extraction.")
             break
 
     return all_ips, ip_to_finding_ids
@@ -216,8 +216,6 @@ def lambda_handler(event, context):
     enriched: List[Dict[str, Any]] = []
     public_ips = [ip for ip in sorted(all_ips) if is_public_ip(ip)]
     for ip in public_ips[:MAX_IPS_PER_EVENT]:
-        if not is_public_ip(ip):
-            continue
         result = query_abuse_ipdb(ip, api_key)
         if not result:
             continue
