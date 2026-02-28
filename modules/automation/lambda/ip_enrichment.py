@@ -38,7 +38,7 @@ def _get_abuseipdb_api_key() -> Optional[str]:
         return _cached_abuseipdb_key
     
     if not THREAT_INTEL_SECRET_ARN:
-        logger.exception("THREAT_INTEL_SECRET_ARN is not set.")
+        logger.error("THREAT_INTEL_SECRET_ARN is not set.")
         return None
     
     try:
