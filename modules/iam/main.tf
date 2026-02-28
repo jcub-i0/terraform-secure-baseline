@@ -493,6 +493,14 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
           "securityhub:BatchUpdateFindings"
         ]
         Resource = "*"
+      },
+      # ALLOW LAMBDA TO RETRIEVE THREAT_INTEL_API_KEYS FROM SECRETS MANAGER
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "*"
       }
     ]
   })
