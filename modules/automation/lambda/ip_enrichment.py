@@ -45,13 +45,13 @@ def _get_abuseipdb_api_key() -> Optional[str]:
         resp = secretsmanager.get_secret_value(SecretId=THREAT_INTEL_SECRET_ARN)
         secret_str = resp.get("SecretString","")
         if not secret_str:
-            logger.exception("SecretString is empty for THREAT_INTEL_SECRET_ARN.")
+            logger.error("SecretString is empty for THREAT_INTEL_SECRET_ARN.")
             return None
         
         secret_json = json.loads(secret_str)
         key = secret_json.get("ABUSEIPDB_API_KEY") or secret_json.get("abuseipdb_api_key")
         if not key:
-            logger.exception("Secret does not contain ABUSEIPDB_API_KEY.")
+            logger.error("Secret does not contain ABUSEIPDB_API_KEY.")
             return None
         
         _cached_abuseipdb_key = key
