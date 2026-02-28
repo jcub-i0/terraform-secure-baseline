@@ -17,12 +17,7 @@ securityhub = boto3.client("securityhub")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 THREAT_INTEL_SECRET_ARN = os.environ.get("THREAT_INTEL_SECRET_ARN")
 SECURITYHUB_REGION = os.environ.get("SECURITYHUB_REGION")
-
-def _env_truthy(name: str, default: str = "true") -> bool:
-    v = os.environ.get(name, default).strip().lower()
-    return v in ("1", "true", "yes", "y", "on")
-
-WRITE_TO_SECURITYHUB = _env_truthy("WRITE_TO_SECURITYHUB", "true")
+WRITE_TO_SECURITYHUB = os.environ.get("WRITE_TO_SECURITYHUB", "true").lower() in ("1", "true", "yes")
 
 # CACHE SECRET ACROSS INVOCATIONS
 _cached_abuseipdb_key: Optional[str] = None
@@ -34,7 +29,7 @@ _IPV6_RE = re.compile(r"\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b")
 
 # GUARDRAILS
 MAX_IPS_PER_EVENT = int(os.environ.get("MAX_IPS_PER_EVENT", "25"))
-ABUSEIPDB_MAX_AGE_DAYS = os.environ.get("ABUSEIPDB_MAX_AGE_DAYS", "90")
+ABUSEIPDB_MAX_AGE_DAYS = int(os.environ.get("ABUSEIPDB_MAX_AGE_DAYS", "90"))
 
 
 def _get_abuseipdb_api_key() -> Optional[str]:
@@ -258,7 +253,7 @@ def lambda_handler(event, context):
             top = enriched[:5]
             note_lines = ["IP enrichment (AbuseIPDB):"]
             for e in top:
-                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')}")
+                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryName')} tor={e.get('isTor')}")
             note = "\n".join(note_lines)
 
             securityhub.batch_update_findings(
