@@ -192,3 +192,72 @@ def write_back_to_securityhub_note(finding_ids: Set[str], note_text: str) -> Non
     except Exception as e:
         logger.error(f"Failed to write back to Security Hub: {e}")
 
+def lambda_handler(event, context):
+    findings = (event.get("detail") or {}).get("findings") or []
+    if not findings:
+        logger.warning("No findings in event.")
+        return {"statuscode": 400, "body": json.dumps({"message": "No findings in event"})}
+    
+    api_key = _get_abuseipdb_api_key()
+    if not api_key:
+        return {"statuscode": 500, "body": json.dumps({"message": "Missing AbuseIPDB API key"})}
+    
+    all_ips, ip_to_finding_ids = extract_ips_and_map_findings(findings)
+    logger.info(f"Unique IPs extracted: {len(all_ips)}")
+
+    enriched: List[Dict[str, Any]] = []
+    for ip in list(all_ips)[:MAX_IPS_PER_EVENT]:
+        result = query_abuse_ipdb(ip, api_key)
+        if not result:
+            continue
+
+        enriched.append({
+            "ip": ip,
+            "findingIds": sorted(list(ip_to_finding_ids.get(ip, set()))),
+            "abuseConfidenceScore": result.get("abuseConfidenceScore"),
+            "countryName": result.get("countryName"),
+            "usageType": result.get("usageType"),
+            "domain": result.get("domain"),
+            "hostnames": result.get("hostnames"),
+            "isp": result.get("isp"),
+            "isTor": result.get("isTor"),
+            "totalReports": result.get("totalReports"),
+            "lastReportedAt": result.get("lastReportedAt"),
+        })
+
+    if not enriched:
+        logger.info("No enrichment results returned.")
+        return {"statusCode": 200, "body": json.dumps({"message": "No IPs enriched", "resultCount": 0})}
+    
+    message = format_enrichment_message(enriched)
+    subject = f"🧠 IP Threat Intel Report: {len(enriched)} IP{'s' if len(enriched) != 1 else ''} Enriched"
+    publish_to_sns(subject, message)
+
+    if WRITE_TO_SECURITYHUB:
+        try:
+            identifiers = []
+            for f in findings:
+                fid = f.get("Id")
+                product_arn = f.get("ProductArn")
+                if fid and product_arn:
+                    identifiers.append({"Id": fid, "ProductArn": product_arn})
+
+            # Short note containing top enriched IPs and scores
+            top = enriched[:5]
+            note_lines = ["IP enrichment (AbuseIPDB):"]
+            for e in top:
+                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')}")
+            note = "\n".join(note_lines)
+
+            securityhub.batch_update_findings(
+                FindingIdentifiers=identifiers,
+                Note={
+                    "Text": note[:1024],
+                    "UpdatedBy": "tf-secure-baseline/ip-enrichment",
+                },
+            )
+            logger.info("Wrote enrichment note back to Security Hub findings.")
+        except Exception as e:
+            logger.error(f"Security Hub write-back failed: {e}")
+
+    return {"statusCode": 200, "body": json.dumps({"message": "Processing complete", "resultCount": len(enriched)})}
