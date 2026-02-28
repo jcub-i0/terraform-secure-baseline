@@ -38,20 +38,20 @@ def _get_abuseipdb_api_key() -> Optional[str]:
         return _cached_abuseipdb_key
     
     if not THREAT_INTEL_SECRET_ARN:
-        logger.error("THREAT_INTEL_SECRET_ARN is not set.")
+        logger.exception("THREAT_INTEL_SECRET_ARN is not set.")
         return None
     
     try:
         resp = secretsmanager.get_secret_value(SecretId=THREAT_INTEL_SECRET_ARN)
         secret_str = resp.get("SecretString","")
         if not secret_str:
-            logger.error("SecretString is empty for THREAT_INTEL_SECRET_ARN.")
+            logger.exception("SecretString is empty for THREAT_INTEL_SECRET_ARN.")
             return None
         
         secret_json = json.loads(secret_str)
         key = secret_json.get("ABUSEIPDB_API_KEY") or secret_json.get("abuseipdb_api_key")
         if not key:
-            logger.error("Secret does not contain ABUSEIPDB_API_KEY.")
+            logger.exception("Secret does not contain ABUSEIPDB_API_KEY.")
             return None
         
         _cached_abuseipdb_key = key
@@ -149,7 +149,7 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
             return parsed.get("data", {})
         
     except Exception as e:
-        logger.error(f"Error querying AbuseIPDB for {ip}: {e}")
+        logger.exception(f"Error querying AbuseIPDB for {ip}: {e}")
         return None
     
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
@@ -193,7 +193,7 @@ def publish_to_sns(subject: str, message: str) -> None:
         )
         logger.info("SNS notification sent.")
     except Exception as e:
-        logger.error(f"Failed to publish to SNS: {e}")
+        logger.exception(f"Failed to publish to SNS: {e}")
 
 def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
@@ -263,6 +263,6 @@ def lambda_handler(event, context):
             )
             logger.info("Wrote enrichment note back to Security Hub findings.")
         except Exception as e:
-            logger.error(f"Security Hub write-back failed: {e}")
+            logger.exception(f"Security Hub write-back failed: {e}")
 
     return {"statusCode": 200, "body": json.dumps({"message": "Processing complete", "resultCount": len(enriched)})}
