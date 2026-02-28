@@ -96,7 +96,7 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
 
         # 1) NETWORK SECTION (COMMON IN GUARDDUTY-STYLE FINDINGS)
         network = f.get("Network") or {}
-        for k in ("SourceIpV4", "SourceIpV6", "DesitinationIpV4", "DestinationIpV6"):
+        for k in ("SourceIpV4", "SourceIpV6", "DestinationIpV4", "DestinationIpV6"):
             v = network.get(k)
             if isinstance(v, str) and v:
                 local_ips.add(v)
