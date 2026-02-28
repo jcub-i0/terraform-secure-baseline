@@ -213,7 +213,8 @@ def lambda_handler(event, context):
     logger.info(f"Unique IPs extracted: {len(all_ips)}")
 
     enriched: List[Dict[str, Any]] = []
-    for ip in sorted(all_ips)[:MAX_IPS_PER_EVENT]:
+    public_ips = [ip for ip in sorted(all_ips) if is_public_ip(ip)]
+    for ip in public_ips[:MAX_IPS_PER_EVENT]:
         if not is_public_ip(ip):
             continue
         result = query_abuse_ipdb(ip, api_key)
