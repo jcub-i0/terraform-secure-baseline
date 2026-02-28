@@ -107,3 +107,9 @@ variable "ip_enrichment_write_to_securityhub" {
   type        = bool
   default     = true
 }
+
+variable "abuseipdb_api_key" {
+  description = "AbuseIPDB API key for IP Enrichment Lamba"
+  type = string
+  sensitive = true
+}
