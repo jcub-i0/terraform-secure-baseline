@@ -122,6 +122,11 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
     params = {
+        "ipAddress": ip,
+        "maxAgeInDays": ABUSEIPDB_MAX_AGE_DAYS
+    }
+
+    headers = {
         "Accept": "application/json",
         "Key": api_key,
         "User-Agent": "tf-secure-baseline-ip-enrichment/1.0",
