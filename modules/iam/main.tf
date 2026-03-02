@@ -474,7 +474,8 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
       {
         Effect = "Allow"
         Action = [
-          "secretsmanager:GetSecretValue"
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
         ]
         Resource = var.threat_intel_api_keys_arn
       },
@@ -493,8 +494,28 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
           "securityhub:BatchUpdateFindings"
         ]
         Resource = "*"
+      },
+      # CONSIDER REMOVING THE BELOW STATEMENT FOR ALL LAMBDAS
+      # ALLOW LAMBDA TO CALL LOGS KMS KEY
+      {
+        Effect = "Allow",
+        Action = [
+          "kms:GenerateDataKey",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ],
+        Resource = var.logs_kms_key_arn
+      },
+      # ALLOW LAMBDA TO CALL SECRETS MANAGER KMS KEY
+      {
+        Effect = "Allow",
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ],
+        Resource = var.secrets_manager_cmk_arn
       }
-      # ADD POLICY STATEMENT HERE FOR DECRYPTING IN SECRETSMANAGER
     ]
   })
 }
