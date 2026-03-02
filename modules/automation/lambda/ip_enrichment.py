@@ -211,7 +211,7 @@ def publish_to_sns(subject: str, message: str) -> None:
     try:
         sns.publish(
             TopicArn=SNS_TOPIC_ARN,
-            Subject=subject[:100], # SNS subject line is 100 chars
+            Subject=subject[:100], # SNS subject line limited to 100 chars
             Message=message
         )
         logger.info("SNS notification sent.")
