@@ -46,6 +46,10 @@ variable "lambda_kms_key_arn" {
   type = string
 }
 
+variable "secrets_manager_cmk_arn" {
+  type = string
+}
+
 variable "interface_endpoints_sg_id" {
   type = string
 }
