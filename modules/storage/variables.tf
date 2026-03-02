@@ -45,3 +45,7 @@ variable "cloudtrail_arn" {
 variable "bucket_admin_principles" {
   type = list(string)
 }
+
+variable "secrets_manager_cmk_arn" {
+  type = string
+}
