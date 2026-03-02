@@ -48,7 +48,7 @@ module "storage" {
   random_id                    = random_id.random_id.hex
   cloudtrail_arn               = module.logging.cloudtrail_arn
   bucket_admin_principles      = var.bucket_admin_principles
-  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
+  secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
 }
 
 module "iam" {
