@@ -470,7 +470,7 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # READ API KEY SECRET
+      # ALLOW LAMBDA TO RETRIEVE THREAT_INTEL_API_KEYS FROM SECRETS MANAGER
       {
         Effect = "Allow"
         Action = [
@@ -491,14 +491,6 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
         Effect = "Allow"
         Action = [
           "securityhub:BatchUpdateFindings"
-        ]
-        Resource = "*"
-      },
-      # ALLOW LAMBDA TO RETRIEVE THREAT_INTEL_API_KEYS FROM SECRETS MANAGER
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
         ]
         Resource = "*"
       }
