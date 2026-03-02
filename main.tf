@@ -64,6 +64,7 @@ module "iam" {
   secops_event_bus_arn                  = module.automation.secops_event_bus_arn
   threat_intel_api_keys_arn             = module.automation.threat_intel_api_keys_arn
   lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
+  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
 }
 
 module "security" {
