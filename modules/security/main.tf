@@ -340,60 +340,13 @@ resource "aws_kms_key" "ebs" {
   }
 }
 
-## SECRETS MANAGER CMK
-resource "aws_kms_key" "secrets_manager" {
-  description = "CMK for encrypting Secrets Manager secrets"
-  enable_key_rotation = true
-  deletion_window_in_days = 30
-
-  lifecycle {
-    prevent_destroy = false # CHANGE THIS IN PROD
-  }
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # FULL ACCESS FOR ROOT ACCOUNT
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      # ALLOW SECRETS MANAGER SERVICE TO USE THIS KEY
-      {
-        Sid = "AllowSecretsManager"
-        Effect = "Allow"
-        Principal = {
-          Service = "secretsmanager.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-
-  tags = {
-    Name = "Secrets-Manager-CMK"
-    Terraform = "true"
-  }
-}
-
 ### EBS KMS KEY ALIAS
 resource "aws_kms_alias" "ebs" {
   name          = "alias/ebs-cmk"
   target_key_id = aws_kms_key.ebs.id
 }
 
-# KMS KEY FOR LAMBDA
+## KMS KEY FOR LAMBDA
 resource "aws_kms_key" "lambda" {
   description             = "CMK for Lambda environment variable encryption"
   enable_key_rotation     = true
@@ -441,10 +394,57 @@ resource "aws_kms_key" "lambda" {
   }
 }
 
-## ALIAS FOR LAMBDA KMS KEY
+### ALIAS FOR LAMBDA KMS KEY
 resource "aws_kms_alias" "lambda" {
   name          = "alias/lambda-cmk"
   target_key_id = aws_kms_key.lambda.id
+}
+
+## SECRETS MANAGER CMK
+resource "aws_kms_key" "secrets_manager" {
+  description = "CMK for encrypting Secrets Manager secrets"
+  enable_key_rotation = true
+  deletion_window_in_days = 30
+
+  lifecycle {
+    prevent_destroy = false # CHANGE THIS IN PROD
+  }
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # FULL ACCESS FOR ROOT ACCOUNT
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      # ALLOW SECRETS MANAGER SERVICE TO USE THIS KEY
+      {
+        Sid = "AllowSecretsManager"
+        Effect = "Allow"
+        Principal = {
+          Service = "secretsmanager.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "Secrets-Manager-CMK"
+    Terraform = "true"
+  }
 }
 
 # CONFIG BASELINE MODULE
