@@ -72,6 +72,7 @@ resource "aws_db_instance" "main" {
 ## Create a secret in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "rds_master" {
   name_prefix = "rds-secret-"
+  kms_key_id = var.secrets_manager_cmk_arn
 }
 
 ## Generate random secret
