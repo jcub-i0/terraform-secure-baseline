@@ -402,8 +402,8 @@ resource "aws_kms_alias" "lambda" {
 
 ## SECRETS MANAGER CMK
 resource "aws_kms_key" "secrets_manager" {
-  description = "CMK for encrypting Secrets Manager secrets"
-  enable_key_rotation = true
+  description             = "CMK for encrypting Secrets Manager secrets"
+  enable_key_rotation     = true
   deletion_window_in_days = 30
 
   lifecycle {
@@ -425,7 +425,7 @@ resource "aws_kms_key" "secrets_manager" {
       },
       # ALLOW SECRETS MANAGER SERVICE TO USE THIS KEY
       {
-        Sid = "AllowSecretsManager"
+        Sid    = "AllowSecretsManager"
         Effect = "Allow"
         Principal = {
           Service = "secretsmanager.amazonaws.com"
@@ -442,13 +442,13 @@ resource "aws_kms_key" "secrets_manager" {
   })
 
   tags = {
-    Name = "Secrets-Manager-CMK"
+    Name      = "Secrets-Manager-CMK"
     Terraform = "true"
   }
 }
 
 resource "aws_kms_alias" "secrets_manager" {
-  name = "alias/tf-secure-baseline/secrets"
+  name          = "alias/tf-secure-baseline/secrets"
   target_key_id = aws_kms_key.secrets_manager.arn
 }
 
