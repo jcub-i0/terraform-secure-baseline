@@ -10,6 +10,10 @@ variable "logs_kms_key_arn" {
   type = string
 }
 
+variable "secrets_manager_cmk_arn" {
+  type = string
+}
+
 variable "account_id" {
   type = string
 }
