@@ -494,6 +494,7 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
         ]
         Resource = "*"
       }
+      # ADD POLICY STATEMENT HERE FOR DECRYPTING IN SECRETSMANAGER
     ]
   })
 }
