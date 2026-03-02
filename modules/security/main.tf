@@ -447,6 +447,11 @@ resource "aws_kms_key" "secrets_manager" {
   }
 }
 
+resource "aws_kms_alias" "secrets_manager" {
+  name = "alias/tf-secure-baseline/secrets"
+  target_key_id = aws_kms_key.secrets_manager.arn
+}
+
 # CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
