@@ -173,6 +173,9 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
+    lines.append(f"A Security Hub finding has one or more public IP addresses associated with it.")
+    lines.append(f"Below is the pertinent IP data, pulled from AbuseIPDB:")
+    lines.append(f"")
     lines.append(f"Findings in event: {len(set(fid for entry in enriched for fid in entry.get('findingIds', [])))}")
     lines.append(f"IPs enriched: {len(enriched)} (public-only)")
     lines.append(f"Writeback enabled: {WRITE_TO_SECURITYHUB}")
@@ -245,15 +248,16 @@ def lambda_handler(event, context):
         enriched.append({
             "ip": ip,
             "findingIds": sorted(list(ip_to_finding_ids.get(ip, set()))),
-            "abuseConfidenceScore": result.get("abuseConfidenceScore"),
-            "countryName": result.get("countryName"),
-            "usageType": result.get("usageType"),
-            "domain": result.get("domain"),
-            "hostnames": result.get("hostnames"),
-            "isp": result.get("isp"),
-            "isTor": result.get("isTor"),
-            "totalReports": result.get("totalReports"),
-            "lastReportedAt": result.get("lastReportedAt"),
+            "abuseConfidenceScore": result.get("abuseConfidenceScore") or "Unknown",
+            "countryCode": result.get("countryCode") or "Unknown",
+            "countryName": result.get("countryName") or "Unknown",
+            "usageType": result.get("usageType") or "Unknown",
+            "domain": result.get("domain") or "Unknown",
+            "hostnames": result.get("hostnames") or "Unknown",
+            "isp": result.get("isp") or "Unknown",
+            "isTor": result.get("isTor") or "Unknown",
+            "totalReports": result.get("totalReports") or "Unknown",
+            "lastReportedAt": result.get("lastReportedAt") or "Unknown",
         })
 
     if not enriched:
