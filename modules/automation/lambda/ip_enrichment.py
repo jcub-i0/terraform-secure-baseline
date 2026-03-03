@@ -232,10 +232,14 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         lines.append(f"    • Last reported: {last}")
         if finding_ids:
             lines.append(f"    • Finding IDs: {', '.join(finding_ids[:5])}{'…' if len(finding_ids) > 5 else ''}")
-        if raw_score >= 90:
-            lines.append("    • Recommended action: Immediate investigation / instance isolation")
-        elif raw_score >= 60:
-            lines.append("    • Recommended action: Review VPC Flow Logs and related activity")
+        if raw_score is None:
+            lines.append("    • Recommended action: No reputation data available. Validate activity and monitor.")
+        elif raw_score >= 90:
+            lines.append("    • Recommended action: Immediate investigation. Consider instance isolation and credential review.")
+        elif 60 <= raw_score < 90:
+            lines.append("    • Recommended action: Investigate associated activity. Review VPC Flow Logs and related findings.")
+        else:
+            lines.append("    • Recommended action: Verify activity is expected and monitor for recurrence.")
     
     return "\n".join(lines)
 
