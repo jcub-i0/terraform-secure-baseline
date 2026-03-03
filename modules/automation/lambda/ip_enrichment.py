@@ -185,10 +185,19 @@ def abuse_severity(score: Optional[int]) -> str:
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
 
-    high_risk = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) >= 60]
+    critical_risk = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) >= 90]
+    high_risk = [e for e in enriched if 60 <= (e.get("abuseConfidenceScore") or 0) < 90]
+    suspicious = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) < 60]
+
+    if critical_risk:
+        lines.append(f"🚨 {len(critical_risk)} Critical-risk IP(s) detected.")
+        lines.append("")
     if high_risk:
-        lines.insert(0, f"⚠️ {len(high_risk)} high-risk IP(s) detected.")
-        lines.insert(1, "")
+        lines.append(f"⚠️ {len(high_risk)} High-risk IP(s) detected.")
+        lines.append("")
+    if not (critical_risk or high_risk):
+        lines.append(f"🟡 {len(suspicious)} Suspicious IP(s) detected.")
+        lines.append("")
         
     lines.append(f"A Security Hub finding has one or more public IP addresses associated with it.")
     lines.append(f"Below is the pertinent IP data, pulled from AbuseIPDB:")
@@ -223,7 +232,6 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         lines.append(f"    • Last reported: {last}")
         if finding_ids:
             lines.append(f"    • Finding IDs: {', '.join(finding_ids[:5])}{'…' if len(finding_ids) > 5 else ''}")
-        lines.append("")
         if raw_score >= 90:
             lines.append("    • Recommended action: Immediate investigation / instance isolation")
         elif raw_score >= 60:
