@@ -210,6 +210,17 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     
     return "\n".join(lines)
 
+def abuse_severity(score: Optional[int]) -> str:
+    if score is None:
+        return "Unknown"
+    if score >= 90:
+        return "Critical"
+    if score >= 60:
+        return "High"
+    if score >= 30:
+        return "Medium"
+    return "Low"
+
 def publish_to_sns(subject: str, message: str) -> None:
     if not SNS_TOPIC_ARN:
         logger.warning("SNS_TOPIC_ARN not set; skipping publish.")
