@@ -193,8 +193,6 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines.append("")
     lines.append("🧠 IP Threat Intel Enrichment")
     lines.append("")
-    lines.append(f"Enriched IPs: {len(enriched)}")
-    lines.append("")
 
     for entry in enriched:
         ip = entry.get("ip", "N/A")
