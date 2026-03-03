@@ -175,12 +175,12 @@ def abuse_severity(score: Optional[int]) -> str:
     if not isinstance(score, int):
         return "Unknown"
     if score >= 90:
-        return "Critical"
+        return "CRITICAL 🚨"
     if score >= 60:
-        return "High"
+        return "HIGH ⚠️"
     if score >= 30:
-        return "Medium"
-    return "Low"
+        return "Medium 🟠"
+    return "Low 🔵"
 
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
@@ -224,6 +224,10 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         if finding_ids:
             lines.append(f"    • Finding IDs: {', '.join(finding_ids[:5])}{'…' if len(finding_ids) > 5 else ''}")
         lines.append("")
+        if raw_score >= 90:
+            lines.append("    • Recommended action: Immediate investigation / instance isolation")
+        elif raw_score >= 60:
+            lines.append("    • Recommended action: Review VPC Flow Logs and related activity")
     
     return "\n".join(lines)
 
