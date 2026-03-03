@@ -172,7 +172,7 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
         return None
     
 def abuse_severity(score: Optional[int]) -> str:
-    if score is None:
+    if not isinstance(score, int):
         return "Unknown"
     if score >= 90:
         return "Critical"
@@ -198,7 +198,9 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
 
     for entry in enriched:
         ip = entry.get("ip", "N/A")
-        score = entry.get("abuseConfidenceScore", "N/A")
+        raw_score = entry.get("abuseConfidenceScore")
+        severity = abuse_severity(raw_score)
+        str_score = str(raw_score) if isinstance(raw_score, int) else "Unknown"
         country = entry.get("countryCode", "N/A")
         isp = entry.get("isp", "N/A")
         usage = entry.get("usageType", "N/A")
@@ -208,7 +210,7 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         finding_ids = entry.get("findingIds", [])
 
         lines.append(f"🌐 IP address: {ip}")
-        lines.append(f"    • Abuse score: {score}")
+        lines.append(f"    • Abuse score: {str_score} ({severity})")
         lines.append(f"    • Country: {country}")
         lines.append(f"    • ISP: {isp}")
         lines.append(f"    • Usage: {usage}")
@@ -259,7 +261,7 @@ def lambda_handler(event, context):
         enriched.append({
             "ip": ip,
             "findingIds": sorted(list(ip_to_finding_ids.get(ip, set()))),
-            "abuseConfidenceScore": result.get("abuseConfidenceScore") or "Unknown",
+            "abuseConfidenceScore": result.get("abuseConfidenceScore"),
             "countryCode": result.get("countryCode") or "Unknown",
             "usageType": result.get("usageType") or "Unknown",
             "domain": result.get("domain") or "Unknown",
