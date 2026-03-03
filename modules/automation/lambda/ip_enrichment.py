@@ -188,7 +188,8 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     for entry in enriched:
         ip = entry.get("ip", "N/A")
         score = entry.get("abuseConfidenceScore", "N/A")
-        country = entry.get("countryName", "N/A")
+        countrycode = entry.get("countryCode", "N/A")
+        countryname = entry.get("countryName", "N/A")
         isp = entry.get("isp", "N/A")
         usage = entry.get("usageType", "N/A")
         tor = entry.get("isTor", "N/A")
@@ -198,7 +199,8 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
 
         lines.append(f"🌐 IP address: {ip}")
         lines.append(f"    • Abuse score: {score}")
-        lines.append(f"    • Country: {country}")
+        lines.append(f"    • Country Code: {countrycode}")
+        lines.append(f"    • Country Name: {countryname}")
         lines.append(f"    • ISP: {isp}")
         lines.append(f"    • Usage: {usage}")
         lines.append(f"    • Tor: {tor}")
@@ -281,7 +283,7 @@ def lambda_handler(event, context):
             top = enriched[:5]
             note_lines = ["IP enrichment (AbuseIPDB):"]
             for e in top:
-                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryName')} tor={e.get('isTor')}")
+                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country_code={e.get('countryCode')} country_name={e.get('countryName')} tor={e.get('isTor')}")
             note = "\n".join(note_lines)
 
             securityhub.batch_update_findings(
