@@ -171,6 +171,17 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
         logger.exception(f"Error querying AbuseIPDB for {ip}: {e}")
         return None
     
+def abuse_severity(score: Optional[int]) -> str:
+    if score is None:
+        return "Unknown"
+    if score >= 90:
+        return "Critical"
+    if score >= 60:
+        return "High"
+    if score >= 30:
+        return "Medium"
+    return "Low"
+
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
     lines.append(f"A Security Hub finding has one or more public IP addresses associated with it.")
@@ -209,17 +220,6 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         lines.append("")
     
     return "\n".join(lines)
-
-def abuse_severity(score: Optional[int]) -> str:
-    if score is None:
-        return "Unknown"
-    if score >= 90:
-        return "Critical"
-    if score >= 60:
-        return "High"
-    if score >= 30:
-        return "Medium"
-    return "Low"
 
 def publish_to_sns(subject: str, message: str) -> None:
     if not SNS_TOPIC_ARN:
