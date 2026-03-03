@@ -193,10 +193,14 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         last = entry.get("lastReportedAt", "N/A")
         finding_ids = entry.get("findingIds", [])
 
-        lines.append(f"🌐 {ip}")
+        lines.append(f"🌐 IP address: {ip}")
         lines.append(f"    • Abuse score: {score}")
-        lines.append(f"    • Country: {country} | ISP: {isp} | Usage: {usage} | Tor: {tor}")
-        lines.append(f"    • Reports: {reports} | Last reported: {last}")
+        lines.append(f"    • Country: {country}")
+        lines.append(f"    • ISP: {isp}")
+        lines.append(f"    • Usage: {usage}")
+        lines.append(f"    • Tor: {tor}")
+        lines.append(f"    • Reports: {reports}")
+        lines.append(f"    • Last reported: {last}")
         if finding_ids:
             lines.append(f"    • Finding IDs: {', '.join(finding_ids[:5])}{'…' if len(finding_ids) > 5 else ''}")
         lines.append("")
