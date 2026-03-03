@@ -184,6 +184,12 @@ def abuse_severity(score: Optional[int]) -> str:
 
 def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
+
+    high_risk = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) >= 60]
+    if high_risk:
+        lines.insert(0, f"⚠️ {len(high_risk)} high-risk IP(s) detected.")
+        lines.insert(1, "")
+        
     lines.append(f"A Security Hub finding has one or more public IP addresses associated with it.")
     lines.append(f"Below is the pertinent IP data, pulled from AbuseIPDB:")
     lines.append(f"")
