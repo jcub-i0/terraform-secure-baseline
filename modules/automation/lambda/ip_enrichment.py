@@ -259,9 +259,9 @@ def lambda_handler(event, context):
     if not enriched:
         logger.info("No enrichment results returned.")
         return {"statusCode": 200, "body": json.dumps({"message": "No IPs enriched", "resultCount": 0})}
-    
+
+    subject = f"🧠 IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
     message = format_enrichment_message(enriched)
-    subject = f"🧠 IP Threat Intel Report: {len(enriched)} IP{'s' if len(enriched) != 1 else ''} Enriched"
     publish_to_sns(subject, message)
 
     if WRITE_TO_SECURITYHUB:
