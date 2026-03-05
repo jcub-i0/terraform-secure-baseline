@@ -66,3 +66,15 @@ variable "abuseipdb_api_key" {
   type      = string
   sensitive = true
 }
+
+variable "ip_enrich_max_ips_per_event" {
+  type = string
+}
+
+variable "ip_enrich_abuseipdb_max_age" {
+  type = string
+}
+
+variable "ip_enrich_max_ips_extracted" {
+  type = string
+}
