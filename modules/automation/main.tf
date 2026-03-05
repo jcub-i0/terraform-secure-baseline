@@ -97,6 +97,20 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   source_arn    = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
 }
 
+### CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
+resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
+  name              = "/aws/lambda/ec2-isolation"
+  retention_in_days = 30
+  kms_key_id        = var.logs_kms_key_arn
+
+  depends_on = [aws_lambda_function.ec2_isolation]
+
+  tags = {
+    Name      = "Lambda-EC2-Isolation-Logs"
+    Terraform = "true"
+  }
+}
+
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
 data "archive_file" "lambda_ec2_rollback" {
