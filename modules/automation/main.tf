@@ -59,7 +59,7 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
 ### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   name        = "securityhub-ec2-high-critical"
-  description = "High/Critical Security Hub EC2 findings"
+  description = "New High/Critical Security Hub EC2 findings"
 
   event_pattern = jsonencode({
     source      = ["aws.securityhub"],
@@ -104,7 +104,7 @@ data "archive_file" "lambda_ec2_rollback" {
   output_path = "${path.module}/lambda/ec2_rollback.zip"
 }
 
-## EC2 ROLLBACK LAMBDA FUCNTION
+## EC2 ROLLBACK LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_rollback" {
   function_name    = "ec2-rollback"
   description      = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
@@ -226,4 +226,119 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   function_name = aws_lambda_function.ec2_rollback.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
+}
+
+# IP ENRICHMENT LAMBDA RESOURCES
+data "archive_file" "lambda_ip_enrichment" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/ip_enrichment.py"
+  output_path = "${path.module}/lambda/ip_enrichment.zip"
+}
+
+resource "aws_lambda_function" "ip_enrichment" {
+  function_name                  = "ip-enrichment"
+  description                    = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"
+  role                           = var.lambda_ip_enrichment_role_arn
+  handler                        = "ip_enrichment.lambda_handler"
+  runtime                        = "python3.12"
+  filename                       = data.archive_file.lambda_ip_enrichment.output_path
+  timeout                        = 60
+  memory_size                    = 256
+  source_code_hash               = data.archive_file.lambda_ip_enrichment.output_base64sha256
+  kms_key_arn                    = var.lambda_kms_key_arn
+  reserved_concurrent_executions = 2
+
+  # ENABLE X-RAY TRACING
+  tracing_config {
+    mode = "Active"
+  }
+
+  # NO VPC_CONFIG HERE (SO THE FUNCTION CAN REACH INTERNET WITHOUT NAT)
+
+  environment {
+    variables = {
+      SNS_TOPIC_ARN           = var.secops_topic_arn
+      THREAT_INTEL_SECRET_ARN = aws_secretsmanager_secret.threat_intel_api_keys.arn
+      WRITE_TO_SECURITYHUB    = var.ip_enrichment_write_to_securityhub
+      MAX_IPS_PER_EVENT       = var.ip_enrich_max_ips_per_event
+      ABUSEIPDB_MAX_AGE_DAYS  = var.ip_enrich_abuseipdb_max_age
+      MAX_IPS_EXTRACTED       = var.ip_enrich_max_ips_extracted
+    }
+  }
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_ip_enrichment
+  ]
+
+  tags = {
+    Name      = "IP-Enrichment"
+    Terraform = "true"
+  }
+}
+
+### STORE IP ENRICHMENT'S API KEYS IN AWS SECRETS MANAGER
+resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
+  name_prefix = "tf-secure-baseline/threat-intel/api-keys-"
+  description = "API keys for external threat intel providers (AbuseIPDB, VirusTotal, etc.)"
+  kms_key_id  = var.secrets_manager_cmk_arn
+
+  tags = {
+    Name      = "Threat-Intel-API-Keys"
+    Terraform = "true"
+  }
+}
+
+#### STORE THREAT INTEL API KEYS FOR IP ENRICHMENT FUNCTION IN AWS SECRETS MANAGER
+resource "aws_secretsmanager_secret_version" "threat_intel_api_keys" {
+  secret_id = aws_secretsmanager_secret.threat_intel_api_keys.id
+
+  secret_string = jsonencode({
+    ABUSEIPDB_API_KEY = var.abuseipdb_api_key
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "securityhub_high_critical" {
+  name        = "securityhub-high-critical"
+  description = "New High/Critical Security Hub findings"
+
+  event_pattern = jsonencode({
+    source      = ["aws.securityhub"],
+    detail-type = ["Security Hub Findings - Imported"],
+    detail = {
+      findings = {
+        Severity = {
+          Label = ["HIGH", "CRITICAL"]
+        },
+        Workflow = {
+          Status = ["NEW"]
+        }
+      }
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "ip_enrichment" {
+  rule      = aws_cloudwatch_event_rule.securityhub_high_critical.name
+  target_id = "IpEnrichment"
+  arn       = aws_lambda_function.ip_enrichment.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
+  statement_id  = "AllowExecutionFromEventBridgeIpEnrichment"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ip_enrichment.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.securityhub_high_critical.arn
+}
+
+### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA
+resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
+  name              = "/aws/lambda/ip-enrichment"
+  retention_in_days = 30
+  kms_key_id        = var.logs_kms_key_arn
+
+  tags = {
+    Name      = "Lambda-IP-Enrichment-Logs"
+    Terraform = "true"
+  }
 }

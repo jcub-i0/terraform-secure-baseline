@@ -101,3 +101,33 @@ variable "config_enabled" {
   type    = bool
   default = false
 }
+
+variable "ip_enrichment_write_to_securityhub" {
+  description = "Define whether you want the IP Enrichment Lambda function to write its enrichments to SecurityHub findings"
+  type        = bool
+  default     = true
+}
+
+variable "abuseipdb_api_key" {
+  description = "AbuseIPDB API key for IP Enrichment Lamba"
+  type        = string
+  sensitive   = true
+}
+
+variable "ip_enrich_max_ips_per_event" {
+  description = "The MAX_IPS_PER_EVENT environment variable for the IP Enrichment Lambda function"
+  type        = string
+  default     = "25"
+}
+
+variable "ip_enrich_abuseipdb_max_age" {
+  description = "The ABUSEIPDB_MAX_AGE_DAYS environment variable for the IP Enrichment Lambda function"
+  type        = string
+  default     = "90"
+}
+
+variable "ip_enrich_max_ips_extracted" {
+  description = "The MAX_IPS_EXTRACTED environment variable for the IP Enrichment Lambda function"
+  type        = string
+  default     = "200"
+}

@@ -3,7 +3,6 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 resource "random_id" "random_id" { byte_length = 4 }
 
-
 # MODULES
 module "networking" {
   source = "./modules/networking"
@@ -49,6 +48,7 @@ module "storage" {
   random_id                    = random_id.random_id.hex
   cloudtrail_arn               = module.logging.cloudtrail_arn
   bucket_admin_principles      = var.bucket_admin_principles
+  secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
 }
 
 module "iam" {
@@ -62,6 +62,9 @@ module "iam" {
   flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
   flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
   secops_event_bus_arn                  = module.automation.secops_event_bus_arn
+  threat_intel_api_keys_arn             = module.automation.threat_intel_api_keys_arn
+  lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
+  secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
 }
 
 module "security" {
@@ -110,6 +113,7 @@ module "automation" {
   vpc_id                                   = module.networking.vpc_id
   lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
+  lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
   serverless_private_subnet_ids            = module.networking.serverless_private_subnet_ids_list
   quarantine_sg_id                         = module.compute.quarantine_sg_id
   secops_topic_arn                         = module.monitoring.secops_topic_arn
@@ -119,6 +123,13 @@ module "automation" {
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
   lambda_kms_key_arn                       = module.security.lambda_kms_key_arn
   interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
+  logs_kms_key_arn                         = module.security.logs_kms_key_arn
+  ip_enrichment_write_to_securityhub       = var.ip_enrichment_write_to_securityhub
+  abuseipdb_api_key                        = var.abuseipdb_api_key
+  secrets_manager_cmk_arn                  = module.security.secrets_manager_cmk_arn
+  ip_enrich_max_ips_per_event              = var.ip_enrich_max_ips_per_event
+  ip_enrich_abuseipdb_max_age              = var.ip_enrich_abuseipdb_max_age
+  ip_enrich_max_ips_extracted              = var.ip_enrich_max_ips_extracted
 }
 
 module "vpc_endpoints" {

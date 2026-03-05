@@ -71,7 +71,8 @@ resource "aws_db_instance" "main" {
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
 ## Create a secret in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "rds_master" {
-  name = "rds-secret"
+  name_prefix = "rds-secret-"
+  kms_key_id  = var.secrets_manager_cmk_arn
 }
 
 ## Generate random secret

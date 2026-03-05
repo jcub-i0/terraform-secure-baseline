@@ -18,6 +18,16 @@ output "lambda_kms_key_arn" {
   value       = aws_kms_key.lambda.arn
 }
 
+output "secrets_manager_cmk_arn" {
+  description = "ARN of the SecretsManager CMK"
+  value       = aws_kms_key.secrets_manager.arn
+}
+
+output "secrets_manager_cmk_alias_arn" {
+  description = "ARN of the SecretsManager CMK's alias"
+  value       = aws_kms_alias.secrets_manager.arn
+}
+
 output "tamper_detection_rule_name" {
   value = module.tamper_detection.tamper_detection_rule_name
 }

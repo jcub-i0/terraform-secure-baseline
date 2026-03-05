@@ -10,6 +10,10 @@ variable "logs_kms_key_arn" {
   type = string
 }
 
+variable "secrets_manager_cmk_arn" {
+  type = string
+}
+
 variable "account_id" {
   type = string
 }
@@ -31,5 +35,13 @@ variable "flowlogs_log_group_arn" {
 }
 
 variable "secops_event_bus_arn" {
+  type = string
+}
+
+variable "threat_intel_api_keys_arn" {
+  type = string
+}
+
+variable "lambda_ip_enrichment_log_group_arn" {
   type = string
 }
