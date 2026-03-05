@@ -281,7 +281,7 @@ resource "aws_lambda_function" "ip_enrichment" {
 ### STORE IP ENRICHMENT'S API KEYS IN AWS SECRETS MANAGER
 resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
   name_prefix = "tf-secure-baseline/threat-intel/api-keys-"
-  description = "API keys for external threat intel providers (AbuseIPDB, VirusTotal, etc.)"
+  description = "API keys for external threat intel providers (AbuseIPDB)"
   kms_key_id  = var.secrets_manager_cmk_arn
 
   tags = {
