@@ -204,7 +204,7 @@ resource "aws_kms_key" "logs" {
       },
       ### ALLOW CLOUDWATCH ALARMS
       {
-        Sid    = "AllowCloudwatchAlarms"
+        Sid    = "AllowCloudwatch"
         Effect = "Allow"
         Principal = {
           Service = "cloudwatch.amazonaws.com"
