@@ -17,14 +17,26 @@ resource "aws_sns_topic_policy" "compliance" {
   arn = aws_sns_topic.compliance.arn
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "config.amazonaws.com"
+    Statement = [
+      # ALLOW ROOT
+      {
+        Sid = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action = "sns:*"
+        Resource = aws_sns_topic.secops.arn
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.compliance.arn
       }
-      Action   = "sns:Publish"
-      Resource = aws_sns_topic.compliance.arn
-    }]
+    ]
   })
 }
 
@@ -47,6 +59,16 @@ resource "aws_sns_topic_policy" "secops" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # ALLOW ROOT
+      {
+        Sid = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action = "sns:*"
+        Resource = aws_sns_topic.secops.arn
+      },
       {
         Sid    = "AllowCloudTrailPublish"
         Effect = "Allow"
