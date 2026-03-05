@@ -230,6 +230,18 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
 }
 
+### CLOUDWATCH LOG GROUP FOR EC2 ROLLBACK LAMBDA
+resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
+  name              = "/aws/lambda/ec2-rollback"
+  retention_in_days = 30
+  kms_key_id        = var.logs_kms_key_arn
+
+  tags = {
+    Name      = "Lambda-EC2-Rollback-Logs"
+    Terraform = "true"
+  }
+}
+
 # IP ENRICHMENT LAMBDA RESOURCES
 data "archive_file" "lambda_ip_enrichment" {
   type        = "zip"
