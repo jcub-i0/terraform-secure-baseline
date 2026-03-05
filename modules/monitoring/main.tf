@@ -25,7 +25,7 @@ resource "aws_sns_topic_policy" "compliance" {
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action   = [
+        Action = [
           "SNS:GetTopicAttributes",
           "SNS:SetTopicAttributes",
           "SNS:AddPermission",
@@ -75,7 +75,7 @@ resource "aws_sns_topic_policy" "secops" {
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action   = [
+        Action = [
           "SNS:GetTopicAttributes",
           "SNS:SetTopicAttributes",
           "SNS:AddPermission",
