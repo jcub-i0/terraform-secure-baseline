@@ -37,6 +37,10 @@ resource "aws_lambda_function" "ec2_isolation" {
     }
   }
 
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_ec2_isolation
+  ]
+
   tags = {
     Name      = "EC2-Isolation"
     Terraform = "true"
@@ -103,8 +107,6 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   retention_in_days = 30
   kms_key_id        = var.logs_kms_key_arn
 
-  depends_on = [aws_lambda_function.ec2_isolation]
-
   tags = {
     Name      = "Lambda-EC2-Isolation-Logs"
     Terraform = "true"
@@ -148,6 +150,10 @@ resource "aws_lambda_function" "ec2_rollback" {
       SNS_TOPIC_ARN = var.secops_topic_arn
     }
   }
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_ec2_rollback
+  ]
 
   tags = {
     Name      = "EC2-Rollback"
@@ -249,8 +255,6 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   name              = "/aws/lambda/ec2-rollback"
   retention_in_days = 30
   kms_key_id        = var.logs_kms_key_arn
-
-  depends_on = [aws_lambda_function.ec2_rollback]
 
   tags = {
     Name      = "Lambda-EC2-Rollback-Logs"
@@ -366,8 +370,6 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   name              = "/aws/lambda/ip-enrichment"
   retention_in_days = 30
   kms_key_id        = var.logs_kms_key_arn
-
-  depends_on = [aws_lambda_function.ip_enrichment]
 
   tags = {
     Name      = "Lambda-IP-Enrichment-Logs"
