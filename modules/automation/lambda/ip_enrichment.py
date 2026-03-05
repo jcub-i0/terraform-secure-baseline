@@ -212,6 +212,7 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     for entry in enriched:
         ip = entry.get("ip", "N/A")
         raw_score = entry.get("abuseConfidenceScore")
+        raw_score = raw_score if isinstance(raw_score, int) else None
         severity = abuse_severity(raw_score)
         str_score = str(raw_score) if isinstance(raw_score, int) else "Unknown"
         country = entry.get("countryCode", "N/A")
