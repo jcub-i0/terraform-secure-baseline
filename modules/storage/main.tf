@@ -78,8 +78,8 @@ resource "aws_secretsmanager_secret" "rds_master" {
 
 ## Generate random secret
 ephemeral "aws_secretsmanager_random_password" "rds_master" {
-  password_length = 20
-  exclude_punctuation = true
+  password_length            = 20
+  exclude_punctuation        = true
   require_each_included_type = true
 }
 
@@ -284,7 +284,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = "${aws_s3_bucket.centralized_logs.arn}/Config/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"                    = "bucket-owner-full-control"
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
