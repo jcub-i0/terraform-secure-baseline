@@ -8,16 +8,16 @@ data "archive_file" "lambda_ec2_isolation" {
 
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
-  function_name    = "ec2-isolation"
-  description      = "Isolate EC2 resources by sending them to the Quarantine SG when a HIGH/CRITICAL Security Hub finding is observed on an instance"
-  role             = var.lambda_ec2_isolation_role_arn
-  handler          = "ec2_isolation.lambda_handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.lambda_ec2_isolation.output_path
-  timeout          = 60
-  memory_size      = 256
-  source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
-  kms_key_arn      = var.lambda_kms_key_arn
+  function_name                  = "ec2-isolation"
+  description                    = "Isolate EC2 resources by sending them to the Quarantine SG when a HIGH/CRITICAL Security Hub finding is observed on an instance"
+  role                           = var.lambda_ec2_isolation_role_arn
+  handler                        = "ec2_isolation.lambda_handler"
+  runtime                        = "python3.12"
+  filename                       = data.archive_file.lambda_ec2_isolation.output_path
+  timeout                        = 60
+  memory_size                    = 256
+  source_code_hash               = data.archive_file.lambda_ec2_isolation.output_base64sha256
+  kms_key_arn                    = var.lambda_kms_key_arn
   reserved_concurrent_executions = 5
 
   # ENABLE X-RAY TRACING FOR LAMBDA FUNC
@@ -107,16 +107,16 @@ data "archive_file" "lambda_ec2_rollback" {
 
 ## EC2 ROLLBACK LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_rollback" {
-  function_name    = "ec2-rollback"
-  description      = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
-  role             = var.lambda_ec2_rollback_role_arn
-  handler          = "ec2_rollback.lambda_handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.lambda_ec2_rollback.output_path
-  timeout          = 60
-  memory_size      = 256
-  source_code_hash = data.archive_file.lambda_ec2_rollback.output_base64sha256
-  kms_key_arn      = var.lambda_kms_key_arn
+  function_name                  = "ec2-rollback"
+  description                    = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
+  role                           = var.lambda_ec2_rollback_role_arn
+  handler                        = "ec2_rollback.lambda_handler"
+  runtime                        = "python3.12"
+  filename                       = data.archive_file.lambda_ec2_rollback.output_path
+  timeout                        = 60
+  memory_size                    = 256
+  source_code_hash               = data.archive_file.lambda_ec2_rollback.output_base64sha256
+  kms_key_arn                    = var.lambda_kms_key_arn
   reserved_concurrent_executions = 5
 
   # ENABLE X-RAY TRACING
