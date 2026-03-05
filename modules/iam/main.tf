@@ -320,17 +320,6 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
           "sns:Publish"
         ],
         Resource = var.secops_topic_arn
-      },
-      # ALLOW LAMBDA TO CALL LOGS KMS KEY
-      {
-        Effect = "Allow",
-        Action = [
-          "kms:GenerateDataKey",
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:DescribeKey"
-        ],
-        Resource = var.logs_kms_key_arn
       }
     ]
   })
@@ -402,17 +391,6 @@ resource "aws_iam_policy" "lambda_ec2_rollback" {
           "sns:Publish"
         ],
         Resource = var.secops_topic_arn
-      },
-      # ALLOW LAMBDA TO CALL LOGS KMS KEY
-      {
-        Effect = "Allow",
-        Action = [
-          "kms:GenerateDataKey",
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:DescribeKey"
-        ],
-        Resource = var.logs_kms_key_arn
       }
     ]
   })
@@ -495,18 +473,6 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
         ]
         Resource = "*"
       },
-      # CONSIDER REMOVING THE BELOW STATEMENT FOR ALL LAMBDAS
-      # ALLOW LAMBDA TO CALL LOGS KMS KEY
-      {
-        Effect = "Allow",
-        Action = [
-          "kms:GenerateDataKey",
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:DescribeKey"
-        ],
-        Resource = var.logs_kms_key_arn
-      },
       # ALLOW LAMBDA TO CALL SECRETS MANAGER KMS KEY
       {
         Effect = "Allow",
@@ -520,6 +486,7 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
   })
 }
 
+### ATTACH LAMBDA_IP_ENRICHMENT IAM POLICY TO IP ENRICHMENT LAMBDA
 resource "aws_iam_role_policy_attachment" "ip_enrichment" {
   role       = aws_iam_role.lambda_ip_enrichment.name
   policy_arn = aws_iam_policy.lambda_ip_enrichment.arn

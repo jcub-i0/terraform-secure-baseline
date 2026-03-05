@@ -141,24 +141,9 @@ resource "aws_kms_key" "logs" {
           }
         }
       },
-      ### ALLOW AWS CONFIG
-      {
-        Sid    = "AllowConfig"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action = [
-          "kms:GenerateDataKey*",
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
       ### ALLOW AWS CONFIG SERVICE LINKED ROLE
       {
-        Sid    = "AllowConfig"
+        Sid    = "AllowConfigServiceRole"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
@@ -219,7 +204,7 @@ resource "aws_kms_key" "logs" {
       },
       ### ALLOW CLOUDWATCH ALARMS
       {
-        Sid    = "AllowCloudwatchAlarms"
+        Sid    = "AllowCloudwatch"
         Effect = "Allow"
         Principal = {
           Service = "cloudwatch.amazonaws.com"

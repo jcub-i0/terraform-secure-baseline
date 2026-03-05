@@ -8,16 +8,17 @@ data "archive_file" "lambda_ec2_isolation" {
 
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
-  function_name    = "ec2-isolation"
-  description      = "Isolate EC2 resources by sending them to the Quarantine SG when a HIGH/CRITICAL Security Hub finding is observed on an instance"
-  role             = var.lambda_ec2_isolation_role_arn
-  handler          = "ec2_isolation.lambda_handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.lambda_ec2_isolation.output_path
-  timeout          = 60
-  memory_size      = 256
-  source_code_hash = data.archive_file.lambda_ec2_isolation.output_base64sha256
-  kms_key_arn      = var.lambda_kms_key_arn
+  function_name                  = "ec2-isolation"
+  description                    = "Isolate EC2 resources by sending them to the Quarantine SG when a HIGH/CRITICAL Security Hub finding is observed on an instance"
+  role                           = var.lambda_ec2_isolation_role_arn
+  handler                        = "ec2_isolation.lambda_handler"
+  runtime                        = "python3.12"
+  filename                       = data.archive_file.lambda_ec2_isolation.output_path
+  timeout                        = 60
+  memory_size                    = 256
+  source_code_hash               = data.archive_file.lambda_ec2_isolation.output_base64sha256
+  kms_key_arn                    = var.lambda_kms_key_arn
+  reserved_concurrent_executions = 5
 
   # ENABLE X-RAY TRACING FOR LAMBDA FUNC
   tracing_config {
@@ -35,6 +36,10 @@ resource "aws_lambda_function" "ec2_isolation" {
       SNS_TOPIC_ARN    = var.secops_topic_arn
     }
   }
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_ec2_isolation
+  ]
 
   tags = {
     Name      = "EC2-Isolation"
@@ -55,8 +60,8 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   }
 }
 
-## EVENTBRIDGE RESOURCES
-### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
+### EVENTBRIDGE RESOURCES
+#### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   name        = "securityhub-ec2-high-critical"
   description = "New High/Critical Security Hub EC2 findings"
@@ -80,20 +85,32 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   })
 }
 
-### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
+#### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_isolation" {
   rule      = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
   target_id = "Ec2Isolation"
   arn       = aws_lambda_function.ec2_isolation.arn
 }
 
-### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
+#### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
 resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   statement_id  = "AllowExecutionFromEventBridgeEc2Isolation"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ec2_isolation.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
+}
+
+### CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
+resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
+  name              = "/aws/lambda/ec2-isolation"
+  retention_in_days = 30
+  kms_key_id        = var.logs_kms_key_arn
+
+  tags = {
+    Name      = "Lambda-EC2-Isolation-Logs"
+    Terraform = "true"
+  }
 }
 
 # EC2 ROLLBACK LAMBDA RESOURCES
@@ -106,16 +123,17 @@ data "archive_file" "lambda_ec2_rollback" {
 
 ## EC2 ROLLBACK LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_rollback" {
-  function_name    = "ec2-rollback"
-  description      = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
-  role             = var.lambda_ec2_rollback_role_arn
-  handler          = "ec2_rollback.lambda_handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.lambda_ec2_rollback.output_path
-  timeout          = 60
-  memory_size      = 256
-  source_code_hash = data.archive_file.lambda_ec2_rollback.output_base64sha256
-  kms_key_arn      = var.lambda_kms_key_arn
+  function_name                  = "ec2-rollback"
+  description                    = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
+  role                           = var.lambda_ec2_rollback_role_arn
+  handler                        = "ec2_rollback.lambda_handler"
+  runtime                        = "python3.12"
+  filename                       = data.archive_file.lambda_ec2_rollback.output_path
+  timeout                        = 60
+  memory_size                    = 256
+  source_code_hash               = data.archive_file.lambda_ec2_rollback.output_base64sha256
+  kms_key_arn                    = var.lambda_kms_key_arn
+  reserved_concurrent_executions = 5
 
   # ENABLE X-RAY TRACING
   tracing_config {
@@ -132,6 +150,10 @@ resource "aws_lambda_function" "ec2_rollback" {
       SNS_TOPIC_ARN = var.secops_topic_arn
     }
   }
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_ec2_rollback
+  ]
 
   tags = {
     Name      = "EC2-Rollback"
@@ -152,13 +174,13 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
   }
 }
 
-## EVENTBRIDGE RESOURCES
-### CUSTOM EVENT BUS TO LIMIT ONLY SECURITY OPERATIONS USERS TO TRIGGER EC2 ROLLBACK
+### EVENTBRIDGE RESOURCES
+#### CUSTOM EVENT BUS TO LIMIT ONLY SECURITY OPERATIONS USERS TO TRIGGER EC2 ROLLBACK
 resource "aws_cloudwatch_event_bus" "secops" {
   name = "security-operations-bus"
 }
 
-### SECURITY OPERATIONS EVENT BUS POLICY
+#### SECURITY OPERATIONS EVENT BUS POLICY
 resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
   event_bus_name = aws_cloudwatch_event_bus.secops.name
   policy = jsonencode({
@@ -198,7 +220,7 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
   })
 }
 
-### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
+#### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
 resource "aws_cloudwatch_event_rule" "ec2_rollback" {
   name           = "ec2-rollback-rule"
   description    = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
@@ -211,7 +233,7 @@ resource "aws_cloudwatch_event_rule" "ec2_rollback" {
   force_destroy = true
 }
 
-### EVENT TARGET FOR EC2 ROLLBACK EVENT RULE
+#### EVENT TARGET FOR EC2 ROLLBACK EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_rollback" {
   rule           = aws_cloudwatch_event_rule.ec2_rollback.name
   event_bus_name = aws_cloudwatch_event_bus.secops.name
@@ -219,13 +241,25 @@ resource "aws_cloudwatch_event_target" "ec2_rollback" {
   arn            = aws_lambda_function.ec2_rollback.arn
 }
 
-### ALLOW EVENTBRIDGE TO INVOKE EC2 ROLLBACK LAMBDA
+#### ALLOW EVENTBRIDGE TO INVOKE EC2 ROLLBACK LAMBDA
 resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   statement_id  = "AllowExecutionFromEventBridgeEc2Rollback"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ec2_rollback.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
+}
+
+### CLOUDWATCH LOG GROUP FOR EC2 ROLLBACK LAMBDA
+resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
+  name              = "/aws/lambda/ec2-rollback"
+  retention_in_days = 30
+  kms_key_id        = var.logs_kms_key_arn
+
+  tags = {
+    Name      = "Lambda-EC2-Rollback-Logs"
+    Terraform = "true"
+  }
 }
 
 # IP ENRICHMENT LAMBDA RESOURCES
@@ -279,7 +313,7 @@ resource "aws_lambda_function" "ip_enrichment" {
 ### STORE IP ENRICHMENT'S API KEYS IN AWS SECRETS MANAGER
 resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
   name_prefix = "tf-secure-baseline/threat-intel/api-keys-"
-  description = "API keys for external threat intel providers (AbuseIPDB, VirusTotal, etc.)"
+  description = "API keys for external threat intel providers (AbuseIPDB)"
   kms_key_id  = var.secrets_manager_cmk_arn
 
   tags = {
