@@ -190,13 +190,13 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     suspicious = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) < 60]
 
     if critical_risk:
-        lines.append(f"🚨 {len(critical_risk)} Critical-risk IP(s) detected.")
+        lines.append(f"🚨 {len(critical_risk)} Critical-risk IP{'s' if len(critical_risk) != 1 else ''} detected.")
         lines.append("")
     if high_risk:
-        lines.append(f"⚠️ {len(high_risk)} High-risk IP(s) detected.")
+        lines.append(f"⚠️ {len(high_risk)} High-risk IP{'s' if len(high_risk) != 1 else ''} detected.")
         lines.append("")
     if not (critical_risk or high_risk):
-        lines.append(f"🟡 {len(suspicious)} Suspicious IP(s) detected.")
+        lines.append(f"🟡 {len(suspicious)} Suspicious IP{'s' if len(suspicious) != 1 else ''} detected.")
         lines.append("")
         
     lines.append(f"A Security Hub finding has one or more public IP addresses associated with it.")
