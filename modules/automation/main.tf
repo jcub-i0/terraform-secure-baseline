@@ -236,6 +236,8 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   retention_in_days = 30
   kms_key_id        = var.logs_kms_key_arn
 
+  depends_on = [aws_lambda_function.ec2_rollback]
+
   tags = {
     Name      = "Lambda-EC2-Rollback-Logs"
     Terraform = "true"
@@ -350,6 +352,8 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   name              = "/aws/lambda/ip-enrichment"
   retention_in_days = 30
   kms_key_id        = var.logs_kms_key_arn
+
+  depends_on = [aws_lambda_function.ip_enrichment]
 
   tags = {
     Name      = "Lambda-IP-Enrichment-Logs"
