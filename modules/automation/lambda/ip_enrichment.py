@@ -199,7 +199,7 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         lines.append(f"🟡 {len(suspicious)} Suspicious IP{'s' if len(suspicious) != 1 else ''} detected.")
         lines.append("")
         
-    lines.append(f"A Security Hub finding has one or more public IP addresses associated with it.")
+    lines.append(f"A Security Hub finding contains one or more public IP addresses.")
     lines.append(f"Below is the pertinent IP data, pulled from AbuseIPDB:")
     lines.append(f"")
     lines.append(f"Findings in event: {len(set(fid for entry in enriched for fid in entry.get('findingIds', [])))}")
