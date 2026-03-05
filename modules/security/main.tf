@@ -156,6 +156,26 @@ resource "aws_kms_key" "logs" {
         ]
         Resource = "*"
       },
+      ### ALLOW CONFIG SERVICE PRINCIPAL
+      {
+        Sid    = "AllowConfigServicePrincipal"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
+      },
       ### ALLOW VPC FLOW LOGS / CLOUDWATCH LOGS
       {
         Sid    = "AllowLogs"
