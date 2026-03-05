@@ -71,7 +71,7 @@ resource "aws_db_instance" "main" {
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
 ## Create a secret in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "rds_master" {
-  name_prefix = "tf-secure-baseline/database/${aws_db_instance.main.db_name}/master-"
+  name_prefix = "tf-secure-baseline/database/rds-master-"
   description = "Main RDS DB's master key"
   kms_key_id  = var.secrets_manager_cmk_arn
 }
