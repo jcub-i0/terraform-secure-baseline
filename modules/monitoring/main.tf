@@ -25,8 +25,17 @@ resource "aws_sns_topic_policy" "compliance" {
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action   = "sns:*"
-        Resource = aws_sns_topic.secops.arn
+        Action   = [
+          "SNS:GetTopicAttributes",
+          "SNS:SetTopicAttributes",
+          "SNS:AddPermission",
+          "SNS:RemovePermission",
+          "SNS:DeleteTopic",
+          "SNS:Subscribe",
+          "SNS:ListSubscriptionsByTopic",
+          "SNS:Publish"
+        ]
+        Resource = aws_sns_topic.compliance.arn
       },
       {
         Effect = "Allow"
@@ -66,7 +75,16 @@ resource "aws_sns_topic_policy" "secops" {
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action   = "sns:*"
+        Action   = [
+          "SNS:GetTopicAttributes",
+          "SNS:SetTopicAttributes",
+          "SNS:AddPermission",
+          "SNS:RemovePermission",
+          "SNS:DeleteTopic",
+          "SNS:Subscribe",
+          "SNS:ListSubscriptionsByTopic",
+          "SNS:Publish"
+        ]
         Resource = aws_sns_topic.secops.arn
       },
       {
