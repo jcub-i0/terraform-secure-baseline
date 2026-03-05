@@ -314,6 +314,10 @@ def lambda_handler(event, context):
                 if fid and product_arn:
                     identifiers.append({"Id": fid, "ProductArn": product_arn})
 
+            if not identifiers:
+                logger.warning("No valid finding identifers; skipping Security Hub writeback.")
+                return {"statusCode": 200, "body": json.dumps({"message": "No valid identifers for Security Hub writeback"})}
+
             # Short note containing top enriched IPs and scores
             top = enriched[:5]
             note_lines = ["IP enrichment (AbuseIPDB):"]
