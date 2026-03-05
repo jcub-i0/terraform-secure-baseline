@@ -20,12 +20,12 @@ resource "aws_sns_topic_policy" "compliance" {
     Statement = [
       # ALLOW ROOT
       {
-        Sid = "EnableRootPermissions"
+        Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action = "sns:*"
+        Action   = "sns:*"
         Resource = aws_sns_topic.secops.arn
       },
       {
@@ -61,12 +61,12 @@ resource "aws_sns_topic_policy" "secops" {
     Statement = [
       # ALLOW ROOT
       {
-        Sid = "EnableRootPermissions"
+        Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         }
-        Action = "sns:*"
+        Action   = "sns:*"
         Resource = aws_sns_topic.secops.arn
       },
       {

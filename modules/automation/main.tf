@@ -236,16 +236,16 @@ data "archive_file" "lambda_ip_enrichment" {
 }
 
 resource "aws_lambda_function" "ip_enrichment" {
-  function_name    = "ip-enrichment"
-  description      = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"
-  role             = var.lambda_ip_enrichment_role_arn
-  handler          = "ip_enrichment.lambda_handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.lambda_ip_enrichment.output_path
-  timeout          = 60
-  memory_size      = 256
-  source_code_hash = data.archive_file.lambda_ip_enrichment.output_base64sha256
-  kms_key_arn      = var.lambda_kms_key_arn
+  function_name                  = "ip-enrichment"
+  description                    = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"
+  role                           = var.lambda_ip_enrichment_role_arn
+  handler                        = "ip_enrichment.lambda_handler"
+  runtime                        = "python3.12"
+  filename                       = data.archive_file.lambda_ip_enrichment.output_path
+  timeout                        = 60
+  memory_size                    = 256
+  source_code_hash               = data.archive_file.lambda_ip_enrichment.output_base64sha256
+  kms_key_arn                    = var.lambda_kms_key_arn
   reserved_concurrent_executions = 2
 
   # ENABLE X-RAY TRACING

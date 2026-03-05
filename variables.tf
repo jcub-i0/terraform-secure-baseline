@@ -116,18 +116,18 @@ variable "abuseipdb_api_key" {
 
 variable "ip_enrich_max_ips_per_event" {
   description = "The MAX_IPS_PER_EVENT environment variable for the IP Enrichment Lambda function"
-  type = string
-  default = "25"
+  type        = string
+  default     = "25"
 }
 
 variable "ip_enrich_abuseipdb_max_age" {
   description = "The ABUSEIPDB_MAX_AGE_DAYS environment variable for the IP Enrichment Lambda function"
-  type = string
-  default = "90"
+  type        = string
+  default     = "90"
 }
 
 variable "ip_enrich_max_ips_extracted" {
   description = "The MAX_IPS_EXTRACTED environment variable for the IP Enrichment Lambda function"
-  type = string
-  default = "200"
+  type        = string
+  default     = "200"
 }

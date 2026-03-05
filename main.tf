@@ -127,9 +127,9 @@ module "automation" {
   ip_enrichment_write_to_securityhub       = var.ip_enrichment_write_to_securityhub
   abuseipdb_api_key                        = var.abuseipdb_api_key
   secrets_manager_cmk_arn                  = module.security.secrets_manager_cmk_arn
-  ip_enrich_max_ips_per_event = var.ip_enrich_max_ips_per_event
-  ip_enrich_abuseipdb_max_age = var.ip_enrich_abuseipdb_max_age
-  ip_enrich_max_ips_extracted = var.ip_enrich_max_ips_extracted
+  ip_enrich_max_ips_per_event              = var.ip_enrich_max_ips_per_event
+  ip_enrich_abuseipdb_max_age              = var.ip_enrich_abuseipdb_max_age
+  ip_enrich_max_ips_extracted              = var.ip_enrich_max_ips_extracted
 }
 
 module "vpc_endpoints" {
