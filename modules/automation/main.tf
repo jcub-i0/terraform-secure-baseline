@@ -246,6 +246,7 @@ resource "aws_lambda_function" "ip_enrichment" {
   memory_size      = 256
   source_code_hash = data.archive_file.lambda_ip_enrichment.output_base64sha256
   kms_key_arn      = var.lambda_kms_key_arn
+  reserved_concurrent_executions = 2
 
   # ENABLE X-RAY TRACING
   tracing_config {
