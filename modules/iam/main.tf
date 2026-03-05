@@ -520,6 +520,7 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
   })
 }
 
+### ATTACH LAMBDA_IP_ENRICHMENT IAM POLICY TO IP ENRICHMENT LAMBDA
 resource "aws_iam_role_policy_attachment" "ip_enrichment" {
   role       = aws_iam_role.lambda_ip_enrichment.name
   policy_arn = aws_iam_policy.lambda_ip_enrichment.arn
