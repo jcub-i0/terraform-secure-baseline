@@ -260,9 +260,9 @@ resource "aws_lambda_function" "ip_enrichment" {
       SNS_TOPIC_ARN           = var.secops_topic_arn
       THREAT_INTEL_SECRET_ARN = aws_secretsmanager_secret.threat_intel_api_keys.arn
       WRITE_TO_SECURITYHUB    = var.ip_enrichment_write_to_securityhub
-      MAX_IPS_PER_EVENT       = "25"
-      ABUSEIPDB_MAX_AGE_DAYS  = "90"
-      MAX_IPS_EXTRACTED       = "200"
+      MAX_IPS_PER_EVENT       = var.ip_enrich_max_ips_per_event
+      ABUSEIPDB_MAX_AGE_DAYS  = var.ip_enrich_abuseipdb_max_age
+      MAX_IPS_EXTRACTED       = var.ip_enrich_max_ips_extracted
     }
   }
 
