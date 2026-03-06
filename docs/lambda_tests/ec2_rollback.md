@@ -41,7 +41,7 @@ You should see '/SecOps-Operator/*' in the last 'Arn' line of the output.
 ### TEST 1 -- MANUAL ROLLBACK EVENT FROM AWS CLI
 #### Expected Outcome:
 * Lambda executes
-* Instance rollbacks from the Quarantine SG to its original SG
+* Instance rolls back from the Quarantine SG to its original SG
 * Tags applied to instance
 * SNS notification sent to configured SNS topic
 * No errors in logs
