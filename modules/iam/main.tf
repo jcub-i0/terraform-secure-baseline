@@ -465,6 +465,16 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
         ]
         Resource = var.secops_topic_arn
       },
+      # ALLOW USE OF LOGS KMS KEY (USED FOR SNS)
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = var.logs_kms_key_arn
+      },
       # ALLOW LAMBDA TO WRITE ENRICHMENT NOTES TO FINDINGS
       {
         Effect = "Allow"
