@@ -220,8 +220,8 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     if not (critical_risk or high_risk):
         lines.append(f"🟡 {len(suspicious)} Suspicious IP{'s' if len(suspicious) != 1 else ''} detected.")
         lines.append("")
-        
-    lines.append(f"A {finding_metadata['severity'].capitalize()}-severity Security Hub finding contains one or more public IP addresses.")
+    
+    lines.append(f"A {finding_metadata['severity']}-severity Security Hub finding contains one or more public IP addresses.")
     lines.append(f"Below is the pertinent IP data, pulled from AbuseIPDB:")
     lines.append(f"")
     lines.append(f"IPs enriched: {len(enriched)} (public-only)")
