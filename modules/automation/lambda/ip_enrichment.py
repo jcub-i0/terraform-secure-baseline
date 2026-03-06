@@ -353,10 +353,10 @@ def lambda_handler(event, context):
                 logger.warning("No valid finding identifers; skipping Security Hub writeback.")
                 return {"statusCode": 200, "body": json.dumps({"message": "No valid identifers for Security Hub writeback"})}
 
-            # Short note containing top enriched IPs and scores
-            top = enriched[:5]
+            # Short note containing 5 enriched IPs and scores
             note_lines = ["IP Enrichment (AbuseIPDB):"]
-            for e in top:
+            note_lines.append("EnrichedIPs: " + ",".join(sorted(e["ip"] for e in enriched)))
+            for e in enriched[:5]:
                 note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')}")
             note = "\n".join(note_lines)
 
