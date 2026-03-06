@@ -292,16 +292,15 @@ def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
     if note.get("UpdatedBy") != "tf-secure-baseline/ip-enrichment":
         return set()
     
-    found: Set[str] = set()
-
-    if isinstance(text, str):
-        for ip in _IPV4_RE.findall(text):
-            found.add(ip)
-        for ip in _IPV6_RE.findall(text):
-            if ip.count(":") >= 2 and re.search(r"[0-9a-fA-F]", ip) and len(ip) >= 8:
-                found.add(ip)
-
-    return found
+    if not isinstance(text, str):
+        return set()
+    
+    for line in text.splitlines():
+        if line.startswith("EnrichedIPs:"):
+            ips = line.replace("EnrichedIPs:", "").strip()
+            return set(i.strip() for i in ips.split(",") if i.strip())
+        
+    return set()
 
 def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
