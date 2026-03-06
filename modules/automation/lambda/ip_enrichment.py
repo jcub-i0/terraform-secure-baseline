@@ -308,8 +308,6 @@ def lambda_handler(event, context):
     if not findings:
         logger.warning("No findings in event.")
         return {"statusCode": 400, "body": json.dumps({"message": "No findings in event"})}
-    
-    findings = [f for f in findings if not already_enriched(f)]
 
     if not findings:
         logger.info("All findings already enriched; skipping.")
