@@ -226,7 +226,7 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
     lines.append(f"")
     lines.append(f"Findings in event: {len(set(fid for entry in enriched for fid in entry.get('findingIds', [])))}")
     lines.append(f"IPs enriched: {len(enriched)} (public-only)")
-    lines.append(f"Writeback enabled: {WRITE_TO_SECURITYHUB}")
+    lines.append(f"Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
     lines.append("")
     lines.append("🧠 IP Threat Intel Enrichment")
     lines.append("")
