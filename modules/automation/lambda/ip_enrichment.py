@@ -301,6 +301,39 @@ def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
         
     return set()
 
+def get_finding_metadata(findings: Dict[str, Any]) -> Dict[str, str]:
+    if not findings:
+        return {
+            "severity": "UNKNOWN",
+            "title": "Unknown finding",
+            "product": "Unknown product",
+            "account": "Unknown account",
+            "region": "Unknown region",
+            "resource": "Unknown resource",
+        }
+    
+    finding = finding[0]
+
+    severity = (finding.get("Severity") or {}).get("Label", "UNKNOWN")
+    title = finding.get("Title", "Unknown finding")
+    product = finding.get("ProductName", "Unknown product")
+    account = finding.get("AwsAccontId", "Unknown account")
+    region = finding.get("Region", "Unknown region")
+
+    resource = "Unknown resource"
+    resources = finding.get("Resources") or []
+    if resources and isinstance(resources, list):
+        resource = resources[0].get("Id", "Unknown resource")
+
+    return {
+        "severity": severity,
+        "title": title,
+        "product": product,
+        "account": account,
+        "region": region,
+        "resource": resource,
+    }
+
 def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
     if not findings:
