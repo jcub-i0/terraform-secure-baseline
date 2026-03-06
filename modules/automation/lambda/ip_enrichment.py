@@ -308,10 +308,6 @@ def lambda_handler(event, context):
     if not findings:
         logger.warning("No findings in event.")
         return {"statusCode": 400, "body": json.dumps({"message": "No findings in event"})}
-
-    if not findings:
-        logger.info("All findings already enriched; skipping.")
-        return {"statusCode": 200, "body": json.dumps({"message": "Findings already enriched; skipping"})}
     
     api_key = _get_abuseipdb_api_key()
     if not api_key:
