@@ -90,5 +90,5 @@ aws securityhub get-findings \
   --query 'Findings[].Note'
 ```
 If the "Note" JSON block is returned ("Text", "UpdatedBy", and "UpdatedAt" fields), the IP Enrichment Lambda successfully wrote to the Security Hub finding ✅
-> NOTE: You can also confirm via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
+> NOTE: You can also confirm this via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
 
