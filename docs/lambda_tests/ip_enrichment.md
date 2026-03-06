@@ -37,8 +37,13 @@ Manual test events used to validate Lambda automation behavior before and after 
 * If valid finding identifiers suppleid and 'WRITE_TO_SECURITYHUB=true', note written back to Security Hub finding
 * No errors in logs
 
-### Event JSON
-```json
+### Manual Event from AWS CLI:
+Run the following:
+```bash
+$ aws lambda invoke \
+  --function-name ip-enrichment \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
 {
   "version": "0",
   "id": "test-event-1",
@@ -52,12 +57,8 @@ Manual test events used to validate Lambda automation behavior before and after 
       {
         "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
         "ProductArn": "<REAL-PRODUCT-ARN>",
-        "Severity": {
-          "Label": "HIGH"
-        },
-        "Workflow": {
-          "Status": "NEW"
-        },
+        "Severity": { "Label": "HIGH" },
+        "Workflow": { "Status": "NEW" },
         "Network": {
           "SourceIpV4": "103.37.6.88"
         },
@@ -68,3 +69,7 @@ Manual test events used to validate Lambda automation behavior before and after 
     ]
   }
 }
+EOF
+)" \
+response.json && cat response.json && rm response.json
+'''
