@@ -33,6 +33,16 @@ _IPV6_RE = re.compile(r"\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b")
 MAX_IPS_PER_EVENT = int(os.environ.get("MAX_IPS_PER_EVENT", "25"))
 ABUSEIPDB_MAX_AGE_DAYS = int(os.environ.get("ABUSEIPDB_MAX_AGE_DAYS", "90"))
 
+EXCLUDED_IP_SCAN_FIELDS = {
+    "Note",
+    "Workflow",
+    "Severity",
+    "UserDefinedFields",
+    "VerificationState",
+    "RecordState",
+    "Compliance"
+}
+
 def _get_abuseipdb_api_key() -> Optional[str]:
     global _cached_abuseipdb_key
 
@@ -64,16 +74,24 @@ def _get_abuseipdb_api_key() -> Optional[str]:
         return None
     
 
-def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
+def _find_ips_in_obj(obj: Any, found: Set[str], excluded_keys: Optional[Set[str]] = None) -> None:
     """Recursively scan strings in dict/list structures for IP-like patterns"""
+    if excluded_keys is None:
+        excluded_keys = EXCLUDED_IP_SCAN_FIELDS
+
     if obj is None:
         return
+    
     if isinstance(obj, dict):
-        for _, v in obj.items():
-            _find_ips_in_obj(v, found)
+        for k, v in obj.items():
+            if k in excluded_keys:
+                continue
+            _find_ips_in_obj(v, found, excluded_keys)
+
     elif isinstance(obj, list):
         for v in obj:
-            _find_ips_in_obj(v, found)
+            _find_ips_in_obj(v, found, excluded_keys)
+
     elif isinstance(obj, str):
         for ip in _IPV4_RE.findall(obj):
             found.add(ip)
