@@ -116,6 +116,20 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceAccount" = var.account_id
           }
         }
+      },
+      {
+        Sid    = "AllowIpEnrichmentLambdaPublish"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.lambda_ip_enrichment_role_arn
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
       }
     ]
   })
