@@ -222,12 +222,10 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     lines.append(f"• Region: {finding_metadata['region']}")
     lines.append(f"• Account ID: {finding_metadata['account']}")
     lines.append("")
-    lines.append(f"Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
-    lines.append("")
     lines.append("🧠 IP Threat Intel IP Enrichment")
-
     lines.append("")
     lines.append(f"Total IPs enriched: {len(enriched)} (public-only)")
+    lines.append(f"Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
     
     if critical_risk:
         lines.append(f"🚨 {len(critical_risk)} Critical-risk IP{'s' if len(critical_risk) != 1 else ''} detected.")
