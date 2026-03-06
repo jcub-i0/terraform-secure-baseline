@@ -99,15 +99,15 @@ module "logging" {
 }
 
 module "monitoring" {
-  source                    = "./modules/monitoring"
-  logs_kms_key_arn          = module.security.logs_kms_key_arn
-  cloudtrail_log_group_name = module.logging.cloudtrail_logs_group_name
-  secops_emails             = var.secops_emails
-  tamper_detection_rule_arn = module.security.tamper_detection_rule_arn
-  account_id                = data.aws_caller_identity.current.account_id
+  source                        = "./modules/monitoring"
+  logs_kms_key_arn              = module.security.logs_kms_key_arn
+  cloudtrail_log_group_name     = module.logging.cloudtrail_logs_group_name
+  secops_emails                 = var.secops_emails
+  tamper_detection_rule_arn     = module.security.tamper_detection_rule_arn
+  account_id                    = data.aws_caller_identity.current.account_id
   lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
   lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn = module.iam.lambda_ec2_rollback_role_arn
+  lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
 }
 
 module "automation" {
