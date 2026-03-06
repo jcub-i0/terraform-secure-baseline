@@ -12,9 +12,9 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 ---
 
-## IP ENRICHMENT LAMBDA TESTS
+# IP ENRICHMENT LAMBDA TESTS
 
-### PREREQUISITES
+## PREREQUISITES
 * Lambda environment variables are configured:
     * 'SNS_TOPIC_ARN'
     * 'THREAT_INTEL_SECRET_ARN'
