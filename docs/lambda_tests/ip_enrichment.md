@@ -34,10 +34,10 @@ Manual test events used to validate Lambda automation behavior before and after 
 * Public IPs extracted from finding
 * IP reputation data retrieved from AbuseIPDB
 * SNS notification sent to configured SNS topic
-* If valid finding identifiers suppleid and 'WRITE_TO_SECURITYHUB=true', note written back to Security Hub finding
+* If valid finding identifiers supplied and 'WRITE_TO_SECURITYHUB=true', note written back to Security Hub finding
 * No errors in logs
 
-### Manual Event from AWS CLI:
+### Manual Event via AWS CLI:
 Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
@@ -73,4 +73,21 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-'''
+```
+
+### Confirm Write to Security Hub Finding
+Run the following from the CLI:
+```bash
+aws securityhub get-findings \
+  --filters '{
+    "Id": [
+      {
+        "Value": "<REAL-SECURITY-HUB-FINDING-ID>",
+        "Comparison": "EQUALS"
+      }
+    ]
+  }' \
+| grep -m1 -A4 "Note"
+```
+If a "Note" JSON block is returned, the IP Enrichment Lambda successfully wrote to the Security Hub finding.
+> NOTE: You can also confirm via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
