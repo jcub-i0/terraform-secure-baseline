@@ -31,7 +31,7 @@ export AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')
 aws sts get-caller-identity
 ```
 You should see '/SecOps-Operator/*' in the last 'Arn' line of the output.
-> To 'unassume' this role / go back to the principle you were using before, run:
+> To 'unassume' this role / go back to the principal you were using before, run:
 > ```bash
 > unset AWS_ACCESS_KEY_ID
 > unset AWS_SECRET_ACCESS_KEY
