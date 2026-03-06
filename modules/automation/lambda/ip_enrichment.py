@@ -204,7 +204,7 @@ def abuse_severity(score: Optional[int]) -> str:
         return "Medium 🟠"
     return "Low 🔵"
 
-def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
+def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
 
     critical_risk = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) >= 90]
@@ -221,7 +221,7 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
         lines.append(f"🟡 {len(suspicious)} Suspicious IP{'s' if len(suspicious) != 1 else ''} detected.")
         lines.append("")
         
-    lines.append(f"A Security Hub finding contains one or more public IP addresses.")
+    lines.append(f"A {finding_metadata['severity']}-severity Security Hub finding contains one or more public IP addresses.")
     lines.append(f"Below is the pertinent IP data, pulled from AbuseIPDB:")
     lines.append(f"")
     lines.append(f"IPs enriched: {len(enriched)} (public-only)")
@@ -374,7 +374,7 @@ def lambda_handler(event, context):
 
     finding_metadata = get_finding_metadata(findings)
     subject = f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
-    message = format_enrichment_message(enriched)
+    message = format_enrichment_message(finding_metadata, enriched)
     publish_to_sns(subject, message)
 
     if WRITE_TO_SECURITYHUB:
