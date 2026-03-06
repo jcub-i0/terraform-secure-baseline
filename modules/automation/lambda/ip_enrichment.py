@@ -128,6 +128,10 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
         if not local_ips:
             _find_ips_in_obj(f, local_ips)
 
+        # FILTER OUT ALREADY-ENRICHED IPs
+        previously_enriched_ips = get_previously_enriched_ips(f)
+        local_ips -= previously_enriched_ips
+
         # NORMALIZE / RECORD FINDINGS
         for ip in local_ips:
             all_ips.add(ip)
