@@ -92,3 +92,12 @@ aws securityhub get-findings \
 If the "Note" JSON block is returned ("Text", "UpdatedBy", and "UpdatedAt" fields), the IP Enrichment Lambda successfully wrote to the Security Hub finding ✅
 > NOTE: You can also confirm this via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
 
+### TEST 2 -- CRITICAL FINDING WITH PUBLIC IPV4 ADDRESS
+
+#### Expected Outcome
+* Lambda executes
+* Public IPs extracted from finding
+* IP reputation data retrieved from AbuseIPDB
+* SNS notification sent to configured SNS topic
+* If valid finding identifiers supplied and 'WRITE_TO_SECURITYHUB=true', note written back to Security Hub finding
+* No errors in logs
