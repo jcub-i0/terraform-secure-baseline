@@ -89,5 +89,5 @@ aws securityhub get-findings \
   }' \
 | grep -m1 -A4 "Note"
 ```
-If a "Note" JSON block is returned, the IP Enrichment Lambda successfully wrote to the Security Hub finding.
+If a "Note" JSON block is returned, the IP Enrichment Lambda successfully wrote to the Security Hub finding ✅
 > NOTE: You can also confirm via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
