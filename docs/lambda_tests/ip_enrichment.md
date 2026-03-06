@@ -3,7 +3,7 @@
 Purpose:
 Manual test events used to validate Lambda automation behavior before and after changes.
 
-## How to Use
+### How to Use
 * Replace '<YOUR-ACCOUNT-ID>' with your AWS account ID
 * Replace '<REAL-SECURITY-HUB-FINDING-ID>' with a valid Security Hub finding ID if you want to test Security Hub writeback
 * Replace '<REAL-PRODUCT-ARN>' with the ProductArn associated with that finding
@@ -12,7 +12,7 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 ---
 
-# IP ENRICHMENT LAMBDA TESTS
+## IP ENRICHMENT LAMBDA TESTS
 
 ## PREREQUISITES
 * Lambda environment variables are configured:
@@ -27,9 +27,9 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 ---
 
-## TEST 1 -- HIGH FINDING WITH PUBLIC IPV4 ADDRESSES
+### TEST 1 -- HIGH FINDING WITH PUBLIC IPV4 ADDRESSES
 
-### Expected Outcome
+#### Expected Outcome
 * Lambda executes
 * Public IPs extracted from finding
 * IP reputation data retrieved from AbuseIPDB
@@ -37,7 +37,7 @@ Manual test events used to validate Lambda automation behavior before and after 
 * If valid finding identifiers supplied and 'WRITE_TO_SECURITYHUB=true', note written back to Security Hub finding
 * No errors in logs
 
-### Manual Event via AWS CLI:
+#### Manual Event via AWS CLI:
 Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
@@ -75,7 +75,7 @@ EOF
 response.json && cat response.json && rm response.json
 ```
 
-### Confirm Write to Security Hub Finding
+##### Confirm Write to Security Hub Finding
 Run the following from the CLI:
 ```bash
 aws securityhub get-findings \
@@ -91,3 +91,4 @@ aws securityhub get-findings \
 ```
 If the "Note" JSON block is returned ("Text", "UpdatedBy", and "UpdatedAt" fields), the IP Enrichment Lambda successfully wrote to the Security Hub finding ✅
 > NOTE: You can also confirm via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
+
