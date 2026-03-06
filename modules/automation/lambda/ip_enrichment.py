@@ -312,7 +312,7 @@ def get_finding_metadata(findings: Dict[str, Any]) -> Dict[str, str]:
             "resource": "Unknown resource",
         }
     
-    finding = finding[0]
+    finding = findings[0]
 
     severity = (finding.get("Severity") or {}).get("Label", "UNKNOWN")
     title = finding.get("Title", "Unknown finding")
