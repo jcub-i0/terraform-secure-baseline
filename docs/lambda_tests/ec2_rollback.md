@@ -46,7 +46,8 @@ You should see '/SecOps-Operator/*' in the last 'Arn' line of the output.
 * SNS notification sent to configured SNS topic
 * No errors in logs
 #### Manual Event from AWS CLI:
-```json
+Run the following:
+```bash
 $ aws events put-events --entries '[
   {
     "Source": "custom.rollback",
