@@ -281,17 +281,6 @@ def publish_to_sns(subject: str, message: str) -> None:
     except Exception as e:
         logger.exception(f"Failed to publish to SNS: {e}")
 
-def already_enriched(finding: Dict[str, Any]) -> bool:
-    note = finding.get("Note") or {}
-    updated_by = note.get("UpdatedBy")
-    text = note.get("Text", "")
-
-    if updated_by == "tf-secure-baseline/ip-enrichment":
-        return True
-    if isinstance(text, str) and text.startswith("IP Enrichment (AbuseIPDB):"):
-        return True
-    return False
-
 def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
     if not findings:
