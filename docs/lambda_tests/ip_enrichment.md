@@ -44,14 +44,14 @@ Manual test events used to validate Lambda automation behavior before and after 
   "id": "test-event-1",
   "detail-type": "Security Hub Findings - Imported",
   "source": "aws.securityhub",
-  "account": "<YOUR-ACCOUNT-ID>",
+  "account": "072288671186",
   "time": "2026-03-02T00:00:00Z",
   "region": "us-east-1",
   "detail": {
     "findings": [
       {
-        "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
-        "ProductArn": "<REAL-PRODUCT-ARN>",
+        "Id": "arn:aws:securityhub:us-east-1::product/aws/securityhub/arn:aws:securityhub:us-east-1:072288671186:security-control/Config.1/finding/86df343a-179d-4a02-9f65-dac5c417ab75",
+        "ProductArn": "arn:aws:securityhub:us-east-1::product/aws/securityhub",
         "Severity": {
           "Label": "HIGH"
         },
@@ -68,3 +68,4 @@ Manual test events used to validate Lambda automation behavior before and after 
     ]
   }
 }
+'''
