@@ -210,16 +210,6 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     critical_risk = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) >= 90]
     high_risk = [e for e in enriched if 60 <= (e.get("abuseConfidenceScore") or 0) < 90]
     suspicious = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) < 60]
-
-    if critical_risk:
-        lines.append(f"🚨 {len(critical_risk)} Critical-risk IP{'s' if len(critical_risk) != 1 else ''} detected.")
-        lines.append("")
-    if high_risk:
-        lines.append(f"⚠️ {len(high_risk)} High-risk IP{'s' if len(high_risk) != 1 else ''} detected.")
-        lines.append("")
-    if not (critical_risk or high_risk):
-        lines.append(f"🟡 {len(suspicious)} Suspicious IP{'s' if len(suspicious) != 1 else ''} detected.")
-        lines.append("")
     
     lines.append(f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report")
     lines.append("")
@@ -234,9 +224,20 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     lines.append("")
     lines.append(f"Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
     lines.append("")
-    lines.append("🧠 IP Threat Intel Enrichment")
+    lines.append("🧠 IP Threat Intel IP Enrichment")
+
     lines.append("")
-    lines.append(f"IPs enriched: {len(enriched)} (public-only)")
+    lines.append(f"Total IPs enriched: {len(enriched)} (public-only)")
+    
+    if critical_risk:
+        lines.append(f"🚨 {len(critical_risk)} Critical-risk IP{'s' if len(critical_risk) != 1 else ''} detected.")
+        lines.append("")
+    if high_risk:
+        lines.append(f"⚠️ {len(high_risk)} High-risk IP{'s' if len(high_risk) != 1 else ''} detected.")
+        lines.append("")
+    if not (critical_risk or high_risk):
+        lines.append(f"🟡 {len(suspicious)} Suspicious IP{'s' if len(suspicious) != 1 else ''} detected.")
+        lines.append("")
 
     for entry in enriched:
         ip = entry.get("ip", "N/A")
@@ -325,7 +326,7 @@ def get_finding_metadata(findings: Dict[str, Any]) -> Dict[str, str]:
     severity = (finding.get("Severity") or {}).get("Label", "UNKNOWN")
     title = finding.get("Title", "Unknown finding")
     product = finding.get("ProductName", "Unknown product")
-    account = finding.get("AwsAccontId", "Unknown account")
+    account = finding.get("AwsAccountId", "Unknown account")
     region = finding.get("Region", "Unknown region")
 
     resource = "Unknown resource"
