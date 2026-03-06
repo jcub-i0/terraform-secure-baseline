@@ -258,7 +258,7 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
             lines.append("    • Recommended action: No reputation data available. Validate activity and monitor.")
             lines.append("")
         elif raw_score >= 90:
-            lines.append("    • Recommended action: Immediate investigation. Consider instance isolation and credential review.")
+            lines.append("    • Recommended action: Immediate investigation. Consider resource isolation and credential review.")
             lines.append("")
         elif 60 <= raw_score < 90:
             lines.append("    • Recommended action: Investigate associated activity. Review VPC Flow Logs and related findings.")
