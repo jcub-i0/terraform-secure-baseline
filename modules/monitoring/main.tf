@@ -144,6 +144,20 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceAccount" = var.account_id
           }
         }
+      },
+      {
+        Sid    = "AllowEc2RollbackLambdaPublish"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.lambda_ec2_rollback_role_arn
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
       }
     ]
   })
