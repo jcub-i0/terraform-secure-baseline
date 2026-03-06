@@ -105,6 +105,9 @@ module "monitoring" {
   secops_emails             = var.secops_emails
   tamper_detection_rule_arn = module.security.tamper_detection_rule_arn
   account_id                = data.aws_caller_identity.current.account_id
+  lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
+  lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
+  lambda_ec2_rollback_role_arn = module.iam.lambda_ec2_rollback_role_arn
 }
 
 module "automation" {
