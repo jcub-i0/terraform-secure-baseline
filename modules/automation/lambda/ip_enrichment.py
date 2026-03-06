@@ -281,6 +281,24 @@ def publish_to_sns(subject: str, message: str) -> None:
     except Exception as e:
         logger.exception(f"Failed to publish to SNS: {e}")
 
+def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
+    note = finding.get("Note") or {}
+    text = note.get("Text", "")
+
+    if note.get("UpdatedBy") != "tf-secure-baseline/ip-enrichment":
+        return set()
+    
+    found: Set[str] = set()
+
+    if isinstance(text, str):
+        for ip in _IPV4_RE.findall(text):
+            found.add(ip)
+        for ip in _IPV6_RE.findall(text):
+            if ip.count(":") >= 2 and re.search(r"[0-9a-fA-F]", ip) and len(ip) >= 8:
+                found.add(ip)
+
+    return found
+
 def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
     if not findings:
