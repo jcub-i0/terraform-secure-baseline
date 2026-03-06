@@ -27,4 +27,44 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 ---
 
-# TEST 1 -- HIGH FINDING WITH PUBLIC IPV4 ADDRESSES
+## TEST 1 -- HIGH FINDING WITH PUBLIC IPV4 ADDRESSES
+
+### Expected Outcome
+* Lambda executes
+* Public IPs extracted from finding
+* IP reputation data retrieved from AbuseIPDB
+* SNS notification sent to configured SNS topic
+* If valid finding identifiers suppleid and 'WRITE_TO_SECURITYHUB=true', note written back to Security Hub finding
+* No errors in logs
+
+### Event JSON
+```json
+{
+  "version": "0",
+  "id": "test-event-1",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "<YOUR-ACCOUNT-ID>",
+  "time": "2026-03-02T00:00:00Z",
+  "region": "us-east-1",
+  "detail": {
+    "findings": [
+      {
+        "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
+        "ProductArn": "<REAL-PRODUCT-ARN>",
+        "Severity": {
+          "Label": "HIGH"
+        },
+        "Workflow": {
+          "Status": "NEW"
+        },
+        "Network": {
+          "SourceIpV4": "103.37.6.88"
+        },
+        "ProductFields": {
+          "someField": "connection from 1.1.1.1 observed"
+        }
+      }
+    ]
+  }
+}
