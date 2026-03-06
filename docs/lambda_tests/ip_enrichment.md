@@ -40,6 +40,7 @@ Manual test events used to validate Lambda automation behavior before and after 
 ### Manual Event from AWS CLI:
 Run the following:
 ```bash
+$ export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 $ aws lambda invoke \
   --function-name ip-enrichment \
   --cli-binary-format raw-in-base64-out \
@@ -73,3 +74,36 @@ EOF
 )" \
 response.json && cat response.json && rm response.json
 '''
+
+aws lambda invoke \
+  --function-name ip-enrichment \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
+{
+  "version": "0",
+  "id": "arn:aws:securityhub:us-east-1:072288671186:security-control/Config.1/finding/86df343a-179d-4a02-9f65-dac5c417ab75",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "072288671186",
+  "time": "2026-03-02T00:00:00Z",
+  "region": "us-east-1",
+  "detail": {
+    "findings": [
+      {
+        "Id": "test-finding-1",
+        "ProductArn": "arn:aws:securityhub:us-east-1::product/aws/securityhub",
+        "Severity": { "Label": "HIGH" },
+        "Workflow": { "Status": "NEW" },
+        "Network": {
+          "SourceIpV4": "103.37.6.88"
+        },
+        "ProductFields": {
+          "someField": "connection from 1.1.1.1 observed"
+        }
+      }
+    ]
+  }
+}
+EOF
+)" \
+response.json && cat response.json
