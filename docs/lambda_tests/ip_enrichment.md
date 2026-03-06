@@ -38,10 +38,10 @@ Manual test events used to validate Lambda automation behavior before and after 
 * No errors in logs
 
 ### Manual Event from AWS CLI:
-Run the following:
+Run the following from the CLI:
 ```bash
-$ export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
-$ aws lambda invoke \
+export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
+aws lambda invoke \
   --function-name ip-enrichment \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
