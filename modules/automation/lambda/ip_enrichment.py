@@ -170,6 +170,7 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
 
     return all_ips, ip_to_finding_ids
 
+# HELPER FUNCTIONS
 def is_public_ip(ip: str) -> bool:
     try:
         addr = ipaddress.ip_address(ip)
@@ -200,6 +201,21 @@ def extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
         ABUSEIPDB_CATEGORIES.get(category_id, f"Unknown Category ({category_id})")
         for category_id in sorted(category_ids)
     ]
+
+def abuse_severity(score: Optional[int]) -> str:
+    if not isinstance(score, int):
+        return "Unknown"
+    if score >= 90:
+        return "CRITICAL 🚨"
+    if score >= 60:
+        return "HIGH ⚠️"
+    if score >= 30:
+        return "Medium 🟠"
+    return "Low 🔵"
+
+def build_securityhub_finding_url(region: str, finding_id: str) -> str:
+    encoded_id = urllib.parse.quote(finding_id)
+    return f"https://console.aws.amazon.com/securityhub/home?region={region}#/findings?search=Id%3D{encoded_id}"
 
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
@@ -244,17 +260,6 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.exception(f"Error querying AbuseIPDB for {ip}: {e}")
         return None
-    
-def abuse_severity(score: Optional[int]) -> str:
-    if not isinstance(score, int):
-        return "Unknown"
-    if score >= 90:
-        return "CRITICAL 🚨"
-    if score >= 60:
-        return "HIGH ⚠️"
-    if score >= 30:
-        return "Medium 🟠"
-    return "Low 🔵"
 
 def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
