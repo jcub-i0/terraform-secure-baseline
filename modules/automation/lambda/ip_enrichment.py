@@ -214,7 +214,7 @@ def abuse_severity(score: Optional[int]) -> str:
     return "Low 🔵"
 
 def build_securityhub_finding_url(region: str, finding_id: str) -> str:
-    encoded_id = urllib.parse.quote(finding_id)
+    encoded_id = urllib.parse.quote(finding_id, safe="")
     return f"https://console.aws.amazon.com/securityhub/home?region={region}#/findings?search=Id%3D{encoded_id}"
 
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
@@ -287,6 +287,8 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     lines.append(f"• Severity: {finding_metadata['severity']}")
     lines.append(f"• Region: {finding_metadata['region']}")
     lines.append(f"• Account ID: {finding_metadata['account']}")
+    lines.append("")
+    lines.append(f"🔎 View Finding: {finding_metadata.get('finding_url', 'N/A')}")
     lines.append("")
     lines.append("🧠 IP Threat Intel IP Enrichment")
     lines.append("")
@@ -367,29 +369,31 @@ def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
         
     return set()
 
-def get_finding_metadata(findings: List[Dict[str, Any]]) -> Dict[str, str]:
+def get_finding_metadata(event: Dict[str, Any], findings: List[Dict[str, Any]]) -> Dict[str, str]:
     if not findings:
         return {
             "severity": "UNKNOWN",
             "title": "Unknown finding",
             "product": "Unknown product",
-            "account": "Unknown account",
-            "region": "Unknown region",
+            "account": event.get("account", "Unknown account"),
+            "region": event.get("region", "Unknown region"),
             "resource": "Unknown resource",
         }
-    
+
     finding = findings[0]
 
     severity = (finding.get("Severity") or {}).get("Label", "UNKNOWN")
-    title = finding.get("Title", "Unknown finding")
-    product = finding.get("ProductName", "Unknown product")
-    account = finding.get("AwsAccountId", "Unknown account")
-    region = finding.get("Region", "Unknown region")
+    title = finding.get("Title") or "Unknown finding"
+    product = finding.get("ProductName") or "Unknown product"
+    account = finding.get("AwsAccountId") or event.get("account") or "Unknown account"
+    region = finding.get("Region") or event.get("region") or "Unknown region"
 
     resource = "Unknown resource"
     resources = finding.get("Resources") or []
     if resources and isinstance(resources, list):
-        resource = resources[0].get("Id", "Unknown resource")
+        first_resource = resources[0]
+        if isinstance(first_resource, dict):
+            resource = first_resource.get("Id", "Unknown resource")
 
     return {
         "severity": severity,
@@ -441,7 +445,14 @@ def lambda_handler(event, context):
         logger.info("No enrichment results returned.")
         return {"statusCode": 200, "body": json.dumps({"message": "No IPs enriched", "resultCount": 0})}
 
-    finding_metadata = get_finding_metadata(findings)
+    finding_metadata = get_finding_metadata(event, findings)
+    finding_url = build_securityhub_finding_url(
+        finding_metadata["region"],
+        findings[0].get("Id", "")
+    )
+
+    finding_metadata["finding_url"] = finding_url
+
     subject = f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
     message = format_enrichment_message(finding_metadata, enriched)
     publish_to_sns(subject, message)
@@ -465,7 +476,9 @@ def lambda_handler(event, context):
             for e in enriched[:5]:
                 categories = e.get("abuseCategories", [])
                 categories_str = ", ".join(categories[:3]) if categories else "Unknown"
-                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')} categories={e.get(categories_str)}")
+                note_lines.append(
+                    f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')} categories=(categories_str)"
+                )
             note = "\n".join(note_lines)
 
             securityhub.batch_update_findings(
