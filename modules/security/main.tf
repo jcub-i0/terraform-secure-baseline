@@ -390,6 +390,26 @@ resource "aws_kms_key" "lambda" {
             "aws:SourceAccount" = var.account_id
           }
         }
+      },
+      ### ALLOW INSPECTORv2
+      {
+        Sid    = "AllowInspectorDecrypt"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
       }
     ]
   })
