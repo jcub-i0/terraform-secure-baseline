@@ -170,7 +170,6 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
 
     return all_ips, ip_to_finding_ids
 
-# HELPER FUNCTIONS
 def is_public_ip(ip: str) -> bool:
     try:
         addr = ipaddress.ip_address(ip)
@@ -319,7 +318,11 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
         lines.append(f"    • Tor: {tor}")
         lines.append(f"    • Reports: {reports}")
         lines.append(f"    • Last reported: {last}")
-        lines.append(f"    • Categories: {', '.join(categories)}")
+
+        # ONLY RETURN THE FIRST 5 CATEGORIES
+        display_categories = categories[:5]
+        lines.append(f"    • Categories: {', '.join(display_categories)}{' ...' if len(categories) > 5 else ''}")
+        
         if finding_ids:
             lines.append(f"    • Finding IDs: {', '.join(finding_ids[:5])}{'…' if len(finding_ids) > 5 else ''}")
         if raw_score is None:
