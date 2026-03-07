@@ -27,7 +27,7 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 ---
 
-### TEST 1 -- HIGH FINDING WITH PUBLIC IPV4 ADDRESSES
+### TEST 1 -- CRITICAL FINDING WITH PUBLIC IPV4 ADDRESSES
 
 #### Expected Outcome
 * Lambda executes
@@ -68,7 +68,7 @@ aws lambda invoke \
         ],
         "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
         "ProductArn": "<REAL-PRODUCT-ARN>",
-        "Severity": { "Label": "HIGH" },
+        "Severity": { "Label": "CRITICAL" },
         "Workflow": { "Status": "NEW" },
         "Network": {
           "SourceIpV4": "103.37.6.88"
@@ -94,7 +94,6 @@ Expected output:
 ```
 
 ##### Confirm Write to Security Hub Finding
-**RUN THIS AFTER EVERY FOLLOWING TEST; NOT JUST TEST 1**
 Run the following from the CLI:
 ```bash
 aws securityhub get-findings \
@@ -111,5 +110,90 @@ aws securityhub get-findings \
 If the "Note" JSON block is returned ("Text", "UpdatedBy", and "UpdatedAt" fields), the IP Enrichment Lambda successfully wrote to the Security Hub finding ✅
 > NOTE: You can also confirm this via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
 
-Repeat this test for ALL other finding serverities, replacing 'HIGH' in *"Severity": { "Label": "HIGH" }* with "CRITICAL", "LOW", and "MEDIUM"
+Repeat this test for ALL other finding serverities, replacing "CRITICAL" in *"Severity": { "Label": "CRITICAL" }* with "HIGH", "MEDIUM", and "LOW"
 
+
+### TEST 2 -- FINDING WITH PRIVATE/NON-PUBLIC IP ONLY
+
+#### Expected Outcome
+* Lambda executes
+* No IP addresses are enriched
+* No SNS message is sent
+* No Security Hub writeback performed
+* No errors in logs
+
+#### Manual Event via AWS CLI:
+Run the following from the CLI:
+```bash
+export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
+aws lambda invoke \
+  --function-name ip-enrichment \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
+{
+  "version": "0",
+  "id": "test-event-1",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "<YOUR-ACCOUNT-ID>",
+  "time": "2026-03-02T00:00:00Z",
+  "region": "us-east-1",
+  "detail": {
+    "findings": [
+      {
+        "Title": "AWS Config should be enabled and use the service-linked role for resource recording",
+        "AwsAccountId": "<YOUR-ACCOUNT-ID>",
+        "Region": "us-east-1",
+        "ProductName": "Security Hub",
+        "Resources": [
+          {
+            "Id": "arn:aws:s3:::example-bucket",
+            "Type": "AwsS3Bucket"
+          }
+        ],
+        "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
+        "ProductArn": "<REAL-PRODUCT-ARN>",
+        "Severity": { "Label": "CRITICAL" },
+        "Workflow": { "Status": "NEW" },
+        "Network": {
+          "SourceIpV4": "10.0.1.15"
+        },
+        "ProductFields": {
+          "someField": "internal service connection from 172.16.5.10 observed"
+        }
+      }
+    ]
+  }
+}
+EOF
+)" \
+response.json && cat response.json && rm response.json
+```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+{"statusCode": 200, "body": "{\"message\": \"No IPs enriched\", \"resultCount\": 0}"}
+```
+
+##### Confirm Absense of Write to Security Hub Finding
+Run the following from the CLI:
+```bash
+aws securityhub get-findings \
+  --filters '{
+    "Id": [
+      {
+        "Value": "<REAL-SECURITY-HUB-FINDING-ID>",
+        "Comparison": "EQUALS"
+      }
+    ]
+  }' \
+  --query 'Findings[].Note'
+```
+Expected Outcome:
+```json
+[]
+```
+> NOTE: You can also confirm this via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
