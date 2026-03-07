@@ -360,3 +360,45 @@ Expected Outcome:
 []
 ```
 > NOTE: You can also confirm this via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
+
+### TEST 5 -- EMPTY FINDINGS ARRAY
+
+#### Expected Outcome
+* Lambda executes
+* Lambda returns a response indicating no findings were present
+* No SNS message is sent
+* No Security Hub writeback performed
+* No errors in logs
+
+#### Manual Event via AWS CLI:
+Run the following from the CLI:
+```bash
+export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
+aws lambda invoke \
+  --function-name ip-enrichment \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
+{
+  "version": "0",
+  "id": "test-event-7",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "072288671186",
+  "time": "2026-03-02T00:00:00Z",
+  "region": "us-east-1",
+  "detail": {
+    "findings": []
+  }
+}
+EOF
+)" \
+response.json && cat response.json && rm response.json
+```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+{"statusCode": 400, "body": "{\"message\": \"No findings in event\"}"}
+```
