@@ -391,7 +391,7 @@ resource "aws_kms_key" "lambda" {
           }
         }
       },
-      ### ALLOW INSPECTORv2
+      ### ALLOW INSPECTORv2 to enable Lambda scanning
       {
         Sid    = "AllowInspectorDecrypt"
         Effect = "Allow"
@@ -399,6 +399,7 @@ resource "aws_kms_key" "lambda" {
           AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
         }
         Action = [
+          "kms:DescribeKey",
           "kms:Encrypt",
           "kms:Decrypt",
           "kms:GenerateDataKey",
@@ -407,7 +408,7 @@ resource "aws_kms_key" "lambda" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = var.account_id
+            "kms:ViaService" = "inspector2.${var.primary_region}.amazonaws.com"
           }
         }
       }
