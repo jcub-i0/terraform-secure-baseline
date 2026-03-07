@@ -459,7 +459,9 @@ def lambda_handler(event, context):
             note_lines = ["IP Enrichment (AbuseIPDB):"]
             note_lines.append("EnrichedIPs: " + ",".join(sorted(e["ip"] for e in enriched)))
             for e in enriched[:5]:
-                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')}")
+                categories = e.get("abuseCategories", [])
+                categories_str = ", ".join(categories[:3]) if categories else "Unknown"
+                note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')} categories={e.get(categories_str)}")
             note = "\n".join(note_lines)
 
             securityhub.batch_update_findings(
