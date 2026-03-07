@@ -179,6 +179,87 @@ Expected output:
 ```
 
 ##### Confirm Absense of Write to Security Hub Finding
+
+Run the following from the CLI:
+```bash
+aws securityhub get-findings \
+  --filters '{
+    "Id": [
+      {
+        "Value": "<REAL-SECURITY-HUB-FINDING-ID>",
+        "Comparison": "EQUALS"
+      }
+    ]
+  }' \
+  --query 'Findings[].Note'
+```
+Expected Outcome:
+```json
+[]
+```
+> NOTE: You can also confirm this via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
+
+### TEST 3 -- HIGH FINDING WITH NO IP DATA
+#### Expected Outcome
+* Lambda executes
+* No IP addresses are enriched
+* No SNS message is sent
+* No Security Hub writeback performed
+* No errors in logs
+
+#### Manual Event via AWS CLI:
+Run the following from the CLI:
+```bash
+export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
+aws lambda invoke \
+  --function-name ip-enrichment \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
+{
+  "version": "0",
+  "id": "test-event-1",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "<YOUR-ACCOUNT-ID>",
+  "time": "2026-03-02T00:00:00Z",
+  "region": "us-east-1",
+  "detail": {
+    "findings": [
+      {
+        "Title": "AWS Config should be enabled and use the service-linked role for resource recording",
+        "AwsAccountId": "<YOUR-ACCOUNT-ID>",
+        "Region": "us-east-1",
+        "ProductName": "Security Hub",
+        "Resources": [
+          {
+            "Id": "arn:aws:s3:::example-bucket",
+            "Type": "AwsS3Bucket"
+          }
+        ],
+        "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
+        "ProductArn": "<REAL-PRODUCT-ARN>",
+        "Severity": { "Label": "HIGH" },
+        "Workflow": { "Status": "NEW" },
+        }
+      }
+    ]
+  }
+}
+EOF
+)" \
+response.json && cat response.json && rm response.json
+```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+{"statusCode": 200, "body": "{\"message\": \"No IPs enriched\", \"resultCount\": 0}"}
+```
+
+##### Confirm Absense of Write to Security Hub Finding
+
 Run the following from the CLI:
 ```bash
 aws securityhub get-findings \
