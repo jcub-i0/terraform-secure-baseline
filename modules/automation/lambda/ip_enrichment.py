@@ -480,7 +480,7 @@ def lambda_handler(event, context):
                 categories = e.get("abuseCategories", [])
                 categories_str = ", ".join(categories[:3]) if categories else "Unknown"
                 note_lines.append(
-                    f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')} categories=(categories_str)"
+                    f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')} categories={categories_str}"
                 )
             note = "\n".join(note_lines)
 
