@@ -156,7 +156,7 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
         _find_ips_in_obj(f, local_ips)
 
         # FILTER OUT ALREADY-ENRICHED IPs
-        previously_enriched_ips = get_previously_enriched_ips(f)
+        previously_enriched_ips = _get_previously_enriched_ips(f)
         local_ips -= previously_enriched_ips
 
         # NORMALIZE / RECORD FINDINGS
@@ -170,14 +170,14 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
 
     return all_ips, ip_to_finding_ids
 
-def is_public_ip(ip: str) -> bool:
+def _is_public_ip(ip: str) -> bool:
     try:
         addr = ipaddress.ip_address(ip)
         return not (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_multicast or addr.is_reserved)
     except ValueError:
         return False
     
-def extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
+def _extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
     reports = result.get("reports", [])
     category_ids: Set[int] = set()
 
@@ -201,7 +201,7 @@ def extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
         for category_id in sorted(category_ids)
     ]
 
-def abuse_severity(score: Optional[int]) -> str:
+def _abuse_severity(score: Optional[int]) -> str:
     if not isinstance(score, int):
         return "Unknown"
     if score >= 90:
@@ -212,11 +212,11 @@ def abuse_severity(score: Optional[int]) -> str:
         return "Medium 🟠"
     return "Low 🔵"
 
-def build_securityhub_finding_url(region: str, finding_id: str) -> str:
+def _build_securityhub_finding_url(region: str, finding_id: str) -> str:
     encoded_id = urllib.parse.quote(finding_id, safe="")
     return f"https://console.aws.amazon.com/securityhub/home?region={region}#/findings?search=Id%3D{encoded_id}"
 
-def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
+def _query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
     params = {
         "ipAddress": ip,
@@ -299,7 +299,7 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
         ip = entry.get("ip", "N/A")
         raw_score = entry.get("abuseConfidenceScore")
         raw_score = raw_score if isinstance(raw_score, int) else None
-        severity = abuse_severity(raw_score)
+        severity = _abuse_severity(raw_score)
         str_score = str(raw_score) if isinstance(raw_score, int) else "Unknown"
         country = entry.get("countryCode", "N/A")
         isp = entry.get("isp", "N/A")
@@ -340,7 +340,7 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     
     return "\n".join(lines)
 
-def publish_to_sns(subject: str, message: str) -> None:
+def _publish_to_sns(subject: str, message: str) -> None:
     if not SNS_TOPIC_ARN:
         logger.warning("SNS_TOPIC_ARN not set; skipping publish.")
         return
@@ -355,7 +355,7 @@ def publish_to_sns(subject: str, message: str) -> None:
     except Exception as e:
         logger.exception(f"Failed to publish to SNS: {e}")
 
-def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
+def _get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
     note = finding.get("Note") or {}
     text = note.get("Text", "")
 
@@ -372,7 +372,7 @@ def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
         
     return set()
 
-def get_finding_metadata(event: Dict[str, Any], findings: List[Dict[str, Any]]) -> Dict[str, str]:
+def _get_finding_metadata(event: Dict[str, Any], findings: List[Dict[str, Any]]) -> Dict[str, str]:
     if not findings:
         return {
             "severity": "UNKNOWN",
@@ -421,13 +421,13 @@ def lambda_handler(event, context):
     logger.info(f"Unique IPs extracted: {len(all_ips)}")
 
     enriched: List[Dict[str, Any]] = []
-    public_ips = [ip for ip in sorted(all_ips) if is_public_ip(ip)]
+    public_ips = [ip for ip in sorted(all_ips) if _is_public_ip(ip)]
     for ip in public_ips[:MAX_IPS_PER_EVENT]:
-        result = query_abuse_ipdb(ip, api_key)
+        result = _query_abuse_ipdb(ip, api_key)
         if not result:
             continue
 
-        categories = extract_abuse_categories(result)
+        categories = _extract_abuse_categories(result)
 
         enriched.append({
             "ip": ip,
@@ -448,8 +448,8 @@ def lambda_handler(event, context):
         logger.info("No enrichment results returned.")
         return {"statusCode": 200, "body": json.dumps({"message": "No IPs enriched", "resultCount": 0})}
 
-    finding_metadata = get_finding_metadata(event, findings)
-    finding_url = build_securityhub_finding_url(
+    finding_metadata = _get_finding_metadata(event, findings)
+    finding_url = _build_securityhub_finding_url(
         finding_metadata["region"],
         findings[0].get("Id", "")
     )
@@ -458,7 +458,7 @@ def lambda_handler(event, context):
 
     subject = f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
     message = format_enrichment_message(finding_metadata, enriched)
-    publish_to_sns(subject, message)
+    _publish_to_sns(subject, message)
 
     if WRITE_TO_SECURITYHUB:
         try:
