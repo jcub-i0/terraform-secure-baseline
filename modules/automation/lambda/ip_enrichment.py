@@ -44,7 +44,7 @@ EXCLUDED_IP_SCAN_FIELDS = {
     "Compliance"
 }
 
-# ABUSEIPDB CATEGORY IDs -> READABLE LABELS MAPPING\
+# ABUSEIPDB CATEGORY IDs -> READABLE LABELS MAPPING
 ABUSEIPDB_CATEGORIES = {
     1: "DNS Compromise",
     2: "DNS Poisoning",
@@ -180,7 +180,7 @@ def is_public_ip(ip: str) -> bool:
     
 def extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
     reports = result.get("reports", [])
-    category_ids = Set[int] = set()
+    category_ids: Set[int] = set()
 
     if not isinstance(reports, list):
         return []
@@ -207,7 +207,7 @@ def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     params = {
         "ipAddress": ip,
         "maxAgeInDays": str(ABUSEIPDB_MAX_AGE_DAYS),
-        "verbose": ""
+        "verbose": "true"
     }
 
     headers = {
@@ -302,6 +302,7 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
         tor = entry.get("isTor", "N/A")
         reports = entry.get("totalReports", "N/A")
         last = entry.get("lastReportedAt", "N/A")
+        categories = entry.get("abuseCategories", ["Unknown"])
         finding_ids = entry.get("findingIds", [])
 
         lines.append(f"🌐 IP address: {ip}")
@@ -312,6 +313,7 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
         lines.append(f"    • Tor: {tor}")
         lines.append(f"    • Reports: {reports}")
         lines.append(f"    • Last reported: {last}")
+        lines.append(f"    • Categories: {', '.join(categories)}")
         if finding_ids:
             lines.append(f"    • Finding IDs: {', '.join(finding_ids[:5])}{'…' if len(finding_ids) > 5 else ''}")
         if raw_score is None:
@@ -361,7 +363,7 @@ def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
         
     return set()
 
-def get_finding_metadata(findings: Dict[str, Any]) -> Dict[str, str]:
+def get_finding_metadata(findings: List[Dict[str, Any]]) -> Dict[str, str]:
     if not findings:
         return {
             "severity": "UNKNOWN",
@@ -414,10 +416,13 @@ def lambda_handler(event, context):
         if not result:
             continue
 
+        categories = extract_abuse_categories(result)
+
         enriched.append({
             "ip": ip,
             "findingIds": sorted(list(ip_to_finding_ids.get(ip, set()))),
             "abuseConfidenceScore": result.get("abuseConfidenceScore"),
+            "abuseCategories": categories if categories else ["Unknown"],
             "countryCode": result.get("countryCode") or "Unknown",
             "usageType": result.get("usageType") or "Unknown",
             "domain": result.get("domain") or "Unknown",
