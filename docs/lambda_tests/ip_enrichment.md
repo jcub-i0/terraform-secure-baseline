@@ -84,6 +84,14 @@ EOF
 )" \
 response.json && cat response.json && rm response.json
 ```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+{"statusCode": 200, "body": "{\"message\": \"Processing complete\", \"resultCount\": 2}"}
+```
 
 ##### Confirm Write to Security Hub Finding
 Run the following from the CLI:
