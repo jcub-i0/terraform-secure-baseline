@@ -33,6 +33,7 @@ _IPV6_RE = re.compile(r"\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b")
 MAX_IPS_PER_EVENT = int(os.environ.get("MAX_IPS_PER_EVENT", "25"))
 ABUSEIPDB_MAX_AGE_DAYS = int(os.environ.get("ABUSEIPDB_MAX_AGE_DAYS", "90"))
 
+# SECURITY HUB FINDING FIELDS THAT SHOULD NOT BE SCANNED
 EXCLUDED_IP_SCAN_FIELDS = {
     "Note",
     "Workflow",
@@ -41,6 +42,33 @@ EXCLUDED_IP_SCAN_FIELDS = {
     "VerificationState",
     "RecordState",
     "Compliance"
+}
+
+# ABUSEIPDB CATEGORY IDs -> READABLE LABELS MAPPING\
+ABUSEIPDB_CATEGORIES = {
+    1: "DNS Compromise",
+    2: "DNS Poisoning",
+    3: "Fraud Orders",
+    4: "DDoS Attack",
+    5: "FTP Brute-Force",
+    6: "Ping of Death",
+    7: "Phishing",
+    8: "Fraud VoIP",
+    9: "Open Proxy",
+    10: "Web Spam",
+    11: "Email Spam",
+    12: "Blog Spam",
+    13: "VPN IP",
+    14: "Port Scan",
+    15: "Hacking",
+    16: "SQL Injection",
+    17: "Spoofing",
+    18: "Brute-Force",
+    19: "Bad Web Bot",
+    20: "Exploited Host",
+    21: "Web App Attack",
+    22: "SSH",
+    23: "IoT Targeted"
 }
 
 def _get_abuseipdb_api_key() -> Optional[str]:
@@ -149,12 +177,37 @@ def is_public_ip(ip: str) -> bool:
         return not (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_multicast or addr.is_reserved)
     except ValueError:
         return False
+    
+def extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
+    reports = result.get("reports", [])
+    category_ids = Set[int] = set()
+
+    if not isinstance(reports, list):
+        return []
+    
+    for report in reports:
+        if not isinstance(report, dict):
+            continue
+
+        categories = report.get("categories", [])
+        if not isinstance(categories, list):
+            continue
+
+        for category_id in categories:
+            if isinstance(category_id, int):
+                category_ids.add(category_id)
+            
+    return [
+        ABUSEIPDB_CATEGORIES.get(category_id, f"Unknown Category ({category_id})")
+        for category_id in sorted(category_ids)
+    ]
 
 def query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     url = "https://api.abuseipdb.com/api/v2/check"
     params = {
         "ipAddress": ip,
-        "maxAgeInDays": str(ABUSEIPDB_MAX_AGE_DAYS)
+        "maxAgeInDays": str(ABUSEIPDB_MAX_AGE_DAYS),
+        "verbose": ""
     }
 
     headers = {
