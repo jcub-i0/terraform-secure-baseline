@@ -56,6 +56,16 @@ aws lambda invoke \
   "detail": {
     "findings": [
       {
+        "Title": "AWS Config should be enabled and use the service-linked role for resource recording",
+        "AwsAccountId": "<YOUR-ACCOUNT-ID>",
+        "Region": "us-east-1",
+        "ProductName": "Security Hub",
+        "Resources": [
+          {
+            "Id": "arn:aws:s3:::example-bucket",
+            "Type": "AwsS3Bucket"
+          }
+        ],
         "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
         "ProductArn": "<REAL-PRODUCT-ARN>",
         "Severity": { "Label": "HIGH" },
