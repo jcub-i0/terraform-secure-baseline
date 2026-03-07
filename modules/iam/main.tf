@@ -318,8 +318,18 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
         Effect = "Allow",
         Action = [
           "sns:Publish"
-        ],
+        ]
         Resource = var.secops_topic_arn
+      },
+      # ALLOW USE OF LOGS KMS KEY (USED FOR SNS)
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = var.logs_kms_key_arn
       }
     ]
   })
@@ -381,7 +391,7 @@ resource "aws_iam_policy" "lambda_ec2_rollback" {
           "ec2:ModifyInstanceAttribute",
           "ec2:DescribeSecurityGroups",
           "ec2:CreateTags"
-        ],
+        ]
         Resource = "*"
       },
       # ALLOW LAMBDA TO CALL SNS
@@ -389,8 +399,18 @@ resource "aws_iam_policy" "lambda_ec2_rollback" {
         Effect = "Allow"
         Action = [
           "sns:Publish"
-        ],
+        ]
         Resource = var.secops_topic_arn
+      },
+      # ALLOW USE OF LOGS KMS KEY (USED FOR SNS)
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = var.logs_kms_key_arn
       }
     ]
   })
