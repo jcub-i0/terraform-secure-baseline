@@ -231,8 +231,9 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     lines.append("")
     lines.append("🧠 IP Threat Intel IP Enrichment")
     lines.append("")
-    lines.append(f"📝 Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
     lines.append(f"Total IPs enriched: {len(enriched)} (public-only)")
+    lines.append(f"📝 Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
+    lines.append("")
 
     for entry in enriched:
         ip = entry.get("ip", "N/A")
