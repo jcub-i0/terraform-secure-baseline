@@ -94,6 +94,7 @@ Expected output:
 ```
 
 ##### Confirm Write to Security Hub Finding
+**RUN THIS AFTER EVERY FOLLOWING TEST; NOT JUST TEST 1**
 Run the following from the CLI:
 ```bash
 aws securityhub get-findings \
@@ -119,3 +120,67 @@ If the "Note" JSON block is returned ("Text", "UpdatedBy", and "UpdatedAt" field
 * SNS notification sent to configured SNS topic
 * If valid finding identifiers supplied and 'WRITE_TO_SECURITYHUB=true', note written back to Security Hub finding
 * No errors in logs
+
+#### Manual Event via AWS CLI:
+Run the following from the CLI:
+```bash
+export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
+aws lambda invoke \
+  --function-name ip-enrichment \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
+{
+  "version": "0",
+  "id": "test-event-1",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "<YOUR-ACCOUNT-ID>",
+  "time": "2026-03-02T00:00:00Z",
+  "region": "us-east-1",
+  "detail": {
+    "findings": [
+      {
+        "Title": "AWS Config should be enabled and use the service-linked role for resource recording",
+        "AwsAccountId": "<YOUR-ACCOUNT-ID>",
+        "Region": "us-east-1",
+        "ProductName": "Security Hub",
+        "Resources": [
+          {
+            "Id": "arn:aws:s3:::example-bucket",
+            "Type": "AwsS3Bucket"
+          }
+        ],
+        "Id": "<REAL-SECURITY-HUB-FINDING-ID>",
+        "ProductArn": "<REAL-PRODUCT-ARN>",
+        "Severity": { "Label": "CRITICAL" },
+        "Workflow": { "Status": "NEW" },
+        "Network": {
+          "SourceIpV4": "103.37.6.88"
+        },
+        "ProductFields": {
+          "someField": "connection from 1.1.1.1 observed"
+        }
+      }
+    ]
+  }
+}
+EOF
+)" \
+response.json && cat response.json && rm response.json
+```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+{"statusCode": 200, "body": "{\"message\": \"Processing complete\", \"resultCount\": 2}"}
+```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+{"statusCode": 200, "body": "{\"message\": \"Processing complete\", \"resultCount\": 2}"}
+```
