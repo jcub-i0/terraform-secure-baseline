@@ -414,7 +414,7 @@ resource "aws_kms_key" "lambda" {
       }
     ]
   })
-  
+
   tags = {
     Name      = "lambda-cmk"
     Terraform = "true"
