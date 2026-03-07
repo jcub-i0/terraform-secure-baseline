@@ -4,14 +4,14 @@ Purpose:
 Manual test events used to validate Lambda automation behavior before and after changes.
 
 How to use:
-* Replace "<INSTANCE_ID> with the ID of the EC2 instance in the Quarantine Security Group
+* Replace <INSTANCE_ID> with the ID of the EC2 instance in the Quarantine Security Group
 * Run the test from a terminal connected to your AWS account
 * Confirm expected outcome based on 'Expected Outcome' section of each test
 
 ## EC2 ROLLBACK LAMBDA TESTS
 
 ### PREQUESITES:
-You must assume the 'SecOps-Operator' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace '<ACCOUNT_ID>' with your AWS account ID.
+You must assume the 'SecOps-Operator' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace <ACCOUNT_ID> with your AWS account ID.
 
 > The following commands require 'jq' to be installed on your machine.
 > Install 'jq' on Debian:
@@ -31,7 +31,7 @@ export AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')
 aws sts get-caller-identity
 ```
 You should see '/SecOps-Operator/*' in the last 'Arn' line of the output.
-> To 'unassume' this role / go back to the principle you were using before, run:
+> To 'unassume' this role / go back to the principal you were using before, run:
 > ```bash
 > unset AWS_ACCESS_KEY_ID
 > unset AWS_SECRET_ACCESS_KEY
@@ -41,12 +41,13 @@ You should see '/SecOps-Operator/*' in the last 'Arn' line of the output.
 ### TEST 1 -- MANUAL ROLLBACK EVENT FROM AWS CLI
 #### Expected Outcome:
 * Lambda executes
-* Instance rollbacks from the Quarantine SG to its original SG
+* Instance rolls back from the Quarantine SG to its original SG
 * Tags applied to instance
 * SNS notification sent to configured SNS topic
 * No errors in logs
 #### Manual Event from AWS CLI:
-```json
+Run the following:
+```bash
 $ aws events put-events --entries '[
   {
     "Source": "custom.rollback",

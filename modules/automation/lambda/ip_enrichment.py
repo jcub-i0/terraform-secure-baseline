@@ -33,6 +33,16 @@ _IPV6_RE = re.compile(r"\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b")
 MAX_IPS_PER_EVENT = int(os.environ.get("MAX_IPS_PER_EVENT", "25"))
 ABUSEIPDB_MAX_AGE_DAYS = int(os.environ.get("ABUSEIPDB_MAX_AGE_DAYS", "90"))
 
+EXCLUDED_IP_SCAN_FIELDS = {
+    "Note",
+    "Workflow",
+    "Severity",
+    "UserDefinedFields",
+    "VerificationState",
+    "RecordState",
+    "Compliance"
+}
+
 def _get_abuseipdb_api_key() -> Optional[str]:
     global _cached_abuseipdb_key
 
@@ -64,16 +74,24 @@ def _get_abuseipdb_api_key() -> Optional[str]:
         return None
     
 
-def _find_ips_in_obj(obj: Any, found: Set[str]) -> None:
+def _find_ips_in_obj(obj: Any, found: Set[str], excluded_keys: Optional[Set[str]] = None) -> None:
     """Recursively scan strings in dict/list structures for IP-like patterns"""
+    if excluded_keys is None:
+        excluded_keys = EXCLUDED_IP_SCAN_FIELDS
+
     if obj is None:
         return
+    
     if isinstance(obj, dict):
-        for _, v in obj.items():
-            _find_ips_in_obj(v, found)
+        for k, v in obj.items():
+            if k in excluded_keys:
+                continue
+            _find_ips_in_obj(v, found, excluded_keys)
+
     elif isinstance(obj, list):
         for v in obj:
-            _find_ips_in_obj(v, found)
+            _find_ips_in_obj(v, found, excluded_keys)
+
     elif isinstance(obj, str):
         for ip in _IPV4_RE.findall(obj):
             found.add(ip)
@@ -109,6 +127,10 @@ def extract_ips_and_map_findings(findings: List[Dict[str, Any]]) -> Tuple[Set[st
         # 3) GENERIC SCAN OF THE FINDING (ONLY IF LOCAL_IPS IS EMPTY)
         if not local_ips:
             _find_ips_in_obj(f, local_ips)
+
+        # FILTER OUT ALREADY-ENRICHED IPs
+        previously_enriched_ips = get_previously_enriched_ips(f)
+        local_ips -= previously_enriched_ips
 
         # NORMALIZE / RECORD FINDINGS
         for ip in local_ips:
@@ -182,32 +204,35 @@ def abuse_severity(score: Optional[int]) -> str:
         return "Medium 🟠"
     return "Low 🔵"
 
-def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
+def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[Dict[str, Any]]) -> str:
     lines: List[str] = []
 
     critical_risk = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) >= 90]
     high_risk = [e for e in enriched if 60 <= (e.get("abuseConfidenceScore") or 0) < 90]
     suspicious = [e for e in enriched if (e.get("abuseConfidenceScore") or 0) < 60]
-
+    
+    lines.append(f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report")
+    lines.append("")
     if critical_risk:
         lines.append(f"🚨 {len(critical_risk)} Critical-risk IP{'s' if len(critical_risk) != 1 else ''} detected.")
-        lines.append("")
     if high_risk:
         lines.append(f"⚠️ {len(high_risk)} High-risk IP{'s' if len(high_risk) != 1 else ''} detected.")
-        lines.append("")
-    if not (critical_risk or high_risk):
+    if suspicious:
         lines.append(f"🟡 {len(suspicious)} Suspicious IP{'s' if len(suspicious) != 1 else ''} detected.")
-        lines.append("")
-        
-    lines.append(f"A Security Hub finding contains one or more public IP addresses.")
-    lines.append(f"Below is the pertinent IP data, pulled from AbuseIPDB:")
+    lines.append("")
+    lines.append(f"A {finding_metadata['severity']}-severity Security Hub finding contains one or more public IP addresses.")
+    lines.append(f"This report provides additional information related to those IP addresses.")
     lines.append(f"")
-    lines.append(f"Findings in event: {len(set(fid for entry in enriched for fid in entry.get('findingIds', [])))}")
-    lines.append(f"IPs enriched: {len(enriched)} (public-only)")
-    lines.append(f"Writeback enabled: {WRITE_TO_SECURITYHUB}")
+    lines.append("Security Hub Finding Summary")
+    lines.append(f"• Title: {finding_metadata['title']}")
+    lines.append(f"• Severity: {finding_metadata['severity']}")
+    lines.append(f"• Region: {finding_metadata['region']}")
+    lines.append(f"• Account ID: {finding_metadata['account']}")
     lines.append("")
-    lines.append("🧠 IP Threat Intel Enrichment")
+    lines.append("🧠 IP Threat Intel IP Enrichment")
     lines.append("")
+    lines.append(f"📝 Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
+    lines.append(f"Total IPs enriched: {len(enriched)} (public-only)")
 
     for entry in enriched:
         ip = entry.get("ip", "N/A")
@@ -237,7 +262,7 @@ def format_enrichment_message(enriched: List[Dict[str, Any]]) -> str:
             lines.append("    • Recommended action: No reputation data available. Validate activity and monitor.")
             lines.append("")
         elif raw_score >= 90:
-            lines.append("    • Recommended action: Immediate investigation. Consider instance isolation and credential review.")
+            lines.append("    • Recommended action: Immediate investigation. Consider resource isolation and credential review.")
             lines.append("")
         elif 60 <= raw_score < 90:
             lines.append("    • Recommended action: Investigate associated activity. Review VPC Flow Logs and related findings.")
@@ -262,6 +287,56 @@ def publish_to_sns(subject: str, message: str) -> None:
         logger.info("SNS notification sent.")
     except Exception as e:
         logger.exception(f"Failed to publish to SNS: {e}")
+
+def get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
+    note = finding.get("Note") or {}
+    text = note.get("Text", "")
+
+    if note.get("UpdatedBy") != "tf-secure-baseline/ip-enrichment":
+        return set()
+    
+    if not isinstance(text, str):
+        return set()
+    
+    for line in text.splitlines():
+        if line.startswith("EnrichedIPs:"):
+            ips = line.replace("EnrichedIPs:", "").strip()
+            return set(i.strip() for i in ips.split(",") if i.strip())
+        
+    return set()
+
+def get_finding_metadata(findings: Dict[str, Any]) -> Dict[str, str]:
+    if not findings:
+        return {
+            "severity": "UNKNOWN",
+            "title": "Unknown finding",
+            "product": "Unknown product",
+            "account": "Unknown account",
+            "region": "Unknown region",
+            "resource": "Unknown resource",
+        }
+    
+    finding = findings[0]
+
+    severity = (finding.get("Severity") or {}).get("Label", "UNKNOWN")
+    title = finding.get("Title", "Unknown finding")
+    product = finding.get("ProductName", "Unknown product")
+    account = finding.get("AwsAccountId", "Unknown account")
+    region = finding.get("Region", "Unknown region")
+
+    resource = "Unknown resource"
+    resources = finding.get("Resources") or []
+    if resources and isinstance(resources, list):
+        resource = resources[0].get("Id", "Unknown resource")
+
+    return {
+        "severity": severity,
+        "title": title,
+        "product": product,
+        "account": account,
+        "region": region,
+        "resource": resource,
+    }
 
 def lambda_handler(event, context):
     findings = (event.get("detail") or {}).get("findings") or []
@@ -301,8 +376,9 @@ def lambda_handler(event, context):
         logger.info("No enrichment results returned.")
         return {"statusCode": 200, "body": json.dumps({"message": "No IPs enriched", "resultCount": 0})}
 
-    subject = f"🧠 IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
-    message = format_enrichment_message(enriched)
+    finding_metadata = get_finding_metadata(findings)
+    subject = f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
+    message = format_enrichment_message(finding_metadata, enriched)
     publish_to_sns(subject, message)
 
     if WRITE_TO_SECURITYHUB:
@@ -318,10 +394,10 @@ def lambda_handler(event, context):
                 logger.warning("No valid finding identifers; skipping Security Hub writeback.")
                 return {"statusCode": 200, "body": json.dumps({"message": "No valid identifers for Security Hub writeback"})}
 
-            # Short note containing top enriched IPs and scores
-            top = enriched[:5]
-            note_lines = ["IP enrichment (AbuseIPDB):"]
-            for e in top:
+            # Short note containing 5 enriched IPs and scores
+            note_lines = ["IP Enrichment (AbuseIPDB):"]
+            note_lines.append("EnrichedIPs: " + ",".join(sorted(e["ip"] for e in enriched)))
+            for e in enriched[:5]:
                 note_lines.append(f"- {e['ip']}: score={e.get('abuseConfidenceScore')} country={e.get('countryCode')} tor={e.get('isTor')}")
             note = "\n".join(note_lines)
 
