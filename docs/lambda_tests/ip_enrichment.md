@@ -16,9 +16,12 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 ## PREREQUISITES
 * Lambda environment variables are configured:
-    * 'SNS_TOPIC_ARN'
-    * 'THREAT_INTEL_SECRET_ARN'
-    * 'WRITE_TO_SECURITYHUB'
+    * ```SNS_TOPIC_ARN```
+    * ```THREAT_INTEL_SECRET_ARN```
+    * ```WRITE_TO_SECURITYHUB```
+    * ```MAX_IPS_PER_EVENT```
+    * ```ABUSEIPDB_MAX_AGE_DAYS```
+    * ```MAX_IPS_EXTRACTED```
 * Lambda IAM role has permission to:
     * Read the threat intel secret from Secrets Manager
     * Publish to the configured SNS topic
