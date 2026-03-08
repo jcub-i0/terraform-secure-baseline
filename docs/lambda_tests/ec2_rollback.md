@@ -4,14 +4,14 @@ Purpose:
 Manual test events used to validate Lambda automation behavior before and after changes.
 
 How to use:
-* Replace <INSTANCE_ID> with the ID of the EC2 instance in the Quarantine Security Group
+* Replace ```<INSTANCE_ID>``` with the ID of the EC2 instance in the Quarantine Security Group
 * Run the test from a terminal connected to your AWS account
 * Confirm expected outcome based on 'Expected Outcome' section of each test
 
 ## EC2 ROLLBACK LAMBDA TESTS
 
 ### PREQUESITES:
-You must assume the 'SecOps-Operator' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace <ACCOUNT_ID> with your AWS account ID.
+You must assume the 'SecOps-Operator' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace ```<ACCOUNT_ID>``` with your AWS account ID.
 
 > The following commands require 'jq' to be installed on your machine.
 > Install 'jq' on Debian:
