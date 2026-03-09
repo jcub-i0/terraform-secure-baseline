@@ -4,7 +4,7 @@
 ### CONFIG SNS TOPIC
 resource "aws_sns_topic" "compliance" {
   name              = "compliance-notifications"
-  kms_master_key_id = var.logs_kms_key_arn
+  kms_master_key_id = var.logs_cmk_arn
 
   tags = {
     Name      = "ConfigNotifications"
@@ -53,7 +53,7 @@ resource "aws_sns_topic_policy" "compliance" {
 ### SECURITY SNS TOPIC
 resource "aws_sns_topic" "secops" {
   name              = "security-notifications"
-  kms_master_key_id = var.logs_kms_key_arn
+  kms_master_key_id = var.logs_cmk_arn
 
   tags = {
     Name      = "CloudtrailNotifications"

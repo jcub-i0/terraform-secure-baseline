@@ -199,7 +199,7 @@ resource "aws_iam_role_policy" "firehose_flow_logs" {
           "kms:GenerateDataKey*",
           "kms:DescribeKey"
         ]
-        Resource = var.logs_kms_key_arn
+        Resource = var.logs_cmk_arn
       }
     ]
   })
@@ -329,7 +329,7 @@ resource "aws_iam_policy" "lambda_ec2_isolation" {
           "kms:Decrypt",
           "kms:DescribeKey"
         ]
-        Resource = var.logs_kms_key_arn
+        Resource = var.logs_cmk_arn
       }
     ]
   })
@@ -410,7 +410,7 @@ resource "aws_iam_policy" "lambda_ec2_rollback" {
           "kms:Decrypt",
           "kms:DescribeKey"
         ]
-        Resource = var.logs_kms_key_arn
+        Resource = var.logs_cmk_arn
       }
     ]
   })
@@ -493,7 +493,7 @@ resource "aws_iam_policy" "lambda_ip_enrichment" {
           "kms:Decrypt",
           "kms:DescribeKey"
         ]
-        Resource = var.logs_kms_key_arn
+        Resource = var.logs_cmk_arn
       },
       # ALLOW LAMBDA TO WRITE ENRICHMENT NOTES TO FINDINGS
       {
@@ -710,7 +710,7 @@ resource "aws_iam_policy" "logs_kms_decrypt" {
           "kms:Decrypt",
           "kms:DescribeKey"
         ]
-        Resource = var.logs_kms_key_arn
+        Resource = var.logs_cmk_arn
       }
     ]
   })

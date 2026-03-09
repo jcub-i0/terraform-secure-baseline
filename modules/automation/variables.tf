@@ -42,7 +42,7 @@ variable "eventbridge_putevents_to_secops_role_arn" {
   type = string
 }
 
-variable "lambda_kms_key_arn" {
+variable "lambda_cmk_arn" {
   type = string
 }
 
@@ -54,7 +54,7 @@ variable "interface_endpoints_sg_id" {
   type = string
 }
 
-variable "logs_kms_key_arn" {
+variable "logs_cmk_arn" {
   type = string
 }
 

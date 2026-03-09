@@ -11,7 +11,7 @@ variable "instance_profile_name" {
   type = string
 }
 
-variable "ebs_kms_key_arn" {
+variable "ebs_cmk_arn" {
   type = string
 }
 

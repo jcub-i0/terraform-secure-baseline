@@ -6,7 +6,7 @@ variable "centralized_logs_bucket_id" {
   type = string
 }
 
-variable "logs_kms_key_arn" {
+variable "logs_cmk_arn" {
   type = string
 }
 

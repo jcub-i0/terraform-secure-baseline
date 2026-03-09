@@ -3,7 +3,7 @@
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/tf-secure-baseline"
   retention_in_days = 90
-  kms_key_id        = var.logs_kms_key_arn
+  kms_key_id        = var.logs_cmk_arn
 
   tags = {
     Name      = "CloudTrail-Logs"
@@ -15,7 +15,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 resource "aws_cloudwatch_log_group" "flowlogs" {
   name              = "/aws/flowlogs/tf-secure-baseline"
   retention_in_days = 90
-  kms_key_id        = var.logs_kms_key_arn
+  kms_key_id        = var.logs_cmk_arn
 
   tags = {
     Name      = "FlowLogs"
@@ -28,7 +28,7 @@ resource "aws_cloudtrail" "cloudtrail" {
   name                          = "CloudTrail"
   s3_bucket_name                = var.centralized_logs_bucket_id
   s3_key_prefix                 = "CloudTrail"
-  kms_key_id                    = var.logs_kms_key_arn
+  kms_key_id                    = var.logs_cmk_arn
   is_multi_region_trail         = true
   enable_logging                = true
   enable_log_file_validation    = true
@@ -83,7 +83,7 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
     role_arn   = var.firehose_flow_logs_role_arn
     bucket_arn = var.centralized_logs_bucket_arn
 
-    kms_key_arn = var.logs_kms_key_arn
+    kms_key_arn = var.logs_cmk_arn
 
     prefix              = "vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
     error_output_prefix = "errors/vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/!{firehose:error-output-type}/"
