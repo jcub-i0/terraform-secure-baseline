@@ -64,7 +64,7 @@ resource "aws_instance" "ec2" {
     volume_size = 20
     volume_type = "gp3"
     encrypted   = true
-    kms_key_id  = var.ebs_kms_key_arn
+    kms_key_id  = var.ebs_cmk_arn
   }
 
   tags = {

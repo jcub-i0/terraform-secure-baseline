@@ -163,7 +163,7 @@ enable_rules = {
 | `centralized_logs_bucket_name` | S3 bucket for Config history |
 | `compliance_topic_arn` | SNS topic for notifications |
 | `config_remediation_role_arn` | IAM role used for auto-remediation |
-| `logs_kms_key_arn` | KMS key used for encryption |
+| `logs_cmk_arn` | KMS key used for encryption |
 | `enable_rules` | Toggle rule families |
 | `config_rule_name_prefix` | Naming prefix for rules |
 | `tags` | Tags applied to Config rules |

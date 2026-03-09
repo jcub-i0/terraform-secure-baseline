@@ -29,7 +29,7 @@ module "compute" {
   vpc_id                         = module.networking.vpc_id
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   instance_profile_name          = module.iam.instance_profile_name
-  ebs_kms_key_arn                = module.security.ebs_kms_key_arn
+  ebs_cmk_arn                = module.security.ebs_cmk_arn
   interface_endpoints_sg_id      = module.vpc_endpoints.interface_endpoints_sg_id
   data_sg_id                     = module.storage.data_sg_id
   db_port                        = var.db_port
@@ -43,7 +43,7 @@ module "storage" {
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
   db_username                  = var.db_username
   db_password                  = var.db_password
-  logs_kms_key_arn             = module.security.logs_kms_key_arn
+  logs_cmk_arn             = module.security.logs_cmk_arn
   account_id                   = data.aws_caller_identity.current.account_id
   random_id                    = random_id.random_id.hex
   cloudtrail_arn               = module.logging.cloudtrail_arn
@@ -55,7 +55,7 @@ module "iam" {
   source                                = "./modules/iam"
   cloudtrail_log_group_arn              = module.logging.cloudtrail_log_group_arn
   secops_topic_arn                      = module.monitoring.secops_topic_arn
-  logs_kms_key_arn                      = module.security.logs_kms_key_arn
+  logs_cmk_arn                      = module.security.logs_cmk_arn
   account_id                            = data.aws_caller_identity.current.account_id
   primary_region                        = var.primary_region
   centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
@@ -87,7 +87,7 @@ module "security" {
 module "logging" {
   source                      = "./modules/logging"
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
-  logs_kms_key_arn            = module.security.logs_kms_key_arn
+  logs_cmk_arn            = module.security.logs_cmk_arn
   cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
   account_id                  = data.aws_caller_identity.current.account_id
   secops_topic_arn            = module.monitoring.secops_topic_arn
@@ -100,7 +100,7 @@ module "logging" {
 
 module "monitoring" {
   source                        = "./modules/monitoring"
-  logs_kms_key_arn              = module.security.logs_kms_key_arn
+  logs_cmk_arn              = module.security.logs_cmk_arn
   cloudtrail_log_group_name     = module.logging.cloudtrail_logs_group_name
   secops_emails                 = var.secops_emails
   tamper_detection_rule_arn     = module.security.tamper_detection_rule_arn
@@ -124,9 +124,9 @@ module "automation" {
   secops_operator_role_arn                 = module.iam.secops_operator_role_arn
   primary_region                           = var.primary_region
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
-  lambda_kms_key_arn                       = module.security.lambda_kms_key_arn
+  lambda_cmk_arn                       = module.security.lambda_cmk_arn
   interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
-  logs_kms_key_arn                         = module.security.logs_kms_key_arn
+  logs_cmk_arn                         = module.security.logs_cmk_arn
   ip_enrichment_write_to_securityhub       = var.ip_enrichment_write_to_securityhub
   abuseipdb_api_key                        = var.abuseipdb_api_key
   secrets_manager_cmk_arn                  = module.security.secrets_manager_cmk_arn

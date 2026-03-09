@@ -17,7 +17,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   timeout                        = 60
   memory_size                    = 256
   source_code_hash               = data.archive_file.lambda_ec2_isolation.output_base64sha256
-  kms_key_arn                    = var.lambda_kms_key_arn
+  kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = 5
 
   # ENABLE X-RAY TRACING FOR LAMBDA FUNC
@@ -105,7 +105,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
 resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   name              = "/aws/lambda/ec2-isolation"
   retention_in_days = 30
-  kms_key_id        = var.logs_kms_key_arn
+  kms_key_id        = var.logs_cmk_arn
 
   tags = {
     Name      = "Lambda-EC2-Isolation-Logs"
@@ -132,7 +132,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   timeout                        = 60
   memory_size                    = 256
   source_code_hash               = data.archive_file.lambda_ec2_rollback.output_base64sha256
-  kms_key_arn                    = var.lambda_kms_key_arn
+  kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = 5
 
   # ENABLE X-RAY TRACING
@@ -254,7 +254,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
 resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   name              = "/aws/lambda/ec2-rollback"
   retention_in_days = 30
-  kms_key_id        = var.logs_kms_key_arn
+  kms_key_id        = var.logs_cmk_arn
 
   tags = {
     Name      = "Lambda-EC2-Rollback-Logs"
@@ -279,7 +279,7 @@ resource "aws_lambda_function" "ip_enrichment" {
   timeout                        = 60
   memory_size                    = 256
   source_code_hash               = data.archive_file.lambda_ip_enrichment.output_base64sha256
-  kms_key_arn                    = var.lambda_kms_key_arn
+  kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = 2
 
   # ENABLE X-RAY TRACING
@@ -369,7 +369,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
 resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   name              = "/aws/lambda/ip-enrichment"
   retention_in_days = 30
-  kms_key_id        = var.logs_kms_key_arn
+  kms_key_id        = var.logs_cmk_arn
 
   tags = {
     Name      = "Lambda-IP-Enrichment-Logs"

@@ -30,7 +30,7 @@ resource "aws_config_configuration_recorder" "config" {
 resource "aws_config_delivery_channel" "config" {
   s3_bucket_name = var.centralized_logs_bucket_name
   s3_key_prefix  = "Config"
-  s3_kms_key_arn = var.logs_kms_key_arn
+  s3_kms_key_arn = var.logs_cmk_arn
   sns_topic_arn  = var.compliance_topic_arn
 
   depends_on = [

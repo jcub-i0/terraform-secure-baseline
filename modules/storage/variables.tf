@@ -24,7 +24,7 @@ variable "db_password" {
   sensitive = true
 }
 
-variable "logs_kms_key_arn" {
+variable "logs_cmk_arn" {
   type = string
 }
 
