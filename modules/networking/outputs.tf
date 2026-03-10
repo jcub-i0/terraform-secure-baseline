@@ -23,7 +23,7 @@ output "serverless_private_subnet_ids_map" {
   value       = { for az, subnet in aws_subnet.serverless_private : az => subnet.id }
 }
 
-output "firewall_private_subnet" {
+output "firewall_private_subnet_ids_map" {
   description = "map(string) of Firewall Private Subnet IDs"
   value = { for az, subnet in aws_subnet.firewall_private : az => subnet.id}
 }
