@@ -15,7 +15,7 @@ variable "logs_cmk_arn" {
 }
 
 variable "network_firewall_log_group_name" {
-  type = string
+  type    = string
   default = "/aws/network-fireall/egress"
 }
 

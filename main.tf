@@ -152,10 +152,10 @@ module "vpc_endpoints" {
 module "network_firewall" {
   source = "./modules/network_firewall"
 
-  cloud_name = var.cloud_name
-  vpc_id = module.networking.vpc_id
+  cloud_name                      = var.cloud_name
+  vpc_id                          = module.networking.vpc_id
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
-  logs_cmk_arn = module.security.logs_cmk_arn
-  centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
-  centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
+  logs_cmk_arn                    = module.security.logs_cmk_arn
+  centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
+  centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
