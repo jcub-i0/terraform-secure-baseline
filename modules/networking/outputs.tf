@@ -48,3 +48,8 @@ output "serverless_private_subnet_ids_list" {
   description = "list(string) of Serverless Private Subnet IDs"
   value       = [for subnet in aws_subnet.serverless_private : subnet.id]
 }
+
+output "firewall_private_subnet_ids_list" {
+  description = "list(string) of Firewall Private Subnet IDs"
+  value = [for subnet in aws_subnet.firewall_private : subnet.id]
+}
