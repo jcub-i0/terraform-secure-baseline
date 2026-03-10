@@ -148,3 +148,9 @@ module "vpc_endpoints" {
   lambda_ec2_isolation_sg_id        = module.automation.lambda_ec2_isolation_sg_id
   lambda_ec2_rollback_sg_id         = module.automation.lambda_ec2_rollback_sg_id
 }
+
+module "network_firewall" {
+  source = "./modules/network_firewall"
+
+  
+}
