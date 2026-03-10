@@ -9,3 +9,7 @@ variable "vpc_id" {
 variable "firewall_private_subnet_ids_map" {
   type = string
 }
+
+variable "logs_cmk_arn" {
+  type = string
+}
