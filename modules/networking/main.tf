@@ -75,6 +75,21 @@ resource "aws_subnet" "serverless_private" {
   }
 }
 
+## FIREWALL PRIVATE SUBNETS
+resource "aws_subnet" "firewall_private" {
+  for_each = local.az_index_map
+  map_public_ip_on_launch = false
+
+  vpc_id = aws_vpc.main.id
+  cidr_block = var.subnet_cidrs.firewall_private[each.value]
+  availability_zone = each.key
+
+  tags = {
+    Name = "Firewall-Private-${each.key}"
+    Terraform = "true"
+  }
+}
+
 # CREATE IGW, EIP, and NATGW
 ## IGW
 resource "aws_internet_gateway" "igw" {
