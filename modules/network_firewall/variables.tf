@@ -7,9 +7,22 @@ variable "vpc_id" {
 }
 
 variable "firewall_private_subnet_ids_map" {
-  type = string
+  type = map(string)
 }
 
 variable "logs_cmk_arn" {
+  type = string
+}
+
+variable "network_firewall_log_group_name" {
+  type = string
+  default = "/aws/network-fireall/egress"
+}
+
+variable "centralized_logs_bucket_arn" {
+  type = string
+}
+
+variable "centralized_logs_bucket_name" {
   type = string
 }
