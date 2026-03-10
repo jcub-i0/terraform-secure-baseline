@@ -152,5 +152,7 @@ module "vpc_endpoints" {
 module "network_firewall" {
   source = "./modules/network_firewall"
 
-  
+  cloud_name = var.cloud_name
+  vpc_id = module.networking.vpc_id
+  firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
 }
