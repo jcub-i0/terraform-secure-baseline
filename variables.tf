@@ -11,13 +11,13 @@ variable "main_vpc_cidr" {
 }
 
 variable "azs" {
-  description = "List of Availability Zones for deployment"
+  description = "List of Availability Zones for deployment."
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b"]
 }
 
 variable "subnet_cidrs" {
-  description = "CIDR blocks for each subnet type"
+  description = "CIDR blocks for each subnet type. If you add/remove an AZ from var.azs, update this."
   type        = map(list(string))
   default = {
     "public"             = ["10.0.0.0/24", "10.0.1.0/24"]
