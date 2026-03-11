@@ -7,9 +7,9 @@ resource "random_id" "random_id" { byte_length = 4 }
 module "networking" {
   source = "./modules/networking"
 
-  main_vpc_cidr = var.main_vpc_cidr
-  azs           = var.azs
-  subnet_cidrs  = var.subnet_cidrs
+  main_vpc_cidr               = var.main_vpc_cidr
+  azs                         = var.azs
+  subnet_cidrs                = var.subnet_cidrs
   firewall_endpoint_ids_by_az = module.network_firewall.firewall_endpoint_ids_by_az
 }
 
@@ -153,10 +153,10 @@ module "vpc_endpoints" {
 module "network_firewall" {
   source = "./modules/network_firewall"
 
-  cloud_name = var.cloud_name
-  vpc_id = module.networking.vpc_id
+  cloud_name                      = var.cloud_name
+  vpc_id                          = module.networking.vpc_id
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
-  logs_cmk_arn = module.security.logs_cmk_arn
-  centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
-  centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
+  logs_cmk_arn                    = module.security.logs_cmk_arn
+  centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
+  centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
