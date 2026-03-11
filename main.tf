@@ -10,7 +10,7 @@ module "networking" {
   main_vpc_cidr               = var.main_vpc_cidr
   azs                         = var.azs
   subnet_cidrs                = var.subnet_cidrs
-  firewall_endpoint_ids_by_az = module.network_firewall.firewall_endpoint_ids_by_az
+  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 
 module "security_policy" {
