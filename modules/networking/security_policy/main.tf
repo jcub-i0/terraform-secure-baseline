@@ -62,6 +62,16 @@ resource "aws_security_group_rule" "compute_egress_to_db" {
   description              = "Compute to DB"
 }
 
+resource "aws_security_group_rule" "compute_egress_to_internet_https" {
+  type = "egress"
+  security_group_id = var.compute_sg_id
+  from_port = 443
+  to_port = 443
+  protocol = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+  description = "Compute internet HTTPS via Network Firewall + NAT"
+}
+
 ## DATA SG RULES
 resource "aws_security_group_rule" "db_ingress_from_compute" {
   type                     = "ingress"
