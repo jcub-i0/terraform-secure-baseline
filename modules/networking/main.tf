@@ -150,10 +150,10 @@ resource "aws_route_table" "public" {
 
 ## PUBLIC ROUTE TABLE ASSOCIATION
 resource "aws_route_table_association" "public" {
-  for_each = aws_subnet.public
+  for_each = local.az_index_map
 
-  route_table_id = aws_route_table.public.id
-  subnet_id      = each.value.id
+  route_table_id = aws_route_table.public[each.key].id
+  subnet_id      = aws_subnet.public[each.key].id
 }
 
 ## PRIVATE ROUTE TABLES
