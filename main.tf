@@ -150,7 +150,7 @@ module "vpc_endpoints" {
   lambda_ec2_rollback_sg_id         = module.automation.lambda_ec2_rollback_sg_id
 }
 
-module "network_firewall" {
+module "firewall" {
   source = "./modules/network_firewall"
 
   cloud_name                      = var.cloud_name
