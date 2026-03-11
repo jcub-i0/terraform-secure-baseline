@@ -143,7 +143,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name      = "Public-Route-Table"
+    Name      = "Public-Route-Table-${each.key}"
     Terraform = "true"
   }
 }
