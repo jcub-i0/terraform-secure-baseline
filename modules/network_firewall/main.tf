@@ -64,6 +64,7 @@ resource "aws_networkfirewall_firewall_policy" "egress" {
   }
 }
 
+# NETWORK FIREWALL LOGGING CONFIG
 resource "aws_networkfirewall_logging_configuration" "egress" {
   firewall_arn = aws_networkfirewall_firewall.egress.arn
 
