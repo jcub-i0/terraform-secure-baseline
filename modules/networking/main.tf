@@ -151,7 +151,28 @@ resource "aws_route_table_association" "public" {
 }
 
 ## PRIVATE ROUTE TABLES
-resource "aws_route_table" "private" {
+
+### COMPUTE PRIVATE SUBNET ROUTE TABLE PER AZ
+resource "aws_route_table" "compute_private" {
+  for_each = local.az_index_map
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "Compute-Private-RT-${each.key}"
+    Terraform = "true"
+  }
+}
+
+resource "aws_route" "compute_default_to_firewall" {
+  for_each = local.az_index_map
+  route_table_id = aws_route_table.compute_private[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+
+  vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+}
+
+### FIREWALL PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "firewall_private" {
   for_each = local.az_index_map
   vpc_id   = aws_vpc.main.id
 
@@ -161,7 +182,29 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name      = "Private-RT-${each.key}"
+    Name      = "Firewall-Private-RT-${each.key}"
+    Terraform = "true"
+  }
+}
+
+### DATA PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "data_private" {
+  for_each = local.az_index_map
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "Data-Private-RT-${each.key}"
+    Terraform = "true"
+  }
+}
+
+### SERVERLESS PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "serverless_private" {
+  for_each = local.az_index_map
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "Serverless-Private-RT-${each.key}"
     Terraform = "true"
   }
 }
@@ -170,20 +213,27 @@ resource "aws_route_table" "private" {
 resource "aws_route_table_association" "compute_private" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private[each.key].id
+  route_table_id = aws_route_table.compute_private[each.key].id
   subnet_id      = aws_subnet.compute_private[each.key].id
+}
+
+resource "aws_route_table_association" "firewall_private" {
+  for_each = local.az_index_map
+
+  route_table_id = aws_route_table.firewall_private[each.key].id
+  subnet_id = aws_subnet.firewall_private[each.key].id
 }
 
 resource "aws_route_table_association" "data_private" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private[each.key].id
+  route_table_id = aws_route_table.data_private[each.key].id
   subnet_id      = aws_subnet.data_private[each.key].id
 }
 
 resource "aws_route_table_association" "serverless_private" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private[each.key].id
+  route_table_id = aws_route_table.serverless_private[each.key].id
   subnet_id      = aws_subnet.serverless_private[each.key].id
 }
