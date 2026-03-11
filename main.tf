@@ -151,7 +151,7 @@ module "vpc_endpoints" {
 }
 
 module "firewall" {
-  source = "./modules/network_firewall"
+  source = "./modules/firewall"
 
   cloud_name                      = var.cloud_name
   vpc_id                          = module.networking.vpc_id
