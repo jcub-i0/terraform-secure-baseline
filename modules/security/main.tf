@@ -281,6 +281,17 @@ resource "aws_kms_key" "logs" {
             "aws:SourceAccount" = var.account_id
           }
         }
+      },
+      {
+        Sid = "AllowFirewallLogDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDatakey*"
+        ]
+        Resource = "*"
       }
     ]
   })
