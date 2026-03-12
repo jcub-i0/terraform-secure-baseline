@@ -24,7 +24,9 @@ resource "aws_networkfirewall_rule_group" "stateful_domains" {
         targets = [
           ".ubuntu.com",
           ".security.ubuntu.com",
-          ".archive.ubuntu.com"
+          ".archive.ubuntu.com",
+          ".ntp.ubuntu.com",
+          "*.ec2.archive.ubuntu.com"
         ]
       }
     }
