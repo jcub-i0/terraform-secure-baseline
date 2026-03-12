@@ -9,7 +9,7 @@ echo "[INFO] Starting bootstrap at $(date -Is)"
 UBUNTU_SOURCES="/etc/apt/sources.list.d/ubuntu.sources"
 
 if [[ -f "$UBUNTU_SOURCES" ]]; then
-  cp "$UBUNTU_SOURCES" "${UBUNTU_SOURCES}.bak"
+  cp "$UBUNTU_SOURCES" "$UBUNTU_SOURCES.bak"
   sed -i 's|http://|https://|g' "$UBUNTU_SOURCES"
   echo "[INFO] Updated Ubuntu package sources to HTTPS"
 else
