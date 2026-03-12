@@ -54,6 +54,11 @@ resource "aws_networkfirewall_firewall_policy" "egress" {
       rule_order = "STRICT_ORDER"
     }
 
+    stateful_default_actions = [
+      "aws:drop_established",
+      "aws:alert_established"
+    ]
+
     stateful_rule_group_reference {
       priority     = 1
       resource_arn = aws_networkfirewall_rule_group.stateful_domains.arn
