@@ -130,7 +130,7 @@ resource "aws_nat_gateway" "natgw" {
 ## PUBLIC ROUTE TABLE
 resource "aws_route_table" "public" {
   for_each = local.az_index_map
-  vpc_id = aws_vpc.main.id
+  vpc_id   = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -138,7 +138,7 @@ resource "aws_route_table" "public" {
   }
 
   route {
-    cidr_block = var.subnet_cidrs.compute_private[each.value]
+    cidr_block      = var.subnet_cidrs.compute_private[each.value]
     vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
   }
 
