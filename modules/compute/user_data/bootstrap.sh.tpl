@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eu pipefail
+set -euo pipefail
 
 LOG_FILE="/var/log/instance-bootstrap.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
