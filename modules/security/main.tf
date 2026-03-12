@@ -283,7 +283,7 @@ resource "aws_kms_key" "logs" {
         }
       },
       {
-        Sid = "AllowFirewallLogDelivery"
+        Sid    = "AllowFirewallLogDelivery"
         Effect = "Allow"
         Principal = {
           Service = "delivery.logs.amazonaws.com"
