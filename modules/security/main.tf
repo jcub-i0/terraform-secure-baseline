@@ -289,7 +289,7 @@ resource "aws_kms_key" "logs" {
           Service = "delivery.logs.amazonaws.com"
         }
         Action = [
-          "kms:GenerateDatakey*"
+          "kms:GenerateDataKey*"
         ]
         Resource = "*"
       }
