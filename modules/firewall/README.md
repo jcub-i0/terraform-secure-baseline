@@ -4,9 +4,7 @@
 
 The `firewall` module implements **centralized outbound traffic inspection and control** using **AWS Network Firewall**.
 
-It exists to solve a key security challenge in cloud environments:
-
-> How to allow workloads to access the internet **safely** without permitting unrestricted outbound connectivity.
+It exists to solve a key security challenge in cloud environments: How to allow workloads to access the internet **safely** without permitting unrestricted outbound connectivity.
 
 In many AWS environments, workloads are placed in private subnets but still have unrestricted outbound access through a NAT Gateway. While this prevents inbound internet exposure, it does **not** restrict outbound destinations.
 
