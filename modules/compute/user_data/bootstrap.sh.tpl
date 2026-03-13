@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# This bootstrap script modifies every domain referenced in '/etc/apt/sources.list.d/ubuntu.sources'
+# to utilize the 'https' protocol instead of 'http'
+
 set -euo pipefail
 
 LOG_FILE="/var/log/instance-bootstrap.log"
