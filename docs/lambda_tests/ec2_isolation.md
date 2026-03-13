@@ -132,8 +132,15 @@ Expected output:
 * No SNS message sent
 * No Security Groups modified
 * No errors in logs
-#### Event JSON
-```json
+
+#### Manual Event via AWS CLI:
+Run the following from the CLI:
+```bash
+export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
+aws lambda invoke \
+  --function-name ec2-isolation \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
 {
   "version": "0",
   "id": "abcd-1234",
@@ -162,6 +169,16 @@ Expected output:
       }
     ]
   }
+}
+EOF
+)" \
+response.json && cat response.json && rm response.json
+```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
 }
 ```
 
