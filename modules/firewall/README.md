@@ -114,7 +114,9 @@ Two types of logs are enabled:
 AWS Network Firewall flow logs are written to Amazon S3 in batched intervals (typically every ~5 minutes).  
 Logs are stored under the following structure:
 
+```
 s3://<centralized-logs-bucket>/<prefix>/AWSLogs/<account-id>/network-firewall/flow/<region>/<firewall-name>/
+```
 
 Flow logs contain **network connection metadata**, including:
 
