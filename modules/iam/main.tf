@@ -546,10 +546,13 @@ resource "aws_iam_role" "secops_operator" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = [
-            "arn:aws:iam::${var.account_id}:user/baseline-admin",
-            "${aws_iam_role.secops_engineer.arn}"
-          ]
+          AWS = concat(
+            [
+              "arn:aws:iam::${var.account_id}:user/baseline-admin",
+              aws_iam_role.secops_engineer.arn,
+            ],
+            var.secops_operator_trusted_principal_arns
+          )
         }
         Action = "sts:AssumeRole"
       }

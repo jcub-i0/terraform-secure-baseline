@@ -4,14 +4,56 @@ Purpose:
 Manual test events used to validate Lambda automation behavior before and after changes.
 
 How to use:
-* Replace ```<INSTANCE_ID>``` with the ID of the EC2 instance in the Quarantine Security Group
-* Run the test from a terminal connected to your AWS account
+* Replace `<INSTANCE_ID>` with the ID of the EC2 instance in the Quarantine Security Group
+* Run the test from a terminal authenticated to your AWS account
 * Confirm expected outcome based on 'Expected Outcome' section of each test
 
 ## EC2 ROLLBACK LAMBDA TESTS
 
-### PREQUESITES:
-You must assume the 'SecOps-Operator' IAM role in order to trigger the EC2 Rollback Lambda function. In the commands below, replace ```<ACCOUNT_ID>``` with your AWS account ID.
+### PREREQUISITES:
+
+As you follow the instructions below, be sure to replace every instance of `<ACCOUNT_ID>` with your AWS account ID.
+
+#### Configure SecOps-Operator Trust (Required)
+Before testing this Lambda function, you must configure which IAM principals in your AWS account are allowed to assume the SecOps-Operator role.
+
+This is done by updating the `secops_operator_trusted_principal_arns` variable.
+
+Add the ARN of the IAM role that administrators in your account will use to access this environment.
+
+**Example:**
+
+If your organization uses an IAM role named `client-admin-role`, update the variable by running the following:
+
+
+```bash
+export TF_VAR_secops_operator_trusted_principal_arns='["arn:aws:iam::<ACCOUNT_ID>:role/client-admin-role"]'
+```
+
+To determine the ARN of the IAM role you are currently using, run the following:
+```bash
+aws sts get-caller-identity
+```
+Example output:
+```json
+{
+  "Arn": "arn:aws:sts::123456789012:assumed-role/client-admin-role/session-name"
+}
+```
+The corresponding IAM role ARN is:
+```text
+arn:aws:iam::123456789012:role/client-admin-role
+```
+
+##### Apply the Configuration
+
+After updating the `secops_operator_trusted_principal_arns` variable, deploy the environment from the same terminal used to set the `secops_operator_trusted_principal_arns` variable by running the following:
+```bash
+terraform apply
+```
+> Once the infrastructure is deployed, any IAM role whose ARN is included in `secops_operator_trusted_principal_arns` will be able to assume the `SecOps-Operator` role to trigger rollback operations.
+
+#### Assume the SecOps-Operator Role
 
 > The following commands require 'jq' to be installed on your machine.
 > Install 'jq' on Debian:
@@ -48,7 +90,7 @@ You should see '/SecOps-Operator/*' in the last 'Arn' line of the output.
 #### Manual Event from AWS CLI:
 Run the following:
 ```bash
-$ aws events put-events --entries '[
+aws events put-events --entries '[
   {
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",

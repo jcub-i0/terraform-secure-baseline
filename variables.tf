@@ -141,3 +141,9 @@ variable "ip_enrich_max_ips_extracted" {
   type        = string
   default     = "200"
 }
+
+variable "secops_operator_trusted_principal_arns" {
+  description = "Additional principals allowed to assume SecOps-Operator"
+  type        = list(string)
+  default     = []
+}
