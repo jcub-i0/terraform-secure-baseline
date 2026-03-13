@@ -159,9 +159,9 @@ Outbound internet access is governed by three layers:
 Workloads can only initiate outbound HTTPS connections.
 
 Example:
-
+```
 443 -> 0.0.0.0/0
-
+```
 
 This permits encrypted outbound traffic only.
 
