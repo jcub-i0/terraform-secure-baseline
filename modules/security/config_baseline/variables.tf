@@ -31,12 +31,6 @@ variable "enable_rules" {
   }
 }
 
-variable "config_rule_name_prefix" {
-  description = "Prefix for AWS Config rule names"
-  type        = string
-  default     = "tf-secure-baseline"
-}
-
 variable "tags" {
   description = "Tags to apply to Config rules"
   type        = map(string)
