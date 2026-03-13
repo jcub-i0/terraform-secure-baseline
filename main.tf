@@ -7,7 +7,7 @@ resource "random_id" "random_id" { byte_length = 4 }
 module "networking" {
   source = "./modules/networking"
 
-  cloud_name = var.cloud_name
+  cloud_name                  = var.cloud_name
   main_vpc_cidr               = var.main_vpc_cidr
   azs                         = var.azs
   subnet_cidrs                = var.subnet_cidrs
@@ -51,7 +51,7 @@ module "storage" {
   cloudtrail_arn               = module.logging.cloudtrail_arn
   bucket_admin_principles      = var.bucket_admin_principles
   secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
-  cloud_name = var.cloud_name
+  cloud_name                   = var.cloud_name
 }
 
 module "iam" {
@@ -73,7 +73,7 @@ module "iam" {
 module "security" {
   source = "./modules/security"
 
-  cloud_name = var.cloud_name
+  cloud_name                   = var.cloud_name
   config_role_arn              = module.iam.config_role_arn
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
   current_region               = data.aws_region.current.region
@@ -90,7 +90,7 @@ module "security" {
 
 module "logging" {
   source                      = "./modules/logging"
-  cloud_name = var.cloud_name
+  cloud_name                  = var.cloud_name
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
   logs_cmk_arn                = module.security.logs_cmk_arn
   cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
@@ -119,7 +119,7 @@ module "automation" {
   source = "./modules/automation"
 
   vpc_id                                   = module.networking.vpc_id
-  cloud_name = var.cloud_name
+  cloud_name                               = var.cloud_name
   lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
   lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
