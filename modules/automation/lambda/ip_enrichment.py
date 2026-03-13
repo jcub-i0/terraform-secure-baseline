@@ -16,6 +16,7 @@ sns = boto3.client("sns")
 secretsmanager = boto3.client("secretsmanager")
 securityhub = boto3.client("securityhub")
 
+CLOUD_NAME = os.environ.get("CLOUD_NAME")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 THREAT_INTEL_SECRET_ARN = os.environ.get("THREAT_INTEL_SECRET_ARN")
 WRITE_TO_SECURITYHUB = os.environ.get("WRITE_TO_SECURITYHUB", "true").lower() in ("1", "true", "yes")
@@ -227,7 +228,7 @@ def _query_abuse_ipdb(ip: str, api_key: str) -> Optional[Dict[str, Any]]:
     headers = {
         "Accept": "application/json",
         "Key": api_key,
-        "User-Agent": "tf-secure-baseline-ip-enrichment/1.0",
+        "User-Agent": f"{CLOUD_NAME}-ip-enrichment/1.0",
     }
 
     full_url = f"{url}?{urllib.parse.urlencode(params)}"
@@ -359,7 +360,7 @@ def _get_previously_enriched_ips(finding: Dict[str, Any]) -> Set[str]:
     note = finding.get("Note") or {}
     text = note.get("Text", "")
 
-    if note.get("UpdatedBy") != "tf-secure-baseline/ip-enrichment":
+    if note.get("UpdatedBy") != f"{CLOUD_NAME}/ip-enrichment":
         return set()
     
     if not isinstance(text, str):
@@ -488,7 +489,7 @@ def lambda_handler(event, context):
                 FindingIdentifiers=identifiers,
                 Note={
                     "Text": note[:1024],
-                    "UpdatedBy": "tf-secure-baseline/ip-enrichment",
+                    "UpdatedBy": f"{CLOUD_NAME}/ip-enrichment",
                 },
             )
             logger.info("Wrote enrichment note back to Security Hub findings.")
