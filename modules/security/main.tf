@@ -486,7 +486,7 @@ resource "aws_kms_key" "secrets_manager" {
 }
 
 resource "aws_kms_alias" "secrets_manager" {
-  name          = "alias/tf-secure-baseline/secrets"
+  name          = "alias/${var.cloud_name}/secrets"
   target_key_id = aws_kms_key.secrets_manager.arn
 }
 
@@ -494,6 +494,7 @@ resource "aws_kms_alias" "secrets_manager" {
 module "config_baseline" {
   source = "./config_baseline"
 
+  cloud_name = var.cloud_name
   config_enabled               = var.config_enabled
   config_role_arn              = var.config_role_arn
   compliance_topic_arn         = var.compliance_topic_arn
