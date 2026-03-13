@@ -40,7 +40,9 @@ It allows controlled outbound connectivity while preventing:
 ## Architecture
 
 The firewall is deployed using a **centralized inspection pattern**.
+
 |Compute Subnet|
+|--------------|
 ▼
 Network Firewall Endpoint
 │
