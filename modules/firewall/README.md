@@ -106,7 +106,7 @@ Two types of logs are enabled:
 
 | Log Type | Destination | Purpose |
 |---|---|---|
-| Flow Logs | S3 | Full traffic flow visibility |
+| Flow Logs | S3 | Long-term traffic flow visibility |
 | Alert Logs | CloudWatch | Real-time security alerts |
 
 ### Flow Log Behavior
