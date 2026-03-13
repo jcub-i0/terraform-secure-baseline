@@ -32,7 +32,7 @@ aws lambda invoke \
   "id": "abcd-1234",
   "detail-type": "Security Hub Findings - Imported",
   "source": "aws.securityhub",
-  "account": "072288671186",
+  "account": "<YOUR-ACCOUNT-ID>",
   "time": "2026-01-22T03:45:49Z",
   "region": "us-east-1",
   "resources": [],
@@ -49,7 +49,7 @@ aws lambda invoke \
         "Resources": [
           {
             "Type": "AwsEc2Instance",
-            "Id": "arn:aws:ec2:us-east-1:072288671186:instance/i-0ed7ecba6be9072ef"
+            "Id": "<ARN-OF-EC2-INSTANCE-TO-ISOLATE>"
           }
         ]
       }
@@ -75,8 +75,15 @@ Expected output:
 * Tags applied to instance
 * SNS notification sent to configured SNS topic
 * No errors in logs
-#### Event JSON
-```json
+
+#### Manual Event via AWS CLI:
+Run the following from the CLI:
+```bash
+export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
+aws lambda invoke \
+  --function-name ec2-isolation \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
 {
   "version": "0",
   "id": "abcd-1234",
@@ -99,12 +106,22 @@ Expected output:
         "Resources": [
           {
             "Type": "AwsEc2Instance",
-            "Id": "<ARN-OF-EC2-INSTANCE>"
+            "Id": "<ARN-OF-EC2-INSTANCE-TO-ISOLATE>"
           }
         ]
       }
     ]
   }
+}
+EOF
+)" \
+response.json && cat response.json && rm response.json
+```
+Expected output:
+```json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
 }
 ```
 
