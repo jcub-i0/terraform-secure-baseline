@@ -330,6 +330,36 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
+      },
+      {
+        Sid    = "AllowFirewallLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.centralized_logs.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AllowFirewallLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.centralized_logs.arn}/firewall/flow/AWSLogs/${var.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount"               = var.account_id
+            "s3:x-amz-acl"                    = "bucket-owner-full-control"
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
       }
     ]
   })

@@ -23,6 +23,11 @@ output "serverless_private_subnet_ids_map" {
   value       = { for az, subnet in aws_subnet.serverless_private : az => subnet.id }
 }
 
+output "firewall_private_subnet_ids_map" {
+  description = "map(string) of Firewall Private Subnet IDs"
+  value       = { for az, subnet in aws_subnet.firewall_private : az => subnet.id }
+}
+
 # For resources that need list(string) (i.e. RDS)
 output "public_subnet_ids_list" {
   description = "list(string) of Public Subnet IDs"
@@ -42,4 +47,9 @@ output "data_private_subnet_ids_list" {
 output "serverless_private_subnet_ids_list" {
   description = "list(string) of Serverless Private Subnet IDs"
   value       = [for subnet in aws_subnet.serverless_private : subnet.id]
+}
+
+output "firewall_private_subnet_ids_list" {
+  description = "list(string) of Firewall Private Subnet IDs"
+  value       = [for subnet in aws_subnet.firewall_private : subnet.id]
 }

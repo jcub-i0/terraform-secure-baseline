@@ -75,6 +75,21 @@ resource "aws_subnet" "serverless_private" {
   }
 }
 
+## FIREWALL PRIVATE SUBNETS
+resource "aws_subnet" "firewall_private" {
+  for_each                = local.az_index_map
+  map_public_ip_on_launch = false
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.subnet_cidrs.firewall_private[each.value]
+  availability_zone = each.key
+
+  tags = {
+    Name      = "Firewall-Private-${each.key}"
+    Terraform = "true"
+  }
+}
+
 # CREATE IGW, EIP, and NATGW
 ## IGW
 resource "aws_internet_gateway" "igw" {
@@ -114,29 +129,56 @@ resource "aws_nat_gateway" "natgw" {
 # CREATE AND ASSOCIATE ROUTE TABLES
 ## PUBLIC ROUTE TABLE
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
+  for_each = local.az_index_map
+  vpc_id   = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
 
+  route {
+    cidr_block      = var.subnet_cidrs.compute_private[each.value]
+    vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+  }
+
   tags = {
-    Name      = "Public-Route-Table"
+    Name      = "Public-Route-Table-${each.key}"
     Terraform = "true"
   }
 }
 
 ## PUBLIC ROUTE TABLE ASSOCIATION
 resource "aws_route_table_association" "public" {
-  for_each = aws_subnet.public
+  for_each = local.az_index_map
 
-  route_table_id = aws_route_table.public.id
-  subnet_id      = each.value.id
+  route_table_id = aws_route_table.public[each.key].id
+  subnet_id      = aws_subnet.public[each.key].id
 }
 
 ## PRIVATE ROUTE TABLES
-resource "aws_route_table" "private" {
+
+### COMPUTE PRIVATE SUBNET ROUTE TABLE PER AZ
+resource "aws_route_table" "compute_private" {
+  for_each = local.az_index_map
+  vpc_id   = aws_vpc.main.id
+
+  tags = {
+    Name      = "Compute-Private-RT-${each.key}"
+    Terraform = "true"
+  }
+}
+
+resource "aws_route" "compute_default_to_firewall" {
+  for_each               = local.az_index_map
+  route_table_id         = aws_route_table.compute_private[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+
+  vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+}
+
+### FIREWALL PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "firewall_private" {
   for_each = local.az_index_map
   vpc_id   = aws_vpc.main.id
 
@@ -146,7 +188,29 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name      = "Private-RT-${each.key}"
+    Name      = "Firewall-Private-RT-${each.key}"
+    Terraform = "true"
+  }
+}
+
+### DATA PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "data_private" {
+  for_each = local.az_index_map
+  vpc_id   = aws_vpc.main.id
+
+  tags = {
+    Name      = "Data-Private-RT-${each.key}"
+    Terraform = "true"
+  }
+}
+
+### SERVERLESS PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "serverless_private" {
+  for_each = local.az_index_map
+  vpc_id   = aws_vpc.main.id
+
+  tags = {
+    Name      = "Serverless-Private-RT-${each.key}"
     Terraform = "true"
   }
 }
@@ -155,20 +219,27 @@ resource "aws_route_table" "private" {
 resource "aws_route_table_association" "compute_private" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private[each.key].id
+  route_table_id = aws_route_table.compute_private[each.key].id
   subnet_id      = aws_subnet.compute_private[each.key].id
+}
+
+resource "aws_route_table_association" "firewall_private" {
+  for_each = local.az_index_map
+
+  route_table_id = aws_route_table.firewall_private[each.key].id
+  subnet_id      = aws_subnet.firewall_private[each.key].id
 }
 
 resource "aws_route_table_association" "data_private" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private[each.key].id
+  route_table_id = aws_route_table.data_private[each.key].id
   subnet_id      = aws_subnet.data_private[each.key].id
 }
 
 resource "aws_route_table_association" "serverless_private" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.private[each.key].id
+  route_table_id = aws_route_table.serverless_private[each.key].id
   subnet_id      = aws_subnet.serverless_private[each.key].id
 }

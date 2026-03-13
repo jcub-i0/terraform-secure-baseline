@@ -1,3 +1,9 @@
+variable "cloud_name" {
+  description = "The name of this cloud environment"
+  type        = string
+  default     = "tf-secure-baseline"
+}
+
 variable "primary_region" {
   description = "Primary Region used"
   type        = string
@@ -11,19 +17,23 @@ variable "main_vpc_cidr" {
 }
 
 variable "azs" {
-  description = "List of Availability Zones for deployment"
+  description = "List of Availability Zones for deployment."
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
+  default = [
+    "us-east-1a",
+    "us-east-1b"
+  ]
 }
 
 variable "subnet_cidrs" {
-  description = "CIDR blocks for each subnet type"
+  description = "CIDR blocks for each subnet type. If you add/remove an AZ from var.azs, update this."
   type        = map(list(string))
   default = {
     "public"             = ["10.0.0.0/24", "10.0.1.0/24"]
     "compute_private"    = ["10.0.16.0/24", "10.0.17.0/24"]
     "data_private"       = ["10.0.32.0/24", "10.0.33.0/24"]
     "serverless_private" = ["10.0.48.0/24", "10.0.49.0/24"]
+    "firewall_private"   = ["10.0.64.0/24", "10.0.65.0/24"]
   }
 }
 
