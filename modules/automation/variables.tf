@@ -2,6 +2,10 @@ variable "vpc_id" {
   type = string
 }
 
+variable "cloud_name" {
+  type = string
+}
+
 variable "lambda_ec2_isolation_role_arn" {
   type = string
 }
