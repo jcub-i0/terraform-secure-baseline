@@ -304,7 +304,7 @@ resource "aws_kms_key" "logs" {
 
 ### ALIAS FOR LOGS KMS KEY
 resource "aws_kms_alias" "logs" {
-  name          = "alias/tf-baseline-logs"
+  name          = "alias/${var.cloud_name}-logs"
   target_key_id = aws_kms_key.logs.key_id
 }
 
