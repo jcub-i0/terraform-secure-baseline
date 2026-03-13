@@ -41,21 +41,7 @@ It allows controlled outbound connectivity while preventing:
 
 The firewall is deployed using a **centralized inspection pattern**.
 
-|Compute Subnet|
-        ▼
-Network Firewall Endpoint
-│
-▼
-Firewall Subnet
-│
-▼
-NAT Gateway
-│
-▼
-Internet Gateway
-│
-▼
-Internet
+Compute Subnet ➔ Network Firewall Endpoint ➔ Firewall Subnet ➔ NAT Gateway ➔ Internet Gateway ➔ Internet
 
 Outbound traffic from compute workloads follows this path:
 
