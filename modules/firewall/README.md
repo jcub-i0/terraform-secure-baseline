@@ -109,12 +109,39 @@ Two types of logs are enabled:
 | Flow Logs | S3 | Full traffic flow visibility |
 | Alert Logs | CloudWatch | Real-time security alerts |
 
-This provides both:
+### Flow Log Behavior
 
-- **Forensic visibility**
-- **Operational monitoring**
+AWS Network Firewall flow logs are written to Amazon S3 in batched intervals (typically every ~5 minutes).  
+Logs are stored under the following structure:
 
-Logs are integrated with the centralized logging architecture used by the rest of the environment.
+s3://<centralized-logs-bucket>/<prefix>/AWSLogs/<account-id>/network-firewall/flow/<region>/<firewall-name>/
+
+Flow logs contain **network connection metadata**, including:
+
+- Source and destination IP addresses
+- Source and destination ports
+- Protocol
+- Firewall action (pass / drop)
+- Packet and byte counts
+- Flow start and end times
+
+These logs are designed primarily for **forensic analysis and traffic investigation**, rather than real-time alerting.  
+They are well suited for long-term storage and integration with analytics platforms such as:
+
+- Amazon Athena
+- OpenSearch
+- SIEM platforms
+
+Because flow logs are batched and delivered asynchronously, entries may appear in S3 several minutes after traffic occurs.
+
+### Logging Strategy
+
+This logging architecture provides both:
+
+- **Operational monitoring** through real-time alert logs in CloudWatch
+- **Forensic visibility** through long-term flow logs stored in S3
+
+All firewall logs are integrated with the centralized logging architecture used throughout the environment.
 
 ---
 
