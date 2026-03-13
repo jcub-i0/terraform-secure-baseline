@@ -1,7 +1,7 @@
 # CLOUDWATCH LOG GROUPS
 ## CLOUDTRAIL LOG GROUP
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/tf-secure-baseline"
+  name              = "/aws/cloudtrail/${var.cloud_name}"
   retention_in_days = 90
   kms_key_id        = var.logs_cmk_arn
 
@@ -13,7 +13,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
 ## FLOW LOGS LOG GROUP
 resource "aws_cloudwatch_log_group" "flowlogs" {
-  name              = "/aws/flowlogs/tf-secure-baseline"
+  name              = "/aws/flowlogs/${var.cloud_name}"
   retention_in_days = 90
   kms_key_id        = var.logs_cmk_arn
 
