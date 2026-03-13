@@ -70,6 +70,7 @@ module "iam" {
   threat_intel_api_keys_arn             = module.automation.threat_intel_api_keys_arn
   lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
   secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
+  secops_operator_trusted_principal_arns = var.secops_operator_trusted_principal_arns
 }
 
 module "security" {
