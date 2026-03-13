@@ -160,3 +160,8 @@ module "firewall" {
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
   centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
+
+module "patch_management" {
+  source = "./modules/patch_management"
+  
+}
