@@ -49,3 +49,7 @@ variable "bucket_admin_principles" {
 variable "secrets_manager_cmk_arn" {
   type = string
 }
+
+variable "cloud_name" {
+  type = string
+}

@@ -1,3 +1,7 @@
+variable "cloud_name" {
+  type = string
+}
+
 variable "config_enabled" {
   type    = bool
   default = false
@@ -25,12 +29,6 @@ variable "enable_rules" {
     ec2_baseline        = true
     kms_baseline        = true
   }
-}
-
-variable "config_rule_name_prefix" {
-  description = "Prefix for AWS Config rule names"
-  type        = string
-  default     = "tf-secure-baseline"
 }
 
 variable "tags" {

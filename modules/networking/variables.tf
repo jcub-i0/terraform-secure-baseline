@@ -2,6 +2,10 @@ variable "main_vpc_cidr" {
   type = string
 }
 
+variable "cloud_name" {
+  type = string
+}
+
 variable "azs" {
   type = list(string)
 }

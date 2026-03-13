@@ -165,7 +165,7 @@ locals {
 resource "aws_config_config_rule" "managed" {
   for_each = var.config_enabled ? local.enabled_managed_rules : {}
 
-  name = "${var.config_rule_name_prefix}-${each.value.name_suffix}"
+  name = "${var.cloud_name}-${each.value.name_suffix}"
 
   source {
     owner             = "AWS"

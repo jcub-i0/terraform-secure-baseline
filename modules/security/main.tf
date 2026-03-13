@@ -304,7 +304,7 @@ resource "aws_kms_key" "logs" {
 
 ### ALIAS FOR LOGS KMS KEY
 resource "aws_kms_alias" "logs" {
-  name          = "alias/tf-baseline-logs"
+  name          = "alias/${var.cloud_name}-logs"
   target_key_id = aws_kms_key.logs.key_id
 }
 
@@ -486,7 +486,7 @@ resource "aws_kms_key" "secrets_manager" {
 }
 
 resource "aws_kms_alias" "secrets_manager" {
-  name          = "alias/tf-secure-baseline/secrets"
+  name          = "alias/${var.cloud_name}/secrets"
   target_key_id = aws_kms_key.secrets_manager.arn
 }
 
@@ -494,6 +494,7 @@ resource "aws_kms_alias" "secrets_manager" {
 module "config_baseline" {
   source = "./config_baseline"
 
+  cloud_name                   = var.cloud_name
   config_enabled               = var.config_enabled
   config_role_arn              = var.config_role_arn
   compliance_topic_arn         = var.compliance_topic_arn
@@ -507,5 +508,6 @@ module "config_baseline" {
 module "tamper_detection" {
   source = "./tamper_detection"
 
+  cloud_name      = var.cloud_name
   alert_topic_arn = var.secops_topic_arn
 }
