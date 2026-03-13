@@ -51,7 +51,7 @@ Outbound traffic from compute workloads follows this path:
 4. NAT sends traffic to the **Internet Gateway**
 5. Return traffic follows the **same path back**
 
-This ensures all internet-bound traffic is inspected.
+This ensures all internet-bound traffic is inspected and symmetrical.
 
 ---
 
