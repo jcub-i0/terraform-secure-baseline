@@ -32,7 +32,7 @@ locals {
 
 # TAMPER DETECTION EVENTBRIDGE RULE
 resource "aws_cloudwatch_event_rule" "tamper_detection" {
-  name        = "${var.name_prefix}-tamper-detection"
+  name        = "${var.cloud_name}-tamper-detection"
   description = "Detect attempts to disable/modify security controls (CloudTrail/GuardDuty/KMS) and alert via SNS"
 
   event_pattern = jsonencode({
