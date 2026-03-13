@@ -91,11 +91,11 @@ The rule group uses a **generated allowlist** based on:
 Example allowed domains include Ubuntu package repositories required for secure OS patching.
 
 Example:
-
+```
 .archive.ubuntu.com
 .security.ubuntu.com
 .ubuntu.com
-
+```
 This allows necessary system updates while preventing access to arbitrary external domains.
 
 ---
