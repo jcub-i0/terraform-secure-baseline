@@ -291,7 +291,7 @@ resource "aws_lambda_function" "ip_enrichment" {
 
   environment {
     variables = {
-      CLOUD_NAME = var.cloud_name
+      CLOUD_NAME              = var.cloud_name
       SNS_TOPIC_ARN           = var.secops_topic_arn
       THREAT_INTEL_SECRET_ARN = aws_secretsmanager_secret.threat_intel_api_keys.arn
       WRITE_TO_SECURITYHUB    = var.ip_enrichment_write_to_securityhub
