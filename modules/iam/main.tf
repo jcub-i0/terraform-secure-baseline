@@ -549,7 +549,7 @@ resource "aws_iam_role" "secops_operator" {
           AWS = [
             "arn:aws:iam::${var.account_id}:user/baseline-admin",
             "${aws_iam_role.secops_engineer.arn}",
-            var.operator_trusted_principal_arns
+            var.secops_operator_trusted_principal_arns
           ]
         }
         Action = "sts:AssumeRole"
