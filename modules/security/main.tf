@@ -508,5 +508,6 @@ module "config_baseline" {
 module "tamper_detection" {
   source = "./tamper_detection"
 
+  cloud_name = var.cloud_name
   alert_topic_arn = var.secops_topic_arn
 }
