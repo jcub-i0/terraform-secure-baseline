@@ -2,6 +2,10 @@ variable "vpc_id" {
   type = string
 }
 
+variable "cloud_name" {
+  type = string
+}
+
 variable "centralized_logs_bucket_id" {
   type = string
 }
