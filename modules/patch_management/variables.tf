@@ -9,6 +9,12 @@ variable "patch_tag_value" {
   default     = "weekly-linux"
 }
 
+variable "patch_schedule" {
+  description = "Cron-formatted schedule for patches to take place"
+  type = string
+  default = "cron(0 3 ? * SUN *)"
+}
+
 variable "patching_enabled" {
   description = "Enabled or disable patching"
   type        = bool
