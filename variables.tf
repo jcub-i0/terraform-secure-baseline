@@ -147,3 +147,9 @@ variable "secops_operator_trusted_principal_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "patch_tag_value" {
+  description = "Tag value used to target patchable instances (the key is 'PatchGroup' by default)"
+  type        = string
+  default     = "weekly-linux"
+}
