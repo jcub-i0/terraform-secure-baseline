@@ -53,3 +53,20 @@ resource "aws_iam_policy" "logs_kms_decrypt" {
     ]
   })
 }
+
+### EC2 ROLLBACK TRIGGER POLICY
+resource "aws_iam_policy" "secops_rollback_trigger" {
+  name = "SecOpsRollbackTriggerPolicy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "AllowEc2RollbackEventOnly"
+        Effect   = "Allow"
+        Action   = "events:PutEvents"
+        Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
+      }
+    ]
+  })
+}
