@@ -14,3 +14,16 @@ resource "aws_ssm_maintenance_window" "patching" {
     Terraform = "true"
   }
 }
+
+# MAINTENANCE WINDOW TARGET
+resource "aws_ssm_maintenance_window_target" "patching" {
+  name = "${var.cloud_name}-patch-target"
+  window_id = aws_ssm_maintenance_window.patching.id
+  description = "Instances tagged for weekly patching"
+  resource_type = "INSTANCE"
+
+  targets {
+    key = "tag:PatchGroup"
+    values = [var.patch_tag_value]
+  }
+}
