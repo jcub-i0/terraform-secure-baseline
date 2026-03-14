@@ -26,3 +26,11 @@ variable "data_sg_id" {
 variable "db_port" {
   type = string
 }
+
+variable "patch_tag_key" {
+  type = string
+}
+
+variable "patch_tag_value" {
+  type = string
+}
