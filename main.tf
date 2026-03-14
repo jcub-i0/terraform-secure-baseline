@@ -172,6 +172,6 @@ module "firewall" {
 module "patch_management" {
   source = "./modules/patch_management"
 
-  cloud_name = var.cloud_name
+  cloud_name                        = var.cloud_name
   patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
 }
