@@ -2,7 +2,7 @@
 resource "aws_ssm_maintenance_window" "patching" {
   name                       = "${var.cloud_name}-weekly-patching"
   description                = "Weekly patch window for Ubuntu EC2 instances"
-  schedule                   = "cron(0 3 ? * SUN *)"
+  schedule                   = var.patch_schedule
   schedule_timezone          = "America/New_York"
   duration                   = 3
   cutoff                     = 1
