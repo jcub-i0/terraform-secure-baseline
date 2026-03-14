@@ -46,3 +46,7 @@ output "cw_to_firehose_role_arn" {
 output "eventbridge_putevents_to_secops_role_arn" {
   value = aws_iam_role.eventbridge_putevents_to_secops.arn
 }
+
+output "patch_maintenance_window_role_arn" {
+  value = aws_iam_role.patch_maintenance_window.arn
+}
