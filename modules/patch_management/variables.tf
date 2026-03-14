@@ -11,8 +11,8 @@ variable "patch_tag_value" {
 
 variable "patch_schedule" {
   description = "Cron-formatted schedule for patches to take place"
-  type = string
-  default = "cron(0 3 ? * SUN *)"
+  type        = string
+  default     = "cron(0 3 ? * SUN *)"
 }
 
 variable "patching_enabled" {
