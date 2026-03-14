@@ -8,3 +8,9 @@ variable "patch_tag_value" {
   type = string
   default = "weekly-linux"
 }
+
+variable "patching_enabled" {
+  description = "Enabled or disable patching"
+  type = bool
+  default = true
+}
