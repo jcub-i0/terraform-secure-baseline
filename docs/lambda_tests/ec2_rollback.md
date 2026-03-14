@@ -5,14 +5,13 @@ Manual test events used to validate Lambda automation behavior before and after 
 
 How to use:
 * Replace `<INSTANCE_ID>` with the ID of the EC2 instance in the Quarantine Security Group
+* Replace `<ACCOUNT_ID>` with your AWS account ID
 * Run the test from a terminal authenticated to your AWS account
 * Confirm expected outcome based on 'Expected Outcome' section of each test
 
 ## EC2 ROLLBACK LAMBDA TESTS
 
 ### PREREQUISITES:
-
-As you follow the instructions below, be sure to replace every instance of `<ACCOUNT_ID>` with your AWS account ID.
 
 #### Configure SecOps-Operator Trust (Required)
 Before testing this Lambda function, you must configure which IAM principals in your AWS account are allowed to assume the SecOps-Operator role.
