@@ -7,7 +7,7 @@ resource "aws_ssm_maintenance_window" "patching" {
   duration = 3
   cutoff = 1
   allow_unassociated_targets = false
-  enabled = var.enabled
+  enabled = var.patching_enabled
 
   tags = {
     Name = "Weekly-Patching"
