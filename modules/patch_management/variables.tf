@@ -17,8 +17,8 @@ variable "patch_schedule" {
 
 variable "schedule_timezone" {
   description = "Timezone for the scheduled patching to take place, referenced by var.patch_schedule"
-  type = string
-  default = "America/New_York"
+  type        = string
+  default     = "America/New_York"
 }
 
 variable "patching_enabled" {
