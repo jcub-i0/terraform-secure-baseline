@@ -76,7 +76,7 @@ resource "aws_iam_role_policy_attachment" "securityhub_readonly_secops_engineer"
   policy_arn = "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
 }
 
-## SECOPS-ANALSYT ROLE
+## SECOPS-ANALYST ROLE
 resource "aws_iam_role" "secops_analyst" {
   name = "SecOps-Analyst"
 
