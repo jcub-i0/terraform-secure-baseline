@@ -10,7 +10,7 @@ resource "aws_ssm_maintenance_window" "patching" {
   enabled                    = var.patching_enabled
 
   tags = {
-    Name      = "${var.cloud_name}Weekly-Patching"
+    Name      = "${var.cloud_name}-Weekly-Patching"
     Terraform = "true"
   }
 }
@@ -23,7 +23,7 @@ resource "aws_ssm_maintenance_window_target" "patching" {
   resource_type = "INSTANCE"
 
   targets {
-    key    = var.patch_tag_key
+    key    = "tag:${var.patch_tag_key}"
     values = [var.patch_tag_value]
   }
 }
@@ -32,7 +32,7 @@ resource "aws_ssm_maintenance_window_target" "patching" {
 resource "aws_ssm_maintenance_window_task" "patching" {
   name             = "${var.cloud_name}-run-patch-baseline"
   window_id        = aws_ssm_maintenance_window.patching.id
-  description      = "Run AWS-RunPatch-Baseline Install on tagged instances"
+  description      = "Run AWS-RunPatchBaseline Install on tagged instances"
   task_type        = "RUN_COMMAND"
   task_arn         = "AWS-RunPatchBaseline"
   service_role_arn = var.patch_maintenance_window_role_arn
