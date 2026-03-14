@@ -5,8 +5,8 @@ variable "cloud_name" {
 
 variable "patch_key_value" {
   description = "Tag key used to target patchable instances"
-  type = string
-  default = "PatchGroup"
+  type        = string
+  default     = "PatchGroup"
 }
 
 variable "patch_tag_value" {
