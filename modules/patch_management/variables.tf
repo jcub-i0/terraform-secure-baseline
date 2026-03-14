@@ -17,5 +17,5 @@ variable "patching_enabled" {
 
 variable "patch_maintenance_window_role_arn" {
   description = "ARN attribute of the Patch Maintenance Window's IAM role"
-  type = string
+  type        = string
 }
