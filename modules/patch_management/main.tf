@@ -27,3 +27,37 @@ resource "aws_ssm_maintenance_window_target" "patching" {
     values = [var.patch_tag_value]
   }
 }
+
+# MAINTENANCE WINDOW TASK
+resource "aws_ssm_maintenance_window_task" "patching" {
+  name = "${var.cloud_name}-run-patch-baseline"
+  window_id = aws_ssm_maintenance_window.patching.id
+  description = "Run AWS-RunPatch-Baseline Install on tagged instances"
+  task_type = "RUN_COMMAND"
+  task_arn = "AWS-RunPatchBaseline"
+  service_role_arn = var.patch_maintenance_window_role_arn
+  priority = 1
+  max_concurrency = "1"
+  max_errors = "1"
+
+  targets {
+    key = "WindowTargetIds"
+    values = [aws_ssm_maintenance_window.patching.id]
+  }
+
+  task_invocation_parameters {
+    run_command_parameters {
+      comment = "Weekly OS patching"
+
+      parameter {
+        name = "Operation"
+        values = ["Install"]
+      }
+
+      parameter {
+        name = "RebootOption"
+        values = ["RebootIfNeeded"]
+      }
+    }
+  }
+}
