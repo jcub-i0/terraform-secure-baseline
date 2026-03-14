@@ -172,4 +172,5 @@ module "firewall" {
 module "patch_management" {
   source = "./modules/patch_management"
 
+  cloud_name = var.cloud_name
 }
