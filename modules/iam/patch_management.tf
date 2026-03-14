@@ -8,23 +8,23 @@ resource "aws_iam_role" "patch_maintenance_window" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-        {
-            Effect = "Allow"
-            Principal = {
-                Service = "ssm.amazonaws.com"
-            }
-            Action = "sts:AssumeRole"
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ssm.amazonaws.com"
         }
+        Action = "sts:AssumeRole"
+      }
     ]
   })
 
   tags = {
-    Name = "PatchMaintenanceWindowRole"
+    Name      = "PatchMaintenanceWindowRole"
     Terraform = "true"
   }
 }
 
 resource "aws_iam_role_policy_attachment" "patch_maintenance_window" {
-  role = aws_iam_role.patch_maintenance_window.name
+  role       = aws_iam_role.patch_maintenance_window.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole"
 }
