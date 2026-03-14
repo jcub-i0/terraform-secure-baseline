@@ -29,6 +29,7 @@ variable "db_port" {
 
 variable "patch_tag_key" {
   type = string
+  default = "PatchGroup"
 }
 
 variable "patch_tag_value" {
