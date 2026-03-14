@@ -23,7 +23,7 @@ resource "aws_ssm_maintenance_window_target" "patching" {
   resource_type = "INSTANCE"
 
   targets {
-    key    = "tag:PatchGroup"
+    key    = var.patch_key_value
     values = [var.patch_tag_value]
   }
 }
