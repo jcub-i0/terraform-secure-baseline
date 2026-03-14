@@ -42,7 +42,7 @@ resource "aws_ssm_maintenance_window_task" "patching" {
 
   targets {
     key    = "WindowTargetIds"
-    values = [aws_ssm_maintenance_window.patching.id]
+    values = [aws_ssm_maintenance_window_target.patching.id]
   }
 
   task_invocation_parameters {
