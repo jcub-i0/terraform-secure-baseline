@@ -10,7 +10,7 @@ resource "aws_ssm_maintenance_window" "patching" {
   enabled                    = var.patching_enabled
 
   tags = {
-    Name      = "Weekly-Patching"
+    Name      = "${var.cloud_name}Weekly-Patching"
     Terraform = "true"
   }
 }
