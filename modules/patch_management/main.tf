@@ -48,6 +48,7 @@ resource "aws_ssm_maintenance_window_task" "patching" {
   task_invocation_parameters {
     run_command_parameters {
       comment = "Weekly OS patching"
+      timeout_seconds = 3600
 
       parameter {
         name   = "Operation"
