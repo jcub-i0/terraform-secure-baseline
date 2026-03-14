@@ -15,6 +15,12 @@ variable "patch_schedule" {
   default     = "cron(0 3 ? * SUN *)"
 }
 
+variable "schedule_timezone" {
+  description = "Timezone for the scheduled patching to take place, referenced by var.patch_schedule"
+  type = string
+  default = "America/New_York"
+}
+
 variable "patching_enabled" {
   description = "Enabled or disable patching"
   type        = bool
