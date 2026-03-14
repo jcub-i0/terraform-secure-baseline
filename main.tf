@@ -35,6 +35,8 @@ module "compute" {
   interface_endpoints_sg_id      = module.vpc_endpoints.interface_endpoints_sg_id
   data_sg_id                     = module.storage.data_sg_id
   db_port                        = var.db_port
+  patch_tag_key = var.patch_tag_key
+  patch_tag_value = var.patch_tag_value
 }
 
 module "storage" {
@@ -174,4 +176,6 @@ module "patch_management" {
 
   cloud_name                        = var.cloud_name
   patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
+  patch_tag_key = var.patch_tag_key
+  patch_tag_value = var.patch_tag_value
 }
