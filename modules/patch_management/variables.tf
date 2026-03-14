@@ -22,7 +22,7 @@ variable "schedule_timezone" {
 }
 
 variable "patching_enabled" {
-  description = "Enabled or disable patching"
+  description = "Enable or disable patching"
   type        = bool
   default     = true
 }
