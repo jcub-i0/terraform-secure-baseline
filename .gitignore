@@ -57,3 +57,51 @@ secrest.json
 secrets.yml
 secrets.yaml
 
+#################################
+# Python (Lambda development)
+#################################
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+venv/
+.env/
+.venv/
+
+#################################
+# OS / Editor
+#################################
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# VSCode
+.vscode/
+
+# JetBrains
+.idea/
+
+#################################
+# Logs
+#################################
+
+*.log
+logs/
+
+#################################
+# Build artifacts
+#################################
+
+dist/
+build/
+*.zip
+*.tar.gz
