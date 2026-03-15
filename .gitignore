@@ -1,3 +1,7 @@
+#################################
+# Terraform
+#################################
+
 # Local .terraform directories
 .terraform/
 
@@ -36,3 +40,20 @@ terraform.rc
 
 # Ignore .ZIP files
 *.zip
+
+#################################
+# Sensitive / Secrets
+#################################
+
+# Local environment variables
+.env
+.env.*
+
+# AWS credentials
+.aws/
+
+# Secret files
+secrest.json
+secrets.yml
+secrets.yaml
+
