@@ -1,7 +1,7 @@
 # SECURITYHUB INSIGHTS
 ## CRITICAL + HIGH FINDINGS
-resource "aws_securityhub_insight" "critical_high" {
-  name               = "Critical and High Findings"
+resource "aws_securityhub_insight" "high_critical" {
+  name               = "High and Critical Findings"
   group_by_attribute = "SeverityLabel"
 
   filters {
