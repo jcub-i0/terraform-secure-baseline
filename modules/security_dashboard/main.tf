@@ -104,7 +104,7 @@ resource "aws_securityhub_insight" "failed_controls" {
   filters {
     product_name {
       comparison = "EQUALS"
-      value = "Security Hub"
+      value      = "Security Hub"
     }
     compliance_status {
       comparison = "EQUALS"
