@@ -72,3 +72,26 @@ resource "aws_securityhub_insight" "inspector_active" {
     }
   }
 }
+
+## EC2 FINDINGS
+resource "aws_securityhub_insight" "ec2_findings" {
+  name = "EC2 Findings"
+  group_by_attribute = "ResourceId"
+
+  filters {
+    product_arn {
+      comparison = "EQUALS"
+      value = "AwsEc2Instance"
+    }
+
+    workflow_status {
+      comparison = "NOT_EQUALS"
+      value = "RESOLVED"
+    }
+
+    record_state {
+      comparison = "EQUALS"
+      value = "ACTIVE"
+    }
+  }
+}
