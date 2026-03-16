@@ -58,7 +58,7 @@ resource "aws_securityhub_insight" "inspector_active" {
   filters {
     product_name {
       comparison = "EQUALS"
-      value      = "INSPECTOR"
+      value      = "Inspector"
     }
 
     workflow_status {
