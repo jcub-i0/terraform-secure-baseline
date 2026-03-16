@@ -76,7 +76,7 @@ resource "aws_securityhub_insight" "inspector_active" {
 ## EC2 FINDINGS
 resource "aws_securityhub_insight" "ec2_findings" {
   name               = "EC2 Findings"
-  group_by_attribute = "ResourceId"
+  group_by_attribute = "SeverityLabel"
 
   filters {
     resource_type {
