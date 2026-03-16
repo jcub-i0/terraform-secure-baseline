@@ -98,7 +98,7 @@ resource "aws_securityhub_insight" "ec2_findings" {
 
 ## FAILED CONTROLS
 resource "aws_securityhub_insight" "failed_controls" {
-  name               = "Failed Controls by Standard"
+  name               = "Failed Controls"
   group_by_attribute = "ComplianceSecurityControlId"
 
   filters {
