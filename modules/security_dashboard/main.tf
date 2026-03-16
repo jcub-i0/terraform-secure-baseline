@@ -79,9 +79,9 @@ resource "aws_securityhub_insight" "ec2_findings" {
   group_by_attribute = "ResourceId"
 
   filters {
-    product_name {
+    resource_type {
       comparison = "EQUALS"
-      value      = "AwsEc2Instance"
+      value = "AwsEc2Instance"
     }
 
     workflow_status {
