@@ -177,3 +177,8 @@ module "patch_management" {
   patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
   patch_tag_value                   = var.patch_tag_value
 }
+
+module "security_dashboard" {
+  source = "./modules/security_dashboard"
+  
+}
