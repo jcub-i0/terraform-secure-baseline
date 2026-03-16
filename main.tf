@@ -180,5 +180,5 @@ module "patch_management" {
 
 module "security_dashboard" {
   source = "./modules/security_dashboard"
-  
+
 }
