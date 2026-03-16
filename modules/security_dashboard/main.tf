@@ -95,3 +95,21 @@ resource "aws_securityhub_insight" "ec2_findings" {
     }
   }
 }
+
+## FAILED CONTROLS
+resource "aws_securityhub_insight" "failed_controls" {
+  name = "Failed Controls by Standard"
+  group_by_attribute = "ComplianceSecurityControlId"
+
+  filters {
+    compliance_status {
+      comparison = "EQUALS"
+      value = "FAILED"
+    }
+
+    record_state {
+      comparison = "EQUALS"
+      value = "ACTIVE"
+    }
+  }
+}
