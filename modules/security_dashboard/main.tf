@@ -49,3 +49,26 @@ resource "aws_securityhub_insight" "guardduty_active" {
     }
   }
 }
+
+## INSPECTOR ACTIVE FINDINGS
+resource "aws_securityhub_insight" "inspector_active" {
+  name = "Active Inspector Findings"
+  group_by_attribute = "SeverityLabel"
+
+  filters {
+    product_name {
+      comparison = "EQUALS"
+      value = "INSPECTOR"
+    }
+
+    workflow_status {
+      comparison = "NOT_EQUALS"
+      value = "RESOLVED"
+    }
+
+    record_state {
+      comparison = "EQUALS"
+      value = "ACTIVE"
+    }
+  }
+}
