@@ -42,7 +42,7 @@ resource "aws_db_instance" "main" {
   multi_az            = true
   publicly_accessible = false
 
-  db_name  = "appdb"
+  db_name  = "${var.cloud_name}-db"
   username = var.db_username
   # SET 'password' TO var.db_password IF NOT USING AUTO-GENERATED PASSWORD FOR RDS
   password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
