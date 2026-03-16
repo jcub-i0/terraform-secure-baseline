@@ -109,7 +109,7 @@ resource "aws_s3_bucket" "centralized_logs" {
   }
 
   tags = {
-    Name      = "TF-Baseline-Centralized-Logs"
+    Name      = "${var.cloud_name}-Centralized-Logs"
     Terraform = "true"
   }
 }
