@@ -102,6 +102,10 @@ resource "aws_securityhub_insight" "failed_controls" {
   group_by_attribute = "ComplianceSecurityControlId"
 
   filters {
+    product_name {
+      comparison = "EQUALS"
+      value = "Security Hub"
+    }
     compliance_status {
       comparison = "EQUALS"
       value      = "FAILED"
