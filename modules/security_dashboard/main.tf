@@ -81,7 +81,7 @@ resource "aws_securityhub_insight" "ec2_findings" {
   filters {
     resource_type {
       comparison = "EQUALS"
-      value = "AwsEc2Instance"
+      value      = "AwsEc2Instance"
     }
 
     workflow_status {
