@@ -96,6 +96,39 @@ resource "aws_securityhub_insight" "ec2_findings" {
   }
 }
 
+## EC2 HIGH AND CRITICAL FINDINGS
+resource "aws_securityhub_insight" "ec2_high_critical" {
+  name = "EC2 High and Critical Findings"
+  group_by_attribute = "ResourceId"
+
+  filters {
+    resource_type {
+      comparison = "EQUALS"
+      value = "AwsEc2Instance"
+    }
+
+    severity_label {
+      comparison = "EQUALS"
+      value = "CRITICAL"
+    }
+
+    severity_label {
+      comparison = "EQUALS"
+      value = "HIGH"
+    }
+
+    workflow_status {
+      comparison = "NOT_EQUALS"
+      value = "RESOLVED"
+    }
+
+    record_state {
+      comparison = "EQUALS"
+      value = "ACTIVE"
+    }
+  }
+}
+
 ## FAILED CONTROLS
 resource "aws_securityhub_insight" "failed_controls" {
   name               = "Failed Controls"
