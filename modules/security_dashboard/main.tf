@@ -33,7 +33,7 @@ resource "aws_securityhub_insight" "guardduty_active" {
   group_by_attribute = "SeverityLabel"
 
   filters {
-    product_arn {
+    product_name {
       comparison = "EQUALS"
       value      = "GuardDuty"
     }
@@ -79,7 +79,7 @@ resource "aws_securityhub_insight" "ec2_findings" {
   group_by_attribute = "ResourceId"
 
   filters {
-    product_arn {
+    product_name {
       comparison = "EQUALS"
       value      = "AwsEc2Instance"
     }
