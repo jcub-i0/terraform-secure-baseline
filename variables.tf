@@ -4,6 +4,12 @@ variable "cloud_name" {
   default     = "tf-secure-baseline"
 }
 
+variable "environment" {
+  description = "Environment name"
+  type = string
+  default = "dev"
+}
+
 variable "primary_region" {
   description = "Primary Region used"
   type        = string
