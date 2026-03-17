@@ -1,6 +1,5 @@
 ====================================================================
 NOTICE: PROPRIETARY CODE
-
 ====================================================================
 This repository is the property of Nano Nexus Consulting.
 
