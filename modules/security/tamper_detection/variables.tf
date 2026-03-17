@@ -1,3 +1,8 @@
+variable "environment" {
+  description = "Environment name"
+  type = string
+}
+
 variable "alert_topic_arn" {
   description = "SNS topic ARN to receive tamper alerts"
   type        = string
