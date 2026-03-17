@@ -37,8 +37,9 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids = [for rt in values(data.aws_route_table.endpoint) : rt.id]
 
   tags = {
-    Name      = "S3-Gateway-Endpoint"
-    Terraform = "true"
+    Name        = "S3-Gateway-Endpoint"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -52,8 +53,9 @@ resource "aws_security_group" "interface_endpoints_sg" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name      = "VPC-Endpoints-SG"
-    Terraform = "true"
+    Name        = "VPC-Endpoints-SG"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -65,8 +67,10 @@ resource "aws_vpc_endpoint" "interface" {
   subnet_ids          = values(local.endpoint_subnets)
   security_group_ids  = [aws_security_group.interface_endpoints_sg.id]
   private_dns_enabled = true
+
   tags = {
-    Name      = "VPC-Endpoint-${each.key}"
-    Terraform = "true"
+    Name        = "VPC-Endpoint-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }

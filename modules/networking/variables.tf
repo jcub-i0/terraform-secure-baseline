@@ -2,6 +2,10 @@ variable "main_vpc_cidr" {
   type = string
 }
 
+variable "environment" {
+  type = string
+}
+
 variable "cloud_name" {
   type = string
 }

@@ -47,6 +47,12 @@ resource "aws_cloudwatch_event_rule" "tamper_detection" {
       "eventName" = local.tamper_actions
     }
   })
+
+  tags = {
+    Name        = "TamperDetectionEventRule"
+    Environment = var.environment
+    Terraform   = "true"
+  }
 }
 
 # SEND TO SNS TOPIC FOR NOTIFICATION

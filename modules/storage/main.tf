@@ -7,8 +7,9 @@ resource "aws_security_group" "data" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name      = "Data-SG"
-    Terraform = "true"
+    Name        = "Data-SG"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -18,8 +19,9 @@ resource "aws_db_subnet_group" "data" {
   subnet_ids = var.data_private_subnet_ids_list
 
   tags = {
-    Name      = "Data-DB-Subnet-Group"
-    Terraform = "true"
+    Name        = "Data-DB-Subnet-Group"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -61,8 +63,9 @@ resource "aws_db_instance" "main" {
   auto_minor_version_upgrade = true
 
   tags = {
-    Name      = "SaaS-RDS"
-    Terraform = "true"
+    Name        = "SaaS-RDS"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -74,6 +77,12 @@ resource "aws_secretsmanager_secret" "rds_master" {
   name_prefix = "${var.cloud_name}/database/rds-master-"
   description = "Main RDS DB's master key"
   kms_key_id  = var.secrets_manager_cmk_arn
+
+  tags = {
+    Name        = "RdsMasterSecret"
+    Environment = var.environment
+    Terraform   = "true"
+  }
 }
 
 ## Generate random secret
@@ -109,8 +118,9 @@ resource "aws_s3_bucket" "centralized_logs" {
   }
 
   tags = {
-    Name      = "${var.cloud_name}-Centralized-Logs"
-    Terraform = "true"
+    Name        = "${var.cloud_name}-Centralized-Logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 

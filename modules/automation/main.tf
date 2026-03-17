@@ -42,8 +42,9 @@ resource "aws_lambda_function" "ec2_isolation" {
   ]
 
   tags = {
-    Name      = "EC2-Isolation"
-    Terraform = "true"
+    Name        = "EC2-Isolation"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -55,8 +56,9 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name      = "Lambda-EC2-Isolation-SG"
-    Terraform = "true"
+    Name        = "Lambda-EC2-Isolation-SG"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -108,8 +110,9 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "Lambda-EC2-Isolation-Logs"
-    Terraform = "true"
+    Name        = "Lambda-EC2-Isolation-Logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -156,8 +159,9 @@ resource "aws_lambda_function" "ec2_rollback" {
   ]
 
   tags = {
-    Name      = "EC2-Rollback"
-    Terraform = "true"
+    Name        = "EC2-Rollback"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -169,8 +173,9 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name      = "Lambda-EC2-Rollback-SG"
-    Terraform = "true"
+    Name        = "Lambda-EC2-Rollback-SG"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -178,6 +183,11 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
 #### CUSTOM EVENT BUS TO LIMIT ONLY SECURITY OPERATIONS USERS TO TRIGGER EC2 ROLLBACK
 resource "aws_cloudwatch_event_bus" "secops" {
   name = "security-operations-bus"
+  tags = {
+    Name        = "secops-bus"
+    Environment = var.environment
+    Terraform   = "true"
+  }
 }
 
 #### SECURITY OPERATIONS EVENT BUS POLICY
@@ -257,8 +267,9 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "Lambda-EC2-Rollback-Logs"
-    Terraform = "true"
+    Name        = "Lambda-EC2-Rollback-Logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -306,8 +317,9 @@ resource "aws_lambda_function" "ip_enrichment" {
   ]
 
   tags = {
-    Name      = "IP-Enrichment"
-    Terraform = "true"
+    Name        = "IP-Enrichment"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -318,8 +330,9 @@ resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
   kms_key_id  = var.secrets_manager_cmk_arn
 
   tags = {
-    Name      = "Threat-Intel-API-Keys"
-    Terraform = "true"
+    Name        = "Threat-Intel-API-Keys"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -373,7 +386,8 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "Lambda-IP-Enrichment-Logs"
-    Terraform = "true"
+    Name        = "Lambda-IP-Enrichment-Logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }

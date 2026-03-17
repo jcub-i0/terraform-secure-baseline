@@ -2,6 +2,10 @@ variable "vpc_id" {
   type = string
 }
 
+variable "environment" {
+  type = string
+}
+
 variable "cloud_name" {
   type = string
 }

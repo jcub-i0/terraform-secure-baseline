@@ -7,8 +7,9 @@ resource "aws_security_group" "compute" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name      = "Compute-SG"
-    Terraform = "true"
+    Name        = "Compute-SG"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -27,9 +28,10 @@ resource "aws_security_group" "quarantine" {
   }
 
   tags = {
-    Name      = "EC2-Quarantine-SG"
-    Terraform = "true"
-    Purpose   = "IncidentResponse"
+    Name        = "EC2-Quarantine-SG"
+    Environment = var.environment
+    Terraform   = "true"
+    Purpose     = "IncidentResponse"
   }
 }
 
@@ -70,6 +72,7 @@ resource "aws_instance" "ec2" {
 
   tags = {
     Name             = "EC2-${each.key}"
+    Environment      = var.environment
     Terraform        = "true"
     Purpose          = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
     IsolationAllowed = "true"

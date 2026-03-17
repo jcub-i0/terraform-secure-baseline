@@ -5,8 +5,9 @@ resource "aws_cloudwatch_log_group" "network_firewall" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "${var.cloud_name}-network-firewall-logs"
-    Terraform = "true"
+    Name        = "${var.cloud_name}-network-firewall-logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -37,8 +38,9 @@ resource "aws_networkfirewall_rule_group" "stateful_domains" {
   }
 
   tags = {
-    Name      = "${var.cloud_name}-stateful-domains"
-    Terraform = "true"
+    Name        = "${var.cloud_name}-stateful-domains"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -66,8 +68,9 @@ resource "aws_networkfirewall_firewall_policy" "egress" {
   }
 
   tags = {
-    Name      = "${var.cloud_name}-egress-policy"
-    Terraform = "true"
+    Name        = "${var.cloud_name}-egress-policy"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -112,8 +115,9 @@ resource "aws_networkfirewall_firewall" "egress" {
   }
 
   tags = {
-    Name      = "${var.cloud_name}-egress-firewall"
-    Terraform = "true"
-    Purpose   = "Centralized outbound traffic inspection and control"
+    Name        = "${var.cloud_name}-egress-firewall"
+    Environment = var.environment
+    Terraform   = "true"
+    Purpose     = "Centralized outbound traffic inspection and control"
   }
 }

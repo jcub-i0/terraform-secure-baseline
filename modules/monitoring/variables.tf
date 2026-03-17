@@ -1,3 +1,7 @@
+variable "environment" {
+  type = string
+}
+
 variable "logs_cmk_arn" {
   type = string
 }

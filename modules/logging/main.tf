@@ -6,8 +6,9 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "CloudTrail-Logs"
-    Terraform = "true"
+    Name        = "CloudTrail-Logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -18,8 +19,9 @@ resource "aws_cloudwatch_log_group" "flowlogs" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "FlowLogs"
-    Terraform = "true"
+    Name        = "FlowLogs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -53,8 +55,9 @@ resource "aws_cloudtrail" "cloudtrail" {
   depends_on = [aws_cloudwatch_log_group.cloudtrail]
 
   tags = {
-    Name      = "CloudTrail"
-    Terraform = "true"
+    Name        = "CloudTrail"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -68,8 +71,9 @@ resource "aws_flow_log" "flowlogs" {
   traffic_type         = "ALL"
 
   tags = {
-    Name      = "VPC-Flow-Logs"
-    Terraform = "true"
+    Name        = "VPC-Flow-Logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
@@ -92,6 +96,12 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
     buffering_size     = 5
 
     compression_format = "GZIP"
+  }
+
+  tags = {
+    Name        = "FlowLogsFirehoseDeliveryStream"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 

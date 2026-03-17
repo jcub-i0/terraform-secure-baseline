@@ -4,6 +4,12 @@ variable "cloud_name" {
   default     = "tf-secure-baseline"
 }
 
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "dev"
+}
+
 variable "primary_region" {
   description = "Primary Region used"
   type        = string
@@ -17,7 +23,7 @@ variable "main_vpc_cidr" {
 }
 
 variable "azs" {
-  description = "List of Availability Zones for deployment."
+  description = "List of Availability Zones for deployment. If you add/remove an AZ from var.azs, update this."
   type        = list(string)
   default = [
     "us-east-1a",
