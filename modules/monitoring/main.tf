@@ -8,6 +8,7 @@ resource "aws_sns_topic" "compliance" {
 
   tags = {
     Name      = "ConfigNotifications"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -57,6 +58,7 @@ resource "aws_sns_topic" "secops" {
 
   tags = {
     Name      = "CloudtrailNotifications"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -198,6 +200,12 @@ resource "aws_cloudwatch_metric_alarm" "root_activity" {
   threshold           = 1
   alarm_description   = "Detect Root-level activity"
   alarm_actions       = [aws_sns_topic.secops.arn]
+
+  tags = {
+    Name = "RootActivityAlarm"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 ### UNAUTHORIZED API CALLS
@@ -225,6 +233,12 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   threshold           = 1
   alarm_description   = "Detect unauthorized API activity"
   alarm_actions       = [aws_sns_topic.secops.arn]
+
+  tags = {
+    Name = "UnauthorizedApiCallsAlarm"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 ### CLOUDTRAIL DISABLED
@@ -252,6 +266,12 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
   threshold           = 1
   alarm_description   = "Detect if CloudTrail is disabled"
   alarm_actions       = [aws_sns_topic.secops.arn]
+
+  tags = {
+    Name = "CloudtrailDisabledAlarm"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 ### IAM POLICY CHANGES (CONSIDER ALSO ADDING 'DeletePolicy', 'DetachRolePolicy', and 'UpdateAssumeRolePolicy')
@@ -279,4 +299,10 @@ resource "aws_cloudwatch_metric_alarm" "iam_changes" {
   threshold           = 1
   alarm_description   = "Detect any changes made to IAM"
   alarm_actions       = [aws_sns_topic.secops.arn]
+
+  tags = {
+    Name = "IamChangesAlarm"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
