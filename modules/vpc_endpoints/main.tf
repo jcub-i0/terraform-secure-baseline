@@ -38,6 +38,7 @@ resource "aws_vpc_endpoint" "s3" {
 
   tags = {
     Name      = "S3-Gateway-Endpoint"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -53,6 +54,7 @@ resource "aws_security_group" "interface_endpoints_sg" {
 
   tags = {
     Name      = "VPC-Endpoints-SG"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -65,8 +67,10 @@ resource "aws_vpc_endpoint" "interface" {
   subnet_ids          = values(local.endpoint_subnets)
   security_group_ids  = [aws_security_group.interface_endpoints_sg.id]
   private_dns_enabled = true
+
   tags = {
     Name      = "VPC-Endpoint-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
