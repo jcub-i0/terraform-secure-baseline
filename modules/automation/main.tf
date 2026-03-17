@@ -43,7 +43,7 @@ resource "aws_lambda_function" "ec2_isolation" {
 
   tags = {
     Name      = "EC2-Isolation"
-    Environment = var.environment
+    Environment = var.environment#
     Terraform = "true"
   }
 }
