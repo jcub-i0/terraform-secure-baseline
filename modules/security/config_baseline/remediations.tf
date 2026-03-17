@@ -12,6 +12,12 @@ resource "aws_config_config_rule" "s3_public_access_block" {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED"
   }
+
+  tags = {
+    Name = "S3PublicAccessBlockRemediation"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 ### REMEDIATION TO AUTOMATICALLY DISABLE S3 PUBLIC READ AND WRITE
