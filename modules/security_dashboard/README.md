@@ -228,3 +228,27 @@ Together, these modules provide:
 `Visibility`
 `Automation`
 `Remediation`
+
+---
+
+# Future Enhancements
+
+Potential future improvements include:
+
+- Additional insights for IAM-related findings
+- Integration with centralized security reporting
+- Cross-account Security Hub aggregation
+- Automated reporting or alerting from insights
+
+---
+
+# Summary
+
+The security_dashboard module provides a curated operational view of the environment’s security posture.
+
+By defining Security Hub insights as code, the environment ensures:
+
+- Consistent security visibility
+- Repeatable deployments
+- Infrastructure-as-Code managed dashboards
+- Streamlined security operations
