@@ -181,4 +181,7 @@ module "patch_management" {
 module "security_dashboard" {
   source = "./modules/security_dashboard"
 
+  depends_on = [
+    module.security
+  ]
 }
