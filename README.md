@@ -1,15 +1,4 @@
-<pre>```text
-====================================================================
-NOTICE: PROPRIETARY CODE
-====================================================================
-This repository is the property of Nano Nexus Consulting.
-
-
-This code is made publicly viewable for demonstration purposes only.
-No license is granted to use, copy, modify, or distribute this code
-without explicit written permission.
-====================================================================
-```</pre>
+<pre> ```text ==================================================================== NOTICE: PROPRIETARY CODE ==================================================================== This repository is the property of Nano Nexus Consulting. This code is made publicly viewable for demonstration purposes only. No license is granted to use, copy, modify, or distribute this code without explicit written permission. ==================================================================== ``` </pre>
 
 # terraform-secure-baseline
 
