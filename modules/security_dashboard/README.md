@@ -224,10 +224,10 @@ This module works alongside other components of the environment:
 
 Together, these modules provide:
 
-`Detection`
-`Visibility`
-`Automation`
-`Remediation`
+- `Detection`
+- `Visibility`
+- `Automation`
+- `Remediation`
 
 ---
 
