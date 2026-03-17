@@ -2,7 +2,7 @@
 
 ## Overview
 
-The 'security_dashboard' module creates a curated set of operational security views within
+The `security_dashboard` module creates a curated set of operational security views within
 AWS Security Hub using custom insights.
 
 These insights act as a security operations dashboard, allowing analysts and operators to quickly
@@ -244,7 +244,7 @@ Potential future improvements include:
 
 # Summary
 
-The security_dashboard module provides a curated operational view of the environment’s security posture.
+The `security_dashboard` module provides a curated operational view of the environment’s security posture.
 
 By defining Security Hub insights as code, the environment ensures:
 
