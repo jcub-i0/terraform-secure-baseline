@@ -6,8 +6,8 @@ variable "cloud_name" {
 
 variable "environment" {
   description = "Environment name"
-  type = string
-  default = "dev"
+  type        = string
+  default     = "dev"
 }
 
 variable "primary_region" {
