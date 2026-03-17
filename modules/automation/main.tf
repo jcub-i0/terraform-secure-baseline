@@ -43,6 +43,7 @@ resource "aws_lambda_function" "ec2_isolation" {
 
   tags = {
     Name      = "EC2-Isolation"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -56,6 +57,7 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
 
   tags = {
     Name      = "Lambda-EC2-Isolation-SG"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -109,6 +111,7 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
 
   tags = {
     Name      = "Lambda-EC2-Isolation-Logs"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -157,6 +160,7 @@ resource "aws_lambda_function" "ec2_rollback" {
 
   tags = {
     Name      = "EC2-Rollback"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -170,6 +174,7 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
 
   tags = {
     Name      = "Lambda-EC2-Rollback-SG"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -178,6 +183,11 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
 #### CUSTOM EVENT BUS TO LIMIT ONLY SECURITY OPERATIONS USERS TO TRIGGER EC2 ROLLBACK
 resource "aws_cloudwatch_event_bus" "secops" {
   name = "security-operations-bus"
+  tags = {
+    Name = "secops-bus"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 #### SECURITY OPERATIONS EVENT BUS POLICY
@@ -258,6 +268,7 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
 
   tags = {
     Name      = "Lambda-EC2-Rollback-Logs"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -307,6 +318,7 @@ resource "aws_lambda_function" "ip_enrichment" {
 
   tags = {
     Name      = "IP-Enrichment"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -319,6 +331,7 @@ resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
 
   tags = {
     Name      = "Threat-Intel-API-Keys"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -374,6 +387,7 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
 
   tags = {
     Name      = "Lambda-IP-Enrichment-Logs"
+    Environment = var.environment
     Terraform = "true"
   }
 }
