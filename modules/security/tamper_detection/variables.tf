@@ -1,6 +1,6 @@
 variable "environment" {
   description = "Environment name"
-  type = string
+  type        = string
 }
 
 variable "alert_topic_arn" {

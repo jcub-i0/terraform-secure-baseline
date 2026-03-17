@@ -9,9 +9,9 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
-    Name      = "Main-${var.cloud_name}"
+    Name        = "Main-${var.cloud_name}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -26,9 +26,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name      = "Public-Subnet-${each.key}"
+    Name        = "Public-Subnet-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -42,9 +42,9 @@ resource "aws_subnet" "compute_private" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name      = "Compute-Private-${each.key}"
+    Name        = "Compute-Private-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -58,9 +58,9 @@ resource "aws_subnet" "data_private" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name      = "Data-Private-${each.key}"
+    Name        = "Data-Private-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -74,9 +74,9 @@ resource "aws_subnet" "serverless_private" {
   availability_zone = each.key
 
   tags = {
-    Name      = "Serverless-Private-${each.key}"
+    Name        = "Serverless-Private-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -90,9 +90,9 @@ resource "aws_subnet" "firewall_private" {
   availability_zone = each.key
 
   tags = {
-    Name      = "Firewall-Private-${each.key}"
+    Name        = "Firewall-Private-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -102,9 +102,9 @@ resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name      = "IGW"
+    Name        = "IGW"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -114,9 +114,9 @@ resource "aws_eip" "nat" {
   domain   = "vpc"
 
   tags = {
-    Name      = "NAT-EIP-${each.key}"
+    Name        = "NAT-EIP-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -129,9 +129,9 @@ resource "aws_nat_gateway" "natgw" {
   depends_on = [aws_internet_gateway.igw]
 
   tags = {
-    Name      = "NAT-Gateway-${each.key}"
+    Name        = "NAT-Gateway-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -152,9 +152,9 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name      = "Public-Route-Table-${each.key}"
+    Name        = "Public-Route-Table-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -174,9 +174,9 @@ resource "aws_route_table" "compute_private" {
   vpc_id   = aws_vpc.main.id
 
   tags = {
-    Name      = "Compute-Private-RT-${each.key}"
+    Name        = "Compute-Private-RT-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -199,9 +199,9 @@ resource "aws_route_table" "firewall_private" {
   }
 
   tags = {
-    Name      = "Firewall-Private-RT-${each.key}"
+    Name        = "Firewall-Private-RT-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -211,9 +211,9 @@ resource "aws_route_table" "data_private" {
   vpc_id   = aws_vpc.main.id
 
   tags = {
-    Name      = "Data-Private-RT-${each.key}"
+    Name        = "Data-Private-RT-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -223,9 +223,9 @@ resource "aws_route_table" "serverless_private" {
   vpc_id   = aws_vpc.main.id
 
   tags = {
-    Name      = "Serverless-Private-RT-${each.key}"
+    Name        = "Serverless-Private-RT-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 

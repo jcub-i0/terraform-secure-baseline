@@ -5,7 +5,7 @@ variable "cloud_name" {
 
 variable "environment" {
   description = "Environment name"
-  type = string
+  type        = string
 }
 
 variable "patch_tag_key" {

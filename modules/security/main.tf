@@ -23,9 +23,9 @@ resource "aws_guardduty_detector" "main" {
   region                       = var.primary_region
 
   tags = {
-    Name = "Main"
+    Name        = "Main"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -92,9 +92,9 @@ resource "aws_cloudwatch_event_rule" "securityhub_inspector_high_critical" {
   })
 
   tags = {
-    Name = "SecurityHubHighCriticalEventRule"
+    Name        = "SecurityHubHighCriticalEventRule"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -309,9 +309,9 @@ resource "aws_kms_key" "logs" {
   })
 
   tags = {
-    Name      = "logs-cmk"
+    Name        = "logs-cmk"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -364,9 +364,9 @@ resource "aws_kms_key" "ebs" {
   })
 
   tags = {
-    Name      = "EBS-CMK"
+    Name        = "EBS-CMK"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -441,9 +441,9 @@ resource "aws_kms_key" "lambda" {
   })
 
   tags = {
-    Name      = "lambda-cmk"
+    Name        = "lambda-cmk"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -495,9 +495,9 @@ resource "aws_kms_key" "secrets_manager" {
   })
 
   tags = {
-    Name      = "Secrets-Manager-CMK"
+    Name        = "Secrets-Manager-CMK"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -511,7 +511,7 @@ module "config_baseline" {
   source = "./config_baseline"
 
   cloud_name                   = var.cloud_name
-  environment = var.environment
+  environment                  = var.environment
   config_enabled               = var.config_enabled
   config_role_arn              = var.config_role_arn
   compliance_topic_arn         = var.compliance_topic_arn
@@ -526,6 +526,6 @@ module "tamper_detection" {
   source = "./tamper_detection"
 
   cloud_name      = var.cloud_name
-  environment = var.environment
+  environment     = var.environment
   alert_topic_arn = var.secops_topic_arn
 }

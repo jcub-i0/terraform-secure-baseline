@@ -14,9 +14,9 @@ resource "aws_config_config_rule" "s3_public_access_block" {
   }
 
   tags = {
-    Name = "S3PublicAccessBlockRemediation"
+    Name        = "S3PublicAccessBlockRemediation"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 

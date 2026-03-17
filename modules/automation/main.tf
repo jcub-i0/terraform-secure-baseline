@@ -42,9 +42,9 @@ resource "aws_lambda_function" "ec2_isolation" {
   ]
 
   tags = {
-    Name      = "EC2-Isolation"
+    Name        = "EC2-Isolation"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -56,9 +56,9 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name      = "Lambda-EC2-Isolation-SG"
+    Name        = "Lambda-EC2-Isolation-SG"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -110,9 +110,9 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "Lambda-EC2-Isolation-Logs"
+    Name        = "Lambda-EC2-Isolation-Logs"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -159,9 +159,9 @@ resource "aws_lambda_function" "ec2_rollback" {
   ]
 
   tags = {
-    Name      = "EC2-Rollback"
+    Name        = "EC2-Rollback"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -173,9 +173,9 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name      = "Lambda-EC2-Rollback-SG"
+    Name        = "Lambda-EC2-Rollback-SG"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -184,9 +184,9 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
 resource "aws_cloudwatch_event_bus" "secops" {
   name = "security-operations-bus"
   tags = {
-    Name = "secops-bus"
+    Name        = "secops-bus"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -267,9 +267,9 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "Lambda-EC2-Rollback-Logs"
+    Name        = "Lambda-EC2-Rollback-Logs"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -317,9 +317,9 @@ resource "aws_lambda_function" "ip_enrichment" {
   ]
 
   tags = {
-    Name      = "IP-Enrichment"
+    Name        = "IP-Enrichment"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -330,9 +330,9 @@ resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
   kms_key_id  = var.secrets_manager_cmk_arn
 
   tags = {
-    Name      = "Threat-Intel-API-Keys"
+    Name        = "Threat-Intel-API-Keys"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -386,8 +386,8 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name      = "Lambda-IP-Enrichment-Logs"
+    Name        = "Lambda-IP-Enrichment-Logs"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }

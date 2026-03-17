@@ -7,7 +7,7 @@ resource "random_id" "random_id" { byte_length = 4 }
 module "networking" {
   source = "./modules/networking"
 
-  environment = var.environment
+  environment                 = var.environment
   cloud_name                  = var.cloud_name
   main_vpc_cidr               = var.main_vpc_cidr
   azs                         = var.azs
@@ -43,7 +43,7 @@ module "compute" {
 module "storage" {
   source                       = "./modules/storage"
   vpc_id                       = module.networking.vpc_id
-  environment = var.environment
+  environment                  = var.environment
   db_port                      = var.db_port
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
@@ -81,7 +81,7 @@ module "security" {
   source = "./modules/security"
 
   cloud_name                   = var.cloud_name
-  environment = var.environment
+  environment                  = var.environment
   config_role_arn              = module.iam.config_role_arn
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
   current_region               = data.aws_region.current.region
@@ -98,7 +98,7 @@ module "security" {
 
 module "logging" {
   source                      = "./modules/logging"
-  environment = var.environment
+  environment                 = var.environment
   cloud_name                  = var.cloud_name
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
   logs_cmk_arn                = module.security.logs_cmk_arn
@@ -113,9 +113,9 @@ module "logging" {
 }
 
 module "monitoring" {
-  source                        = "./modules/monitoring"
+  source = "./modules/monitoring"
 
-  environment = var.environment
+  environment                   = var.environment
   logs_cmk_arn                  = module.security.logs_cmk_arn
   cloudtrail_log_group_name     = module.logging.cloudtrail_logs_group_name
   secops_emails                 = var.secops_emails
@@ -157,7 +157,7 @@ module "vpc_endpoints" {
   source = "./modules/vpc_endpoints"
 
   vpc_id                            = module.networking.vpc_id
-  environment = var.environment
+  environment                       = var.environment
   account_id                        = data.aws_caller_identity.current.account_id
   primary_region                    = var.primary_region
   compute_private_subnet_ids_map    = module.networking.compute_private_subnet_ids_map
@@ -172,7 +172,7 @@ module "firewall" {
   source = "./modules/firewall"
 
   cloud_name                      = var.cloud_name
-  environment = var.environment
+  environment                     = var.environment
   vpc_id                          = module.networking.vpc_id
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
   logs_cmk_arn                    = module.security.logs_cmk_arn
@@ -184,7 +184,7 @@ module "patch_management" {
   source = "./modules/patch_management"
 
   cloud_name                        = var.cloud_name
-  environment = var.environment
+  environment                       = var.environment
   patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
   patch_tag_value                   = var.patch_tag_value
 }

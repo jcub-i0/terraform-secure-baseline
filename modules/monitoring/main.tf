@@ -7,9 +7,9 @@ resource "aws_sns_topic" "compliance" {
   kms_master_key_id = var.logs_cmk_arn
 
   tags = {
-    Name      = "ConfigNotifications"
+    Name        = "ConfigNotifications"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -57,9 +57,9 @@ resource "aws_sns_topic" "secops" {
   kms_master_key_id = var.logs_cmk_arn
 
   tags = {
-    Name      = "CloudtrailNotifications"
+    Name        = "CloudtrailNotifications"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -202,9 +202,9 @@ resource "aws_cloudwatch_metric_alarm" "root_activity" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name = "RootActivityAlarm"
+    Name        = "RootActivityAlarm"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -235,9 +235,9 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name = "UnauthorizedApiCallsAlarm"
+    Name        = "UnauthorizedApiCallsAlarm"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -268,9 +268,9 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name = "CloudtrailDisabledAlarm"
+    Name        = "CloudtrailDisabledAlarm"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -301,8 +301,8 @@ resource "aws_cloudwatch_metric_alarm" "iam_changes" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name = "IamChangesAlarm"
+    Name        = "IamChangesAlarm"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }

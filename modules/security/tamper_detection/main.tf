@@ -49,9 +49,9 @@ resource "aws_cloudwatch_event_rule" "tamper_detection" {
   })
 
   tags = {
-    Name = "TamperDetectionEventRule"
+    Name        = "TamperDetectionEventRule"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
