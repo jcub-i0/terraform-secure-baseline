@@ -10,6 +10,7 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
   tags = {
     Name      = "Main-${var.cloud_name}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -26,6 +27,7 @@ resource "aws_subnet" "public" {
 
   tags = {
     Name      = "Public-Subnet-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -41,6 +43,7 @@ resource "aws_subnet" "compute_private" {
 
   tags = {
     Name      = "Compute-Private-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -56,6 +59,7 @@ resource "aws_subnet" "data_private" {
 
   tags = {
     Name      = "Data-Private-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -71,6 +75,7 @@ resource "aws_subnet" "serverless_private" {
 
   tags = {
     Name      = "Serverless-Private-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -86,6 +91,7 @@ resource "aws_subnet" "firewall_private" {
 
   tags = {
     Name      = "Firewall-Private-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -97,6 +103,7 @@ resource "aws_internet_gateway" "igw" {
 
   tags = {
     Name      = "IGW"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -108,6 +115,7 @@ resource "aws_eip" "nat" {
 
   tags = {
     Name      = "NAT-EIP-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -122,6 +130,7 @@ resource "aws_nat_gateway" "natgw" {
 
   tags = {
     Name      = "NAT-Gateway-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -144,6 +153,7 @@ resource "aws_route_table" "public" {
 
   tags = {
     Name      = "Public-Route-Table-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -165,6 +175,7 @@ resource "aws_route_table" "compute_private" {
 
   tags = {
     Name      = "Compute-Private-RT-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -189,6 +200,7 @@ resource "aws_route_table" "firewall_private" {
 
   tags = {
     Name      = "Firewall-Private-RT-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -200,6 +212,7 @@ resource "aws_route_table" "data_private" {
 
   tags = {
     Name      = "Data-Private-RT-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -211,6 +224,7 @@ resource "aws_route_table" "serverless_private" {
 
   tags = {
     Name      = "Serverless-Private-RT-${each.key}"
+    Environment = var.environment
     Terraform = "true"
   }
 }
