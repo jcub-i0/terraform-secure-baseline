@@ -29,6 +29,7 @@ module "compute" {
   source = "./modules/compute"
 
   vpc_id                         = module.networking.vpc_id
+  environment = var.environment
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
@@ -123,6 +124,7 @@ module "automation" {
   source = "./modules/automation"
 
   vpc_id                                   = module.networking.vpc_id
+  environment = var.environment
   cloud_name                               = var.cloud_name
   lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
