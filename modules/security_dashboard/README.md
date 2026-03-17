@@ -158,3 +158,73 @@ Example usage:
 module "security_dashboard" {
   source = "./modules/security_dashboard"
 }
+```
+
+---
+
+# Outputs
+
+`securityhub_insight_arns`
+
+ARNs of the Security Hub insights created by this module.
+
+Example output:
+
+```json
+{
+  high_critical
+  guardduty
+  inspector
+  ec2_findings
+  ec2_high_critical
+  failed_controls
+}
+```
+
+These ARNs can be used for integrations or automation workflows.
+
+---
+
+# Requirements
+
+The following services must already be enabled:
+
+- AWS Security Hub
+- Amazon GuardDuty
+- Amazon Inspector
+
+Security Hub msut be enabled in the same region where this module is deployed.
+
+---
+
+# Security Considerations
+
+This module does not create or modify security controls directly. Instead, it provides operational visibility
+into the security posture of the environment.
+
+The insights defined here support:
+
+- Security triage
+- Vulnerability monitoring
+- Threat detection
+- Compliance monitoring
+
+---
+
+# Relationships to Other Modules
+
+This module works alongside other components of the environment:
+
+| Module | Function |
+|--------|----------|
+| `security` | Security Hub, GuardDuty, Inspector configuration |
+| `automation` | Incident response Lambda functions |
+| `monitoring` | SNS alerts and event routing |
+| `patch_management` | OS patch compliance |
+
+Together, these modules provide:
+
+`Detection`
+`Visibility`
+`Automation`
+`Remediation`
