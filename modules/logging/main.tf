@@ -7,6 +7,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
   tags = {
     Name      = "CloudTrail-Logs"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -19,6 +20,7 @@ resource "aws_cloudwatch_log_group" "flowlogs" {
 
   tags = {
     Name      = "FlowLogs"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -54,6 +56,7 @@ resource "aws_cloudtrail" "cloudtrail" {
 
   tags = {
     Name      = "CloudTrail"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -69,6 +72,7 @@ resource "aws_flow_log" "flowlogs" {
 
   tags = {
     Name      = "VPC-Flow-Logs"
+    Environment = var.environment
     Terraform = "true"
   }
 }
@@ -92,6 +96,12 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
     buffering_size     = 5
 
     compression_format = "GZIP"
+  }
+
+  tags = {
+    Name = "FlowLogsFirehoseDeliveryStream"
+    Environment = var.environment
+    Terraform = "true"
   }
 }
 
