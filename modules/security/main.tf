@@ -1,4 +1,5 @@
 locals {
+  name_prefix = "${var.cloud_name}-${var.environment}"
   # SecurityHub standards for securityhub_standards_subscriptions resource to loop through
   ## Select the SecurityHub standards you want by uncommenting the respective standard(s)
   securityhub_standards = {
@@ -23,7 +24,7 @@ resource "aws_guardduty_detector" "main" {
   region                       = var.primary_region
 
   tags = {
-    Name        = "Main"
+    Name        = "${local.name_prefix}-Main"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -92,7 +93,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_inspector_high_critical" {
   })
 
   tags = {
-    Name        = "SecurityHubHighCriticalEventRule"
+    Name        = "${local.name_prefix}-SecurityHubHighCriticalEventRule"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -309,7 +310,7 @@ resource "aws_kms_key" "logs" {
   })
 
   tags = {
-    Name        = "logs-cmk"
+    Name        = "${local.name_prefix}-logs-cmk"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -364,7 +365,7 @@ resource "aws_kms_key" "ebs" {
   })
 
   tags = {
-    Name        = "EBS-CMK"
+    Name        = "${local.name_prefix}-EBS-CMK"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -441,7 +442,7 @@ resource "aws_kms_key" "lambda" {
   })
 
   tags = {
-    Name        = "lambda-cmk"
+    Name        = "${local.name_prefix}-lambda-cmk"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -495,7 +496,7 @@ resource "aws_kms_key" "secrets_manager" {
   })
 
   tags = {
-    Name        = "Secrets-Manager-CMK"
+    Name        = "${local.name_prefix}-Secrets-Manager-CMK"
     Environment = var.environment
     Terraform   = "true"
   }

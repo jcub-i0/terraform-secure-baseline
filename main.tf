@@ -40,6 +40,7 @@ module "security_policy" {
 module "compute" {
   source = "./modules/compute"
 
+  cloud_name = var.cloud_name
   vpc_id                         = module.networking.vpc_id
   environment                    = var.environment
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
@@ -126,6 +127,7 @@ module "logging" {
 module "monitoring" {
   source = "./modules/monitoring"
 
+  cloud_name = var.cloud_name
   environment                   = var.environment
   logs_cmk_arn                  = module.security.logs_cmk_arn
   cloudtrail_log_group_name     = module.logging.cloudtrail_logs_group_name
@@ -167,6 +169,7 @@ module "automation" {
 module "vpc_endpoints" {
   source = "./modules/vpc_endpoints"
 
+  cloud_name = var.cloud_name
   vpc_id                            = module.networking.vpc_id
   environment                       = var.environment
   account_id                        = data.aws_caller_identity.current.account_id

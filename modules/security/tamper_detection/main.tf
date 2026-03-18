@@ -3,6 +3,8 @@
 ############################################
 
 locals {
+  name_prefix = "${var.cloud_name}-${var.environment}"
+
   tamper_actions = [
     # CLOUDTRAIL TAMPERING
     "StopLogging",
@@ -32,7 +34,7 @@ locals {
 
 # TAMPER DETECTION EVENTBRIDGE RULE
 resource "aws_cloudwatch_event_rule" "tamper_detection" {
-  name        = "${var.cloud_name}-tamper-detection"
+  name        = "${local.name_prefix}-tamper-detection"
   description = "Detect attempts to disable/modify security controls (CloudTrail/GuardDuty/KMS) and alert via SNS"
 
   event_pattern = jsonencode({
@@ -49,7 +51,7 @@ resource "aws_cloudwatch_event_rule" "tamper_detection" {
   })
 
   tags = {
-    Name        = "TamperDetectionEventRule"
+    Name        = "${local.name_prefix}-TamperDetectionEventRule"
     Environment = var.environment
     Terraform   = "true"
   }

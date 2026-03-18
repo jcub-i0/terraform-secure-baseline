@@ -1,13 +1,17 @@
+locals {
+  name_prefix = "${var.cloud_name}-${var.environment}"
+}
+
 # CREATE SECURITY GROUPS FOR EC2
 ## COMPUTE SECURITY GROUP
 resource "aws_security_group" "compute" {
-  name                   = "Compute-SG"
+  name                   = "${local.name_prefix}-Compute-SG"
   description            = "Security Group for EC2 compute instances"
   vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
 
   tags = {
-    Name        = "Compute-SG"
+    Name        = "${local.name_prefix}-Compute-SG"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -15,7 +19,7 @@ resource "aws_security_group" "compute" {
 
 ## QUARANTINE SECURITY GROUP
 resource "aws_security_group" "quarantine" {
-  name        = "Quarantine-SG"
+  name        = "${local.name_prefix}-Quarantine-SG"
   description = "Security Group for isolating EC2 instances suspected of compromisation so that security triage and remediation can be performed safely without allowing unrestricted network access"
   vpc_id      = var.vpc_id
 
@@ -28,7 +32,7 @@ resource "aws_security_group" "quarantine" {
   }
 
   tags = {
-    Name        = "EC2-Quarantine-SG"
+    Name        = "${local.name_prefix}-EC2-Quarantine-SG"
     Environment = var.environment
     Terraform   = "true"
     Purpose     = "IncidentResponse"

@@ -1,6 +1,10 @@
+locals {
+  name_prefix = "${var.cloud_name}-${var.environment}"
+}
+
 # MAINTENANCE WINDOW
 resource "aws_ssm_maintenance_window" "patching" {
-  name                       = "${var.cloud_name}-weekly-patching"
+  name                       = "${local.name_prefix}--weekly-patching"
   description                = "Weekly patch window for Ubuntu EC2 instances"
   schedule                   = var.patch_schedule
   schedule_timezone          = var.schedule_timezone
@@ -10,7 +14,7 @@ resource "aws_ssm_maintenance_window" "patching" {
   enabled                    = var.patching_enabled
 
   tags = {
-    Name        = "${var.cloud_name}-Weekly-Patching"
+    Name        = "${local.name_prefix}-Weekly-Patching"
     Environment = var.environment
     Terraform   = "true"
   }
