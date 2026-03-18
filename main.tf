@@ -9,6 +9,10 @@
 # without explicit written permission.                                  
 # ==================================================================== 
 
+locals {
+  name_prefix = "${var.cloud_name}-${var.environment}"
+}
+
 # GLOBAL RESOURCES
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
