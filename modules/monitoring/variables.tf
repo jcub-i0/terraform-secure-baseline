@@ -1,3 +1,7 @@
+variable "name_prefix" {
+  type = string
+}
+
 variable "cloud_name" {
   type = string
 }

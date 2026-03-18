@@ -1,3 +1,7 @@
+variable "name_prefix" {
+  type = string
+}
+
 variable "main_vpc_cidr" {
   type = string
 }
