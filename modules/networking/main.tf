@@ -1,5 +1,4 @@
 locals {
-  name_prefix = "${var.cloud_name}-${var.environment}"
   # Loop over var.azs using the index (indx) to pick the CIDR for that AZ
   az_index_map = { for indx, az in var.azs : az => indx }
 }
@@ -10,7 +9,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
-    Name        = "${local.name_prefix}-Main"
+    Name        = "${var.name_prefix}-Main"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -27,7 +26,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name        = "${local.name_prefix}-Public-Subnet-${each.key}"
+    Name        = "${var.name_prefix}-Public-Subnet-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -43,7 +42,7 @@ resource "aws_subnet" "compute_private" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name        = "${local.name_prefix}-Compute-Private-${each.key}"
+    Name        = "${var.name_prefix}-Compute-Private-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -59,7 +58,7 @@ resource "aws_subnet" "data_private" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name        = "${local.name_prefix}-Data-Private-${each.key}"
+    Name        = "${var.name_prefix}-Data-Private-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -75,7 +74,7 @@ resource "aws_subnet" "serverless_private" {
   availability_zone = each.key
 
   tags = {
-    Name        = "${local.name_prefix}-Serverless-Private-${each.key}"
+    Name        = "${var.name_prefix}-Serverless-Private-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -91,7 +90,7 @@ resource "aws_subnet" "firewall_private" {
   availability_zone = each.key
 
   tags = {
-    Name        = "${local.name_prefix}-Firewall-Private-${each.key}"
+    Name        = "${var.name_prefix}-Firewall-Private-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -103,7 +102,7 @@ resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "${local.name_prefix}-IGW"
+    Name        = "${var.name_prefix}-IGW"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -115,7 +114,7 @@ resource "aws_eip" "nat" {
   domain   = "vpc"
 
   tags = {
-    Name        = "${local.name_prefix}-NAT-EIP-${each.key}"
+    Name        = "${var.name_prefix}-NAT-EIP-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -130,7 +129,7 @@ resource "aws_nat_gateway" "natgw" {
   depends_on = [aws_internet_gateway.igw]
 
   tags = {
-    Name        = "${local.name_prefix}-NAT-Gateway-${each.key}"
+    Name        = "${var.name_prefix}-NAT-Gateway-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -153,7 +152,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name        = "${local.name_prefix}-Public-Route-Table-${each.key}"
+    Name        = "${var.name_prefix}-Public-Route-Table-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -175,7 +174,7 @@ resource "aws_route_table" "compute_private" {
   vpc_id   = aws_vpc.main.id
 
   tags = {
-    Name        = "${local.name_prefix}-Compute-Private-RT-${each.key}"
+    Name        = "${var.name_prefix}-Compute-Private-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -200,7 +199,7 @@ resource "aws_route_table" "firewall_private" {
   }
 
   tags = {
-    Name        = "${local.name_prefix}-Firewall-Private-RT-${each.key}"
+    Name        = "${var.name_prefix}-Firewall-Private-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -212,7 +211,7 @@ resource "aws_route_table" "data_private" {
   vpc_id   = aws_vpc.main.id
 
   tags = {
-    Name        = "${local.name_prefix}-Data-Private-RT-${each.key}"
+    Name        = "${var.name_prefix}-Data-Private-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -224,7 +223,7 @@ resource "aws_route_table" "serverless_private" {
   vpc_id   = aws_vpc.main.id
 
   tags = {
-    Name        = "${local.name_prefix}-Serverless-Private-RT-${each.key}"
+    Name        = "${var.name_prefix}-Serverless-Private-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
