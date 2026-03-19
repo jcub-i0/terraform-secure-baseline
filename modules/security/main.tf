@@ -1,5 +1,4 @@
 locals {
-  name_prefix = "${var.cloud_name}-${var.environment}"
   # SecurityHub standards for securityhub_standards_subscriptions resource to loop through
   ## Select the SecurityHub standards you want by uncommenting the respective standard(s)
   securityhub_standards = {
@@ -24,7 +23,7 @@ resource "aws_guardduty_detector" "main" {
   region                       = var.primary_region
 
   tags = {
-    Name        = "${local.name_prefix}-Main"
+    Name        = "${var.name_prefix}-Main"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -93,7 +92,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_inspector_high_critical" {
   })
 
   tags = {
-    Name        = "${local.name_prefix}-SecurityHubHighCriticalEventRule"
+    Name        = "${var.name_prefix}-SecurityHubHighCriticalEventRule"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -310,7 +309,7 @@ resource "aws_kms_key" "logs" {
   })
 
   tags = {
-    Name        = "${local.name_prefix}-logs-cmk"
+    Name        = "${var.name_prefix}-logs-cmk"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -365,7 +364,7 @@ resource "aws_kms_key" "ebs" {
   })
 
   tags = {
-    Name        = "${local.name_prefix}-EBS-CMK"
+    Name        = "${var.name_prefix}-EBS-CMK"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -442,7 +441,7 @@ resource "aws_kms_key" "lambda" {
   })
 
   tags = {
-    Name        = "${local.name_prefix}-lambda-cmk"
+    Name        = "${var.name_prefix}-lambda-cmk"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -496,7 +495,7 @@ resource "aws_kms_key" "secrets_manager" {
   })
 
   tags = {
-    Name        = "${local.name_prefix}-Secrets-Manager-CMK"
+    Name        = "${var.name_prefix}-Secrets-Manager-CMK"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -511,6 +510,7 @@ resource "aws_kms_alias" "secrets_manager" {
 module "config_baseline" {
   source = "./config_baseline"
 
+  name_prefix = var.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   config_enabled               = var.config_enabled
@@ -526,6 +526,7 @@ module "config_baseline" {
 module "tamper_detection" {
   source = "./tamper_detection"
 
+  name_prefix = var.name_prefix
   cloud_name      = var.cloud_name
   environment     = var.environment
   alert_topic_arn = var.secops_topic_arn
