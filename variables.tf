@@ -169,11 +169,11 @@ variable "backup_enabled" {
 variable "backup_schedule" {
   description = "CRON expression for when backups are performed"
   type        = string
-  default = "cron(0 5 * * ? *)"
+  default     = "cron(0 5 * * ? *)"
 }
 
 variable "delete_backups_after_days" {
   description = "Number of days to retain backups before deletion"
   type        = string
-  default = "30"
+  default     = "30"
 }
