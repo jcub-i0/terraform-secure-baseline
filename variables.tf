@@ -165,3 +165,8 @@ variable "backup_enabled" {
   type = bool
   default = true
 }
+
+variable "backup_schedule" {
+  description = "Set the schedule for when backups are performed"
+  type = string
+}
