@@ -506,6 +506,53 @@ resource "aws_kms_alias" "secrets_manager" {
   target_key_id = aws_kms_key.secrets_manager.arn
 }
 
+## BACKUP VAULT KMS KEY
+resource "aws_kms_key" "backup_vault" {
+  description = "CMK for AWS Backup Vault"
+  enable_key_rotation = true
+  deletion_window_in_days = 30
+
+  lifecycle {
+    prevent_destroy = false # CHANGE THIS IN PROD
+  }
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # FULL ACCESS FOR ROOT ACCOUNT
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid = "AllowBackupVault"
+        Effect = "Allow"
+        Principal = {
+          Service = "backup.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
+      }
+    ]}
+  )
+}
+
 # CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
