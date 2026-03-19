@@ -232,4 +232,6 @@ module "backup" {
   backup_enabled       = var.backup_enabled
   backup_schedule      = var.backup_schedule
   backup_vault_cmk_arn = module.security.backup_vault_cmk_arn
+  delete_backups_after_days = var.delete_backups_after_days
+  backup_service_role_arn = module.iam.backup_service_role_arn
 }
