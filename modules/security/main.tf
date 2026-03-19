@@ -510,7 +510,7 @@ resource "aws_kms_alias" "secrets_manager" {
 module "config_baseline" {
   source = "./config_baseline"
 
-  name_prefix = var.name_prefix
+  name_prefix                  = var.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   config_enabled               = var.config_enabled
@@ -526,7 +526,7 @@ module "config_baseline" {
 module "tamper_detection" {
   source = "./tamper_detection"
 
-  name_prefix = var.name_prefix
+  name_prefix     = var.name_prefix
   cloud_name      = var.cloud_name
   environment     = var.environment
   alert_topic_arn = var.secops_topic_arn

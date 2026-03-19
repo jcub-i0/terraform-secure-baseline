@@ -22,7 +22,7 @@ resource "random_id" "random_id" { byte_length = 4 }
 module "networking" {
   source = "./modules/networking"
 
-  name_prefix = local.name_prefix
+  name_prefix                 = local.name_prefix
   environment                 = var.environment
   cloud_name                  = var.cloud_name
   main_vpc_cidr               = var.main_vpc_cidr
@@ -45,7 +45,7 @@ module "security_policy" {
 module "compute" {
   source = "./modules/compute"
 
-  name_prefix = local.name_prefix
+  name_prefix                    = local.name_prefix
   vpc_id                         = module.networking.vpc_id
   environment                    = var.environment
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
@@ -58,9 +58,9 @@ module "compute" {
 }
 
 module "storage" {
-  source                       = "./modules/storage"
+  source = "./modules/storage"
 
-  name_prefix = local.name_prefix
+  name_prefix                  = local.name_prefix
   vpc_id                       = module.networking.vpc_id
   environment                  = var.environment
   db_port                      = var.db_port
@@ -99,7 +99,7 @@ module "iam" {
 module "security" {
   source = "./modules/security"
 
-  name_prefix = local.name_prefix
+  name_prefix                  = local.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   config_role_arn              = module.iam.config_role_arn
@@ -117,9 +117,9 @@ module "security" {
 }
 
 module "logging" {
-  source                      = "./modules/logging"
+  source = "./modules/logging"
 
-  name_prefix = local.name_prefix
+  name_prefix                 = local.name_prefix
   environment                 = var.environment
   cloud_name                  = var.cloud_name
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
@@ -137,7 +137,7 @@ module "logging" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  name_prefix = local.name_prefix
+  name_prefix                   = local.name_prefix
   environment                   = var.environment
   logs_cmk_arn                  = module.security.logs_cmk_arn
   cloudtrail_log_group_name     = module.logging.cloudtrail_logs_group_name
@@ -152,7 +152,7 @@ module "monitoring" {
 module "automation" {
   source = "./modules/automation"
 
-  name_prefix = local.name_prefix
+  name_prefix                              = local.name_prefix
   vpc_id                                   = module.networking.vpc_id
   environment                              = var.environment
   cloud_name                               = var.cloud_name
@@ -180,7 +180,7 @@ module "automation" {
 module "vpc_endpoints" {
   source = "./modules/vpc_endpoints"
 
-  name_prefix = local.name_prefix
+  name_prefix                       = local.name_prefix
   vpc_id                            = module.networking.vpc_id
   environment                       = var.environment
   account_id                        = data.aws_caller_identity.current.account_id
@@ -196,7 +196,7 @@ module "vpc_endpoints" {
 module "firewall" {
   source = "./modules/firewall"
 
-  name_prefix = local.name_prefix
+  name_prefix                     = local.name_prefix
   cloud_name                      = var.cloud_name
   environment                     = var.environment
   vpc_id                          = module.networking.vpc_id
@@ -209,7 +209,7 @@ module "firewall" {
 module "patch_management" {
   source = "./modules/patch_management"
 
-  name_prefix = local.name_prefix
+  name_prefix                       = local.name_prefix
   cloud_name                        = var.cloud_name
   environment                       = var.environment
   patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
