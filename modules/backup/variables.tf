@@ -13,3 +13,7 @@ variable "backup_schedule" {
 variable "backup_vault_cmk_arn" {
   type = string
 }
+
+variable "environment" {
+  type = string
+}
