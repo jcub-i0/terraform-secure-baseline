@@ -25,17 +25,17 @@ variable "delete_backups_after_days" {
 
 variable "backup_service_role_arn" {
   description = "IAM role ARN used by AWS Backup for resource backups"
-  type = string
+  type        = string
 }
 
 variable "backup_tag_key" {
   description = "Tag key used to select resources for backup"
-  type = string
-  default = "Backup"
+  type        = string
+  default     = "Backup"
 }
 
 variable "backup_tag_value" {
   description = "Tag value used to select resources for backup"
-  type = string
-  default = "true"
+  type        = string
+  default     = "true"
 }
