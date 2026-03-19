@@ -41,13 +41,13 @@ resource "aws_backup_plan" "main" {
 
 # BACKUP SELECTION
 resource "aws_backup_selection" "main" {
-  name = "${var.name_prefix}-backup-selection"
-  plan_id = aws_backup_plan.main.id
+  name         = "${var.name_prefix}-backup-selection"
+  plan_id      = aws_backup_plan.main.id
   iam_role_arn = var.backup_service_role_arn
 
   selection_tag {
-    type = "STRINGEQUALS"
-    key = var.backup_tag_key
+    type  = "STRINGEQUALS"
+    key   = var.backup_tag_key
     value = var.backup_tag_value
   }
 }

@@ -227,11 +227,11 @@ module "security_dashboard" {
 module "backup" {
   source = "./modules/backup"
 
-  name_prefix          = local.name_prefix
-  environment          = var.environment
-  backup_enabled       = var.backup_enabled
-  backup_schedule      = var.backup_schedule
-  backup_vault_cmk_arn = module.security.backup_vault_cmk_arn
+  name_prefix               = local.name_prefix
+  environment               = var.environment
+  backup_enabled            = var.backup_enabled
+  backup_schedule           = var.backup_schedule
+  backup_vault_cmk_arn      = module.security.backup_vault_cmk_arn
   delete_backups_after_days = var.delete_backups_after_days
-  backup_service_role_arn = module.iam.backup_service_role_arn
+  backup_service_role_arn   = module.iam.backup_service_role_arn
 }
