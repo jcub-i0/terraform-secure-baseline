@@ -508,8 +508,8 @@ resource "aws_kms_alias" "secrets_manager" {
 
 ## BACKUP VAULT KMS KEY
 resource "aws_kms_key" "backup_vault" {
-  description = "CMK for AWS Backup Vault"
-  enable_key_rotation = true
+  description             = "CMK for AWS Backup Vault"
+  enable_key_rotation     = true
   deletion_window_in_days = 30
 
   lifecycle {
@@ -530,7 +530,7 @@ resource "aws_kms_key" "backup_vault" {
         Resource = "*"
       },
       {
-        Sid = "AllowBackupVault"
+        Sid    = "AllowBackupVault"
         Effect = "Allow"
         Principal = {
           Service = "backup.amazonaws.com"
@@ -549,7 +549,7 @@ resource "aws_kms_key" "backup_vault" {
           }
         }
       }
-    ]}
+    ] }
   )
 }
 

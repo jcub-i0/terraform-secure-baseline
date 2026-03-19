@@ -162,11 +162,11 @@ variable "patch_tag_value" {
 
 variable "backup_enabled" {
   description = "Define whether backup resources are enabled"
-  type = bool
-  default = true
+  type        = bool
+  default     = true
 }
 
 variable "backup_schedule" {
   description = "Set the schedule for when backups are performed"
-  type = string
+  type        = string
 }

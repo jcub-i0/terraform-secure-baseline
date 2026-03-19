@@ -227,8 +227,8 @@ module "security_dashboard" {
 module "backup" {
   source = "./modules/backup"
 
-  name_prefix = local.name_prefix
-  backup_enabled = var.backup_enabled
-  backup_schedule = var.backup_schedule
+  name_prefix          = local.name_prefix
+  backup_enabled       = var.backup_enabled
+  backup_schedule      = var.backup_schedule
   backup_vault_cmk_arn = module.security.backup_vault_cmk_arn
 }
