@@ -167,7 +167,7 @@ variable "backup_enabled" {
 }
 
 variable "backup_schedule" {
-  description = "Set the schedule for when backups are performed"
+  description = "CRON expression for when backups are performed"
   type        = string
 }
 
