@@ -1,6 +1,11 @@
 # BACKUP-RELATED IAM RESOURCES
 
-# BACKUP SERVICE-LINKED ROLE
+# PULL THE AWS-MANAGED BACKUP ROLE POLICY
+data "aws_iam_policy" "backup" {
+  name = "AWSBackupServiceRolePolicyForBackup"
+}
+
+# AWS BACKUP SERVICE ROLE
 resource "aws_iam_role" "backup" {
   name = "backup-role"
 
@@ -14,4 +19,10 @@ resource "aws_iam_role" "backup" {
       Action = "sts:AssumeRole"
     }]
   })
+}
+
+# ATTACH AWS-MANAGED BACKUP POLICY
+resource "aws_iam_role_policy_attachment" "backup" {
+  role = aws_iam_role.backup.name
+  policy_arn = data.aws_iam_policy.backup.arn
 }
