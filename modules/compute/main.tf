@@ -1,7 +1,3 @@
-locals {
-
-}
-
 # CREATE SECURITY GROUPS FOR EC2
 ## COMPUTE SECURITY GROUP
 resource "aws_security_group" "compute" {
