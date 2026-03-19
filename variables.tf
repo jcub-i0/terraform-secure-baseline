@@ -159,3 +159,9 @@ variable "patch_tag_value" {
   type        = string
   default     = "weekly-linux"
 }
+
+variable "backup_enabled" {
+  description = "Define whether backup resources are enabled"
+  type = bool
+  default = true
+}
