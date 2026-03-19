@@ -9,3 +9,7 @@ variable "backup_enabled" {
 variable "backup_schedule" {
   type = string
 }
+
+variable "backup_vault_cmk_arn" {
+  type = string
+}
