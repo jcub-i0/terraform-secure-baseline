@@ -1,17 +1,13 @@
-locals {
-  name_prefix = "${var.cloud_name}-${var.environment}"
-}
-
 # SNS
 ## SNS RESOURCES FOR CONFIG
 ### CONFIG DOES NOT HAVE AN SNS SUBSCRIPTION (YET)
 ### CONFIG SNS TOPIC
 resource "aws_sns_topic" "compliance" {
-  name              = "${local.name_prefix}-compliance-notifications"
+  name              = "${var.name_prefix}-compliance-notifications"
   kms_master_key_id = var.logs_cmk_arn
 
   tags = {
-    Name        = "${local.name_prefix}-ConfigNotifications"
+    Name        = "${var.name_prefix}-ConfigNotifications"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -57,11 +53,11 @@ resource "aws_sns_topic_policy" "compliance" {
 ## SNS RESOURCES FOR SECURITY
 ### SECURITY SNS TOPIC
 resource "aws_sns_topic" "secops" {
-  name              = "${local.name_prefix}-security-notifications"
+  name              = "${var.name_prefix}-security-notifications"
   kms_master_key_id = var.logs_cmk_arn
 
   tags = {
-    Name        = "${local.name_prefix}-CloudtrailNotifications"
+    Name        = "${var.name_prefix}-CloudtrailNotifications"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -194,7 +190,7 @@ resource "aws_cloudwatch_log_metric_filter" "root_activity" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "root_activity" {
-  alarm_name          = "${local.name_prefix}-Root-User-Activity"
+  alarm_name          = "${var.name_prefix}-Root-User-Activity"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "RootActivityCount"
@@ -206,7 +202,7 @@ resource "aws_cloudwatch_metric_alarm" "root_activity" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name        = "${local.name_prefix}-RootActivityAlarm"
+    Name        = "${var.name_prefix}-RootActivityAlarm"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -227,7 +223,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
-  alarm_name          = "${local.name_prefix}-Unauthorized_API_Calls"
+  alarm_name          = "${var.name_prefix}-Unauthorized_API_Calls"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "UnauthorizedAPICallCount"
@@ -239,7 +235,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name        = "${local.name_prefix}-UnauthorizedApiCallsAlarm"
+    Name        = "${var.name_prefix}-UnauthorizedApiCallsAlarm"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -260,7 +256,7 @@ resource "aws_cloudwatch_log_metric_filter" "cloudtrail_disabled" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
-  alarm_name          = "${local.name_prefix}-CloudTrailDisabled"
+  alarm_name          = "${var.name_prefix}-CloudTrailDisabled"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "CloudTrailDisabled"
@@ -272,7 +268,7 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name        = "${local.name_prefix}-CloudtrailDisabledAlarm"
+    Name        = "${var.name_prefix}-CloudtrailDisabledAlarm"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -293,7 +289,7 @@ resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "iam_changes" {
-  alarm_name          = "${local.name_prefix}-IamPolicyChanges"
+  alarm_name          = "${var.name_prefix}-IamPolicyChanges"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "IamPolicyChanges"
@@ -305,7 +301,7 @@ resource "aws_cloudwatch_metric_alarm" "iam_changes" {
   alarm_actions       = [aws_sns_topic.secops.arn]
 
   tags = {
-    Name        = "${local.name_prefix}-IamChangesAlarm"
+    Name        = "${var.name_prefix}-IamChangesAlarm"
     Environment = var.environment
     Terraform   = "true"
   }
