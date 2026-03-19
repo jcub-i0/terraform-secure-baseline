@@ -66,7 +66,7 @@ resource "aws_db_instance" "main" {
     Name        = "${var.name_prefix}-SaaS-RDS"
     Environment = var.environment
     Terraform   = "true"
-    Backup = "true"
+    Backup      = "true"
   }
 }
 
