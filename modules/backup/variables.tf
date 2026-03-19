@@ -22,3 +22,9 @@ variable "delete_backups_after_days" {
   description = "Number of days to retain backups before deletion"
   type        = string
 }
+
+variable "backup_tag_key" {
+  description = "Tag key used to select resources for backup"
+  type = string
+  default = "Backup"
+}
