@@ -182,7 +182,7 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
 ### EVENTBRIDGE RESOURCES
 #### CUSTOM EVENT BUS TO LIMIT ONLY SECURITY OPERATIONS USERS TO TRIGGER EC2 ROLLBACK
 resource "aws_cloudwatch_event_bus" "secops" {
-  name = "${var.name_prefix}-security-operations-bus"
+  name = "security-operations-bus"
   tags = {
     Name        = "${var.name_prefix}-secops-bus"
     Environment = var.environment
