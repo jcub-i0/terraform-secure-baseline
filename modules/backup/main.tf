@@ -22,7 +22,7 @@ resource "aws_backup_plan" "main" {
     schedule = var.backup_schedule
 
     lifecycle {
-      delete_after = var.delete_after_days
+      delete_after = var.delete_backups_after_days
     }
 
     recovery_point_tags = {
