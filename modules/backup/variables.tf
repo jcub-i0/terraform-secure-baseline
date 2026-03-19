@@ -28,3 +28,9 @@ variable "backup_tag_key" {
   type = string
   default = "Backup"
 }
+
+variable "backup_tag_value" {
+  description = "Tag value used to select resources for backup"
+  type = string
+  default = "true"
+}
