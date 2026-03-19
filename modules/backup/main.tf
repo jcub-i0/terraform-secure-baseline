@@ -15,26 +15,26 @@ resource "aws_backup_vault" "main" {
 # BACKUP PLAN
 resource "aws_backup_plan" "main" {
   name = "${var.name_prefix}-backup-plan"
-  
+
   rule {
-    rule_name = "daily-backups"
+    rule_name         = "daily-backups"
     target_vault_name = aws_backup_vault.main.name
-    schedule = var.backup_schedule
+    schedule          = var.backup_schedule
 
     lifecycle {
       delete_after = var.delete_backups_after_days
     }
 
     recovery_point_tags = {
-        Name = "${var.name_prefix}-daily-backup"
-        Environment = var.environment
-        Terraform = "true"
+      Name        = "${var.name_prefix}-daily-backup"
+      Environment = var.environment
+      Terraform   = "true"
     }
   }
 
   tags = {
-    Name = "${var.name_prefix}-backup-plan"
+    Name        = "${var.name_prefix}-backup-plan"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }

@@ -172,6 +172,6 @@ variable "backup_schedule" {
 }
 
 variable "delete_backups_after_days" {
-    description = "Number of days to retain backups before deletion"
-  type = string
+  description = "Number of days to retain backups before deletion"
+  type        = string
 }
