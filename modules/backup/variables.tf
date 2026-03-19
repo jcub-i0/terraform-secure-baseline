@@ -17,3 +17,8 @@ variable "backup_vault_cmk_arn" {
 variable "environment" {
   type = string
 }
+
+variable "delete_backups_after_days" {
+    description = "Number of days to retain backups before deletion"
+  type = string
+}
