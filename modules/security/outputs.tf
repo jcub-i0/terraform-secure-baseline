@@ -28,6 +28,11 @@ output "secrets_manager_cmk_alias_arn" {
   value       = aws_kms_alias.secrets_manager.arn
 }
 
+output "backup_vault_cmk_arn" {
+  description = "ARN of the Backup Vault CMK"
+  value = aws_kms_key.backup_vault.arn
+}
+
 output "tamper_detection_rule_name" {
   value = module.tamper_detection.tamper_detection_rule_name
 }
