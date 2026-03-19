@@ -553,6 +553,11 @@ resource "aws_kms_key" "backup_vault" {
   )
 }
 
+resource "aws_kms_alias" "backup_vault" {
+  name          = "alias/${var.cloud_name}/backup"
+  target_key_id = aws_kms_key.backup_vault.arn
+}
+
 # CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
