@@ -62,6 +62,11 @@ resource "aws_db_instance" "main" {
 
   auto_minor_version_upgrade = true
 
+  depends_on = [
+    aws_cloudwatch_log_group.rds_postgresql,
+    aws_cloudwatch_log_group.rds_upgrade
+  ]
+
   tags = {
     Name        = "${var.name_prefix}-SaaS-RDS"
     Environment = var.environment
