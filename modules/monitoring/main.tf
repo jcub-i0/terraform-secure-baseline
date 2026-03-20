@@ -92,6 +92,12 @@ data "aws_iam_policy_document" "compliance_queue_policy" {
   }
 }
 
+### SQS QUEUE POLICY FOR COMPLIANCE SQS QUEUE
+resource "aws_sqs_queue_policy" "compliance" {
+  queue_url = aws_sqs_queue.compliance.id
+  policy = data.aws_iam_policy_document.compliance_queue_policy
+}
+
 ## SNS RESOURCES FOR SECURITY
 ### SECURITY SNS TOPIC
 resource "aws_sns_topic" "secops" {
