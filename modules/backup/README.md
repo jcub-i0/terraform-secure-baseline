@@ -40,7 +40,7 @@ The backup workflow is as follows:
 ## Features
 
 - **Tag-Based Backup Selection**
-- Automatically includes resources with matching tags
+- Automatically includes supported resources with matching tags
 - No manual resource registration required
 
 - **Automated Scheduling**
@@ -53,7 +53,7 @@ The backup workflow is as follows:
 - Dedicated vault per environment
 
 - **IAM Role Integration**
-- Uses a least-privileged service role for AWS Backup and Restore
+- Uses a least-privileged service role for AWS Backup and restore operations
 
 ---
 
