@@ -1,4 +1,4 @@
-# SNS
+# SNS and SQS
 ## SNS RESOURCES FOR CONFIG
 ### CONFIG DOES NOT HAVE AN SNS SUBSCRIPTION (YET)
 ### CONFIG SNS TOPIC
@@ -48,6 +48,17 @@ resource "aws_sns_topic_policy" "compliance" {
       }
     ]
   })
+}
+
+### SQS QUEUE FOR COMPLIANCE SNS
+resource "aws_sqs_queue" "compliance" {
+  name = "${var.name_prefix}-compliance-queue"
+
+  tags = {
+    Name = "${var.name_prefix}-ComplianceQueue"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 ### COMPLIANCE SNS SUBSCRIPTION
