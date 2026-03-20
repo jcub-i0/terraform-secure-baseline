@@ -140,7 +140,6 @@ module "monitoring" {
   environment                   = var.environment
   logs_cmk_arn                  = module.security.logs_cmk_arn
   cloudtrail_log_group_name     = module.logging.cloudtrail_logs_group_name
-  compliance_emails             = var.compliance_emails
   secops_emails                 = var.secops_emails
   tamper_detection_rule_arn     = module.security.tamper_detection_rule_arn
   account_id                    = data.aws_caller_identity.current.account_id
