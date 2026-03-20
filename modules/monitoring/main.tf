@@ -70,7 +70,7 @@ resource "aws_sqs_queue" "compliance" {
   }
 }
 
-### SQS QUEUE POLICY FOR COMPLIANCE SQS QUEUE
+### POLICY DOCUMENT FOR COMPLIANCE SQS QUEUE
 data "aws_iam_policy_document" "compliance_queue_policy" {
   statement {
     sid = "AllowComplianceTopicToSend"
