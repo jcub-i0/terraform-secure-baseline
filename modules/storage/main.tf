@@ -70,7 +70,7 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# CLOUDWATCH LOG GROUP FOR RDS
+# CLOUDWATCH LOG GROUP FOR RDS POSTGRESQL LOGS
 resource "aws_cloudwatch_log_group" "rds_postgresql" {
   name = "/aws/rds/instance/${aws_db_instance.main.identifier}/postgresql"
   retention_in_days = 30
@@ -78,6 +78,19 @@ resource "aws_cloudwatch_log_group" "rds_postgresql" {
 
   tags = {
     Name = "${var.name_prefix}-rds-postgresql-logs"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
+
+# CLOUDWATCH LOG GROUP FOR RDS POSTGRESQL UDGRADE LOGS
+resource "aws_cloudwatch_log_group" "rds_upgrade" {
+  name = "/aws/rds/instance/${aws_db_instance.main.identifier}/upgrade"
+  retention_in_days = 30
+  kms_key_id = var.logs_cmk_arn
+
+  tags = {
+    Name = "${var.name_prefix}-rds-upgrade-logs"
     Environment = var.environment
     Terraform = "true"
   }
