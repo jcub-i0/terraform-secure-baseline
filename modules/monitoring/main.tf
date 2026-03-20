@@ -71,21 +71,21 @@ resource "aws_sqs_queue" "compliance" {
 ### POLICY DOCUMENT FOR COMPLIANCE SQS QUEUE
 data "aws_iam_policy_document" "compliance_queue_policy" {
   statement {
-    sid = "AllowComplianceTopicToSend"
+    sid    = "AllowComplianceTopicToSend"
     effect = "Allow"
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["sns.amazonaws.com"]
     }
 
-    actions = ["sqs:SendMessage"]
+    actions   = ["sqs:SendMessage"]
     resources = [aws_sqs_queue.compliance.arn]
 
     condition {
-      test = "ArnEquals"
+      test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values = [aws_sns_topic.compliance.arn]
+      values   = [aws_sns_topic.compliance.arn]
     }
   }
 }
@@ -93,7 +93,7 @@ data "aws_iam_policy_document" "compliance_queue_policy" {
 ### SQS QUEUE POLICY FOR COMPLIANCE SQS QUEUE
 resource "aws_sqs_queue_policy" "compliance" {
   queue_url = aws_sqs_queue.compliance.id
-  policy = data.aws_iam_policy_document.compliance_queue_policy
+  policy    = data.aws_iam_policy_document.compliance_queue_policy
 }
 
 ## SNS RESOURCES FOR SECURITY
