@@ -55,9 +55,9 @@ resource "aws_sqs_queue" "compliance" {
   name = "${var.name_prefix}-compliance-queue"
 
   tags = {
-    Name = "${var.name_prefix}-ComplianceQueue"
+    Name        = "${var.name_prefix}-ComplianceQueue"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
