@@ -122,7 +122,10 @@ Includes:
 - Root MFA required  
 - Password policy enforcement  
 
-Disabled by default to avoid conflicts in federated environments.
+Disabled by default to avoid unnecessary AWS Config scope expansion and cost, as these checks rely on global IAM resource types.
+
+Enable only if AWS Config is configured to record IAM resources in a designated home region.
+May also be unnecessary in fully federated identity environments.
 
 ---
 
