@@ -50,7 +50,16 @@ resource "aws_sns_topic_policy" "compliance" {
   })
 }
 
-### SQS QUEUE FOR COMPLIANCE SNS
+### COMPLIANCE SNS SUBSCRIPTION
+resource "aws_sns_topic_subscription" "compliance" {
+  for_each = toset(var.compliance_emails)
+
+  topic_arn = aws_sns_topic.compliance.arn
+  protocol  = "email"
+  endpoint  = each.value
+}
+
+## SQS QUEUE FOR COMPLIANCE SNS
 resource "aws_sqs_queue" "compliance" {
   name = "${var.name_prefix}-compliance-queue"
 
@@ -61,13 +70,26 @@ resource "aws_sqs_queue" "compliance" {
   }
 }
 
-### COMPLIANCE SNS SUBSCRIPTION
-resource "aws_sns_topic_subscription" "compliance" {
-  for_each = toset(var.compliance_emails)
+### SQS QUEUE POLICY FOR COMPLIANCE SQS QUEUE
+data "aws_iam_policy_document" "compliance_queue_policy" {
+  statement {
+    sid = "AllowComplianceTopicToSend"
+    effect = "Allow"
 
-  topic_arn = aws_sns_topic.compliance.arn
-  protocol  = "email"
-  endpoint  = each.value
+    principals {
+      type = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    actions = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.compliance.arn]
+
+    condition {
+      test = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [aws_sns_topic.compliance.arn]
+    }
+  }
 }
 
 ## SNS RESOURCES FOR SECURITY
