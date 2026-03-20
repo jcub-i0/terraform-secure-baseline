@@ -154,3 +154,41 @@ To confirm the module is working:
 
 - Resources with `Backup = "true"` are backed up
 - Untagged resources are not included
+
+---
+
+## What Gets Backed Up
+
+---
+
+## Security Considerations
+
+- Backups are stored in a dedicated vault
+- IAM role follows least-privilege principles
+- Encryption is handled via AWS-managed or customer-managed KMS keys
+- Backup access is controlled via IAM policies
+
+---
+
+## Limitations
+
+- Backup schedules are defined in UTC (not local time)
+- EC2 instance metadata is not backed up (only volumes)
+- No cross-region replication (can be added later)
+- No cold storage lifecycle configured (optional enhancement)
+
+---
+
+## Future Enhancements
+
+- Cross-region backup replication
+- Backup vault lock (immutability)
+- Lifecycle policies (cold storage / archive tier)
+- Backup monitoring and alerting
+
+---
+
+## Summary
+
+This module provides a simple, scalable, and secure backup solution for AWS workloads
+It ensures that critical resources can be automatically backed upa nd restored with minimal operational overhead.
