@@ -52,11 +52,9 @@ resource "aws_sns_topic_policy" "compliance" {
 
 ### COMPLIANCE SNS SUBSCRIPTION
 resource "aws_sns_topic_subscription" "compliance" {
-  for_each = toset(var.compliance_emails)
-
   topic_arn = aws_sns_topic.compliance.arn
-  protocol  = "email"
-  endpoint  = each.value
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.compliance.arn
 }
 
 ## SQS QUEUE FOR COMPLIANCE SNS
