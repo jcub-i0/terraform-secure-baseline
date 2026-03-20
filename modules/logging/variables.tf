@@ -34,10 +34,6 @@ variable "account_id" {
   type = string
 }
 
-variable "secops_topic_arn" {
-  type = string
-}
-
 variable "firehose_flow_logs_role_arn" {
   type = string
 }
