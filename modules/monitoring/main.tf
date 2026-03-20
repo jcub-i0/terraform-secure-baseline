@@ -54,7 +54,7 @@ resource "aws_sns_topic_policy" "compliance" {
 resource "aws_sns_topic_subscription" "compliance" {
   for_each = toset(var.compliance_emails)
 
-  topic_arn = aws_sns_topic.secops.arn
+  topic_arn = aws_sns_topic.compliance.arn
   protocol  = "email"
   endpoint  = each.value
 }
