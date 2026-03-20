@@ -128,3 +128,29 @@ Only resources with this tag will be backed up.
 |------|-------------|
 | `backup_vault_name` | Name of the backup vault |
 | `backup_plan_id` | ID of the backup plan |
+
+---
+
+## Validation
+
+To confirm the module is working:
+
+1. Navigate to:
+
+`AWS Backup` ➔ `Jobs`
+- Verify jobs complete successfully
+
+2. Navigate to:
+
+`AWS Backup` ➔ `Recovery points`
+- Confirm recovery points exist
+
+3. Restore a resource:
+
+`AWS Backup` ➔ `Recovery points` ➔ `Restore`
+- Validate successful recovery
+
+4. Confirm tag-based selection:
+
+- Resources with `Backup = "true"` are backed up
+- Untagged resources are not included
