@@ -1,3 +1,7 @@
+locals {
+  rds_identifier = "saas-data-db"
+}
+
 # CREATE DATA SECURITY GROUP, DB Subnet Group, AND RDS INSTANCE
 ## DATA SECURITY GROUP
 resource "aws_security_group" "data" {
@@ -27,7 +31,7 @@ resource "aws_db_subnet_group" "data" {
 
 ## RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "saas-data-db"
+  identifier = local.rds_identifier
 
   engine         = "postgres"
   engine_version = "16.6"
@@ -62,11 +66,42 @@ resource "aws_db_instance" "main" {
 
   auto_minor_version_upgrade = true
 
+  depends_on = [
+    aws_cloudwatch_log_group.rds_postgresql,
+    aws_cloudwatch_log_group.rds_upgrade
+  ]
+
   tags = {
     Name        = "${var.name_prefix}-SaaS-RDS"
     Environment = var.environment
     Terraform   = "true"
     Backup      = "true"
+  }
+}
+
+# CLOUDWATCH LOG GROUP FOR RDS POSTGRESQL LOGS
+resource "aws_cloudwatch_log_group" "rds_postgresql" {
+  name              = "/aws/rds/instance/${local.rds_identifier}/postgresql"
+  retention_in_days = 30
+  kms_key_id        = var.logs_cmk_arn
+
+  tags = {
+    Name        = "${var.name_prefix}-rds-postgresql-logs"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+# CLOUDWATCH LOG GROUP FOR RDS POSTGRESQL UDGRADE LOGS
+resource "aws_cloudwatch_log_group" "rds_upgrade" {
+  name              = "/aws/rds/instance/${local.rds_identifier}/upgrade"
+  retention_in_days = 30
+  kms_key_id        = var.logs_cmk_arn
+
+  tags = {
+    Name        = "${var.name_prefix}-rds-upgrade-logs"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
