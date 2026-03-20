@@ -70,25 +70,25 @@ The backup workflow is as follows:
 - AWS Backup must be enabled in the target AWS account and region
 
 - A valid AWS Backup service role must be configured:
-  - Trusted entity: `backup.amazonaws.com`
-  - Attached policies:
-    - `AWSBackupServiceRolePolicyForBackup`
-    - `AWSBackupServiceRolePolicyForRestores`
+- Trusted entity: `backup.amazonaws.com`
+- Attached policies:
+  - `AWSBackupServiceRolePolicyForBackup`
+  - `AWSBackupServiceRolePolicyForRestores`
 
 - Resources must be tagged appropriately for selection:
-  ```hcl
-  Backup = "true"
+```hcl
+Backup = "true"
   ```
 
 - AWS Backup must have resource type support enabled in:
   - `AWS Backup` ➔ `Settings` ➔ `Resource assignments`
-  - Ensure EC2, RDS, and any other resources with the `Backup = "true"` tag are enabled
+  - Ensure required resource types (i.e., EC2, RDS) are enabled
 
 - IAM permissions must allow AWS Backup to:
   - Describe resources (i.e., EC2 tags)
   - Create snapshots
   - Write to the backup vault
-  > The `AWSBackupServiceRolePolicyForBackup` and `AWSBackupServiceRolePolicyForRestores` AWS-managed roles fulfil these permission requirements
+  > The `AWSBackupServiceRolePolicyForBackup` and `AWSBackupServiceRolePolicyForRestores` AWS-managed roles satisfy these permission requirements
 
 ---
 
