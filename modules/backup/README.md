@@ -117,5 +117,5 @@ Only resources with this tag will be backed up.
 | backup_schedule |	Cron expression (UTC) for backup execution | string | "cron(5 5 * * ? *)" |
 | backup_retention_days | Number of days to retain backups | number | 30 |
 | backup_tag_key | Tag key used for selection | string | "Backup" |
-| backup_tag_value | Tag value used for selection | string	"true" |
+| backup_tag_value | Tag value used for selection | string | "true" |
 | backup_service_role_arn | IAM role ARN used by AWS Backup | string | n/a |
