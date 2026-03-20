@@ -6,7 +6,7 @@ The `Backup` module implements automated, tag-based backup and recovery for AWS 
 
 This module enables:
 
-- Scheduled backups for EC2 (EBS volumes) and RDS (or any resource with 'Backup' tag set to 'true')
+- Scheduled backups for EC2 (EBS volumes) and RDS (or any supported AWS Backup resource with the `Backup = "true"` tag)
 - Centralized backup management via AWS Backup
 - Tag-based resource selection
 - Secure storage of recovery points in a dedicated backup vault
