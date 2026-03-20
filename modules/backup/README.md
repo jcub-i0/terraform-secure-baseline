@@ -173,10 +173,6 @@ To confirm the module is working:
 
 ---
 
-## What Gets Backed Up
-
----
-
 ## Security Considerations
 
 - Backups are stored in a dedicated vault
