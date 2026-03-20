@@ -18,6 +18,12 @@ resource "aws_config_configuration_recorder" "config" {
       "AWS::EC2::Volume",
       "AWS::EC2::SecurityGroup",
       "AWS::EC2::Instance",
+
+      # GLOBAL IAM TYPES - explicitly recorded to support IAM Config rules in this designated region
+      "AWS::IAM::User",
+      "AWS::IAM::Group",
+      "AWS::IAM::Role",
+      "AWS::IAM::Policy"
     ]
 
     recording_strategy {

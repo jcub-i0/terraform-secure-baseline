@@ -113,6 +113,7 @@ variable "enable_rules" {
   }
 }
 
+# ENABLE IN PROD
 variable "config_enabled" {
   type    = bool
   default = false

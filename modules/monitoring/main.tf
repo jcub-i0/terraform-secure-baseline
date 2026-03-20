@@ -1,4 +1,4 @@
-# SNS
+# SNS and SQS
 ## SNS RESOURCES FOR CONFIG
 ### CONFIG DOES NOT HAVE AN SNS SUBSCRIPTION (YET)
 ### CONFIG SNS TOPIC
@@ -50,6 +50,53 @@ resource "aws_sns_topic_policy" "compliance" {
   })
 }
 
+### COMPLIANCE SNS SUBSCRIPTION
+resource "aws_sns_topic_subscription" "compliance" {
+  topic_arn = aws_sns_topic.compliance.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.compliance.arn
+}
+
+## SQS QUEUE FOR COMPLIANCE SNS
+resource "aws_sqs_queue" "compliance" {
+  name              = "${var.name_prefix}-compliance-queue"
+  kms_master_key_id = var.logs_cmk_arn
+
+  tags = {
+    Name        = "${var.name_prefix}-ComplianceQueue"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+### POLICY DOCUMENT FOR COMPLIANCE SQS QUEUE
+data "aws_iam_policy_document" "compliance_queue_policy" {
+  statement {
+    sid    = "AllowComplianceTopicToSend"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.compliance.arn]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_sns_topic.compliance.arn]
+    }
+  }
+}
+
+### SQS QUEUE POLICY FOR COMPLIANCE SQS QUEUE
+resource "aws_sqs_queue_policy" "compliance" {
+  queue_url = aws_sqs_queue.compliance.id
+  policy    = data.aws_iam_policy_document.compliance_queue_policy.json
+}
+
 ## SNS RESOURCES FOR SECURITY
 ### SECURITY SNS TOPIC
 resource "aws_sns_topic" "secops" {
@@ -87,15 +134,6 @@ resource "aws_sns_topic_policy" "secops" {
           "SNS:ListSubscriptionsByTopic",
           "SNS:Publish"
         ]
-        Resource = aws_sns_topic.secops.arn
-      },
-      {
-        Sid    = "AllowCloudTrailPublish"
-        Effect = "Allow"
-        Principal = {
-          "Service" = "cloudtrail.amazonaws.com"
-        }
-        Action   = "sns:Publish"
         Resource = aws_sns_topic.secops.arn
       },
       {

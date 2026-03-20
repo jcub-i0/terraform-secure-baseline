@@ -1,5 +1,5 @@
 ############################################
-# TAMPER DETECTION — EVENTBRIDGE → SNS
+# TAMPER DETECTION — EVENTBRIDGE ➔ SNS
 ############################################
 
 locals {
