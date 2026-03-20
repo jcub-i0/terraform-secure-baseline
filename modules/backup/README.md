@@ -67,7 +67,7 @@ The backup workflow is as follows:
 
 ## Requirements
 
-- AWS Backup must be enabled in the target AWS account adn region
+- AWS Backup must be enabled in the target AWS account and region
 
 - A valid AWS Backup service role must be configured:
   - Trusted entity: `backup.amazonaws.com`
@@ -87,7 +87,7 @@ The backup workflow is as follows:
 - IAM permissions must allow AWS Backup to:
   - Describe resources (i.e., EC2 tags)
   - Create snapshots
-  - Write to the backup bault
+  - Write to the backup vault
   > The `AWSBackupServiceRolePolicyForBackup` and `AWSBackupServiceRolePolicyForRestores` AWS-managed roles fulfil these permission requirements
 
 ---
@@ -203,4 +203,4 @@ To confirm the module is working:
 ## Summary
 
 This module provides a simple, scalable, and secure backup solution for AWS workloads
-It ensures that critical resources can be automatically backed upa nd restored with minimal operational overhead.
+It ensures that critical resources can be automatically backed up and restored with minimal operational overhead.
