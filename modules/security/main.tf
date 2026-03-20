@@ -235,7 +235,7 @@ resource "aws_kms_key" "logs" {
         Resource = "*"
       },
       {
-        Sid = "AllowSQS"
+        Sid    = "AllowSQS"
         Effect = "Allow"
         Principal = {
           Service = "sqs.amazonaws.com"
