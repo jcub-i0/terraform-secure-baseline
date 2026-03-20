@@ -234,3 +234,8 @@ module "backup" {
   delete_backups_after_days = var.delete_backups_after_days
   backup_service_role_arn   = module.iam.backup_service_role_arn
 }
+
+module "identity_center" {
+  source = "./modules/identity_center"
+  
+}
