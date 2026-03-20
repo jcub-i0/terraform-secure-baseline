@@ -23,7 +23,7 @@ resource "aws_guardduty_detector" "main" {
   region                       = var.primary_region
 
   tags = {
-    Name        = "Main"
+    Name        = "${var.name_prefix}-Main"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -92,7 +92,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_inspector_high_critical" {
   })
 
   tags = {
-    Name        = "SecurityHubHighCriticalEventRule"
+    Name        = "${var.name_prefix}-SecurityHubHighCriticalEventRule"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -309,7 +309,7 @@ resource "aws_kms_key" "logs" {
   })
 
   tags = {
-    Name        = "logs-cmk"
+    Name        = "${var.name_prefix}-logs-cmk"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -364,7 +364,7 @@ resource "aws_kms_key" "ebs" {
   })
 
   tags = {
-    Name        = "EBS-CMK"
+    Name        = "${var.name_prefix}-EBS-CMK"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -441,7 +441,7 @@ resource "aws_kms_key" "lambda" {
   })
 
   tags = {
-    Name        = "lambda-cmk"
+    Name        = "${var.name_prefix}-lambda-cmk"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -495,7 +495,7 @@ resource "aws_kms_key" "secrets_manager" {
   })
 
   tags = {
-    Name        = "Secrets-Manager-CMK"
+    Name        = "${var.name_prefix}-Secrets-Manager-CMK"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -506,10 +506,63 @@ resource "aws_kms_alias" "secrets_manager" {
   target_key_id = aws_kms_key.secrets_manager.arn
 }
 
+## BACKUP VAULT KMS KEY
+resource "aws_kms_key" "backup_vault" {
+  description             = "CMK for AWS Backup Vault"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  lifecycle {
+    prevent_destroy = false # CHANGE THIS IN PROD
+  }
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # FULL ACCESS FOR ROOT ACCOUNT
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowBackupVault"
+        Effect = "Allow"
+        Principal = {
+          Service = "backup.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
+      }
+    ] }
+  )
+}
+
+resource "aws_kms_alias" "backup_vault" {
+  name          = "alias/${var.cloud_name}/backup"
+  target_key_id = aws_kms_key.backup_vault.arn
+}
+
 # CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
 
+  name_prefix                  = var.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   config_enabled               = var.config_enabled
@@ -525,6 +578,7 @@ module "config_baseline" {
 module "tamper_detection" {
   source = "./tamper_detection"
 
+  name_prefix     = var.name_prefix
   cloud_name      = var.cloud_name
   environment     = var.environment
   alert_topic_arn = var.secops_topic_arn

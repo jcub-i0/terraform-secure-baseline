@@ -1,13 +1,13 @@
 # CREATE DATA SECURITY GROUP, DB Subnet Group, AND RDS INSTANCE
 ## DATA SECURITY GROUP
 resource "aws_security_group" "data" {
-  name                   = "Data-SG"
+  name                   = "${var.name_prefix}-Data-SG"
   description            = "Security Group for the RDS database"
   vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
 
   tags = {
-    Name        = "Data-SG"
+    Name        = "${var.name_prefix}-Data-SG"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -15,11 +15,11 @@ resource "aws_security_group" "data" {
 
 ## DB SUBNET GROUP
 resource "aws_db_subnet_group" "data" {
-  name       = "data-db-subnet-group"
+  name       = "${var.name_prefix}-data-db-subnet-group"
   subnet_ids = var.data_private_subnet_ids_list
 
   tags = {
-    Name        = "Data-DB-Subnet-Group"
+    Name        = "${var.name_prefix}-Data-DB-Subnet-Group"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -63,9 +63,10 @@ resource "aws_db_instance" "main" {
   auto_minor_version_upgrade = true
 
   tags = {
-    Name        = "SaaS-RDS"
+    Name        = "${var.name_prefix}-SaaS-RDS"
     Environment = var.environment
     Terraform   = "true"
+    Backup      = "true"
   }
 }
 
@@ -79,7 +80,7 @@ resource "aws_secretsmanager_secret" "rds_master" {
   kms_key_id  = var.secrets_manager_cmk_arn
 
   tags = {
-    Name        = "RdsMasterSecret"
+    Name        = "${var.name_prefix}-RdsMasterSecret"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -118,7 +119,7 @@ resource "aws_s3_bucket" "centralized_logs" {
   }
 
   tags = {
-    Name        = "${var.cloud_name}-Centralized-Logs"
+    Name        = "${var.name_prefix}-Centralized-Logs"
     Environment = var.environment
     Terraform   = "true"
   }

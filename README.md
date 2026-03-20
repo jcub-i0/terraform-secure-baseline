@@ -2,6 +2,14 @@
 
 Opinionated Terraform baseline for deploying secure, cost-efficient AWS environments for early-to-mid-stage SaaS businesses handling customer data.
 
+## NOTICE: PROPRIETARY CODE
+
+This repository is the property of *NanoNexus Consulting*.
+
+This code is made publicly viewable for demonstration purposes only.
+No license is granted to use, copy, modify, or distribute this code
+without explicit written permission.
+
 ---
 
 ## Overview

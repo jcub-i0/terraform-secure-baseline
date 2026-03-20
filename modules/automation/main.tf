@@ -8,7 +8,7 @@ data "archive_file" "lambda_ec2_isolation" {
 
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
-  function_name                  = "ec2-isolation"
+  function_name                  = "${var.name_prefix}-ec2-isolation"
   description                    = "Isolate EC2 resources by sending them to the Quarantine SG when a HIGH/CRITICAL Security Hub finding is observed on an instance"
   role                           = var.lambda_ec2_isolation_role_arn
   handler                        = "ec2_isolation.lambda_handler"
@@ -42,7 +42,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   ]
 
   tags = {
-    Name        = "EC2-Isolation"
+    Name        = "${var.name_prefix}-EC2-Isolation"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -50,13 +50,13 @@ resource "aws_lambda_function" "ec2_isolation" {
 
 ## EC2 ISOLATION SECURITY GROUP
 resource "aws_security_group" "lambda_ec2_isolation_sg" {
-  name                   = "Lambda-EC2-Isolation-SG"
+  name                   = "${var.name_prefix}-Lambda-EC2-Isolation-SG"
   description            = "Security Group for the EC2 Isolation Lambda function"
   vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
 
   tags = {
-    Name        = "Lambda-EC2-Isolation-SG"
+    Name        = "${var.name_prefix}--Lambda-EC2-Isolation-SG"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -110,7 +110,7 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name        = "Lambda-EC2-Isolation-Logs"
+    Name        = "${var.name_prefix}-Lambda-EC2-Isolation-Logs"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -126,7 +126,7 @@ data "archive_file" "lambda_ec2_rollback" {
 
 ## EC2 ROLLBACK LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_rollback" {
-  function_name                  = "ec2-rollback"
+  function_name                  = "${var.name_prefix}-ec2-rollback"
   description                    = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
   role                           = var.lambda_ec2_rollback_role_arn
   handler                        = "ec2_rollback.lambda_handler"
@@ -159,7 +159,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   ]
 
   tags = {
-    Name        = "EC2-Rollback"
+    Name        = "${var.name_prefix}-EC2-Rollback"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -167,13 +167,13 @@ resource "aws_lambda_function" "ec2_rollback" {
 
 ## EC2 ROLLBACK SG
 resource "aws_security_group" "lambda_ec2_rollback_sg" {
-  name                   = "Lambda-EC2-Rollback-SG"
+  name                   = "${var.name_prefix}-Lambda-EC2-Rollback-SG"
   description            = "Security Group for the EC2 Rollback Lambda function"
   vpc_id                 = var.vpc_id
   revoke_rules_on_delete = true
 
   tags = {
-    Name        = "Lambda-EC2-Rollback-SG"
+    Name        = "${var.name_prefix}-Lambda-EC2-Rollback-SG"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -184,7 +184,7 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
 resource "aws_cloudwatch_event_bus" "secops" {
   name = "security-operations-bus"
   tags = {
-    Name        = "secops-bus"
+    Name        = "${var.name_prefix}-secops-bus"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -267,7 +267,7 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name        = "Lambda-EC2-Rollback-Logs"
+    Name        = "${var.name_prefix}-Lambda-EC2-Rollback-Logs"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -281,7 +281,7 @@ data "archive_file" "lambda_ip_enrichment" {
 }
 
 resource "aws_lambda_function" "ip_enrichment" {
-  function_name                  = "ip-enrichment"
+  function_name                  = "${var.name_prefix}-ip-enrichment"
   description                    = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"
   role                           = var.lambda_ip_enrichment_role_arn
   handler                        = "ip_enrichment.lambda_handler"
@@ -317,7 +317,7 @@ resource "aws_lambda_function" "ip_enrichment" {
   ]
 
   tags = {
-    Name        = "IP-Enrichment"
+    Name        = "${var.name_prefix}-IP-Enrichment"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -325,12 +325,12 @@ resource "aws_lambda_function" "ip_enrichment" {
 
 ### STORE IP ENRICHMENT'S API KEYS IN AWS SECRETS MANAGER
 resource "aws_secretsmanager_secret" "threat_intel_api_keys" {
-  name_prefix = "${var.cloud_name}/threat-intel/api-keys-"
+  name_prefix = "${var.cloud_name}/${var.environment}/threat-intel/api-keys-"
   description = "API keys for external threat intel providers (AbuseIPDB)"
   kms_key_id  = var.secrets_manager_cmk_arn
 
   tags = {
-    Name        = "Threat-Intel-API-Keys"
+    Name        = "${var.name_prefix}-Threat-Intel-API-Keys"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -386,7 +386,7 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name        = "Lambda-IP-Enrichment-Logs"
+    Name        = "${var.name_prefix}-Lambda-IP-Enrichment-Logs"
     Environment = var.environment
     Terraform   = "true"
   }

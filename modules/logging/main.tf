@@ -6,7 +6,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name        = "CloudTrail-Logs"
+    Name        = "${var.name_prefix}-CloudTrail-Logs"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -19,7 +19,7 @@ resource "aws_cloudwatch_log_group" "flowlogs" {
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
-    Name        = "FlowLogs"
+    Name        = "${var.name_prefix}-FlowLogs"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -27,7 +27,7 @@ resource "aws_cloudwatch_log_group" "flowlogs" {
 
 # CLOUDTRAIL
 resource "aws_cloudtrail" "cloudtrail" {
-  name                          = "CloudTrail"
+  name                          = "${var.name_prefix}-CloudTrail"
   s3_bucket_name                = var.centralized_logs_bucket_id
   s3_key_prefix                 = "CloudTrail"
   kms_key_id                    = var.logs_cmk_arn
@@ -55,7 +55,7 @@ resource "aws_cloudtrail" "cloudtrail" {
   depends_on = [aws_cloudwatch_log_group.cloudtrail]
 
   tags = {
-    Name        = "CloudTrail"
+    Name        = "${var.name_prefix}-CloudTrail"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -71,7 +71,7 @@ resource "aws_flow_log" "flowlogs" {
   traffic_type         = "ALL"
 
   tags = {
-    Name        = "VPC-Flow-Logs"
+    Name        = "${var.name_prefix}-VPC-Flow-Logs"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -99,7 +99,7 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
   }
 
   tags = {
-    Name        = "FlowLogsFirehoseDeliveryStream"
+    Name        = "${var.name_prefix}-FlowLogsFirehoseDeliveryStream"
     Environment = var.environment
     Terraform   = "true"
   }

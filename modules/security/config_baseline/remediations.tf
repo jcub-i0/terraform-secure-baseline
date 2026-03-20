@@ -6,7 +6,7 @@
 ### S3 PUBLIC ACCESS REMEDIATION RULE
 resource "aws_config_config_rule" "s3_public_access_block" {
   count = var.config_enabled ? 1 : 0
-  name  = "s3-bucket-public-read-block"
+  name  = "${var.name_prefix}-s3-bucket-public-read-block"
 
   source {
     owner             = "AWS"
@@ -14,7 +14,7 @@ resource "aws_config_config_rule" "s3_public_access_block" {
   }
 
   tags = {
-    Name        = "S3PublicAccessBlockRemediation"
+    Name        = "${var.name_prefix}-S3PublicAccessBlockRemediation"
     Environment = var.environment
     Terraform   = "true"
   }

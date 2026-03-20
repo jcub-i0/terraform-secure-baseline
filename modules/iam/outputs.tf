@@ -50,3 +50,7 @@ output "eventbridge_putevents_to_secops_role_arn" {
 output "patch_maintenance_window_role_arn" {
   value = aws_iam_role.patch_maintenance_window.arn
 }
+
+output "backup_service_role_arn" {
+  value = aws_iam_role.backup.arn
+}

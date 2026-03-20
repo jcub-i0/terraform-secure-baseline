@@ -159,3 +159,21 @@ variable "patch_tag_value" {
   type        = string
   default     = "weekly-linux"
 }
+
+variable "backup_enabled" {
+  description = "Define whether backup resources are enabled"
+  type        = bool
+  default     = true
+}
+
+variable "backup_schedule" {
+  description = "CRON expression for when backups are performed"
+  type        = string
+  default     = "cron(0 5 * * ? *)"
+}
+
+variable "delete_backups_after_days" {
+  description = "Number of days to retain backups before deletion"
+  type        = string
+  default     = "30"
+}
