@@ -50,6 +50,15 @@ resource "aws_sns_topic_policy" "compliance" {
   })
 }
 
+### COMPLIANCE SNS SUBSCRIPTION
+resource "aws_sns_topic_subscription" "compliance" {
+  for_each = toset(var.compliance_emails)
+
+  topic_arn = aws_sns_topic.secops.arn
+  protocol  = "email"
+  endpoint  = each.value
+}
+
 ## SNS RESOURCES FOR SECURITY
 ### SECURITY SNS TOPIC
 resource "aws_sns_topic" "secops" {
