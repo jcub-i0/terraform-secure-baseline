@@ -238,4 +238,7 @@ module "backup" {
 module "identity_center" {
   source = "./modules/identity_center"
 
+  secops_analyst_group_name = "SecOps-Analysts"
+  secops_engineer_group_name = "SecOps-Engineers"
+  secops_operator_group_name = "SecOps-Operators"
 }
