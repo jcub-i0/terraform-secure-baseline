@@ -31,7 +31,7 @@ resource "aws_db_subnet_group" "data" {
 
 ## RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "saas-data-db"
+  identifier = local.rds_identifier
 
   engine         = "postgres"
   engine_version = "16.6"
@@ -81,7 +81,7 @@ resource "aws_db_instance" "main" {
 
 # CLOUDWATCH LOG GROUP FOR RDS POSTGRESQL LOGS
 resource "aws_cloudwatch_log_group" "rds_postgresql" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/postgresql"
+  name              = "/aws/rds/instance/${local.rds_identifier}/postgresql"
   retention_in_days = 30
   kms_key_id        = var.logs_cmk_arn
 
@@ -94,7 +94,7 @@ resource "aws_cloudwatch_log_group" "rds_postgresql" {
 
 # CLOUDWATCH LOG GROUP FOR RDS POSTGRESQL UDGRADE LOGS
 resource "aws_cloudwatch_log_group" "rds_upgrade" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/upgrade"
+  name              = "/aws/rds/instance/${local.rds_identifier}/upgrade"
   retention_in_days = 30
   kms_key_id        = var.logs_cmk_arn
 
