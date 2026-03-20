@@ -126,7 +126,6 @@ module "logging" {
   logs_cmk_arn                = module.security.logs_cmk_arn
   cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
   account_id                  = data.aws_caller_identity.current.account_id
-  secops_topic_arn            = module.monitoring.secops_topic_arn
   flowlogs_role_arn           = module.iam.flowlogs_role_arn
   vpc_id                      = module.networking.vpc_id
   firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
