@@ -60,6 +60,7 @@ resource "aws_sns_topic_subscription" "compliance" {
 ## SQS QUEUE FOR COMPLIANCE SNS
 resource "aws_sqs_queue" "compliance" {
   name = "${var.name_prefix}-compliance-queue"
+  kms_master_key_id = var.logs_cmk_arn
 
   tags = {
     Name        = "${var.name_prefix}-ComplianceQueue"
