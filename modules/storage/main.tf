@@ -70,6 +70,19 @@ resource "aws_db_instance" "main" {
   }
 }
 
+# CLOUDWATCH LOG GROUP FOR RDS
+resource "aws_cloudwatch_log_group" "rds_postgresql" {
+  name = "/aws/rds/instance/${aws_db_instance.main.identifier}/postgresql"
+  retention_in_days = 30
+  kms_key_id = var.logs_cmk_arn
+
+  tags = {
+    Name = "${var.name_prefix}-rds-postgresql-logs"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
+
 # COMMENT THIS OUT IF USING 'var.db_password' INSTEAD OF A RANDOMLY-GENERATED PASSWORD
 
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
