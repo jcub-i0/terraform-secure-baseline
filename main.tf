@@ -237,5 +237,5 @@ module "backup" {
 
 module "identity_center" {
   source = "./modules/identity_center"
-  
+
 }
