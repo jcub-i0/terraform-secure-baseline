@@ -73,18 +73,6 @@ variable "secops_emails" {
   }
 }
 
-variable "compliance_emails" {
-  description = "List of emails to send security-related notifications to"
-  type        = list(string)
-  default     = []
-
-  # VALIDATE EMAIL FORMATS
-  validation {
-    condition     = alltrue([for e in var.compliance_emails : can(regex("^.+@.+\\..+$", e))])
-    error_message = "Each entry in compliance_emails must be a valid email address."
-  }
-}
-
 variable "guardduty_features" {
   description = "List of GuardDuty features that dictate what data GuardDuty analyzes"
   type        = list(string)
