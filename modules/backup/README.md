@@ -126,3 +126,5 @@ Only resources with this tag will be backed up.
 
 | Name | Description |
 |------|-------------|
+| `backup_vault_name` | Name of the backup vault |
+| `backup_plan_id` | ID of the backup plan |
