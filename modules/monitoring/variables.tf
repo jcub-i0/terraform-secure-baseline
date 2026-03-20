@@ -14,6 +14,10 @@ variable "cloudtrail_log_group_name" {
   type = string
 }
 
+variable "compliance_emails" {
+  type = list(string)
+}
+
 variable "secops_emails" {
   type = list(string)
 }
