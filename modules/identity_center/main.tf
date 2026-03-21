@@ -106,7 +106,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
 ##########################################
 
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_s3" {
-  instance_arn = local.instance_arn
+  instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
 
   customer_managed_policy_reference {
@@ -116,7 +116,7 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_
 }
 
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_cmk" {
-  instance_arn = local.instance_arn
+  instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
 
   customer_managed_policy_reference {

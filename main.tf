@@ -238,12 +238,12 @@ module "backup" {
 module "identity_center" {
   source = "./modules/identity_center"
 
-  account_id                 = data.aws_caller_identity.current.account_id
-  secops_analyst_group_name  = "SecOps-Analysts"
-  secops_engineer_group_name = "SecOps-Engineers"
-  secops_operator_group_name = "SecOps-Operators"
-  logs_cmk_decrypt_policy_name = module.iam.logs_cmk_decrypt_policy_name
-  logs_s3_readonly_policy_name = module.iam.logs_s3_readonly_policy_name
+  account_id                          = data.aws_caller_identity.current.account_id
+  secops_analyst_group_name           = "SecOps-Analysts"
+  secops_engineer_group_name          = "SecOps-Engineers"
+  secops_operator_group_name          = "SecOps-Operators"
+  logs_cmk_decrypt_policy_name        = module.iam.logs_cmk_decrypt_policy_name
+  logs_s3_readonly_policy_name        = module.iam.logs_s3_readonly_policy_name
   secops_rollback_trigger_policy_name = module.iam.secops_rollback_trigger_policy_name
 
   depends_on = [
