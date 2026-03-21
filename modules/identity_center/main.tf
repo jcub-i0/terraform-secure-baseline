@@ -47,3 +47,28 @@ data "aws_identitystore_group" "operators" {
     }
   }
 }
+
+##########################################
+# PERMISSION SETS
+##########################################
+
+resource "aws_ssoadmin_permission_set" "analyst" {
+  name = "SecOps-Analyst"
+  description = "Read-only security visibility for analysts"
+  instance_arn = local.instance_arn
+  session_duration = "PT4H"
+}
+
+resource "aws_ssoadmin_permission_set" "engineer" {
+  name = "SecOps-Engineer"
+  description = "Security investigation and response access"
+  instance_arn = local.instance_arn
+  session_duration = "PT4H"
+}
+
+resource "aws_ssoadmin_permission_set" "operator" {
+  name = "SecOps-Operator"
+  description = "Privileged operational rollback access"
+  instance_arn = local.identity_store_id
+  session_duration = "PT2H"
+}
