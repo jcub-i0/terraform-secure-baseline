@@ -116,32 +116,12 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
         Sid    = "AllowSecurityInvestigation"
         Effect = "Allow"
         Action = [
-          "securityhub:Get*",
-          "securityhub:List*",
-          "securityhub:BatchUpdateFindings",
-          "guardduty:Get*",
-          "guardduty:List*",
-          "inspector2:List*",
-          "inspector2:Get*",
-          "cloudtrail:LookupEvents",
-          "config:Get*",
-          "config:Describe*",
-          "logs:Describe*",
-          "logs:Get*",
-          "logs:FilterLogEvents",
-          "logs:StartQuery",
-          "logs:StopQuery",
-          "logs:GetQueryResults",
-          "ec2:Describe*",
-          "ssm:Describe*",
-          "ssm:Get*",
-          "sns:List*",
-          "ec2:Describe*",
-          "ec2:CreateTags",
-          "ec2:ModifyInstanceAttribute",
-          "ec2:ReplaceIamInstanceProfileAssociation",
-          "ec2:AssociateIamInstanceProfile",
-          "ec2:DisassociateIamInstanceProfile"
+            "securityhub:BatchUpdateFindings",
+            "ec2:CreateTags",
+            "ec2:ModifyInstanceAttribute",
+            "ec2:ReplaceIamInstanceProfileAssociation",
+            "ec2:AssociateIamInstanceProfile",
+            "ec2:DisassociateIamInstanceProfile"
         ]
         Resource = "*"
       }
