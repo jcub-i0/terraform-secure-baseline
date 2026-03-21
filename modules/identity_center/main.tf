@@ -95,9 +95,9 @@ resource "aws_ssoadmin_managed_policy_attachment" "engineer_security_audit" {
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
 
-########################################
+##########################################
 # INLINE POLICY FOR SECOPS-ENGINEER
-########################################
+##########################################
 
 resource "aws_ssoadmin_permission_set_inline_policy" "engineer_inline" {
   instance_arn = local.instance_arn
@@ -136,3 +136,4 @@ resource "aws_ssoadmin_permission_set_inline_policy" "engineer_inline" {
     ]
   })
 }
+
