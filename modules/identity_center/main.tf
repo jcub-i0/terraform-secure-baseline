@@ -72,3 +72,25 @@ resource "aws_ssoadmin_permission_set" "operator" {
   instance_arn = local.identity_store_id
   session_duration = "PT2H"
 }
+
+##########################################
+# AWS-MANAGED POLICY ATTACHMENTS
+##########################################
+
+resource "aws_ssoadmin_managed_policy_attachment" "analyst_security_audit" {
+  instance_arn = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.analyst.arn
+  managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
+}
+
+resource "aws_ssoadmin_managed_policy_attachment" "analyst_readonly" {
+  instance_arn = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.analyst.arn
+  managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+resource "aws_ssoadmin_managed_policy_attachment" "engineer_security_audit" {
+  instance_arn = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.engineer.arn
+  managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
+}
