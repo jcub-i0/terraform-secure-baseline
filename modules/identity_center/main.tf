@@ -15,7 +15,7 @@ locals {
 # GROUP LOOKUPS
 ##########################################
 
-data "aws_identitystore_group" "analysts" {
+data "aws_identitystore_group" "secops_analysts" {
   identity_store_id = local.identity_store_id
 
   alternate_identifier {
@@ -26,7 +26,7 @@ data "aws_identitystore_group" "analysts" {
   }
 }
 
-data "aws_identitystore_group" "engineers" {
+data "aws_identitystore_group" "secops_engineers" {
   identity_store_id = local.identity_store_id
 
   alternate_identifier {
@@ -37,7 +37,7 @@ data "aws_identitystore_group" "engineers" {
   }
 }
 
-data "aws_identitystore_group" "operators" {
+data "aws_identitystore_group" "secops_operators" {
   identity_store_id = local.identity_store_id
 
   alternate_identifier {
@@ -52,21 +52,21 @@ data "aws_identitystore_group" "operators" {
 # PERMISSION SETS
 ##########################################
 
-resource "aws_ssoadmin_permission_set" "analyst" {
+resource "aws_ssoadmin_permission_set" "secops_analyst" {
   name = "SecOps-Analyst"
   description = "Read-only security visibility for analysts"
   instance_arn = local.instance_arn
   session_duration = "PT4H"
 }
 
-resource "aws_ssoadmin_permission_set" "engineer" {
+resource "aws_ssoadmin_permission_set" "secops_engineer" {
   name = "SecOps-Engineer"
   description = "Security investigation and response access"
   instance_arn = local.instance_arn
   session_duration = "PT4H"
 }
 
-resource "aws_ssoadmin_permission_set" "operator" {
+resource "aws_ssoadmin_permission_set" "secops_operator" {
   name = "SecOps-Operator"
   description = "Privileged operational rollback access"
   instance_arn = local.identity_store_id
@@ -77,21 +77,21 @@ resource "aws_ssoadmin_permission_set" "operator" {
 # AWS-MANAGED POLICY ATTACHMENTS
 ##########################################
 
-resource "aws_ssoadmin_managed_policy_attachment" "analyst_security_audit" {
+resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_security_audit" {
   instance_arn = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.analyst.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
 
-resource "aws_ssoadmin_managed_policy_attachment" "analyst_readonly" {
+resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_readonly" {
   instance_arn = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.analyst.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
   managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
-resource "aws_ssoadmin_managed_policy_attachment" "engineer_security_audit" {
+resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_security_audit" {
   instance_arn = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
 
@@ -99,9 +99,9 @@ resource "aws_ssoadmin_managed_policy_attachment" "engineer_security_audit" {
 # INLINE POLICY FOR SECOPS-ENGINEER
 ##########################################
 
-resource "aws_ssoadmin_permission_set_inline_policy" "engineer_inline" {
+resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
   instance_arn = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
   
   inline_policy = jsonencode({
     Version = "2012-10-17"
@@ -137,3 +137,10 @@ resource "aws_ssoadmin_permission_set_inline_policy" "engineer_inline" {
   })
 }
 
+##########################################
+# INLINE POLICY FOR SECOPS-OPERATOR
+##########################################
+
+resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
+  
+}
