@@ -245,4 +245,8 @@ module "identity_center" {
   logs_cmk_decrypt_policy_name = module.iam.logs_cmk_decrypt_policy_name
   logs_s3_readonly_policy_name = module.iam.logs_s3_readonly_policy_name
   secops_rollback_trigger_policy_name = module.iam.secops_rollback_trigger_policy_name
+
+  depends_on = [
+    module.iam
+  ]
 }
