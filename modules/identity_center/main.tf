@@ -142,5 +142,27 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
 ##########################################
 
 resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
-  
+  instance_arn = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
+
+  inline_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+        {
+            Sid = "AllowRollbackAndResponse"
+            Effect = "Allow"
+            Action = [
+                "events:PutEvents",
+                "lambda:InvokeFunction",
+                "ec2:Describe*",
+                "ec2:CreateTags",
+                "ec2:ModifyInstanceAttribute",
+                "ec2:ReplaceIamInstanceProfileAssociation",
+                "ec2:AssociateIamInstanceProfile",
+                "ec2:DisassociateIamInstanceProfile"
+            ]
+            Resource = "*"
+        }
+    ]
+  })
 }
