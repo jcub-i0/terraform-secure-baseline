@@ -181,3 +181,15 @@ resource "aws_ssoadmin_account_assignment" "analysts" {
   target_id = var.account_id
   target_type = "AWS_ACCOUNT"
 }
+
+resource "aws_ssoadmin_account_assignment" "engineers" {
+  instance_arn = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+
+  principal_id = data.aws_identitystore_group.secops_engineers.group_id
+  principal_type = "GROUP"
+
+  target_id = var.account_id
+  target_type = "AWS_ACCOUNT"
+}
+
