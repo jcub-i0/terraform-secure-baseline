@@ -96,7 +96,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_security_audi
 }
 
 resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
-  instance_arn = local.instance_arn
+  instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
@@ -116,12 +116,12 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
         Sid    = "AllowSecurityInvestigation"
         Effect = "Allow"
         Action = [
-            "securityhub:BatchUpdateFindings",
-            "ec2:CreateTags",
-            "ec2:ModifyInstanceAttribute",
-            "ec2:ReplaceIamInstanceProfileAssociation",
-            "ec2:AssociateIamInstanceProfile",
-            "ec2:DisassociateIamInstanceProfile"
+          "securityhub:BatchUpdateFindings",
+          "ec2:CreateTags",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:ReplaceIamInstanceProfileAssociation",
+          "ec2:AssociateIamInstanceProfile",
+          "ec2:DisassociateIamInstanceProfile"
         ]
         Resource = "*"
       }
