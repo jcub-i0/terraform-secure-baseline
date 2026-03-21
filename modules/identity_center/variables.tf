@@ -12,3 +12,8 @@ variable "secops_operator_group_name" {
   description = "Name of the SecOps-Operator IAM group"
   type = string
 }
+
+variable "account_id" {
+  description = ""
+  type = string
+}
