@@ -129,7 +129,13 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
           "ec2:Describe*",
           "ssm:Describe*",
           "ssm:Get*",
-          "sns:List*"
+          "sns:List*",
+          "ec2:Describe*",
+          "ec2:CreateTags",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:ReplaceIamInstanceProfileAssociation",
+          "ec2:AssociateIamInstanceProfile",
+          "ec2:DisassociateIamInstanceProfile"
         ]
         Resource = "*"
       }
@@ -154,12 +160,6 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
         Action = [
           "events:PutEvents",
           "lambda:InvokeFunction",
-          "ec2:Describe*",
-          "ec2:CreateTags",
-          "ec2:ModifyInstanceAttribute",
-          "ec2:ReplaceIamInstanceProfileAssociation",
-          "ec2:AssociateIamInstanceProfile",
-          "ec2:DisassociateIamInstanceProfile"
         ]
         Resource = "*"
       }
