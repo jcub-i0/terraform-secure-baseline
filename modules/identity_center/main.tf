@@ -94,3 +94,45 @@ resource "aws_ssoadmin_managed_policy_attachment" "engineer_security_audit" {
   permission_set_arn = aws_ssoadmin_permission_set.engineer.arn
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
+
+########################################
+# INLINE POLICY FOR SECOPS-ENGINEER
+########################################
+
+resource "aws_ssoadmin_permission_set_inline_policy" "engineer_inline" {
+  instance_arn = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.engineer.arn
+  
+  inline_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+        {
+            Sid = "AllowSecurityInvestigation"
+            Effect = "Allow"
+            Action = [
+                "securityhub:Get*",
+                "securityhub:List*",
+                "securityhub:BatchUpdateFindings",
+                "guardduty:Get*",
+                "guardduty:List*",
+                "inspector2:List*",
+                "inspector2:Get*",
+                "cloudtrail:LookupEvents",
+                "config:Get*",
+                "config:Describe*",
+                "logs:Describe*",
+                "logs:Get*",
+                "logs:FilterLogEvents",
+                "logs:StartQuery",
+                "logs:StopQuery",
+                "logs:GetQueryResults",
+                "ec2:Describe*",
+                "ssm:Describe*",
+                "ssm:Get*",
+                "sns:List*"
+            ]
+            Resource = "*"
+        }
+    ]
+  })
+}
