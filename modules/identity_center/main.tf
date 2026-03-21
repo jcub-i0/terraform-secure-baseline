@@ -166,3 +166,18 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
     ]
   })
 }
+
+##########################################
+# ACCOUNT ASSIGNMENTS
+##########################################
+
+resource "aws_ssoadmin_account_assignment" "analysts" {
+  instance_arn = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
+
+  principal_id = data.aws_identitystore_group.secops_analysts.group_id
+  principal_type = "GROUP"
+
+  target_id = var.account_id
+  target_type = "AWS_ACCOUNT"
+}
