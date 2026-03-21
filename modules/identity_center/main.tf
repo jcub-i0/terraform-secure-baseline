@@ -25,3 +25,25 @@ data "aws_identitystore_group" "analysts" {
     }
   }
 }
+
+data "aws_identitystore_group" "engineers" {
+  identity_store_id = local.identity_store_id
+
+  alternate_identifier {
+    unique_attribute {
+      attribute_path = "DisplayName"
+      attribute_value = var.secops_engineer_group_name
+    }
+  }
+}
+
+data "aws_identitystore_group" "operators" {
+  identity_store_id = local.identity_store_id
+
+  alternate_identifier {
+    unique_attribute {
+      attribute_path = "DisplayName"
+      attribute_value = var.secops_operator_group_name
+    }
+  }
+}
