@@ -18,6 +18,12 @@ variable "account_id" {
   type        = string
 }
 
+variable "customer_managed_policy_path" {
+  description = "Path of customer managed IAM policies used by permission sets"
+  type = string
+  default = "/"
+}
+
 variable "logs_s3_readonly_policy_name" {
     description = "'Name' attribute of the logs_s3_readonly policy"
   type = string
