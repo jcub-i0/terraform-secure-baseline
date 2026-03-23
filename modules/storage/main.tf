@@ -51,7 +51,7 @@ resource "aws_db_instance" "main" {
   db_name  = "appdb"
   username = var.db_username
   # SET 'password' TO var.db_password IF NOT USING AUTO-GENERATED PASSWORD FOR RDS
-  password_wo = jsondecode(ephemeral.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
+  password_wo         = jsondecode(ephemeral.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
   password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
   deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
