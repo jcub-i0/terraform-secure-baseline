@@ -69,7 +69,7 @@ resource "aws_ssoadmin_permission_set" "secops_engineer" {
 resource "aws_ssoadmin_permission_set" "secops_operator" {
   name             = "SecOps-Operator"
   description      = "Privileged operational rollback access"
-  instance_arn     = local.identity_store_id
+  instance_arn     = local.instance_arn
   session_duration = "PT2H"
 }
 
