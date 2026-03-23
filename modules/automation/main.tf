@@ -204,7 +204,7 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
           AWS = var.secops_operator_role_arn
         }
         Action   = "events:PutEvents"
-        Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
+        Resource = var.aws_cloudwatch_event_bus.secops.arn
         Condition = {
           StringEquals = {
             "events:source" = "custom.rollback"
