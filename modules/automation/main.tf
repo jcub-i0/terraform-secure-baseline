@@ -201,7 +201,7 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
         Sid    = "AllowSecOpsRollbackOnly"
         Effect = "Allow"
         Principal = {
-          AWS = var.secops_operator_role_arn
+          AWS = "*"
         }
         Action   = "events:PutEvents"
         Resource = var.aws_cloudwatch_event_bus.secops.arn
