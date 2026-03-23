@@ -263,7 +263,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principles
+            "aws:PrincipalArn" : var.bucket_admin_principals
           }
         }
       },
@@ -278,7 +278,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principles
+            "aws:PrincipalArn" : var.bucket_admin_principals
           }
         }
       },
