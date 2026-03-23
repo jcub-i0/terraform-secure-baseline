@@ -51,7 +51,7 @@ resource "aws_db_instance" "main" {
   db_name  = "appdb"
   username = var.db_username
   # SET 'password' TO var.db_password IF NOT USING AUTO-GENERATED PASSWORD FOR RDS
-  password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
+  password = jsondecode(aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
 
   deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
   skip_final_snapshot     = true  # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
@@ -140,6 +140,10 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
 ## Access the generated secret inside the AWS Secrets Manager secret
 data "aws_secretsmanager_secret_version" "rds_master" {
   secret_id = aws_secretsmanager_secret.rds_master.id
+
+  depends_on = [
+    aws_secretsmanager_secret_version.rds_master
+  ]
 }
 
 # S3 RESOURCES
