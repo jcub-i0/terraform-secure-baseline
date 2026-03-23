@@ -137,15 +137,6 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
   secret_string_wo_version = 1
 }
 
-## Access the generated secret inside the AWS Secrets Manager secret
-data "aws_secretsmanager_secret_version" "rds_master" {
-  secret_id = aws_secretsmanager_secret.rds_master.id
-
-  depends_on = [
-    aws_secretsmanager_secret_version.rds_master
-  ]
-}
-
 # S3 RESOURCES
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
