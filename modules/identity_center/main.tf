@@ -208,10 +208,9 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
         Sid    = "AllowRollbackAndResponse"
         Effect = "Allow"
         Action = [
-          "events:PutEvents",
-          "lambda:InvokeFunction",
+          "events:PutEvents"
         ]
-        Resource = "*"
+        Resource = var.secops_event_bus_arn
       }
     ]
   })
