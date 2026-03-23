@@ -41,5 +41,5 @@ variable "secops_rollback_trigger_policy_name" {
 
 variable "secops_event_bus_arn" {
   description = "ARN of the SecOps Event Bus"
-  type = string
+  type        = string
 }
