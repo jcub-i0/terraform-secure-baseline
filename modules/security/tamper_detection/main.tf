@@ -60,4 +60,8 @@ resource "aws_cloudwatch_event_target" "tamper_to_sns" {
   rule      = aws_cloudwatch_event_rule.tamper_detection.name
   target_id = "TamperAlertsToSNS"
   arn       = var.alert_topic_arn
+
+  depends_on = [
+    aws_cloudwatch_event_rule.tamper_detection
+  ]
 }
