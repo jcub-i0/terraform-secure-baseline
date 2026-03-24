@@ -17,8 +17,8 @@ locals {
 
 resource "aws_identitystore_group" "secops_analyst" {
   identity_store_id = local.identity_store_id
-  display_name = var.secops_analyst_group_name
-  description = "SecOps analysts"
+  display_name      = var.secops_analyst_group_name
+  description       = "SecOps analysts"
 }
 
 resource "aws_identitystore_group" "secops_engineers" {
