@@ -34,7 +34,7 @@ resource "aws_iam_policy" "logs_s3_readonly" {
 }
 
 ## GENERIC POLICY TO ALLOW DECRYPTION OF OBJECTS ENCRYPTED WITH THE LOGS CMK
-resource "aws_iam_policy" "logs_kms_decrypt" {
+resource "aws_iam_policy" "logs_cmk_decrypt" {
   name        = "LogsKmsDecrypt"
   description = "Allow decryption of objects encrypted with the Logs CMK"
 

@@ -104,6 +104,10 @@ resource "aws_cloudwatch_event_target" "securityhub_inspector_high_critical_to_s
   rule           = aws_cloudwatch_event_rule.securityhub_inspector_high_critical.name
   target_id      = "send-to-sns"
   arn            = var.secops_topic_arn
+
+  depends_on = [
+    aws_cloudwatch_event_rule.securityhub_inspector_high_critical
+  ]
 }
 
 # KMS

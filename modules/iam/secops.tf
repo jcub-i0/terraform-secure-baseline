@@ -31,8 +31,8 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_secops" {
 }
 
 ### ATTACH LogsKmsReadOnly POLICY TO SECOPS-OPERATOR ROLE
-resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops" {
-  policy_arn = aws_iam_policy.logs_kms_decrypt.arn
+resource "aws_iam_role_policy_attachment" "logs_cmk_decrypt_secops" {
+  policy_arn = aws_iam_policy.logs_cmk_decrypt.arn
   role       = aws_iam_role.secops_operator.name
 }
 
@@ -59,9 +59,9 @@ resource "aws_iam_role_policy_attachment" "logs_s3_readonly_secops_engineer" {
 }
 
 ### ATTACH LogsKmsReadOnly POLICY TO SECOPS-ENGINEER ROLE
-resource "aws_iam_role_policy_attachment" "logs_kms_decrypt_secops_engineer" {
+resource "aws_iam_role_policy_attachment" "logs_cmk_decrypt_secops_engineer" {
   role       = aws_iam_role.secops_engineer.name
-  policy_arn = aws_iam_policy.logs_kms_decrypt.arn
+  policy_arn = aws_iam_policy.logs_cmk_decrypt.arn
 }
 
 ### ATTACH EC2 ROLLBACK POLICY TO SECOPS-ENGINEER ROLE

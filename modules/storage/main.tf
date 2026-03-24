@@ -51,7 +51,8 @@ resource "aws_db_instance" "main" {
   db_name  = "appdb"
   username = var.db_username
   # SET 'password' TO var.db_password IF NOT USING AUTO-GENERATED PASSWORD FOR RDS
-  password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
+  password_wo         = ephemeral.aws_secretsmanager_random_password.rds_master.random_password
+  password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
   deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
   skip_final_snapshot     = true  # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
@@ -137,9 +138,13 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
   secret_string_wo_version = 1
 }
 
-## Access the generated secret inside the AWS Secrets Manager secret
-data "aws_secretsmanager_secret_version" "rds_master" {
+## Read back the rds_master secret ephemerally
+ephemeral "aws_secretsmanager_secret_version" "rds_master" {
   secret_id = aws_secretsmanager_secret.rds_master.id
+
+  depends_on = [
+    aws_secretsmanager_secret_version.rds_master
+  ]
 }
 
 # S3 RESOURCES
@@ -263,7 +268,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principles
+            "aws:PrincipalArn" : var.bucket_admin_principals
           }
         }
       },
@@ -278,7 +283,7 @@ resource "aws_s3_bucket_policy" "centralized_logs" {
         Resource = aws_s3_bucket.centralized_logs.arn
         Condition = {
           "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principles
+            "aws:PrincipalArn" : var.bucket_admin_principals
           }
         }
       },

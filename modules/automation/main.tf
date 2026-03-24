@@ -92,6 +92,10 @@ resource "aws_cloudwatch_event_target" "ec2_isolation" {
   rule      = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
   target_id = "Ec2Isolation"
   arn       = aws_lambda_function.ec2_isolation.arn
+
+  depends_on = [
+    aws_cloudwatch_event_rule.securityhub_ec2_high_critical
+  ]
 }
 
 #### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
@@ -201,10 +205,10 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
         Sid    = "AllowSecOpsRollbackOnly"
         Effect = "Allow"
         Principal = {
-          AWS = var.secops_operator_role_arn
+          AWS = "*"
         }
         Action   = "events:PutEvents"
-        Resource = "arn:aws:events:${var.primary_region}:${var.account_id}:event-bus/security-operations-bus"
+        Resource = aws_cloudwatch_event_bus.secops.arn
         Condition = {
           StringEquals = {
             "events:source" = "custom.rollback"
@@ -249,6 +253,10 @@ resource "aws_cloudwatch_event_target" "ec2_rollback" {
   event_bus_name = aws_cloudwatch_event_bus.secops.name
   target_id      = "Ec2RollbackLambda"
   arn            = aws_lambda_function.ec2_rollback.arn
+
+  depends_on = [
+    aws_cloudwatch_event_rule.ec2_rollback
+  ]
 }
 
 #### ALLOW EVENTBRIDGE TO INVOKE EC2 ROLLBACK LAMBDA
@@ -369,6 +377,10 @@ resource "aws_cloudwatch_event_target" "ip_enrichment" {
   rule      = aws_cloudwatch_event_rule.securityhub_high_critical.name
   target_id = "IpEnrichment"
   arn       = aws_lambda_function.ip_enrichment.arn
+
+  depends_on = [
+    aws_cloudwatch_event_rule.securityhub_high_critical
+  ]
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {

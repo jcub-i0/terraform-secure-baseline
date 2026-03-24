@@ -50,7 +50,7 @@ variable "cloudtrail_arn" {
   type = string
 }
 
-variable "bucket_admin_principles" {
+variable "bucket_admin_principals" {
   type = list(string)
 }
 
