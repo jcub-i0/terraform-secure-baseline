@@ -1,1 +1,152 @@
-# AWS IAM Identity Center Module
+# Identity Center Module
+
+## Overview
+
+The `identity_center` module implements centralized, role-based access control for AWS accounts using AWS IAM Identity Center (SSO).
+
+This module enables:
+
+- Centralized workforce authentication via IAM Identity Center
+- Role-based access using permission sets
+- Group-based access management
+- Least-privilege access aligned with security operations workflows
+- Integration with existing IAM policies and security controls
+
+This replaces the use of long-lived IAM users with short-lived, federated access.
+
+---
+
+## Architecture
+
+The access model is structured as follows:
+
+1. IAM Identity Center instance is discovered:
+- `aws_ssoadmin_instances`
+
+2. Security groups are created or referenced:
+- `aws_identitystore_group`
+
+3. Permission sets define access levels:
+- `aws_ssoadmin_permission_set`
+
+4. Policies are attached:
+- AWS-managed policies (e.g., `SecurityAudit`, `ReadOnlyAccess`)
+- Customer-managed policies (e.g., logs access, rollback trigger)
+- Inline policies for specific actions
+
+5. Groups are assigned to AWS accounts:
+- `aws_ssoadmin_account_assignment`
+
+6. IAM Identity Center provisions roles automatically:
+- `AWSReservedSSO_<PermissionSetName>_<random>`
+
+---
+
+## Features
+
+- **Centralized Authentication**
+  - Eliminates IAM users in favor of SSO-based login
+
+- **Role-Based Access Control (RBAC)**
+  - Permission sets define access levels per persona
+
+- **Group-Based Access Management**
+  - Users are assigned to groups instead of roles directly
+
+- **Least-Privilege Design**
+  - Permissions scoped to operational responsibilities
+
+- **Policy Reuse**
+  - Integrates with existing customer-managed IAM policies
+
+- **Separation of Duties**
+  - Distinct roles for analysts, engineers, and operators
+
+---
+
+## Default Security Groups
+
+This module defines three baseline groups:
+
+- `SecOps-Analysts`
+- `SecOps-Engineers`
+- `SecOps-Operators`
+
+These represent a **basic starting point** for security operations access control.
+
+> These groups are intentionally simple and should be extended or modified based on organizational needs, team structure, and compliance requirements.
+
+---
+
+## Access Model
+
+### SecOps-Analyst
+- Read-only access to security telemetry and logs
+- Attached policies:
+  - `SecurityAudit`
+  - `ReadOnlyAccess`
+  - `centralized_logs` S3 read access
+  - `logs` KMS decrypt access
+
+### SecOps-Engineer
+- Investigation and response capabilities
+- Includes:
+  - All Analyst permissions
+  - Security Hub updates
+  - EC2 response actions (tagging, instance modification, etc.)
+
+### SecOps-Operator
+- Limited to operational actions (e.g., rollback trigger)
+- Scoped permissions:
+  - EventBridge `PutEvents` to security operations bus
+
+---
+
+## Resources Created
+
+- `aws_identitystore_group`
+- `aws_ssoadmin_permission_set`
+- `aws_ssoadmin_managed_policy_attachment`
+- `aws_ssoadmin_customer_managed_policy_attachment`
+- `aws_ssoadmin_permission_set_inline_policy`
+- `aws_ssoadmin_account_assignment`
+
+---
+
+## Requirements
+
+- IAM Identity Center must be enabled in the AWS account
+
+- The AWS account must be accessible via Identity Center
+
+- Customer-managed IAM policies must already exist in the account:
+  - Logs S3 read policy
+  - Logs KMS decrypt policy
+  - Rollback trigger policy
+
+- Users must be created in Identity Center and assigned to groups after running `terraform apply`
+
+---
+
+## Usage
+
+### Example
+
+```hcl
+module "identity_center" {
+  source = "./modules/identity_center"
+
+  account_id = data.aws_caller_identity.current.account_id
+
+  secops_analyst_group_name  = "SecOps-Analysts"
+  secops_engineer_group_name = "SecOps-Engineers"
+  secops_operator_group_name = "SecOps-Operators"
+
+  logs_s3_readonly_policy_name        = module.iam.logs_s3_readonly_policy_name
+  logs_cmk_decrypt_policy_name        = module.iam.logs_kms_decrypt_policy_name
+  secops_rollback_trigger_policy_name = module.iam.secops_rollback_trigger_policy_name
+
+  customer_managed_policy_path = "/"
+  secops_event_bus_arn         = module.automation.secops_event_bus_arn
+}
+```
