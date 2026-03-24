@@ -125,6 +125,7 @@ These represent a **basic starting point** for security operations access contro
   - Rollback trigger policy
 
 - Users must be created in Identity Center and assigned to groups after running `terraform apply`
+  - This module manages groups and permission sets; it does not provision users
 
 ---
 
