@@ -160,7 +160,7 @@ module "identity_center" {
 | `account_id` | AWS account ID for assignments | `string` | n/a |
 | `secops_analyst_group_name` | SecOps Analyst group display name | `string` | n/a |
 | `secops_engineer_group_name` | SecOps Engineer Group display name | `string` | n/a |
-| `secops_operator_group_name` | SecOps Analyst Group display name | `string` | n/a |
+| `secops_operator_group_name` | SecOps Operator Group display name | `string` | n/a |
 | `logs_s3_readonly_policy_name` | IAM policy name for Centralized Logs S3 read access | `string` | n/a |
 | `logs_cmk_decrypt_policy_name` | IAM policy name for 'logs' CMK decrypt | `string` | n/a |
 | `secops_rollback_trigger_policy_name` | IAM policy name for rollback trigger | `string` | n/a |
