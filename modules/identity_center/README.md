@@ -223,6 +223,7 @@ To confirm the module is working:
 
 ## Security Considerations
 
+- Access is granted via short-lived, federatred sessions (no static access keys)
 - Eliminates long-lived IAM user credentials
 - Enforces least-privilege access via permission sets
 - Uses short-lived credentials via SSO
