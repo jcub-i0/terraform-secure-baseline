@@ -51,7 +51,7 @@ resource "aws_db_instance" "main" {
   db_name  = "appdb"
   username = var.db_username
   # SET 'password' TO var.db_password IF NOT USING AUTO-GENERATED PASSWORD FOR RDS
-  password_wo         = jsondecode(ephemeral.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
+  password_wo         = ephemeral.aws_secretsmanager_random_password.rds_master.random_password
   password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
   deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
@@ -136,6 +136,15 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
     password = ephemeral.aws_secretsmanager_random_password.rds_master.random_password
   })
   secret_string_wo_version = 1
+}
+
+## Read back the rds_master secret ephemerally
+ephemeral "aws_secretsmanager_secret_version" "rds_master" {
+  secret_id = aws_secretsmanager_secret.rds_master.id
+
+  depends_on = [
+    aws_secretsmanager_secret_version.rds_master
+  ]
 }
 
 # S3 RESOURCES
