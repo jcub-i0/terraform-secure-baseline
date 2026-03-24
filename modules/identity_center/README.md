@@ -205,7 +205,7 @@ To confirm the module is working:
 
     > Note:
     > - `<profile-name>` is the local AWS CLI profile configured via `aws configure sso`
-    > - This profile is mapped to the the IAM Identity Center permission set (i.e., `SecOps-Analyst`)
+    > - This profile is mapped to the IAM Identity Center permission set (i.e., `SecOps-Analyst`)
   
   5. Validate permissions:
     - SecOps-Analyst:
