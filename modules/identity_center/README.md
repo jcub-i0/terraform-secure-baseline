@@ -195,8 +195,17 @@ To confirm the module is working:
   
   4. Test access via CLI:
     ```bash
-    aws sts get-caller-identity --profile analyst
+    aws sts get-caller-identity --profile <profile-name>
     ```
+
+    > Example:
+    >   ```bash
+    >   aws sts get-caller-identity --profile analyst
+    >   ```
+
+    > Note:
+    > - `<profile-name>` is the local AWS CLI profile configured via `aws configure sso`
+    > - This profile is mapped to the the IAM Identity Center permission set (i.e., `SecOps-Analyst`)
   
   5. Validate permissions:
     - SecOps-Analyst:
