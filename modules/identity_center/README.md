@@ -208,16 +208,16 @@ To confirm the module is working:
 > - `<profile-name>` is the local AWS CLI profile configured via `aws configure sso`
 > - This profile is mapped to the IAM Identity Center permission set (i.e., `SecOps-Analyst`)
   
-  5. Validate permissions:
-    - SecOps-Analyst:
-      - Can view logs and findings
-      - Cannot modify resources
+5. Validate permissions:
+- SecOps-Analyst:
+    - Can view logs and findings
+    - Cannot modify resources
     
-    - SecOps-Engineer:
-      - Can update findings and modify EC2 instances
+- SecOps-Engineer:
+    - Can update findings and modify EC2 instances
 
-    - SecOps-Operator:
-      - Can publish events to EventBridge Rollback bus only
+- SecOps-Operator:
+    - Can publish events to EventBridge Rollback bus only
 
 ---
 
