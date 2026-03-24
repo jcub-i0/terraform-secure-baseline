@@ -12,40 +12,25 @@ locals {
 }
 
 ##########################################
-# GROUP LOOKUPS
+# CREATE IAM IDENTITY CENTER GROUPS
 ##########################################
 
-data "aws_identitystore_group" "secops_analysts" {
+resource "aws_identitystore_group" "secops_analyst" {
   identity_store_id = local.identity_store_id
-
-  alternate_identifier {
-    unique_attribute {
-      attribute_path  = "DisplayName"
-      attribute_value = var.secops_analyst_group_name
-    }
-  }
+  display_name = var.secops_analyst_group_name
+  description = "SecOps analysts"
 }
 
-data "aws_identitystore_group" "secops_engineers" {
+resource "aws_identitystore_group" "secops_engineers" {
   identity_store_id = local.identity_store_id
-
-  alternate_identifier {
-    unique_attribute {
-      attribute_path  = "DisplayName"
-      attribute_value = var.secops_engineer_group_name
-    }
-  }
+  display_name      = var.secops_engineer_group_name
+  description       = "SecOps engineers"
 }
 
-data "aws_identitystore_group" "secops_operators" {
+resource "aws_identitystore_group" "secops_operators" {
   identity_store_id = local.identity_store_id
-
-  alternate_identifier {
-    unique_attribute {
-      attribute_path  = "DisplayName"
-      attribute_value = var.secops_operator_group_name
-    }
-  }
+  display_name      = var.secops_operator_group_name
+  description       = "SecOps operators"
 }
 
 ##########################################
@@ -224,7 +209,7 @@ resource "aws_ssoadmin_account_assignment" "analysts" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
 
-  principal_id   = data.aws_identitystore_group.secops_analysts.group_id
+  principal_id   = aws_identitystore_group.secops_analyst.group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
@@ -235,7 +220,7 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
 
-  principal_id   = data.aws_identitystore_group.secops_engineers.group_id
+  principal_id   = aws_identitystore_group.secops_engineers.group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
@@ -246,7 +231,7 @@ resource "aws_ssoadmin_account_assignment" "operators" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
 
-  principal_id   = data.aws_identitystore_group.secops_operators.group_id
+  principal_id   = aws_identitystore_group.secops_operators.group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
