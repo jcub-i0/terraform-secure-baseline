@@ -176,3 +176,67 @@ module "identity_center" {
 | `permission_set_arns` | ARNs of created permission sets |
 
 ---
+
+## Validation
+
+To confirm the module is working:
+
+  1. Log into IAM Identity Center portal:
+    - `https://<your-org>.awsapp.com/start
+  
+  2. Verify access:
+    - SecOps-Analyst sees read-only data
+    - SecOps-Engineer can perform response actions
+    - Operator can trigger rollback only
+
+  3. Confirm IAM roles exist:
+    - Navigate to `IAM` ➔ `Roles`
+    - Locate `AWSReservedSSO_SecOps-*` roles
+  
+  4. Test access via CLI:
+    ```bash
+    aws sts get-caller-identity --profile analyst
+    ```
+  
+  5. Validate permissions:
+    - SecOps-Analyst:
+      - Can view logs and findings
+      - Cannot modify resources
+    
+    - SecOps-Engineer:
+      - Can update findings and modify EC2 instances
+
+    - SecOps-Operator:
+      - Can publish events to EventBridge Rollback bus only
+
+---
+
+## Security Considerations
+
+- Elimates long-lived IAM user credentials
+- Enforces least-privilege access via permission sets
+- Uses short-lived credentials via SSO
+- Integrates with KMS-encrypted resources securely
+- Supports centralized audit and access control
+
+---
+
+## Limitations
+
+- Groups are basic and may not reflect real organizational structure
+- No external IdP integration (Okta, Entra ID, etc.) in this module
+- No automated user provisioning
+- No session tagging or advanced conditional access controls
+
+---
+
+## Future Enhancements
+
+- External IdP federation (Okta / Entra ID)
+- Automated user provisioning
+- Attribute-based access control (ABAC)
+- Session tagging for fine-grained access control
+- Cross-account access patterns
+- Just-in-Time (JIT) access workflows
+
+---
