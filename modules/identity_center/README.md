@@ -85,7 +85,7 @@ These represent a **basic starting point** for security operations access contro
 - Attached policies:
   - `SecurityAudit`
   - `ReadOnlyAccess`
-  - `centralized_logs` S3 read access
+  - `Centralized Logs` S3 read access
   - `logs` KMS decrypt access
 
 ### SecOps-Engineer
