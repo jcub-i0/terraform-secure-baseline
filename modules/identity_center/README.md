@@ -240,3 +240,9 @@ To confirm the module is working:
 - Just-in-Time (JIT) access workflows
 
 ---
+
+## Summary
+
+This module provides a centralized, scalable, and secure access control model for AWS environments.
+
+It replaces IAM users with a modern SSO-based approach, enforces the least privilege principle, and establishes a strong foundation for enterprise-grade identity and access management.
