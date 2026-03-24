@@ -182,7 +182,7 @@ module "identity_center" {
 To confirm the module is working:
 
   1. Log into IAM Identity Center portal:
-    - `https://<your-org>.awsapp.com/start
+    - `https://<your-org>.awsapps.com/start
   
   2. Verify access:
     - SecOps-Analyst sees read-only data
