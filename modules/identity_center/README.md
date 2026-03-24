@@ -187,7 +187,7 @@ To confirm the module is working:
   2. Verify access:
     - SecOps-Analyst sees read-only data
     - SecOps-Engineer can perform response actions
-    - Operator can trigger rollback only
+    - SecOps-Operator can trigger rollback only
 
   3. Confirm IAM roles exist:
     - Navigate to `IAM` ➔ `Roles`
