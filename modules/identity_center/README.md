@@ -168,3 +168,11 @@ module "identity_center" {
 | `secops_event_bus_arn` | ARN of the Security Operations EventBridge bus | `string` | n/a |
 
 ---
+
+### Outputs
+
+| Name | Description |
+|------|-------------|
+| `permission_set_arns` | ARNs of created permission sets |
+
+---
