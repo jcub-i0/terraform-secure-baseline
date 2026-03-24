@@ -223,7 +223,7 @@ To confirm the module is working:
 
 ## Security Considerations
 
-- Elimates long-lived IAM user credentials
+- Eliminates long-lived IAM user credentials
 - Enforces least-privilege access via permission sets
 - Uses short-lived credentials via SSO
 - Integrates with KMS-encrypted resources securely
