@@ -194,6 +194,7 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
         Effect = "Allow"
         Action = [
           "events:ListEventBuses",
+          "events:DescribeEventBus",
           "events:PutEvents"
         ]
         Resource = var.secops_event_bus_arn
