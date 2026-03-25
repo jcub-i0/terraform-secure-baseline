@@ -28,7 +28,7 @@ module "networking" {
   main_vpc_cidr               = var.main_vpc_cidr
   azs                         = var.azs
   subnet_cidrs                = var.subnet_cidrs
-  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+#  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 
 module "security_policy" {
@@ -192,6 +192,7 @@ module "vpc_endpoints" {
   lambda_ec2_rollback_sg_id         = module.automation.lambda_ec2_rollback_sg_id
 }
 
+/*
 module "firewall" {
   source = "./modules/firewall"
 
@@ -204,7 +205,7 @@ module "firewall" {
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
   centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
-
+*/
 module "patch_management" {
   source = "./modules/patch_management"
 
