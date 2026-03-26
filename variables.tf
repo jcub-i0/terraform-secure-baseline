@@ -172,3 +172,8 @@ variable "delete_backups_after_days" {
   type        = string
   default     = "30"
 }
+
+variable "break_glass_trusted_principal_arns" {
+  description = "ARNs of the principals trusted to assume the 'break_glass_admin' IAM role"
+  default = []
+}
