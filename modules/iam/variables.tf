@@ -49,7 +49,3 @@ variable "threat_intel_api_keys_arn" {
 variable "lambda_ip_enrichment_log_group_arn" {
   type = string
 }
-
-variable "secops_operator_trusted_principal_arns" {
-  type = list(string)
-}
