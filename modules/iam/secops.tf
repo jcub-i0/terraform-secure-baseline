@@ -1,40 +1,4 @@
 # SECOPS IAM RESOURCES
-## SECOPS-OPERATOR IAM ROLE TRUST POLICY
-resource "aws_iam_role" "secops_operator" {
-  name        = "SecOps-Operator"
-  description = "Role exclusively assumed to trigger the EC2 Rollback Lambda function"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          AWS = concat(
-            [
-              "arn:aws:iam::${var.account_id}:user/baseline-admin",
-              aws_iam_role.secops_engineer.arn,
-            ],
-            var.secops_operator_trusted_principal_arns
-          )
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-### ATTACH SECURITY OPERATIONS POLICY TO SECOPS-OPERATOR ROLE
-resource "aws_iam_role_policy_attachment" "ec2_rollback_secops" {
-  role       = aws_iam_role.secops_operator.name
-  policy_arn = aws_iam_policy.secops_rollback_trigger.arn
-}
-
-### ATTACH LogsKmsReadOnly POLICY TO SECOPS-OPERATOR ROLE
-resource "aws_iam_role_policy_attachment" "logs_cmk_decrypt_secops" {
-  policy_arn = aws_iam_policy.logs_cmk_decrypt.arn
-  role       = aws_iam_role.secops_operator.name
-}
 
 ## SECOPS-ENGINEER ROLE
 resource "aws_iam_role" "secops_engineer" {
