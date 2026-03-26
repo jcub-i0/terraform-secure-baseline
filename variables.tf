@@ -175,5 +175,6 @@ variable "delete_backups_after_days" {
 
 variable "break_glass_trusted_principal_arns" {
   description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
+  type = list(string)
   default     = []
 }
