@@ -2,6 +2,10 @@ variable "cloud_name" {
   type = string
 }
 
+variable "environment" {
+  type = string
+}
+
 variable "cloudtrail_log_group_arn" {
   type = string
 }
