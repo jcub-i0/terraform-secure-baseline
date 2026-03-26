@@ -138,18 +138,6 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs
   }
 }
 
-# SECOPS-OPERATOR POLICY ATTACHMENTS
-
-resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_operator_rollback_trigger" {
-  instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
-
-  customer_managed_policy_reference {
-    name = var.secops_rollback_trigger_policy_name
-    path = var.customer_managed_policy_path
-  }
-}
-
 ##########################################
 # INLINE POLICY FOR SECOPS-ENGINEER
 ##########################################
@@ -190,10 +178,17 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowRollbackAndResponse"
+        Sid = "AllowListEventBuses"
         Effect = "Allow"
         Action = [
           "events:ListEventBuses",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowDescribeAndPutOnSecOpsBus"
+        Effect = "Allow"
+        Action = [
           "events:DescribeEventBus",
           "events:PutEvents"
         ]
