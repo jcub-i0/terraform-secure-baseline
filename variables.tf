@@ -174,6 +174,6 @@ variable "delete_backups_after_days" {
 }
 
 variable "break_glass_trusted_principal_arns" {
-  description = "ARNs of the principals trusted to assume the 'break_glass_admin' IAM role"
+  description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
   default = []
 }
