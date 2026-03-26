@@ -145,7 +145,7 @@ resource "aws_route_table" "public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
-/*
+  /*
   route {
     cidr_block      = var.subnet_cidrs.compute_private[each.value]
     vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]

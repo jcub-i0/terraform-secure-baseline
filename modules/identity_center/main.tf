@@ -178,7 +178,7 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid = "AllowListEventBuses"
+        Sid    = "AllowListEventBuses"
         Effect = "Allow"
         Action = [
           "events:ListEventBuses",

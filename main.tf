@@ -22,13 +22,13 @@ resource "random_id" "random_id" { byte_length = 4 }
 module "networking" {
   source = "./modules/networking"
 
-  name_prefix                 = local.name_prefix
-  environment                 = var.environment
-  cloud_name                  = var.cloud_name
-  main_vpc_cidr               = var.main_vpc_cidr
-  azs                         = var.azs
-  subnet_cidrs                = var.subnet_cidrs
-#  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+  name_prefix   = local.name_prefix
+  environment   = var.environment
+  cloud_name    = var.cloud_name
+  main_vpc_cidr = var.main_vpc_cidr
+  azs           = var.azs
+  subnet_cidrs  = var.subnet_cidrs
+  #  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 
 module "security_policy" {
@@ -80,19 +80,19 @@ module "storage" {
 module "iam" {
   source = "./modules/iam"
 
-  cloud_name                             = var.cloud_name
-  cloudtrail_log_group_arn               = module.logging.cloudtrail_log_group_arn
-  secops_topic_arn                       = module.monitoring.secops_topic_arn
-  logs_cmk_arn                           = module.security.logs_cmk_arn
-  account_id                             = data.aws_caller_identity.current.account_id
-  primary_region                         = var.primary_region
-  centralized_logs_bucket_arn            = module.storage.centralized_logs_bucket_arn
-  flowlogs_firehose_delivery_stream_arn  = module.logging.flowlogs_firehose_delivery_stream_arn
-  flowlogs_log_group_arn                 = module.logging.flowlogs_log_group_arn
-  secops_event_bus_arn                   = module.automation.secops_event_bus_arn
-  threat_intel_api_keys_arn              = module.automation.threat_intel_api_keys_arn
-  lambda_ip_enrichment_log_group_arn     = module.automation.lambda_ip_enrichment_log_group_arn
-  secrets_manager_cmk_arn                = module.security.secrets_manager_cmk_arn
+  cloud_name                            = var.cloud_name
+  cloudtrail_log_group_arn              = module.logging.cloudtrail_log_group_arn
+  secops_topic_arn                      = module.monitoring.secops_topic_arn
+  logs_cmk_arn                          = module.security.logs_cmk_arn
+  account_id                            = data.aws_caller_identity.current.account_id
+  primary_region                        = var.primary_region
+  centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
+  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
+  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
+  secops_event_bus_arn                  = module.automation.secops_event_bus_arn
+  threat_intel_api_keys_arn             = module.automation.threat_intel_api_keys_arn
+  lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
+  secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
 }
 
 module "security" {
