@@ -22,13 +22,13 @@ resource "random_id" "random_id" { byte_length = 4 }
 module "networking" {
   source = "./modules/networking"
 
-  name_prefix                 = local.name_prefix
-  environment                 = var.environment
-  cloud_name                  = var.cloud_name
-  main_vpc_cidr               = var.main_vpc_cidr
-  azs                         = var.azs
-  subnet_cidrs                = var.subnet_cidrs
-  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+  name_prefix   = local.name_prefix
+  environment   = var.environment
+  cloud_name    = var.cloud_name
+  main_vpc_cidr = var.main_vpc_cidr
+  azs           = var.azs
+  subnet_cidrs  = var.subnet_cidrs
+  #  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 
 module "security_policy" {
@@ -80,20 +80,19 @@ module "storage" {
 module "iam" {
   source = "./modules/iam"
 
-  cloud_name                             = var.cloud_name
-  cloudtrail_log_group_arn               = module.logging.cloudtrail_log_group_arn
-  secops_topic_arn                       = module.monitoring.secops_topic_arn
-  logs_cmk_arn                           = module.security.logs_cmk_arn
-  account_id                             = data.aws_caller_identity.current.account_id
-  primary_region                         = var.primary_region
-  centralized_logs_bucket_arn            = module.storage.centralized_logs_bucket_arn
-  flowlogs_firehose_delivery_stream_arn  = module.logging.flowlogs_firehose_delivery_stream_arn
-  flowlogs_log_group_arn                 = module.logging.flowlogs_log_group_arn
-  secops_event_bus_arn                   = module.automation.secops_event_bus_arn
-  threat_intel_api_keys_arn              = module.automation.threat_intel_api_keys_arn
-  lambda_ip_enrichment_log_group_arn     = module.automation.lambda_ip_enrichment_log_group_arn
-  secrets_manager_cmk_arn                = module.security.secrets_manager_cmk_arn
-  secops_operator_trusted_principal_arns = var.secops_operator_trusted_principal_arns
+  cloud_name                            = var.cloud_name
+  cloudtrail_log_group_arn              = module.logging.cloudtrail_log_group_arn
+  secops_topic_arn                      = module.monitoring.secops_topic_arn
+  logs_cmk_arn                          = module.security.logs_cmk_arn
+  account_id                            = data.aws_caller_identity.current.account_id
+  primary_region                        = var.primary_region
+  centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
+  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
+  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
+  secops_event_bus_arn                  = module.automation.secops_event_bus_arn
+  threat_intel_api_keys_arn             = module.automation.threat_intel_api_keys_arn
+  lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
+  secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
 }
 
 module "security" {
@@ -162,7 +161,6 @@ module "automation" {
   quarantine_sg_id                         = module.compute.quarantine_sg_id
   secops_topic_arn                         = module.monitoring.secops_topic_arn
   account_id                               = data.aws_caller_identity.current.account_id
-  secops_operator_role_arn                 = module.iam.secops_operator_role_arn
   primary_region                           = var.primary_region
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
   lambda_cmk_arn                           = module.security.lambda_cmk_arn
@@ -192,6 +190,7 @@ module "vpc_endpoints" {
   lambda_ec2_rollback_sg_id         = module.automation.lambda_ec2_rollback_sg_id
 }
 
+/*
 module "firewall" {
   source = "./modules/firewall"
 
@@ -204,7 +203,7 @@ module "firewall" {
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
   centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
-
+*/
 module "patch_management" {
   source = "./modules/patch_management"
 
@@ -238,15 +237,14 @@ module "backup" {
 module "identity_center" {
   source = "./modules/identity_center"
 
-  account_id                          = data.aws_caller_identity.current.account_id
-  secops_analyst_group_name           = "SecOps-Analysts"
-  secops_engineer_group_name          = "SecOps-Engineers"
-  secops_operator_group_name          = "SecOps-Operators"
-  logs_cmk_decrypt_policy_name        = module.iam.logs_cmk_decrypt_policy_name
-  logs_s3_readonly_policy_name        = module.iam.logs_s3_readonly_policy_name
-  secops_rollback_trigger_policy_name = module.iam.secops_rollback_trigger_policy_name
-  secops_event_bus_arn                = module.automation.secops_event_bus_arn
-  customer_managed_policy_path        = "/"
+  account_id                   = data.aws_caller_identity.current.account_id
+  secops_analyst_group_name    = "SecOps-Analysts"
+  secops_engineer_group_name   = "SecOps-Engineers"
+  secops_operator_group_name   = "SecOps-Operators"
+  logs_cmk_decrypt_policy_name = module.iam.logs_cmk_decrypt_policy_name
+  logs_s3_readonly_policy_name = module.iam.logs_s3_readonly_policy_name
+  secops_event_bus_arn         = module.automation.secops_event_bus_arn
+  customer_managed_policy_path = "/"
 
   depends_on = [
     module.iam

@@ -93,8 +93,27 @@ aws events put-events --entries '[
   {
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
-    "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\", \"ticket_id\":\"t-abc123\", \"reason\":\"Test rollback\"}",
+    "Detail": "{\"instance_id\":\"i-007c460b960eede84\",\"approved_by\":\"secops@company.com\", \"ticket_id\":\"t-abc123\", \"reason\":\"Test rollback\"}",
     "EventBusName": "security-operations-bus"
   }
 ]'
 ```
+
+This works in the EventBridge console:
+
+{
+  "version": "0",
+  "id": "daa27c9e-1e7c-460a-f37b-fb43158be382",
+  "detail-type": "Ec2Rollback",
+  "source": "custom.rollback",
+  "account": "072288671186",
+  "time": "2026-03-26T00:11:40Z",
+  "region": "us-east-1",
+  "resources": [],
+  "detail": {
+    "instance_id": "i-007c460b960eede84",
+    "approved_by": "secops@company.com",
+    "ticket_id": "t-abc123",
+    "reason": "Test rollback"
+  }
+}

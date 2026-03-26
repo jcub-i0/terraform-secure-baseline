@@ -27,10 +27,6 @@ output "lambda_ip_enrichment_role_arn" {
   value = aws_iam_role.lambda_ip_enrichment.arn
 }
 
-output "secops_operator_role_arn" {
-  value = aws_iam_role.secops_operator.arn
-}
-
 output "config_remediation_role_arn" {
   value = aws_iam_role.config_remediation.arn
 }
@@ -61,8 +57,4 @@ output "logs_s3_readonly_policy_name" {
 
 output "logs_cmk_decrypt_policy_name" {
   value = aws_iam_policy.logs_cmk_decrypt.name
-}
-
-output "secops_rollback_trigger_policy_name" {
-  value = aws_iam_policy.secops_rollback_trigger.name
 }

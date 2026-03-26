@@ -42,10 +42,6 @@ variable "account_id" {
   type = string
 }
 
-variable "secops_operator_role_arn" {
-  type = string
-}
-
 variable "primary_region" {
   type = string
 }

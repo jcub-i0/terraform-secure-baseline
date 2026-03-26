@@ -149,12 +149,6 @@ variable "ip_enrich_max_ips_extracted" {
   default     = "200"
 }
 
-variable "secops_operator_trusted_principal_arns" {
-  description = "Additional principals allowed to assume SecOps-Operator"
-  type        = list(string)
-  default     = []
-}
-
 variable "patch_tag_value" {
   description = "Tag value used to target patchable instances (the key is 'PatchGroup' by default)"
   type        = string
