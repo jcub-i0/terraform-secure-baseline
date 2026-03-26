@@ -243,7 +243,6 @@ module "identity_center" {
   secops_operator_group_name          = "SecOps-Operators"
   logs_cmk_decrypt_policy_name        = module.iam.logs_cmk_decrypt_policy_name
   logs_s3_readonly_policy_name        = module.iam.logs_s3_readonly_policy_name
-  secops_rollback_trigger_policy_name = module.iam.secops_rollback_trigger_policy_name
   secops_event_bus_arn                = module.automation.secops_event_bus_arn
   customer_managed_policy_path        = "/"
 
