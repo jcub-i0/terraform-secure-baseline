@@ -310,6 +310,7 @@ resource "aws_kms_key" "logs" {
           }
         }
       },
+      ### ALLOW NETWORK FIREWALL
       {
         Sid    = "AllowFirewallLogDelivery"
         Effect = "Allow"
