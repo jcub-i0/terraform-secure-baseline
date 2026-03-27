@@ -38,6 +38,11 @@ output "backup_vault_cmk_alias_arn" {
   value       = aws_kms_alias.backup_vault.arn
 }
 
+output "securityhub_inspector_high_critical_rule_arn" {
+  description = "ARN of the SecurityHub/Inspector High/Critical eventbridge rule target"
+  value = aws_cloudwatch_event_rule.securityhub_inspector_high_critical.arn
+}
+
 ##################################
 # TAMPER DETECTION MODULE OUTPUTS
 ##################################
