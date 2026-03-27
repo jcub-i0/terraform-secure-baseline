@@ -21,3 +21,11 @@ output "threat_intel_api_keys_arn" {
 output "lambda_ip_enrichment_log_group_arn" {
   value = aws_cloudwatch_log_group.lambda_ip_enrichment.arn
 }
+
+output "securityhub_high_critical_rule_arn" {
+  value = aws_cloudwatch_event_rule.securityhub_high_critical.arn
+}
+
+output "securityhub_high_critical_rule_name" {
+  value = aws_cloudwatch_event_rule.securityhub_high_critical.name
+}

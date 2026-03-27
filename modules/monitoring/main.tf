@@ -200,6 +200,7 @@ resource "aws_sns_topic_policy" "secops" {
         }
       },
       # EVENTBRIDGE PERMISSIONS
+      ## ALLOW BREAK-GLASS EVENT RULE
       {
         Sid    = "AllowEventBridgePublishBreakGlassAlerts"
         Effect = "Allow"
@@ -217,6 +218,7 @@ resource "aws_sns_topic_policy" "secops" {
           }
         }
       },
+      ## ALLOW TAMPER DETECTION EVENT RULE
       {
         Sid    = "AllowEventBridgeTamperDetectionAlerts"
         Effect = "Allow"
@@ -233,6 +235,24 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceArn" = var.tamper_detection_rule_arn
           }
         }
+      },
+      ## ALLOW SECURITY HUB INSCOPE FINDINGS EVENT RULE
+      {
+        Sid    = "AllowSecurityHubFindingAlerts"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+          ArnEquals = {
+            "aws:SourceArn" = var.securityhub_high_critical_rule_arn
+          }
+        }
       }
     ]
   })
@@ -245,6 +265,47 @@ resource "aws_sns_topic_subscription" "secops" {
   topic_arn = aws_sns_topic.secops.arn
   protocol  = "email"
   endpoint  = each.value
+}
+
+### EVENTBRIDGE TARGET FOR SECURITY HUB HIGH + CRITICAL ALERTS (EVENT RULE LOCATED IN 'AUTOMATION' MODULE)
+resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
+  rule      = var.securityhub_high_critical_rule_name
+  target_id = "sec-hub-to-secops-sns"
+  arn       = aws_sns_topic.secops.arn
+
+  input_transformer {
+    input_paths = {
+      time            = "$.time"
+      account         = "$.account"
+      region          = "$.region"
+      finding_id      = "$.detail.findings[0].Id"
+      title           = "$.detail.findings[0].Title"
+      severity        = "$.detail.findings[0].Severity.Label"
+      product_name    = "$.detail.findings[0].ProductName"
+      workflow_status = "$.detail.findings[0].Workflow.Status"
+      record_state    = "$.detail.findings[0].RecordState"
+      resource_type   = "$.detail.findings[0].Resources[0].Type"
+      resource_id     = "$.detail.findings[0].Resources[0].Id"
+    }
+
+    input_template = <<-EOT
+"🚨 NEW HIGH/CRITICAL SECURITY HUB FINDING 🚨"
+"----------------------------------------"
+"Severity: <severity>"
+"Product: <product_name>"
+"Title: <title>"
+"Time: <time>"
+"Account: <account>"
+"Region: <region>"
+"Finding ID: <finding_id>"
+"Workflow Status: <workflow_status>"
+"Record State: <record_state>"
+"Resource Type: <resource_type>"
+"Resource ID: <resource_id>"
+"----------------------------------------"
+"Review this finding in Security Hub and validate whether immediate action is required."
+EOT
+  }
 }
 
 ### CLOUDWATCH EVENT RULES
@@ -274,7 +335,7 @@ resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
 ### EVENTBRIDGE TARGET FOR BREAK-GLASS ADMIN ROLE ASSUMED RULE
 resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
   rule      = aws_cloudwatch_event_rule.break_glass_assumed.name
-  target_id = "send-to-secops-sns"
+  target_id = "break-glass-to-secops-sns"
   arn       = aws_sns_topic.secops.arn
 
   input_transformer {
