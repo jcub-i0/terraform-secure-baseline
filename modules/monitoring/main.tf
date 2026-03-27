@@ -212,7 +212,7 @@ resource "aws_sns_topic_subscription" "secops" {
   endpoint  = each.value
 }
 
-### CLOUDTRAIL LOG METRIC FILTERS AND ALARMS
+### CLOUDWATCH LOG METRIC FILTERS AND ALARMS
 #### ROOT ACTIVITY
 resource "aws_cloudwatch_log_metric_filter" "root_activity" {
   name           = "RootActivity"
