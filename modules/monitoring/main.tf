@@ -256,7 +256,6 @@ resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   arn = var.securityhub_high_critical_rule_arn
 }
 
-
 ### CLOUDWATCH EVENT RULES
 
 ##########################################
