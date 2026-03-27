@@ -217,6 +217,7 @@ resource "aws_sns_topic_subscription" "secops" {
 ##########################################
 # BREAK-GLASS ROLE ASSUMPTION DETECTION
 ##########################################
+
 #### EVENTBRIDGE RULE FOR BREAK-GLASS ADMIN ROLE ASSUMED
 resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
   name = "break-glass-admin-assumed"
@@ -242,7 +243,10 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
   arn = aws_sns_topic.secops.arn
 }
 
-### CLOUDWATCH LOG METRIC FILTERS AND ALARMS
+###################################################
+# GENERAL CLOUDWATCH LOG METRIC FILTERS AND ALARMS
+###################################################
+
 #### ROOT ACTIVITY
 resource "aws_cloudwatch_log_metric_filter" "root_activity" {
   name           = "RootActivity"
