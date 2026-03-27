@@ -250,7 +250,7 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceAccount" = var.account_id
           }
           ArnEquals = {
-            "aws:SourceArn" = var.securityhub_inspector_high_critical_rule_arn
+            "aws:SourceArn" = var.sec_hub_inspector_high_critical_rule_arn
           }
         }
       }

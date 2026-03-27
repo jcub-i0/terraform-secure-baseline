@@ -74,7 +74,7 @@ resource "aws_securityhub_product_subscription" "inspector" {
 }
 
 ## ALERT ON HIGH/CRITICAL INSPECTOR FINDINGS VIA SECURITY HUB
-resource "aws_cloudwatch_event_rule" "securityhub_inspector_high_critical" {
+resource "aws_cloudwatch_event_rule" "sec_hub_inspector_high_critical" {
   name           = "securityhub-inspector-high-critical"
   description    = "Alert on HIGH/CRITICAL Inspector findings in Security Hub"
   event_bus_name = var.secops_event_bus_name
@@ -99,14 +99,14 @@ resource "aws_cloudwatch_event_rule" "securityhub_inspector_high_critical" {
 }
 
 ## EVENT TARGET TO SEND SNS NOTIFICATION
-resource "aws_cloudwatch_event_target" "securityhub_inspector_high_critical_to_sns" {
+resource "aws_cloudwatch_event_target" "sec_hub_inspector_high_critical_to_sns" {
   event_bus_name = var.secops_event_bus_name
-  rule           = aws_cloudwatch_event_rule.securityhub_inspector_high_critical.name
+  rule           = aws_cloudwatch_event_rule.sec_hub_inspector_high_critical.name
   target_id      = "send-to-sns"
   arn            = var.secops_topic_arn
 
   depends_on = [
-    aws_cloudwatch_event_rule.securityhub_inspector_high_critical
+    aws_cloudwatch_event_rule.sec_hub_inspector_high_critical
   ]
 }
 
