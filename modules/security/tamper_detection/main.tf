@@ -61,6 +61,36 @@ resource "aws_cloudwatch_event_target" "tamper_to_sns" {
   target_id = "TamperAlertsToSNS"
   arn       = var.alert_topic_arn
 
+  input_transformer {
+    input_paths = {
+      time       = "$.time"
+      account    = "$.account"
+      region     = "$.region"
+      event_name = "$.detail.eventName"
+      event_src  = "$.detail.eventSource"
+      actor      = "$.detail.userIdentity.arn"
+      source_ip  = "$.detail.sourceIPAddress"
+      mfa        = "$.detail.userIdentity.sessionContext.attributes.mfaAuthenticated"
+    }
+
+    input_template = <<EOT
+"🚨 SECURITY CONTROL TAMPERING DETECTED 🚨"
+"-------------------------------------------------------------------------------------------------"
+"Action: <event_name>"
+"Service: <event_src>"
+"Time: <time>"
+"Account: <account>"
+"Region: <region>"
+""
+"Actor: <actor>"
+"Source IP: <source_ip>"
+"MFA: <mfa>"
+"-------------------------------------------------------------------------------------------------"
+"This may indicate an attempt to disable or modify security controls."
+"Immediately investigate and validate this activity."
+EOT
+  }
+
   depends_on = [
     aws_cloudwatch_event_rule.tamper_detection
   ]

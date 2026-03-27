@@ -216,6 +216,23 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceArn" = aws_cloudwatch_event_rule.break_glass_assumed.arn
           }
         }
+      },
+      {
+        Sid    = "AllowEventBridgeTamperDetectionAlerts"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+          ArnEquals = {
+            "aws:SourceArn" = var.tamper_detection_rule_arn
+          }
+        }
       }
     ]
   })
@@ -291,6 +308,10 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
 "Immediately verify that this activity is expected and authorized."
 EOT
   }
+
+  depends_on = [
+    aws_cloudwatch_event_rule.break_glass_assumed
+  ]
 }
 
 ###################################################
