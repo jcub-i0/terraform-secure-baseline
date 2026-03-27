@@ -249,6 +249,14 @@ resource "aws_sns_topic_subscription" "secops" {
   endpoint  = each.value
 }
 
+### EVENTBRIDGE TARGET FOR SECURITY HUB HIGH + CRITICAL ALERTS (EVENT RULE LOCATED IN 'AUTOMATION' MODULE)
+resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
+  rule = var.securityhub_high_critical_rule_name
+  target_id = "sec-hub-to-sns"
+  arn = var.securityhub_high_critical_rule_arn
+}
+
+
 ### CLOUDWATCH EVENT RULES
 
 ##########################################
