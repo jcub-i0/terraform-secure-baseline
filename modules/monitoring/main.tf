@@ -201,12 +201,12 @@ resource "aws_sns_topic_policy" "secops" {
       },
       # EVENTBRIDGE PERMISSIONS
       {
-        Sid = "AllowEventBridgePublishBreakGlassAlerts"
+        Sid    = "AllowEventBridgePublishBreakGlassAlerts"
         Effect = "Allow"
         Principal = {
           Service = "events.amazonaws.com"
         }
-        Action = "sns:Publish"
+        Action   = "sns:Publish"
         Resource = aws_sns_topic.secops.arn
         Condition = {
           StringEquals = {
@@ -238,15 +238,15 @@ resource "aws_sns_topic_subscription" "secops" {
 
 #### EVENTBRIDGE RULE FOR BREAK-GLASS ADMIN ROLE ASSUMED
 resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
-  name = "break-glass-admin-assumed"
+  name        = "break-glass-admin-assumed"
   description = "Alert when the BreakGlass-Admin role is assumed"
 
   event_pattern = jsonencode({
-    source = ["aws.sts"]
+    source      = ["aws.sts"]
     detail-type = ["AWS API Call via CloudTrail"]
     detail = {
       eventSource = ["sts.amazonaws.com"]
-      eventName = ["AssumeRole"]
+      eventName   = ["AssumeRole"]
       requestParameters = {
         roleArn = [var.break_glass_admin_role_arn]
       }
@@ -256,20 +256,20 @@ resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
 
 ### EVENTBRIDGE TARGET FOR BREAK-GLASS ADMIN ROLE ASSUMED RULE
 resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
-  rule = aws_cloudwatch_event_rule.break_glass_assumed.name
+  rule      = aws_cloudwatch_event_rule.break_glass_assumed.name
   target_id = "send-to-secops-sns"
-  arn = aws_sns_topic.secops.arn
+  arn       = aws_sns_topic.secops.arn
 
   input_transformer {
     input_paths = {
-      time = "$.time"
-      account = "$.account"
-      region      = "$.region"
-      caller_arn  = "$.detail.userIdentity.arn"
-      role_arn    = "$.detail.requestParameters.roleArn"
-      session     = "$.detail.requestParameters.roleSessionName"
-      source_ip   = "$.detail.sourceIPAddress"
-      user_agent  = "$.detail.userAgent"
+      time       = "$.time"
+      account    = "$.account"
+      region     = "$.region"
+      caller_arn = "$.detail.userIdentity.arn"
+      role_arn   = "$.detail.requestParameters.roleArn"
+      session    = "$.detail.requestParameters.roleSessionName"
+      source_ip  = "$.detail.sourceIPAddress"
+      user_agent = "$.detail.userAgent"
     }
 
     input_template = jsonencode(

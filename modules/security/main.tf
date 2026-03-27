@@ -324,7 +324,7 @@ resource "aws_kms_key" "logs" {
       },
       ### ALLOW EVENTBRIDGE
       {
-        Sid = "AllowEventBridgeForSNS"
+        Sid    = "AllowEventBridgeForSNS"
         Effect = "Allow"
         Principal = {
           Service = "events.amazonaws.com"
