@@ -200,6 +200,7 @@ resource "aws_sns_topic_policy" "secops" {
         }
       },
       # EVENTBRIDGE PERMISSIONS
+      ## ALLOW BREAK-GLASS EVENT RULE
       {
         Sid    = "AllowEventBridgePublishBreakGlassAlerts"
         Effect = "Allow"
