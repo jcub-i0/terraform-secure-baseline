@@ -213,7 +213,10 @@ resource "aws_sns_topic_subscription" "secops" {
 }
 
 ### CLOUDWATCH EVENT RULES
-#### EVENT RULE FOR BREAK-GLASS ADMIN ROLE ASSUMED
+
+##########################################
+# BREAK-GLASS ROLE ASSUMPTION DETECTION
+##########################################
 resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
   name = "break-glass-admin-assumed"
   description = "Alert when the BreakGlass-Admin role is assumed"
