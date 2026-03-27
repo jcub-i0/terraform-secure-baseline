@@ -86,7 +86,11 @@ resource "aws_cloudwatch_event_rule" "sec_hub_inspector_high_critical" {
       findings = [
         {
           ProductName = ["Inspector"],
-          Severity    = { Label = ["HIGH", "CRITICAL"] },
+          Severity    = {
+            Label = [
+              "HIGH", "CRITICAL"
+            ]
+          },
           RecordState = ["ACTIVE"]
         }
       ]
