@@ -238,7 +238,7 @@ resource "aws_sns_topic_policy" "secops" {
       },
       ## ALLOW SECURITY HUB / INSPECTOR HIGH/CRITICAL EVENT RULE
       {
-        Sid    = "AllowEventBridgeSecurityHubInspectorHighCriticalAlerts"
+        Sid    = "AllowEventBridgeSecHubInspectorHighCriticalAlerts"
         Effect = "Allow"
         Principal = {
           Service = "events.amazonaws.com"
