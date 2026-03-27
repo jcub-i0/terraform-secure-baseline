@@ -218,6 +218,7 @@ resource "aws_sns_topic_policy" "secops" {
           }
         }
       },
+      ## ALLOW TAMPER DETECTION EVENT RULE
       {
         Sid    = "AllowEventBridgeTamperDetectionAlerts"
         Effect = "Allow"
