@@ -308,6 +308,10 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
 "Immediately verify that this activity is expected and authorized."
 EOT
   }
+
+  depends_on = [
+    aws_cloudwatch_event_rule.break_glass_assumed
+  ]
 }
 
 ###################################################
