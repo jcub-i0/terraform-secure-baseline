@@ -217,6 +217,7 @@ resource "aws_sns_topic_subscription" "secops" {
 ##########################################
 # BREAK-GLASS ROLE ASSUMPTION DETECTION
 ##########################################
+#### EVENTBRIDGE RULE FOR BREAK-GLASS ADMIN ROLE ASSUMED
 resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
   name = "break-glass-admin-assumed"
   description = "Alert when the BreakGlass-Admin role is assumed"
@@ -232,6 +233,13 @@ resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
       }
     }
   })
+}
+
+### EVENTBRIDGE TARGET FOR BREAK-GLASS ADMIN ROLE ASSUMED RULE
+resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
+  rule = aws_cloudwatch_event_rule.break_glass_assumed.name
+  target_id = "send-to-secops-sns"
+  arn = aws_sns_topic.secops.arn
 }
 
 ### CLOUDWATCH LOG METRIC FILTERS AND ALARMS
