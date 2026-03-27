@@ -212,6 +212,25 @@ resource "aws_sns_topic_subscription" "secops" {
   endpoint  = each.value
 }
 
+### CLOUDWATCH EVENT RULES
+#### EVENT RULE FOR BREAK-GLASS ADMIN ROLE ASSUMED
+resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
+  name = "break-glass-admin-assumed"
+  description = "Alert when the BreakGlass-Admin role is assumed"
+
+  event_pattern = jsonencode({
+    source = ["aws.sts"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["sts.amazonaws.com"]
+      eventName = ["AssumeRole"]
+      requestParameters = {
+        roleArn = [var.break_glass_admin_role_arn]
+      }
+    }
+  })
+}
+
 ### CLOUDWATCH LOG METRIC FILTERS AND ALARMS
 #### ROOT ACTIVITY
 resource "aws_cloudwatch_log_metric_filter" "root_activity" {
