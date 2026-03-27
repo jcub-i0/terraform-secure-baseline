@@ -77,3 +77,7 @@ variable "enable_rules" {
     kms_baseline        = true
   }
 }
+
+variable "securityhub_inspector_high_critical_arn" {
+  type = string
+}
