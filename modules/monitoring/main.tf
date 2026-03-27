@@ -238,12 +238,12 @@ resource "aws_sns_topic_policy" "secops" {
       },
       ## ALLOW SECURITY HUB INSCOPE FINDINGS EVENT RULE
       {
-        Sid = "AllowSecurityHubFindingAlerts"
+        Sid    = "AllowSecurityHubFindingAlerts"
         Effect = "Allow"
         Principal = {
           Service = "events.amazonaws.com"
         }
-        Action = "sns:Publish"
+        Action   = "sns:Publish"
         Resource = aws_sns_topic.secops.arn
         Condition = {
           StringEquals = {
@@ -269,9 +269,9 @@ resource "aws_sns_topic_subscription" "secops" {
 
 ### EVENTBRIDGE TARGET FOR SECURITY HUB HIGH + CRITICAL ALERTS (EVENT RULE LOCATED IN 'AUTOMATION' MODULE)
 resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
-  rule = var.securityhub_high_critical_rule_name
+  rule      = var.securityhub_high_critical_rule_name
   target_id = "sec-hub-to-secops-sns"
-  arn = aws_sns_topic.secops.arn
+  arn       = aws_sns_topic.secops.arn
 
   input_transformer {
     input_paths = {
