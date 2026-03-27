@@ -198,6 +198,24 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceAccount" = var.account_id
           }
         }
+      },
+      # EVENTBRIDGE PERMISSIONS
+      {
+        Sid = "AllowEventBridgePublishBreakGlassAlerts"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+          ArnEquals = {
+            "aws:SourceArn" = aws_cloudwatch_event_rule.break_glass_assumed.arn
+          }
+        }
       }
     ]
   })
