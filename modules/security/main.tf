@@ -310,6 +310,7 @@ resource "aws_kms_key" "logs" {
           }
         }
       },
+      ### ALLOW NETWORK FIREWALL
       {
         Sid    = "AllowFirewallLogDelivery"
         Effect = "Allow"
@@ -318,6 +319,19 @@ resource "aws_kms_key" "logs" {
         }
         Action = [
           "kms:GenerateDataKey*"
+        ]
+        Resource = "*"
+      },
+      ### ALLOW EVENTBRIDGE
+      {
+        Sid    = "AllowEventBridgeForSNS"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
         ]
         Resource = "*"
       }

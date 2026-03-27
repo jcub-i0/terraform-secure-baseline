@@ -198,12 +198,30 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceAccount" = var.account_id
           }
         }
+      },
+      # EVENTBRIDGE PERMISSIONS
+      {
+        Sid    = "AllowEventBridgePublishBreakGlassAlerts"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+          ArnEquals = {
+            "aws:SourceArn" = aws_cloudwatch_event_rule.break_glass_assumed.arn
+          }
+        }
       }
     ]
   })
 }
 
-### SECURITY SNS SUBSCRIPTION
+### SECOPS SNS SUBSCRIPTION
 resource "aws_sns_topic_subscription" "secops" {
   for_each = toset(var.secops_emails)
 
@@ -212,7 +230,73 @@ resource "aws_sns_topic_subscription" "secops" {
   endpoint  = each.value
 }
 
-### CLOUDTRAIL LOG METRIC FILTERS AND ALARMS
+### CLOUDWATCH EVENT RULES
+
+##########################################
+# BREAK-GLASS ROLE ASSUMPTION DETECTION
+##########################################
+
+#### EVENTBRIDGE RULE FOR BREAK-GLASS ADMIN ROLE ASSUMED
+resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
+  name        = "break-glass-admin-assumed"
+  description = "Alert when the BreakGlass-Admin role is assumed"
+
+  event_pattern = jsonencode({
+    source      = ["aws.sts"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["sts.amazonaws.com"]
+      eventName   = ["AssumeRole"]
+      requestParameters = {
+        roleArn = [var.break_glass_admin_role_arn]
+      }
+    }
+  })
+}
+
+### EVENTBRIDGE TARGET FOR BREAK-GLASS ADMIN ROLE ASSUMED RULE
+resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
+  rule      = aws_cloudwatch_event_rule.break_glass_assumed.name
+  target_id = "send-to-secops-sns"
+  arn       = aws_sns_topic.secops.arn
+
+  input_transformer {
+    input_paths = {
+      time       = "$.time"
+      account    = "$.account"
+      region     = "$.region"
+      caller_arn = "$.detail.userIdentity.arn"
+      role_arn   = "$.detail.requestParameters.roleArn"
+      session    = "$.detail.requestParameters.roleSessionName"
+      source_ip  = "$.detail.sourceIPAddress"
+      user_agent = "$.detail.userAgent"
+    }
+
+    input_template = <<-EOT
+"🚨 BREAK-GLASS ROLE ASSUMED! 🚨"
+"-------------------------------------------------------------------------------------------------"
+"Break-Glass Role Usage Detected - Immediate Validation Required"
+"-------------------------------------------------------------------------------------------------"
+"Severity: CRITICAL"
+"Time: <time>"
+"Account: <account>"
+"Region: <region>"
+"Caller: <caller_arn>"
+"Role: <role_arn>"
+"Session: <session>"
+"Source IP: <source_ip>"
+"User Agent: <user_agent>"
+"-------------------------------------------------------------------------------------------------"
+"This role is restricted to approved emergency use only."
+"Immediately verify that this activity is expected and authorized."
+EOT
+  }
+}
+
+###################################################
+# GENERAL CLOUDWATCH LOG METRIC FILTERS AND ALARMS
+###################################################
+
 #### ROOT ACTIVITY
 resource "aws_cloudwatch_log_metric_filter" "root_activity" {
   name           = "RootActivity"
