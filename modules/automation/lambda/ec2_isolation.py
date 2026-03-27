@@ -184,7 +184,7 @@ def publish_to_sns(instance_id, finding_id, original_sgs):
         return
     
     message = (
-        f"🚨 EC2 instance {instance_id} was automatically isolated!\n"
+        f"🚨 EC2 instance {instance_id} was automatically isolated! 🚨\n"
         f"Finding ID: {finding_id}\n"
         f"Original Security Groups: {",".join(original_sgs)}\n"
         f"Quarantine SG: {QUARANTINE_SG}\n"
