@@ -259,6 +259,32 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
   rule = aws_cloudwatch_event_rule.break_glass_assumed.name
   target_id = "send-to-secops-sns"
   arn = aws_sns_topic.secops.arn
+
+  input_transformer {
+    input_paths = {
+      time = "$.time"
+      account = "$.account"
+      region      = "$.region"
+      caller_arn  = "$.detail.userIdentity.arn"
+      role_arn    = "$.detail.requestParameters.roleArn"
+      session     = "$.detail.requestParameters.roleSessionName"
+      source_ip   = "$.detail.sourceIPAddress"
+      user_agent  = "$.detail.userAgent"
+    }
+
+    input_template = <<EOF
+"BREAK-GLASS ROLE ASSUMED
+
+Time: <time>
+Account: <account>
+Region: <region>
+Caller: <caller_arn>
+Role: <role_arn>
+Session: <session>
+Source IP: <source_ip>
+User Agent: <user_agent>"
+EOF
+  }
 }
 
 ###################################################
