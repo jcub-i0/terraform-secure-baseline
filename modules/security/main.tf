@@ -321,6 +321,19 @@ resource "aws_kms_key" "logs" {
           "kms:GenerateDataKey*"
         ]
         Resource = "*"
+      },
+      ### ALLOW EVENTBRIDGE
+      {
+        Sid = "AllowEventBridgeForSNS"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
       }
     ]
   })
