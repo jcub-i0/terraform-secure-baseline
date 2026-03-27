@@ -38,6 +38,10 @@ output "backup_vault_cmk_alias_arn" {
   value       = aws_kms_alias.backup_vault.arn
 }
 
+##################################
+# TAMPER DETECTION MODULE OUTPUTS
+##################################
+
 output "tamper_detection_rule_name" {
   value = module.tamper_detection.tamper_detection_rule_name
 }
