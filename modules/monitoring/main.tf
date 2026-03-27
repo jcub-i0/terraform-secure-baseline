@@ -272,6 +272,40 @@ resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   rule = var.securityhub_high_critical_rule_name
   target_id = "sec-hub-to-secops-sns"
   arn = aws_sns_topic.secops.arn
+
+  input_transformer {
+    input_paths = {
+      time            = "$.time"
+      account         = "$.account"
+      region          = "$.region"
+      finding_id      = "$.detail.findings[0].Id"
+      title           = "$.detail.findings[0].Title"
+      severity        = "$.detail.findings[0].Severity.Label"
+      product_name    = "$.detail.findings[0].ProductName"
+      workflow_status = "$.detail.findings[0].Workflow.Status"
+      record_state    = "$.detail.findings[0].RecordState"
+      resource_type   = "$.detail.findings[0].Resources[0].Type"
+      resource_id     = "$.detail.findings[0].Resources[0].Id"
+    }
+
+    input_template = <<-EOT
+"🚨 NEW HIGH/CRITICAL SECURITY HUB FINDING 🚨"
+"----------------------------------------"
+"Severity: <severity>"
+"Product: <product_name>"
+"Title: <title>"
+"Time: <time>"
+"Account: <account>"
+"Region: <region>"
+"Finding ID: <finding_id>"
+"Workflow Status: <workflow_status>"
+"Record State: <record_state>"
+"Resource Type: <resource_type>"
+"Resource ID: <resource_id>"
+"----------------------------------------"
+"Review this finding in Security Hub and validate whether immediate action is required."
+EOT
+  }
 }
 
 ### CLOUDWATCH EVENT RULES
