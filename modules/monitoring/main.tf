@@ -272,18 +272,9 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
       user_agent  = "$.detail.userAgent"
     }
 
-    input_template = <<EOF
-"BREAK-GLASS ROLE ASSUMED
-
-Time: <time>
-Account: <account>
-Region: <region>
-Caller: <caller_arn>
-Role: <role_arn>
-Session: <session>
-Source IP: <source_ip>
-User Agent: <user_agent>"
-EOF
+    input_template = jsonencode(
+      "BREAK-GLASS ROLE ASSUMED\n\nTime: <time>\nAccount: <account>\nRegion: <region>\nCaller: <caller_arn>\nRole: <role_arn>\nSession: <session>\nSource IP: <source_ip>\nUser Agent: <user_agent>"
+    )
   }
 }
 
