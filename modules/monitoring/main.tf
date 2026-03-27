@@ -272,9 +272,24 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
       user_agent = "$.detail.userAgent"
     }
 
-    input_template = jsonencode(
-      "BREAK-GLASS ROLE ASSUMED\n\nTime: <time>\nAccount: <account>\nRegion: <region>\nCaller: <caller_arn>\nRole: <role_arn>\nSession: <session>\nSource IP: <source_ip>\nUser Agent: <user_agent>"
-    )
+    input_template = <<-EOT
+"🚨 BREAK-GLASS ROLE ASSUMED! 🚨"
+"----------------------------------------"
+"Break-Glass Role Usage Detected - Immediate Validation Required"
+"----------------------------------------"
+"Severity: CRITICAL"
+"Time: <time>"
+"Account: <account>"
+"Region: <region>"
+"Caller: <caller_arn>"
+"Role: <role_arn>"
+"Session: <session>"
+"Source IP: <source_ip>"
+"User Agent: <user_agent>"
+"----------------------------------------"
+"This role is restricted to approved emergency use only."
+"Immediately verify that this activity is expected and authorized."
+EOT
   }
 }
 
