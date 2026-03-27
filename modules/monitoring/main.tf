@@ -235,6 +235,24 @@ resource "aws_sns_topic_policy" "secops" {
             "aws:SourceArn" = var.tamper_detection_rule_arn
           }
         }
+      },
+      ## ALLOW SECURITY HUB / INSPECTOR HIGH/CRITICAL EVENT RULE
+      {
+        Sid    = "AllowEventBridgeSecurityHubInspectorHighCriticalAlerts"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.secops.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+          ArnEquals = {
+            "aws:SourceArn" = var.securityhub_inspector_high_critical_rule_arn
+          }
+        }
       }
     ]
   })
