@@ -41,7 +41,3 @@ variable "lambda_ec2_rollback_role_arn" {
 variable "break_glass_admin_role_arn" {
   type = string
 }
-
-variable "securityhub_inspector_high_critical_rule_arn" {
-  type = string
-}
