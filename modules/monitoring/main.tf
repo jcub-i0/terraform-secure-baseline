@@ -218,12 +218,12 @@ resource "aws_sns_topic_policy" "secops" {
         }
       },
       {
-        Sid = "AllowEventBridgeTamperDetectionAlerts"
+        Sid    = "AllowEventBridgeTamperDetectionAlerts"
         Effect = "Allow"
         Principal = {
           Service = "events.amazonaws.com"
         }
-        Action = "sns:Publish"
+        Action   = "sns:Publish"
         Resource = aws_sns_topic.secops.arn
         Condition = {
           StringEquals = {

@@ -63,14 +63,14 @@ resource "aws_cloudwatch_event_target" "tamper_to_sns" {
 
   input_transformer {
     input_paths = {
-      time        = "$.time"
-      account     = "$.account"
-      region      = "$.region"
-      event_name  = "$.detail.eventName"
-      event_src   = "$.detail.eventSource"
-      actor       = "$.detail.userIdentity.arn"
-      source_ip   = "$.detail.sourceIPAddress"
-      mfa         = "$.detail.userIdentity.sessionContext.attributes.mfaAuthenticated"
+      time       = "$.time"
+      account    = "$.account"
+      region     = "$.region"
+      event_name = "$.detail.eventName"
+      event_src  = "$.detail.eventSource"
+      actor      = "$.detail.userIdentity.arn"
+      source_ip  = "$.detail.sourceIPAddress"
+      mfa        = "$.detail.userIdentity.sessionContext.attributes.mfaAuthenticated"
     }
 
     input_template = <<EOT
