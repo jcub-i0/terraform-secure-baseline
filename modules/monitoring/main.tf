@@ -274,9 +274,9 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
 
     input_template = <<-EOT
 "🚨 BREAK-GLASS ROLE ASSUMED! 🚨"
-"----------------------------------------"
+"-------------------------------------------------------------------------------------------------"
 "Break-Glass Role Usage Detected - Immediate Validation Required"
-"----------------------------------------"
+"-------------------------------------------------------------------------------------------------"
 "Severity: CRITICAL"
 "Time: <time>"
 "Account: <account>"
@@ -286,7 +286,7 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
 "Session: <session>"
 "Source IP: <source_ip>"
 "User Agent: <user_agent>"
-"----------------------------------------"
+"-------------------------------------------------------------------------------------------------"
 "This role is restricted to approved emergency use only."
 "Immediately verify that this activity is expected and authorized."
 EOT
