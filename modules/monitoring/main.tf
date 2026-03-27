@@ -203,7 +203,7 @@ resource "aws_sns_topic_policy" "secops" {
   })
 }
 
-### SECURITY SNS SUBSCRIPTION
+### SECOPS SNS SUBSCRIPTION
 resource "aws_sns_topic_subscription" "secops" {
   for_each = toset(var.secops_emails)
 

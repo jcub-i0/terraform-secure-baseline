@@ -147,6 +147,7 @@ module "monitoring" {
   lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
   lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
+  break_glass_admin_role_arn = module.iam.break_glass_admin_role_arn
 }
 
 module "automation" {
