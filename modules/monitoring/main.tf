@@ -271,7 +271,7 @@ resource "aws_sns_topic_subscription" "secops" {
 resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   rule = var.securityhub_high_critical_rule_name
   target_id = "sec-hub-to-sns"
-  arn = var.securityhub_high_critical_rule_arn
+  arn = aws_sns_topic.secops.arn
 }
 
 ### CLOUDWATCH EVENT RULES
