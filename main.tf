@@ -148,7 +148,6 @@ module "monitoring" {
   lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
   break_glass_admin_role_arn               = module.iam.break_glass_admin_role_arn
-  sec_hub_inspector_high_critical_rule_arn = module.security.sec_hub_inspector_high_critical_rule_arn
 }
 
 module "automation" {
