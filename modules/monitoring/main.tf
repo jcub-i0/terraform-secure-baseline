@@ -270,7 +270,7 @@ resource "aws_sns_topic_subscription" "secops" {
 ### EVENTBRIDGE TARGET FOR SECURITY HUB HIGH + CRITICAL ALERTS (EVENT RULE LOCATED IN 'AUTOMATION' MODULE)
 resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   rule = var.securityhub_high_critical_rule_name
-  target_id = "sec-hub-to-sns"
+  target_id = "sec-hub-to-secops-sns"
   arn = aws_sns_topic.secops.arn
 }
 
@@ -301,7 +301,7 @@ resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
 ### EVENTBRIDGE TARGET FOR BREAK-GLASS ADMIN ROLE ASSUMED RULE
 resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
   rule      = aws_cloudwatch_event_rule.break_glass_assumed.name
-  target_id = "send-to-secops-sns"
+  target_id = "break-glass-to-secops-sns"
   arn       = aws_sns_topic.secops.arn
 
   input_transformer {
