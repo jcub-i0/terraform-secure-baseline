@@ -388,7 +388,7 @@ resource "aws_cloudwatch_log_metric_filter" "root_activity" {
 
   metric_transformation {
     name      = "RootActivityCount"
-    namespace = "SecurityBaseline"
+    namespace = var.name_prefix
     value     = "1"
   }
 }
@@ -398,7 +398,7 @@ resource "aws_cloudwatch_metric_alarm" "root_activity" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "RootActivityCount"
-  namespace           = "SecurityBaseline"
+  namespace           = var.name_prefix
   period              = 300
   statistic           = "Sum"
   threshold           = 1
@@ -421,7 +421,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
 
   metric_transformation {
     name      = "UnauthorizedAPICallCount"
-    namespace = "SecurityBaseline"
+    namespace = var.name_prefix
     value     = "1"
   }
 }
@@ -431,7 +431,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "UnauthorizedAPICallCount"
-  namespace           = "SecurityBaseline"
+  namespace           = var.name_prefix
   period              = 300
   statistic           = "Sum"
   threshold           = 1
@@ -454,7 +454,7 @@ resource "aws_cloudwatch_log_metric_filter" "cloudtrail_disabled" {
 
   metric_transformation {
     name      = "CloudTrailDisabled"
-    namespace = "SecurityBaseline"
+    namespace = var.name_prefix
     value     = "1"
   }
 }
@@ -464,7 +464,7 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "CloudTrailDisabled"
-  namespace           = "SecurityBaseline"
+  namespace           = var.name_prefix
   period              = 300
   statistic           = "Sum"
   threshold           = 1
@@ -487,7 +487,7 @@ resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
 
   metric_transformation {
     name      = "IamPolicyChanges"
-    namespace = "SecurityBaseline"
+    namespace = var.name_prefix
     value     = "1"
   }
 }
@@ -497,7 +497,7 @@ resource "aws_cloudwatch_metric_alarm" "iam_changes" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "IamPolicyChanges"
-  namespace           = "SecurityBaseline"
+  namespace           = var.name_prefix
   period              = 300
   statistic           = "Sum"
   threshold           = 1
