@@ -175,6 +175,10 @@ This test requires a locally-configured AWS CLI SSO profile.
 #### Manual Event from AWS CLI
 
 Run the following from a terminal authenticated with the `SecOps-Operator` SSO profile:
+> Ensure the AWS CLI is configured for the same region as the deployed infrastrustructure (`us-east-1`) by running the following:
+> ```bash
+> aws configure get region --profile <profile-name>
+> ```
 
 ```bash
 aws events put-events --region us-east-1 --entries '[
