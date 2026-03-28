@@ -92,3 +92,44 @@ Then authenticate:
 ```bash
 aws sso login --profile operator
 ```
+
+---
+
+### TEST 1 - MANUAL ROLLBACK EVENT FROM AWS CLI
+
+#### Expected Outcome
+
+- Lambda executes successfully
+- Instance rolls back from the Quarantine Security Group to its original Security Group(s)
+- SNS notification is sent to the configured SecOps SNS topic
+- No errors appear in the Lambda function's CloudWatch log group
+
+#### Manual Event from AWS CLI
+
+Run the following from a terminal authenticated with the `SecOps-Operator` permission set:
+
+```bash
+aws events put-events --entries '[
+  {
+    "Source": "custom.rollback",
+    "DetailType": "Ec2Rollback",
+    "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
+    "EventBusName": "security-operations-bus"
+  }
+]' --profile operator
+```
+
+**Example**
+
+```bash
+aws events put-events --entries '[
+  {
+    "Source": "custom.rollback",
+    "DetailType": "Ec2Rollback",
+    "Detail": "{\"instance_id\":\"i-007c460b960eede84\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
+    "EventBusName": "security-operations-bus"
+  }
+]' --profile operator
+```
+
+---
