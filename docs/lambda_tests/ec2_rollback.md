@@ -15,16 +15,15 @@ How to use:
 
 ### PREREQUISITES:
 
-#### IAM Identity Center Access is Required
+#### ACCESS REQUIREMENTS
 
-The EC2 Rollback workflow is now tested through **AWS IAM Identity Center**, not by assuming the legacy `SecOps-Operator` IAM role.
+The EC2 Rollback workflow is tested through **AWS IAM Identity Center** and the `SecOps-Operator` permission set.
 
 To test this Lambda function, the user performing the test must:
 
 - Exist as a user in IAM Identity Center
 - Be assigned to the `SecOps-Operators` group
-- Sign into the AWS access portal
-- Access the AWS accoutn using the `SecOps-Operator` permission set
+- Have access to the AWS account using the `SecOps-Operator` permission set
 
 The `SecOps-Operator` permission set allows:
 
@@ -36,61 +35,79 @@ This is the minimum access required to manually inject rollback events onto the 
 
 ---
 
-### SIGN IN WITH IAM IDENTITY CENTER
+### SIGN IN VIA THE AWS ACCESS PORTAL
 
-1. Sign into the AWS access portal:
+Use the exact AWS access portal URL configured for your IAM Identity Center instance.
 
-```text
-https://<your-org>.awsapps.com/start
-```
+Examples of valid access portal URL formats include:
 
-2. Open the AWS account using `SecOps-Operator`
+- `https://d-xxxxxxxxxx.awsapps.com/start`
+- `https://ssoins-xxxxxxxxxxxxxxxx.portal.us-east-1.app.aws`
+- A custom AWS access portal URL, if configured
 
-3. Confirm you are in the correct role by running:
+For this environment, use one of the working access portal URLs shown under `AWS access portal URLs` in the IAM Identity Center console's `Dashboard` page.
 
-```bash
-aws sts get-caller-identity --profile <profile-name>
-```
+> Example:
+> https://ssoins-72238b162a9546df.portal.us-east-1.app.aws
 
-Example:
+Sign in using a user assigned to the `SecOps-Operators` group, then open the AWS account using `SecOps-Operator`
 
-```bash
-aws sts get-caller-identity --profile operator
-```
+#### Confirm the correct role in the browser
 
-Expected Result:
+After opening the AWS account, confirm the active role in the top-right of the console header.
 
-- The returned ARN should reference an assumed IAM Identity Center role similar to:
+Expected role name pattern:
 
-```text
-arn:aws:sts::<AWS_ACCOUNT_ID>:assumed-role/AWSReservedSSO_SecOps-Operator_<random>/<username>
-```
-
-> `<profile-name>` refers to your local AWS CLI profile configured via `aws configure sso`.
+`SecOps-Operator/<username>`
 
 ---
 
 ### CONFIGURE LOCAL AWS CLI SSO PROFILE (IF NEEDED)
 
-If you have not already configured a local CLI profile for the `SecOps-Operator` permission set, run:
+If you want to run the rollback test from a local terminal, first configure an AWS CLI SSO profile:
 
 ```bash
-aws configure sso
+aws configure sso --use-device-code
 ```
 
-Use the profile to select:
-
-- The AWS account hosting this environment
-- The `SecOps-Operator` permission set
-
-Example local profile name:
-
-`operator`
-
-Then authenticate:
+For the following prompts, enter the following:
 
 ```bash
-aws sso login --profile operator
+SSO session name (Recommended): test
+SSO start URL [None]: `start-url-provided-by-identity-center-console`
+SSO region [None]: us-east-1
+SSO registration scopes [sso:account:access]: sso:account:access
+```
+
+Note the following output:
+
+```bash
+Attempting to automatically open the SSO authorization page in your default browser.
+If the browser does not open or you wish to use a different device to authorize this request, open the following URL:
+
+https://d-xxxxxxxxxx.awsapps.com/start/#/device
+
+Then enter the code:
+
+XXXX-XXXX
+```
+
+If you are unable to authenticate into your SSO user from the automatically-opened default browser, try a different browser, using the URL and code provided in the output above.
+
+To validate your AWS identity, run:
+
+```bash
+aws sts get-caller-identity --profile <profile-name>
+```
+
+Expected output:
+
+```json
+{
+    "UserId": "AROARBVF5SXJFGTX4DP6G:<sso-user>",
+    "Account": "072288671186",
+    "Arn": "arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_SecOps-Operator_<random-string>/<sso-user>"
+}
 ```
 
 ---
