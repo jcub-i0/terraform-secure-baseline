@@ -163,7 +163,7 @@ aws events put-events --entries '[
   {
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
-    "Detail": "{\"instance_id\":\"<QUARANTINED_INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
+    "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
     "EventBusName": "security-operations-bus"
   }
 ]' --profile <profile-name>
