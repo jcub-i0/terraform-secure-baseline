@@ -144,7 +144,7 @@ And use this JSON in the **Detail** field:
 }
 ```
 
-Expected outcome:
+Expected Outcome:
 
 - `Event(s) sent successfully.` green banner at top of EventBridge UI
 - Lambda executes successfully
