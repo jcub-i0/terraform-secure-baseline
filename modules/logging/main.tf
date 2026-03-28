@@ -71,7 +71,7 @@ resource "aws_flow_log" "flowlogs" {
   traffic_type         = "ALL"
 
   tags = {
-    Name        = "${var.name_prefix}-VPC-Flow-Logs"
+    Name        = "${var.name_prefix}-FlowLogs"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -107,7 +107,7 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
 
 ## CLOUDWATCH LOGS SUBSCRIPTION FILTER FOR FLOWLOGS FIREHOSE
 resource "aws_cloudwatch_log_subscription_filter" "flowlogs" {
-  name            = "vpc-flow-logs-to-firehose"
+  name            = "${var.name_prefix}-flowlogs-to-firehose"
   log_group_name  = aws_cloudwatch_log_group.flowlogs.name
   destination_arn = aws_kinesis_firehose_delivery_stream.flowlogs.arn
   role_arn        = var.cw_to_firehose_role_arn
