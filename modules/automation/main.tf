@@ -56,7 +56,7 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name        = "${var.name_prefix}--Lambda-EC2-Isolation-SG"
+    Name        = "${var.name_prefix}-Lambda-EC2-Isolation-SG"
     Environment = var.environment
     Terraform   = "true"
   }
