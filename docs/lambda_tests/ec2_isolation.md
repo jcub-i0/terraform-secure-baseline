@@ -4,10 +4,29 @@ Purpose:
 Manual test events used to validate Lambda automation behavior before and after changes.
 
 How to use:
-* Replace ```<YOUR-ACCOUNT-ID>``` with your AWS account ID
-* Replace ```<ARN-OF-EC2-INSTANCE-TO-ISOLATE>``` with the ARN of the to-be-isolated EC2 instance
+* Replace `<YOUR-ACCOUNT-ID>` with your AWS account ID
+* Replace `<ARN-OF-EC2-INSTANCE-TO-ISOLATE>` with the ARN of the to-be-isolated EC2 instance
 * Run the test
 * Confirm Expected Outcome based on 'Expected Outcome' section of each test
+
+> Permissions:
+> These tests require a principal with permission to invoke Lambda functions (e.g., an administrator or a role with `lambda:InvokeFunction` access).
+
+## TESTING APPROACH
+
+This document contains **direct Lambda invocation tests** used for validation and debugging.
+
+These tests:
+- Bypass EventBridge and Security Hub
+- Require permissions to invoke the Lambda function directly
+- Are intended for development and validation purposes
+
+In a production workflow, this Lambda is triggered by:
+- Security Hub findings
+- EventBridge rules
+
+> Note:
+> The name of the EC2 Isolation Lambda function is dynamically generated using `var.name_prefix`, which is composed of `var.cloud_name` and `var.environment` (e.g., `nanonexus-prod-ec2-isolation`). By default, `var.cloud_name` is `tf-secure-baseline` and `var.environment` is `dev`, resulting in `tf-secure-baseline-dev-ec2-isolation`.
 
 ## EC2 ISOLATION LAMBDA TESTS
 
@@ -24,7 +43,8 @@ Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
-  --function-name ec2-isolation \
+  --region us-east-1 \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
@@ -81,7 +101,7 @@ Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
-  --function-name ec2-isolation \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
@@ -138,7 +158,7 @@ Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
-  --function-name ec2-isolation \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
@@ -195,7 +215,7 @@ Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
-  --function-name ec2-isolation \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
