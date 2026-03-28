@@ -15,3 +15,23 @@ How to use:
 
 ### PREREQUISITES:
 
+#### IAM Identity Center Access is Required
+
+The EC2 Rollback workflow is now tested through **AWS IAM Identity Center**, not by assuming the legacy `SecOps-Operator` IAM role.
+
+To test this Lambda function, the user performing the test must:
+
+- Exist as a user in IAM Identity Center
+- Be assigned to the `SecOps-Operators` group
+- Sign into the AWS access portal
+- Access the AWS accoutn using the `SecOps-Operator` permission set
+
+The `SecOps-Operator` permission set allows:
+
+- `events:ListEventBuses`
+- `events:DescribeEventBus`
+- `events:PutEvents` on the `security-operations-bus`
+
+This is the minimum access required to manually inject rollback events onto the SecOps event bus.
+
+---
