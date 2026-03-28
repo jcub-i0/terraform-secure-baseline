@@ -122,6 +122,8 @@ Expected output:
 
 ### TEST 1 - MANUAL ROLLBACK EVENT FROM EVENTBRIDGE CONSOLE
 
+This test is performed entirely from the AWS console (no CLI required).
+
 Sign in through the AWS access portal, open the AWS account using `SecOps-Operator`, and navigate to:
 
 `Amazon EventBridge` ➔ `Event buses` ➔ `security-operations-bus` ➔ `Send events`
@@ -153,6 +155,8 @@ Expected outcome:
 ---
 
 ### TEST 2 - MANUAL ROLLBACK EVENT FROM AWS CLI
+
+This test requires a locally-configured AWS CLI SSO profile.
 
 #### Manual Event from AWS CLI
 
