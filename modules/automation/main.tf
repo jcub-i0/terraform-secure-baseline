@@ -56,7 +56,7 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   revoke_rules_on_delete = true
 
   tags = {
-    Name        = "${var.name_prefix}--Lambda-EC2-Isolation-SG"
+    Name        = "${var.name_prefix}-Lambda-EC2-Isolation-SG"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -109,7 +109,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
 
 ### CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
-  name              = "/aws/lambda/ec2-isolation"
+  name              = "/aws/lambda/${var.name_prefix}-ec2-isolation"
   retention_in_days = 30
   kms_key_id        = var.logs_cmk_arn
 
@@ -270,7 +270,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
 
 ### CLOUDWATCH LOG GROUP FOR EC2 ROLLBACK LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
-  name              = "/aws/lambda/ec2-rollback"
+  name              = "/aws/lambda/${var.name_prefix}-ec2-rollback"
   retention_in_days = 30
   kms_key_id        = var.logs_cmk_arn
 
@@ -393,7 +393,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
 
 ### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
-  name              = "/aws/lambda/ip-enrichment"
+  name              = "/aws/lambda/${var.name_prefix}-ip-enrichment"
   retention_in_days = 30
   kms_key_id        = var.logs_cmk_arn
 

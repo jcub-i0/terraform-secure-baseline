@@ -1,7 +1,7 @@
 # CLOUDWATCH LOG GROUPS
 ## CLOUDTRAIL LOG GROUP
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/${var.cloud_name}"
+  name              = "/aws/cloudtrail/${var.name_prefix}"
   retention_in_days = 90
   kms_key_id        = var.logs_cmk_arn
 
@@ -14,7 +14,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
 ## FLOW LOGS LOG GROUP
 resource "aws_cloudwatch_log_group" "flowlogs" {
-  name              = "/aws/flowlogs/${var.cloud_name}"
+  name              = "/aws/flowlogs/${var.name_prefix}"
   retention_in_days = 90
   kms_key_id        = var.logs_cmk_arn
 
@@ -71,7 +71,7 @@ resource "aws_flow_log" "flowlogs" {
   traffic_type         = "ALL"
 
   tags = {
-    Name        = "${var.name_prefix}-VPC-Flow-Logs"
+    Name        = "${var.name_prefix}-FlowLogs"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -80,7 +80,7 @@ resource "aws_flow_log" "flowlogs" {
 # KINESIS FIREHOSE FOR VPC FLOWLOGS
 ## FLOWLOGS FIREHOSE DELIVERY STREAM
 resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
-  name        = "vpc-flow-logs-to-s3"
+  name        = "${var.name_prefix}-flowlogs-to-s3"
   destination = "extended_s3"
 
   extended_s3_configuration {
@@ -99,7 +99,7 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
   }
 
   tags = {
-    Name        = "${var.name_prefix}-FlowLogsFirehoseDeliveryStream"
+    Name        = "${var.name_prefix}-flowlogs-to-s3"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -107,7 +107,7 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
 
 ## CLOUDWATCH LOGS SUBSCRIPTION FILTER FOR FLOWLOGS FIREHOSE
 resource "aws_cloudwatch_log_subscription_filter" "flowlogs" {
-  name            = "vpc-flow-logs-to-firehose"
+  name            = "${var.name_prefix}-flowlogs-to-firehose"
   log_group_name  = aws_cloudwatch_log_group.flowlogs.name
   destination_arn = aws_kinesis_firehose_delivery_stream.flowlogs.arn
   role_arn        = var.cw_to_firehose_role_arn
