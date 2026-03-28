@@ -99,7 +99,7 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
   }
 
   tags = {
-    Name        = "${var.name_prefix}-FlowLogsFirehoseDeliveryStream"
+    Name        = "${var.name_prefix}-flowlogs-to-s3"
     Environment = var.environment
     Terraform   = "true"
   }
