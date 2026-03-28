@@ -9,6 +9,9 @@ How to use:
 * Run the test
 * Confirm Expected Outcome based on 'Expected Outcome' section of each test
 
+> Permissions:
+> These tests require a principal with permission to invoke Lambda functions (e.g., an administrator or a role with `lambda:InvokeFunction` access).
+
 ## TESTING APPROACH
 
 This document contains **direct Lambda invocation tests** used for validation and debugging.
