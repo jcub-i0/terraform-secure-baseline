@@ -104,8 +104,8 @@ Expected output:
 
 ```json
 {
-    "UserId": "AROARBVF5SXJFGTX4DP6G:<sso-user>",
-    "Account": "072288671186",
+    "UserId": "<id-string>:<sso-user>",
+    "Account": "<account-id>",
     "Arn": "arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_SecOps-Operator_<random-string>/<sso-user>"
 }
 ```
