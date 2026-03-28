@@ -127,7 +127,7 @@ Expected output:
 
 #### Manual Event from AWS CLI
 
-Run the following from a terminal authenticated with the `SecOps-Operator` permission set:
+Run the following from a terminal authenticated with the `SecOps-Operator` SSO profile:
 
 ```bash
 aws events put-events --entries '[
@@ -137,20 +137,20 @@ aws events put-events --entries '[
     "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
     "EventBusName": "security-operations-bus"
   }
-]' --profile operator
+]' --profile <profile-name>
 ```
 
-**Example**
+Expected outcome:
 
 ```bash
-aws events put-events --entries '[
-  {
-    "Source": "custom.rollback",
-    "DetailType": "Ec2Rollback",
-    "Detail": "{\"instance_id\":\"i-007c460b960eede84\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
-    "EventBusName": "security-operations-bus"
-  }
-]' --profile operator
+{
+    "FailedEntryCount": 0,
+    "Entries": [
+        {
+            "EventId": "<id-string>"
+        }
+    ]
+}
 ```
 
 ---
