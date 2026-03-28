@@ -111,7 +111,7 @@ resource "aws_cloudwatch_log_group" "rds_upgrade" {
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
 ## Create a secret in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "rds_master" {
-  name_prefix = "${var.cloud_name}/database/rds-master-"
+  name_prefix = "${var.name_prefix}/database/rds-master-"
   description = "Main RDS DB's master key"
   kms_key_id  = var.secrets_manager_cmk_arn
 
