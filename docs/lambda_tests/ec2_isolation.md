@@ -23,7 +23,7 @@ In a production workflow, this Lambda is triggered by:
 - EventBridge rules
 
 > Note:
-> The name of the EC2 Isolation Lambda function is dynamically generated using `var.name_prefix`, which is composed of `var.cloud_name` and `var.environment` (e.g., `nanonexus-prod-ec2-isolation`). By default, `var.cloud_name` is `tf-secure-baseline` and `var.environment` is `dev`.
+> The name of the EC2 Isolation Lambda function is dynamically generated using `var.name_prefix`, which is composed of `var.cloud_name` and `var.environment` (e.g., `nanonexus-prod-ec2-isolation`). By default, `var.cloud_name` is `tf-secure-baseline` and `var.environment` is `dev`, resulting in `tf-secure-baseline-dev-ec2-isolation`.
 
 ## EC2 ISOLATION LAMBDA TESTS
 
