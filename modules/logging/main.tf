@@ -80,7 +80,7 @@ resource "aws_flow_log" "flowlogs" {
 # KINESIS FIREHOSE FOR VPC FLOWLOGS
 ## FLOWLOGS FIREHOSE DELIVERY STREAM
 resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
-  name        = "vpc-flow-logs-to-s3"
+  name        = "${var.name_prefix}-flowlogs-to-s3"
   destination = "extended_s3"
 
   extended_s3_configuration {
