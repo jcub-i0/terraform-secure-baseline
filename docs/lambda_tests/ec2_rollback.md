@@ -100,9 +100,23 @@ Then enter the code:
 XXXX-XXXX
 ```
 
-If you are unable to authenticate into your SSO user from the automatically-opened default browser, try a different browser, using the URL and code provided in the output above.
+If you are unable to confirm the code in the automatically-opened default browser, try a different browser, using the URL and code provided in the output above.
 
-To validate your AWS identity, run:
+After successfully confirming the code in your browser, answer the CLI's prompts as follows:
+
+> You may be prompted with `CLI profile name:`; if so, enter `operator` and use this wherever `<profile-name>` is referenced.
+
+```bash
+There are _ roles available to you.
+`> SecOps-Operator`
+Default client Region: us-east-1
+CLI default output format (json if not specified): <press enter>
+To use this profile, specify the profile name using --profile, as shown:
+
+aws sts get-caller-identity --profile <profile-name>
+```
+
+Run:
 
 ```bash
 aws sts get-caller-identity --profile <profile-name>
