@@ -38,7 +38,7 @@ Run the following from the CLI:
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
   --region us-east-1 \
-  --function-name ec2-isolation \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
@@ -95,7 +95,7 @@ Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
-  --function-name ec2-isolation \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
@@ -152,7 +152,7 @@ Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
-  --function-name ec2-isolation \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
@@ -209,7 +209,7 @@ Run the following from the CLI:
 ```bash
 export AWS_PAGER="" # Prevents AWS CLI from launching 'less'
 aws lambda invoke \
-  --function-name ec2-isolation \
+  --function-name tf-secure-baseline-dev-ec2-isolation \
   --cli-binary-format raw-in-base64-out \
   --payload "$(cat <<EOF
 {
