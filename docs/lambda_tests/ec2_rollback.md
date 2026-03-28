@@ -35,3 +35,39 @@ The `SecOps-Operator` permission set allows:
 This is the minimum access required to manually inject rollback events onto the SecOps event bus.
 
 ---
+
+### SIGN IN WITH IAM IDENTITY CENTER
+
+1. Sign into the AWS access portal:
+
+```text
+https://<your-org>.awsapps.com/start
+```
+
+2. Open the AWS account using:
+
+`SecOps-Operator`
+
+3. Confirm you are in the correct role by running:
+
+```bash
+aws sts get-caller-identity --profile <profile-name>
+```
+
+Example:
+
+```bash
+aws sts get-caller-identity --profile operator
+```
+
+**Expected Result:**
+
+- The returned ARN should reference an assumed IAM Identity Center role similar to:
+
+```text
+arn:aws:sts::<AWS_ACCOUNT_ID>:assumed-role/AWSReservedSSO_SecOps-Operator_<random>/<username>
+```
+
+> `<profile-name>` refers to your local AWS CLI profile configured via `aws configure sso`.
+
+---
