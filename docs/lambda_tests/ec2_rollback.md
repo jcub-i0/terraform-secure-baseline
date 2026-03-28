@@ -82,7 +82,7 @@ For the following prompts, enter the following:
 
 ```bash
 SSO session name (Recommended): test
-SSO start URL [None]: `start-url-provided-by-identity-center-console`
+SSO start URL [None]: One of the AWS access portal URLs from the IAM Identity Center console (Dashboard page)
 SSO region [None]: us-east-1
 SSO registration scopes [sso:account:access]: sso:account:access
 ```
