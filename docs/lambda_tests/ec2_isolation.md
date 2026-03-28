@@ -4,10 +4,23 @@ Purpose:
 Manual test events used to validate Lambda automation behavior before and after changes.
 
 How to use:
-* Replace ```<YOUR-ACCOUNT-ID>``` with your AWS account ID
-* Replace ```<ARN-OF-EC2-INSTANCE-TO-ISOLATE>``` with the ARN of the to-be-isolated EC2 instance
+* Replace `<YOUR-ACCOUNT-ID>` with your AWS account ID
+* Replace `<ARN-OF-EC2-INSTANCE-TO-ISOLATE>` with the ARN of the to-be-isolated EC2 instance
 * Run the test
 * Confirm Expected Outcome based on 'Expected Outcome' section of each test
+
+## TESTING APPROACH
+
+This document contains **direct Lambda invocation tests** used for validation and debugging.
+
+These tests:
+- Bypass EventBridge and Security Hub
+- Require permissions to invoke the Lambda function directly
+- Are intended for development and validation purposes
+
+In a production workflow, this Lambda is triggered by:
+- Security Hub findings
+- EventBridge rules
 
 ## EC2 ISOLATION LAMBDA TESTS
 
