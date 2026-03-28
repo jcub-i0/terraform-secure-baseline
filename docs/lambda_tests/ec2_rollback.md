@@ -177,7 +177,7 @@ This test requires a locally-configured AWS CLI SSO profile.
 Run the following from a terminal authenticated with the `SecOps-Operator` SSO profile:
 
 ```bash
-aws events put-events --entries '[
+aws events put-events --region us-east-1 --entries '[
   {
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
