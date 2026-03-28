@@ -64,6 +64,10 @@ Expected role name pattern:
 
 `SecOps-Operator/<username>`
 
+or:
+
+`AWSReservedSSO_SecOps-Operator_<random>/<username>`
+
 ---
 
 ### CONFIGURE LOCAL AWS CLI SSO PROFILE (FOR TEST 2)
