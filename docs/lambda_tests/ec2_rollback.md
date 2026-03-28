@@ -39,7 +39,7 @@ This is the minimum access required to manually inject rollback events onto the 
 
 ---
 
-### SIGN IN VIA THE AWS ACCESS PORTAL
+### SIGN IN VIA THE AWS ACCESS PORTAL (FOR TEST 2)
 
 Use the exact AWS access portal URL configured for your IAM Identity Center instance.
 
@@ -66,7 +66,7 @@ Expected role name pattern:
 
 ---
 
-### CONFIGURE LOCAL AWS CLI SSO PROFILE (IF NEEDED)
+### CONFIGURE LOCAL AWS CLI SSO PROFILE (FOR TEST 1)
 
 If you want to run the rollback test from a local terminal, first configure an AWS CLI SSO profile:
 
@@ -134,7 +134,7 @@ aws events put-events --entries '[
   {
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
-    "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
+    "Detail": "{\"instance_id\":\"<QUARANTINED_INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
     "EventBusName": "security-operations-bus"
   }
 ]' --profile <profile-name>
@@ -154,3 +154,9 @@ Expected outcome:
 ```
 
 ---
+
+### TEST 2 - MANUAL ROLLBACK EVENT FROM EVENTBRIDGE CONSOLE
+
+Sign in through the AWS access portal, open the AWS account using `SecOps-Operator`, and navigate to:
+
+`Amazon EventBridge` ➔ `Event buses` ➔ `security-operations-bus`
