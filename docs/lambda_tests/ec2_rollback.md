@@ -44,9 +44,7 @@ This is the minimum access required to manually inject rollback events onto the 
 https://<your-org>.awsapps.com/start
 ```
 
-2. Open the AWS account using:
-
-`SecOps-Operator`
+2. Open the AWS account using `SecOps-Operator`
 
 3. Confirm you are in the correct role by running:
 
