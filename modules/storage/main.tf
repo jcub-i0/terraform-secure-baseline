@@ -1,5 +1,5 @@
 locals {
-  rds_identifier = "saas-data-db"
+  rds_identifier = "${var.name_prefix}-saas-db"
 }
 
 # CREATE DATA SECURITY GROUP, DB Subnet Group, AND RDS INSTANCE
