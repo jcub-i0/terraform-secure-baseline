@@ -104,7 +104,7 @@ If you are unable to confirm the code in the automatically-opened default browse
 
 After successfully confirming the code in your browser, answer the CLI's prompts as follows:
 
-> You may be prompted with `CLI profile name:`; if so, enter `operator` and use this wherever `<profile-name>` is referenced.
+> You may be prompted with `CLI profile name:`; if so, enter '`operator`' and use this wherever `<profile-name>` is referenced.
 
 ```bash
 There are _ roles available to you.
