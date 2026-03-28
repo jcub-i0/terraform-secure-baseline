@@ -118,13 +118,6 @@ Expected output:
 
 ### TEST 1 - MANUAL ROLLBACK EVENT FROM AWS CLI
 
-#### Expected Outcome
-
-- Lambda executes successfully
-- Instance rolls back from the Quarantine Security Group to its original Security Group(s)
-- SNS notification is sent to the configured SecOps SNS topic
-- No errors appear in the Lambda function's CloudWatch log group
-
 #### Manual Event from AWS CLI
 
 Run the following from a terminal authenticated with the `SecOps-Operator` SSO profile:
@@ -140,7 +133,7 @@ aws events put-events --entries '[
 ]' --profile <profile-name>
 ```
 
-Expected outcome:
+Expected output:
 
 ```bash
 {
@@ -153,10 +146,41 @@ Expected outcome:
 }
 ```
 
+#### Expected Outcome
+
+- Lambda executes successfully
+- Instance rolls back from the Quarantine Security Group to its original Security Group(s)
+- SNS notification is sent to the configured SecOps SNS topic
+- No errors appear in the Lambda function's CloudWatch log group
+
 ---
 
 ### TEST 2 - MANUAL ROLLBACK EVENT FROM EVENTBRIDGE CONSOLE
 
 Sign in through the AWS access portal, open the AWS account using `SecOps-Operator`, and navigate to:
 
-`Amazon EventBridge` ➔ `Event buses` ➔ `security-operations-bus`
+`Amazon EventBridge` ➔ `Event buses` ➔ `security-operations-bus` ➔ `Send events`
+
+Use:
+
+- **Event source**: `custom.rollback`
+- **Detail type**: `Ec2Rollback`
+
+And use this JSON in the **Detail** field:
+
+```json
+{
+  "instance_id": "<INSTANCE_ID>",
+  "approved_by": "secops@company.com",
+  "ticket_id": "t-abc123",
+  "reason": "Test rollback"
+}
+```
+
+Expected outcome:
+
+- `Event(s) sent successfully.` green banner at top of EventBridge UI
+- Lambda executes successfully
+- Instance rolls back from the Quarantine Security Group to its original Security Group(s)
+- SNS notification is sent to the configured SecOps SNS topic
+- No errors appear in the Lambda function's CloudWatch log group
