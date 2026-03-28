@@ -15,6 +15,10 @@ How to use:
 
 ### PREREQUISITES:
 
+#### QUARANTINED EC2 INSTANCE
+
+You must have an EC2 instance that exists in the Quarantine Security Group.
+
 #### ACCESS REQUIREMENTS
 
 The EC2 Rollback workflow is tested through **AWS IAM Identity Center** and the `SecOps-Operator` permission set.
