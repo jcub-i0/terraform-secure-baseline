@@ -39,7 +39,7 @@ This is the minimum access required to manually inject rollback events onto the 
 
 ---
 
-### SIGN IN VIA THE AWS ACCESS PORTAL (FOR TEST 2)
+### SIGN IN VIA THE AWS ACCESS PORTAL (FOR TEST 1)
 
 Use the exact AWS access portal URL configured for your IAM Identity Center instance.
 
@@ -66,7 +66,7 @@ Expected role name pattern:
 
 ---
 
-### CONFIGURE LOCAL AWS CLI SSO PROFILE (FOR TEST 1)
+### CONFIGURE LOCAL AWS CLI SSO PROFILE (FOR TEST 2)
 
 If you want to run the rollback test from a local terminal, first configure an AWS CLI SSO profile:
 
@@ -116,7 +116,39 @@ Expected output:
 
 ---
 
-### TEST 1 - MANUAL ROLLBACK EVENT FROM AWS CLI
+### TEST 1 - MANUAL ROLLBACK EVENT FROM EVENTBRIDGE CONSOLE
+
+Sign in through the AWS access portal, open the AWS account using `SecOps-Operator`, and navigate to:
+
+`Amazon EventBridge` ➔ `Event buses` ➔ `security-operations-bus` ➔ `Send events`
+
+Use:
+
+- **Event source**: `custom.rollback`
+- **Detail type**: `Ec2Rollback`
+
+And use this JSON in the **Detail** field:
+
+```json
+{
+  "instance_id": "<INSTANCE_ID>",
+  "approved_by": "secops@company.com",
+  "ticket_id": "t-abc123",
+  "reason": "Test rollback"
+}
+```
+
+Expected outcome:
+
+- `Event(s) sent successfully.` green banner at top of EventBridge UI
+- Lambda executes successfully
+- Instance rolls back from the Quarantine Security Group to its original Security Group(s)
+- SNS notification is sent to the configured SecOps SNS topic
+- No errors appear in the Lambda function's CloudWatch log group
+
+---
+
+### TEST 2 - MANUAL ROLLBACK EVENT FROM AWS CLI
 
 #### Manual Event from AWS CLI
 
@@ -148,38 +180,6 @@ Expected output:
 
 #### Expected Outcome
 
-- Lambda executes successfully
-- Instance rolls back from the Quarantine Security Group to its original Security Group(s)
-- SNS notification is sent to the configured SecOps SNS topic
-- No errors appear in the Lambda function's CloudWatch log group
-
----
-
-### TEST 2 - MANUAL ROLLBACK EVENT FROM EVENTBRIDGE CONSOLE
-
-Sign in through the AWS access portal, open the AWS account using `SecOps-Operator`, and navigate to:
-
-`Amazon EventBridge` ➔ `Event buses` ➔ `security-operations-bus` ➔ `Send events`
-
-Use:
-
-- **Event source**: `custom.rollback`
-- **Detail type**: `Ec2Rollback`
-
-And use this JSON in the **Detail** field:
-
-```json
-{
-  "instance_id": "<INSTANCE_ID>",
-  "approved_by": "secops@company.com",
-  "ticket_id": "t-abc123",
-  "reason": "Test rollback"
-}
-```
-
-Expected outcome:
-
-- `Event(s) sent successfully.` green banner at top of EventBridge UI
 - Lambda executes successfully
 - Instance rolls back from the Quarantine Security Group to its original Security Group(s)
 - SNS notification is sent to the configured SecOps SNS topic
