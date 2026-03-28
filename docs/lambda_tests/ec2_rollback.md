@@ -58,7 +58,7 @@ Example:
 aws sts get-caller-identity --profile operator
 ```
 
-**Expected Result:**
+Expected Result:
 
 - The returned ARN should reference an assumed IAM Identity Center role similar to:
 
