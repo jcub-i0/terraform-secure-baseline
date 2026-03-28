@@ -69,3 +69,26 @@ arn:aws:sts::<AWS_ACCOUNT_ID>:assumed-role/AWSReservedSSO_SecOps-Operator_<rando
 > `<profile-name>` refers to your local AWS CLI profile configured via `aws configure sso`.
 
 ---
+
+### CONFIGURE LOCAL AWS CLI SSO PROFILE (IF NEEDED)
+
+If you have not already configured a local CLI profile for the `SecOps-Operator` permission set, run:
+
+```bash
+aws configure sso
+```
+
+Use the profile to select:
+
+- The AWS account hosting this environment
+- The `SecOps-Operator` permission set
+
+Example local profile name:
+
+`operator`
+
+Then authenticate:
+
+```bash
+aws sso login --profile operator
+```
