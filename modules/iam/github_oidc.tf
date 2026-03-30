@@ -24,29 +24,29 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 data "aws_iam_policy_document" "github_oidc_assume_role" {
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
     principals {
-      type = "Federated"
+      type        = "Federated"
       identifiers = [aws_iam_openid_connect_provider.github]
     }
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:aud"
-      values = ["sts.amazonaws.com"]
+      values   = ["sts.amazonaws.com"]
     }
 
     condition {
-      test = "StringLike"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values = local.github_branch_subjects
+      values   = local.github_branch_subjects
     }
   }
 }
 
 resource "aws_iam_role" "github_plan" {
-  name = "${var.name_prefix}-github-plan-role"
+  name               = "${var.name_prefix}-github-plan-role"
   assume_role_policy = data.aws_iam_policy_document.github_oidc_assume_role.json
 }
