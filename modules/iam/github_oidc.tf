@@ -21,7 +21,6 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 data "aws_iam_policy_document" "github_oidc_assume_role" {
-    for_each = toset(var.github_branches)
   statement {
     effect = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -41,7 +40,7 @@ data "aws_iam_policy_document" "github_oidc_assume_role" {
       test = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${each.value}"
+        local.github_branch_subjects
       ]
     }
   }
