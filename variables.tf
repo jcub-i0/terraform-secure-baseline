@@ -200,3 +200,9 @@ variable "github_branches" {
     "main"
   ]
 }
+
+variable "github_allow_pull_requests" {
+  description = "Allow pull_request subject in OIDC trust policy"
+  type = bool
+  default = false
+}
