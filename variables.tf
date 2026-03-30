@@ -178,3 +178,12 @@ variable "break_glass_trusted_principal_arns" {
   type        = list(string)
   default     = []
 }
+
+########################
+# GITHUB OIDC VARIABLES
+########################
+
+variable "github_owner" {
+  description = "GitHub organization or username (repo owner)"
+  type = string
+}
