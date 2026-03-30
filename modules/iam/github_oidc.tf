@@ -6,6 +6,8 @@ locals {
     for branch in var.github_branches :
     "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${branch}"
   ]
+
+  github_pr_subject = "repo:${var.github_owner}/${var.github_repo}/:pull_request"
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
