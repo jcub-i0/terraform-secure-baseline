@@ -185,17 +185,17 @@ variable "break_glass_trusted_principal_arns" {
 
 variable "github_owner" {
   description = "GitHub organization or username (repo owner)"
-  type = string
+  type        = string
 }
 
 variable "github_repo" {
   description = "GitHub repository name"
-  type = string
+  type        = string
 }
 
 variable "github_branches" {
   description = "List of branches allowed to assume the github_oidc role"
-  type = list(string)
+  type        = list(string)
   default = [
     "main"
   ]
@@ -203,6 +203,6 @@ variable "github_branches" {
 
 variable "github_allow_pull_requests" {
   description = "Allow pull_request subject in OIDC trust policy"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
