@@ -81,6 +81,7 @@ module "iam" {
   source = "./modules/iam"
 
   cloud_name                            = var.cloud_name
+  name_prefix = local.name_prefix
   environment                           = var.environment
   cloudtrail_log_group_arn              = module.logging.cloudtrail_log_group_arn
   secops_topic_arn                      = module.monitoring.secops_topic_arn
