@@ -46,3 +46,8 @@ data "aws_iam_policy_document" "github_oidc_assume_role" {
     }
   }
 }
+
+resource "aws_iam_role" "github_plan" {
+  name = "${var.name_prefix}-github-plan-role"
+  assume_role_policy = data.aws_iam_policy_document.github_oidc_assume_role.json
+}
