@@ -95,10 +95,10 @@ module "iam" {
   lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
   secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns    = var.break_glass_trusted_principal_arns
-  github_owner = var.github_owner
-  github_repo = var.github_repo
-  github_branches = var.github_branches
-  github_allow_pull_requests = var.github_allow_pull_requests
+  github_owner                          = var.github_owner
+  github_repo                           = var.github_repo
+  github_branches                       = var.github_branches
+  github_allow_pull_requests            = var.github_allow_pull_requests
 }
 
 module "security" {
