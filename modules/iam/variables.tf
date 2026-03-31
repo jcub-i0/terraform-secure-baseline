@@ -72,14 +72,22 @@ variable "enable_github_oidc" {
   default     = false
 }
 
+variable "github_oidc_provider_arn" {
+  description = "ARN of the GitHub OIDC provider"
+  type        = string
+  default = null
+}
+
 variable "github_owner" {
   description = "GitHub organization or username (repo owner)"
   type        = string
+  default     = null
 }
 
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
+  default     = null
 }
 
 variable "github_branches" {
@@ -97,11 +105,7 @@ variable "github_allow_pull_requests" {
 variable "tf_state_bucket_arn" {
   description = "ARN of the S3 bucket where the Terraform state is stored"
   type        = string
-}
-
-variable "github_oidc_provider_arn" {
-  description = "ARN of the GitHub OIDC provider"
-  type        = string
+  default     = null
 }
 
 variable "tf_state_lock_table_arn" {
