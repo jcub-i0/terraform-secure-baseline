@@ -8,6 +8,11 @@ locals {
   ]
 
   github_pr_subject = "repo:${var.github_owner}/${var.github_repo}:pull_request"
+
+  github_oidc_subjects = concat(
+    local.github_branch_subjects,
+    var.github_allow_pull_requests ? [local.github_pr_subject] : []
+  )
 }
 
 data "aws_iam_policy_document" "github_oidc_assume_role" {
