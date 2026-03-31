@@ -204,13 +204,13 @@ variable "github_repo" {
 variable "github_branches" {
   description = "List of branches allowed to assume the github_oidc role"
   type        = list(string)
-  default = null
+  default = ["main"]
 }
 
 variable "github_allow_pull_requests" {
   description = "Allow pull_request subject in OIDC trust policy"
   type        = bool
-  default     = null
+  default     = false
 }
 
 variable "tf_state_bucket_arn" {
