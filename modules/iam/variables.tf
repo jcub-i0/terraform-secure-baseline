@@ -97,5 +97,5 @@ variable "tf_state_bucket_arn" {
 
 variable "github_oidc_provider_arn" {
   description = "ARN of the GitHub OIDC provider"
-  type = string
+  type        = string
 }
