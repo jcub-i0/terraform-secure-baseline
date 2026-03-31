@@ -75,7 +75,7 @@ variable "enable_github_oidc" {
 variable "github_oidc_provider_arn" {
   description = "ARN of the GitHub OIDC provider"
   type        = string
-  default = null
+  default     = null
 }
 
 variable "github_owner" {
