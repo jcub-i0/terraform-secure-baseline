@@ -2,6 +2,12 @@
 # GITHUB OIDC VARIABLES
 ########################
 
+variable "enable_github_oidc" {
+  description = "Enable GitHub OIDC federation resources for CI/CD"
+  type        = bool
+  default     = false
+}
+
 variable "name_prefix" {
   type = string
 }
