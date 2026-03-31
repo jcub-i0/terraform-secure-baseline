@@ -185,8 +185,8 @@ variable "break_glass_trusted_principal_arns" {
 
 variable "enable_github_oidc" {
   description = "Enable GitHub OIDC federation resources for CI/CD"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "github_owner" {

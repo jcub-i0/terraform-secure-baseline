@@ -68,8 +68,8 @@ variable "break_glass_trusted_principal_arns" {
 
 variable "enable_github_oidc" {
   description = "Enable GitHub OIDC federation resources for CI/CD"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "github_owner" {
@@ -85,7 +85,7 @@ variable "github_repo" {
 variable "github_branches" {
   description = "List of branches allowed to assume the github_oidc role"
   type        = list(string)
-  default = ["main"]
+  default     = ["main"]
 }
 
 variable "github_allow_pull_requests" {
