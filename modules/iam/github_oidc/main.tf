@@ -49,42 +49,45 @@ resource "aws_iam_policy" "github_plan" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "TerraformStateAccess"
-        Effect = "Allow"
-        Action = [
-          "s3:ListBucket"
-        ]
-        Resource = [
-          var.tf_state_bucket_arn
-        ]
-      },
-      {
-        Sid    = "TerraformStateObjectAccess"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject"
-        ]
-        Resource = [
-          "${var.tf_state_bucket_arn}/*"
-        ]
-      },
-      # UNCOMMENT IF TF STATE USES LOCK TABLE
-      {
-        Sid    = "TerraformStateLockAccess"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:UpdateItem"
-        ]
-        Resource = var.tf_state_lock_table_arn
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Sid    = "TerraformStateAccess"
+          Effect = "Allow"
+          Action = [
+            "s3:ListBucket"
+          ]
+          Resource = [
+            var.tf_state_bucket_arn
+          ]
+        },
+        {
+          Sid    = "TerraformStateObjectAccess"
+          Effect = "Allow"
+          Action = [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject"
+          ]
+          Resource = [
+            "${var.tf_state_bucket_arn}/*"
+          ]
+        },
+      ],
+      var.tf_state_lock_table_arn != null ? [
+        {
+          Sid    = "TerraformStateLockAccess"
+          Effect = "Allow"
+          Action = [
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:UpdateItem"
+          ]
+          Resource = var.tf_state_lock_table_arn
+        }
+      ] : []
+    )
   })
 }
 
