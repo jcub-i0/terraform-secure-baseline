@@ -50,3 +50,25 @@ resource "aws_iam_role" "github_plan" {
   name               = "${var.name_prefix}-github-plan-role"
   assume_role_policy = data.aws_iam_policy_document.github_oidc_assume_role.json
 }
+
+resource "aws_iam_policy" "github_plan" {
+  name = "${var.name_prefix}-github-plan-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+        {
+            Sid = "TerraformStateAccess"
+            Effect = "Allow"
+            Action = [
+                "s3:GetObject",
+                "s3:ListBucket"
+            ]
+            Resource = [
+                var.tf_state_bucket_arn,
+                "${var.tf_state_bucket_arn}/*"
+            ]
+        }
+    ]
+  })
+}
