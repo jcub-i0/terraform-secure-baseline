@@ -52,7 +52,7 @@ resource "aws_iam_policy" "github_plan" {
     Statement = concat(
       [
         {
-          Sid    = "TerraformStateAccess"
+          Sid    = "TerraformStateBucketList"
           Effect = "Allow"
           Action = [
             "s3:ListBucket"
