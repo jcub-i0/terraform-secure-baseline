@@ -72,7 +72,6 @@ resource "aws_iam_policy" "github_plan" {
           "${var.tf_state_bucket_arn}/*"
         ]
       },
-      /*
       # UNCOMMENT IF TF STATE USES LOCK TABLE
       {
         Sid = "TerraformStateLockAccess"
@@ -85,7 +84,6 @@ resource "aws_iam_policy" "github_plan" {
         ]
         Resource = var.tf_state_lock_table_arn
       }
-      */
     ]
   })
 }
