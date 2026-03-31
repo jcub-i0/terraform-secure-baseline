@@ -209,5 +209,5 @@ variable "github_allow_pull_requests" {
 
 variable "tf_state_bucket_arn" {
   description = "ARN of the S3 bucket where the Terraform state is stored"
-  type = string
+  type        = string
 }

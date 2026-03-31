@@ -57,23 +57,23 @@ resource "aws_iam_policy" "github_plan" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-        {
-            Sid = "TerraformStateAccess"
-            Effect = "Allow"
-            Action = [
-                "s3:GetObject",
-                "s3:ListBucket"
-            ]
-            Resource = [
-                var.tf_state_bucket_arn,
-                "${var.tf_state_bucket_arn}/*"
-            ]
-        }
+      {
+        Sid    = "TerraformStateAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.tf_state_bucket_arn,
+          "${var.tf_state_bucket_arn}/*"
+        ]
+      }
     ]
   })
 }
 
 resource "aws_iam_role_policy_attachment" "github_plan_attach" {
-  role = aws_iam_role.github_plan.name
+  role       = aws_iam_role.github_plan.name
   policy_arn = aws_iam_policy.github_plan.arn
 }

@@ -100,7 +100,7 @@ module "iam" {
   github_repo                           = var.github_repo
   github_branches                       = var.github_branches
   github_allow_pull_requests            = var.github_allow_pull_requests
-  tf_state_bucket_arn = var.tf_state_bucket_arn
+  tf_state_bucket_arn                   = var.tf_state_bucket_arn
 }
 
 module "security" {
