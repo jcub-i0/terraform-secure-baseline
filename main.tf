@@ -98,14 +98,14 @@ module "iam" {
   break_glass_trusted_principal_arns    = var.break_glass_trusted_principal_arns
 
   # GITHUB OIDC VARIABLES
-  enable_github_oidc = var.enable_github_oidc
-  github_owner                          = var.github_owner
-  github_repo                           = var.github_repo
-  github_branches                       = var.github_branches
-  github_allow_pull_requests            = var.github_allow_pull_requests
-  tf_state_bucket_arn                   = var.tf_state_bucket_arn
-  tf_state_lock_table_arn               = var.tf_state_lock_table_arn
-  github_oidc_provider_arn              = var.enable_github_oidc ? aws_iam_openid_connect_provider.github[0].arn : null
+  enable_github_oidc         = var.enable_github_oidc
+  github_owner               = var.github_owner
+  github_repo                = var.github_repo
+  github_branches            = var.github_branches
+  github_allow_pull_requests = var.github_allow_pull_requests
+  tf_state_bucket_arn        = var.tf_state_bucket_arn
+  tf_state_lock_table_arn    = var.tf_state_lock_table_arn
+  github_oidc_provider_arn   = var.enable_github_oidc ? aws_iam_openid_connect_provider.github[0].arn : null
 }
 
 module "security" {
