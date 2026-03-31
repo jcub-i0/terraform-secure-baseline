@@ -73,6 +73,7 @@ resource "aws_iam_policy" "github_plan" {
         ]
       },
       /*
+      # UNCOMMENT IF TF STATE USES LOCK TABLE
       {
         Sid = "TerraformStateLockAccess"
         Effect = "Allow"
