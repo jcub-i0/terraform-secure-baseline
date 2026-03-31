@@ -66,7 +66,20 @@ resource "aws_iam_policy" "github_plan" {
         Resource = [
           "${var.tf_state_bucket_arn}/*"
         ]
+      },
+      /*
+      {
+        Sid = "TerraformStateLockAccess"
+        Effect = "Allow"
+        Action = [
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:UpdateItem"
+        ]
+        Resource = var.tf_state_lock_table_arn
       }
+      */
     ]
   })
 }
