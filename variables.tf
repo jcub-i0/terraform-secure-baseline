@@ -193,12 +193,22 @@ variable "github_owner" {
   description = "GitHub organization or username (repo owner)"
   type        = string
   default     = null
+
+  validation {
+    condition = !var.enable_github_oidc || var.github_owner != null
+    error_message = "'github_owner' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
   default     = null
+
+  validation {
+    condition = !var.enable_github_oidc || var.github_repo != null
+    error_message = "'github_repo' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "github_branches" {
@@ -217,6 +227,11 @@ variable "tf_state_bucket_arn" {
   description = "ARN of the S3 bucket where the Terraform state is stored"
   type        = string
   default     = null
+
+  validation {
+    condition = !var.enable_github_oidc || var.tf_state_bucket_arn != null
+    error_message = "'tf_state_bucket_arn' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "tf_state_lock_table_arn" {
