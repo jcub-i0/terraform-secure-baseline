@@ -72,3 +72,8 @@ resource "aws_iam_policy" "github_plan" {
     ]
   })
 }
+
+resource "aws_iam_role_policy_attachment" "github_plan_attach" {
+  role = aws_iam_role.github_plan.name
+  policy_arn = aws_iam_policy.github_plan.arn
+}
