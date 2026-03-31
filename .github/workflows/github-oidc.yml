@@ -10,18 +10,18 @@ permissions:
     contents: read
 
 jobs:
-    terraform-plan:
-        runs-on: ubuntu-latest
+  terraform-plan:
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-            - name: Configure AWS credentials from GitHub OIDC
-              uses: aws-actions/configure-aws-credentials@v4
-              with:
-                role-to-assume: arn:aws:iam::977098999313:role/tf-secure-baseline-dev-github-plan-role
-                aws-region: us-east-1
-            
-            - name: Verify identity
-              run: aws sts get-caller-identity
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/<ROLE_NAME>
+          aws-region: us-east-1
+
+      - name: Verify identity
+        run: aws sts get-caller-identity
