@@ -183,6 +183,12 @@ variable "break_glass_trusted_principal_arns" {
 # GITHUB OIDC VARIABLES
 ########################
 
+variable "enable_github_oidc" {
+  description = "Enable GitHub OIDC federation resources for CI/CD"
+  type = bool
+  default = false
+}
+
 variable "github_owner" {
   description = "GitHub organization or username (repo owner)"
   type        = string
