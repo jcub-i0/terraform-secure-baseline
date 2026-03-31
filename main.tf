@@ -101,8 +101,8 @@ module "iam" {
   github_branches                       = var.github_branches
   github_allow_pull_requests            = var.github_allow_pull_requests
   tf_state_bucket_arn                   = var.tf_state_bucket_arn
-  tf_state_lock_table_arn = var.tf_state_lock_table_arn
-  github_oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
+  tf_state_lock_table_arn               = var.tf_state_lock_table_arn
+  github_oidc_provider_arn              = aws_iam_openid_connect_provider.github.arn
 }
 
 module "security" {

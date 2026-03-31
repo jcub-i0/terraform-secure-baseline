@@ -74,13 +74,13 @@ resource "aws_iam_policy" "github_plan" {
       },
       # UNCOMMENT IF TF STATE USES LOCK TABLE
       {
-        Sid = "TerraformStateLockAccess"
+        Sid    = "TerraformStateLockAccess"
         Effect = "Allow"
         Action = [
-            "dynamodb:GetItem",
-            "dynamodb:PutItem",
-            "dynamodb:DeleteItem",
-            "dynamodb:UpdateItem"
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:UpdateItem"
         ]
         Resource = var.tf_state_lock_table_arn
       }
