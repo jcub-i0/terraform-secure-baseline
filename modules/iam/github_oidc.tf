@@ -49,14 +49,22 @@ resource "aws_iam_policy" "github_plan" {
         Sid    = "TerraformStateAccess"
         Effect = "Allow"
         Action = [
-          "s3:GetObject",
-          "s3:ListBucket",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.tf_state_bucket_arn
+        ]
+      },
+      {
+        Sid = "TerraformStateObjectAccess"
+        Effect = "Allow"
+        Action = [
+            "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject"
         ]
         Resource = [
-          var.tf_state_bucket_arn,
-          "${var.tf_state_bucket_arn}/*"
+            "${var.tf_state_bucket_arn}/*"
         ]
       }
     ]
