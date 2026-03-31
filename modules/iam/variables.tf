@@ -84,7 +84,7 @@ variable "github_owner" {
   default     = null
 
   validation {
-    condition = !var.enable_github_oidc || var.github_owner != null
+    condition     = !var.enable_github_oidc || var.github_owner != null
     error_message = "'github_owner' must be set when 'enable_github_oidc' is 'true'."
   }
 }
@@ -95,7 +95,7 @@ variable "github_repo" {
   default     = null
 
   validation {
-    condition = !var.enable_github_oidc || var.github_repo != null
+    condition     = !var.enable_github_oidc || var.github_repo != null
     error_message = "'github_repo' must be set when 'enable_github_oidc' is 'true'."
   }
 }
@@ -118,7 +118,7 @@ variable "tf_state_bucket_arn" {
   default     = null
 
   validation {
-    condition = !var.enable_github_oidc || var.tf_state_bucket_arn != null
+    condition     = !var.enable_github_oidc || var.tf_state_bucket_arn != null
     error_message = "'tf_state_bucket_arn' must be set when 'enable_github_oidc' is 'true'."
   }
 }
