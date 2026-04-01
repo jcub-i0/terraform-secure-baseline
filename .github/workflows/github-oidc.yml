@@ -41,4 +41,5 @@ jobs:
       - name: Terraform Plan
         run: terraform plan -no-color
         env:
-          TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
+          TF_VAR_abuseipdb_api_key: ${{secrets.TF_VAR_ABUSEIPDB_API_KEY}}
+          TF_VAR_bucket_admin_principals: ${{vars.TF_VAR_BUCKET_ADMIN_PRINCIPALS}}
