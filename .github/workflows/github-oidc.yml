@@ -42,4 +42,4 @@ jobs:
         run: terraform plan -no-color
         env:
           TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
-          TF_VAR_bucket_admin_principals: ${{vars.ADMIN_PRINCIPALS}}
+          TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
