@@ -25,3 +25,6 @@ jobs:
 
       - name: Verify identity
         run: aws sts get-caller-identity
+
+      - name: Verify S3 access
+        run: aws s3 ls s3://baseline-tf-state
