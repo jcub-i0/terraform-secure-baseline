@@ -50,7 +50,6 @@ resource "aws_db_instance" "main" {
 
   db_name  = "appdb"
   username = var.db_username
-  # SET 'password' TO var.db_password IF NOT USING AUTO-GENERATED PASSWORD FOR RDS
   password_wo         = ephemeral.aws_secretsmanager_random_password.rds_master.random_password
   password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
@@ -105,8 +104,6 @@ resource "aws_cloudwatch_log_group" "rds_upgrade" {
     Terraform   = "true"
   }
 }
-
-# COMMENT THIS OUT IF USING 'var.db_password' INSTEAD OF A RANDOMLY-GENERATED PASSWORD
 
 # RDS SECRET GENERATION/HANDLING, WHERE THE SECRET IS NEVER PERSISTED TO THE STATE
 ## Create a secret in AWS Secrets Manager

@@ -55,12 +55,6 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
-variable "db_password" {
-  description = "The password for the RDS database"
-  type        = string
-  sensitive   = true
-}
-
 variable "secops_emails" {
   description = "List of emails to send security-related notifications to"
   type        = list(string)
