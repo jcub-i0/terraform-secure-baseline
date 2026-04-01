@@ -67,7 +67,6 @@ module "storage" {
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
   db_username                  = var.db_username
-  db_password                  = var.db_password
   logs_cmk_arn                 = module.security.logs_cmk_arn
   account_id                   = data.aws_caller_identity.current.account_id
   random_id                    = random_id.random_id.hex
