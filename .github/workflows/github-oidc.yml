@@ -28,3 +28,6 @@ jobs:
 
       - name: Verify S3 access
         run: aws s3 ls s3://baseline-tf-state/baseline-tf-state/tf-state
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
