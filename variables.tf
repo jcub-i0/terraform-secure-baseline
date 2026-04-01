@@ -54,7 +54,6 @@ variable "db_username" {
   type        = string
   default     = "dbadmin"
 }
-#comment
 
 variable "secops_emails" {
   description = "List of emails to send security-related notifications to"
