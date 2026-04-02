@@ -10,6 +10,6 @@ module "github_oidc" {
   name_prefix                = var.name_prefix
   tf_state_bucket_arn        = var.tf_state_bucket_arn
   tf_state_lock_table_arn    = var.tf_state_lock_table_arn
-  primary_region = var.primary_region
-  account_id = var.account_id
+  primary_region             = var.primary_region
+  account_id                 = var.account_id
 }

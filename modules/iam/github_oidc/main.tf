@@ -74,7 +74,7 @@ resource "aws_iam_policy" "github_plan" {
           ]
         },
         {
-          Sid = "SecretsManagerRead"
+          Sid    = "SecretsManagerRead"
           Effect = "Allow"
           Action = [
             "secretsmanager:GetSecretValue"
