@@ -56,3 +56,8 @@ variable "secrets_manager_cmk_arn" {
   description = "ARN of the CMK used by Secrets Manager"
   type        = string
 }
+
+variable "lambda_cmk_arn" {
+  description = "ARN of the CMK used to encrypt Lambda functions"
+  type = string
+}
