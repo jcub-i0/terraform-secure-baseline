@@ -13,4 +13,5 @@ module "github_oidc" {
   primary_region             = var.primary_region
   account_id                 = var.account_id
   secrets_manager_cmk_arn    = var.secrets_manager_cmk_arn
+  lambda_cmk_arn = var.lambda_cmk_arn
 }
