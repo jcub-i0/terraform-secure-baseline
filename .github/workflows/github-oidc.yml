@@ -45,3 +45,4 @@ jobs:
           TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
           TF_VAR_enable_github_oidc: ${{vars.ENABLE_GITHUB_OIDC}}
           TF_VAR_owner_github: ${{vars.OWNER_GITHUB}}
+          TF_VAR_repo_github: ${{vars.REPO_GITHUB}}
