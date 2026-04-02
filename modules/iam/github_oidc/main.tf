@@ -129,5 +129,3 @@ resource "aws_iam_role_policy_attachment" "readonly_github_plan_attach" {
   role       = aws_iam_role.github_plan.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
-
-#comment
