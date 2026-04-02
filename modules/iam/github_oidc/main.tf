@@ -84,7 +84,7 @@ resource "aws_iam_policy" "github_plan" {
           ]
         },
         {
-          Sid = "SecretsManagerRandomPassword"
+          Sid    = "SecretsManagerRandomPassword"
           Effect = "Allow"
           Action = [
             "secretsmanager:GetRandomPassword"
@@ -92,7 +92,7 @@ resource "aws_iam_policy" "github_plan" {
           Resource = "*"
         },
         {
-          Sid = "SecretsManagerKmsDecrypt"
+          Sid    = "SecretsManagerKmsDecrypt"
           Effect = "Allow"
           Action = [
             "kms:Decrypt",
