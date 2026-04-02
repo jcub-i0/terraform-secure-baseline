@@ -4,10 +4,10 @@
 locals {
   github_branch_subjects = [
     for branch in var.github_branches :
-    "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${branch}"
+    "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
   ]
 
-  github_pr_subject = "repo:${var.github_owner}/${var.github_repo}:pull_request"
+  github_pr_subject = "repo:${var.owner_github}/${var.repo_github}:pull_request"
 
   github_oidc_subjects = concat(
     local.github_branch_subjects,

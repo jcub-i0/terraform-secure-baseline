@@ -78,24 +78,24 @@ variable "github_oidc_provider_arn" {
   default     = null
 }
 
-variable "github_owner" {
+variable "owner_github" {
   description = "GitHub organization or username (repo owner)"
   type        = string
   default     = null
 
   validation {
-    condition     = !var.enable_github_oidc || var.github_owner != null
+    condition     = !var.enable_github_oidc || var.owner_github != null
     error_message = "'github_owner' must be set when 'enable_github_oidc' is 'true'."
   }
 }
 
-variable "github_repo" {
+variable "repo_github" {
   description = "GitHub repository name"
   type        = string
   default     = null
 
   validation {
-    condition     = !var.enable_github_oidc || var.github_repo != null
+    condition     = !var.enable_github_oidc || var.repo_github != null
     error_message = "'github_repo' must be set when 'enable_github_oidc' is 'true'."
   }
 }

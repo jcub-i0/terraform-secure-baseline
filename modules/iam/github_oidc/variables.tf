@@ -14,12 +14,12 @@ variable "account_id" {
   type = string
 }
 
-variable "github_owner" {
+variable "owner_github" {
   description = "GitHub organization or username (repo owner)"
   type        = string
 }
 
-variable "github_repo" {
+variable "repo_github" {
   description = "GitHub repository name"
   type        = string
 }
