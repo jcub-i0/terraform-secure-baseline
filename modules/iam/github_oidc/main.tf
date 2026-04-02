@@ -83,6 +83,14 @@ resource "aws_iam_policy" "github_plan" {
             "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
           ]
         },
+        {
+          Sid = "SecretsManagerRandomPassword"
+          Effect = "Allow"
+          Action = [
+            "secretsmanager:GetRandomPassword"
+          ]
+          Resource = "*"
+        },
       ],
       var.tf_state_lock_table_arn != null ? [
         {
