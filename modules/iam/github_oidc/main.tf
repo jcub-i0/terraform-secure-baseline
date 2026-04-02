@@ -101,6 +101,17 @@ resource "aws_iam_policy" "github_plan" {
           Resource = [
             var.secrets_manager_cmk_arn
           ]
+        },
+        {
+          Sid = "LambdaKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.lambda_cmk_arn
+          ]
         }
       ],
       var.tf_state_lock_table_arn != null ? [
