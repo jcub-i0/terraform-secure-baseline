@@ -11,7 +11,7 @@ locals {
 
   github_oidc_subjects = concat(
     local.github_branch_subjects,
-    var.github_allow_pull_requests ? [local.github_pr_subject] : []
+    var.allow_pull_requests_github ? [local.github_pr_subject] : []
   )
 }
 

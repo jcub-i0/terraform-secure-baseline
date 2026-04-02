@@ -5,7 +5,7 @@ module "github_oidc" {
   github_owner               = var.owner_github
   github_repo                = var.repo_github
   github_branches            = var.branches_github
-  github_allow_pull_requests = var.github_allow_pull_requests
+  github_allow_pull_requests = var.allow_pull_requests_github
   github_oidc_provider_arn   = var.github_oidc_provider_arn
   name_prefix                = var.name_prefix
   tf_state_bucket_arn        = var.tf_state_bucket_arn
