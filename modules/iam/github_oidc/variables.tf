@@ -51,3 +51,8 @@ variable "tf_state_lock_table_arn" {
   type        = string
   default     = null
 }
+
+variable "secrets_manager_cmk_arn" {
+  description = "ARN of the CMK used by Secrets Manager"
+  type = string
+}
