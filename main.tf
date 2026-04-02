@@ -100,7 +100,7 @@ module "iam" {
   enable_github_oidc         = var.enable_github_oidc
   github_owner               = var.owner_github
   github_repo                = var.repo_github
-  github_branches            = var.github_branches
+  github_branches            = var.branches_github
   github_allow_pull_requests = var.github_allow_pull_requests
   tf_state_bucket_arn        = var.tf_state_bucket_arn
   tf_state_lock_table_arn    = var.tf_state_lock_table_arn

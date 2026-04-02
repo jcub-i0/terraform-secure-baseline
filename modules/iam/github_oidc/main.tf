@@ -3,7 +3,7 @@
 ## Build subject strings dynamically
 locals {
   github_branch_subjects = [
-    for branch in var.github_branches :
+    for branch in var.branches_github :
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
   ]
 

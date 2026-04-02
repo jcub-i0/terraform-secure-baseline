@@ -100,7 +100,7 @@ variable "repo_github" {
   }
 }
 
-variable "github_branches" {
+variable "branches_github" {
   description = "List of branches allowed to assume the github_oidc role"
   type        = list(string)
   default     = ["main"]
