@@ -190,7 +190,7 @@ variable "owner_github" {
 
   validation {
     condition     = !var.enable_github_oidc || var.owner_github != null
-    error_message = "'github_owner' must be set when 'enable_github_oidc' is 'true'."
+    error_message = "'owner_github' must be set when 'enable_github_oidc' is 'true'."
   }
 }
 
@@ -201,7 +201,7 @@ variable "repo_github" {
 
   validation {
     condition     = !var.enable_github_oidc || var.repo_github != null
-    error_message = "'github_repo' must be set when 'enable_github_oidc' is 'true'."
+    error_message = "'repo_github' must be set when 'enable_github_oidc' is 'true'."
   }
 }
 
