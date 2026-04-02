@@ -131,5 +131,5 @@ variable "tf_state_lock_table_arn" {
 
 variable "lambda_cmk_arn" {
   description = "ARN of the CMK used to encrypt Lambda functions"
-  type = string
+  type        = string
 }

@@ -103,7 +103,7 @@ resource "aws_iam_policy" "github_plan" {
           ]
         },
         {
-          Sid = "LambdaKmsDecrypt"
+          Sid    = "LambdaKmsDecrypt"
           Effect = "Allow"
           Action = [
             "kms:Decrypt",
