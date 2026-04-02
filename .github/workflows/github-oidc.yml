@@ -44,3 +44,4 @@ jobs:
           TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
           TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
           TF_VAR_enable_github_oidc: ${{vars.ENABLE_GITHUB_OIDC}}
+          TF_VAR_owner_github: ${{vars.OWNER_GITHUB}}
