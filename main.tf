@@ -95,6 +95,7 @@ module "iam" {
   lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
   secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns    = var.break_glass_trusted_principal_arns
+  lambda_cmk_arn = module.security.lambda_cmk_arn
 
   # GITHUB OIDC VARIABLES
   enable_github_oidc         = var.enable_github_oidc
