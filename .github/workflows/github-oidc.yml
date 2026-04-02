@@ -46,4 +46,4 @@ jobs:
           TF_VAR_enable_github_oidc: ${{vars.ENABLE_GITHUB_OIDC}}
           TF_VAR_owner_github: ${{vars.OWNER_GITHUB}}
           TF_VAR_repo_github: ${{vars.REPO_GITHUB}}
-          TF_VAR_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
+          TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
