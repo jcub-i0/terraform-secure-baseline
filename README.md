@@ -117,3 +117,135 @@ It does not replace:
 - Operational procedures
 
 It should be considered a technical foundation within a broader security program.
+
+---
+
+## File Structure
+
+Below is the file structure for this repository:
+.
+├── backend.tf
+├── docs
+│   ├── adoption-guide.md
+│   ├── architecture-diagram.png
+│   ├── architecture-overview.md
+│   ├── assurance
+│   │   ├── control-narratives.md
+│   │   └── soc2-control-mapping.md
+│   ├── design-principles.md
+│   ├── lambda_tests
+│   │   ├── ec2_isolation.md
+│   │   ├── ec2_rollback.md
+│   │   └── ip_enrichment.md
+│   ├── quickstart.md
+│   └── validation-checklist.md
+├── main.tf
+├── modules
+│   ├── automation
+│   │   ├── lambda
+│   │   │   ├── ec2_isolation.py
+│   │   │   ├── ec2_isolation.zip
+│   │   │   ├── ec2_rollback.py
+│   │   │   ├── ec2_rollback.zip
+│   │   │   ├── ip_enrichment.py
+│   │   │   └── ip_enrichment.zip
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── backup
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── compute
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   ├── user_data
+│   │   │   └── bootstrap.sh.tpl
+│   │   └── variables.tf
+│   ├── firewall
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── iam
+│   │   ├── backup.tf
+│   │   ├── break_glass.tf
+│   │   ├── config.tf
+│   │   ├── ec2.tf
+│   │   ├── lambda.tf
+│   │   ├── logging.tf
+│   │   ├── outputs.tf
+│   │   ├── patch_management.tf
+│   │   ├── README.md
+│   │   ├── security_integrations.tf
+│   │   ├── shared_policies.tf
+│   │   └── variables.tf
+│   ├── identity_center
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── logging
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── monitoring
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── networking
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   ├── security_policy
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── README.md
+│   │   │   └── variables.tf
+│   │   └── variables.tf
+│   ├── patch_management
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── security
+│   │   ├── config_baseline
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── README.md
+│   │   │   ├── remediations.tf
+│   │   │   ├── rules.tf
+│   │   │   └── variables.tf
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   ├── tamper_detection
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── README.md
+│   │   │   └── variables.tf
+│   │   └── variables.tf
+│   ├── security_dashboard
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── storage
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   └── vpc_endpoints
+│       ├── main.tf
+│       ├── outputs.tf
+│       └── variables.tf
+├── outputs.tf
+├── providers.tf
+├── README.md
+├── SECURITY.md
+└── variables.tf

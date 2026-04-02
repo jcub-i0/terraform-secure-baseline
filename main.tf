@@ -67,7 +67,6 @@ module "storage" {
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
   db_username                  = var.db_username
-  db_password                  = var.db_password
   logs_cmk_arn                 = module.security.logs_cmk_arn
   account_id                   = data.aws_caller_identity.current.account_id
   random_id                    = random_id.random_id.hex
@@ -81,6 +80,7 @@ module "iam" {
   source = "./modules/iam"
 
   cloud_name                            = var.cloud_name
+  name_prefix                           = local.name_prefix
   environment                           = var.environment
   cloudtrail_log_group_arn              = module.logging.cloudtrail_log_group_arn
   secops_topic_arn                      = module.monitoring.secops_topic_arn
@@ -95,6 +95,17 @@ module "iam" {
   lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
   secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns    = var.break_glass_trusted_principal_arns
+  lambda_cmk_arn                        = module.security.lambda_cmk_arn
+
+  # GITHUB OIDC VARIABLES
+  enable_github_oidc         = var.enable_github_oidc
+  owner_github               = var.owner_github
+  repo_github                = var.repo_github
+  branches_github            = var.branches_github
+  allow_pull_requests_github = var.allow_pull_requests_github
+  tf_state_bucket_arn        = var.tf_state_bucket_arn
+  tf_state_lock_table_arn    = var.tf_state_lock_table_arn
+  github_oidc_provider_arn   = var.enable_github_oidc ? aws_iam_openid_connect_provider.github[0].arn : null
 }
 
 module "security" {
