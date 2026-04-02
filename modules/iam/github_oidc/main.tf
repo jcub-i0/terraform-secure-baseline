@@ -73,6 +73,16 @@ resource "aws_iam_policy" "github_plan" {
             "${var.tf_state_bucket_arn}/*"
           ]
         },
+        {
+          Sid = "SecretsManagerRead"
+          Effect = "Allow"
+          Action = [
+            "secretsmanager:GetSecretValue"
+          ]
+          Resource = [
+            "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
+          ]
+        },
       ],
       var.tf_state_lock_table_arn != null ? [
         {
