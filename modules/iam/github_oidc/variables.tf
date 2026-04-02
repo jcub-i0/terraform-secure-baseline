@@ -6,6 +6,14 @@ variable "name_prefix" {
   type = string
 }
 
+variable "primary_region" {
+  type = string
+}
+
+variable "account_id" {
+  type = string
+}
+
 variable "github_owner" {
   description = "GitHub organization or username (repo owner)"
   type        = string
