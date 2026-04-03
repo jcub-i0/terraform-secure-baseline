@@ -30,7 +30,7 @@ locals {
   ] : []
 
   apply_oidc_subjects_github = (
-    length(local.apply_environment_subjects_github) > 0 ?
+    var.environment_apply_github != null ?
     local.apply_environment_subjects_github :
     local.apply_branch_subjects_github
   )
