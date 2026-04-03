@@ -190,3 +190,11 @@ data "aws_iam_policy_document" "apply_oidc_assume_role" {
     }
   }
 }
+
+## GitHub-Apply role
+resource "aws_iam_role" "apply_github" {
+  count = var.enable_apply_role_github ? 1 : 0
+
+  name = "${var.name_prefix}-github-apply-role"
+  assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role
+}
