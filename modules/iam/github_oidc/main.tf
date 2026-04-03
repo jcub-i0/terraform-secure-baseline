@@ -192,7 +192,7 @@ data "aws_iam_policy_document" "apply_oidc_assume_role" {
 }
 
 ## GitHub-Apply role
-resource "aws_iam_role" "apply_github" {
+resource "aws_iam_role" "github_apply" {
   count = var.enable_apply_role_github ? 1 : 0
 
   name               = "${var.name_prefix}-github-apply-role"
@@ -250,12 +250,12 @@ resource "aws_iam_policy" "github_apply" {
 resource "aws_iam_role_policy_attachment" "github_apply_attach" {
   count = var.enable_apply_role_github ? 1 : 0
 
-  role       = aws_iam_role.apply_github[0].name
-  policy_arn = aws_iam_policy.apply_backend_github[0].arn
+  role       = aws_iam_role.github_apply[0].name
+  policy_arn = aws_iam_policy.github_apply.arn
 }
 
 ## AWS-managed AdministratorAccessRole policy
 resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
-  role       = aws_iam_role.apply_github[0].name
+  role       = aws_iam_role.github_apply[0].arn
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
