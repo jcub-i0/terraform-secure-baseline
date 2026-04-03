@@ -1,4 +1,6 @@
-# GITHUB OIDC RESOURCES
+###########################################
+# GITHUB OIDC MODULE (CHILD MODULE OF IAM)
+###########################################
 
 ## Build subject strings dynamically
 locals {
@@ -15,6 +17,7 @@ locals {
   )
 }
 
+# TRUST POLICY FOR GITHUB_OIDC ROLES
 data "aws_iam_policy_document" "github_oidc_assume_role" {
   statement {
     effect  = "Allow"
