@@ -165,7 +165,6 @@ resource "aws_iam_role_policy_attachment" "readonly_github_plan_attach" {
 }
 
 # GitHub-Apply resources
-
 ## GitHub-Apply trust policy
 data "aws_iam_policy_document" "apply_oidc_assume_role" {
   statement {
@@ -196,7 +195,7 @@ resource "aws_iam_role" "github_apply" {
   count = var.enable_apply_role_github ? 1 : 0
 
   name               = "${var.name_prefix}-github-apply-role"
-  assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role
+  assume_role_policy = data.aws_iam_policy_document.apply_oidc_assume_role
 }
 
 ## GitHub-Apply role policy
