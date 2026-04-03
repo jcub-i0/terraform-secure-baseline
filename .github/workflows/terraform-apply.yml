@@ -1,8 +1,11 @@
-#comment
 name: Terraform Apply
 
 on:
     workflow_dispatch:
+        inputs:
+            confirm:
+                description: "Type 'YES' to apply"
+                required: true
 
 permissions:
     id-token: write
