@@ -4,8 +4,8 @@ module "github_oidc" {
 
   owner_github               = var.owner_github
   repo_github                = var.repo_github
-  branches_github            = var.branches_github
-  allow_pull_requests_github = var.allow_pull_requests_github
+  branches_plan_github            = var.branches_plan_github
+  allow_pull_requests_plan_github = var.allow_pull_requests_plan_github
   github_oidc_provider_arn   = var.github_oidc_provider_arn
   name_prefix                = var.name_prefix
   tf_state_bucket_arn        = var.tf_state_bucket_arn

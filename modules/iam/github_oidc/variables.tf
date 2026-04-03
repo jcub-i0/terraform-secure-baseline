@@ -24,13 +24,13 @@ variable "repo_github" {
   type        = string
 }
 
-variable "branches_github" {
+variable "branches_plan_github" {
   description = "List of branches allowed to assume the github_oidc role"
   type        = list(string)
   default     = ["main"]
 }
 
-variable "allow_pull_requests_github" {
+variable "allow_pull_requests_plan_github" {
   description = "Allow pull_request subject in OIDC trust policy"
   type        = bool
   default     = false

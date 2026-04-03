@@ -5,7 +5,7 @@
 ## Build subject strings dynamically
 locals {
   github_branch_subjects = [
-    for branch in var.branches_github :
+    for branch in var.branches_plan_github :
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
   ]
 
@@ -13,7 +13,7 @@ locals {
 
   github_oidc_subjects = concat(
     local.github_branch_subjects,
-    var.allow_pull_requests_github ? [local.github_pr_subject] : []
+    var.allow_pull_requests_plan_github ? [local.github_pr_subject] : []
   )
 }
 

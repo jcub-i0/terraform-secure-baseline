@@ -101,8 +101,8 @@ module "iam" {
   enable_github_oidc         = var.enable_github_oidc
   owner_github               = var.owner_github
   repo_github                = var.repo_github
-  branches_github            = var.branches_github
-  allow_pull_requests_github = var.allow_pull_requests_github
+  branches_plan_github            = var.branches_plan_github
+  allow_pull_requests_plan_github = var.allow_pull_requests_plan_github
   tf_state_bucket_arn        = var.tf_state_bucket_arn
   tf_state_lock_table_arn    = var.tf_state_lock_table_arn
   github_oidc_provider_arn   = var.enable_github_oidc ? aws_iam_openid_connect_provider.github[0].arn : null
