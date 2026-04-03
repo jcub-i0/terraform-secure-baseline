@@ -5,7 +5,6 @@
 ## Build subject strings dynamically
 locals {
 
-  ### GitHub-Plan locals
   plan_branch_subjects_github = [
     for branch in var.branches_plan_github :
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
@@ -18,7 +17,6 @@ locals {
     var.allow_pull_requests_plan_github ? [local.github_pr_subject] : []
   )
 
-  ### GitHub-Apply locals
 }
 
 # TRUST POLICY FOR GITHUB_OIDC ROLES
