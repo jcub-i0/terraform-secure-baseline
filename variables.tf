@@ -253,4 +253,3 @@ variable "environment_apply_github" {
   type        = string
   default     = null
 }
-
