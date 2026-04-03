@@ -244,7 +244,7 @@ variable "branches_apply_github" {
 
 variable "environment_apply_github" {
   description = "GitHub environment allowed to assume the GitHub-Apply role"
-  type = string
-  default = null
+  type        = string
+  default     = null
 }
 
