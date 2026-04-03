@@ -234,3 +234,10 @@ variable "tf_state_bucket_arn" {
     error_message = "'tf_state_bucket_arn' must be set when 'enable_github_oidc' is 'true'."
   }
 }
+
+# GitHub-Apply Role-related variables
+variable "branches_apply_github" {
+  description = "Branches allowed to assume the GitHub-Apply role"
+  type = list(string)
+  default = ["main"]
+}
