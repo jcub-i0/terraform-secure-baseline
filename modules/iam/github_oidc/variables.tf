@@ -61,3 +61,22 @@ variable "lambda_cmk_arn" {
   description = "ARN of the CMK used to encrypt Lambda functions"
   type        = string
 }
+
+# GitHub-Apply Role-related variables
+variable "enable_apply_role_github" {
+  description = "Enable the GitHub-Apply role"
+  type        = bool
+  default     = false
+}
+
+variable "branches_apply_github" {
+  description = "Branches allowed to assume the GitHub-Apply role"
+  type        = list(string)
+  default     = ["main"]
+}
+
+variable "environment_apply_github" {
+  description = "GitHub environment allowed to assume the GitHub-Apply role"
+  type        = string
+  default     = null
+}
