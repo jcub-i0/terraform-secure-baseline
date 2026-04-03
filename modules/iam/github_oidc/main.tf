@@ -198,3 +198,51 @@ resource "aws_iam_role" "apply_github" {
   name               = "${var.name_prefix}-github-apply-role"
   assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role
 }
+
+## GitHub-Apply role policy
+resource "aws_iam_policy" "github_apply" {
+  name = "${var.name_prefix}-github-apply-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      [
+        {
+          Sid    = "TerraformStateBucketList"
+          Effect = "Allow"
+          Action = [
+            "s3:ListBucket"
+          ]
+          Resource = [
+            var.tf_state_bucket_arn
+          ]
+        },
+        {
+          Sid    = "TerraformStateObjectAccess"
+          Effect = "Allow"
+          Action = [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject"
+          ]
+          Resource = [
+            "${var.tf_state_bucket_arn}/*"
+          ]
+        },
+      ],
+      var.tf_state_lock_table_arn != null ? [
+        {
+          Sid    = "TerraformStateLockAccess"
+          Effect = "Allow"
+          Action = [
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:UpdateItem"
+          ]
+          Resource = var.tf_state_lock_table_arn
+        }
+      ] : []
+    )
+  })
+}
