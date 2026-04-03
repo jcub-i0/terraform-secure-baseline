@@ -56,4 +56,16 @@ jobs:
               run: terraform validate
 
             - name: Terraform Apply
-              run: terraform apply -auto-approve -input=false
+              run: |
+                set -o pipefail
+
+                terraform apply -auto-approve -input=false -no-color 2>&1 | tee apply.log
+                status=$?
+
+                if [$status -ne 0] && grep -q "Permission set provision not found" apply.log; then
+                    echo "Hit IAM Identity Center provisioning consistency issue. Retrying once..."
+                    sleep 30
+                    terraform apply -auto-approve -input=false -no-color
+                else
+                    exit $status
+                fi
