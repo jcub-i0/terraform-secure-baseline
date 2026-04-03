@@ -238,6 +238,6 @@ variable "tf_state_bucket_arn" {
 # GitHub-Apply Role-related variables
 variable "branches_apply_github" {
   description = "Branches allowed to assume the GitHub-Apply role"
-  type = list(string)
-  default = ["main"]
+  type        = list(string)
+  default     = ["main"]
 }
