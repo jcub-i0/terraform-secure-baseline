@@ -36,7 +36,8 @@ locals {
   )
 }
 
-# TRUST POLICY FOR GITHUB_OIDC ROLES
+# GitHub-Plan resources
+## GitHub-Plan trust policy
 data "aws_iam_policy_document" "plan_oidc_assume_role" {
   statement {
     effect  = "Allow"
@@ -161,4 +162,31 @@ resource "aws_iam_role_policy_attachment" "github_plan_attach" {
 resource "aws_iam_role_policy_attachment" "readonly_github_plan_attach" {
   role       = aws_iam_role.github_plan.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# GitHub-Apply resources
+
+## GitHub-Apply trust policy
+data "aws_iam_policy_document" "apply_oidc_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.github_oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = local.apply_oidc_subjects_github
+    }
+  }
 }
