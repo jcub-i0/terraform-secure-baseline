@@ -68,8 +68,6 @@ resource "aws_iam_role" "github_plan" {
 }
 
 resource "aws_iam_policy" "github_plan" {
-  count = var.enable_apply_role_github ? 1 : 0
-
   name = "${var.name_prefix}-github-plan-policy"
 
   policy = jsonencode({
@@ -204,6 +202,8 @@ resource "aws_iam_role" "github_apply" {
 
 ## GitHub-Apply role policy
 resource "aws_iam_policy" "github_apply" {
+  count = var.enable_apply_role_github ? 1 : 0
+  
   name = "${var.name_prefix}-github-apply-policy"
 
   policy = jsonencode({
@@ -254,7 +254,7 @@ resource "aws_iam_role_policy_attachment" "github_apply_attach" {
   count = var.enable_apply_role_github ? 1 : 0
 
   role       = aws_iam_role.github_apply[0].name
-  policy_arn = aws_iam_policy.github_apply.arn
+  policy_arn = aws_iam_policy.github_apply[0].arn
 }
 
 ## AWS-managed AdministratorAccessRole policy
