@@ -58,14 +58,28 @@ jobs:
             - name: Terraform Apply
               run: |
                 set -o pipefail
+                
+                for attempt in 1 2 3; do
+                    echo "========== Terraform apply attempt $attempt =========="
 
-                terraform apply -auto-approve -input=false -no-color 2>&1 | tee apply.log
-                status=$?
+                    terraform apply -auto-approve -input=false -no-color 2>&1 | tee apply.log
+                    status=$?
 
-                if [ $status -ne 0 ] && grep -q "Permission set provision not found|Assignment not found" apply.log; then
-                    echo "Hit IAM Identity Center provisioning consistency issue. Retrying once..."
-                    sleep 30
-                    terraform apply -auto-approve -input=false -no-color
-                else
-                    exit $status
-                fi
+                    if [ $status -eq 0 ]; then
+                        echo "Terraform apply succeeded on attempt $attempt"
+                        exit 0
+                    fi
+
+                    if grep -Eq "Permission set provision not found|Assignment not found" apply.log; then
+                        if [ $attempt -lt 3 ]; then
+                            echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt. Retrying in 45 seconds..."
+                            sleep 45
+                        else
+                            echo "Retries exhausted after attempt $attempt"
+                            exit $status
+                        fi
+                    else
+                        echo "Non-retryable terraform error on attempt $attempt"
+                        exit $status
+                    fi
+                done
