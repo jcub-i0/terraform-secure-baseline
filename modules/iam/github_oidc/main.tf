@@ -19,6 +19,23 @@ locals {
 
 }
 
+locals {
+  apply_branch_subjects_github = [
+    for branch in var.branches_apply_github :
+    "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
+  ]
+
+  apply_environment_subjects_github = var.environment_apply_github != null ? [
+    "repo:${var.owner_github}/${var.repo_github}:environment:${var.environment_apply_github}"
+  ] : []
+
+  apply_oidc_subjects_github = (
+    length(local.apply_environment_subjects_github) > 0 ?
+    local.apply_environment_subjects_github :
+    local.apply_branch_subjects_github
+  )
+}
+
 # TRUST POLICY FOR GITHUB_OIDC ROLES
 data "aws_iam_policy_document" "github_oidc_assume_role" {
   statement {
