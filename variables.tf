@@ -238,8 +238,8 @@ variable "tf_state_bucket_arn" {
 # GitHub-Apply Role-related variables
 variable "enable_apply_role_github" {
   description = "Enable the GitHub-Apply role"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "branches_apply_github" {
