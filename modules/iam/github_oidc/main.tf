@@ -246,3 +246,10 @@ resource "aws_iam_policy" "github_apply" {
     )
   })
 }
+
+resource "aws_iam_role_policy_attachment" "apply_github" {
+  count = var.enable_apply_role_github ? 1 : 0
+
+  role = aws_iam_role.apply_github[0].name
+  policy_arn = aws_iam_policy.apply_backend_github[0].arn
+}
