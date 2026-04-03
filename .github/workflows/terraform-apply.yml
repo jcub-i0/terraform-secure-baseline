@@ -70,7 +70,7 @@ jobs:
                         exit 0
                     fi
 
-                    if [ $status -ne 0 ] && grep -Eq "Permission set provision not found|Assignment not found" apply.log; then
+                    if grep -Eq "Permission set provision not found|Assignment not found" apply.log; then
                         if [ $attempt -lt 3 ]; then
                             echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt. Retrying in 45 seconds..."
                             sleep 45
