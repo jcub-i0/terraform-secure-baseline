@@ -205,6 +205,13 @@ variable "repo_github" {
   }
 }
 
+variable "tf_state_lock_table_arn" {
+  description = "ARN of the DynamoDB table used for Terraform state locking"
+  type        = string
+  default     = null
+}
+
+# GitHub-Plan Role-related variables
 variable "branches_plan_github" {
   description = "List of branches allowed to assume the github_oidc role"
   type        = list(string)
@@ -226,10 +233,4 @@ variable "tf_state_bucket_arn" {
     condition     = !var.enable_github_oidc || var.tf_state_bucket_arn != null
     error_message = "'tf_state_bucket_arn' must be set when 'enable_github_oidc' is 'true'."
   }
-}
-
-variable "tf_state_lock_table_arn" {
-  description = "ARN of the DynamoDB table used for Terraform state locking"
-  type        = string
-  default     = null
 }
