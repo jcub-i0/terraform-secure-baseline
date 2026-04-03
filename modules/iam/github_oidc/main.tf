@@ -4,17 +4,21 @@
 
 ## Build subject strings dynamically
 locals {
-  github_branch_subjects = [
+
+  ### GitHub-Plan locals
+  plan_branch_subjects_github = [
     for branch in var.branches_plan_github :
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
   ]
 
   github_pr_subject = "repo:${var.owner_github}/${var.repo_github}:pull_request"
 
-  github_oidc_subjects = concat(
-    local.github_branch_subjects,
+  plan_oidc_subjects_github = concat(
+    local.plan_branch_subjects_github,
     var.allow_pull_requests_plan_github ? [local.github_pr_subject] : []
   )
+
+  ### GitHub-Apply locals
 }
 
 # TRUST POLICY FOR GITHUB_OIDC ROLES
@@ -37,7 +41,7 @@ data "aws_iam_policy_document" "github_oidc_assume_role" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = local.github_oidc_subjects
+      values   = local.plan_oidc_subjects_github
     }
   }
 }
