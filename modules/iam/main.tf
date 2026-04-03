@@ -14,6 +14,6 @@ module "github_oidc" {
   account_id                      = var.account_id
   secrets_manager_cmk_arn         = var.secrets_manager_cmk_arn
   lambda_cmk_arn                  = var.lambda_cmk_arn
-  branches_apply_github = var.branches_apply_github
-  environment_apply_github = var.environment_apply_github
+  branches_apply_github           = var.branches_apply_github
+  environment_apply_github        = var.environment_apply_github
 }
