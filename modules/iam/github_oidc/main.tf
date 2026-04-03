@@ -203,7 +203,7 @@ resource "aws_iam_role" "github_apply" {
 ## GitHub-Apply role policy
 resource "aws_iam_policy" "github_apply" {
   count = var.enable_apply_role_github ? 1 : 0
-  
+
   name = "${var.name_prefix}-github-apply-policy"
 
   policy = jsonencode({
