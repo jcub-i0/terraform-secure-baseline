@@ -24,18 +24,6 @@ variable "repo_github" {
   type        = string
 }
 
-variable "branches_github" {
-  description = "List of branches allowed to assume the github_oidc role"
-  type        = list(string)
-  default     = ["main"]
-}
-
-variable "allow_pull_requests_github" {
-  description = "Allow pull_request subject in OIDC trust policy"
-  type        = bool
-  default     = false
-}
-
 variable "tf_state_bucket_arn" {
   description = "ARN of the S3 bucket where the Terraform state is stored"
   type        = string
@@ -60,4 +48,36 @@ variable "secrets_manager_cmk_arn" {
 variable "lambda_cmk_arn" {
   description = "ARN of the CMK used to encrypt Lambda functions"
   type        = string
+}
+
+# GitHub-Plan role-related variables
+variable "branches_plan_github" {
+  description = "List of branches allowed to assume the github_oidc role"
+  type        = list(string)
+  default     = ["main"]
+}
+
+variable "allow_pull_requests_plan_github" {
+  description = "Allow pull_request subject in OIDC trust policy"
+  type        = bool
+  default     = false
+}
+
+# GitHub-Apply Role-related variables
+variable "enable_apply_role_github" {
+  description = "Enable the GitHub-Apply role"
+  type        = bool
+  default     = false
+}
+
+variable "branches_apply_github" {
+  description = "Branches allowed to assume the GitHub-Apply role"
+  type        = list(string)
+  default     = ["main"]
+}
+
+variable "environment_apply_github" {
+  description = "GitHub environment allowed to assume the GitHub-Apply role"
+  type        = string
+  default     = null
 }

@@ -1,0 +1,59 @@
+name: Terraform Apply
+
+on:
+    workflow_dispatch:
+        inputs:
+            confirm:
+                description: "Type 'YES' to apply"
+                required: true
+
+permissions:
+    id-token: write
+    contents: read
+
+jobs:
+    terraform-apply:
+        runs-on: ubuntu-latest
+        environment: dev
+
+        env:
+          TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
+          TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
+          TF_VAR_enable_github_oidc: ${{vars.ENABLE_GITHUB_OIDC}}
+          TF_VAR_owner_github: ${{vars.OWNER_GITHUB}}
+          TF_VAR_repo_github: ${{vars.REPO_GITHUB}}
+          TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
+          TF_VAR_allow_pull_requests_plan_github: ${{vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB}}
+          TF_VAR_break_glass_trusted_principal_arns: ${{vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS}}
+          TF_VAR_secops_emails: ${{vars.SECOPS_EMAILS}}
+          TF_VAR_enable_apply_role_github: ${{vars.ENABLE_APPLY_ROLE_GITHUB}}
+          TF_VAR_environment_apply_github: ${{vars.ENVIRONMENT_APPLY_GITHUB}}
+          TF_VAR_branches_apply_github: ${{vars.BRANCHES_APPLY_GITHUB}}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+            
+            - name: Configure AWS credentials from GitHub OIDC
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: arn:aws:iam::072288671186:role/tf-secure-baseline-dev-github-apply-role
+                aws-region: us-east-1
+
+            - name: Verify identity
+              run: aws sts get-caller-identity
+
+            - name: Verify S3 access
+              run: aws s3 ls s3://baseline-tf-state/baseline-tf-state/tf-state
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+
+            - name: Terraform Init
+              run: terraform init
+
+            - name: Terraform Validate
+              run: terraform validate
+
+            - name: Terraform Apply
+              run: terraform apply -auto-approve -input=false
