@@ -232,6 +232,46 @@ resource "aws_iam_policy" "github_apply" {
             "${var.tf_state_bucket_arn}/*"
           ]
         },
+        {
+          Sid    = "SecretsManagerRead"
+          Effect = "Allow"
+          Action = [
+            "secretsmanager:GetSecretValue"
+          ]
+          Resource = [
+            "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
+          ]
+        },
+        {
+          Sid    = "SecretsManagerRandomPassword"
+          Effect = "Allow"
+          Action = [
+            "secretsmanager:GetRandomPassword"
+          ]
+          Resource = "*"
+        },
+        {
+          Sid    = "SecretsManagerKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.secrets_manager_cmk_arn
+          ]
+        },
+        {
+          Sid    = "LambdaKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.lambda_cmk_arn
+          ]
+        }
       ],
       var.tf_state_lock_table_arn != null ? [
         {
