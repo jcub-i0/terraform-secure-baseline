@@ -68,6 +68,8 @@ resource "aws_iam_role" "github_plan" {
 }
 
 resource "aws_iam_policy" "github_plan" {
+  count = var.enable_apply_role_github ? 1 : 0
+
   name = "${var.name_prefix}-github-plan-policy"
 
   policy = jsonencode({
