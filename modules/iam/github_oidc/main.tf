@@ -253,3 +253,9 @@ resource "aws_iam_role_policy_attachment" "github_apply_attach" {
   role       = aws_iam_role.apply_github[0].name
   policy_arn = aws_iam_policy.apply_backend_github[0].arn
 }
+
+## AWS-managed AdministratorAccessRole policy
+resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
+  role = aws_iam_role.apply_github[0].name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
