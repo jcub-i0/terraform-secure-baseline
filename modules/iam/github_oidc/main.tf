@@ -37,7 +37,7 @@ locals {
 }
 
 # TRUST POLICY FOR GITHUB_OIDC ROLES
-data "aws_iam_policy_document" "github_oidc_assume_role" {
+data "aws_iam_policy_document" "plan_oidc_assume_role" {
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -63,7 +63,7 @@ data "aws_iam_policy_document" "github_oidc_assume_role" {
 
 resource "aws_iam_role" "github_plan" {
   name               = "${var.name_prefix}-github-plan-role"
-  assume_role_policy = data.aws_iam_policy_document.github_oidc_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role.json
 }
 
 resource "aws_iam_policy" "github_plan" {
