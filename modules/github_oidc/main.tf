@@ -44,7 +44,7 @@ data "aws_iam_policy_document" "plan_oidc_assume_role" {
 
     principals {
       type        = "Federated"
-      identifiers = [var.github_oidc_provider_arn]
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
     }
 
     condition {
@@ -189,7 +189,7 @@ data "aws_iam_policy_document" "apply_oidc_assume_role" {
 
     principals {
       type        = "Federated"
-      identifiers = [var.github_oidc_provider_arn]
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
     }
 
     condition {
