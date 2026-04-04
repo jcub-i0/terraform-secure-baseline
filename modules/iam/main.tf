@@ -9,6 +9,7 @@ module "github_oidc" {
   github_oidc_provider_arn        = var.github_oidc_provider_arn
   name_prefix                     = var.name_prefix
   tf_state_bucket_arn             = var.tf_state_bucket_arn
+  tf_state_bucket_cmk_arn = var.tf_state_bucket_arn
   tf_state_lock_table_arn         = var.tf_state_lock_table_arn
   primary_region                  = var.primary_region
   account_id                      = var.account_id
