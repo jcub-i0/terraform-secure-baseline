@@ -237,8 +237,8 @@ variable "tf_state_bucket_arn" {
 
 variable "tf_state_bucket_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt the Terraform State bucket"
-  type        = string
-  default     = null
+  type = string
+  default = null
 }
 
 # GitHub-Apply Role-related variables
