@@ -4,6 +4,6 @@ output "github_plan_role_arn" {
 }
 
 output "github_apply_role_arn" {
-  description = "ARN of the GitHub OIDC Terraform apply role"
-  value       = aws_iam_role.github_apply[0].arn
+  description = "ARN of the GitHub OIDC Terraform plan role"
+  value       = var.enable_apply_role_github ? module.github_oidc[0].github_apply_role_arn : null
 }
