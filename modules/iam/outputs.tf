@@ -62,13 +62,3 @@ output "logs_cmk_decrypt_policy_name" {
 output "break_glass_admin_role_arn" {
   value = aws_iam_role.break_glass_admin.arn
 }
-
-output "github_plan_role_arn" {
-  description = "ARN of the GitHub OIDC Terraform plan role"
-  value       = var.enable_github_oidc ? module.github_oidc[0].github_plan_role_arn : null
-}
-
-output "github_apply_role_arn" {
-  description = "ARN of the GitHub OIDC Terraform plan role"
-  value       = var.enable_apply_role_github ? module.github_oidc[0].github_apply_role_arn : null
-}
