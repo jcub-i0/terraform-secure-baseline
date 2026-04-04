@@ -156,7 +156,9 @@ resource "aws_iam_policy" "github_plan" {
           Effect = "Allow"
           Action = [
             "kms:Decrypt",
-            "kms:DescribeKey"
+            "kms:DescribeKey",
+            "kms:Encrypt",
+            "kms:GenerateDataKey"
           ]
           Resource = [
             var.tf_state_bucket_cmk_arn
