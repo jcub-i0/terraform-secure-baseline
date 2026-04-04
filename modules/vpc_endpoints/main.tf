@@ -1,5 +1,5 @@
 locals {
-  interface_endpoint_subnets = var.compute_private_subnet_ids_map
+  interface_endpoint_subnets         = var.compute_private_subnet_ids_map
   interface_endpoint_route_table_ids = var.compute_private_route_table_ids_map
   endpoint_subnet_cidrs = flatten([
     var.subnet_cidrs["compute_private"]
