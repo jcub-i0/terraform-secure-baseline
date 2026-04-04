@@ -1,13 +1,10 @@
-name: Terraform Apply
+name: Terraform Destroy
 
 on:
-    push:
-        branches:
-            - main
     workflow_dispatch:
         inputs:
             confirm:
-                description: "Type 'YES' to apply"
+                description: "Type DESTROY to destroy infrastructure"
                 required: true
 
 permissions:
@@ -15,33 +12,40 @@ permissions:
     contents: read
 
 concurrency:
-    group: terraform-apply-dev
+    group: terraform-destroy-dev
     cancel-in-progress: false
 
 jobs:
-    terraform-apply:
+    terraform-destroy:
         runs-on: ubuntu-latest
         environment: dev
 
         env:
-          TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
-          TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
-          TF_VAR_enable_github_oidc: ${{vars.ENABLE_GITHUB_OIDC}}
-          TF_VAR_owner_github: ${{vars.OWNER_GITHUB}}
-          TF_VAR_repo_github: ${{vars.REPO_GITHUB}}
-          TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
-          TF_VAR_allow_pull_requests_plan_github: ${{vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB}}
-          TF_VAR_break_glass_trusted_principal_arns: ${{vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS}}
-          TF_VAR_secops_emails: ${{vars.SECOPS_EMAILS}}
-          TF_VAR_enable_apply_role_github: ${{vars.ENABLE_APPLY_ROLE_GITHUB}}
-          TF_VAR_environment_apply_github: ${{vars.ENVIRONMENT_APPLY_GITHUB}}
-          TF_VAR_branches_apply_github: ${{vars.BRANCHES_APPLY_GITHUB}}
+            TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
+            TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
+            TF_VAR_enable_github_oidc: ${{vars.ENABLE_GITHUB_OIDC}}
+            TF_VAR_owner_github: ${{vars.OWNER_GITHUB}}
+            TF_VAR_repo_github: ${{vars.REPO_GITHUB}}
+            TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
+            TF_VAR_allow_pull_requests_plan_github: ${{vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB}}
+            TF_VAR_break_glass_trusted_principal_arns: ${{vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS}}
+            TF_VAR_secops_emails: ${{vars.SECOPS_EMAILS}}
+            TF_VAR_enable_apply_role_github: ${{vars.ENABLE_APPLY_ROLE_GITHUB}}
+            TF_VAR_environment_apply_github: ${{vars.ENVIRONMENT_APPLY_GITHUB}}
+            TF_VAR_branches_apply_github: ${{vars.BRANCHES_APPLY_GITHUB}}
 
         steps:
+            - name: Confirm destroy
+              run: |
+                if [ "${{ github.event.inputs.confirm }}" != "DESTROY" ]; then
+                    echo "Confirmation failed. Aborting."
+                    exit 1
+                fi
+
             - name: Checkout
               uses: actions/checkout@v4
-            
-            - name: Configure AWS credentials from GitHub OIDC
+
+            - name: Configure AWS credentials
               uses: aws-actions/configure-aws-credentials@v4
               with:
                 role-to-assume: arn:aws:iam::072288671186:role/tf-secure-baseline-dev-github-apply-role
@@ -59,26 +63,23 @@ jobs:
             - name: Terraform Init
               run: terraform init
 
-            - name: Terraform Validate
-              run: terraform validate
-
-            - name: Terraform Apply
+            - name: Terraform Destroy
               shell: bash
               run: |
                 set -o pipefail
                 
                 for attempt in 1 2 3; do
-                    echo "========== Terraform apply attempt $attempt =========="
+                    echo "========== Terraform destroy attempt $attempt =========="
 
-                    terraform apply -auto-approve -input=false -no-color 2>&1 | tee apply.log
+                    terraform destroy -auto-approve -input=false -no-color -lock-timeout=5m 2>&1 | tee destroy.log
                     status=$?
 
                     if [ $status -eq 0 ]; then
-                        echo "Terraform apply succeeded on attempt $attempt"
+                        echo "Terraform destroy succeeded on attempt $attempt"
                         exit 0
                     fi
 
-                    if grep -Eq "Permission set provision not found|Assignment not found" apply.log; then
+                    if grep -Eq "Permission set provision not found|Assignment not found" destroy.log; then
                         if [ $attempt -lt 3 ]; then
                             echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt."
                             echo "Sleeping for 60 seconds before retry..."
