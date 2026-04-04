@@ -235,6 +235,12 @@ variable "tf_state_bucket_arn" {
   }
 }
 
+variable "tf_state_bucket_cmk_arn" {
+  description = "ARN of the KMS CMK used to encrypt the Terraform State bucket"
+  type = string
+  default = null
+}
+
 # GitHub-Apply Role-related variables
 variable "enable_apply_role_github" {
   description = "Enable the GitHub-Apply role"
