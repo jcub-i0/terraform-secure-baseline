@@ -29,11 +29,6 @@ variable "tf_state_bucket_arn" {
   type        = string
 }
 
-variable "github_oidc_provider_arn" {
-  description = "ARN of the GitHub OIDC provider"
-  type        = string
-}
-
 variable "tf_state_bucket_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt the Terraform State bucket"
   type        = string
