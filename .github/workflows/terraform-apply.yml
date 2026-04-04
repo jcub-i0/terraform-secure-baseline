@@ -14,6 +14,10 @@ permissions:
     id-token: write
     contents: read
 
+concurrency:
+    group: terraform-apply-dev
+    cancel-in-progress: false
+
 jobs:
     terraform-apply:
         runs-on: ubuntu-latest
@@ -75,8 +79,9 @@ jobs:
 
                     if grep -Eq "Permission set provision not found|Assignment not found" apply.log; then
                         if [ $attempt -lt 3 ]; then
-                            echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt. Retrying in 45 seconds..."
-                            sleep 45
+                            echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt."
+                            echo "Sleeping for 60 seconds before retry..."
+                            sleep 60
                         else
                             echo "Retries exhausted after attempt $attempt"
                             exit $status
