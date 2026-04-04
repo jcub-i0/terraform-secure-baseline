@@ -208,6 +208,7 @@ module "vpc_endpoints" {
   compute_sg_id                     = module.compute.compute_sg_id
   lambda_ec2_isolation_sg_id        = module.automation.lambda_ec2_isolation_sg_id
   lambda_ec2_rollback_sg_id         = module.automation.lambda_ec2_rollback_sg_id
+  compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
 }
 
 /*
