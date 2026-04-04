@@ -16,7 +16,6 @@ locals {
     local.plan_branch_subjects_github,
     var.allow_pull_requests_plan_github ? [local.github_pr_subject] : []
   )
-
 }
 
 locals {
