@@ -271,7 +271,7 @@ module "github_oidc" {
   tf_state_lock_table_arn         = var.tf_state_lock_table_arn
   primary_region                  = var.primary_region
   account_id                      = data.aws_caller_identity.current.account_id
-  secrets_manager_cmk_arn         = module.automation.secrets_manager_cmk_arn
+  secrets_manager_cmk_arn         = module.security.secrets_manager_cmk_arn
   lambda_cmk_arn                  = module.security.lambda_cmk_arn
   enable_apply_role_github        = var.enable_apply_role_github
   branches_apply_github           = var.branches_apply_github
