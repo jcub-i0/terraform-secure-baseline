@@ -152,7 +152,7 @@ resource "aws_iam_policy" "github_plan" {
       ] : [],
       var.tf_state_bucket_cmk_arn != null ? [
         {
-          Sid = "TerraformStateBucketKmsAccess"
+          Sid    = "TerraformStateBucketKmsAccess"
           Effect = "Allow"
           Action = [
             "kms:Decrypt",
