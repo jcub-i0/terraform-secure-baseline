@@ -71,7 +71,7 @@ jobs:
                 for attempt in 1 2 3; do
                     echo "========== Terraform destroy attempt $attempt =========="
 
-                    terraform destroy -auto-approve -input=false -no-color 2>&1 | tee destroy.log
+                    terraform destroy -auto-approve -input=false -no-color -lock-timeout=5m 2>&1 | tee destroy.log
                     status=$?
 
                     if [ $status -eq 0 ]; then
