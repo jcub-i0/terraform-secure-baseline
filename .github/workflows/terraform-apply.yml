@@ -63,6 +63,7 @@ jobs:
               run: terraform validate
 
             - name: Terraform Apply
+              shell: bash
               run: |
                 set -o pipefail
                 
