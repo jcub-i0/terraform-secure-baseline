@@ -285,6 +285,19 @@ resource "aws_iam_policy" "github_apply" {
           ]
           Resource = var.tf_state_lock_table_arn
         }
+      ] : [],
+      var.tf_state_bucket_cmk_arn != null ? [
+        {
+          Sid = "TerraformStateBucketKmsAccess"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.tf_state_bucket_cmk_arn
+          ]
+        }
       ] : []
     )
   })
