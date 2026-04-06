@@ -183,24 +183,6 @@ variable "enable_github_oidc" {
   default     = false
 }
 
-variable "cloud_name" {
-  description = "The name of this cloud environment"
-  type        = string
-  default     = "tf-secure-baseline"
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "dev"
-}
-
-variable "primary_region" {
-  description = "Primary Region used"
-  type        = string
-  default     = "us-east-1"
-}
-
 variable "owner_github" {
   description = "GitHub organization or username (repo owner)"
   type        = string
