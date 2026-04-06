@@ -20,12 +20,10 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "name_prefix" {
-  type = string
-}
-
 variable "primary_region" {
-  type = string
+  description = "Primary Region used"
+  type        = string
+  default     = "us-east-1"
 }
 
 variable "account_id" {
