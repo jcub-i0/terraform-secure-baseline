@@ -385,60 +385,77 @@ resource "aws_kms_key" "lambda" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      # ROOT/ADMIN
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      # ALLOW LAMBDA SERVICE TO USE THE KEY FOR ENV VAR ENCRYPTION
-      {
-        Sid    = "AllowLambdaUse"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
+    Statement = concat(
+      [
+        # ROOT/ADMIN
+        {
+          Sid    = "EnableRootPermissions"
+          Effect = "Allow"
+          Principal = {
+            AWS = "arn:aws:iam::${var.account_id}:root"
           }
-        }
-      },
-      ### ALLOW INSPECTORv2 to enable Lambda scanning
-      {
-        Sid    = "AllowInspectorDecrypt"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
-        }
-        Action = [
-          "kms:DescribeKey",
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlaintext"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "inspector2.${var.primary_region}.amazonaws.com"
+          Action   = "kms:*"
+          Resource = "*"
+        },
+        # ALLOW LAMBDA SERVICE TO USE THE KEY FOR ENV VAR ENCRYPTION
+        {
+          Sid    = "AllowLambdaUse"
+          Effect = "Allow"
+          Principal = {
+            Service = "lambda.amazonaws.com"
           }
+          Action = [
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:ReEncrypt",
+            "kms:GenerateDataKey*",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "aws:SourceAccount" = var.account_id
+            }
+          }
+        },
+        ### ALLOW INSPECTORv2 to enable Lambda scanning
+        {
+          Sid    = "AllowInspectorDecrypt"
+          Effect = "Allow"
+          Principal = {
+            AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
+          }
+          Action = [
+            "kms:DescribeKey",
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:GenerateDataKey",
+            "kms:GenerateDataKeyWithoutPlaintext"
+          ]
+          Resource = "*"
+          Condition = {
+            StringEquals = {
+              "kms:ViaService" = "inspector2.${var.primary_region}.amazonaws.com"
+            }
+          }
+        },
+      ],
+      ### ALLOW GITHUB OIDC ROLES TO USE KEYS (APPLICABLE IF 'GITHUB_OIDC' IS MODULE IS DEPLOYED)
+      length(local.github_kms_principal_arns) > 0 ? [
+        {
+          Sid = "AllowGitHubOidcRolesUseOfKey"
+          Effect = "Allow"
+          Principal = {
+            AWS = local.github_kms_principal_arns
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
         }
-      }
-    ]
+      ] : []
+    )
   })
 
   tags = {
