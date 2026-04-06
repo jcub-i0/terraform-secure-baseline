@@ -1,3 +1,7 @@
+locals {
+  name_prefix = "${var.cloud_name}-${var.environment}"
+}
+
 module "github_oidc" {
   source = "../modules/github_oidc"
   count  = var.enable_github_oidc ? 1 : 0
