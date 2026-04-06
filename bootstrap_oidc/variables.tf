@@ -2,6 +2,12 @@
 # GITHUB OIDC VARIABLES
 ########################
 
+variable "enable_github_oidc" {
+  description = "Enable GitHub OIDC federation resources for CI/CD"
+  type        = bool
+  default     = false
+}
+
 variable "cloud_name" {
   description = "The name of this cloud environment"
   type        = string
@@ -12,12 +18,6 @@ variable "environment" {
   description = "Environment name"
   type        = string
   default     = "dev"
-}
-
-variable "enable_github_oidc" {
-  description = "Enable GitHub OIDC federation resources for CI/CD"
-  type        = bool
-  default     = false
 }
 
 variable "name_prefix" {
