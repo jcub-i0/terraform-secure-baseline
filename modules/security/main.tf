@@ -483,33 +483,51 @@ resource "aws_kms_key" "secrets_manager" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      # FULL ACCESS FOR ROOT ACCOUNT
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
+    Statement = concat(
+      [
+        # FULL ACCESS FOR ROOT ACCOUNT
+        {
+          Sid    = "EnableRootPermissions"
+          Effect = "Allow"
+          Principal = {
+            AWS = "arn:aws:iam::${var.account_id}:root"
+          }
+          Action   = "kms:*"
+          Resource = "*"
+        },
+        # ALLOW SECRETS MANAGER SERVICE TO USE THIS KEY
+        {
+          Sid    = "AllowSecretsManager"
+          Effect = "Allow"
+          Principal = {
+            Service = "secretsmanager.amazonaws.com"
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:Encrypt",
+            "kms:GenerateDataKey*",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
         }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      # ALLOW SECRETS MANAGER SERVICE TO USE THIS KEY
-      {
-        Sid    = "AllowSecretsManager"
-        Effect = "Allow"
-        Principal = {
-          Service = "secretsmanager.amazonaws.com"
+      ],
+      
+      ### ALLOW GITHUB OIDC ROLES TO USE KEYS (APPLICABLE IF 'GITHUB_OIDC' IS MODULE IS DEPLOYED)
+      length(local.github_kms_principal_arns) > 0 ? [
+        {
+          Sid = "AllowGitHubOidcRolesUseOfKey"
+          Effect = "Allow"
+          Principal = {
+            AWS = local.github_kms_principal_arns
+          }
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = "*"
         }
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      }
-    ]
+      ] : []
+    )
   })
 
   tags = {
