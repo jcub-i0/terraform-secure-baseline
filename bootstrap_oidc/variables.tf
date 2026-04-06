@@ -26,10 +26,6 @@ variable "primary_region" {
   default     = "us-east-1"
 }
 
-variable "account_id" {
-  type = string
-}
-
 variable "owner_github" {
   description = "GitHub organization or username (repo owner)"
   type        = string
