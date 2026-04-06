@@ -72,3 +72,13 @@ variable "environment_apply_github" {
   type        = string
   default     = null
 }
+
+variable "lambda_cmk_arn" {
+  description = "ARN of the Lambda CMK"
+  type = string
+}
+
+variable "secrets_manager_cmk_arn" {
+  description = "ARN of the Secrets Manager CMK"
+  type = string
+}
