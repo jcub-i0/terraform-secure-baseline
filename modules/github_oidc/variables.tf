@@ -32,7 +32,7 @@ variable "tf_state_bucket_arn" {
 variable "tf_state_bucket_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt the Terraform State bucket"
   type        = string
-  default = null
+  default     = null
 }
 
 variable "tf_state_lock_table_arn" {

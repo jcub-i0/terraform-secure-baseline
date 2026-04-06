@@ -23,7 +23,7 @@ data "terraform_remote_state" "bootstrap_oidc" {
 
   config = {
     bucket = "baseline-tf-state"
-    key = "baseline-tf-state/tf-state-bootstrap"
+    key    = "baseline-tf-state/tf-state-bootstrap"
     region = "us-east-1"
   }
 }
