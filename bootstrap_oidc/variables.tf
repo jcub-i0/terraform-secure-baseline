@@ -2,6 +2,18 @@
 # GITHUB OIDC VARIABLES
 ########################
 
+variable "cloud_name" {
+  description = "The name of this cloud environment"
+  type        = string
+  default     = "tf-secure-baseline"
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "dev"
+}
+
 variable "enable_github_oidc" {
   description = "Enable GitHub OIDC federation resources for CI/CD"
   type        = bool
