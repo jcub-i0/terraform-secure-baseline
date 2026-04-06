@@ -30,7 +30,10 @@ data "terraform_remote_state" "bootstrap_oidc" {
 
 resource "random_id" "random_id" { byte_length = 4 }
 
-# MODULES
+###############
+# MODULE CALLS
+###############
+
 module "networking" {
   source = "./modules/networking"
 
