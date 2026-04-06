@@ -16,6 +16,18 @@ locals {
 # GLOBAL RESOURCES
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+## Pull outputs from the 'bootstrap_oidc' stack
+data "terraform_remote_state" "bootstrap_oidc" {
+  backend = "s3"
+
+  config = {
+    bucket = "baseline-tf-state"
+    key = "baseline-tf-state/tf-state-bootstrap"
+    region = "us-east-1"
+  }
+}
+
 resource "random_id" "random_id" { byte_length = 4 }
 
 # MODULES
