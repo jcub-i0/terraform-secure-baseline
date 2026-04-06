@@ -10,6 +10,14 @@ locals {
   }
 }
 
+# Local var if GitHub_OIDC module is being used
+locals {
+  github_kms_principal_arns = compact([
+    var.github_plan_role_arn,
+    var.github_apply_role_arn
+  ])
+}
+
 # ENABLE 'BLOCK PUBLIC SHARING' ON SSM DOCUMENTS
 resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
   setting_id    = "/ssm/documents/console/public-sharing-permission"
