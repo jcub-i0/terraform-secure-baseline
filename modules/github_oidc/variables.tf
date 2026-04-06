@@ -40,16 +40,6 @@ variable "tf_state_lock_table_arn" {
   default     = null
 }
 
-variable "secrets_manager_cmk_arn" {
-  description = "ARN of the CMK used by Secrets Manager"
-  type        = string
-}
-
-variable "lambda_cmk_arn" {
-  description = "ARN of the CMK used to encrypt Lambda functions"
-  type        = string
-}
-
 # GitHub-Plan role-related variables
 variable "branches_plan_github" {
   description = "List of branches allowed to assume the github_oidc role"
