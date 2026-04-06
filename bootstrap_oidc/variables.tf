@@ -40,6 +40,12 @@ variable "owner_github" {
 variable "repo_github" {
   description = "GitHub repository name"
   type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_github_oidc || var.repo_github != null
+    error_message = "'repo_github' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "tf_state_bucket_arn" {
