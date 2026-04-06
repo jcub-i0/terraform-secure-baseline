@@ -10,14 +10,6 @@ locals {
   }
 }
 
-# Local var if GitHub_OIDC module is being used
-locals {
-  github_kms_principal_arns = compact([
-    var.github_plan_role_arn,
-    var.github_apply_role_arn
-  ])
-}
-
 # ENABLE 'BLOCK PUBLIC SHARING' ON SSM DOCUMENTS
 resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
   setting_id    = "/ssm/documents/console/public-sharing-permission"
@@ -385,77 +377,60 @@ resource "aws_kms_key" "lambda" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = concat(
-      [
-        # ROOT/ADMIN
-        {
-          Sid    = "EnableRootPermissions"
-          Effect = "Allow"
-          Principal = {
-            AWS = "arn:aws:iam::${var.account_id}:root"
-          }
-          Action   = "kms:*"
-          Resource = "*"
-        },
-        # ALLOW LAMBDA SERVICE TO USE THE KEY FOR ENV VAR ENCRYPTION
-        {
-          Sid    = "AllowLambdaUse"
-          Effect = "Allow"
-          Principal = {
-            Service = "lambda.amazonaws.com"
-          }
-          Action = [
-            "kms:Encrypt",
-            "kms:Decrypt",
-            "kms:ReEncrypt",
-            "kms:GenerateDataKey*",
-            "kms:DescribeKey"
-          ]
-          Resource = "*"
-          Condition = {
-            StringEquals = {
-              "aws:SourceAccount" = var.account_id
-            }
-          }
-        },
-        ### ALLOW INSPECTORv2 to enable Lambda scanning
-        {
-          Sid    = "AllowInspectorDecrypt"
-          Effect = "Allow"
-          Principal = {
-            AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
-          }
-          Action = [
-            "kms:DescribeKey",
-            "kms:Encrypt",
-            "kms:Decrypt",
-            "kms:GenerateDataKey",
-            "kms:GenerateDataKeyWithoutPlaintext"
-          ]
-          Resource = "*"
-          Condition = {
-            StringEquals = {
-              "kms:ViaService" = "inspector2.${var.primary_region}.amazonaws.com"
-            }
-          }
-        },
-      ],
-      ### ALLOW GITHUB OIDC ROLES TO USE KEYS (APPLICABLE IF 'GITHUB_OIDC' IS MODULE IS DEPLOYED)
-      length(local.github_kms_principal_arns) > 0 ? [
-        {
-          Sid = "AllowGitHubOidcRolesUseOfKey"
-          Effect = "Allow"
-          Principal = {
-            AWS = local.github_kms_principal_arns
-          }
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = "*"
+    Statement = [
+      # ROOT/ADMIN
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
         }
-      ] : []
-    )
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      # ALLOW LAMBDA SERVICE TO USE THE KEY FOR ENV VAR ENCRYPTION
+      {
+        Sid    = "AllowLambdaUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
+      },
+      ### ALLOW INSPECTORv2 to enable Lambda scanning
+      {
+        Sid    = "AllowInspectorDecrypt"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
+        }
+        Action = [
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "inspector2.${var.primary_region}.amazonaws.com"
+          }
+        }
+      }
+    ]
   })
 
   tags = {
@@ -483,51 +458,33 @@ resource "aws_kms_key" "secrets_manager" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = concat(
-      [
-        # FULL ACCESS FOR ROOT ACCOUNT
-        {
-          Sid    = "EnableRootPermissions"
-          Effect = "Allow"
-          Principal = {
-            AWS = "arn:aws:iam::${var.account_id}:root"
-          }
-          Action   = "kms:*"
-          Resource = "*"
-        },
-        # ALLOW SECRETS MANAGER SERVICE TO USE THIS KEY
-        {
-          Sid    = "AllowSecretsManager"
-          Effect = "Allow"
-          Principal = {
-            Service = "secretsmanager.amazonaws.com"
-          }
-          Action = [
-            "kms:Decrypt",
-            "kms:Encrypt",
-            "kms:GenerateDataKey*",
-            "kms:DescribeKey"
-          ]
-          Resource = "*"
+    Statement = [
+      # FULL ACCESS FOR ROOT ACCOUNT
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
         }
-      ],
-      
-      ### ALLOW GITHUB OIDC ROLES TO USE KEYS (APPLICABLE IF 'GITHUB_OIDC' IS MODULE IS DEPLOYED)
-      length(local.github_kms_principal_arns) > 0 ? [
-        {
-          Sid = "AllowGitHubOidcRolesUseOfKey"
-          Effect = "Allow"
-          Principal = {
-            AWS = local.github_kms_principal_arns
-          }
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = "*"
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      # ALLOW SECRETS MANAGER SERVICE TO USE THIS KEY
+      {
+        Sid    = "AllowSecretsManager"
+        Effect = "Allow"
+        Principal = {
+          Service = "secretsmanager.amazonaws.com"
         }
-      ] : []
-    )
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
   })
 
   tags = {
