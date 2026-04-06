@@ -51,6 +51,12 @@ variable "repo_github" {
 variable "tf_state_bucket_arn" {
   description = "ARN of the S3 bucket where the Terraform state is stored"
   type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_github_oidc || var.tf_state_bucket_arn != null
+    error_message = "'tf_state_bucket_arn' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "tf_state_bucket_cmk_arn" {
