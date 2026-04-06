@@ -75,10 +75,10 @@ variable "environment_apply_github" {
 
 variable "lambda_cmk_arn" {
   description = "ARN of the Lambda CMK"
-  type = string
+  type        = string
 }
 
 variable "secrets_manager_cmk_arn" {
   description = "ARN of the Secrets Manager CMK"
-  type = string
+  type        = string
 }

@@ -277,6 +277,6 @@ module "github_oidc" {
   enable_apply_role_github        = var.enable_apply_role_github
   branches_apply_github           = var.branches_apply_github
   environment_apply_github        = var.environment_apply_github
-  lambda_cmk_arn = module.security.lambda_cmk_arn
-  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
+  lambda_cmk_arn                  = module.security.lambda_cmk_arn
+  secrets_manager_cmk_arn         = module.security.secrets_manager_cmk_arn
 }
