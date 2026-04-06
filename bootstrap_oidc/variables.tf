@@ -29,6 +29,12 @@ variable "primary_region" {
 variable "owner_github" {
   description = "GitHub organization or username (repo owner)"
   type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_github_oidc || var.owner_github != null
+    error_message = "'owner_github' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "repo_github" {
