@@ -172,3 +172,15 @@ variable "break_glass_trusted_principal_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "github_plan_role_arn" {
+  description = "ARN of the GitHub OIDC Terraform Plan role. THIS MUST BE SET IF USING GITHUB_OIDC MODULE"
+  type = string
+  default = null
+}
+
+variable "github_apply_role_arn" {
+  description = "ARN of the GitHub OIDC Terraform Apply role. THIS MUST BE SET IF USING GITHUB_OIDC MODULE"
+  type = string
+  default = null
+}
