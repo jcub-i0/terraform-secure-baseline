@@ -11,6 +11,12 @@
 
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
+
+  # Local var if GitHub_OIDC module is being used
+  github_kms_principal_arns = compact([
+    var.github_plan_role_arn,
+    var.github_apply_role_arn
+  ])
 }
 
 # GLOBAL RESOURCES
