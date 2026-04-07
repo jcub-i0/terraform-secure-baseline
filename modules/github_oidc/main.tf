@@ -2,7 +2,7 @@
 # GITHUB OIDC MODULE
 #####################
 
-## Build subject strings dynamically
+## Build subject strings dynamically for GitHub-Plan role
 locals {
 
   plan_branch_subjects_github = [
@@ -18,6 +18,7 @@ locals {
   )
 }
 
+## Build subject strings dynamically for GitHub-Apply role
 locals {
   apply_branch_subjects_github = [
     for branch in var.branches_apply_github :
