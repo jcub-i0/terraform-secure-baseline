@@ -117,17 +117,6 @@ resource "aws_iam_policy" "github_plan" {
           ]
           Resource = "*"
         },
-        {
-          Sid    = "SecretsManagerKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.secrets_manager_cmk_arn
-          ]
-        },
       ],
       var.tf_state_lock_table_arn != null ? [
         {
@@ -167,6 +156,19 @@ resource "aws_iam_policy" "github_plan" {
           ]
           Resource = [
             var.lambda_cmk_arn
+          ]
+        }
+      ] : [],
+      var.secrets_manager_cmk_arn != null ? [
+        {
+          Sid    = "SecretsManagerKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.secrets_manager_cmk_arn
           ]
         }
       ] : []
