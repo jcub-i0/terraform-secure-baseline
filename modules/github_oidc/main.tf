@@ -1,8 +1,8 @@
-###########################################
-# GITHUB OIDC MODULE (CHILD MODULE OF IAM)
-###########################################
+#####################
+# GITHUB OIDC MODULE
+#####################
 
-## Build subject strings dynamically
+## Build subject strings dynamically for GitHub-Plan role
 locals {
 
   plan_branch_subjects_github = [
@@ -18,6 +18,7 @@ locals {
   )
 }
 
+## Build subject strings dynamically for GitHub-Apply role
 locals {
   apply_branch_subjects_github = [
     for branch in var.branches_apply_github :
@@ -33,6 +34,19 @@ locals {
     local.apply_environment_subjects_github :
     local.apply_branch_subjects_github
   )
+}
+
+# GitHub OIDC provider
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1"
+  ]
 }
 
 # GitHub-Plan resources
@@ -64,10 +78,6 @@ data "aws_iam_policy_document" "plan_oidc_assume_role" {
 resource "aws_iam_role" "github_plan" {
   name               = "${var.name_prefix}-github-plan-role"
   assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role.json
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "aws_iam_policy" "github_plan" {
@@ -117,28 +127,6 @@ resource "aws_iam_policy" "github_plan" {
           ]
           Resource = "*"
         },
-        {
-          Sid    = "SecretsManagerKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.secrets_manager_cmk_arn
-          ]
-        },
-        {
-          Sid    = "LambdaKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.lambda_cmk_arn
-          ]
-        }
       ],
       var.tf_state_lock_table_arn != null ? [
         {
@@ -167,31 +155,45 @@ resource "aws_iam_policy" "github_plan" {
             var.tf_state_bucket_cmk_arn
           ]
         }
+      ] : [],
+      var.lambda_cmk_arn != null ? [
+        {
+          Sid    = "LambdaKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.lambda_cmk_arn
+          ]
+        }
+      ] : [],
+      var.secrets_manager_cmk_arn != null ? [
+        {
+          Sid    = "SecretsManagerKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.secrets_manager_cmk_arn
+          ]
+        }
       ] : []
     )
   })
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "aws_iam_role_policy_attachment" "github_plan_attach" {
   role       = aws_iam_role.github_plan.name
   policy_arn = aws_iam_policy.github_plan.arn
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "aws_iam_role_policy_attachment" "readonly_github_plan_attach" {
   role       = aws_iam_role.github_plan.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 # GitHub-Apply resources
@@ -228,10 +230,6 @@ resource "aws_iam_role" "github_apply" {
 
   name               = "${var.name_prefix}-github-apply-role"
   assume_role_policy = data.aws_iam_policy_document.apply_oidc_assume_role[0].json
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 ## GitHub-Apply role policy
@@ -284,29 +282,8 @@ resource "aws_iam_policy" "github_apply" {
           ]
           Resource = "*"
         },
-        {
-          Sid    = "SecretsManagerKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.secrets_manager_cmk_arn
-          ]
-        },
-        {
-          Sid    = "LambdaKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.lambda_cmk_arn
-          ]
-        }
       ],
+
       var.tf_state_lock_table_arn != null ? [
         {
           Sid    = "TerraformStateLockAccess"
@@ -332,13 +309,35 @@ resource "aws_iam_policy" "github_apply" {
             var.tf_state_bucket_cmk_arn
           ]
         }
+      ] : [],
+      var.lambda_cmk_arn != null ? [
+        {
+          Sid    = "LambdaKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.lambda_cmk_arn
+          ]
+        }
+      ] : [],
+      var.secrets_manager_cmk_arn != null ? [
+        {
+          Sid    = "SecretsManagerKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.secrets_manager_cmk_arn
+          ]
+        }
       ] : []
     )
   })
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "aws_iam_role_policy_attachment" "github_apply_attach" {
@@ -346,10 +345,6 @@ resource "aws_iam_role_policy_attachment" "github_apply_attach" {
 
   role       = aws_iam_role.github_apply[0].name
   policy_arn = aws_iam_policy.github_apply[0].arn
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 ## AWS-managed AdministratorAccessRole policy
@@ -358,8 +353,4 @@ resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
 
   role       = aws_iam_role.github_apply[0].name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }

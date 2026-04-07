@@ -2,31 +2,60 @@
 # GITHUB OIDC VARIABLES
 ########################
 
-variable "name_prefix" {
-  type = string
+variable "cloud_name" {
+  description = "The name of this cloud environment"
+  type        = string
+  default     = "tf-secure-baseline"
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "dev"
 }
 
 variable "primary_region" {
-  type = string
+  type    = string
+  default = "us-east-1"
 }
 
-variable "account_id" {
-  type = string
+variable "enable_github_oidc" {
+  description = "Enable GitHub OIDC federation resources for CI/CD"
+  type        = bool
+  default     = false
 }
 
 variable "owner_github" {
   description = "GitHub organization or username (repo owner)"
   type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_github_oidc || var.owner_github != null
+    error_message = "'owner_github' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "repo_github" {
   description = "GitHub repository name"
   type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_github_oidc || var.repo_github != null
+    error_message = "'repo_github' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "tf_state_bucket_arn" {
   description = "ARN of the S3 bucket where the Terraform state is stored"
   type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_github_oidc || var.tf_state_bucket_arn != null
+    error_message = "'tf_state_bucket_arn' must be set when 'enable_github_oidc' is 'true'."
+  }
 }
 
 variable "tf_state_bucket_cmk_arn" {
