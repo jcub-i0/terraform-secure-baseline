@@ -66,7 +66,7 @@ resource "aws_iam_role" "github_plan" {
   assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role.json
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
 
@@ -172,7 +172,7 @@ resource "aws_iam_policy" "github_plan" {
   })
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
 
@@ -181,7 +181,7 @@ resource "aws_iam_role_policy_attachment" "github_plan_attach" {
   policy_arn = aws_iam_policy.github_plan.arn
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
 
@@ -190,7 +190,7 @@ resource "aws_iam_role_policy_attachment" "readonly_github_plan_attach" {
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
 
@@ -230,7 +230,7 @@ resource "aws_iam_role" "github_apply" {
   assume_role_policy = data.aws_iam_policy_document.apply_oidc_assume_role[0].json
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
 
@@ -337,7 +337,7 @@ resource "aws_iam_policy" "github_apply" {
   })
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
 
@@ -348,7 +348,7 @@ resource "aws_iam_role_policy_attachment" "github_apply_attach" {
   policy_arn = aws_iam_policy.github_apply[0].arn
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
 
@@ -360,6 +360,6 @@ resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }

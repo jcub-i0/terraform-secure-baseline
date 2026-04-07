@@ -9,6 +9,6 @@ resource "aws_iam_openid_connect_provider" "github" {
     "6938fd4d98bab03faadb97b34396831e3780aea1"
   ]
   lifecycle {
-    prevent_destroy = var.prevent_destroy_github_oidc_resources
+    prevent_destroy = true
   }
 }
