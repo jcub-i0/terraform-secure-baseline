@@ -1,6 +1,6 @@
-###########################################
-# GITHUB OIDC MODULE (CHILD MODULE OF IAM)
-###########################################
+#####################
+# GITHUB OIDC MODULE
+#####################
 
 ## Build subject strings dynamically
 locals {
