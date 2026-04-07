@@ -6,13 +6,6 @@ variable "name_prefix" {
   type = string
 }
 
-variable "prevent_destroy_github_oidc_resources" {
-  description = "Prevent destroy of GitHub OIDC resources (roles, policies, provider)"
-  type        = bool
-  default     = true
-}
-
-
 variable "primary_region" {
   type = string
 }
