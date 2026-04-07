@@ -53,3 +53,8 @@ output "firewall_private_subnet_ids_list" {
   description = "list(string) of Firewall Private Subnet IDs"
   value       = [for subnet in aws_subnet.firewall_private : subnet.id]
 }
+
+output "compute_private_route_table_ids_map" {
+  description = "map(string) of Compute Private Route Table IDs"
+  value       = { for az, rt in aws_route_table.compute_private : az => rt.id }
+}

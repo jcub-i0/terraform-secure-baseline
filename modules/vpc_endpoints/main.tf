@@ -1,6 +1,6 @@
 locals {
-  endpoint_subnets = var.compute_private_subnet_ids_map
-
+  interface_endpoint_subnets         = var.compute_private_subnet_ids_map
+  interface_endpoint_route_table_ids = var.compute_private_route_table_ids_map
   endpoint_subnet_cidrs = flatten([
     var.subnet_cidrs["compute_private"]
   ])
@@ -22,19 +22,13 @@ locals {
   ]
 }
 
-# GET ROUTE TABLE FOR EACH PRIVATE SUBNET
-data "aws_route_table" "endpoint" {
-  for_each  = local.endpoint_subnets
-  subnet_id = each.value
-}
-
 # GATEWAY ENDPOINTS (S3, DYNAMODB)
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = var.vpc_id
   service_name      = "com.amazonaws.${var.primary_region}.s3"
   vpc_endpoint_type = "Gateway"
 
-  route_table_ids = [for rt in values(data.aws_route_table.endpoint) : rt.id]
+  route_table_ids = values(local.interface_endpoint_route_table_ids)
 
   tags = {
     Name        = "${var.name_prefix}-S3-Gateway-Endpoint"
@@ -64,7 +58,7 @@ resource "aws_vpc_endpoint" "interface" {
   vpc_id              = var.vpc_id
   service_name        = "com.amazonaws.${var.primary_region}.${each.key}"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = values(local.endpoint_subnets)
+  subnet_ids          = values(local.interface_endpoint_subnets)
   security_group_ids  = [aws_security_group.interface_endpoints_sg.id]
   private_dns_enabled = true
 

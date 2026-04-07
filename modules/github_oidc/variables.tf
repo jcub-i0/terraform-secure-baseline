@@ -29,30 +29,16 @@ variable "tf_state_bucket_arn" {
   type        = string
 }
 
-variable "github_oidc_provider_arn" {
-  description = "ARN of the GitHub OIDC provider"
-  type        = string
-}
-
 variable "tf_state_bucket_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt the Terraform State bucket"
   type        = string
+  default     = null
 }
 
 variable "tf_state_lock_table_arn" {
   description = "ARN of the DynamoDB table used for Terraform state locking"
   type        = string
   default     = null
-}
-
-variable "secrets_manager_cmk_arn" {
-  description = "ARN of the CMK used by Secrets Manager"
-  type        = string
-}
-
-variable "lambda_cmk_arn" {
-  description = "ARN of the CMK used to encrypt Lambda functions"
-  type        = string
 }
 
 # GitHub-Plan role-related variables
@@ -85,4 +71,14 @@ variable "environment_apply_github" {
   description = "GitHub environment allowed to assume the GitHub-Apply role"
   type        = string
   default     = null
+}
+
+variable "lambda_cmk_arn" {
+  description = "ARN of the Lambda CMK"
+  type        = string
+}
+
+variable "secrets_manager_cmk_arn" {
+  description = "ARN of the Secrets Manager CMK"
+  type        = string
 }

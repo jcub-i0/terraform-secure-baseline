@@ -18,7 +18,10 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 resource "random_id" "random_id" { byte_length = 4 }
 
-# MODULES
+###############
+# MODULE CALLS
+###############
+
 module "networking" {
   source = "./modules/networking"
 
@@ -95,21 +98,6 @@ module "iam" {
   lambda_ip_enrichment_log_group_arn    = module.automation.lambda_ip_enrichment_log_group_arn
   secrets_manager_cmk_arn               = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns    = var.break_glass_trusted_principal_arns
-  lambda_cmk_arn                        = module.security.lambda_cmk_arn
-
-  # GITHUB OIDC VARIABLES
-  enable_github_oidc              = var.enable_github_oidc
-  owner_github                    = var.owner_github
-  repo_github                     = var.repo_github
-  branches_plan_github            = var.branches_plan_github
-  allow_pull_requests_plan_github = var.allow_pull_requests_plan_github
-  tf_state_bucket_arn             = var.tf_state_bucket_arn
-  tf_state_bucket_cmk_arn         = var.tf_state_bucket_arn
-  tf_state_lock_table_arn         = var.tf_state_lock_table_arn
-  github_oidc_provider_arn        = var.enable_github_oidc ? aws_iam_openid_connect_provider.github[0].arn : null
-  enable_apply_role_github        = var.enable_apply_role_github
-  branches_apply_github           = var.branches_apply_github
-  environment_apply_github        = var.environment_apply_github
 }
 
 module "security" {
@@ -197,17 +185,18 @@ module "automation" {
 module "vpc_endpoints" {
   source = "./modules/vpc_endpoints"
 
-  name_prefix                       = local.name_prefix
-  vpc_id                            = module.networking.vpc_id
-  environment                       = var.environment
-  account_id                        = data.aws_caller_identity.current.account_id
-  primary_region                    = var.primary_region
-  compute_private_subnet_ids_map    = module.networking.compute_private_subnet_ids_map
-  serverless_private_subnet_ids_map = module.networking.serverless_private_subnet_ids_map
-  subnet_cidrs                      = var.subnet_cidrs
-  compute_sg_id                     = module.compute.compute_sg_id
-  lambda_ec2_isolation_sg_id        = module.automation.lambda_ec2_isolation_sg_id
-  lambda_ec2_rollback_sg_id         = module.automation.lambda_ec2_rollback_sg_id
+  name_prefix                         = local.name_prefix
+  vpc_id                              = module.networking.vpc_id
+  environment                         = var.environment
+  account_id                          = data.aws_caller_identity.current.account_id
+  primary_region                      = var.primary_region
+  compute_private_subnet_ids_map      = module.networking.compute_private_subnet_ids_map
+  serverless_private_subnet_ids_map   = module.networking.serverless_private_subnet_ids_map
+  subnet_cidrs                        = var.subnet_cidrs
+  compute_sg_id                       = module.compute.compute_sg_id
+  lambda_ec2_isolation_sg_id          = module.automation.lambda_ec2_isolation_sg_id
+  lambda_ec2_rollback_sg_id           = module.automation.lambda_ec2_rollback_sg_id
+  compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
 }
 
 /*
@@ -269,4 +258,25 @@ module "identity_center" {
   depends_on = [
     module.iam
   ]
+}
+
+module "github_oidc" {
+  source = "./modules/github_oidc"
+  count  = var.enable_github_oidc ? 1 : 0
+
+  owner_github                    = var.owner_github
+  repo_github                     = var.repo_github
+  branches_plan_github            = var.branches_plan_github
+  allow_pull_requests_plan_github = var.allow_pull_requests_plan_github
+  name_prefix                     = local.name_prefix
+  tf_state_bucket_arn             = var.tf_state_bucket_arn
+  tf_state_bucket_cmk_arn         = var.tf_state_bucket_cmk_arn
+  tf_state_lock_table_arn         = var.tf_state_lock_table_arn
+  primary_region                  = var.primary_region
+  account_id                      = data.aws_caller_identity.current.account_id
+  enable_apply_role_github        = var.enable_apply_role_github
+  branches_apply_github           = var.branches_apply_github
+  environment_apply_github        = var.environment_apply_github
+  lambda_cmk_arn                  = module.security.lambda_cmk_arn
+  secrets_manager_cmk_arn         = module.security.secrets_manager_cmk_arn
 }
