@@ -15,7 +15,7 @@ variable "environment" {
 }
 
 variable "primary_region" {
-  type = string
+  type    = string
   default = "us-east-1"
 }
 
@@ -108,12 +108,12 @@ variable "environment_apply_github" {
 
 variable "lambda_cmk_arn" {
   description = "ARN of the CMK used to encrypt Lambda functions"
-  type = string
-  default = null
+  type        = string
+  default     = null
 }
 
 variable "secrets_manager_cmk_arn" {
   description = "ARN of the CMK used to encrypt Secrets Manager secrets"
-  type = string
-  default = null
+  type        = string
+  default     = null
 }
