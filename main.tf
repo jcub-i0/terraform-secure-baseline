@@ -264,7 +264,6 @@ module "github_oidc" {
   source = "./modules/github_oidc"
   count  = var.enable_github_oidc ? 1 : 0
 
-  prevent_destroy_github_oidc_resources = var.prevent_destroy_github_oidc_resources
   owner_github                          = var.owner_github
   repo_github                           = var.repo_github
   branches_plan_github                  = var.branches_plan_github
