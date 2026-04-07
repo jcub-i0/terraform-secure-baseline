@@ -64,6 +64,10 @@ data "aws_iam_policy_document" "plan_oidc_assume_role" {
 resource "aws_iam_role" "github_plan" {
   name               = "${var.name_prefix}-github-plan-role"
   assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role.json
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
 
 resource "aws_iam_policy" "github_plan" {
@@ -166,16 +170,28 @@ resource "aws_iam_policy" "github_plan" {
       ] : []
     )
   })
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "github_plan_attach" {
   role       = aws_iam_role.github_plan.name
   policy_arn = aws_iam_policy.github_plan.arn
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "readonly_github_plan_attach" {
   role       = aws_iam_role.github_plan.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
 
 # GitHub-Apply resources
@@ -212,6 +228,10 @@ resource "aws_iam_role" "github_apply" {
 
   name               = "${var.name_prefix}-github-apply-role"
   assume_role_policy = data.aws_iam_policy_document.apply_oidc_assume_role[0].json
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
 
 ## GitHub-Apply role policy
@@ -315,6 +335,10 @@ resource "aws_iam_policy" "github_apply" {
       ] : []
     )
   })
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "github_apply_attach" {
@@ -322,6 +346,10 @@ resource "aws_iam_role_policy_attachment" "github_apply_attach" {
 
   role       = aws_iam_role.github_apply[0].name
   policy_arn = aws_iam_policy.github_apply[0].arn
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
 
 ## AWS-managed AdministratorAccessRole policy
@@ -330,4 +358,8 @@ resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
 
   role       = aws_iam_role.github_apply[0].name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+
+  lifecycle {
+    prevent_destroy = var.prevent_destroy_github_oidc_resources
+  }
 }
