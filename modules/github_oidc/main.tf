@@ -288,29 +288,8 @@ resource "aws_iam_policy" "github_apply" {
           ]
           Resource = "*"
         },
-        {
-          Sid    = "SecretsManagerKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.secrets_manager_cmk_arn
-          ]
-        },
-        {
-          Sid    = "LambdaKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.lambda_cmk_arn
-          ]
-        }
       ],
+
       var.tf_state_lock_table_arn != null ? [
         {
           Sid    = "TerraformStateLockAccess"
@@ -334,6 +313,32 @@ resource "aws_iam_policy" "github_apply" {
           ]
           Resource = [
             var.tf_state_bucket_cmk_arn
+          ]
+        }
+      ] : [],
+      var.lambda_cmk_arn != null ? [
+        {
+          Sid    = "LambdaKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.lambda_cmk_arn
+          ]
+        }
+      ] : [],
+      var.secrets_manager_cmk_arn != null ? [
+        {
+          Sid    = "SecretsManagerKmsDecrypt"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey"
+          ]
+          Resource = [
+            var.secrets_manager_cmk_arn
           ]
         }
       ] : []
