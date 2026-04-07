@@ -183,6 +183,12 @@ variable "enable_github_oidc" {
   default     = false
 }
 
+variable "prevent_destroy_github_oidc_resources" {
+  description = "Prevent destroy of GitHub OIDC resources (roles, policies, provider)"
+  type        = bool
+  default     = true
+}
+
 variable "owner_github" {
   description = "GitHub organization or username (repo owner)"
   type        = string
