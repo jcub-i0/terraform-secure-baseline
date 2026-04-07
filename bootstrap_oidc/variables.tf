@@ -19,10 +19,6 @@ variable "primary_region" {
   default = "us-east-1"
 }
 
-variable "account_id" {
-  type = string
-}
-
 variable "enable_github_oidc" {
   description = "Enable GitHub OIDC federation resources for CI/CD"
   type        = bool
