@@ -74,11 +74,13 @@ variable "environment_apply_github" {
 }
 
 variable "lambda_cmk_arn" {
-  description = "ARN of the Lambda CMK"
-  type        = string
+  description = "ARN of the CMK used to encrypt Lambda functions"
+  type = string
+  default = null
 }
 
 variable "secrets_manager_cmk_arn" {
-  description = "ARN of the Secrets Manager CMK"
-  type        = string
+  description = "ARN of the CMK used to encrypt Secrets Manager secrets"
+  type = string
+  default = null
 }
