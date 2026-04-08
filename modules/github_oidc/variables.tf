@@ -43,7 +43,7 @@ variable "tf_state_lock_table_arn" {
 
 # GitHub-Plan role-related variables
 variable "branches_plan_github" {
-  description = "List of branches allowed to assume the github_oidc role"
+  description = "List of branches allowed to assume the github_plan role"
   type        = list(string)
   default     = ["main"]
 }
