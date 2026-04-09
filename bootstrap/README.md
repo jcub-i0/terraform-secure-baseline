@@ -66,7 +66,7 @@ TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk-arn"
 4. Re-apply `bootstrap` stack
 
 ```bash
-cd bootstrap
+cd ../bootstrap
 terraform apply
 ```
 
