@@ -47,6 +47,15 @@ cd bootstrap
 terraform init
 terraform apply
 ```
+>Note the `github_apply_role_arn` output
+
+3. Add the `github_apply_role_arn` output's value to the `bucket_admin_principals` variable (defined in `bootstrap` stack)
+
+Example:
+
+```bash
+export TF_VAR_bucket_admin_principals=["arn:aws:iam::<account_id>:root","arn:aws:iam::<account_id>:role/tf-secure-baseline-dev-github-apply-role"]
+```
 
 2. Deploy `baseline` stack after setting required variables (locally once)
 
