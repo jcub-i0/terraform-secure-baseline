@@ -20,9 +20,9 @@ Without this separation:
 
 - Terraform destroy can remove the IAM roles it is actively using
 - This results in:
-  - failed applies
-  - corrupted state
-  - broken pipelines
+  - Failed applies
+  - Corrupted state
+  - Broken pipelines
 
 This stack solves that by isolating execution-plane resources.
 
