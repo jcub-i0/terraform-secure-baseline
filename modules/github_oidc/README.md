@@ -7,8 +7,8 @@ This module provisions AWS IAM resources required to enable GitHub Actions to au
 It creates:
 
 - GitHub OIDC Identity Provider
-- GitHub Plan Role (read-only / planning permissions)
-- GitHub Apply Role (write / administrative permissions)
+- `GitHub-Plan` Role (read-only / planning permissions)
+- `GitHub-Apply` Role (write / administrative permissions)
 - Associated IAM policies and attachments
 
 This module enables secure, short-lived credential access from GitHub without storing AWS keys.
