@@ -30,7 +30,7 @@ This stack solves that by isolating execution-plane resources.
 
 ## Architecture
 
-`bootstrap_oidc` (this stack) ➔ `github_oidc` module
+`bootstrap` (this stack) ➔ `github_oidc` module
 
 `baseline` stack ➔ All infrastructure (VPC, Lambda, S3, etc.)
 
@@ -43,7 +43,7 @@ This stack solves that by isolating execution-plane resources.
 1. Deploy `bootstrap` stack
 
 ```bash
-cd bootstrap_oidc
+cd bootstrap
 terraform init
 terraform apply
 ```
@@ -63,10 +63,10 @@ TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk-arn"
 ```
 
-4. Re-apply `bootstrap_oidc` stack
+4. Re-apply `bootstrap` stack
 
 ```bash
-cd bootstrap_oidc
+cd bootstrap
 terraform apply
 ```
 
