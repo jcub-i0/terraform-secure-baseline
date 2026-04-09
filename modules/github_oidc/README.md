@@ -86,3 +86,31 @@ module "github_oidc" {
 
 ---
 
+## Security Model
+
+- Uses GitHub OIDC (`token.actions.githubusercontent.com`)
+- Restricts access via:
+  - Repository
+  - Branch
+  - Environment (optional)
+- No long-lived AWS credentials required
+
+---
+
+## Notes
+
+- The `GitHub-Apply` role should be tightly controlled (branch + environment recommended)
+- KMS permissions are optional and conditional
+- Designed for use in CI/CD pipelines (GitHub Actions)
+
+---
+
+## Example GitHub Usage
+
+```yaml
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: <github_apply_role_arn>
+    aws-region: us-east-1
+```
