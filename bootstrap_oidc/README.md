@@ -113,3 +113,21 @@ module "github_oidc" {
 |------|-------------|
 | `github_plan_role_arn` | `GitHub-Plan` role ARN |
 | `github_apply_role_arn` | `GitHub-Apply` role ARN |
+
+---
+
+## Important Notes
+
+- This stack should **NOT** be destroyed during normal operations
+- It is safe to keep this deployed permanently
+- Destroy workflows should only target the **baseline stack**
+
+---
+
+## CI/CD Behavior
+
+- GitHub Actions assumes roles created here
+- Baseline workflows depend on this stack
+- Destroy workflow does **not** affect this stack
+
+---
