@@ -46,6 +46,8 @@ module "github_oidc" {
 }
 ```
 
+> NOTE: It's highly recommended that this module is called from a stack separate from your main configuration's stack to prevent the deletion of the `GitHub-Plan` and `GitHub-Apply` roles, in addition to other resources critical for this module's operations.
+
 ---
 
 ## Inputs
