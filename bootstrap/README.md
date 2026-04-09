@@ -7,8 +7,8 @@ This stack provisions the **GitHub OIDC control plane** for the environment.
 It deploys:
 
 - GitHub OIDC provider
-- GitHub Plan role
-- GitHub Apply role
+- `GitHub-Plan` role
+- `GitHub-Apply` role
 
 This stack is intentionally separated from the main Terraform baseline to prevent self-destruction during CI/CD operations.
 
@@ -18,7 +18,7 @@ This stack is intentionally separated from the main Terraform baseline to preven
 
 Without this separation:
 
-- Terraform destroy can remove the IAM roles it is actively using
+- The `Terraform Destroy` CI/CD workflow can remove the IAM roles it is actively using
 - This results in:
   - Failed applies
   - Corrupted state
