@@ -1,4 +1,4 @@
-# Bootstrap OIDC Stack
+# Bootstrap Stack
 
 ## Overview
 
