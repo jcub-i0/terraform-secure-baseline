@@ -92,3 +92,18 @@ module "github_oidc" {
   enable_apply_role_github = var.enable_apply_role_github
 }
 ```
+
+## Inputs
+
+| Name | Description |
+|------|-------------|
+| `name_prefix` | Resource naming prefix |
+| `primary_region` | AWS region |
+| `account_id` | AWS account ID |
+| `owner_github` | GitHub org/user |
+| `repo_github` | GitHub repo |
+| `tf_state_bucket_arn` | Terraform state bucket |
+| `tf_state_bucket_cmk_arn` | CMK for state bucket |
+| `lambda_cmk_arn` | Lambda CMK (optional on first apply) |
+| `secrets_manager_cmk_arn` | Secrets CMK (optional on first apply) |
+
