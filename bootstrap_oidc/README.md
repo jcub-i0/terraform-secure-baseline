@@ -107,3 +107,9 @@ module "github_oidc" {
 | `lambda_cmk_arn` | Lambda CMK (optional on first apply) |
 | `secrets_manager_cmk_arn` | Secrets CMK (optional on first apply) |
 
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `github_plan_role_arn` | `GitHub-Plan` role ARN |
+| `github_apply_role_arn` | `GitHub-Apply` role ARN |
