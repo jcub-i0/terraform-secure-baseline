@@ -131,3 +131,38 @@ module "github_oidc" {
 - Destroy workflow does **not** affect this stack
 
 ---
+
+## State Management
+
+This stack uses a **separate state** from the baseline stack.
+
+Example:
+
+```
+bootstrap state: tf-state-bootstrap
+baseline state: tf-state
+```
+
+---
+
+## When to Modify
+
+Only update this stack when:
+
+- Changing GitHub repo/org
+- Modifying role permissions
+- Updating trust conditions
+
+---
+
+## When NOT to Modify
+
+Do not modify during normal infra changes.
+
+---
+
+## Summary
+
+This stack represents the execution plane for Terraform.
+
+It must remain stable and separate from the infrastructure it manages.
