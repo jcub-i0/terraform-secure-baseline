@@ -33,12 +33,15 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
+        working-directory: ./baseline
         run: terraform init
 
       - name: Terraform Validate
+        working-directory: ./baseline
         run: terraform validate
 
       - name: Terraform Plan
+        working-directory: ./baseline
         run: terraform plan -no-color
         env:
             TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
