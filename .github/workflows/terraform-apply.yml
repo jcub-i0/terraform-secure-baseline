@@ -51,12 +51,15 @@ jobs:
               uses: hashicorp/setup-terraform@v3
 
             - name: Terraform Init
+              working-directory: ./baseline
               run: terraform init
 
             - name: Terraform Validate
+              working-directory: ./baseline
               run: terraform validate
 
             - name: Terraform Apply
+              working-directory: ./baseline
               shell: bash
               run: |
                 set -o pipefail
