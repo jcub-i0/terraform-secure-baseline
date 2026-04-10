@@ -112,7 +112,7 @@ terraform {
     key     = "tf-state-bootstrap"
     region  = "us-east-1"
     encrypt = true
-    dynamodb_table = var.tf_state_lock_table_name
+    dynamodb_table = "tf-secure-baseline-lock"
   }
 }
 ```
@@ -128,7 +128,7 @@ terraform {
     key     = "tf-state-baseline"
     region  = "us-east-1"
     encrypt = true
-    dynamodb_table = var.tf_state_lock_table_name
+    dynamodb_table = "tf-secure-baseline-lock"
   }
 }
 ```
