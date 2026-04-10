@@ -8,13 +8,13 @@ locals {
 
 # KMS KEY FOR STATE S3 BUCKET
 resource "aws_kms_key" "state" {
-  description = "CMK for the the State S3 bucket"
-  enable_key_rotation = true
+  description             = "CMK for the the State S3 bucket"
+  enable_key_rotation     = true
   deletion_window_in_days = 30
 
-    lifecycle {
-      prevent_destroy = true
-    }
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # CREATE STATE S3 BUCKET
@@ -37,8 +37,8 @@ resource "aws_s3_bucket" "state" {
 resource "aws_s3_bucket_public_access_block" "state" {
   bucket = aws_s3_bucket.state.id
 
-  block_public_acls = true
-  block_public_policy = true
-  ignore_public_acls = true
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
   restrict_public_buckets = true
 }
