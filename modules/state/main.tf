@@ -2,10 +2,6 @@
 # STATE MODULE
 ###############
 
-locals {
-  name_prefix = "${var.cloud_name}-${var.environment}"
-}
-
 # KMS KEY FOR STATE S3 BUCKET
 resource "aws_kms_key" "state" {
   description             = "CMK for the the State S3 bucket"
@@ -15,6 +11,37 @@ resource "aws_kms_key" "state" {
   lifecycle {
     prevent_destroy = true
   }
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # ALLOW FULL ACCESS FOR ROOT ACCOUNT
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      # ALLOW S3
+      {
+        Sid    = "AllowS3"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*"
+        ]
+        Resource = "*"
+      },
+    ]
+  })
 }
 
 # CREATE STATE S3 BUCKET
