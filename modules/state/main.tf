@@ -44,6 +44,12 @@ resource "aws_kms_key" "state" {
   })
 }
 
+## ALIAS FOR STATE CMK / KMS KEY
+resource "aws_kms_alias" "state" {
+  name = "alias/${var.cloud_name}-state"
+  target_key_id = aws_kms_key.state.key_id
+}
+
 # CREATE STATE S3 BUCKET
 resource "aws_s3_bucket" "state" {
   bucket              = "${var.cloud_name}-state"
