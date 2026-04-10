@@ -10,5 +10,5 @@ output "tf_state_lock_table_arn" {
 
 output "tf_state_bucket_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt the Terraform State bucket"
-  value = module.state.tf_state_bucket_cmk_arn
+  value       = module.state.tf_state_bucket_cmk_arn
 }
