@@ -41,10 +41,10 @@ resource "aws_kms_key" "state" {
         ]
         Resource = "*"
         Condition = {
-            StringEquals = {
-                "kms:CallerAccount" = var.account_id
-                "kms:ViaService" = "s3.${var.primary_region}.amazonaws.com"
-            }
+          StringEquals = {
+            "kms:CallerAccount" = var.account_id
+            "kms:ViaService"    = "s3.${var.primary_region}.amazonaws.com"
+          }
         }
       },
     ]
