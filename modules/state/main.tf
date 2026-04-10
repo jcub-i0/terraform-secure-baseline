@@ -158,6 +158,21 @@ resource "aws_s3_bucket_policy" "state" {
             "aws:PrincipalArn" : var.bucket_admin_principals
           }
         }
+      },
+      # DENY CHANGES TO THE BUCKET ENCRYPTION CONFIG UNLESS ADMIN PRINCIPAL
+      {
+        Sid = "DenyEncryptionConfigChanges"
+        Effect = "Deny"
+        Principal = "*"
+        Action = [
+            "s3:PutEncryptionConfiguration"
+        ]
+        Resource = aws_s3_bucket.state.arn
+        Condition = {
+            "ForAnyValue:ArnNotEquals" = {
+                "aws:PrincipalArn" : var.bucket_admin_principals
+            }
+        }
       }
     ]
   })
