@@ -5,7 +5,7 @@ output "tf_state_bucket_arn" {
 
 output "tf_state_bucket_name" {
   description = "Name of the S3 bucket where the Terraform state is stored"
-  value = aws_s3_bucket.state.bucket
+  value       = aws_s3_bucket.state.bucket
 }
 
 output "tf_state_bucket_cmk_arn" {
@@ -20,5 +20,5 @@ output "tf_state_lock_table_arn" {
 
 output "tf_state_lock_table_name" {
   description = "Name of the State Lock DynamoDB Table"
-  value = aws_dynamodb_table.state_lock.name
+  value       = aws_dynamodb_table.state_lock.name
 }
