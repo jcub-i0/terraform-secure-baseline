@@ -145,32 +145,6 @@ resource "aws_s3_bucket_policy" "state" {
             "aws:PrincipalArn" : var.bucket_admin_principals
           }
         }
-      },
-      # ENFORCE ENCRYPTION ON ALL PUTS
-      {
-        Sid       = "DenyUnencryptedObjectUploads"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.state.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      },
-      # DENY ANYTHING LACKING ENCRYPTION
-      {
-        Sid       = "DenyMissingEncryptionHeader"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.state.arn}/*"
-        Condition = {
-          Null = {
-            "s3:x-amz-server-side-encryption" = "true"
-          }
-        }
       }
     ]
   })
