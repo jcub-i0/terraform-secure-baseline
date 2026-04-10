@@ -149,3 +149,29 @@ resource "aws_s3_bucket_policy" "state" {
     ]
   })
 }
+
+# STATE DYNAMODB LOCK TABLE
+resource "aws_dynamodb_table" "state_lock" {
+  name = "${var.cloud_name}-tf-lock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name = "${var.cloud_name}-Terraform-Lock"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
