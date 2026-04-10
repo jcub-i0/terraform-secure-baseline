@@ -27,7 +27,7 @@ resource "aws_kms_key" "state" {
       },
       # ALLOW S3
       {
-        Sid    = "AllowS3"
+        Sid    = "AllowS3UseOfKeyForThisAccount"
         Effect = "Allow"
         Principal = {
           Service = "s3.amazonaws.com"
@@ -36,9 +36,16 @@ resource "aws_kms_key" "state" {
           "kms:Encrypt",
           "kms:Decrypt",
           "kms:ReEncrypt*",
-          "kms:GenerateDataKey*"
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
+        Condition = {
+            StringEquals = {
+                "kms:CallerAccount" = var.account_id
+                "kms:ViaService" = "s3.${var.primary_region}.amazonaws.com"
+            }
+        }
       },
     ]
   })
