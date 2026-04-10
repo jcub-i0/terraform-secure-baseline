@@ -107,3 +107,33 @@ resource "aws_s3_bucket_ownership_controls" "state" {
     object_ownership = "BucketOwnerEnforced"
   }
 }
+
+## LIFECYCLE RETENTION FOR STATE BUCKET (COST REDUCTION)
+resource "aws_s3_bucket_lifecycle_configuration" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  rule {
+    id = "state-retention"
+    status = "Enabled"
+
+    filter {} # ENTIRE BUCKET -- CAN BE SCOPED
+
+    transition {
+      days          = 30
+      storage_class = "GLACIER_IR"
+    }
+
+    transition {
+      days          = 180
+      storage_class = "DEEP_ARCHIVE"
+    }
+
+    expiration {
+      days = 2555 # 7 YEARS
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 2555
+    }
+  }
+}
