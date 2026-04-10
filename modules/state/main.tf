@@ -33,7 +33,9 @@ resource "aws_kms_key" "state" {
           "kms:Decrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
-          "kms:DescribeKey"
+          "kms:DescribeKey",
+          "kms:CreateGrant",
+          "kms:ListGrants"
         ]
         Resource = "*"
         Condition = {
