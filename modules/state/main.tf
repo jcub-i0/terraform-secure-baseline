@@ -6,7 +6,7 @@ locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
 }
 
-resource "aws_s3_bucket" "state_bucket" {
+resource "aws_s3_bucket" "state" {
   bucket              = "${var.cloud_name}-state"
   object_lock_enabled = true
 
