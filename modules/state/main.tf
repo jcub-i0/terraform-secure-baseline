@@ -8,10 +8,6 @@ resource "aws_kms_key" "state" {
   enable_key_rotation     = true
   deletion_window_in_days = 30
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -49,6 +45,10 @@ resource "aws_kms_key" "state" {
       },
     ]
   })
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 ## ALIAS FOR STATE CMK / KMS KEY
