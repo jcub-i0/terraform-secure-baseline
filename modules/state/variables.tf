@@ -18,3 +18,8 @@ variable "primary_region" {
 variable "account_id" {
   type = string
 }
+
+variable "bucket_admin_principals" {
+  description = "Principals allowed to manage the Centralized Logs Bucket guardrails (polish/versioning)"
+  type        = list(string)
+}
