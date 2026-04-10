@@ -152,9 +152,9 @@ resource "aws_s3_bucket_policy" "state" {
 
 # STATE DYNAMODB LOCK TABLE
 resource "aws_dynamodb_table" "state_lock" {
-  name = "${var.cloud_name}-tf-lock"
+  name         = "${var.cloud_name}-tf-lock"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key = "LockID"
+  hash_key     = "LockID"
 
   attribute {
     name = "LockID"
@@ -170,8 +170,8 @@ resource "aws_dynamodb_table" "state_lock" {
   }
 
   tags = {
-    Name = "${var.cloud_name}-Terraform-Lock"
+    Name        = "${var.cloud_name}-Terraform-Lock"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
