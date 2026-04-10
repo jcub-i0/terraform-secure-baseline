@@ -137,3 +137,82 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
     }
   }
 }
+
+# STATE S3 BUCKET POLICY
+resource "aws_s3_bucket_policy" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+        # DENY DELETION OF ANY OBJECTS/VERSIONS (IMMUTABILITY)
+      {
+        Sid       = "DenyDeleteLogs"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
+          "s3:DeleteObject",
+          "s3:DeleteObjectVersion"
+        ]
+        Resource = "${aws_s3_bucket.state.arn}/*"
+      },
+      # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
+      {
+        Sid       = "DenyBucketPolicyChanges"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
+          "s3:PutBucketPolicy",
+          "s3:DeleteBucketPolicy"
+        ]
+        Resource = aws_s3_bucket.state.arn
+        Condition = {
+          "ForAnyValue:ArnNotEquals" = {
+            "aws:PrincipalArn" : var.bucket_admin_principals
+          }
+        }
+      },
+      #DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
+      {
+        Sid       = "DenyVersioningChanges"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
+          "s3:PutBucketVersioning"
+        ]
+        Resource = aws_s3_bucket.state.arn
+        Condition = {
+          "ForAnyValue:ArnNotEquals" = {
+            "aws:PrincipalArn" : var.bucket_admin_principals
+          }
+        }
+      },
+      # ENFORCE ENCRYPTION ON ALL PUTS
+      {
+        Sid       = "DenyUnencryptedObjectUploads"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.state.arn}/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      },
+      # DENY ANYTHING LACKING ENCRYPTION
+      {
+        Sid       = "DenyMissingEncryptionHeader"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.state.arn}/*"
+        Condition = {
+          Null = {
+            "s3:x-amz-server-side-encryption" = "true"
+          }
+        }
+      }
+    ]
+  })
+}
