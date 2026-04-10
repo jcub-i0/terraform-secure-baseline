@@ -138,20 +138,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
   }
 }
 
-resource "aws_s3_bucket_object_lock_configuration" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  region = var.primary_region
-  object_lock_enabled = true
-
-  rule {
-    default_retention {
-      days = 365
-      mode = "GOVERNANCE"
-    }
-  }
-}
-
 # STATE S3 BUCKET POLICY
 resource "aws_s3_bucket_policy" "state" {
   bucket = aws_s3_bucket.state.id
