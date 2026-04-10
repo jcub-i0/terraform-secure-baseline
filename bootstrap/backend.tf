@@ -4,5 +4,6 @@ terraform {
     key     = "tf-state-bootstrap"
     region  = "us-east-1"
     encrypt = true
+    dynamodb_table = "tf-secure-baseline-lock"
   }
 }
