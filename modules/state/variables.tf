@@ -16,7 +16,8 @@ variable "primary_region" {
 }
 
 variable "account_id" {
-  type = string
+  description = "ID of the AWS account managing this environment"
+  type        = string
 }
 
 variable "bucket_admin_principals" {
