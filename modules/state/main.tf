@@ -147,7 +147,7 @@ resource "aws_s3_bucket_policy" "state" {
     Statement = [
         # DENY DELETION OF ANY OBJECTS/VERSIONS (IMMUTABILITY)
       {
-        Sid       = "DenyDeleteLogs"
+        Sid       = "DenyDelete"
         Effect    = "Deny"
         Principal = "*"
         Action = [
