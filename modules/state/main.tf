@@ -51,9 +51,9 @@ resource "aws_kms_key" "state" {
   }
 
   tags = {
-    Name = "${var.cloud_name}-state"
+    Name        = "${var.cloud_name}-state"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -161,17 +161,17 @@ resource "aws_s3_bucket_policy" "state" {
       },
       # DENY CHANGES TO THE BUCKET ENCRYPTION CONFIG UNLESS ADMIN PRINCIPAL
       {
-        Sid = "DenyEncryptionConfigChanges"
-        Effect = "Deny"
+        Sid       = "DenyEncryptionConfigChanges"
+        Effect    = "Deny"
         Principal = "*"
         Action = [
-            "s3:PutEncryptionConfiguration"
+          "s3:PutEncryptionConfiguration"
         ]
         Resource = aws_s3_bucket.state.arn
         Condition = {
-            "ForAnyValue:ArnNotEquals" = {
-                "aws:PrincipalArn" : var.bucket_admin_principals
-            }
+          "ForAnyValue:ArnNotEquals" = {
+            "aws:PrincipalArn" : var.bucket_admin_principals
+          }
         }
       }
     ]
