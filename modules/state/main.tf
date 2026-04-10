@@ -7,7 +7,7 @@ locals {
 }
 
 resource "aws_s3_bucket" "state_bucket" {
-  bucket = "${var.cloud_name}-state"
+  bucket              = "${var.cloud_name}-state"
   object_lock_enabled = true
 
   lifecycle {
@@ -15,8 +15,8 @@ resource "aws_s3_bucket" "state_bucket" {
   }
 
   tags = {
-    Name = "${var.cloud_name}-State"
+    Name        = "${var.cloud_name}-State"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
