@@ -49,6 +49,12 @@ resource "aws_kms_key" "state" {
   lifecycle {
     prevent_destroy = true
   }
+
+  tags = {
+    Name = "${var.cloud_name}-state"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 ## ALIAS FOR STATE CMK / KMS KEY
@@ -67,7 +73,7 @@ resource "aws_s3_bucket" "state" {
   }
 
   tags = {
-    Name        = "${var.cloud_name}-State"
+    Name        = "${var.cloud_name}-state"
     Environment = var.environment
     Terraform   = "true"
   }
