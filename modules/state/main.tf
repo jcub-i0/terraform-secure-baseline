@@ -181,7 +181,7 @@ resource "aws_s3_bucket_policy" "state" {
 
 # STATE DYNAMODB LOCK TABLE
 resource "aws_dynamodb_table" "state_lock" {
-  name         = "${var.cloud_name}-tf-lock"
+  name         = "${var.cloud_name}-lock"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
