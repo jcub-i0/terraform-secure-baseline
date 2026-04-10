@@ -20,5 +20,5 @@ output "tf_state_lock_table_arn" {
 
 output "tf_state_lock_table_name" {
   description = "value"
-  value = aws_dynamodb_table.state_lock.name
+  value       = aws_dynamodb_table.state_lock.name
 }
