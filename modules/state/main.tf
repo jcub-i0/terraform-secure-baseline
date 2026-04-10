@@ -113,7 +113,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
   bucket = aws_s3_bucket.state.id
 
   rule {
-    id = "state-retention"
+    id     = "state-retention"
     status = "Enabled"
 
     filter {} # ENTIRE BUCKET -- CAN BE SCOPED
@@ -145,7 +145,7 @@ resource "aws_s3_bucket_policy" "state" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-        # DENY DELETION OF ANY OBJECTS/VERSIONS (IMMUTABILITY)
+      # DENY DELETION OF ANY OBJECTS/VERSIONS (IMMUTABILITY)
       {
         Sid       = "DenyDelete"
         Effect    = "Deny"
