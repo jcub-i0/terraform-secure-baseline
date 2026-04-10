@@ -195,7 +195,7 @@ resource "aws_s3_bucket_versioning" "centralized_logs" {
 }
 
 ## ENSURE BUCKET OWNER ALWAYS OWNS ALL OBJECTS, REGARDLESS OF UPLOADER.
-## THIS DISABLES ACLs AND AVOIDS CROSS-ACCOUTN WRITE PERMISSION ISSUES.
+## THIS DISABLES ACLs AND AVOIDS CROSS-ACCOUNT WRITE PERMISSION ISSUES.
 resource "aws_s3_bucket_ownership_controls" "centralized_logs" {
   bucket = aws_s3_bucket.centralized_logs.id
 
