@@ -20,3 +20,13 @@ resource "aws_s3_bucket" "state" {
     Terraform   = "true"
   }
 }
+
+## BLOCK PUBLIC ACCESS TO THE STATE BUCKET
+resource "aws_s3_bucket_public_access_block" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  block_public_acls = true
+  block_public_policy = true
+  ignore_public_acls = true
+  restrict_public_buckets = true
+}
