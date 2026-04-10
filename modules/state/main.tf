@@ -145,17 +145,6 @@ resource "aws_s3_bucket_policy" "state" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # DENY DELETION OF ANY OBJECTS/VERSIONS (IMMUTABILITY)
-      {
-        Sid       = "DenyDelete"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "s3:DeleteObject",
-          "s3:DeleteObjectVersion"
-        ]
-        Resource = "${aws_s3_bucket.state.arn}/*"
-      },
       # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
       {
         Sid       = "DenyBucketPolicyChanges"
