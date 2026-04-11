@@ -37,15 +37,13 @@ Treat this stack as:
 
 ---
 
-## Architecture Role
+## Architecture
 
 This stack exists in a separate control plane layer:
 
-```
-[state]       → Backend infrastructure (S3 + DynamoDB + KMS)
-[bootstrap]   → CI/CD execution roles (GitHub OIDC)
-[baseline]    → Deployable infrastructure
-```
+- `state` stack ➔ `bootstrap` and `baseline` stacks
+  - `bootstrap` stack ➔ `github_oidc` module
+  - `baseline` stack ➔ All infrastructure (VPC, Lambda, S3, etc.)
 
 This separation ensures:
 - Terraform cannot destroy its own backend
