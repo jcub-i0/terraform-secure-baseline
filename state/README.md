@@ -17,16 +17,23 @@ This stack represents the root of trust for your entire infrastructure.
 
 🚨 **THIS STACK MUST NEVER BE DESTROYED!** 🚨
 
-This stack contains the backend for:
-- `bootstrap` stack (CI/CD execution plane)
-- `baseline` stack (infrastructure plane)
-- Any future environments (dev, staging, prod)
+- This stack must be deployed **first**, and only once per account
+- Do **NOT** re-create or duplicate the state bucket
+- Do **NOT** manually modify backend resources outside Terraform
+- Do **NOT** run `terraform destroy` from within this stack
 
 Destroying this stack will:
 - Delete, corrupt, or orphan Terraform state
 - Break all Terraform operations
 - Make safe infrastructure management impossible
 - Potentially require full environment rebuild
+
+This stack contains the backend for:
+- `bootstrap` stack (CI/CD execution plane)
+- `baseline` stack (infrastructure plane)
+- Any future environments (dev, staging, prod)
+
+This stack is the **foundation of all Terraform operations** in this environment.
 
 **There is NO safe recovery from accidental destruction.**
 
