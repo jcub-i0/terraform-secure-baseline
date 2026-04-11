@@ -24,6 +24,7 @@ jobs:
             TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
             TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
             TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
+            TF_VAR_tf_state_bucket_cmk_arn: ${{vars.TF_STATE_BUCKET_CMK_ARN}}
             TF_VAR_tf_state_lock_table_arn: ${{vars.TF_STATE_LOCK_TABLE_ARN}}
             TF_VAR_allow_pull_requests_plan_github: ${{vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB}}
             TF_VAR_break_glass_trusted_principal_arns: ${{vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS}}
