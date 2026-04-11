@@ -175,7 +175,7 @@ terraform {
   }
 }
 ```
-> These `provider` / `terraform` blocks may already be configure correctly if using default variables
+> These `provider` / `terraform` blocks may already be configured correctly if using default variables
 
 Then initialize the `bootstrap` and `baseline` stacks:
 
