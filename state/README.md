@@ -100,13 +100,31 @@ After deployment:
 
 ---
 
-## Deployment
+## Deployment and Integration with Other Stacks
 
-### Step 1: Initialize
+The following steps assume you are using the `bootstrap` stack, which enables OIDC between AWS and GitHub.
+
+If you are not using this feature, ignore any references to the `bootstrap` stack
+> For example, for:
+> ```bash
+> cd ../bootstrap
+> terraform init
+> cd ../baseline
+> terraform init
+> ```
+> Run:
+> ```bash
+> cd ../baseline
+> terraform init
+> ```
+
+### Step 1: Navigate to the `state` stack and initialize it
 
 ```bash
+cd state
 terraform init
 ```
+> The `state` stack intentionally uses **local state** during initial deployment to bootstrap the remote backend
 
 ### Step 2: Apply
 
@@ -119,13 +137,15 @@ This creates:
 - DynamoDB lock table
 - KMS key
 
----
+### Step 3: Capture outputs for downstream stacks
 
-## Integration with Other Stacks
+After apply, note the following outputs:
+- `tf_state_bucket_cmk_arn`
+- `tf_state_lock_table_arn`
 
-After deployment, configure:
+### Step 4: Configure backend for `bootstrap` and `baseline` stacks
 
-### bootstrap/backend.tf
+Update `bootstrap/backend.tf`:
 
 ```hcl
 terraform {
@@ -139,9 +159,7 @@ terraform {
 }
 ```
 
----
-
-### baseline/backend.tf
+Update `baseline/backend.tf`:
 
 ```hcl
 terraform {
@@ -154,6 +172,18 @@ terraform {
   }
 }
 ```
+
+Then initialize the `bootstrap` and `baseline` stacks:
+
+```bash
+cd ../bootstrap
+terraform init
+cd ../baseline
+terraform init
+```
+
+### Step 5: Proceed with Normal Deployment Flow
+> Refer to `/bootstrap/README.md` file 
 
 ---
 
