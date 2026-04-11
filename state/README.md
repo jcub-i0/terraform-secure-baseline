@@ -187,7 +187,13 @@ terraform init
 ```
 
 ### Step 5: Proceed with Normal Deployment Flow
-> Refer to `/bootstrap/README.md` file 
+
+At this point:
+- `bootstrap` stack can be deployed
+> Refer to `/bootstrap/README.md` file for instructions on configuring the `bootstrap` stack
+- `baseline` stack can be deployed
+> Refer to `/baseline/README.md` file for instructions on configuring the `baseline` stack
+- All stacks will use the centralized remote state created by this `state` stack
 
 ---
 
