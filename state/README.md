@@ -142,7 +142,7 @@ terraform apply
 This creates:
 - S3 state bucket
 - DynamoDB lock table
-- KMS key
+- KMS key used by the state bucket
 
 ### Step 3: Capture outputs for downstream stacks
 
