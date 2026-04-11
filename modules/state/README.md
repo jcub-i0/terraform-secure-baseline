@@ -88,7 +88,7 @@ The module enforces:
 | `tf_state_bucket_name` | ARN of the state S3 bucket |
 | `tf_state_bucket_cmk_arn` | ARN of the KMS key |
 | `tf_state_lock_table_arn` | ARN of the DynamoDB state lock table |
-| `tf_state_lock_table_arn` | Name of the DynamoDB state lock table |
+| `tf_state_lock_table_name` | Name of the DynamoDB state lock table |
 
 ---
 
