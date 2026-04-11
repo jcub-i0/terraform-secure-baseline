@@ -42,10 +42,18 @@ This stack solves that by isolating execution-plane resources.
 
 ### Initial Setup
 
-1. Deploy `bootstrap` stack
+1. Deploy `state` stack after setting required variables
 
 ```bash
-cd bootstrap
+cd state
+terraform init
+terraform apply
+```
+
+2. Deploy `bootstrap` stack
+
+```bash
+cd ../bootstrap
 terraform init
 terraform apply
 ```
@@ -59,7 +67,7 @@ Example:
 export TF_VAR_bucket_admin_principals=["arn:aws:iam::<account_id>:root","arn:aws:iam::<account_id>:role/tf-secure-baseline-dev-github-apply-role"]
 ```
 
-2. Deploy `baseline` stack after setting required variables (locally once)
+4. Deploy `baseline` stack after setting required variables (locally once)
 
 ```bash
 cd ../baseline
