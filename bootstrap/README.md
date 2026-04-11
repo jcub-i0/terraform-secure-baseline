@@ -30,7 +30,9 @@ This stack solves that by isolating execution-plane resources.
 
 ## Architecture
 
-`bootstrap` (this stack) ➔ `github_oidc` module
+`state` stack ➔ `bootstrap` and `baseline` stacks
+
+`bootstrap` stack ➔ `github_oidc` module
 
 `baseline` stack ➔ All infrastructure (VPC, Lambda, S3, etc.)
 
