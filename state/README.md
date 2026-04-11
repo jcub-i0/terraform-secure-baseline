@@ -67,11 +67,35 @@ After deployment:
 
 ---
 
+## Inputs
+
+| Name                     | Description                                      | Required |
+|--------------------------|--------------------------------------------------|----------|
+| `cloud_name`             | Name of env; used as prefix for resource naming  | Yes      |
+| `environment`            | Environment name (e.g., dev, prod)               | Yes      |
+| `account_id`             | AWS account ID                                   | Yes      |
+| `primary_region`         | AWS region                                       | Yes      |
+| `bucket_admin_principals`| ARNs allowed to modify bucket protections        | Yes      |
+
+---
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `tf_state_bucket_arn` | Name of the state S3 bucket |
+| `tf_state_bucket_name` | ARN of the state S3 bucket |
+| `tf_state_bucket_cmk_arn` | ARN of the KMS key |
+| `tf_state_lock_table_arn` | ARN of the DynamoDB state lock table |
+| `tf_state_lock_table_name` | Name of the DynamoDB state lock table |
+
+---
+
 ## Files
 
 | File             | Purpose                                  |
 |------------------|------------------------------------------|
-| main.tf          | Calls the state module                   |
+| main.tf          | Calls the `state` module                   |
 | variables.tf     | Input variables                          |
 | outputs.tf       | Exposes backend resource values          |
 | README.md        | Documentation                            |
