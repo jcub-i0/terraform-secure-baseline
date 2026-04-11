@@ -36,7 +36,7 @@ variable "tf_state_bucket_cmk_arn" {
 }
 
 variable "tf_state_lock_table_arn" {
-  description = "ARN of the DynamoDB table used for Terraform state locking"
+  description = "ARN of the State Lock DynamoDB table used for Terraform state locking"
   type        = string
   default     = null
 }

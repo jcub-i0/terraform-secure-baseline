@@ -30,7 +30,9 @@ This stack solves that by isolating execution-plane resources.
 
 ## Architecture
 
-`bootstrap` (this stack) ➔ `github_oidc` module
+`state` stack ➔ `bootstrap` and `baseline` stacks
+
+`bootstrap` stack ➔ `github_oidc` module
 
 `baseline` stack ➔ All infrastructure (VPC, Lambda, S3, etc.)
 
@@ -39,6 +41,8 @@ This stack solves that by isolating execution-plane resources.
 ## Deployment Order
 
 ### Initial Setup
+
+The following steps assume that you have already deployed the `state` stack (refer to the `/state/README.md` file):
 
 1. Deploy `bootstrap` stack
 
@@ -49,7 +53,7 @@ terraform apply
 ```
 >Note the `github_apply_role_arn` output
 
-3. Add the `github_apply_role_arn` output's value to the `bucket_admin_principals` variable (defined in `bootstrap` stack)
+2. Add the `github_apply_role_arn` output's value to the `bucket_admin_principals` variable (defined in `bootstrap` stack)
 
 Example:
 
@@ -57,7 +61,7 @@ Example:
 export TF_VAR_bucket_admin_principals=["arn:aws:iam::<account_id>:root","arn:aws:iam::<account_id>:role/tf-secure-baseline-dev-github-apply-role"]
 ```
 
-2. Deploy `baseline` stack after setting required variables (locally once)
+3. Deploy `baseline` stack after setting required variables (locally once)
 
 ```bash
 cd ../baseline
@@ -65,14 +69,14 @@ terraform apply
 ```
 > Note the `lambda_cmk_arn` and `secrets_manager_cmk_arn` outputs
 
-3. Define the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables
+4. Define the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables
 
 ```bash
 TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk-arn"
 ```
 
-4. Re-apply `bootstrap` stack
+5. Re-apply `bootstrap` stack
 
 ```bash
 cd ../bootstrap
