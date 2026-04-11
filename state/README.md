@@ -155,7 +155,7 @@ terraform {
   backend "s3" {
     bucket  = "<tf_state_bucket_name>"
     key     = "tf-state-bootstrap"
-    region  = "us-east-1"
+    region  = "<primary_region>"
     encrypt = true
     dynamodb_table = "<tf_state_lock_table_name>"
   }
@@ -169,7 +169,7 @@ terraform {
   backend "s3" {
     bucket  = "<tf_state_bucket_name>"
     key     = "tf-state-baseline"
-    region  = "us-east-1"
+    region  = "<primary_region>"
     encrypt = true
     dynamodb_table = "<tf_state_lock_table_name>"
   }
