@@ -140,7 +140,10 @@ This creates:
 ### Step 3: Capture outputs for downstream stacks
 
 After apply, note the following outputs:
+- `tf_state_bucket_name`
+- `tf_state_bucket_arn`
 - `tf_state_bucket_cmk_arn`
+- `tf_state_lock_table_name`
 - `tf_state_lock_table_arn`
 
 ### Step 4: Configure backend for `bootstrap` and `baseline` stacks
@@ -150,11 +153,11 @@ Update `bootstrap/backend.tf`:
 ```hcl
 terraform {
   backend "s3" {
-    bucket  = "tf-secure-baseline-state"
+    bucket  = "<tf_state_bucket_name>"
     key     = "tf-state-bootstrap"
     region  = "us-east-1"
     encrypt = true
-    dynamodb_table = "tf-secure-baseline-lock"
+    dynamodb_table = "<tf_state_lock_table_name>"
   }
 }
 ```
@@ -164,14 +167,15 @@ Update `baseline/backend.tf`:
 ```hcl
 terraform {
   backend "s3" {
-    bucket  = "tf-secure-baseline-state"
+    bucket  = "<tf_state_bucket_name>"
     key     = "tf-state-baseline"
     region  = "us-east-1"
     encrypt = true
-    dynamodb_table = "tf-secure-baseline-lock"
+    dynamodb_table = "<tf_state_lock_table_name>"
   }
 }
 ```
+> These `provider` / `terraform` blocks may already be configure correctly if using default variables
 
 Then initialize the `bootstrap` and `baseline` stacks:
 
