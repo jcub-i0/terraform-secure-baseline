@@ -112,7 +112,7 @@ If you are not using this feature, ignore any references to the `bootstrap` stac
 > cd ../baseline
 > terraform init
 > ```
-> Run:
+> Run this instead:
 > ```bash
 > cd ../baseline
 > terraform init
