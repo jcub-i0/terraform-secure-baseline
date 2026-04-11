@@ -47,7 +47,7 @@ The following steps assume that you have already deployed the `state` stack (ref
 1. Deploy `bootstrap` stack
 
 ```bash
-cd ../bootstrap
+cd bootstrap
 terraform init
 terraform apply
 ```
