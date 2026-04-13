@@ -60,10 +60,6 @@ jobs:
               working-directory: ./baseline
               run: terraform init
 
-            - name: Terraform Validate
-              working-directory: ./baseline
-              run: terraform validate
-
             - name: Terraform Destroy
               working-directory: ./baseline
               shell: bash
