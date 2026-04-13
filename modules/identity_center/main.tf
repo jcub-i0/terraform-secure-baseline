@@ -253,3 +253,4 @@ resource "aws_ssoadmin_account_assignment" "operators" {
     aws_ssoadmin_permission_set_inline_policy.secops_operator_inline
   ]
 }
+#comment
