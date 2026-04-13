@@ -248,4 +248,8 @@ resource "aws_ssoadmin_account_assignment" "operators" {
 
   target_id   = var.account_id
   target_type = "AWS_ACCOUNT"
+
+  depends_on = [
+    aws_ssoadmin_permission_set_inline_policy.secops_operator_inline
+  ]
 }
