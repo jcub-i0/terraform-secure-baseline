@@ -60,28 +60,6 @@ jobs:
               working-directory: ./baseline
               run: terraform init
 
-            - name: Terraform Destroy Identity Center assignments first
-              working-directory: ./baseline
-              shell: bash
-              run: |
-                set -euo pipefail
-
-                mapfile -t targets < <(terraform state list | grep 'aws_ssoadmin_account_assignment' || true)
-
-                if [ "${#targets[@]}" -gt 0 ]; then
-                  echo "Destroying SSO account assignments first..."
-                  target_args=()
-                  for t in "${targets[@]}"; do
-                    target_args+=("-target=$t")
-                  done
-
-                  terraform destroy -auto-approve -input=false -no-color -lock-timeout=5m "${target_args[@]}"
-                  echo "Waiting for IAM Identity Center assignment deletion to settle..."
-                  sleep 90
-                else
-                  echo "No aws_ssoadmin_account_assignment resources found in state."
-                fi
-
             - name: Terraform Destroy
               working-directory: ./baseline
               shell: bash
