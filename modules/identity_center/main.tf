@@ -211,6 +211,13 @@ resource "aws_ssoadmin_account_assignment" "analysts" {
 
   target_id   = var.account_id
   target_type = "AWS_ACCOUNT"
+
+  depends_on = [
+    aws_ssoadmin_managed_policy_attachment.secops_analyst_security_audit,
+    aws_ssoadmin_managed_policy_attachment.secops_analyst_readonly,
+    aws_ssoadmin_customer_managed_policy_attachment.secops_analyst_logs_s3,
+    aws_ssoadmin_customer_managed_policy_attachment.secops_analyst_logs_cmk
+  ]
 }
 
 resource "aws_ssoadmin_account_assignment" "engineers" {
@@ -222,6 +229,14 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
 
   target_id   = var.account_id
   target_type = "AWS_ACCOUNT"
+
+  depends_on = [
+    aws_ssoadmin_managed_policy_attachment.secops_engineer_readonly,
+    aws_ssoadmin_managed_policy_attachment.secops_engineer_security_audit,
+    aws_ssoadmin_customer_managed_policy_attachment.secops_engineer_logs_s3,
+    aws_ssoadmin_customer_managed_policy_attachment.secops_engineer_logs_cmk,
+    aws_ssoadmin_permission_set_inline_policy.secops_engineer_inline
+  ]
 }
 
 resource "aws_ssoadmin_account_assignment" "operators" {
@@ -233,4 +248,8 @@ resource "aws_ssoadmin_account_assignment" "operators" {
 
   target_id   = var.account_id
   target_type = "AWS_ACCOUNT"
+
+  depends_on = [
+    aws_ssoadmin_permission_set_inline_policy.secops_operator_inline
+  ]
 }
