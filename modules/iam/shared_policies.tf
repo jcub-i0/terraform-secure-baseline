@@ -1,7 +1,7 @@
 # SHARED POLICIES ATTACHED TO MULTIPLE ROLES
 ## GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
 resource "aws_iam_policy" "logs_s3_readonly" {
-  name        = "CentralizedLogsS3ReadOnly"
+  name        = "${var.name_prefix}-CentralizedLogsS3ReadOnly"
   description = "Read-only access to Centralized Logs S3 bucket (no delete, no write)"
 
   policy = jsonencode({
@@ -35,7 +35,7 @@ resource "aws_iam_policy" "logs_s3_readonly" {
 
 ## GENERIC POLICY TO ALLOW DECRYPTION OF OBJECTS ENCRYPTED WITH THE LOGS CMK
 resource "aws_iam_policy" "logs_cmk_decrypt" {
-  name        = "LogsKmsDecrypt"
+  name        = "${var.name_prefix}-LogsKmsDecrypt"
   description = "Allow decryption of objects encrypted with the Logs CMK"
 
   policy = jsonencode({
