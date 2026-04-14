@@ -20,5 +20,5 @@ variable "abuseipdb_api_key" {
 }
 
 variable "config_enabled" {
-  type    = bool
+  type = bool
 }

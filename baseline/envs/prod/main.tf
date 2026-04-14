@@ -10,5 +10,5 @@ module "baseline" {
   primary_region          = var.primary_region
   bucket_admin_principals = var.bucket_admin_principals
   abuseipdb_api_key       = var.abuseipdb_api_key
-  config_enabled = var.config_enabled
+  config_enabled          = var.config_enabled
 }
