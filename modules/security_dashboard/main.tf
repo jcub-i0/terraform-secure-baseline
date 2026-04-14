@@ -1,7 +1,7 @@
 # SECURITYHUB INSIGHTS
 ## CRITICAL + HIGH FINDINGS
 resource "aws_securityhub_insight" "high_critical" {
-  name               = "High and Critical Findings"
+  name               = "High and Critical Findings (${var.environment})"
   group_by_attribute = "SeverityLabel"
 
   filters {
@@ -29,7 +29,7 @@ resource "aws_securityhub_insight" "high_critical" {
 
 ## GUARDDUTY ACTIVE FINDINGS
 resource "aws_securityhub_insight" "guardduty_active" {
-  name               = "Active GuardDuty Findings"
+  name               = "Active GuardDuty Findings (${var.environment})"
   group_by_attribute = "SeverityLabel"
 
   filters {
@@ -52,7 +52,7 @@ resource "aws_securityhub_insight" "guardduty_active" {
 
 ## INSPECTOR ACTIVE FINDINGS
 resource "aws_securityhub_insight" "inspector_active" {
-  name               = "Active Inspector Findings"
+  name               = "Active Inspector Findings (${var.environment})"
   group_by_attribute = "SeverityLabel"
 
   filters {
@@ -75,7 +75,7 @@ resource "aws_securityhub_insight" "inspector_active" {
 
 ## EC2 FINDINGS
 resource "aws_securityhub_insight" "ec2_findings" {
-  name               = "EC2 Findings"
+  name               = "EC2 Findings (${var.environment})"
   group_by_attribute = "SeverityLabel"
 
   filters {
@@ -98,7 +98,7 @@ resource "aws_securityhub_insight" "ec2_findings" {
 
 ## EC2 HIGH AND CRITICAL FINDINGS
 resource "aws_securityhub_insight" "ec2_high_critical" {
-  name               = "EC2 High and Critical Findings"
+  name               = "EC2 High and Critical Findings (${var.environment})"
   group_by_attribute = "ResourceId"
 
   filters {
@@ -131,7 +131,7 @@ resource "aws_securityhub_insight" "ec2_high_critical" {
 
 ## FAILED CONTROLS
 resource "aws_securityhub_insight" "failed_controls" {
-  name               = "Failed Controls"
+  name               = "Failed Controls (${var.environment})"
   group_by_attribute = "GeneratorId"
 
   filters {
