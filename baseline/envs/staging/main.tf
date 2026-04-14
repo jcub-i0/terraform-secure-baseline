@@ -11,5 +11,5 @@ module "baseline" {
   bucket_admin_principals = var.bucket_admin_principals
   abuseipdb_api_key       = var.abuseipdb_api_key
   config_enabled          = var.config_enabled
-  backup_enabled = var.backup_enabled
+  backup_enabled          = var.backup_enabled
 }
