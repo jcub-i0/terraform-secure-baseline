@@ -27,3 +27,8 @@ variable "backup_enabled" {
   description = "Define whether backup resources are enabled"
   type        = bool
 }
+
+variable "break_glass_trusted_principal_arns" {
+  description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
+  type        = list(string)
+}
