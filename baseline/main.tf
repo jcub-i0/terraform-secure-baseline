@@ -253,6 +253,7 @@ module "identity_center" {
   logs_cmk_decrypt_policy_name = module.iam.logs_cmk_decrypt_policy_name
   logs_s3_readonly_policy_name = module.iam.logs_s3_readonly_policy_name
   secops_event_bus_arn         = module.automation.secops_event_bus_arn
+  environment = var.environment
   customer_managed_policy_path = "/"
 
   depends_on = [
