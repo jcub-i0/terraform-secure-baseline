@@ -1,7 +1,7 @@
 # CLOUDTRAIL
 ## CLOUDTRAIL ROLE
 resource "aws_iam_role" "cloudtrail" {
-  name = "cloudtrail-cloudwatch-role"
+  name = "${var.name_prefix}-cloudtrail-cloudwatch-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -35,7 +35,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 # VPC FLOWLOGS
 ## FLOWLOGS ROLE
 resource "aws_iam_role" "flowlogs" {
-  name = "VpcFlowLogsRole"
+  name = "${var.name_prefix}-VpcFlowLogsRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -55,7 +55,7 @@ resource "aws_iam_role" "flowlogs" {
 
 ### POLICY FOR FLOWLOGS ROLE
 resource "aws_iam_role_policy" "flowlogs" {
-  name = "VpcFlowLogsPolicy"
+  name = "${var.name_prefix}-VpcFlowLogsPolicy"
   role = aws_iam_role.flowlogs.id
 
   policy = jsonencode({
@@ -76,7 +76,7 @@ resource "aws_iam_role_policy" "flowlogs" {
 
 ## CLOUDWATCH TO FIREHOSE ROLE
 resource "aws_iam_role" "cw_to_firehose" {
-  name = "CloudWatchLogsToFirehose"
+  name = "${var.name_prefix}-CloudWatchLogsToFirehose"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -110,7 +110,7 @@ resource "aws_iam_role_policy" "cw_to_firehose" {
 # KINESIS FIREHOSE
 ## FIREHOSE FLOW LOGS ROLE
 resource "aws_iam_role" "firehose_flow_logs" {
-  name = "FirehoseFlowLogsRole"
+  name = "${var.name_prefix}-FirehoseFlowLogsRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
