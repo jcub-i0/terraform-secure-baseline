@@ -12,5 +12,6 @@ module "baseline" {
   abuseipdb_api_key       = var.abuseipdb_api_key
   config_enabled          = var.config_enabled
   backup_enabled          = var.backup_enabled
+  break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
   secops_emails = var.secops_emails
 }
