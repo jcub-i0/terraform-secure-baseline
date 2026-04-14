@@ -556,7 +556,6 @@ module "config_baseline" {
   source = "./config_baseline"
 
   name_prefix                  = var.name_prefix
-  cloud_name                   = var.cloud_name
   environment                  = var.environment
   config_enabled               = var.config_enabled
   config_role_arn              = var.config_role_arn
