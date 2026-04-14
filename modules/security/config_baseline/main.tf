@@ -4,7 +4,7 @@
 
 ## CONFIGURATION RECORDER
 resource "aws_config_configuration_recorder" "config" {
-  name     = var.cloud_name
+  name     = var.name_prefix
   role_arn = var.config_role_arn
 
   recording_group {
