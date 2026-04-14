@@ -217,7 +217,6 @@ module "patch_management" {
   source = "../modules/patch_management"
 
   name_prefix                       = local.name_prefix
-  cloud_name                        = var.cloud_name
   environment                       = var.environment
   patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
   patch_tag_value                   = var.patch_tag_value
