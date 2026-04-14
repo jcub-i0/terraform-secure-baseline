@@ -1,2 +1,2 @@
-cloud_name = "tf-secure-baseline"
+cloud_name  = "tf-secure-baseline"
 environment = "prod"

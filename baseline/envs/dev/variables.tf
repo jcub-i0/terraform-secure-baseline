@@ -11,6 +11,6 @@ variable "bucket_admin_principals" {
 }
 
 variable "abuseipdb_api_key" {
-  type = string
+  type      = string
   sensitive = true
 }

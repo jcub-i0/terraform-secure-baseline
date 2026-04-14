@@ -5,8 +5,8 @@ locals {
 module "baseline" {
   source = "../.."
 
-  cloud_name = var.cloud_name
-  environment = var.environment
+  cloud_name              = var.cloud_name
+  environment             = var.environment
   bucket_admin_principals = var.bucket_admin_principals
-  abuseipdb_api_key = var.abuseipdb_api_key
+  abuseipdb_api_key       = var.abuseipdb_api_key
 }
