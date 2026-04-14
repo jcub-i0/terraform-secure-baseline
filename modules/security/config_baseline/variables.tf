@@ -16,7 +16,7 @@ variable "config_enabled" {
 }
 
 variable "enable_rules" {
-  description = "Config rules to be enabled in the 'config_baseline' module"
+  description = "Rules to be enabled in the 'config_baseline' module"
   type = object({
     s3_baseline         = bool
     cloudtrail_baseline = bool
