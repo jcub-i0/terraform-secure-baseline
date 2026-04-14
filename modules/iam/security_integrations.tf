@@ -8,7 +8,7 @@
 
 # IAM ACCESS ANALYZER
 resource "aws_accessanalyzer_analyzer" "main" {
-  analyzer_name = "account-access-analyzer"
+  analyzer_name = "${var.name_prefix}-account-access-analyzer"
   type          = "ACCOUNT"
 
   tags = {
@@ -18,7 +18,7 @@ resource "aws_accessanalyzer_analyzer" "main" {
 
 # EVENTBRIDGE ROLE
 resource "aws_iam_role" "eventbridge_putevents_to_secops" {
-  name = "EventBridgePutEventsToSecopsBus"
+  name = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
