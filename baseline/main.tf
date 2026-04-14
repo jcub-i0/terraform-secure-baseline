@@ -143,7 +143,7 @@ module "monitoring" {
   name_prefix                         = local.name_prefix
   environment                         = var.environment
   logs_cmk_arn                        = module.security.logs_cmk_arn
-  cloudtrail_log_group_name           = module.logging.cloudtrail_logs_group_name
+  cloudtrail_logs_group_name           = module.logging.cloudtrail_logs_group_name
   secops_emails                       = var.secops_emails
   tamper_detection_rule_arn           = module.security.tamper_detection_rule_arn
   account_id                          = data.aws_caller_identity.current.account_id
