@@ -7,7 +7,7 @@ variable "environment" {
 }
 
 variable "bucket_admin_principals" {
-  type = string
+  type = list(string)
 }
 
 variable "abuseipdb_api_key" {
