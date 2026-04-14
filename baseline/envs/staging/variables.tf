@@ -14,7 +14,7 @@ variable "primary_region" {
 }
 
 variable "bucket_admin_principals" {
-  description = "Principals allowed to manage bucket guardrails (polish/versioning)"
+  description = "Principals allowed to manage bucket guardrails (policy/versioning)"
   type        = list(string)
 }
 
