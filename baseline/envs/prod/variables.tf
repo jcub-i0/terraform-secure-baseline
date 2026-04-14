@@ -16,14 +16,14 @@ variable "primary_region" {
 variable "bucket_admin_principals" {
   description = "Principals allowed to manage bucket guardrails (policy/versioning)"
   type        = list(string)
-  default = []
+  default     = []
 }
 
 variable "abuseipdb_api_key" {
   description = "AbuseIPDB API key for IP Enrichment Lamba"
   type        = string
   sensitive   = true
-  default = null
+  default     = null
 }
 
 variable "config_enabled" {
@@ -39,13 +39,13 @@ variable "backup_enabled" {
 variable "break_glass_trusted_principal_arns" {
   description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
   type        = list(string)
-  default = []
+  default     = []
 }
 
 variable "secops_emails" {
   description = "List of emails to send security-related notifications to"
   type        = list(string)
-  default = []
+  default     = []
 
   # VALIDATE EMAIL FORMATS
   validation {
