@@ -6,6 +6,10 @@ variable "environment" {
   type = string
 }
 
+variable "primary_region" {
+  type = string
+}
+
 variable "bucket_admin_principals" {
   type = list(string)
 }
