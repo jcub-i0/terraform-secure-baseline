@@ -65,7 +65,7 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
 ### EVENTBRIDGE RESOURCES
 #### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
-  name        = "securityhub-ec2-high-critical"
+  name        = "${name_prefix}-securityhub-ec2-high-critical"
   description = "New High/Critical Security Hub EC2 findings"
 
   event_pattern = jsonencode({
@@ -186,7 +186,7 @@ resource "aws_security_group" "lambda_ec2_rollback_sg" {
 ### EVENTBRIDGE RESOURCES
 #### CUSTOM EVENT BUS TO LIMIT ONLY SECURITY OPERATIONS USERS TO TRIGGER EC2 ROLLBACK
 resource "aws_cloudwatch_event_bus" "secops" {
-  name = "security-operations-bus"
+  name = "${var.name_prefix}-security-operations-bus"
   tags = {
     Name        = "${var.name_prefix}-secops-bus"
     Environment = var.environment
@@ -236,7 +236,7 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
 
 #### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
 resource "aws_cloudwatch_event_rule" "ec2_rollback" {
-  name           = "ec2-rollback-rule"
+  name           = "${var.name_prefix}-ec2-rollback-rule"
   description    = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
   event_bus_name = aws_cloudwatch_event_bus.secops.name
 
@@ -354,7 +354,7 @@ resource "aws_secretsmanager_secret_version" "threat_intel_api_keys" {
 }
 
 resource "aws_cloudwatch_event_rule" "securityhub_high_critical" {
-  name        = "securityhub-high-critical"
+  name        = "${var.name_prefix}-securityhub-high-critical"
   description = "New High/Critical Security Hub findings"
 
   event_pattern = jsonencode({
