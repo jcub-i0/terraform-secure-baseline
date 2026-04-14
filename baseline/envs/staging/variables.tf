@@ -18,3 +18,7 @@ variable "abuseipdb_api_key" {
   type      = string
   sensitive = true
 }
+
+variable "config_enabled" {
+  type    = bool
+}
