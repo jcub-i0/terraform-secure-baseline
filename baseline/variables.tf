@@ -111,8 +111,8 @@ variable "enable_rules" {
 # ENABLE IN PROD
 variable "config_enabled" {
   description = "Define whether AWS Config is enabled or not"
-  type    = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "ip_enrichment_write_to_securityhub" {
