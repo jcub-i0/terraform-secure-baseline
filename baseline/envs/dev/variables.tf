@@ -1,12 +1,15 @@
 variable "cloud_name" {
+  description = "The name of this cloud environment"
   type = string
 }
 
 variable "environment" {
+  description = "Environment name"
   type = string
 }
 
 variable "primary_region" {
+  description = "Primary Region used"
   type = string
 }
 
@@ -16,11 +19,13 @@ variable "bucket_admin_principals" {
 }
 
 variable "abuseipdb_api_key" {
+  description = "AbuseIPDB API key for IP Enrichment Lamba"
   type      = string
   sensitive = true
 }
 
 variable "config_enabled" {
+  description = "Define whether AWS Config is enabled or not"
   type = bool
 }
 
