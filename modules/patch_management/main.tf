@@ -1,6 +1,6 @@
 # MAINTENANCE WINDOW
 resource "aws_ssm_maintenance_window" "patching" {
-  name                       = "${var.name_prefix}--weekly-patching"
+  name                       = "${var.name_prefix}-weekly-patching"
   description                = "Weekly patch window for Ubuntu EC2 instances"
   schedule                   = var.patch_schedule
   schedule_timezone          = var.schedule_timezone
