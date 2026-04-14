@@ -33,7 +33,7 @@ resource "aws_guardduty_detector" "main" {
 resource "aws_guardduty_detector_feature" "main" {
   for_each    = toset(var.guardduty_features)
   detector_id = aws_guardduty_detector.main.id
-  name        = each.value
+  name        = "${var.name_prefix}-each.value"
   status      = "ENABLED"
 
   lifecycle {
@@ -310,7 +310,7 @@ resource "aws_kms_key" "logs" {
 
 ### ALIAS FOR LOGS KMS KEY
 resource "aws_kms_alias" "logs" {
-  name          = "alias/${var.cloud_name}-logs"
+  name          = "alias/${var.name_prefix}/logs-cmk"
   target_key_id = aws_kms_key.logs.key_id
 }
 
@@ -365,7 +365,7 @@ resource "aws_kms_key" "ebs" {
 
 ### EBS KMS KEY ALIAS
 resource "aws_kms_alias" "ebs" {
-  name          = "alias/ebs-cmk"
+  name          = "alias/${var.name_prefix}/ebs-cmk"
   target_key_id = aws_kms_key.ebs.id
 }
 
@@ -442,7 +442,7 @@ resource "aws_kms_key" "lambda" {
 
 ### ALIAS FOR LAMBDA KMS KEY
 resource "aws_kms_alias" "lambda" {
-  name          = "alias/lambda-cmk"
+  name          = "alias/${var.name_prefix}/lambda-cmk"
   target_key_id = aws_kms_key.lambda.id
 }
 
@@ -495,7 +495,7 @@ resource "aws_kms_key" "secrets_manager" {
 }
 
 resource "aws_kms_alias" "secrets_manager" {
-  name          = "alias/${var.cloud_name}/secrets"
+  name          = "alias/${var.name_prefix}/secrets-cmk"
   target_key_id = aws_kms_key.secrets_manager.arn
 }
 
@@ -547,7 +547,7 @@ resource "aws_kms_key" "backup_vault" {
 }
 
 resource "aws_kms_alias" "backup_vault" {
-  name          = "alias/${var.cloud_name}/backup"
+  name          = "alias/${var.name_prefix}/backup-cmk"
   target_key_id = aws_kms_key.backup_vault.arn
 }
 
