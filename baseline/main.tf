@@ -225,6 +225,8 @@ module "patch_management" {
 module "security_dashboard" {
   source = "../modules/security_dashboard"
 
+  environment = var.environment
+
   depends_on = [
     module.security
   ]
