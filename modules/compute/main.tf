@@ -71,7 +71,7 @@ resource "aws_instance" "ec2" {
   }
 
   tags = {
-    Name             = "EC2-${each.key}"
+    Name             = "${var.name_prefix}-EC2-${each.key}"
     Environment      = var.environment
     Terraform        = "true"
     Purpose          = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
