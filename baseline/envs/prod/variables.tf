@@ -11,6 +11,7 @@ variable "primary_region" {
 }
 
 variable "bucket_admin_principals" {
+  description = "Principals allowed to manage bucket guardrails (polish/versioning)"
   type = list(string)
 }
 
@@ -31,4 +32,15 @@ variable "backup_enabled" {
 variable "break_glass_trusted_principal_arns" {
   description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
   type        = list(string)
+}
+
+variable "secops_emails" {
+  description = "List of emails to send security-related notifications to"
+  type        = list(string)
+
+  # VALIDATE EMAIL FORMATS
+  validation {
+    condition     = alltrue([for e in var.secops_emails : can(regex("^.+@.+\\..+$", e))])
+    error_message = "Each entry in secops_emails must be a valid email address."
+  }
 }
