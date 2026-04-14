@@ -12,4 +12,5 @@ module "baseline" {
   abuseipdb_api_key       = var.abuseipdb_api_key
   config_enabled          = var.config_enabled
   backup_enabled          = var.backup_enabled
+  secops_emails = var.secops_emails
 }
