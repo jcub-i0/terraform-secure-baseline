@@ -16,7 +16,7 @@ data "aws_iam_policy" "lambda_xray" {
 ## EC2 ISOLATION LAMBDA
 ### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
-  name = "lambda-ec2-isolation-role"
+  name = "${var.name_prefix}-lambda-ec2-isolation-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -32,7 +32,7 @@ resource "aws_iam_role" "lambda_ec2_isolation" {
 
 ### EC2 ISOLATION IAM POLICY
 resource "aws_iam_policy" "lambda_ec2_isolation" {
-  name = "lambda-ec2-isolation"
+  name = "${var.name_prefix}-lambda-ec2-isolation"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -99,7 +99,7 @@ resource "aws_iam_role_policy_attachment" "ec2_isolation_xray_attach" {
 ## EC2 ROLLBACK LAMBDA
 ### EC2 ROLLBACK LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_rollback" {
-  name = "lambda-ec2-rollback"
+  name = "${var.name_prefix}-lambda-ec2-rollback"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -115,7 +115,7 @@ resource "aws_iam_role" "lambda_ec2_rollback" {
 
 ### EC2 ROLLBACK IAM POLICY
 resource "aws_iam_policy" "lambda_ec2_rollback" {
-  name = "lambda-rollback-policy"
+  name = "${var.name_prefix}-lambda-rollback-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -180,7 +180,7 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_xray_attach" {
 ## IP ENRICHMENT LAMBDA
 ### IP ENRICHMENT LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ip_enrichment" {
-  name = "lambda-ip-enrichment"
+  name = "${var.name_prefix}-lambda-ip-enrichment"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -199,7 +199,7 @@ resource "aws_iam_role" "lambda_ip_enrichment" {
 }
 
 resource "aws_iam_policy" "lambda_ip_enrichment" {
-  name        = "lambda-ip-enrichment-policy"
+  name        = "${var.name_prefix}-lambda-ip-enrichment-policy"
   description = "Permissions for IP Enrichment Lambda"
 
   policy = jsonencode({
