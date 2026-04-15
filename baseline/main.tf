@@ -18,6 +18,11 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 resource "random_id" "random_id" { byte_length = 4 }
 
+# ACCOUNT-SCOPED RESOURCES (DEPLOYED BY 'ACCOUNT_SERVICES' STACK)
+data "aws_iam_role" "config" {
+  name = "AWSServiceRoleForConfig"
+}
+
 ###############
 # MODULE CALLS
 ###############
