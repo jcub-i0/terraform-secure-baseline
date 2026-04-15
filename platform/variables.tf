@@ -1,4 +1,4 @@
 variable "cloud_name" {
-  type = string
+  type    = string
   default = "tf-secure-baseline"
 }
