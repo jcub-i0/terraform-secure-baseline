@@ -62,3 +62,23 @@ terraform {
 - No environment duplication
 - Minimal scope (only resources that cannot be multi-env)
 - Separation of concerns for `baseline`
+
+---
+
+## Notes
+
+- Keep this stack small and focused
+- Do NOT add environment-specific resources here
+- Avoid turning this into a general-purpose "shared" stack
+
+---
+
+## Summary
+
+The `account_services` stack ensures that AWS account-level services are:
+
+- Deployed once
+- Managed safely
+- Reused across all environments
+
+This prevents conflicts, quota issues, and deployment failures in multi-enviornment setups, like this one.
