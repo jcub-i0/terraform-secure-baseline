@@ -24,7 +24,7 @@ resource "aws_guardduty_detector" "main" {
   region                       = var.primary_region
 
   tags = {
-    Name        = "${var.cloud_name}-Main"
-    Terraform   = "true"
+    Name      = "${var.cloud_name}-Main"
+    Terraform = "true"
   }
 }

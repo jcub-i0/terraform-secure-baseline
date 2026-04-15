@@ -4,6 +4,6 @@ variable "cloud_name" {
 }
 
 variable "primary_region" {
-  type = string
+  type    = string
   default = "us-east-1"
 }
