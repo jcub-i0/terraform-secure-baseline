@@ -17,3 +17,14 @@ resource "aws_accessanalyzer_analyzer" "main" {
   }
 }
 
+# GUARDDUTY DETECTOR
+resource "aws_guardduty_detector" "main" {
+  enable                       = true
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+  region                       = var.primary_region
+
+  tags = {
+    Name        = "${var.cloud_name}-Main"
+    Terraform   = "true"
+  }
+}
