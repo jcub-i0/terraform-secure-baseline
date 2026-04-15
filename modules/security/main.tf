@@ -35,9 +35,7 @@ resource "aws_guardduty_detector_feature" "main" {
 }
 
 # SECURITY HUB
-resource "aws_securityhub_account" "main" {
-  depends_on = [aws_guardduty_detector.main]
-}
+resource "aws_securityhub_account" "main" {}
 
 ## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
 resource "aws_securityhub_standards_subscription" "main" {
