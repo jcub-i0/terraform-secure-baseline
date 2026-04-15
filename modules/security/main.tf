@@ -35,7 +35,7 @@ resource "aws_guardduty_detector" "main" {
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
   for_each    = toset(var.guardduty_features)
-  detector_id = aws_guardduty_detector.main.id
+  detector_id = data.aws_guardduty_detector.main
   name        = each.value
   status      = "ENABLED"
 
