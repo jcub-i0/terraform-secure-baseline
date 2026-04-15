@@ -112,7 +112,7 @@ module "security" {
   name_prefix                  = local.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
-  config_role_arn              = data.aws_iam_role.config
+  config_role_arn              = data.aws_iam_role.config.arn
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
   current_region               = data.aws_region.current.region
   account_id                   = data.aws_caller_identity.current.account_id
