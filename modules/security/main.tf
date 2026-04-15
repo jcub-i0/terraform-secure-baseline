@@ -33,7 +33,7 @@ resource "aws_guardduty_detector" "main" {
 resource "aws_guardduty_detector_feature" "main" {
   for_each    = toset(var.guardduty_features)
   detector_id = aws_guardduty_detector.main.id
-  name        = "${var.name_prefix}-each.value"
+  name        = each.value
   status      = "ENABLED"
 
   lifecycle {
