@@ -22,7 +22,7 @@ resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
   for_each    = toset(var.guardduty_features)
-  detector_id = data.aws_guardduty_detector.main
+  detector_id = data.aws_guardduty_detector.main.id
   name        = each.value
   status      = "ENABLED"
 
