@@ -34,6 +34,10 @@ variable "compliance_topic_arn" {
   type = string
 }
 
+variable "guardduty_detector_id" {
+  type = string
+}
+
 variable "guardduty_features" {
   type = list(string)
 }
