@@ -81,4 +81,4 @@ The `account_services` stack ensures that AWS account-level services are:
 - Managed safely
 - Reused across all environments
 
-This prevents conflicts, quota issues, and deployment failures in multi-enviornment setups, like this one.
+This prevents conflicts, quota issues, and deployment failures in multi-enviornment configurations, like this one.
