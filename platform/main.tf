@@ -2,14 +2,12 @@
 # PLATFORM STACK
 #################
 
-# IAM-RELATED RESOURCES
-
-## CONFIG SERVICE-LINKED ROLE
+# CONFIG SERVICE-LINKED ROLE
 resource "aws_iam_service_linked_role" "config" {
   aws_service_name = "config.amazonaws.com"
 }
 
-## IAM ACCESS ANALYZER
+# IAM ACCESS ANALYZER
 resource "aws_accessanalyzer_analyzer" "main" {
   analyzer_name = "${var.cloud_name}-account-access-analyzer"
   type          = "ACCOUNT"
@@ -18,3 +16,4 @@ resource "aws_accessanalyzer_analyzer" "main" {
     Terraform = "true"
   }
 }
+
