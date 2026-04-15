@@ -10,9 +10,6 @@ locals {
   }
 }
 
-# PULL GUARDDUTY DETECTOR'S ID (RESOURCE DEPLOYED FROM 'ACCOUNT_SERVICES' STACK)
-data "aws_guardduty_detector" "main" {}
-
 # ENABLE 'BLOCK PUBLIC SHARING' ON SSM DOCUMENTS
 resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
   setting_id    = "/ssm/documents/console/public-sharing-permission"
