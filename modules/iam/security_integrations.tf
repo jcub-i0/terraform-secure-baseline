@@ -6,16 +6,6 @@
 # in the environment.
 #############################################
 
-# IAM ACCESS ANALYZER
-resource "aws_accessanalyzer_analyzer" "main" {
-  analyzer_name = "${var.name_prefix}-account-access-analyzer"
-  type          = "ACCOUNT"
-
-  tags = {
-    Terraform = "true"
-  }
-}
-
 # EVENTBRIDGE ROLE
 resource "aws_iam_role" "eventbridge_putevents_to_secops" {
   name = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
