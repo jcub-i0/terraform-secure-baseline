@@ -49,7 +49,7 @@ resource "aws_db_instance" "main" {
   publicly_accessible = false
 
   db_name             = "appdb"
-  username            = "${var.db_username}-${var.environment}"
+  username            = "${var.db_username}${var.environment}"
   password_wo         = ephemeral.aws_secretsmanager_random_password.rds_master.random_password
   password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
