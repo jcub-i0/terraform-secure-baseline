@@ -118,7 +118,7 @@ module "security" {
   account_id                   = data.aws_caller_identity.current.account_id
   compliance_topic_arn         = module.monitoring.compliance_topic_arn
   primary_region               = var.primary_region
-  guardduty_detector_id = data.aws_guardduty_detector.main.id
+  guardduty_detector_id        = data.aws_guardduty_detector.main.id
   guardduty_features           = var.guardduty_features
   config_remediation_role_arn  = module.iam.config_remediation_role_arn
   secops_event_bus_name        = module.automation.secops_event_bus_name
