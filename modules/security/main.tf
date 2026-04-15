@@ -19,19 +19,6 @@ resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
   setting_value = "Disable"
 }
 
-# GUARDDUTY
-resource "aws_guardduty_detector" "main" {
-  enable                       = true
-  finding_publishing_frequency = "FIFTEEN_MINUTES"
-  region                       = var.primary_region
-
-  tags = {
-    Name        = "${var.name_prefix}-Main"
-    Environment = var.environment
-    Terraform   = "true"
-  }
-}
-
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
   for_each    = toset(var.guardduty_features)
