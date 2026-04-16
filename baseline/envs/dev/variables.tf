@@ -1,3 +1,8 @@
+variable "deployment_role_arn" {
+  description = "Role assumed by Terraform to deploy into this environment account"
+  type        = string
+}
+
 variable "cloud_name" {
   description = "The name of this cloud environment"
   type        = string
