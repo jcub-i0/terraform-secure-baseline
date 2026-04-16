@@ -16,10 +16,23 @@ resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
   setting_value = "Disable"
 }
 
+# GUARDDUTY
+resource "aws_guardduty_detector" "main" {
+  enable                       = true
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+  region                       = var.primary_region
+
+  tags = {
+    Name        = "${var.name_prefix}-Main"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
   for_each    = toset(var.guardduty_features)
-  detector_id = var.guardduty_detector_id
+  detector_id = aws_guardduty_detector.main.id
   name        = each.value
   status      = "ENABLED"
 
@@ -32,7 +45,9 @@ resource "aws_guardduty_detector_feature" "main" {
 }
 
 # SECURITY HUB
-resource "aws_securityhub_account" "main" {}
+resource "aws_securityhub_account" "main" {
+  depends_on = [aws_guardduty_detector.main]
+}
 
 ## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
 resource "aws_securityhub_standards_subscription" "main" {

@@ -28,3 +28,6 @@ resource "aws_guardduty_detector" "main" {
     Terraform = "true"
   }
 }
+
+# SECURITY HUB ACCOUNT
+resource "aws_securityhub_account" "main" {}
