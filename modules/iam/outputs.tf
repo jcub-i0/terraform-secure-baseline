@@ -11,6 +11,10 @@ output "flowlogs_role_arn" {
   value = aws_iam_role.flowlogs.arn
 }
 
+output "config_role_arn" {
+  value = aws_iam_service_linked_role.config.arn
+}
+
 output "lambda_ec2_isolation_role_arn" {
   value = aws_iam_role.lambda_ec2_isolation.arn
 }

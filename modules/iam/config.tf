@@ -4,6 +4,11 @@ data "aws_iam_policy" "ssm_automation" {
   name = "AmazonSSMAutomationRole"
 }
 
+# CONFIG SERVICE-LINKED ROLE
+resource "aws_iam_service_linked_role" "config" {
+  aws_service_name = "config.amazonaws.com"
+}
+
 # CONFIG REMEDIATION ROLE
 resource "aws_iam_role" "config_remediation" {
   name = "${var.name_prefix}-ConfigRemediationRole"

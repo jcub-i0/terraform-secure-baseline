@@ -18,12 +18,6 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 resource "random_id" "random_id" { byte_length = 4 }
 
-# ACCOUNT-SCOPED RESOURCES (DEPLOYED BY 'ACCOUNT_SERVICES' STACK)
-data "aws_guardduty_detector" "main" {}
-data "aws_iam_role" "config" {
-  name = "AWSServiceRoleForConfig"
-}
-
 ###############
 # MODULE CALLS
 ###############
@@ -112,13 +106,12 @@ module "security" {
   name_prefix                  = local.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
-  config_role_arn              = data.aws_iam_role.config.arn
+  config_role_arn              = module.iam.config_role_arn
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
   current_region               = data.aws_region.current.region
   account_id                   = data.aws_caller_identity.current.account_id
   compliance_topic_arn         = module.monitoring.compliance_topic_arn
   primary_region               = var.primary_region
-  guardduty_detector_id        = data.aws_guardduty_detector.main.id
   guardduty_features           = var.guardduty_features
   config_remediation_role_arn  = module.iam.config_remediation_role_arn
   secops_event_bus_name        = module.automation.secops_event_bus_name
