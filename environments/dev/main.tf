@@ -3,7 +3,7 @@ locals {
 }
 
 module "baseline" {
-  source = "../.."
+  source = "../../baseline"
 
   cloud_name                         = var.cloud_name
   environment                        = var.environment
