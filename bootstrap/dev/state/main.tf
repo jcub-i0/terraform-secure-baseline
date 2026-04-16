@@ -7,7 +7,7 @@ locals {
 }
 
 module "state" {
-  source = "../modules/state"
+  source = "../../../modules/state"
 
   cloud_name              = var.cloud_name
   environment             = var.environment
