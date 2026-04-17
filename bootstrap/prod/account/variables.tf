@@ -1,3 +1,7 @@
+variable "aws_profile" {
+  type = string
+}
+
 ########################
 # GITHUB OIDC VARIABLES
 ########################
