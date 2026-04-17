@@ -1,9 +1,9 @@
 terraform {
   backend "s3" {
-    bucket         = "tf-secure-baseline-state"
+    bucket         = "tf-secure-baseline-staging-state"
     key            = "tf-state-bootstrap"
     region         = "us-east-1"
     encrypt        = true
-    dynamodb_table = "tf-secure-baseline-lock"
+    dynamodb_table = "tf-secure-baseline-staging-lock"
   }
 }
