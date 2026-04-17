@@ -1,7 +1,3 @@
-variable "aws_profile" {
-  type = string
-}
-
 variable "cloud_name" {
   description = "The name of this cloud environment"
   type        = string
