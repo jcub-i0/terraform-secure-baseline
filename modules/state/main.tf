@@ -53,7 +53,7 @@ resource "aws_kms_key" "state" {
   }
 
   tags = {
-    Name        = "${var.cloud_name}-state"
+    Name        = "${var.name_prefix}-state"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -61,20 +61,20 @@ resource "aws_kms_key" "state" {
 
 ## ALIAS FOR STATE CMK / KMS KEY
 resource "aws_kms_alias" "state" {
-  name          = "alias/${var.cloud_name}-state"
+  name          = "alias/${var.name_prefix}-state"
   target_key_id = aws_kms_key.state.key_id
 }
 
 # CREATE STATE S3 BUCKET
 resource "aws_s3_bucket" "state" {
-  bucket = "${var.cloud_name}-state"
+  bucket = "${var.name_prefix}-state"
 
   lifecycle {
     prevent_destroy = true
   }
 
   tags = {
-    Name        = "${var.cloud_name}-state"
+    Name        = "${var.name_prefix}-state"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -181,7 +181,7 @@ resource "aws_s3_bucket_policy" "state" {
 
 # STATE DYNAMODB LOCK TABLE
 resource "aws_dynamodb_table" "state_lock" {
-  name         = "${var.cloud_name}-lock"
+  name         = "${var.name_prefix}-lock"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -199,7 +199,7 @@ resource "aws_dynamodb_table" "state_lock" {
   }
 
   tags = {
-    Name        = "${var.cloud_name}-Terraform-Lock"
+    Name        = "${var.name_prefix}-Terraform-Lock"
     Environment = var.environment
     Terraform   = "true"
   }
