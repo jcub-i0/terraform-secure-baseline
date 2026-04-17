@@ -15,11 +15,6 @@ variable "primary_region" {
   default = "us-east-1"
 }
 
-variable "account_id" {
-  description = "ID of the AWS account managing this environment"
-  type        = string
-}
-
 variable "bucket_admin_principals" {
   description = "Principals allowed to manage bucket guardrails (policy/versioning)"
   type        = list(string)
