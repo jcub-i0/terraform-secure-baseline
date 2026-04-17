@@ -9,7 +9,7 @@ variable "environment" {
 }
 
 variable "primary_region" {
-  type    = string
+  type = string
 }
 
 variable "bucket_admin_principals" {
