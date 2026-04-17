@@ -13,7 +13,7 @@ variable "environment" {
 }
 
 variable "primary_region" {
-  type    = string
+  type = string
 }
 
 variable "enable_github_oidc" {
