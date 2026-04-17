@@ -1,3 +1,7 @@
+variable "name_prefix" {
+  description = "'cloud_name'-'environment'"
+}
+
 variable "cloud_name" {
   description = "The name of this cloud environment"
   type        = string
