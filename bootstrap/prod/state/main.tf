@@ -9,7 +9,7 @@ locals {
 module "state" {
   source = "../../../modules/state"
 
-  name_prefix = local.name_prefix
+  name_prefix             = local.name_prefix
   cloud_name              = var.cloud_name
   environment             = var.environment
   primary_region          = var.primary_region
