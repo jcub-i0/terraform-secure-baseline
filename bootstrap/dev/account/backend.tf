@@ -5,6 +5,6 @@ terraform {
     region         = "us-east-1"
     encrypt        = true
     dynamodb_table = "tf-secure-baseline-dev-lock"
-    use_lockfile = true
+    use_lockfile   = true
   }
 }
