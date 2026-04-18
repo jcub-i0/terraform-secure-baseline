@@ -3,6 +3,14 @@ name: Terraform Destroy
 on:
     workflow_dispatch:
         inputs:
+            environment:
+                description: "Environment to deploy"
+                required: true
+                type: choice
+                options:
+                    - dev
+                    - staging
+                    - prod
             confirm:
                 description: "Type DESTROY to destroy infrastructure"
                 required: true
