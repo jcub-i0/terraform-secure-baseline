@@ -71,7 +71,6 @@ variable "tf_state_lock_table_arn" {
 variable "branches_plan_github" {
   description = "List of branches allowed to assume the github_oidc role"
   type        = list(string)
-  default     = ["main"]
 }
 
 variable "allow_pull_requests_plan_github" {
