@@ -9,10 +9,6 @@ permissions:
     id-token: write
     contents: read
 
-concurrency:
-  group: terraform-plan-${{github.ref}}-${{matrix.environment}}
-  cancel-in-progress: true
-
 jobs:
   terraform-plan:
     runs-on: ubuntu-latest
@@ -21,6 +17,10 @@ jobs:
       matrix:
         environment: [dev, staging, prod]
       
+    concurrency:
+      group: terraform-plan-${{github.ref}}-${{matrix.environment}}
+      cancel-in-progress: true
+
     environment: ${{format('{0}-plan', matrix.environment)}}
 
     env:
