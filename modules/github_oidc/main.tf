@@ -76,12 +76,12 @@ data "aws_iam_policy_document" "plan_oidc_assume_role" {
 }
 
 resource "aws_iam_role" "github_plan" {
-  name               = "${var.cloud_name}-github-plan-role"
+  name               = "${var.name_prefix}-github-plan-role"
   assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role.json
 }
 
 resource "aws_iam_policy" "github_plan" {
-  name = "${var.cloud_name}-github-plan-policy"
+  name = "${var.name_prefix}-github-plan-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -228,7 +228,7 @@ data "aws_iam_policy_document" "apply_oidc_assume_role" {
 resource "aws_iam_role" "github_apply" {
   count = var.enable_apply_role_github ? 1 : 0
 
-  name               = "${var.cloud_name}-github-apply-role"
+  name               = "${var.name_prefix}-github-apply-role"
   assume_role_policy = data.aws_iam_policy_document.apply_oidc_assume_role[0].json
 }
 
@@ -236,7 +236,7 @@ resource "aws_iam_role" "github_apply" {
 resource "aws_iam_policy" "github_apply" {
   count = var.enable_apply_role_github ? 1 : 0
 
-  name = "${var.cloud_name}-github-apply-policy"
+  name = "${var.name_prefix}-github-apply-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
