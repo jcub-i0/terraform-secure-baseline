@@ -17,8 +17,12 @@ locals {
   github_pr_subject = "repo:${var.owner_github}/${var.repo_github}:pull_request"
 
   plan_oidc_subjects_github = concat(
-    local.plan_branch_subjects_github,
-    var.allow_pull_requests_plan_github ? [local.github_pr_subject] : []
+    var.environment != null ?
+    local.plan_environment_subjects_github :
+    concat(
+      local.plan_branch_subjects_github,
+      var.allow_pull_requests_plan_github ? [local.github_pr_subject] : []
+    )
   )
 }
 
