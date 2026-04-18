@@ -46,7 +46,7 @@ jobs:
         run: aws sts get-caller-identity
 
       - name: Verify S3 access
-        run: aws s3 ls s3://${{vars.TF_STATE_BUCKET_NAME}}-${{matrix.environment}}-state/tf-state-baseline-${{matrix.environment}}
+        run: aws s3 ls s3://${{vars.TF_STATE_BUCKET_NAME}}/tf-state-baseline-${{matrix.environment}}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
