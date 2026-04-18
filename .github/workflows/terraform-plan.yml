@@ -18,7 +18,7 @@ jobs:
         environment: [dev, staging, prod]
       
     concurrency:
-      group: terraform-plan-${{github.ref}}-${{matrix.environment}}
+      group: terraform-plan-${{github.head_ref || github.ref_name}}-${{matrix.environment}}
       cancel-in-progress: true
 
     environment: ${{format('{0}-plan', matrix.environment)}}
