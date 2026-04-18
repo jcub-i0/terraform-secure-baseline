@@ -71,30 +71,5 @@ jobs:
               working-directory: ./environments/${{inputs.environment}}
               shell: bash
               run: |
-                set -o pipefail
-                
-                for attempt in 1 2 3; do
-                    echo "========== Terraform apply attempt $attempt =========="
-
-                    terraform apply -auto-approve -input=false -no-color 2>&1 | tee apply.log
-                    status=$?
-
-                    if [ $status -eq 0 ]; then
-                        echo "Terraform apply succeeded on attempt $attempt"
-                        exit 0
-                    fi
-
-                    if grep -Eq "Permission set provision not found|Assignment not found" apply.log; then
-                        if [ $attempt -lt 3 ]; then
-                            echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt."
-                            echo "Sleeping for 60 seconds before retry..."
-                            sleep 60
-                        else
-                            echo "Retries exhausted after attempt $attempt"
-                            exit $status
-                        fi
-                    else
-                        echo "Non-retryable terraform error on attempt $attempt"
-                        exit $status
-                    fi
-                done
+                set -euo pipefail
+                terraform apply -auto-approve -input=false -no-color
