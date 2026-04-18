@@ -20,13 +20,14 @@ permissions:
     contents: read
 
 concurrency:
-    group: terraform-destroy-dev
+    group: terraform-destroy-${{inputs.environment}}
     cancel-in-progress: false
 
 jobs:
     terraform-destroy:
+        if: ${{inputs.confirm == 'DESTROY'}}
         runs-on: ubuntu-latest
-        environment: dev
+        environment: ${{inputs.environment}}
 
         env:
             TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
