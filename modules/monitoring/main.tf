@@ -316,7 +316,7 @@ EOT
 
 #### EVENTBRIDGE RULE FOR BREAK-GLASS ADMIN ROLE ASSUMED
 resource "aws_cloudwatch_event_rule" "break_glass_assumed" {
-  name        = "break-glass-admin-assumed"
+  name        = "${var.name_prefix}-break-glass-admin-assumed"
   description = "Alert when the BreakGlass-Admin role is assumed"
 
   event_pattern = jsonencode({
@@ -382,7 +382,7 @@ EOT
 #### ROOT ACTIVITY
 resource "aws_cloudwatch_log_metric_filter" "root_activity" {
   name           = "RootActivity"
-  log_group_name = var.cloudtrail_log_group_name
+  log_group_name = var.cloudtrail_logs_group_name
 
   pattern = "{$.userIdentity.type = \"Root\"}"
 
@@ -415,7 +415,7 @@ resource "aws_cloudwatch_metric_alarm" "root_activity" {
 ### UNAUTHORIZED API CALLS
 resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
   name           = "Unauthorized-API-Calls"
-  log_group_name = var.cloudtrail_log_group_name
+  log_group_name = var.cloudtrail_logs_group_name
 
   pattern = "{($.errorCode = \"UnauthorizedOperation\") || ($.errorCode = \"AccessDenied\")}"
 
@@ -448,7 +448,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
 ### CLOUDTRAIL DISABLED
 resource "aws_cloudwatch_log_metric_filter" "cloudtrail_disabled" {
   name           = "CloudTrail-Disabled"
-  log_group_name = var.cloudtrail_log_group_name
+  log_group_name = var.cloudtrail_logs_group_name
 
   pattern = "{($.eventName = \"StopLogging\") || ($.eventName = \"DeleteTrail\")}"
 
@@ -481,7 +481,7 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
 ### IAM POLICY CHANGES (CONSIDER ALSO ADDING 'DeletePolicy', 'DetachRolePolicy', and 'UpdateAssumeRolePolicy')
 resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
   name           = "IamPolicyChanges"
-  log_group_name = var.cloudtrail_log_group_name
+  log_group_name = var.cloudtrail_logs_group_name
 
   pattern = "{ ($.eventSource = \"iam.amazonaws.com\") && (($.eventName = \"CreatePolicy\") || ($.eventName = \"PutRolePolicy\") || ($.eventName = \"AttachRolePolicy\"))}"
 

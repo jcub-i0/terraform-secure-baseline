@@ -1,3 +1,8 @@
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string

@@ -11,7 +11,7 @@ resource "aws_iam_service_linked_role" "config" {
 
 # CONFIG REMEDIATION ROLE
 resource "aws_iam_role" "config_remediation" {
-  name = "ConfigRemediationRole"
+  name = "${var.name_prefix}-ConfigRemediationRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -37,7 +37,7 @@ resource "aws_iam_role_policy_attachment" "config_ssm_automation" {
 
 ## CONFIG REMEDIATION S3 PUBLIC ACCESS BLOCK POLICY
 resource "aws_iam_role_policy" "s3_public_remediation" {
-  name = "S3PublicAccessBlockRemediation"
+  name = "${var.name_prefix}-S3PublicAccessBlockRemediation"
   role = aws_iam_role.config_remediation.id
 
   policy = jsonencode({

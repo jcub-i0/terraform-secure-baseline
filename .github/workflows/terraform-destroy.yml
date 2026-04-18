@@ -3,6 +3,14 @@ name: Terraform Destroy
 on:
     workflow_dispatch:
         inputs:
+            environment:
+                description: "Environment to destroy"
+                required: true
+                type: choice
+                options:
+                    - dev
+                    - staging
+                    - prod
             confirm:
                 description: "Type DESTROY to destroy infrastructure"
                 required: true
@@ -12,13 +20,14 @@ permissions:
     contents: read
 
 concurrency:
-    group: terraform-destroy-dev
+    group: terraform-destroy-${{inputs.environment}}
     cancel-in-progress: false
 
 jobs:
     terraform-destroy:
+        if: ${{inputs.confirm == 'DESTROY'}}
         runs-on: ubuntu-latest
-        environment: dev
+        environment: ${{inputs.environment}}
 
         env:
             TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
@@ -26,7 +35,6 @@ jobs:
             TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
             TF_VAR_tf_state_bucket_cmk_arn: ${{vars.TF_STATE_BUCKET_CMK_ARN}}
             TF_VAR_tf_state_lock_table_arn: ${{vars.TF_STATE_LOCK_TABLE_ARN}}
-            TF_VAR_allow_pull_requests_plan_github: ${{vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB}}
             TF_VAR_break_glass_trusted_principal_arns: ${{vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS}}
             TF_VAR_secops_emails: ${{vars.SECOPS_EMAILS}}
 
@@ -44,50 +52,25 @@ jobs:
             - name: Configure AWS credentials
               uses: aws-actions/configure-aws-credentials@v4
               with:
-                role-to-assume: arn:aws:iam::072288671186:role/tf-secure-baseline-dev-github-apply-role
-                aws-region: us-east-1
+                role-to-assume: ${{vars.APPLY_ROLE_GITHUB_ARN}}
+                aws-region: ${{vars.PRIMARY_REGION}}
 
             - name: Verify identity
               run: aws sts get-caller-identity
 
             - name: Verify S3 access
-              run: aws s3 ls s3://tf-secure-baseline-state/tf-state-baseline
+              run: aws s3 ls s3://${{vars.TF_STATE_BUCKET_NAME}}-${{inputs.environment}}-state/tf-state-baseline-${{inputs.environment}}
 
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v3
 
             - name: Terraform Init
-              working-directory: ./baseline
+              working-directory: ./environments/${{inputs.environment}}
               run: terraform init
 
             - name: Terraform Destroy
-              working-directory: ./baseline
+              working-directory: ./environments/${{inputs.environment}}
               shell: bash
               run: |
                 set -o pipefail
-                
-                for attempt in 1 2 3; do
-                    echo "========== Terraform destroy attempt $attempt =========="
-
-                    terraform destroy -auto-approve -input=false -no-color -lock-timeout=5m 2>&1 | tee destroy.log
-                    status=$?
-
-                    if [ $status -eq 0 ]; then
-                        echo "Terraform destroy succeeded on attempt $attempt"
-                        exit 0
-                    fi
-
-                    if grep -Eq "Permission set provision not found|Assignment not found" destroy.log; then
-                        if [ $attempt -lt 3 ]; then
-                            echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt."
-                            echo "Sleeping for 60 seconds before retry..."
-                            sleep 60
-                        else
-                            echo "Retries exhausted after attempt $attempt"
-                            exit $status
-                        fi
-                    else
-                        echo "Non-retryable terraform error on attempt $attempt"
-                        exit $status
-                    fi
-                done
+                terraform destroy -auto-approve -input=false -no-color

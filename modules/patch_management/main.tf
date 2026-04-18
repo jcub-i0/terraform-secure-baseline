@@ -1,6 +1,6 @@
 # MAINTENANCE WINDOW
 resource "aws_ssm_maintenance_window" "patching" {
-  name                       = "${var.name_prefix}--weekly-patching"
+  name                       = "${var.name_prefix}-weekly-patching"
   description                = "Weekly patch window for Ubuntu EC2 instances"
   schedule                   = var.patch_schedule
   schedule_timezone          = var.schedule_timezone
@@ -18,7 +18,7 @@ resource "aws_ssm_maintenance_window" "patching" {
 
 # MAINTENANCE WINDOW TARGET
 resource "aws_ssm_maintenance_window_target" "patching" {
-  name          = "${var.cloud_name}-patch-target"
+  name          = "${var.name_prefix}-patch-target"
   window_id     = aws_ssm_maintenance_window.patching.id
   description   = "Instances tagged for weekly patching"
   resource_type = "INSTANCE"
@@ -31,7 +31,7 @@ resource "aws_ssm_maintenance_window_target" "patching" {
 
 # MAINTENANCE WINDOW TASK
 resource "aws_ssm_maintenance_window_task" "patching" {
-  name             = "${var.cloud_name}-run-patch-baseline"
+  name             = "${var.name_prefix}-run-patch-baseline"
   window_id        = aws_ssm_maintenance_window.patching.id
   description      = "Run AWS-RunPatchBaseline Install on tagged instances"
   task_type        = "RUN_COMMAND"

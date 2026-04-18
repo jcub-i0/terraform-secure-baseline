@@ -6,9 +6,11 @@ locals {
 data "aws_caller_identity" "current" {}
 
 module "github_oidc" {
-  source = "../modules/github_oidc"
+  source = "../../../modules/github_oidc"
   count  = var.enable_github_oidc ? 1 : 0
 
+  cloud_name                      = var.cloud_name
+  environment                     = var.environment
   owner_github                    = var.owner_github
   repo_github                     = var.repo_github
   branches_plan_github            = var.branches_plan_github

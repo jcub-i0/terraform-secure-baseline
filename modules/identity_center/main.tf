@@ -38,21 +38,21 @@ resource "aws_identitystore_group" "secops_operators" {
 ##########################################
 
 resource "aws_ssoadmin_permission_set" "secops_analyst" {
-  name             = "SecOps-Analyst"
+  name             = "SecOps-Analyst-${var.environment}"
   description      = "Read-only security visibility for analysts"
   instance_arn     = local.instance_arn
   session_duration = "PT4H"
 }
 
 resource "aws_ssoadmin_permission_set" "secops_engineer" {
-  name             = "SecOps-Engineer"
+  name             = "SecOps-Engineer-${var.environment}"
   description      = "Security investigation and response access"
   instance_arn     = local.instance_arn
   session_duration = "PT4H"
 }
 
 resource "aws_ssoadmin_permission_set" "secops_operator" {
-  name             = "SecOps-Operator"
+  name             = "SecOps-Operator-${var.environment}"
   description      = "Privileged operational rollback access"
   instance_arn     = local.instance_arn
   session_duration = "PT2H"

@@ -3,7 +3,7 @@
 ########################################
 
 resource "aws_iam_role" "patch_maintenance_window" {
-  name = "${var.cloud_name}-patch-mw-role"
+  name = "${var.name_prefix}-patch-mw-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -19,7 +19,7 @@ resource "aws_iam_role" "patch_maintenance_window" {
   })
 
   tags = {
-    Name      = "PatchMaintenanceWindowRole"
+    Name      = "${var.name_prefix}-PatchMaintenanceWindowRole"
     Terraform = "true"
   }
 }

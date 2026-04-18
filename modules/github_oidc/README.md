@@ -83,8 +83,8 @@ module "github_oidc" {
 
 | Name | Description |
 |------|-------------|
-| `github_plan_role_arn` | `GitHub-Plan` role ARN |
-| `github_apply_role_arn` | `GitHub-Apply` role ARN (if enabled) |
+| `plan_role_github_arn` | `GitHub-Plan` role ARN |
+| `apply_role_github_arn` | `GitHub-Apply` role ARN (if enabled) |
 
 ---
 
@@ -113,6 +113,6 @@ module "github_oidc" {
 - name: Configure AWS credentials
   uses: aws-actions/configure-aws-credentials@v4
   with:
-    role-to-assume: <github_apply_role_arn>
+    role-to-assume: <apply_role_github_arn>
     aws-region: us-east-1
 ```

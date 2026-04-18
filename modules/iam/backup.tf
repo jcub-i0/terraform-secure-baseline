@@ -12,7 +12,7 @@ data "aws_iam_policy" "backup_restore" {
 
 # AWS BACKUP SERVICE ROLE
 resource "aws_iam_role" "backup" {
-  name = "backup-role"
+  name = "${var.name_prefix}-backup-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

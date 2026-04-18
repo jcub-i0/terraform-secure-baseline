@@ -35,7 +35,7 @@ resource "aws_db_instance" "main" {
 
   engine         = "postgres"
   engine_version = "16.6"
-  instance_class = "db.t4g.medium"
+  instance_class = "db.t4g.micro"
 
   allocated_storage     = 50
   max_allocated_storage = 200
@@ -49,7 +49,7 @@ resource "aws_db_instance" "main" {
   publicly_accessible = false
 
   db_name             = "appdb"
-  username            = var.db_username
+  username            = "${var.db_username}${var.environment}"
   password_wo         = ephemeral.aws_secretsmanager_random_password.rds_master.random_password
   password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
@@ -147,7 +147,7 @@ ephemeral "aws_secretsmanager_secret_version" "rds_master" {
 # S3 RESOURCES
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
-  bucket              = "centralized-logs-${var.random_id}"
+  bucket              = "${var.name_prefix}-centralized-logs-${var.random_id}"
   object_lock_enabled = false # CHANGE THIS IN PROD
   force_destroy       = true  # CHANGE THIS IN PROD
 

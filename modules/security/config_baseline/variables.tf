@@ -1,7 +1,3 @@
-variable "cloud_name" {
-  type = string
-}
-
 variable "name_prefix" {
   type = string
 }
@@ -16,6 +12,7 @@ variable "config_enabled" {
 }
 
 variable "enable_rules" {
+  description = "Rules to be enabled in the 'config_baseline' module"
   type = object({
     s3_baseline         = bool
     cloudtrail_baseline = bool

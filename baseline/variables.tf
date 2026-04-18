@@ -79,11 +79,12 @@ variable "guardduty_features" {
 }
 
 variable "bucket_admin_principals" {
-  description = "Principals allowed to manage bucket guardrails (polish/versioning)"
+  description = "Principals allowed to manage bucket guardrails (policy/versioning)"
   type        = list(string)
 }
 
 variable "enable_rules" {
+  description = "Rules to be enabled in the 'config_baseline' module"
   type = object({
     s3_baseline         = bool
     cloudtrail_baseline = bool
@@ -109,8 +110,9 @@ variable "enable_rules" {
 
 # ENABLE IN PROD
 variable "config_enabled" {
-  type    = bool
-  default = false
+  description = "Define whether AWS Config is enabled or not"
+  type        = bool
+  default     = false
 }
 
 variable "ip_enrichment_write_to_securityhub" {

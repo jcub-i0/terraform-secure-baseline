@@ -4,18 +4,11 @@
 
 ## Build subject strings dynamically for GitHub-Plan role
 locals {
+  environment_plan_github = "${var.environment}-plan"
 
-  plan_branch_subjects_github = [
-    for branch in var.branches_plan_github :
-    "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
+  plan_oidc_subjects_github = [
+    "repo:${var.owner_github}/${var.repo_github}:environment:${local.environment_plan_github}"
   ]
-
-  github_pr_subject = "repo:${var.owner_github}/${var.repo_github}:pull_request"
-
-  plan_oidc_subjects_github = concat(
-    local.plan_branch_subjects_github,
-    var.allow_pull_requests_plan_github ? [local.github_pr_subject] : []
-  )
 }
 
 ## Build subject strings dynamically for GitHub-Apply role

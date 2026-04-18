@@ -10,7 +10,7 @@ variable "logs_cmk_arn" {
   type = string
 }
 
-variable "cloudtrail_log_group_name" {
+variable "cloudtrail_logs_group_name" {
   type = string
 }
 

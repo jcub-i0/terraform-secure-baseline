@@ -1,8 +1,3 @@
-variable "cloud_name" {
-  description = "Name of the cloud environment"
-  type        = string
-}
-
 variable "name_prefix" {
   type = string
 }

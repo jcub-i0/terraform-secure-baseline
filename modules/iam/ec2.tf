@@ -1,7 +1,7 @@
 # EC2 Roles and Policies
 ## EC2 Role
 resource "aws_iam_role" "ec2_role" {
-  name = "ec2_compute_role"
+  name = "${var.name_prefix}-ec2_compute_role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -29,6 +29,6 @@ resource "aws_iam_role_policy_attachment" "cloudwatch" {
 
 ## Create EC2 Instance Profile to attach the ec2_role IAM Role, thus allowing EC2 compute instance(s) to inherit the role
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.cloud_name}_ec2_compute_instance_profile"
+  name = "${var.name_prefix}-ec2_compute_instance_profile"
   role = aws_iam_role.ec2_role.name
 }

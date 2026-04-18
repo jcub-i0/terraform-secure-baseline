@@ -6,7 +6,7 @@
 # All usage should be monitored and audited.
 
 resource "aws_iam_role" "break_glass_admin" {
-  name        = "BreakGlass-Admin"
+  name        = "${var.name_prefix}-BreakGlass-Admin"
   description = "Emergency-only administrator role to be used if IAM Identity Center access is unavailable"
 
   assume_role_policy = jsonencode({
@@ -29,7 +29,7 @@ resource "aws_iam_role" "break_glass_admin" {
   })
 
   tags = {
-    Name        = "BreakGlass-Admin"
+    Name        = "${var.name_prefix}-BreakGlass-Admin"
     Environment = var.environment
     Terraform   = "true"
     Purpose     = "EmergencyAccessOnly"
