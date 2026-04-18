@@ -19,7 +19,7 @@ variable "secops_operator_group_name" {
 }
 
 variable "account_id" {
-  description = ""
+  description = "ID of the AWS account managing this environment"
   type        = string
 }
 
