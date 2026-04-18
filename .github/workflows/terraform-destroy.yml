@@ -65,29 +65,4 @@ jobs:
               shell: bash
               run: |
                 set -o pipefail
-                
-                for attempt in 1 2 3; do
-                    echo "========== Terraform destroy attempt $attempt =========="
-
-                    terraform destroy -auto-approve -input=false -no-color -lock-timeout=5m 2>&1 | tee destroy.log
-                    status=$?
-
-                    if [ $status -eq 0 ]; then
-                        echo "Terraform destroy succeeded on attempt $attempt"
-                        exit 0
-                    fi
-
-                    if grep -Eq "Permission set provision not found|Assignment not found" destroy.log; then
-                        if [ $attempt -lt 3 ]; then
-                            echo "Hit IAM Identity Center eventual consistency issue. Retrying on attempt $attempt."
-                            echo "Sleeping for 60 seconds before retry..."
-                            sleep 60
-                        else
-                            echo "Retries exhausted after attempt $attempt"
-                            exit $status
-                        fi
-                    else
-                        echo "Non-retryable terraform error on attempt $attempt"
-                        exit $status
-                    fi
-                done
+                terraform destroy -auto-approve -input=false -no-color -lock-timeout=5m 2>&1 | tee destroy.log
