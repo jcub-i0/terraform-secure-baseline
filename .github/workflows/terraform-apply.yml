@@ -1,27 +1,34 @@
 name: Terraform Apply
 
 on:
-    push:
-        branches:
-            - main
     workflow_dispatch:
         inputs:
+            environment:
+                description: "Environment to deploy"
+                required: true
+                type: choice
+                options:
+                    - dev
+                    - staging
+                    - prod
             confirm:
                 description: "Type 'YES' to apply"
                 required: true
+                type: string
 
 permissions:
     id-token: write
     contents: read
 
 concurrency:
-    group: terraform-apply-dev
+    group: terraform-apply-${{inputs.environment}}
     cancel-in-progress: false
 
 jobs:
     terraform-apply:
+        if: ${{inputs.confirm == 'YES'}}
         runs-on: ubuntu-latest
-        environment: dev
+        environment: ${{inputs.environment}}
 
         env:
             TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
@@ -40,28 +47,28 @@ jobs:
             - name: Configure AWS credentials from GitHub OIDC
               uses: aws-actions/configure-aws-credentials@v4
               with:
-                role-to-assume: ${{  }}
-                aws-region: us-east-1
+                role-to-assume: ${{vars.APPLY_ROLE_GITHUB_ARN}}
+                aws-region: ${{vars.PRIMARY_REGION}}
 
             - name: Verify identity
               run: aws sts get-caller-identity
 
             - name: Verify S3 access
-              run: aws s3 ls s3://tf-secure-baseline-state/tf-state-baseline
+              run: aws s3 ls s3://tf-secure-baseline-dev-state/tf-state-baseline-dev
 
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v3
 
             - name: Terraform Init
-              working-directory: ./baseline
+              working-directory: ./environments/${{inputs.environment}}
               run: terraform init
 
             - name: Terraform Validate
-              working-directory: ./baseline
+              working-directory: ./environments/${{inputs.environment}}
               run: terraform validate
 
             - name: Terraform Apply
-              working-directory: ./baseline
+              working-directory: ./environments/${{inputs.environment}}
               shell: bash
               run: |
                 set -o pipefail
