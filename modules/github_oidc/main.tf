@@ -10,6 +10,10 @@ locals {
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
   ]
 
+  plan_environment_subjects_github = var.environment != null ? [
+    "repo:${var.owner_github}/${var.repo_github}:environment:${var.environment}"
+  ] : []
+
   github_pr_subject = "repo:${var.owner_github}/${var.repo_github}:pull_request"
 
   plan_oidc_subjects_github = concat(
