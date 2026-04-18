@@ -51,9 +51,9 @@ cd bootstrap
 terraform init
 terraform apply
 ```
->Note the `github_apply_role_arn` output
+>Note the `apply_role_github_arn` output
 
-2. Add the `github_apply_role_arn` output's value to the `bucket_admin_principals` variable (defined in `bootstrap` stack)
+2. Add the `apply_role_github_arn` output's value to the `bucket_admin_principals` variable (defined in `bootstrap` stack)
 
 Example:
 
@@ -125,7 +125,7 @@ module "github_oidc" {
 | Name | Description |
 |------|-------------|
 | `github_plan_role_arn` | `GitHub-Plan` role ARN |
-| `github_apply_role_arn` | `GitHub-Apply` role ARN |
+| `apply_role_github_arn` | `GitHub-Apply` role ARN |
 
 ---
 
