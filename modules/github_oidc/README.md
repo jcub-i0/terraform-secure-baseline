@@ -83,7 +83,7 @@ module "github_oidc" {
 
 | Name | Description |
 |------|-------------|
-| `github_plan_role_arn` | `GitHub-Plan` role ARN |
+| `plan_role_github_arn` | `GitHub-Plan` role ARN |
 | `apply_role_github_arn` | `GitHub-Apply` role ARN (if enabled) |
 
 ---

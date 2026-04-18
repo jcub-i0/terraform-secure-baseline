@@ -40,7 +40,7 @@ jobs:
             - name: Configure AWS credentials from GitHub OIDC
               uses: aws-actions/configure-aws-credentials@v4
               with:
-                role-to-assume: arn:aws:iam::072288671186:role/tf-secure-baseline-dev-github-apply-role
+                role-to-assume: ${{  }}
                 aws-region: us-east-1
 
             - name: Verify identity
