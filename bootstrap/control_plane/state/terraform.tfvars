@@ -1,3 +1,3 @@
 cloud_name     = "tf-secure-baseline"
-environment    = "dev"
+environment    = "bootstrap"
 primary_region = "us-east-1"
