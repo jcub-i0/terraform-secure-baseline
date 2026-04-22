@@ -20,6 +20,11 @@ variable "staging_account_id" {
   description = "ID of the AWS account managing the 'staging' environment"
 }
 
+variable "dev_primary_region" {
+  default = "us-east-1"
+  description = "Primary region used by the 'dev' environment"
+}
+
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
