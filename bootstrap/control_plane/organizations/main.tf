@@ -4,3 +4,13 @@ resource "aws_organizations_organization" "main" {
   aws_service_access_principals = []
   enabled_policy_types = []
 }
+
+resource "aws_organizations_organizational_unit" "workloads" {
+  name = "Workloads"
+  parent_id = aws_organizations_organization.main.id
+}
+
+resource "aws_organizations_organizational_unit" "nonprod" {
+  name = "NonProd"
+  parent_id = aws_organizations_organization.main.id
+}
