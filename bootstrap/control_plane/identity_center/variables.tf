@@ -10,29 +10,35 @@ variable "environment" {
 
 variable "dev_account_id" {
   description = "ID of the AWS account managing the 'dev' environment"
+  type = string
 }
 
 variable "prod_account_id" {
   description = "ID of the AWS account managing the 'prod' environment"
+  type = string
 }
 
 variable "staging_account_id" {
   description = "ID of the AWS account managing the 'staging' environment"
+  type = string
 }
 
 variable "dev_primary_region" {
-  default = "us-east-1"
   description = "Primary region used by the 'dev' environment"
+  type = string
+  default = "us-east-1"
 }
 
 variable "prod_primary_region" {
-  default = "us-east-1"
+  type = string
   description = "Primary region used by the 'prod' environment"
+  default = "us-east-1"
 }
 
 variable "staging_primary_region" {
-  default = "us-east-1"
+  type = string
   description = "Primary region used by the 'staging' environment"
+  default = "us-east-1"
 }
 
 variable "secops_analyst_group_name" {
