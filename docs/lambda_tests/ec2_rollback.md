@@ -33,7 +33,7 @@ The `SecOps-Operator` permission set allows:
 
 - `events:ListEventBuses`
 - `events:DescribeEventBus`
-- `events:PutEvents` on the `security-operations-bus`
+- `events:PutEvents` on the `secops-bus`
 
 This is the minimum access required to manually inject rollback events onto the SecOps event bus.
 
@@ -140,7 +140,7 @@ This test is performed entirely from the AWS console (no CLI required).
 
 Sign in through the AWS access portal, open the AWS account using `SecOps-Operator`, and navigate to:
 
-`Amazon EventBridge` ➔ `Event buses` ➔ `security-operations-bus` ➔ `Send events`
+`Amazon EventBridge` ➔ `Event buses` ➔ `secops-bus` ➔ `Send events`
 
 Use:
 
@@ -187,7 +187,7 @@ aws events put-events --region us-east-1 --entries '[
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
     "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
-    "EventBusName": "security-operations-bus"
+    "EventBusName": "secops-bus"
   }
 ]' --profile <profile-name>
 ```
