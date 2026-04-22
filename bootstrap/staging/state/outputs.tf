@@ -1,6 +1,6 @@
 output "account_id" {
   description = "ID of the AWS account managing this environment"
-  value = data.aws_caller_identity.account_id.account_id
+  value       = data.aws_caller_identity.account_id.account_id
 }
 
 output "tf_state_bucket_arn" {

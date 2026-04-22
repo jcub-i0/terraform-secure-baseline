@@ -1,2 +1,2 @@
-cloud_name     = "tf-secure-baseline"
-environment    = "bootstrap"
+cloud_name  = "tf-secure-baseline"
+environment = "bootstrap"
