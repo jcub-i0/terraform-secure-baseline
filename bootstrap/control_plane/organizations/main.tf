@@ -7,15 +7,15 @@ resource "aws_organizations_organization" "main" {
 
 resource "aws_organizations_organizational_unit" "workloads" {
   name = "Workloads"
-  parent_id = aws_organizations_organization.main.id
+  parent_id = aws_organizations_organization.main.roots[0].id
 }
 
 resource "aws_organizations_organizational_unit" "nonprod" {
   name = "NonProd"
-  parent_id = aws_organizations_organization.main.id
+  parent_id = aws_organizations_organizational_unit.workloads.id
 }
 
 resource "aws_organizations_organizational_unit" "prod" {
   name = "Prod"
-  parent_id = aws_organizations_organization.main.id
+  parent_id = aws_organizations_organizational_unit.workloads.id
 }
