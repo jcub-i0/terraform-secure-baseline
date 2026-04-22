@@ -22,6 +22,15 @@ module "identity_center_prod" {
   secops_event_bus_arn       = "arn:aws:events:${var.prod_account_id}:${var.prod_account_id}:event-bus/secops-bus"
 }
 
+module "identity_center_staging" {
+  source = "../../../modules/identity_center"
+
+  account_id                 = var.staging_account_id
+  environment                = "staging"
+  secops_operator_group_name = "SecOps-Operator-Staging"
+  secops_event_bus_arn       = "arn:aws:events:${var.staging_account_id}:${var.staging_account_id}:event-bus/secops-bus"
+}
+
 /*
 # FULL IDENTITY_CENTER MODULE CALL
 module "identity_center" {
