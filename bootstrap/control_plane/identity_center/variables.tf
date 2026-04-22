@@ -48,10 +48,6 @@ variable "secops_engineer_group_name" {
   type        = string
 }
 */
-variable "secops_operator_group_name" {
-  description = "Name of the SecOps-Operator IAM group"
-  type        = string
-}
 
 variable "account_id" {
   description = "ID of the AWS account managing this environment"
