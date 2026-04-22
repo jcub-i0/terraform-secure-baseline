@@ -4,7 +4,7 @@ variable "environment" {
 }
 
 variable "secops_operator_group_name" {
-  description = "Name of the SecOps-Operator IAM group"
+  description = "Name of the SecOps-Operator Identity Center group"
   type        = string
 }
 
