@@ -1,4 +1,4 @@
-output "account_id" {
+output "bootstrap_account_id" {
   description = "ID of the AWS account managing this environment"
   value       = data.aws_caller_identity.account_id.account_id
 }
