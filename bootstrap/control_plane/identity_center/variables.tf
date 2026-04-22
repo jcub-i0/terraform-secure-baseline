@@ -8,6 +8,10 @@ variable "environment" {
   type        = string
 }
 
+variable "dev_account_id" {
+  description = "ID of the AWS account managing the 'dev' environment"
+}
+
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
