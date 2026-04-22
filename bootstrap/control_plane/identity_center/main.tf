@@ -10,7 +10,16 @@ module "identity_center_dev" {
   account_id                 = var.dev_account_id
   environment                = "dev"
   secops_operator_group_name = "SecOps-Operator-Dev"
-  secops_event_bus_arn       = "arn:aws:events:us-east-1:${var.dev_account_id}:event-bus/secops-bus"
+  secops_event_bus_arn       = "arn:aws:events:${var.dev_account_id}:${var.dev_account_id}:event-bus/secops-bus"
+}
+
+module "identity_center_prod" {
+  source = "../../../modules/identity_center"
+
+  account_id                 = var.prod_account_id
+  environment                = "prod"
+  secops_operator_group_name = "SecOps-Operator-Prod"
+  secops_event_bus_arn       = "arn:aws:events:${var.prod_account_id}:${var.prod_account_id}:event-bus/secops-bus"
 }
 
 /*
