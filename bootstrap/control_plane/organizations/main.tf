@@ -1,13 +1,18 @@
+/*
+If AWS Organizations is not already enabled in the account, uncomment this resource
 resource "aws_organizations_organization" "main" {
   feature_set = "ALL"
 
   aws_service_access_principals = []
   enabled_policy_types          = []
 }
+*/
+
+data "aws_organizations_organization" "main" {}
 
 resource "aws_organizations_organizational_unit" "workloads" {
   name      = "Workloads"
-  parent_id = aws_organizations_organization.main.roots[0].id
+  parent_id = data.aws_organizations_organization.main.roots[0].id
 }
 
 resource "aws_organizations_organizational_unit" "nonprod" {
