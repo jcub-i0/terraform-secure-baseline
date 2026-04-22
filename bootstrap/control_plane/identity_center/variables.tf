@@ -26,19 +26,16 @@ variable "staging_account_id" {
 variable "dev_primary_region" {
   description = "Primary region used by the 'dev' environment"
   type = string
-  default = "us-east-1"
 }
 
 variable "prod_primary_region" {
   type = string
   description = "Primary region used by the 'prod' environment"
-  default = "us-east-1"
 }
 
 variable "staging_primary_region" {
   type = string
   description = "Primary region used by the 'staging' environment"
-  default = "us-east-1"
 }
 
 variable "secops_analyst_group_name" {
