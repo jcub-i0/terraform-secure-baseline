@@ -7,10 +7,10 @@ data "aws_caller_identity" "account_id" {}
 module "identity_center_dev" {
   source = "../../../modules/identity_center"
 
-  account_id = var.dev_account_id
-  environment = "dev"
+  account_id                 = var.dev_account_id
+  environment                = "dev"
   secops_operator_group_name = "SecOps-Operator-Dev"
-  secops_event_bus_arn = "arn:aws:events:us-east-1:${var.dev_account_id}:event-bus/secops-bus"
+  secops_event_bus_arn       = "arn:aws:events:us-east-1:${var.dev_account_id}:event-bus/secops-bus"
 }
 
 /*

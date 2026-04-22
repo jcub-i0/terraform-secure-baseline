@@ -10,31 +10,31 @@ variable "environment" {
 
 variable "dev_account_id" {
   description = "ID of the AWS account managing the 'dev' environment"
-  type = string
+  type        = string
 }
 
 variable "prod_account_id" {
   description = "ID of the AWS account managing the 'prod' environment"
-  type = string
+  type        = string
 }
 
 variable "staging_account_id" {
   description = "ID of the AWS account managing the 'staging' environment"
-  type = string
+  type        = string
 }
 
 variable "dev_primary_region" {
   description = "Primary region used by the 'dev' environment"
-  type = string
+  type        = string
 }
 
 variable "prod_primary_region" {
-  type = string
+  type        = string
   description = "Primary region used by the 'prod' environment"
 }
 
 variable "staging_primary_region" {
-  type = string
+  type        = string
   description = "Primary region used by the 'staging' environment"
 }
 
