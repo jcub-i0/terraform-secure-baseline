@@ -25,6 +25,11 @@ variable "dev_primary_region" {
   description = "Primary region used by the 'dev' environment"
 }
 
+variable "prod_primary_region" {
+  default = "us-east-1"
+  description = "Primary region used by the 'prod' environment"
+}
+
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
