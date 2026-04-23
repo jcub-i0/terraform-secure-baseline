@@ -10,7 +10,7 @@ module "identity_center_dev" {
   account_id                 = var.dev_account_id
   environment                = "dev"
   secops_operator_group_name = "SecOps-Operator-Dev"
-  secops_event_bus_arn       = "arn:aws:events:${var.dev_account_id}:${var.dev_account_id}:event-bus/secops-bus"
+  secops_event_bus_arn       = "arn:aws:events:${var.dev_primary_region}:${var.dev_account_id}:event-bus/secops-bus"
 }
 
 module "identity_center_prod" {
@@ -19,7 +19,7 @@ module "identity_center_prod" {
   account_id                 = var.prod_account_id
   environment                = "prod"
   secops_operator_group_name = "SecOps-Operator-Prod"
-  secops_event_bus_arn       = "arn:aws:events:${var.prod_account_id}:${var.prod_account_id}:event-bus/secops-bus"
+  secops_event_bus_arn       = "arn:aws:events:${var.prod_primary_region}:${var.prod_account_id}:event-bus/secops-bus"
 }
 
 module "identity_center_staging" {
@@ -28,7 +28,7 @@ module "identity_center_staging" {
   account_id                 = var.staging_account_id
   environment                = "staging"
   secops_operator_group_name = "SecOps-Operator-Staging"
-  secops_event_bus_arn       = "arn:aws:events:${var.staging_account_id}:${var.staging_account_id}:event-bus/secops-bus"
+  secops_event_bus_arn       = "arn:aws:events:${var.staging_primary_region}:${var.staging_account_id}:event-bus/secops-bus"
 }
 
 /*
