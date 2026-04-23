@@ -14,7 +14,7 @@ locals {
 ##########################################
 # CREATE IAM IDENTITY CENTER GROUPS
 ##########################################
-
+/*
 resource "aws_identitystore_group" "secops_analyst" {
   identity_store_id = local.identity_store_id
   display_name      = var.secops_analyst_group_name
@@ -26,7 +26,7 @@ resource "aws_identitystore_group" "secops_engineers" {
   display_name      = var.secops_engineer_group_name
   description       = "SecOps engineers"
 }
-
+*/
 resource "aws_identitystore_group" "secops_operators" {
   identity_store_id = local.identity_store_id
   display_name      = var.secops_operator_group_name
@@ -36,7 +36,7 @@ resource "aws_identitystore_group" "secops_operators" {
 ##########################################
 # PERMISSION SETS
 ##########################################
-
+/*
 resource "aws_ssoadmin_permission_set" "secops_analyst" {
   name             = "SecOps-Analyst-${var.environment}"
   description      = "Read-only security visibility for analysts"
@@ -50,7 +50,7 @@ resource "aws_ssoadmin_permission_set" "secops_engineer" {
   instance_arn     = local.instance_arn
   session_duration = "PT4H"
 }
-
+*/
 resource "aws_ssoadmin_permission_set" "secops_operator" {
   name             = "SecOps-Operator-${var.environment}"
   description      = "Privileged operational rollback access"
@@ -63,7 +63,7 @@ resource "aws_ssoadmin_permission_set" "secops_operator" {
 ##########################################
 
 # SECOPS-ANALYST POLICY ATTACHMENTS
-
+/*
 resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_security_audit" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
@@ -94,7 +94,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
 # CUSTOMER-MANAGED POLICY ATTACHMENTS
 ##########################################
 
-# SECOPS-OPERATOR POLICY ATTACHMENTS
+# SECOPS-ANALYST POLICY ATTACHMENTS
 
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_s3" {
   instance_arn       = local.instance_arn
@@ -165,7 +165,7 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
     ]
   })
 }
-
+*/
 ##########################################
 # INLINE POLICY FOR SECOPS-OPERATOR
 ##########################################
@@ -201,7 +201,7 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
 ##########################################
 # ACCOUNT ASSIGNMENTS
 ##########################################
-
+/*
 resource "aws_ssoadmin_account_assignment" "analysts" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
@@ -238,7 +238,7 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
     aws_ssoadmin_permission_set_inline_policy.secops_engineer_inline
   ]
 }
-
+*/
 resource "aws_ssoadmin_account_assignment" "operators" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn

@@ -33,7 +33,7 @@ In a production workflow, this Lambda is triggered by:
 ### TEST 1 -- HIGH EC2 SECURITY HUB FINDING
 #### Expected Outcome:
 * Lambda executes
-* Instance isolated in Quarantine Security Group
+* Instance isolated in `Quarantine` Security Group
 * Tags applied to instance
 * SNS notification sent to configured SNS topic
 * No errors in logs

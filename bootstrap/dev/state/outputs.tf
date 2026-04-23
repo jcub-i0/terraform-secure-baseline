@@ -1,3 +1,8 @@
+output "dev_account_id" {
+  description = "ID of the AWS account managing this environment"
+  value       = data.aws_caller_identity.account_id.account_id
+}
+
 output "tf_state_bucket_arn" {
   description = "ARN of the S3 bucket where the Terraform state is stored"
   value       = module.state.tf_state_bucket_arn

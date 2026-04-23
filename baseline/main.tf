@@ -243,22 +243,3 @@ module "backup" {
   delete_backups_after_days = var.delete_backups_after_days
   backup_service_role_arn   = module.iam.backup_service_role_arn
 }
-/*
-module "identity_center" {
-  source = "../modules/identity_center"
-
-  account_id                   = data.aws_caller_identity.current.account_id
-  secops_analyst_group_name    = "SecOps-Analysts"
-  secops_engineer_group_name   = "SecOps-Engineers"
-  secops_operator_group_name   = "SecOps-Operators"
-  logs_cmk_decrypt_policy_name = module.iam.logs_cmk_decrypt_policy_name
-  logs_s3_readonly_policy_name = module.iam.logs_s3_readonly_policy_name
-  secops_event_bus_arn         = module.automation.secops_event_bus_arn
-  environment                  = var.environment
-  customer_managed_policy_path = "/"
-
-  depends_on = [
-    module.iam
-  ]
-}
-*/

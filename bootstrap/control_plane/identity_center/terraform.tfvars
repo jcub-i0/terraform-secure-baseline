@@ -1,0 +1,5 @@
+cloud_name             = "tf-secure-baseline"
+environment            = "bootstrap"
+dev_primary_region     = "us-east-1"
+prod_primary_region    = "us-east-1"
+staging_primary_region = "us-east-1"
