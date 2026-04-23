@@ -9,6 +9,7 @@ How to use:
 * Authenticate using IAM Identity Center (SSO)
 * Confirm expected outcome based on the **Expected Outcome** section of each test
 
+These tests take place within the `dev` environment and assume that environment exists in the `us-east-1` region.
 ---
 
 ## EC2 ROLLBACK LAMBDA TESTS
@@ -21,19 +22,19 @@ You must have an EC2 instance that exists in the Quarantine Security Group.
 
 #### ACCESS REQUIREMENTS
 
-The EC2 Rollback workflow is tested through **AWS IAM Identity Center** and the `SecOps-Operator` permission set.
+The EC2 Rollback workflow is tested through **AWS IAM Identity Center** and the `SecOps-Operator-dev` permission set. Identity Center exists within the `bootstrap` AWS account.
 
 To test this Lambda function, the user performing the test must:
 
 - Exist as a user in IAM Identity Center
-- Be assigned to the `SecOps-Operators` group
-- Have access to the AWS account using the `SecOps-Operator` permission set
+- Be assigned to the `SecOps-Operators-dev` group
+- Have access to the AWS account using the `SecOps-Operator-dev` permission set
 
 The `SecOps-Operator` permission set allows:
 
 - `events:ListEventBuses`
 - `events:DescribeEventBus`
-- `events:PutEvents` on the `secops-bus`
+- `events:PutEvents` on the `<cloud_name>-dev-secops-bus`
 
 This is the minimum access required to manually inject rollback events onto the SecOps event bus.
 
@@ -41,7 +42,7 @@ This is the minimum access required to manually inject rollback events onto the 
 
 ### SIGN IN VIA THE AWS ACCESS PORTAL (FOR TEST 1)
 
-Use the exact AWS access portal URL configured for your IAM Identity Center instance.
+Use the exact AWS access portal URL configured for your IAM Identity Center instance in the `bootstrap` AWS account.
 
 Examples of valid access portal URL formats include:
 
@@ -62,11 +63,11 @@ After opening the AWS account, confirm the active role in the top-right of the c
 
 Expected role name pattern:
 
-`SecOps-Operator/<username>`
+`SecOps-Operator-dev/<username>`
 
 or:
 
-`AWSReservedSSO_SecOps-Operator_<random>/<username>`
+`AWSReservedSSO_SecOps-Operator-dev_<random>/<username>`
 
 ---
 
@@ -140,7 +141,7 @@ This test is performed entirely from the AWS console (no CLI required).
 
 Sign in through the AWS access portal, open the AWS account using `SecOps-Operator`, and navigate to:
 
-`Amazon EventBridge` ➔ `Event buses` ➔ `secops-bus` ➔ `Send events`
+`Amazon EventBridge` ➔ `Event buses` ➔ `<cloud_name>-dev-secops-bus` ➔ `Send events`
 
 Use:
 
@@ -187,7 +188,7 @@ aws events put-events --region us-east-1 --entries '[
     "Source": "custom.rollback",
     "DetailType": "Ec2Rollback",
     "Detail": "{\"instance_id\":\"<INSTANCE_ID>\",\"approved_by\":\"secops@company.com\",\"ticket_id\":\"t-abc123\",\"reason\":\"Test rollback\"}",
-    "EventBusName": "secops-bus"
+    "EventBusName": "<cloud_name>-dev-secops-bus"
   }
 ]' --profile <profile-name>
 ```
