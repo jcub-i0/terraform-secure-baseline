@@ -10,14 +10,14 @@ variable "environment" {
 
 variable "enable_secops_analyst" {
   description = "Determines whether SecOps-Analyst resources are deployed"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "enable_secops_engineer" {
   description = "Determines whether SecOps-Engineer resources are deployed"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "dev_account_id" {
