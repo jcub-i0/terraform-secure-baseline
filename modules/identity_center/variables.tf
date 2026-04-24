@@ -66,4 +66,12 @@ variable "logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the logs_cmk_decrypt policy (set after 'baseline' is deployed)"
   type        = string
   default     = null
+
+  validation {
+    condition = !(
+      (var.enable_secops_analyst || var.enable_secops_engineer)
+      && var.logs_cmk_decrypt_policy_name == null
+    )
+    error_message = "'logs_cmk_decrypt_policy_name' must be set when 'enable_secops_analyst' or 'enable_secops_engineer' is set to 'true'"
+  }
 }
