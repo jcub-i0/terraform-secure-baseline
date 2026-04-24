@@ -67,7 +67,7 @@ variable "account_id" {
   type        = string
 }
 
-variable "logs_s3_readonly_policy_name_dev" {
+variable "dev_logs_s3_readonly_policy_name" {
   description = "'Name' attribute of the 'dev' env's logs_s3_readonly policy"
   type        = string
   default     = null
