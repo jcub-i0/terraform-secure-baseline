@@ -94,7 +94,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_security_audi
   count = var.enable_secops_engineer ? 1 : 0
 
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
 
@@ -102,7 +102,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
   count = var.enable_secops_engineer ? 1 : 0
 
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
   managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
@@ -142,7 +142,7 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs
   count = var.logs_s3_readonly_policy_name ? 1 : 0
 
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
   customer_managed_policy_reference {
     name = var.logs_s3_readonly_policy_name
@@ -154,7 +154,7 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs
   count = var.logs_cmk_decrypt_policy_name ? 1 : 0
 
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
   customer_managed_policy_reference {
     name = var.logs_cmk_decrypt_policy_name
@@ -170,7 +170,7 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
   count = var.enable_secops_engineer ? 1 : 0
 
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
   inline_policy = jsonencode({
     Version = "2012-10-17"
@@ -252,7 +252,7 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
   count = var.enable_secops_engineer ? 1 : 0
 
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
   principal_id   = aws_identitystore_group.secops_engineers.group_id
   principal_type = "GROUP"
