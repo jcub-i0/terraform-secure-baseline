@@ -39,4 +39,9 @@ module "identity_center_staging" {
   environment                = "staging"
   secops_operator_group_name = "SecOps-Operator-Staging"
   secops_event_bus_arn       = "arn:aws:events:${var.staging_primary_region}:${var.staging_account_id}:event-bus/secops-bus"
+  enable_secops_analyst        = var.enable_secops_analyst
+  enable_secops_engineer       = var.enable_secops_engineer
+  logs_cmk_decrypt_policy_name = var.staging_logs_cmk_decrypt_policy_name
+  logs_s3_readonly_policy_name = var.staging_logs_s3_readonly_policy_name
+  customer_managed_policy_path = "/"
 }
