@@ -37,7 +37,7 @@ variable "staging_primary_region" {
   type        = string
   description = "Primary region used by the 'staging' environment"
 }
-/*
+
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
@@ -47,13 +47,12 @@ variable "secops_engineer_group_name" {
   description = "Name of the SecOps-Engineer IAM group"
   type        = string
 }
-*/
 
 variable "account_id" {
   description = "ID of the AWS account managing this environment"
   type        = string
 }
-/*
+
 variable "customer_managed_policy_path" {
   description = "Path of customer managed IAM policies used by permission sets"
   type        = string
@@ -74,4 +73,3 @@ variable "secops_event_bus_arn" {
   description = "ARN of the SecOps Event Bus"
   type        = string
 }
-*/
