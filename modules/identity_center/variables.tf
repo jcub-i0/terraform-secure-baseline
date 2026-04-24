@@ -17,7 +17,7 @@ variable "secops_event_bus_arn" {
   description = "ARN of the SecOps Event Bus"
   type        = string
 }
-/*
+
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
@@ -43,4 +43,3 @@ variable "logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the logs_cmk_decrypt policy"
   type        = string
 }
-*/
