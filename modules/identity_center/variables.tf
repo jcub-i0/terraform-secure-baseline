@@ -3,11 +3,6 @@ variable "environment" {
   type        = string
 }
 
-variable "secops_operator_group_name" {
-  description = "Name of the SecOps-Operator Identity Center group"
-  type        = string
-}
-
 variable "account_id" {
   description = "ID of the AWS account managing this environment"
   type        = string
@@ -15,6 +10,11 @@ variable "account_id" {
 
 variable "secops_event_bus_arn" {
   description = "ARN of the SecOps Event Bus"
+  type        = string
+}
+
+variable "secops_operator_group_name" {
+  description = "Name of the SecOps-Operator Identity Center group"
   type        = string
 }
 
