@@ -49,13 +49,13 @@ variable "customer_managed_policy_path" {
 }
 
 variable "logs_s3_readonly_policy_name" {
-  description = "'Name' attribute of the logs_s3_readonly policy"
+  description = "'Name' attribute of the logs_s3_readonly policy (set after 'baseline' is deployed)"
   type        = string
   default     = null
 }
 
 variable "logs_cmk_decrypt_policy_name" {
-  description = "'Name' attribute of the logs_cmk_decrypt policy"
+  description = "'Name' attribute of the logs_cmk_decrypt policy (set after 'baseline' is deployed)"
   type        = string
   default     = null
 }
