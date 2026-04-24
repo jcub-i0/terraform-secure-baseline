@@ -242,9 +242,7 @@ resource "aws_ssoadmin_account_assignment" "analysts" {
 
   depends_on = [
     aws_ssoadmin_managed_policy_attachment.secops_analyst_security_audit,
-    aws_ssoadmin_managed_policy_attachment.secops_analyst_readonly,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_analyst_logs_s3,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_analyst_logs_cmk
+    aws_ssoadmin_managed_policy_attachment.secops_analyst_readonly
   ]
 }
 
@@ -263,8 +261,6 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
   depends_on = [
     aws_ssoadmin_managed_policy_attachment.secops_engineer_readonly,
     aws_ssoadmin_managed_policy_attachment.secops_engineer_security_audit,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_engineer_logs_s3,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_engineer_logs_cmk,
     aws_ssoadmin_permission_set_inline_policy.secops_engineer_inline
   ]
 }
