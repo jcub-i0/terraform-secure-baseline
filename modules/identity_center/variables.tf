@@ -48,7 +48,7 @@ variable "customer_managed_policy_path" {
   default     = "/"
 
   validation {
-    condition = var.customer_managed_policy_path != ""
+    condition     = var.customer_managed_policy_path != ""
     error_message = "'customer_managed_policy_path' cannot be empty"
   }
 }

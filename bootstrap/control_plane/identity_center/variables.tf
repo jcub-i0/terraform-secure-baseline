@@ -62,13 +62,13 @@ variable "customer_managed_policy_path" {
 variable "logs_s3_readonly_policy_name" {
   description = "'Name' attribute of the logs_s3_readonly policy"
   type        = string
-  default = null
+  default     = null
 }
 
 variable "logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the logs_cmk_decrypt policy"
   type        = string
-  default = null
+  default     = null
 }
 
 variable "secops_event_bus_arn" {
