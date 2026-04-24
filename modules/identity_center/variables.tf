@@ -18,6 +18,12 @@ variable "secops_operator_group_name" {
   type        = string
 }
 
+variable "enable_secops_analyst" {
+  description = "Determines whether SecOps-Analyst resources are deployed"
+  type = bool
+  default = false
+}
+
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
