@@ -34,9 +34,9 @@ variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
   default     = null
-  
+
   validation {
-    condition = !var.enable_secops_analyst && var.secops_analyst_group_name == null
+    condition     = !var.enable_secops_analyst && var.secops_analyst_group_name == null
     error_message = "'enable_secops_analyst' must be set to 'true' when 'secops_analyst_group_name' is set"
   }
 }
@@ -47,7 +47,7 @@ variable "secops_engineer_group_name" {
   default     = null
 
   validation {
-    condition = !var.enable_secops_engineer && var.secops_engineer_group_name == null
+    condition     = !var.enable_secops_engineer && var.secops_engineer_group_name == null
     error_message = "'enable_secops_engineer' must be set to 'true' when 'secops_engineer_group_name' is set"
   }
 }
