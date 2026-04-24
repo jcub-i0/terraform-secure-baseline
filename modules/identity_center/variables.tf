@@ -46,6 +46,11 @@ variable "customer_managed_policy_path" {
   description = "Path of customer managed IAM policies used by permission sets"
   type        = string
   default     = "/"
+
+  validation {
+    condition = var.customer_managed_policy_path != ""
+    error_message = "'customer_managed_policy_path' cannot be empty"
+  }
 }
 
 variable "logs_s3_readonly_policy_name" {
