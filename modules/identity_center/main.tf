@@ -234,7 +234,7 @@ resource "aws_ssoadmin_account_assignment" "analysts" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
 
-  principal_id   = aws_identitystore_group.secops_analyst.group_id
+  principal_id   = aws_identitystore_group.secops_analyst[0].group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
@@ -252,7 +252,7 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
-  principal_id   = aws_identitystore_group.secops_engineers.group_id
+  principal_id   = aws_identitystore_group.secops_engineers[0].group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
