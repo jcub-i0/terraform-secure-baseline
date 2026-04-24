@@ -41,11 +41,13 @@ variable "staging_primary_region" {
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
+  default = null
 }
 
 variable "secops_engineer_group_name" {
   description = "Name of the SecOps-Engineer IAM group"
   type        = string
+  default = null
 }
 
 variable "account_id" {
