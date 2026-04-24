@@ -125,7 +125,7 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_
 }
 
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_cmk" {
-  count = var.logs_s3_readonly_policy_name ? 1 : 0
+  count = var.logs_cmk_decrypt_policy_name ? 1 : 0
   
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
