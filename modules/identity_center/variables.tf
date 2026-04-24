@@ -13,26 +13,26 @@ variable "secops_event_bus_arn" {
   type        = string
 }
 
-variable "secops_operator_group_name" {
-  description = "Name of the SecOps-Operator Identity Center group"
-  type        = string
-}
-
 variable "enable_secops_analyst" {
   description = "Determines whether SecOps-Analyst resources are deployed"
   type        = bool
   default     = false
 }
 
-variable "secops_analyst_group_name" {
-  description = "Name of the SecOps-Analyst IAM group"
-  type        = string
-}
-
 variable "enable_secops_engineer" {
   description = "Determines whether SecOps-Engineer resources are deployed"
   type        = bool
   default     = false
+}
+
+variable "secops_operator_group_name" {
+  description = "Name of the SecOps-Operator Identity Center group"
+  type        = string
+}
+
+variable "secops_analyst_group_name" {
+  description = "Name of the SecOps-Analyst IAM group"
+  type        = string
 }
 
 variable "secops_engineer_group_name" {
