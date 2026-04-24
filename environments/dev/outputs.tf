@@ -8,7 +8,7 @@ output "secrets_manager_cmk_arn_dev" {
   value       = module.baseline.secrets_manager_cmk_arn
 }
 
-output "logs_cmk_decrypt_policy_name_dev" {
+output "dev_logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the 'dev' env's 'Logs CMK Decrypt Policy' resource"
   value       = module.baseline.logs_cmk_decrypt_policy_name
 }

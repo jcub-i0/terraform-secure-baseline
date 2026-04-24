@@ -85,19 +85,19 @@ variable "staging_logs_s3_readonly_policy_name" {
   default     = null
 }
 
-variable "logs_cmk_decrypt_policy_name_dev" {
+variable "dev_logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the 'dev' env's logs_cmk_decrypt policy"
   type        = string
   default     = null
 }
 
-variable "logs_cmk_decrypt_policy_name_prod" {
+variable "prod_logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the 'prod' env's logs_cmk_decrypt policy"
   type        = string
   default     = null
 }
 
-variable "logs_cmk_decrypt_policy_name_staging" {
+variable "staging_logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the 'staging' env's logs_cmk_decrypt policy"
   type        = string
   default     = null
