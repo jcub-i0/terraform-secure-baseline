@@ -8,6 +8,12 @@ variable "environment" {
   type        = string
 }
 
+variable "enable_secops_analyst" {
+  description = "Determines whether SecOps-Analyst resources are deployed"
+  type = bool
+  default = false
+}
+
 variable "dev_account_id" {
   description = "ID of the AWS account managing the 'dev' environment"
   type        = string
