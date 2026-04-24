@@ -126,8 +126,3 @@ variable "staging_logs_cmk_decrypt_policy_name" {
   type        = string
   default     = null
 }
-
-variable "secops_event_bus_arn" {
-  description = "ARN of the SecOps Event Bus"
-  type        = string
-}
