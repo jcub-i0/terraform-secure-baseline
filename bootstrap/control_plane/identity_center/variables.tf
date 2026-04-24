@@ -73,13 +73,13 @@ variable "dev_logs_s3_readonly_policy_name" {
   default     = null
 }
 
-variable "logs_s3_readonly_policy_name_prod" {
+variable "prod_logs_s3_readonly_policy_name" {
   description = "'Name' attribute of the 'prod' env's logs_s3_readonly policy"
   type        = string
   default     = null
 }
 
-variable "logs_s3_readonly_policy_name_staging" {
+variable "staging_logs_s3_readonly_policy_name" {
   description = "'Name' attribute of the 'staging' env's logs_s3_readonly policy"
   type        = string
   default     = null
