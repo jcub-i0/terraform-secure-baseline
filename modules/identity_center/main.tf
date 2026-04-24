@@ -227,8 +227,10 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
 ##########################################
 # ACCOUNT ASSIGNMENTS
 ##########################################
-/*
+
 resource "aws_ssoadmin_account_assignment" "analysts" {
+  count = var.enable_secops_analyst ? 1 : 0
+
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
 
@@ -247,6 +249,8 @@ resource "aws_ssoadmin_account_assignment" "analysts" {
 }
 
 resource "aws_ssoadmin_account_assignment" "engineers" {
+  count = var.enable_secops_engineer ? 1 : 0
+
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
 
@@ -264,7 +268,7 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
     aws_ssoadmin_permission_set_inline_policy.secops_engineer_inline
   ]
 }
-*/
+
 resource "aws_ssoadmin_account_assignment" "operators" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
