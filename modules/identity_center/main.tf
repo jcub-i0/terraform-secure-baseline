@@ -14,23 +14,27 @@ locals {
 ##########################################
 # CREATE IAM IDENTITY CENTER GROUPS
 ##########################################
-/*
+
 resource "aws_identitystore_group" "secops_analyst" {
+  count = var.enable_secops_analyst ? 1 : 0
+
   identity_store_id = local.identity_store_id
   display_name      = var.secops_analyst_group_name
-  description       = "SecOps analysts"
+  description       = "SecOps-Analysts Identity Center group"
 }
 
 resource "aws_identitystore_group" "secops_engineers" {
+  count = var.enable_secops_engineer ? 1 : 0
+
   identity_store_id = local.identity_store_id
   display_name      = var.secops_engineer_group_name
-  description       = "SecOps engineers"
+  description       = "SecOps-Engineers Identity Center group"
 }
-*/
+
 resource "aws_identitystore_group" "secops_operators" {
   identity_store_id = local.identity_store_id
   display_name      = var.secops_operator_group_name
-  description       = "SecOps operators"
+  description       = "SecOps-Operators Identity Center Group"
 }
 
 ##########################################
