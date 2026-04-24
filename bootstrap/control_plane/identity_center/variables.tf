@@ -14,6 +14,12 @@ variable "enable_secops_analyst" {
   default = false
 }
 
+variable "enable_secops_engineer" {
+  description = "Determines whether SecOps-Engineer resources are deployed"
+  type = bool
+  default = false
+}
+
 variable "dev_account_id" {
   description = "ID of the AWS account managing the 'dev' environment"
   type        = string
