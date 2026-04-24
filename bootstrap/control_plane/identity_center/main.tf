@@ -11,6 +11,11 @@ module "identity_center_dev" {
   environment                = "dev"
   secops_operator_group_name = "SecOps-Operator-Dev"
   secops_event_bus_arn       = "arn:aws:events:${var.dev_primary_region}:${var.dev_account_id}:event-bus/secops-bus"
+  enable_secops_analyst = var.enable_secops_analyst
+  enable_secops_engineer = var.enable_secops_engineer
+  logs_cmk_decrypt_policy_name = var.logs_cmk_decrypt_policy_name
+  logs_s3_readonly_policy_name = var.logs_s3_readonly_policy_name
+  customer_managed_policy_path = "/"
 }
 
 module "identity_center_prod" {
