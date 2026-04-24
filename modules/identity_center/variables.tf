@@ -33,13 +33,13 @@ variable "secops_operator_group_name" {
 variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
-  default = null
+  default     = null
 }
 
 variable "secops_engineer_group_name" {
   description = "Name of the SecOps-Engineer IAM group"
   type        = string
-  default = null
+  default     = null
 }
 
 variable "customer_managed_policy_path" {
