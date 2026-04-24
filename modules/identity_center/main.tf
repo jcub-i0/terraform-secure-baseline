@@ -138,7 +138,7 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_
 
 # SECOPS-ENGINEER POLICY ATTACHMENTS
 
-resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs_s3" {
+resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs_s3_read" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
 
