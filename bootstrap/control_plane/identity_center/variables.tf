@@ -26,8 +26,20 @@ variable "staging_enable_secops_analyst" {
   default     = false
 }
 
-variable "enable_secops_engineer" {
-  description = "Determines whether SecOps-Engineer resources are deployed"
+variable "dev_enable_secops_engineer" {
+  description = "Determines whether SecOps-Engineer resources are deployed in the 'dev' env"
+  type        = bool
+  default     = false
+}
+
+variable "prod_enable_secops_engineer" {
+  description = "Determines whether SecOps-Engineer resources are deployed in the 'prod' env"
+  type        = bool
+  default     = false
+}
+
+variable "staging_enable_secops_engineer" {
+  description = "Determines whether SecOps-Engineer resources are deployed in the 'staging' env"
   type        = bool
   default     = false
 }
