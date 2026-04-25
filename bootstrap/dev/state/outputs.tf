@@ -1,4 +1,4 @@
-output "dev_account_id" {
+output "account_id_dev" {
   description = "ID of the AWS account managing this environment"
   value       = data.aws_caller_identity.account_id.account_id
 }

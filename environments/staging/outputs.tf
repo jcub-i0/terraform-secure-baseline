@@ -8,12 +8,12 @@ output "secrets_manager_cmk_arn_staging" {
   value       = module.baseline.secrets_manager_cmk_arn
 }
 
-output "staging_logs_cmk_decrypt_policy_name" {
+output "logs_cmk_decrypt_policy_name_staging" {
   description = "'Name' attribute of the 'staging' env's 'Logs CMK Decrypt Policy' resource"
   value       = module.baseline.logs_cmk_decrypt_policy_name
 }
 
-output "staging_logs_s3_readonly_policy_name" {
+output "logs_s3_readonly_policy_name_staging" {
   description = "'Name' attribute of the 'staging' env's 'Logs S3 Readonly Policy' resource"
   value       = module.baseline.logs_s3_readonly_policy_name
 }

@@ -8,12 +8,12 @@ output "secrets_manager_cmk_arn_dev" {
   value       = module.baseline.secrets_manager_cmk_arn
 }
 
-output "dev_logs_cmk_decrypt_policy_name" {
+output "logs_cmk_decrypt_policy_name_dev" {
   description = "'Name' attribute of the 'dev' env's 'Logs CMK Decrypt Policy' resource"
   value       = module.baseline.logs_cmk_decrypt_policy_name
 }
 
-output "dev_logs_s3_readonly_policy_name" {
+output "logs_s3_readonly_policy_name_dev" {
   description = "'Name' attribute of the 'dev' env's 'Logs S3 Readonly Policy' resource"
   value       = module.baseline.logs_s3_readonly_policy_name
 }
