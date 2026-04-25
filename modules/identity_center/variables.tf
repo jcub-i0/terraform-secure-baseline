@@ -37,7 +37,7 @@ variable "secops_analyst_group_name" {
 
   validation {
     condition     = !var.enable_secops_analyst && var.secops_analyst_group_name == null
-    error_message = "'enable_secops_analyst' must be set to 'true' when 'secops_analyst_group_name' is set"
+    error_message = "'enable_secops_analyst_${var.environment}' must be set to 'true' when 'secops_analyst_group_name_${var.environment}' is set"
   }
 }
 
@@ -48,7 +48,7 @@ variable "secops_engineer_group_name" {
 
   validation {
     condition     = !var.enable_secops_engineer && var.secops_engineer_group_name == null
-    error_message = "'enable_secops_engineer' must be set to 'true' when 'secops_engineer_group_name' is set"
+    error_message = "'enable_secops_engineer_${var.environment}' must be set to 'true' when 'secops_engineer_group_name_${var.environment}' is set"
   }
 }
 
@@ -59,7 +59,7 @@ variable "customer_managed_policy_path" {
 
   validation {
     condition     = var.customer_managed_policy_path != ""
-    error_message = "'customer_managed_policy_path' cannot be empty"
+    error_message = "'customer_managed_policy_path_${var.environment}' cannot be empty"
   }
 }
 
@@ -73,7 +73,7 @@ variable "logs_s3_readonly_policy_name" {
       (var.enable_secops_analyst || var.enable_secops_engineer)
       && var.logs_s3_readonly_policy_name == null
     )
-    error_message = "'logs_s3_readonly_policy_name' must be set when 'enable_secops_analyst' or 'enable_secops_engineer' is set to 'true'"
+    error_message = "'logs_s3_readonly_policy_name_${var.environment}' must be set when 'enable_secops_analyst_${var.environment}' or 'enable_secops_engineer_${var.environment}' is set to 'true'"
   }
 }
 
@@ -87,6 +87,6 @@ variable "logs_cmk_decrypt_policy_name" {
       (var.enable_secops_analyst || var.enable_secops_engineer)
       && var.logs_cmk_decrypt_policy_name == null
     )
-    error_message = "'logs_cmk_decrypt_policy_name' must be set when 'enable_secops_analyst' or 'enable_secops_engineer' is set to 'true'"
+    error_message = "'logs_cmk_decrypt_policy_name_${var.environment}' must be set when 'enable_secops_analyst' or 'enable_secops_engineer_${var.environment}' is set to 'true'"
   }
 }
