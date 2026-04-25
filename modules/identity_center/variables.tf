@@ -34,22 +34,12 @@ variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
   default     = null
-
-  validation {
-    condition     = !var.enable_secops_analyst && var.secops_analyst_group_name == null
-    error_message = "'enable_secops_analyst_${var.environment}' must be set to 'true' when 'secops_analyst_group_name_${var.environment}' is set"
-  }
 }
 
 variable "secops_engineer_group_name" {
   description = "Name of the SecOps-Engineer IAM group"
   type        = string
   default     = null
-
-  validation {
-    condition     = !var.enable_secops_engineer && var.secops_engineer_group_name == null
-    error_message = "'enable_secops_engineer_${var.environment}' must be set to 'true' when 'secops_engineer_group_name_${var.environment}' is set"
-  }
 }
 
 variable "customer_managed_policy_path" {
