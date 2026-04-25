@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [dev, staging, prod]
+        environment: [dev, staging, prod, control-plane]
       
     concurrency:
       group: terraform-plan-${{github.head_ref || github.ref_name}}-${{matrix.environment}}
