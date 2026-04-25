@@ -1,4 +1,4 @@
-# AWS Organizations (`bootstrap/control_plane/organizations`)
+# 🏢 AWS Organizations (`bootstrap/control_plane/organizations`)
 
 ## Purpose
 
