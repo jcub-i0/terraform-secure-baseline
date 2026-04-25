@@ -14,30 +14,36 @@ locals {
 ##########################################
 # CREATE IAM IDENTITY CENTER GROUPS
 ##########################################
-/*
+
 resource "aws_identitystore_group" "secops_analyst" {
+  count = var.enable_secops_analyst ? 1 : 0
+
   identity_store_id = local.identity_store_id
   display_name      = var.secops_analyst_group_name
-  description       = "SecOps analysts"
+  description       = "SecOps-Analysts Identity Center group"
 }
 
 resource "aws_identitystore_group" "secops_engineers" {
+  count = var.enable_secops_engineer ? 1 : 0
+
   identity_store_id = local.identity_store_id
   display_name      = var.secops_engineer_group_name
-  description       = "SecOps engineers"
+  description       = "SecOps-Engineers Identity Center group"
 }
-*/
+
 resource "aws_identitystore_group" "secops_operators" {
   identity_store_id = local.identity_store_id
   display_name      = var.secops_operator_group_name
-  description       = "SecOps operators"
+  description       = "SecOps-Operators Identity Center Group"
 }
 
 ##########################################
 # PERMISSION SETS
 ##########################################
-/*
+
 resource "aws_ssoadmin_permission_set" "secops_analyst" {
+  count = var.enable_secops_analyst ? 1 : 0
+
   name             = "SecOps-Analyst-${var.environment}"
   description      = "Read-only security visibility for analysts"
   instance_arn     = local.instance_arn
@@ -45,12 +51,14 @@ resource "aws_ssoadmin_permission_set" "secops_analyst" {
 }
 
 resource "aws_ssoadmin_permission_set" "secops_engineer" {
+  count = var.enable_secops_engineer ? 1 : 0
+
   name             = "SecOps-Engineer-${var.environment}"
   description      = "Security investigation and response access"
   instance_arn     = local.instance_arn
   session_duration = "PT4H"
 }
-*/
+
 resource "aws_ssoadmin_permission_set" "secops_operator" {
   name             = "SecOps-Operator-${var.environment}"
   description      = "Privileged operational rollback access"
@@ -63,30 +71,38 @@ resource "aws_ssoadmin_permission_set" "secops_operator" {
 ##########################################
 
 # SECOPS-ANALYST POLICY ATTACHMENTS
-/*
+
 resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_security_audit" {
+  count = var.enable_secops_analyst ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
 
 resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_readonly" {
+  count = var.enable_secops_analyst ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
   managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
 # SECOPS-ENGINEER POLICY ATTACHMENTS
 
 resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_security_audit" {
+  count = var.enable_secops_engineer ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
   managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
 }
 
 resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
+  count = var.enable_secops_engineer ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
   managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
@@ -96,9 +112,14 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
 
 # SECOPS-ANALYST POLICY ATTACHMENTS
 
-resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_s3" {
+resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_s3_read" {
+  count = (
+    var.enable_secops_analyst &&
+    var.logs_s3_readonly_policy_name != null
+  ) ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
 
   customer_managed_policy_reference {
     name = var.logs_s3_readonly_policy_name
@@ -107,8 +128,13 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_
 }
 
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_cmk" {
+  count = (
+    var.enable_secops_analyst &&
+    var.logs_s3_readonly_policy_name != null
+  ) ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
 
   customer_managed_policy_reference {
     name = var.logs_cmk_decrypt_policy_name
@@ -118,9 +144,14 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_
 
 # SECOPS-ENGINEER POLICY ATTACHMENTS
 
-resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs_s3" {
+resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs_s3_read" {
+  count = (
+    var.enable_secops_engineer &&
+    var.logs_s3_readonly_policy_name != null
+  ) ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
   customer_managed_policy_reference {
     name = var.logs_s3_readonly_policy_name
@@ -129,8 +160,13 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs
 }
 
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs_cmk" {
+  count = (
+    var.enable_secops_engineer &&
+    var.logs_s3_readonly_policy_name != null
+  ) ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
   customer_managed_policy_reference {
     name = var.logs_cmk_decrypt_policy_name
@@ -143,8 +179,10 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs
 ##########################################
 
 resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
+  count = var.enable_secops_engineer ? 1 : 0
+
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
 
   inline_policy = jsonencode({
     Version = "2012-10-17"
@@ -165,7 +203,7 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
     ]
   })
 }
-*/
+
 ##########################################
 # INLINE POLICY FOR SECOPS-OPERATOR
 ##########################################
@@ -201,12 +239,14 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
 ##########################################
 # ACCOUNT ASSIGNMENTS
 ##########################################
-/*
-resource "aws_ssoadmin_account_assignment" "analysts" {
-  instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst.arn
 
-  principal_id   = aws_identitystore_group.secops_analyst.group_id
+resource "aws_ssoadmin_account_assignment" "analysts" {
+  count = var.enable_secops_analyst ? 1 : 0
+
+  instance_arn       = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
+
+  principal_id   = aws_identitystore_group.secops_analyst[0].group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
@@ -214,17 +254,17 @@ resource "aws_ssoadmin_account_assignment" "analysts" {
 
   depends_on = [
     aws_ssoadmin_managed_policy_attachment.secops_analyst_security_audit,
-    aws_ssoadmin_managed_policy_attachment.secops_analyst_readonly,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_analyst_logs_s3,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_analyst_logs_cmk
+    aws_ssoadmin_managed_policy_attachment.secops_analyst_readonly
   ]
 }
 
 resource "aws_ssoadmin_account_assignment" "engineers" {
-  instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer.arn
+  count = var.enable_secops_engineer ? 1 : 0
 
-  principal_id   = aws_identitystore_group.secops_engineers.group_id
+  instance_arn       = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
+
+  principal_id   = aws_identitystore_group.secops_engineers[0].group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
@@ -233,12 +273,10 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
   depends_on = [
     aws_ssoadmin_managed_policy_attachment.secops_engineer_readonly,
     aws_ssoadmin_managed_policy_attachment.secops_engineer_security_audit,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_engineer_logs_s3,
-    aws_ssoadmin_customer_managed_policy_attachment.secops_engineer_logs_cmk,
     aws_ssoadmin_permission_set_inline_policy.secops_engineer_inline
   ]
 }
-*/
+
 resource "aws_ssoadmin_account_assignment" "operators" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
