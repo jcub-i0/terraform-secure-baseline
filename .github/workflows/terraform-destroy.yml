@@ -66,6 +66,7 @@ jobs:
             terraform apply -auto-approve -input=false -no-color
 
     terraform-destroy:
+        needs: identity-center-cleanup
         if: ${{inputs.confirm == 'DESTROY'}}
         runs-on: ubuntu-latest
         environment: ${{inputs.environment}}
@@ -110,5 +111,5 @@ jobs:
               working-directory: ./environments/${{inputs.environment}}
               shell: bash
               run: |
-                set -o pipefail
+                set -euo pipefail
                 terraform destroy -auto-approve -input=false -no-color
