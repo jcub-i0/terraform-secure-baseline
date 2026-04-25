@@ -10,13 +10,13 @@ This stack creates and manages Organizational Units (OUs) used to segment accoun
 
 ## Scope
 
-### This stack DOES:
+### ✅ This stack DOES:
 - Create Organizational Units:
   - `Workloads`
   - `NonProd`
   - `Prod`
 
-### This stack does NOT:
+### ❌ This stack does NOT:
 - Create AWS accounts
 - Manage account invitations
 - Manage Service Control Policies (SCPs)
