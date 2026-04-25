@@ -24,6 +24,27 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
+    identity-center-cleanup:
+      if: ${{inputs.confirm == 'DESTROY'}}
+      runs-on: ubuntu-latest
+      environment: control-plane
+
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+
+        - name: Configure AWS credentials for Control Plane
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            role-to-assume: ${{vars.APPLY_ROLE_GITHUB_ARN}}
+            aws-region: ${{vars.PRIMARY_REGION}}
+
+        - name: Setup Terraform
+          uses: hashicorp/setup-terraform@v3
+
+        - name: Terraform Init Identity Center
+          working-directory: ./bootstrap/control_plane/identity_center
+          run: terraform init
     terraform-destroy:
         if: ${{inputs.confirm == 'DESTROY'}}
         runs-on: ubuntu-latest
