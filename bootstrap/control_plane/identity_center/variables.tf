@@ -81,11 +81,6 @@ variable "secops_engineer_group_name" {
   default     = null
 }
 
-variable "account_id" {
-  description = "ID of the AWS account managing this environment"
-  type        = string
-}
-
 variable "logs_s3_readonly_policy_name_dev" {
   description = "'Name' attribute of the 'dev' env's logs_s3_readonly policy"
   type        = string
