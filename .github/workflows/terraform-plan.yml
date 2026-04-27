@@ -65,5 +65,5 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        working-directory: ./environments/${{matrix.environment}}
+        working-directory: ${{matrix.working_directory}}
         run: terraform plan -no-color
