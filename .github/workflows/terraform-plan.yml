@@ -37,7 +37,7 @@ jobs:
 
     concurrency:
       group: terraform-plan-${{github.head_ref || github.ref_name}}-${{matrix.environment}}
-      cancel-in-progress: true
+      cancel-in-progress: false
 
     environment: ${{matrix.github_environment}}
 
