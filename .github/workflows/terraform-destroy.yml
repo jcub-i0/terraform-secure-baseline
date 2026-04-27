@@ -24,7 +24,52 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
+    identity-center-cleanup:
+      if: ${{inputs.confirm == 'DESTROY'}}
+      runs-on: ubuntu-latest
+      environment: control-plane
+
+      env:
+        TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
+        TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
+        TF_VAR_tf_state_bucket_cmk_arn: ${{vars.TF_STATE_BUCKET_CMK_ARN}}
+        TF_VAR_tf_state_lock_table_arn: ${{vars.TF_STATE_LOCK_TABLE_ARN}}
+        TF_VAR_account_id_dev: ${{vars.ACCOUNT_ID_DEV}}
+        TF_VAR_account_id_prod: ${{vars.ACCOUNT_ID_PROD}}
+        TF_VAR_account_id_staging: ${{vars.ACCOUNT_ID_STAGING}}
+
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+
+        - name: Configure AWS credentials for Control Plane
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            role-to-assume: ${{vars.APPLY_ROLE_GITHUB_ARN}}
+            aws-region: ${{vars.PRIMARY_REGION}}
+
+        - name: Setup Terraform
+          uses: hashicorp/setup-terraform@v3
+
+        - name: Terraform Init Identity Center
+          working-directory: ./bootstrap/control_plane/identity_center
+          run: terraform init
+
+        - name: Identity Center Cleanup
+          working-directory: ./bootstrap/control_plane/identity_center
+          shell: bash
+          run: |
+            set -euo pipefail
+
+            export TF_VAR_enable_secops_analyst_${{ inputs.environment }}=false
+            export TF_VAR_enable_secops_engineer_${{ inputs.environment }}=false
+            export TF_VAR_logs_s3_readonly_policy_name_${{ inputs.environment }}=""
+            export TF_VAR_logs_cmk_decrypt_policy_name_${{ inputs.environment }}=""
+
+            terraform apply -auto-approve -input=false -no-color
+
     terraform-destroy:
+        needs: identity-center-cleanup
         if: ${{inputs.confirm == 'DESTROY'}}
         runs-on: ubuntu-latest
         environment: ${{inputs.environment}}
@@ -69,5 +114,5 @@ jobs:
               working-directory: ./environments/${{inputs.environment}}
               shell: bash
               run: |
-                set -o pipefail
+                set -euo pipefail
                 terraform destroy -auto-approve -input=false -no-color

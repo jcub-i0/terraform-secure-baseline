@@ -1,7 +1,3 @@
-locals {
-  name_prefix = "${var.cloud_name}-${var.environment}"
-}
-
 module "identity_center_dev" {
   source = "../../../modules/identity_center"
 

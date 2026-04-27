@@ -3,11 +3,6 @@ variable "cloud_name" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
 variable "enable_secops_analyst_dev" {
   description = "Determines whether SecOps-Analyst resources are deployed in the 'dev' env"
   type        = bool
@@ -84,11 +79,6 @@ variable "secops_engineer_group_name" {
   description = "Name of the SecOps-Engineer IAM group"
   type        = string
   default     = null
-}
-
-variable "account_id" {
-  description = "ID of the AWS account managing this environment"
-  type        = string
 }
 
 variable "logs_s3_readonly_policy_name_dev" {
