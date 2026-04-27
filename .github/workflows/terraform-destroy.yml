@@ -34,6 +34,9 @@ jobs:
         TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
         TF_VAR_tf_state_bucket_cmk_arn: ${{vars.TF_STATE_BUCKET_CMK_ARN}}
         TF_VAR_tf_state_lock_table_arn: ${{vars.TF_STATE_LOCK_TABLE_ARN}}
+        TF_VAR_account_id_dev: ${{vars.ACCOUNT_ID_DEV}}
+        TF_VAR_account_id_prod: ${{vars.ACCOUNT_ID_PROD}}
+        TF_VAR_account_id_staging: ${{vars.ACCOUNT_ID_STAGING}}
 
       steps:
         - name: Checkout
