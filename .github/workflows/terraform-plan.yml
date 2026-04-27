@@ -15,8 +15,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [dev, staging, prod, control-plane]
-      
+        include:
+          - environment: dev
+            working_directory: ./environments/dev
+          - environment: prod
+            working_directory: ./environments/prod
+          - environment: staging
+            working_directory: ./environments/staging
+          - environment: control-plane
+            working_directory: ./bootstrap/control_plane/account
+
     concurrency:
       group: terraform-plan-${{github.head_ref || github.ref_name}}-${{matrix.environment}}
       cancel-in-progress: true
@@ -49,7 +57,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        working-directory: ./environments/${{matrix.environment}}
+        working-directory: ${{matrix.working_directory}}
         run: terraform init
 
       - name: Terraform Validate
