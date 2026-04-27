@@ -3,11 +3,6 @@ variable "cloud_name" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
 variable "enable_secops_analyst_dev" {
   description = "Determines whether SecOps-Analyst resources are deployed in the 'dev' env"
   type        = bool
