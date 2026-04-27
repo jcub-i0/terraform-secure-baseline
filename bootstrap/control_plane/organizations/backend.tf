@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    bucket         = "tf-secure-baseline-bootstrap-state"
+    bucket         = "tf-secure-baseline-control-plane-state"
     key            = "control-plane/organizations.tfstate"
     region         = "us-east-1"
     encrypt        = true
