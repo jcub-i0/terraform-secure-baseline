@@ -61,7 +61,7 @@ jobs:
         run: terraform init
 
       - name: Terraform Validate
-        working-directory: ./environments/${{matrix.environment}}
+        working-directory: ${{matrix.working_directory}}
         run: terraform validate
 
       - name: Terraform Plan
