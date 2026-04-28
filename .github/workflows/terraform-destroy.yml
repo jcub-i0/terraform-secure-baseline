@@ -48,12 +48,28 @@ jobs:
             role-to-assume: ${{vars.APPLY_ROLE_GITHUB_ARN}}
             aws-region: ${{vars.PRIMARY_REGION}}
 
+        - name: Verify control-plane identity
+          run: aws sts get-caller-identity
+          
         - name: Setup Terraform
           uses: hashicorp/setup-terraform@v3
 
         - name: Terraform Init Identity Center
           working-directory: ./bootstrap/control_plane/identity_center
           run: terraform init
+
+        - name: Identity Center Cleanup Plan
+          working-directory: ./bootstrap/control_plane/identity_center
+          shell: bash
+          run: |
+            set -euo pipefail
+
+            export TF_VAR_enable_secops_analyst_${{ inputs.environment }}=false
+            export TF_VAR_enable_secops_engineer_${{ inputs.environment }}=false
+            export TF_VAR_logs_s3_readonly_policy_name_${{ inputs.environment }}=""
+            export TF_VAR_logs_cmk_decrypt_policy_name_${{ inputs.environment }}=""
+
+            terraform plan -input=false -no-color -lock-timeout=5m
 
         - name: Identity Center Cleanup
           working-directory: ./bootstrap/control_plane/identity_center
