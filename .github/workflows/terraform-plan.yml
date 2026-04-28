@@ -25,9 +25,6 @@ jobs:
           - environment: staging
             github_environment: staging-plan
             working_directory: ./environments/staging
-          - environment: control-plane-account
-            github_environment: control-plane-plan
-            working_directory: ./bootstrap/control_plane/account
           - environment: control-plane-identity-center
             github_environment: control-plane-plan
             working_directory: ./bootstrap/control_plane/identity_center
