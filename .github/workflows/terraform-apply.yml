@@ -65,6 +65,10 @@ jobs:
             - name: Terraform Validate
               working-directory: ./environments/${{inputs.environment}}
               run: terraform validate
+              
+            - name: Terraform Plan
+              working-directory: ./environments/${{inputs.environment}}
+              run: terraform plan -input=false -no-color
 
             - name: Terraform Apply
               working-directory: ./environments/${{inputs.environment}}
