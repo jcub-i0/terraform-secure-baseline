@@ -2,7 +2,7 @@
 ## GIT WORKFLOW FOR CI/CD PIPELINE TERRAFORM SCANS ##
 #####################################################
 
-name: Terraform CI/CD Pipeline
+name: Terraform Scans
 
 permissions:
   contents: read
