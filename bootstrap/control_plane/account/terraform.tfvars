@@ -7,3 +7,4 @@ branches_plan_github = ["main"]
 
 # GitHub-Apply Role-related variables
 branches_apply_github = ["main"]
+environment_apply_github = "control-plane"
