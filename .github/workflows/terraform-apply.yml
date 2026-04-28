@@ -71,4 +71,4 @@ jobs:
               shell: bash
               run: |
                 set -euo pipefail
-                terraform apply -auto-approve -input=false -no-color
+                terraform apply -auto-approve -input=false -no-color -lock-timeout=5m
