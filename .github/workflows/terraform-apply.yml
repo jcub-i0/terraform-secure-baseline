@@ -65,10 +65,13 @@ jobs:
             - name: Terraform Validate
               working-directory: ./environments/${{inputs.environment}}
               run: terraform validate
-              
+
             - name: Terraform Plan
               working-directory: ./environments/${{inputs.environment}}
               run: terraform plan -input=false -no-color
+
+            - name: Print apply target
+              run: echo "Applying environment - ${{inputs.environment}}"
 
             - name: Terraform Apply
               working-directory: ./environments/${{inputs.environment}}
