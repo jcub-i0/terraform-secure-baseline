@@ -128,6 +128,9 @@ jobs:
               working-directory: ./environments/${{inputs.environment}}
               run: terraform init
 
+            - name: Print destroy target
+              run: echo "Destroying environment - ${{inputs.environment}}"
+
             - name: Terraform Destroy
               working-directory: ./environments/${{inputs.environment}}
               shell: bash
