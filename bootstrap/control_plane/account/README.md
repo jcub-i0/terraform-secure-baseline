@@ -28,13 +28,7 @@ This stack solves that by isolating execution-plane resources.
 
 ---
 
-## Architecture
-
-`state` stack ➔ `bootstrap` and `baseline` stacks
-
-`bootstrap` stack ➔ `github_oidc` module
-
-`baseline` stack ➔ All infrastructure (VPC, Lambda, S3, etc.)
+## (Architecture section?)
 
 ---
 
@@ -44,10 +38,10 @@ This stack solves that by isolating execution-plane resources.
 
 The following steps assume that you have already deployed the `state` stack (refer to the `/state/README.md` file):
 
-1. Deploy `bootstrap` stack
+1. Deploy `account` stack
 
 ```bash
-cd bootstrap
+cd /bootstrap/<env>/account
 terraform init
 terraform apply
 ```
@@ -58,13 +52,13 @@ terraform apply
 Example:
 
 ```bash
-export TF_VAR_bucket_admin_principals=["arn:aws:iam::<account_id>:root","arn:aws:iam::<account_id>:role/tf-secure-baseline-dev-github-apply-role"]
+export TF_VAR_bucket_admin_principals=["arn:aws:iam::<account_id>:root","arn:aws:iam::<account_id>:role/tf-secure-baseline-<env>-github-apply-role"]
 ```
 
-3. Deploy `baseline` stack after setting required variables (locally once)
+3. After setting required variables (locally once), deploy `baseline` stack
 
 ```bash
-cd ../baseline
+cd ../../../baseline/
 terraform apply
 ```
 > Note the `lambda_cmk_arn` and `secrets_manager_cmk_arn` outputs
@@ -76,10 +70,10 @@ TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk-arn"
 ```
 
-5. Re-apply `bootstrap` stack
+5. After setting the variables above, re-apply `account` stack
 
 ```bash
-cd ../bootstrap
+cd ../bootstrap/<env>/account/
 terraform apply
 ```
 
@@ -110,13 +104,20 @@ module "github_oidc" {
 
 | Name | Description |
 |------|-------------|
-| `name_prefix` | Resource naming prefix |
+| `cloud_name` | Name of cloud |
+| `environment` | Name of environment (`dev`, `prod`, `staging` `control-plane`) |
 | `primary_region` | AWS region |
-| `account_id` | AWS account ID |
+| `enable_github_oidc` | Enable GitHub OIDC federation resources for CI/CD |
 | `owner_github` | GitHub org/user |
 | `repo_github` | GitHub repo |
+| `branches_plan_github` | List of branches allowed to assume the github_oidc role |
+| `allow_pull_requests_plan_github` | Allow pull_request subject in OIDC trust policy |
+| `enable_apply_role_github` | Enable the GitHub-Apply role |
+| `environment_apply_github` | GitHub environment allowed to assume the GitHub-Apply role |
+| `branches_apply_github` | Branches allowed to assume the GitHub-Apply role |
 | `tf_state_bucket_arn` | Terraform state bucket |
 | `tf_state_bucket_cmk_arn` | CMK for state bucket |
+| `tf_state_lock_table_arn` | ARN of the DynamoDB table used for Terraform state locking |
 | `lambda_cmk_arn` | Lambda CMK (optional on first apply) |
 | `secrets_manager_cmk_arn` | Secrets CMK (optional on first apply) |
 
