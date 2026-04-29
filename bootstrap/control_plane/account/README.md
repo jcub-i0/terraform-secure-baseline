@@ -153,9 +153,14 @@ This stack uses a **separate state** from the baseline stack.
 Example:
 
 ```
-bootstrap state: tf-state-bootstrap
-baseline state: tf-state
+bootstrap state: "bootstrap/<env>.tfstate"
+baseline state: "baseline/<env>.tfstate"
 ```
+> The `control_plane` stack uses a different format for it's bootstrap states:
+> ```
+> bootstrap state: "control-plane/<substack>.tfstate"
+> ```
+> `substack` can be `account`, `identity_center` or `organizations`
 
 ---
 
