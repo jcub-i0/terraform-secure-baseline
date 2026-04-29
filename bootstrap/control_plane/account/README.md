@@ -2,33 +2,77 @@
 
 ## Overview
 
-This stack provisions the **GitHub OIDC control plane** for the environment.
+The `account` substack provisions the **GitHub OIDC execution plane** for a target environment or control-plane context.
 
 It deploys:
 
 - GitHub OIDC provider
 - `GitHub-Plan` role
 - `GitHub-Apply` role
+- Supporting IAM policies for Terraform state access and CI/CD operations
 
-This stack is intentionally separated from the main Terraform baseline to prevent self-destruction during CI/CD operations.
+This stack is intentionally separated from the main Terraform baseline to prevent Terraform from destroying the IAM roles it is actively using during CI/CD workflows.
 
 ---
 
 ## Why This Exists
 
-Without this separation:
+Without this separation, a Terraform apply or destroy workflow could remove the IAM roles required to continue running the workflow.
 
-- The `Terraform Destroy` CI/CD workflow can remove the IAM roles it is actively using
-- This results in:
-  - Failed applies
-  - Corrupted state
-  - Broken pipelines
+That can result in:
 
-This stack solves that by isolating execution-plane resources.
+- Failed applies
+- Failed destroys
+- Broken GitHub Actions authentication
+- Terraform state inconsistencies
+- CI/CD pipelines that can no longer assume AWS roles
+
+This stack solves that problem by isolating CI/CD execution resources from the infrastructure they manage.
 
 ---
 
-## (Architecture section?)
+## Architecture
+```text
+GitHub Actions
+    |
+    | OIDC token
+    v
+AWS IAM OIDC Provider
+    |
+    | sts:AssumeRoleWithWebIdentity
+    v 
+GitHub-Plan / GitHub-Apply IAM Roles
+    |
+    | Terraform permissions
+    v 
+Target Terraform Stack
+```
+
+The roles created by this stack are used by GitHub Actions to run Terraform workflows without long-lived AWS credentials.
+
+### Role Responsibilities
+
+#### `GitHub-Plan` Role
+
+Used by Terraform plan workflows.
+
+Typical responsibilities:
+
+- Read Terraform state
+- Acquire Terraform state locks
+- Read AWS resources needed for planning
+- Generate Terraform execution plans
+
+#### `GitHub-Apply` Role
+
+Used by Terraform apply and destroy workflows.
+
+Typical responsibilities:
+
+- Read and write Terraform state
+- Acquire and release Terraform state locks
+- Create, update, and destroy AWS resources
+- Access required KMS keys for encrypted Terraform-managed resources
 
 ---
 
