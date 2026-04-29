@@ -120,6 +120,18 @@ It should be considered a technical foundation within a broader security program
 
 ---
 
+## Roadmap / Future Improvements
+
+### v1.1
+- Refactor IAM policies from `jsonencode()` to `aws_iam_policy_document`
+- Improve policy reuse patterns (Lambda, KMS, SNS, logging)
+- Add configurable egress inspection modes:
+  - network_firewall (current)
+  - nat_only
+  - vpc_endpoints_only
+  
+---
+
 ## File Structure
 
 Below is the file structure for this repository:
