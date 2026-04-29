@@ -125,20 +125,97 @@ It should be considered a technical foundation within a broader security program
 Below is the file structure for this repository:
 
 ```
-.
 ├── baseline
-│   ├── backend.tf
 │   ├── main.tf
 │   ├── outputs.tf
 │   ├── providers.tf
 │   └── variables.tf
 ├── bootstrap
-│   ├── backend.tf
-│   ├── main.tf
-│   ├── outputs.tf
-│   ├── providers.tf
-│   ├── README.md
-│   └── variables.tf
+│   ├── control_plane
+│   │   ├── account
+│   │   │   ├── backend.tf
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── providers.tf
+│   │   │   ├── README.md
+│   │   │   ├── terraform.tfvars
+│   │   │   └── variables.tf
+│   │   ├── identity_center
+│   │   │   ├── backend.tf
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── providers.tf
+│   │   │   ├── README.md
+│   │   │   ├── terraform.tfvars
+│   │   │   └── variables.tf
+│   │   ├── organizations
+│   │   │   ├── backend.tf
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── providers.tf
+│   │   │   ├── README.md
+│   │   │   ├── terraform.tfvars
+│   │   │   └── variables.tf
+│   │   ├── README.md
+│   │   └── state
+│   │       ├── main.tf
+│   │       ├── outputs.tf
+│   │       ├── providers.tf
+│   │       ├── README.md
+│   │       ├── terraform.tfvars
+│   │       └── variables.tf
+│   ├── dev
+│   │   ├── account
+│   │   │   ├── backend.tf
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── providers.tf
+│   │   │   ├── README.md
+│   │   │   ├── terraform.tfvars
+│   │   │   └── variables.tf
+│   │   └── state
+│   │       ├── main.tf
+│   │       ├── outputs.tf
+│   │       ├── providers.tf
+│   │       ├── README.md
+│   │       ├── terraform.tfvars
+│   │       └── variables.tf
+│   ├── prod
+│   │   ├── account
+│   │   │   ├── backend.tf
+│   │   │   ├── main.tf
+│   │   │   ├── outputs.tf
+│   │   │   ├── providers.tf
+│   │   │   ├── README.md
+│   │   │   ├── terraform.tfvars
+│   │   │   └── variables.tf
+│   │   └── state
+│   │       ├── main.tf
+│   │       ├── outputs.tf
+│   │       ├── providers.tf
+│   │       ├── README.md
+│   │       ├── terraform.tfstate
+│   │       ├── terraform.tfstate.backup
+│   │       ├── terraform.tfvars
+│   │       └── variables.tf
+│   └── staging
+│       ├── account
+│       │   ├── backend.tf
+│       │   ├── main.tf
+│       │   ├── outputs.tf
+│       │   ├── providers.tf
+│       │   ├── README.md
+│       │   ├── terraform.tfvars
+│       │   └── variables.tf
+│       └── state
+│           ├── main.tf
+│           ├── outputs.tf
+│           ├── providers.tf
+│           ├── README.md
+│           ├── terraform.tfstate
+│           ├── terraform.tfstate.backup
+│           ├── terraform.tfvars
+│           └── variables.tf
 ├── docs
 │   ├── adoption-guide.md
 │   ├── architecture-diagram.png
@@ -153,15 +230,34 @@ Below is the file structure for this repository:
 │   │   └── ip_enrichment.md
 │   ├── quickstart.md
 │   └── validation-checklist.md
+├── environments
+│   ├── dev
+│   │   ├── backend.tf
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── providers.tf
+│   │   ├── terraform.tfvars
+│   │   └── variables.tf
+│   ├── prod
+│   │   ├── backend.tf
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── providers.tf
+│   │   ├── terraform.tfvars
+│   │   └── variables.tf
+│   └── staging
+│       ├── backend.tf
+│       ├── main.tf
+│       ├── outputs.tf
+│       ├── providers.tf
+│       ├── terraform.tfvars
+│       └── variables.tf
 ├── modules
 │   ├── automation
 │   │   ├── lambda
 │   │   │   ├── ec2_isolation.py
-│   │   │   ├── ec2_isolation.zip
 │   │   │   ├── ec2_rollback.py
-│   │   │   ├── ec2_rollback.zip
 │   │   │   ├── ip_enrichment.py
-│   │   │   └── ip_enrichment.zip
 │   │   ├── main.tf
 │   │   ├── outputs.tf
 │   │   ├── README.md
@@ -249,6 +345,11 @@ Below is the file structure for this repository:
 │   │   │   └── variables.tf
 │   │   └── variables.tf
 │   ├── security_dashboard
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── README.md
+│   │   └── variables.tf
+│   ├── state
 │   │   ├── main.tf
 │   │   ├── outputs.tf
 │   │   ├── README.md
