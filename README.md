@@ -428,7 +428,26 @@ Future versions may include configurable egress profiles such as:
 
 ---
 
+## Documentation
 
+System-level documentation is located in:
+```text
+docs/
+```
+
+Important docs include:
+
+| Document | Purpose |
+|----------|---------|
+| docs/quickstart.md | End-to-end deployment guide |
+| docs/architecture-overview.md	| Architecture explanation |
+| docs/design-principles.md	| Design principles and rationale |
+| docs/adoption-guide.md | Guidance for adapting the baseline |
+| docs/validation-checklist.md | Post-deployment validation checklist |
+| docs/assurance/ | Compliance-oriented documentation |
+| docs/lambda_tests/ | Automation testing documentation |
+
+Each module also includes its own local README.md.
 
 ---
 
