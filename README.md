@@ -14,111 +14,80 @@ without explicit written permission.
 
 ## Overview
 
-terraform-secure-baseline provides a deployable AWS security foundation designed for SaaS environments that must demonstrate strong infrastructure safeguards without the overhead of a full security engineering team.
+`tf-secure-baseline` is a Terraform-driven AWS security baseline designed for organizations running applications that handle PII or other sensitive data.
 
-It enables teams to launch cloud environments that are:
+It provides a secure, multi-account cloud foundation with:
 
-- Private by default
-- Continuously monitored
-- Resistant to silent logging disablement
-- Configured to limit exposure
-- Capable of automated containment
+- Centralized identity and access management
+- Secure-by-default networking
+- Centralized logging and monitoring
+- Automated detection and response
+- GitHub OIDC-based CI/CD
+- Environment isolation across `dev`, `staging`, and `prod`
+- SOC 2 / ISO 27001-aligned security architecture
 
-The baseline is implemented entirely as Infrastructure-as-Code.
-
----
-
-## What This Provides
-
-terraform-secure-baseline implements:
-
-- Private-by-default infrastructure
-- Centralized, tamper-resistant logging
-- Continuous monitoring and threat detection
-- Automated containment of high-severity EC2 threats
-- Configuration integrity protections
-- Encryption-backed operational evidence
-
-Together, these controls help:
-
-- Reduce external attack surface
-- Ensure monitoring cannot be silently disabled
-- Maintain visibility into security-relevant activity
-- Limit blast radius during incidents
-- Preserve integrity of operational logs
+This project is intended for SaaS companies, startups, and engineering teams that need a repeatable AWS security foundation without building every security control from scratch.
 
 ---
 
-## Who This Is For
+## What This Project Provides
 
-This baseline is intended for:
-
-- Early-stage SaaS companies
-- Mid-stage SaaS companies preparing for audits
-- Teams handling sensitive customer data (e.g., PII)
-
-It is especially useful where:
-
-- Security engineering resources are limited
-- Infrastructure maturity is growing
-- Audit readiness is becoming a requirement
-
----
-
-## Compliance Alignment
-
-terraform-secure-baseline includes assurance documentation that supports alignment with security frameworks such as SOC 2.
-
-See:
-
-- `docs/assurance/soc2-control-mapping.md`
-- `docs/assurance/control-narratives.md`
-
-These documents describe how implemented controls align with infrastructure-level expectations.
-
----
-
-## Design Goals
-
-The baseline focuses on:
-
-- Exposure reduction
-- Monitoring visibility
-- Detection integrity
-- Incident containment
-- Configuration stability
-- Log protection
-
----
-
-## Implementation Model
-
-All components are deployed using Terraform modules.
+This repository deploys a production-aligned AWS security baseline using Terraform.
 
 Key capabilities include:
 
-- Centralized logging
-- Private networking
-- Detection services
-- Configuration monitoring
-- Automated response actions
+- Multi-account AWS architecture
+- Centralized control plane
+- IAM Identity Center access management
+- GitHub Actions OIDC federation
+- Private-first networking
+- AWS Network Firewall egress inspection
+- Centralized CloudTrail, Config, and VPC Flow Logs
+- GuardDuty, Security Hub, Inspector, and AWS Config
+- Event-driven security automation
+- EC2 isolation and rollback workflows
+- Tamper detection
+- Break-glass role monitoring
+- Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
+- AWS Backup and SSM patching support
 
 ---
 
-## Scope
+## Target Use Case
 
-terraform-secure-baseline provides infrastructure-level safeguards.
+This baseline is designed for:
 
-It does not replace:
-
-- Organizational policies
-- Application security practices
-- Identity governance processes
-- Operational procedures
-
-It should be considered a technical foundation within a broader security program.
+- SaaS companies handling PII
+- Teams preparing for SOC 2 or ISO 27001
+- Organizations that need secure AWS account separation
+- Cloud security teams building reusable landing-zone patterns
+- Startups that need production-ready security architecture early
+- Consultants implementing secure AWS foundations for clients
 
 ---
+
+## High-Level Architecture
+
+```text
+GitHub Actions
+    |
+    | OIDC
+    v
+GitHub Plan / Apply IAM Roles
+    |
+    v
+Terraform Stacks
+    |
+    +--> bootstrap/control_plane
+    |       +--> state
+    |       +--> account
+    |       +--> organizations
+    |       +--> identity_center
+    |
+    +--> environments/dev
+    +--> environments/staging
+    +--> environments/prod
+```
 
 ## Roadmap / Future Improvements
 
@@ -129,7 +98,7 @@ It should be considered a technical foundation within a broader security program
   - network_firewall (current)
   - nat_only
   - vpc_endpoints_only
-  
+
 ---
 
 ## File Structure
