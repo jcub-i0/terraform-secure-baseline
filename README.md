@@ -111,6 +111,7 @@ The **environment** stacks manage:
 ---
 ## Repository Structure
 
+```text
 .
 ├── bootstrap
 │   ├── control_plane
@@ -165,6 +166,7 @@ The **environment** stacks manage:
 │
 ├── README.md
 └── SECURITY.md
+```
 
 ---
 
