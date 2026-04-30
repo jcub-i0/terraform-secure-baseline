@@ -78,6 +78,16 @@ Identity Center roles that depend on environment-specific policies (e.g., logs a
 
 ---
 
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `dev_permission_set_arns` | ARNs of the `dev` environment's permission sets |
+| `prod_permission_set_arns` | ARNs of the `prod` environment's permission sets |
+| `staging_permission_set_arns` | ARNs of the `staging` environment's permission sets |
+
+---
+
 ## ⚠️ Important Notes
 
 - Customer-managed policy attachments require:
