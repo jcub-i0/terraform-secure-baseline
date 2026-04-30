@@ -64,7 +64,7 @@ Unlike other stacks:
 - It bootstraps the remote backend used by all other stacks
 
 After deployment:
-- Bootstrap and baseline use the S3 backend created here
+- `bootstrap` and `baseline` use the S3 backend created here
 - This stack may optionally be migrated to remote state later
 
 ---
