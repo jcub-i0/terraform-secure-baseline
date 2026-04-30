@@ -478,3 +478,13 @@ This project is intended for:
 - SaaS founders
 - Security consultants
 - Teams preparing for SOC 2 / ISO 27001
+
+---
+
+## Summary
+
+`tf-secure-baseline` is a deployable AWS security foundation for sensitive workloads.
+
+It combines multi-account architecture, centralized identity, secure networking, logging, monitoring, automated response, and GitHub OIDC CI/CD into a **reusable Terraform platform**.
+
+The goal is to provide a **secure-by-default foundation** that can be adapted, extended, and used as the starting point for production SaaS environments.
