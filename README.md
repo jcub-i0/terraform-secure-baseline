@@ -221,6 +221,166 @@ Security events are routed through EventBridge and trigger automated workflows s
 
 ## Major Components
 
+### Control Plane
+
+Located at:
+
+```text
+bootstrap/control_plane
+```
+
+The **control plane** manages foundational platform resources.
+
+Substacks include:
+
+| Substack | Purpose |
+|----------|---------|
+| `state` | Creates Terraform backend resources |
+| `account` | Creates GitHub OIDC execution roles |
+| `organizations` | Defines AWS Organizations OU structure |
+| `identity_center` | Manages centralized IAM Identity Center access |
+
+### Environment Stacks
+
+Located at:
+```text
+environments/dev
+environments/staging
+environments/prod
+```
+
+Each environment stack deploys the full security baseline into its respective AWS account.
+
+Environment stacks include:
+- VPC and subnets
+- AWS Network Firewall
+- NAT Gateway
+- VPC endpoints
+- EC2 workloads
+- S3 storage
+- KMS keys
+- CloudTrail
+- CloudWatch
+- AWS Config
+- GuardDuty
+- Security Hub
+- Inspector
+- Lambda automation
+- EventBridge rules
+- SNS topics
+- Backup and patching resources
+
+### Modules
+
+Reusable Terraform modules live under:
+```text
+modules/
+```
+
+Each module contains its own `README.md` describing its purpose, inputs, outputs, and behavior.
+
+## Security Services
+
+This baseline integrates several AWS-native security services:
+
+| Service |	Purpose |
+|---------|---------|
+| GuardDuty | Threat detection |
+| Security Hub | Security findings aggregation |
+| AWS Config | Compliance rule evaluation |
+| CloudTrail | API activity logging |
+| CloudWatch | Metrics, logs, and alarms |
+| Inspector	| Vulnerability scanning |
+| EventBridge | Security event routing |
+| SNS |	Alert delivery |
+| KMS |	Encryption key management |
+| IAM Identity Center |	Centralized human access |
+| AWS Backup | Backup orchestration |
+| SSM Patch Manager | Patch management |
+
+## Automation Workflows
+
+The baseline includes several security automation workflows.
+
+### EC2 Isolation
+
+Triggered by High- and Critical-severity Security Hub findings.
+
+Actions include:
+- Replacing existing security groups with a quarantine security group
+- Snapshotting the EBS volume(s)
+- Tagging the instance
+- Sending an SNS alert
+
+### EC2 Rollback
+
+Triggered manually through a controlled EventBridge event.
+
+This allows a SecOps operator to restore previously isolated EC2 instances after review and approval.
+
+### IP Threat Enrichment
+
+Enriches IP-related Security Hub findings using threat intelligence sources and sends the results to SNS.
+
+### Tamper Detection
+
+Detects attempts to disable, delete, or modify critical security services such as:
+- CloudTrail
+- GuardDuty
+- Security Hub
+- KMS
+
+### Break-Glass Monitoring
+
+Detects use of the break-glass administrator role and sends a high-priority alert.
+
+### CI/CD
+
+GitHub Actions workflows use GitHub OIDC to assume AWS IAM roles.
+
+Typical workflows include:
+- `Terraform Plan`
+- `Terraform Apply`
+- `Terraform Destroy`
+- `Terraform Static Analysis`
+- `Lint PR`
+
+Each environment uses its own GitHub environment and AWS role for `Terraform Plan`, `Terraform Apply`, and `Terraform Destroy` workflows.
+
+Example mapping:
+
+```text
+dev-plan        -> dev GitHub-Plan role
+dev             -> dev GitHub-Apply role
+
+staging-plan    -> staging GitHub-Plan role
+staging         -> staging GitHub-Apply role
+
+prod-plan       -> prod GitHub-Plan role
+prod            -> prod GitHub-Apply role
+
+control-plane-plan -> control-plane GitHub-Plan role
+control-plane      -> control-plane GitHub-Apply role
+```
+
+---
+
+## Deployment Order
+
+At a high level, deployment follows this order:
+
+1. Deploy **state** resources
+2. Deploy **account / GitHub OIDC** resources
+3. Deploy **AWS Organizations** structure
+4. Deploy **environment baseline**
+5. Deploy or re-apply **IAM Identity Center** assignments
+6. Validate **security automation workflows**
+
+Detailed instructions are provided in:
+```text
+docs/quickstart.md
+```
+
 ---
 
 ## Roadmap / Future Improvements
