@@ -422,9 +422,9 @@ Recommended usage:
 - Review NAT Gateway, Network Firewall, VPC endpoint, CloudWatch, and logging costs regularly
 
 Future versions may include configurable egress profiles such as:
-- network_firewall
-- nat_only
-- vpc_endpoints_only
+- `network_firewall`
+- `nat_only`
+- `vpc_endpoints_only`
 
 ---
 
