@@ -1,6 +1,6 @@
 # 🧭 Control Plane (`bootstrap/control_plane`)
 
-The control plane is the centralized management layer for this platform. It is deployed in the bootstrap (management) account and is responsible for organization-wide structure, identity, and foundational state management.
+The control plane is the centralized management layer for this platform. It is deployed in the `control-plane` (management) account and is responsible for organization-wide structure, identity, and foundational state management.
 
 This stack does not deploy application infrastructure. Instead, it governs how infrastructure is organized, accessed, and managed across all accounts.
 
