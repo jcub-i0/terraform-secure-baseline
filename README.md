@@ -383,6 +383,55 @@ docs/quickstart.md
 
 ---
 
+## State Management
+
+Terraform state is separated by **stack** and **environment**.
+
+Example layout:
+```text
+bootstrap/dev.tfstate
+baseline/dev.tfstate
+
+bootstrap/staging.tfstate
+baseline/staging.tfstate
+
+bootstrap/prod.tfstate
+baseline/prod.tfstate
+```
+
+Control-plane substacks use separate state files:
+```text
+control-plane/account.tfstate
+control-plane/identity-center.tfstate
+control-plane/organizations.tfstate
+```
+
+This separation prevents accidental cross-stack changes and reduces the blast radius of Terraform operations.
+
+---
+
+## Cost Considerations
+
+This baseline uses **AWS Network Firewall** for centralized egress inspection.
+
+AWS Network Firewall provides strong security controls, but it can increase cost, especially when deployed across multiple environments and Availability Zones.
+
+Recommended usage:
+- Use the full architecture for production or sensitive workloads
+- Consider a reduced-cost profile for dev or staging environments
+- Review NAT Gateway, Network Firewall, VPC endpoint, CloudWatch, and logging costs regularly
+
+Future versions may include configurable egress profiles such as:
+- network_firewall
+- nat_only
+- vpc_endpoints_only
+
+---
+
+
+
+---
+
 ## Roadmap / Future Improvements
 
 ### v1.1
