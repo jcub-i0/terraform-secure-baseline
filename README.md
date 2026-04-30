@@ -89,6 +89,138 @@ Terraform Stacks
     +--> environments/prod
 ```
 
+The platform separates the control plane from the workload environments.
+
+The **control plane** manages:
+- Terraform backend infrastructure
+- GitHub OIDC execution roles
+- AWS Organizations structure
+- IAM Identity Center access
+
+The **environment** stacks manage:
+- Networking
+- Logging
+- Monitoring
+- Security services
+- Automation
+- Compute
+- Storage
+- Backup
+- Patch management
+
+---
+## Repository Structure
+
+.
+├── bootstrap
+│   ├── control_plane
+│   │   ├── account
+│   │   ├── identity_center
+│   │   ├── organizations
+│   │   └── state
+│   ├── dev
+│   │   ├── account
+│   │   └── state
+│   ├── staging
+│   │   ├── account
+│   │   └── state
+│   └── prod
+│       ├── account
+│       └── state
+│
+├── environments
+│   ├── dev
+│   ├── staging
+│   └── prod
+│
+├── modules
+│   ├── automation
+│   ├── backup
+│   ├── compute
+│   ├── firewall
+│   ├── github_oidc
+│   ├── iam
+│   ├── identity_center
+│   ├── logging
+│   ├── monitoring
+│   ├── networking
+│   ├── patch_management
+│   ├── security
+│   ├── security_dashboard
+│   ├── state
+│   ├── storage
+│   └── vpc_endpoints
+│
+├── docs
+│   ├── architecture-overview.md
+│   ├── design-principles.md
+│   ├── quickstart.md
+│   ├── adoption-guide.md
+│   ├── validation-checklist.md
+│   ├── assurance
+│   └── lambda_tests
+│
+├── .github
+│   └── workflows
+│
+├── README.md
+└── SECURITY.md
+
+---
+
+## Core Design Principles
+
+### Private-First Infrastructure
+
+Compute workloads are deployed in private subnets by default.
+
+The baseline avoids public IPs for application infrastructure and uses controlled outbound access.
+
+### Multi-Account Isolation
+
+The platform separates environments into dedicated AWS accounts:
+```text
+dev
+staging
+prod
+bootstrap / control-plane
+```
+
+This improves blast-radius reduction, access control, and operational isolation.
+
+### Control Plane Separation
+
+The control plane is isolated from workload infrastructure.
+
+This prevents Terraform from destroying or modifying the execution roles, state resources, and identity infrastructure it depends on.
+
+### No Long-Lived CI/CD Credentials
+
+GitHub Actions authenticates to AWS using OIDC.
+
+No static AWS access keys are required for CI/CD workflows.
+
+### Centralized Identity
+
+IAM Identity Center is used for human access.
+
+Permission sets and account assignments are managed centrally from the control plane.
+
+### Event-Driven Security Automation
+
+Security events are routed through EventBridge and trigger automated workflows such as:
+- EC2 isolation
+- EC2 rollback
+- IP threat enrichment
+- Tamper detection alerts
+- Break-glass role usage alerts
+
+---
+
+## Major Components
+
+---
+
 ## Roadmap / Future Improvements
 
 ### v1.1
