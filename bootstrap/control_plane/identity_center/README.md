@@ -62,6 +62,22 @@ Identity Center roles that depend on environment-specific policies (e.g., logs a
 
 ---
 
+## Inputs
+
+| Name | Description |
+|------|-------------|
+| `cloud_name` | Name of cloud environment |
+| `primary_region_<env>` | AWS region used by specified environment |
+| `enable_secops_analyst_<env>` | Enable SecOps-Analyst resources in specified environment |
+| `enable_secops_engineer_<env>` | Enable SecOps-Engineer resources in specified environment |
+| `account_id_<env>` | AWS account ID of specified environment |
+| `secops_analyst_group_name` | Name of the SecOps-Analyst Identity Center group |
+| `secops_engineer_group_name` | Name of the SecOps-Engineer Identity Center group |
+| `logs_s3_readonly_policy_name_<env>` | Name of the Centralized Logs S3 bucket's ReadOnly IAM policy in specified environment |
+| `logs_cmk_decrypt_policy_name_<env>` | Name of the Centralized Logs S3 bucket CMK's Decrypt IAM policy |
+
+---
+
 ## ⚠️ Important Notes
 
 - Customer-managed policy attachments require:
