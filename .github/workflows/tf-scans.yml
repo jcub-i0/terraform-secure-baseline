@@ -2,7 +2,7 @@
 ## GIT WORKFLOW FOR CI/CD PIPELINE TERRAFORM SCANS ##
 #####################################################
 
-name: Terraform Scans
+name: Terraform Static Analysis
 
 permissions:
   contents: read
