@@ -451,14 +451,30 @@ Each module also includes its own local README.md.
 
 ---
 
-## Roadmap / Future Improvements
+## Roadmap
 
 ### v1.1
-- Refactor IAM policies from `jsonencode()` to `aws_iam_policy_document`
-- Improve policy reuse patterns (Lambda, KMS, SNS, logging)
+Potential improvements:
+
 - Add configurable egress inspection modes:
-  - network_firewall (current)
+  - network_firewall
   - nat_only
   - vpc_endpoints_only
+- Refactor IAM policies from jsonencode() to aws_iam_policy_document
+- Add additional Service Control Policies
+- Add cross-account GuardDuty aggregation
+- Add cross-account Security Hub aggregation
+- Improve automated validation and test coverage
 
 ---
+
+## Intended Audience
+
+This project is intended for:
+
+- Cloud security engineers
+- DevSecOps engineers
+- Platform engineers
+- SaaS founders
+- Security consultants
+- Teams preparing for SOC 2 / ISO 27001
