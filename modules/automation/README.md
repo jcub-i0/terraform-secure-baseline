@@ -252,8 +252,6 @@ module "automation" {
 
 ## Outputs
 
-## Outputs
-
 | Name | Description |
 |------|-------------|
 | `secops_event_bus_name` | Name of the custom SecOps EventBridge bus |
