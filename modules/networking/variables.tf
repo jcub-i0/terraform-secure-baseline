@@ -22,6 +22,6 @@ variable "subnet_cidrs" {
   type = map(list(string))
 }
 
-variable "firewall_endpoint_ids_by_az" {
-  type = map(string)
-}
+#variable "firewall_endpoint_ids_by_az" {
+#  type = map(string)
+#}
