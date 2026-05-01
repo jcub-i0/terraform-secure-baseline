@@ -74,13 +74,13 @@ It can submit rollback events, but it does not directly modify EC2 security grou
 Before running these tests, confirm:
 
 - The target environment has been deployed.
-- The EC2 Isolation Lambda has already isolated a test instance.
-- The target EC2 instance is currently attached to the quarantine security group.
-- The EC2 Rollback Lambda exists.
+- The `EC2 Isolation` Lambda has already isolated a test instance.
+- The target EC2 instance is currently attached to the `Quarantine` security group.
+- The `EC2 Rollback` Lambda exists.
 - The environment-specific SecOps event bus exists.
 - The rollback EventBridge rule exists.
 - The SecOps SNS topic exists.
-- Your IAM Identity Center user is assigned to the correct `SecOps-Operator` group for the target environment.
+- Your `IAM Identity Center` user is assigned to the correct `SecOps-Operator` group for the target environment.
 
 Example groups:
 
