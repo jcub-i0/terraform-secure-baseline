@@ -146,10 +146,10 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.igw.id
   }
 
-#  route {
-#    cidr_block      = var.subnet_cidrs.compute_private[each.value]
-#    vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
-#  }
+  #  route {
+  #    cidr_block      = var.subnet_cidrs.compute_private[each.value]
+  #    vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+  #  }
 
   tags = {
     Name        = "${var.name_prefix}-Public-Route-Table-${each.key}"
