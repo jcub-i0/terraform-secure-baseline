@@ -1,4 +1,4 @@
-# automation module
+# Automation Module
 
 This Terraform module provisions security automation workflows driven by AWS Security Hub findings. It deploys Lambda responders, EventBridge rules/bus integrations, encrypted logging, and secret management to support automated containment and controlled recovery.
 
