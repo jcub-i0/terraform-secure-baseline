@@ -42,7 +42,7 @@ Across all Lambdas, the module enables X-Ray tracing and provisions KMS-encrypte
 - CloudWatch log groups (30-day retention, KMS key)
 - Secrets Manager secret + version for threat intel API keys
 
-## Input variables
+## Input Variables
 
 | Name | Type | Description |
 |---|---|---|
