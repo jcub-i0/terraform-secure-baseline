@@ -546,52 +546,6 @@ aws events put-events \
 
 ---
 
-## Test 6 - Wrong Event Source
-
-### Purpose
-
-Validate that events with an incorrect source do not trigger the rollback Lambda.
-
-This test depends on the EventBridge rule pattern.
-
-### Manual Event from AWS CLI
-
-```bash
-aws events put-events \
-  --region "${AWS_REGION}" \
-  --entries "[
-    {
-      \"Source\": \"custom.invalid\",
-      \"DetailType\": \"Ec2Rollback\",
-      \"Detail\": \"{\\\"instance_id\\\":\\\"${INSTANCE_ID}\\\",\\\"approved_by\\\":\\\"${APPROVED_BY}\\\",\\\"ticket_id\\\":\\\"${TICKET_ID}\\\",\\\"reason\\\":\\\"Wrong source test\\\"}\",
-      \"EventBusName\": \"${EVENT_BUS_NAME}\"
-    }
-  ]" \
-  --profile "${PROFILE_NAME}"
-```
-
-### Expected CLI Output
-
-```json
-{
-  "FailedEntryCount": 0,
-  "Entries": [
-    {
-      "EventId": "<id-string>"
-    }
-  ]
-}
-```
-
-### Expected Outcome
-
-- EventBridge accepts the event.
-- Rollback Lambda should not execute if the rule only matches `custom.rollback`.
-- No EC2 instances are modified.
-- No rollback SNS notification is sent.
-
----
-
 ## Test 7 - Wrong Detail Type
 
 ### Purpose
@@ -652,6 +606,10 @@ After running a successful rollback test, confirm:
 ---
 
 # Troubleshooting
+
+Errors associated with these tests are often the result of an invalid environment variable.
+
+Ensure that all environment variables are correctly set prior to following the troubleshooting steps outlined below. 
 
 ## EventBridge returns FailedEntryCount greater than 0
 
