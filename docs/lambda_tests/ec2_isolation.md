@@ -4,7 +4,7 @@
 
 This document provides manual tests used to validate the **EC2 Isolation Lambda** behavior before and after changes.
 
-The EC2 Isolation Lambda is responsible for isolating EC2 instances when qualifying Security Hub findings are detected.
+The EC2 Isolation Lambda is responsible for isolating EC2 instances and snapshotting their EBS volumes when qualifying Security Hub findings are detected.
 
 It is designed to support the broader `tf-secure-baseline` architecture, including:
 
