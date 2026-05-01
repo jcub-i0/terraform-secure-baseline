@@ -252,17 +252,18 @@ module "automation" {
 
 ## Outputs
 
+## Outputs
+
 | Name | Description |
 |------|-------------|
-| `ec2_isolation_lambda_name` | Name of the EC2 isolation Lambda function |
-| `ec2_isolation_lambda_arn` | ARN of the EC2 isolation Lambda function |
-| `ec2_rollback_lambda_name` | Name of the EC2 rollback Lambda function |
-| `ec2_rollback_lambda_arn` | ARN of the EC2 rollback Lambda function |
-| `ip_enrichment_lambda_name` | Name of the IP enrichment Lambda function |
-| `ip_enrichment_lambda_arn` | ARN of the IP enrichment Lambda function |
 | `secops_event_bus_name` | Name of the custom SecOps EventBridge bus |
 | `secops_event_bus_arn` | ARN of the custom SecOps EventBridge bus |
-| `threat_intel_secret_arn` | ARN of the Secrets Manager secret storing threat intelligence API keys |
+| `lambda_ec2_isolation_sg_id` | Security group ID for the EC2 isolation Lambda |
+| `lambda_ec2_rollback_sg_id` | Security group ID for the EC2 rollback Lambda |
+| `threat_intel_api_keys_arn` | ARN of the Secrets Manager secret storing threat intelligence API keys |
+| `lambda_ip_enrichment_log_group_arn` | ARN of the CloudWatch log group for the IP enrichment Lambda |
+| `securityhub_high_critical_rule_arn` | ARN of the EventBridge rule for HIGH / CRITICAL Security Hub findings |
+| `securityhub_high_critical_rule_name` | Name of the EventBridge rule for HIGH / CRITICAL Security Hub findings |
 
 ---
 
