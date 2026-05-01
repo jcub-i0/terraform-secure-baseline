@@ -70,7 +70,7 @@ Before running these tests, confirm:
 - Security Hub is enabled in the target account.
 - EventBridge rules for Security Hub findings are deployed.
 - The EC2 Isolation Lambda exists.
-- The quarantine security group exists.
+- The `Quarantine` security group exists.
 - The SecOps SNS topic exists.
 - A test EC2 instance exists in the target environment.
 - Your principal has permission to invoke the Lambda directly.
@@ -92,6 +92,7 @@ export INSTANCE_ID="<EC2-INSTANCE-ID>"
 export INSTANCE_ARN="arn:aws:ec2:${AWS_REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-isolation"
 ```
+> If any of the following tests fail, ensure that the above environment variables are correctly set.
 
 For other environments, update:
 
@@ -121,6 +122,8 @@ tf-secure-baseline-dev-ec2-isolation
 
 ## Verification Commands
 
+- Specify that this should be done AFTER configuring the AWS CLI with either the role you assume or the IAM admin user.
+
 Use the following commands to confirm the target instance state before and after isolation.
 
 ### Check Current Security Groups
@@ -131,6 +134,7 @@ aws ec2 describe-instances \
   --instance-ids "${INSTANCE_ID}" \
   --query 'Reservations[0].Instances[0].SecurityGroups'
 ```
+> Ensure that the instance is not attached to the `Quarantine` security group.
 
 ### Check Instance Tags
 
@@ -139,6 +143,7 @@ aws ec2 describe-tags \
   --region "${AWS_REGION}" \
   --filters "Name=resource-id,Values=${INSTANCE_ID}"
 ```
+> Ensure that the instance's `IsolationAllowed` tag is set to `true` and the `Isolated` tag either does not exist or is set to `false`.
 
 ### Check Lambda Logs
 
@@ -147,6 +152,7 @@ aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
   --region "${AWS_REGION}" \
   --since 15m
 ```
+> If this returns nothing, that's fine; but you do not want to see errors.
 
 ---
 
@@ -161,6 +167,7 @@ Validate that a `HIGH` severity Security Hub finding for an EC2 instance causes 
 ### Expected Outcome
 
 - Lambda executes successfully.
+- A snapshot is taken of the instance's EBS volume
 - Instance is moved into the quarantine security group.
 - Isolation tags are applied to the instance.
 - SNS notification is sent to the configured SecOps topic.
@@ -230,6 +237,7 @@ Validate that a `CRITICAL` severity Security Hub finding for an EC2 instance cau
 ### Expected Outcome
 
 - Lambda executes successfully.
+- A snapshot is taken of the instance's EBS volume
 - Instance is moved into the quarantine security group.
 - Isolation tags are applied to the instance.
 - SNS notification is sent to the configured SecOps topic.
@@ -637,17 +645,20 @@ response.json && cat response.json && rm response.json
 
 ### Purpose
 
-Validate that the isolation function leaves the instance in a state that can later be restored by the EC2 Rollback workflow.
+Validate that the isolation function leaves the instance in a state that can later be restored by the `EC2 Rollback` workflow.
 
 This test does not invoke the rollback Lambda directly. It confirms that isolation has completed and that the required metadata exists for follow-on rollback validation.
 
 ### Expected Outcome
 
-- Instance is isolated.
-- Original security group information is preserved according to the Lambda implementation.
-- Isolation tags are present.
-- The instance can be targeted by the EC2 Rollback test workflow.
-- A user assigned to the correct `SecOps-Operator-<Env>` group can trigger rollback through EventBridge.
+After running one of the `EC2 Isolation` tests that results in an isolated instance (Test 1 or 2), ensure the following: 
+
+- Instance is isolated
+- Snapshot is taken of EBS volume(s) associated with the instance
+- Original security group information is preserved according to the Lambda implementation
+- Isolation tags are present
+- The instance can be targeted by the EC2 Rollback test workflow
+- A user assigned to the correct `SecOps-Operator-<Env>` group can trigger rollback through EventBridge
 
 ### Verification Commands
 
@@ -720,17 +731,19 @@ Do not manually reattach security groups unless rollback testing is not being pe
 
 Preferred cleanup path:
 
-```text
 1. Confirm isolation occurred.
 2. Assume the correct SecOps-Operator role through IAM Identity Center.
 3. Send the approved rollback event to the environment-specific security operations EventBridge bus.
 4. Confirm original security groups are restored.
 5. Confirm rollback notification is sent.
-```
 
 ---
 
 # Troubleshooting
+
+Errors associated with these tests are often the result of an invalid environment variable.
+
+Ensure that all environment variables are correctly set prior to following the troubleshooting steps outlined below. 
 
 ## Lambda invocation succeeds but instance is not isolated
 
