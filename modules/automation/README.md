@@ -66,7 +66,7 @@ This module creates resources for three automation workflows:
 ### EC2 Isolation
 
 - Lambda deployment package
-- EC2 Isolation Lambda function
+- `EC2 Isolation` Lambda function
 - Lambda security group
 - EventBridge rule for HIGH / CRITICAL EC2 Security Hub findings
 - EventBridge target
@@ -76,7 +76,7 @@ This module creates resources for three automation workflows:
 ### EC2 Rollback
 
 - Lambda deployment package
-- EC2 Rollback Lambda function
+- `EC2 Rollback` Lambda function
 - Lambda security group
 - Custom SecOps EventBridge bus
 - EventBridge bus policy
@@ -88,7 +88,7 @@ This module creates resources for three automation workflows:
 ### IP Enrichment
 
 - Lambda deployment package
-- IP Enrichment Lambda function
+- `IP Enrichment` Lambda function
 - Secrets Manager secret for threat intelligence API keys
 - Secrets Manager secret version
 - EventBridge rule for HIGH / CRITICAL Security Hub findings
@@ -102,7 +102,7 @@ This module creates resources for three automation workflows:
 
 ## EC2 Isolation
 
-The EC2 Isolation workflow is triggered by new HIGH or CRITICAL Security Hub findings involving EC2 instances.
+The `EC2 Rollback` workflow is triggered by new HIGH or CRITICAL Security Hub findings involving EC2 instances.
 
 When triggered, the Lambda function is designed to isolate affected EC2 instances by moving them into the Quarantine Security Group.
 
@@ -124,7 +124,7 @@ The Lambda function receives the Security Hub finding, identifies affected EC2 i
 
 ## EC2 Rollback
 
-The EC2 Rollback workflow restores isolated EC2 instances to their previous security group configuration.
+The `EC2 Rollback` workflow restores isolated EC2 instances to their previous security group configuration.
 
 This workflow is intentionally triggered through a custom SecOps EventBridge bus instead of the default event bus.
 
@@ -145,7 +145,7 @@ This workflow supports an auditable manual recovery path after automated isolati
 
 ## IP Enrichment
 
-The IP enrichment workflow is triggered by new HIGH or CRITICAL Security Hub findings.
+The `IP Enrichment` workflow is triggered by new HIGH or CRITICAL Security Hub findings.
 
 The Lambda function enriches IP address indicators using an external threat intelligence provider and sends the enrichment results to SNS.
 
@@ -167,7 +167,7 @@ Secret name prefix:
 <name_prefix>/threat-intel/api-keys-
 ```
 
-The IP Enrichment Lambda reads the secret at runtime.
+The `IP Enrichment` Lambda reads the secret at runtime.
 
 ---
 
@@ -180,9 +180,9 @@ This module follows several security-focused design choices:
 - Lambda function code is encrypted with a Lambda CMK
 - CloudWatch log groups are encrypted with the logs CMK
 - Threat intelligence API keys are stored in Secrets Manager
-- EC2 Isolation and rollback Lambdas run inside private serverless subnets
-- EC2 Rollback is routed through a custom EventBridge bus
-- IP Enrichment does not use a VPC configuration so it can reach external threat intelligence APIs without requiring NAT
+- `EC2 Isolation` and `EC2 Rollback` Lambdas run inside private serverless subnets
+- `EC2 Rollback` is routed through a custom EventBridge bus
+- `IP Enrichment` does not use a VPC configuration so it can reach external threat intelligence APIs without requiring NAT
 
 ---
 
@@ -270,9 +270,9 @@ module "automation" {
 
 ## Important Notes
 
-- EC2 isolation is triggered only for new HIGH or CRITICAL Security Hub findings involving EC2 instances.
-- EC2 rollback is triggered through the custom SecOps event bus using the `custom.rollback` source.
-- The IP enrichment Lambda is intentionally not placed in a VPC so it can reach external threat intelligence APIs without NAT.
+- `EC2 Isolation` is triggered only for new HIGH or CRITICAL Security Hub findings involving EC2 instances.
+- `EC2 Rollback` is triggered through the custom SecOps event bus using the `custom.rollback` source.
+- The `IP Enrichment` Lambda is intentionally not placed in a VPC so it can reach external threat intelligence APIs without NAT.
 - Lambda IAM roles are created outside this module and passed in as inputs.
 - CloudWatch log groups are created explicitly so retention and KMS encryption can be controlled.
 - The AbuseIPDB API key is stored in Secrets Manager and encrypted with the provided Secrets Manager CMK.
