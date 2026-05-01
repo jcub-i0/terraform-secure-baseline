@@ -153,7 +153,7 @@ export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-rollback"
 
 ## Sign In via AWS Access Portal
 
-Use the AWS access portal URL configured for IAM Identity Center in the bootstrap/control-plane account.
+Use the AWS access portal URL configured for IAM Identity Center in the `bootstrap/control-plane` account.
 
 Valid access portal URL formats include:
 
