@@ -370,6 +370,7 @@ Use this JSON in the **Detail** field:
 - EventBridge shows `Event(s) sent successfully.`
 - Rollback Lambda executes successfully.
 - Instance rolls back from the quarantine security group to its original security group or groups.
+- Instance tags are added/updated
 - SNS notification is sent to the configured SecOps SNS topic.
 - No errors appear in the Lambda function CloudWatch log group.
 
@@ -422,6 +423,7 @@ aws events put-events \
 
 - Rollback Lambda executes successfully.
 - Instance rolls back from the quarantine security group to its original security group or groups.
+- Instance tags are added/updated
 - SNS notification is sent to the configured SecOps SNS topic.
 - No errors appear in the Lambda function CloudWatch log group.
 
@@ -433,14 +435,15 @@ aws events put-events \
 
 Confirm that the EC2 instance was restored to its pre-isolation security group configuration.
 
+Run these from a terminal authenticated as either an IAM administrator user, the SecOps-Analyst role, SecOps-Engineer role, or an authorized CI/CD / break-glass role.
+
 ### Check Security Groups
 
 ```bash
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
   --instance-ids "${INSTANCE_ID}" \
-  --query 'Reservations[0].Instances[0].SecurityGroups' \
-  --profile "${PROFILE_NAME}"
+  --query 'Reservations[0].Instances[0].SecurityGroups'
 ```
 
 ### Expected Outcome
