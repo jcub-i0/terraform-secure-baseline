@@ -66,7 +66,7 @@ This module creates resources for three automation workflows:
 ### EC2 Isolation
 
 - Lambda deployment package
-- EC2 isolation Lambda function
+- EC2 Isolation Lambda function
 - Lambda security group
 - EventBridge rule for HIGH / CRITICAL EC2 Security Hub findings
 - EventBridge target
@@ -76,7 +76,7 @@ This module creates resources for three automation workflows:
 ### EC2 Rollback
 
 - Lambda deployment package
-- EC2 rollback Lambda function
+- EC2 Rollback Lambda function
 - Lambda security group
 - Custom SecOps EventBridge bus
 - EventBridge bus policy
@@ -88,7 +88,7 @@ This module creates resources for three automation workflows:
 ### IP Enrichment
 
 - Lambda deployment package
-- IP enrichment Lambda function
+- IP Enrichment Lambda function
 - Secrets Manager secret for threat intelligence API keys
 - Secrets Manager secret version
 - EventBridge rule for HIGH / CRITICAL Security Hub findings
@@ -102,9 +102,9 @@ This module creates resources for three automation workflows:
 
 ## EC2 Isolation
 
-The EC2 isolation workflow is triggered by new HIGH or CRITICAL Security Hub findings involving EC2 instances.
+The EC2 Isolation workflow is triggered by new HIGH or CRITICAL Security Hub findings involving EC2 instances.
 
-When triggered, the Lambda function is designed to isolate affected EC2 instances by moving them into the quarantine security group.
+When triggered, the Lambda function is designed to isolate affected EC2 instances by moving them into the Quarantine Security Group.
 
 ### Trigger
 
@@ -118,13 +118,13 @@ workflow    = NEW
 
 ### Behavior
 
-The Lambda function receives the Security Hub finding, identifies affected EC2 instances, applies quarantine controls, and sends an SNS notification.
+The Lambda function receives the Security Hub finding, identifies affected EC2 instances, snapshots the attaches EBS volume(s), applies quarantine controls, and sends an SNS notification.
 
 ---
 
 ## EC2 Rollback
 
-The EC2 rollback workflow restores isolated EC2 instances to their previous security group configuration.
+The EC2 Rollback workflow restores isolated EC2 instances to their previous security group configuration.
 
 This workflow is intentionally triggered through a custom SecOps EventBridge bus instead of the default event bus.
 
@@ -137,7 +137,7 @@ source    = custom.rollback
 
 ### Behavior
 
-A SecOps operator sends a controlled rollback event to the custom event bus. EventBridge invokes the rollback Lambda, which restores the instance security group configuration and sends an SNS alert.
+A SecOps Operator sends a controlled rollback event to the custom event bus. EventBridge invokes the rollback Lambda, which restores the instance security group configuration and sends an SNS alert.
 
 This workflow supports an auditable manual recovery path after automated isolation.
 
@@ -167,7 +167,7 @@ Secret name prefix:
 <name_prefix>/threat-intel/api-keys-
 ```
 
-The IP enrichment Lambda reads the secret at runtime.
+The IP Enrichment Lambda reads the secret at runtime.
 
 ---
 
@@ -180,9 +180,9 @@ This module follows several security-focused design choices:
 - Lambda function code is encrypted with a Lambda CMK
 - CloudWatch log groups are encrypted with the logs CMK
 - Threat intelligence API keys are stored in Secrets Manager
-- EC2 isolation and rollback Lambdas run inside private serverless subnets
-- EC2 rollback is routed through a custom EventBridge bus
-- IP enrichment does not use a VPC configuration so it can reach external threat intelligence APIs without requiring NAT
+- EC2 Isolation and rollback Lambdas run inside private serverless subnets
+- EC2 Rollback is routed through a custom EventBridge bus
+- IP Enrichment does not use a VPC configuration so it can reach external threat intelligence APIs without requiring NAT
 
 ---
 
@@ -190,32 +190,35 @@ This module follows several security-focused design choices:
 
 ```hcl
 module "automation" {
-  source = "../../modules/automation"
+  source = "../modules/automation"
 
-  cloud_name  = var.cloud_name
-  environment = var.environment
-  name_prefix = local.name_prefix
-  account_id  = var.account_id
+  cloud_name                               = var.cloud_name
+  account_id                               = data.aws_caller_identity.current.account_id
+  name_prefix                              = local.name_prefix
+  environment                              = var.environment
+  primary_region                           = var.primary_region
 
-  vpc_id                        = module.networking.vpc_id
-  serverless_private_subnet_ids = module.networking.serverless_private_subnet_ids
-  quarantine_sg_id              = module.networking.quarantine_sg_id
+  vpc_id                                   = module.networking.vpc_id
+  serverless_private_subnet_ids            = module.networking.serverless_private_subnet_ids_list
+  interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
+  quarantine_sg_id                         = module.compute.quarantine_sg_id
 
-  lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
-  lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
+  lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
+  lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
+  lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
+  eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
 
-  secops_topic_arn        = module.monitoring.secops_topic_arn
-  lambda_cmk_arn          = module.logging.lambda_cmk_arn
-  logs_cmk_arn            = module.logging.logs_cmk_arn
-  secrets_manager_cmk_arn = module.logging.secrets_manager_cmk_arn
+  secops_topic_arn                         = module.monitoring.secops_topic_arn
+  lambda_cmk_arn                           = module.security.lambda_cmk_arn
+  logs_cmk_arn                             = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn                  = module.security.secrets_manager_cmk_arn
 
-  abuseipdb_api_key = var.abuseipdb_api_key
+  abuseipdb_api_key                        = var.abuseipdb_api_key
 
-  ip_enrichment_write_to_securityhub = false
-  ip_enrich_max_ips_per_event        = 5
-  ip_enrich_abuseipdb_max_age        = 90
-  ip_enrich_max_ips_extracted        = 25
+  ip_enrichment_write_to_securityhub       = var.ip_enrichment_write_to_securityhub
+  ip_enrich_max_ips_per_event              = var.ip_enrich_max_ips_per_event
+  ip_enrich_abuseipdb_max_age              = var.ip_enrich_abuseipdb_max_age
+  ip_enrich_max_ips_extracted              = var.ip_enrich_max_ips_extracted
 }
 ```
 
