@@ -59,6 +59,7 @@ Identity Center roles that depend on environment-specific policies (e.g., logs a
 3. **Re-apply Identity Center**
    - Pass policy names as variables, which are output by the `baseline` stack deployed by `environment/<env>`
    - Attach customer-managed policies to permission sets by defining policy name variables and re-apply the `identity_center` substack. Example:
+   
 ```bash
 export TF_VAR_logs_s3_readonly_policy_name_dev="tf-secure-baseline-dev-CentralizedLogsS3ReadOnly"
 export TF_VAR_logs_cmk_decrypt_policy_name_dev="tf-secure-baseline-dev-LogsKmsDecrypt"
