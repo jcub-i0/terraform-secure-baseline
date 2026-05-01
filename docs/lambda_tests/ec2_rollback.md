@@ -81,7 +81,6 @@ Before running these tests, confirm:
 - The rollback EventBridge rule exists.
 - The SecOps SNS topic exists.
 - Your `IAM Identity Center` user is assigned to the correct `SecOps-Operator` group for the target environment.
-> NOTE: If you are not already setup in Identity Center, refer to `bootstrap/control_plane/identity_center/README.md`
 
 Example groups:
 
