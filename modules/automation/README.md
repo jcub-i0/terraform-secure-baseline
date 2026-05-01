@@ -225,22 +225,25 @@ module "automation" {
 
 | Name | Description |
 |------|-------------|
+| `vpc_id` | VPC ID used for Lambda security groups |
+| `name_prefix` | Naming prefix used for created resources |
 | `cloud_name` | Name of the cloud environment |
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` |
-| `name_prefix` | Naming prefix used for created resources |
-| `account_id` | AWS account ID where automation resources are deployed |
-| `vpc_id` | VPC ID used for Lambda security groups |
-| `serverless_private_subnet_ids` | Private subnet IDs used by VPC-enabled Lambda functions |
-| `quarantine_sg_id` | Security group ID used to isolate EC2 instances |
 | `lambda_ec2_isolation_role_arn` | IAM role ARN for the EC2 isolation Lambda |
 | `lambda_ec2_rollback_role_arn` | IAM role ARN for the EC2 rollback Lambda |
 | `lambda_ip_enrichment_role_arn` | IAM role ARN for the IP enrichment Lambda |
+| `serverless_private_subnet_ids` | Private subnet IDs used by VPC-enabled Lambda functions |
+| `quarantine_sg_id` | Security group ID used to isolate EC2 instances |
 | `secops_topic_arn` | SNS topic ARN for SecOps notifications |
+| `account_id` | AWS account ID where automation resources are deployed |
+| `primary_region` | Primary AWS region |
+| `eventbridge_putevents_to_secops_role_arn` | IAM role ARN used for putting events onto the SecOps event bus |
 | `lambda_cmk_arn` | KMS CMK ARN used to encrypt Lambda functions |
-| `logs_cmk_arn` | KMS CMK ARN used to encrypt Lambda CloudWatch log groups |
 | `secrets_manager_cmk_arn` | KMS CMK ARN used to encrypt Secrets Manager secrets |
-| `abuseipdb_api_key` | AbuseIPDB API key stored in Secrets Manager |
+| `interface_endpoints_sg_id` | Security group ID used by VPC interface endpoints |
+| `logs_cmk_arn` | KMS CMK ARN used to encrypt Lambda CloudWatch log groups |
 | `ip_enrichment_write_to_securityhub` | Controls whether IP enrichment writes results back to Security Hub |
+| `abuseipdb_api_key` | Sensitive AbuseIPDB API key stored in Secrets Manager |
 | `ip_enrich_max_ips_per_event` | Maximum number of IPs enriched per Security Hub event |
 | `ip_enrich_abuseipdb_max_age` | AbuseIPDB max age filter in days |
 | `ip_enrich_max_ips_extracted` | Maximum number of IPs extracted from a finding |
