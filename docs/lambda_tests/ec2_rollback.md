@@ -4,7 +4,7 @@
 
 This document provides manual tests used to validate the **EC2 Rollback Lambda** behavior before and after changes.
 
-The EC2 Rollback Lambda restores an EC2 instance from the quarantine security group back to its original security group configuration after an approved rollback event is submitted.
+The EC2 Rollback Lambda restores an EC2 instance from the `Quarantine` security group back to its original security group configuration after an approved rollback event is submitted.
 
 This test validates the rollback workflow in the context of the full `tf-secure-baseline` architecture, including:
 
@@ -19,9 +19,9 @@ This test validates the rollback workflow in the context of the full `tf-secure-
 
 ## Testing Approach
 
-The EC2 Rollback Lambda is not intended to be invoked directly during normal operations.
+The `EC2 Rollback` Lambda is not intended to be invoked directly during normal operations.
 
-Instead, rollback is triggered by sending an approved custom event to the environment-specific security operations EventBridge bus.
+Instead, rollback is triggered by sending an approved custom event to the environment-specific `secops` EventBridge bus.
 
 This document includes two test methods:
 
