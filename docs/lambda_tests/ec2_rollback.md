@@ -41,7 +41,7 @@ The rollback workflow is designed to happen after EC2 isolation.
 
 Expected flow:
 
-%%%text
+```text
 Security Hub Finding
     |
     v
@@ -61,7 +61,7 @@ EC2 Rollback Lambda
     |
     v
 Original security groups restored
-%%%
+```
 
 The `SecOps-Operator` role is intentionally limited.
 
@@ -84,11 +84,11 @@ Before running these tests, confirm:
 
 Example groups:
 
-%%%text
+```text
 SecOps-Operator-Dev
 SecOps-Operator-Staging
 SecOps-Operator-Prod
-%%%
+```
 
 ---
 
@@ -118,7 +118,7 @@ Set these values before running the CLI-based tests.
 
 Update the values for the environment you are testing.
 
-%%%bash
+```bash
 export AWS_PAGER=""
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
@@ -131,23 +131,23 @@ export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-rollback"
 export APPROVED_BY="secops@company.com"
 export TICKET_ID="t-abc123"
 export ROLLBACK_REASON="Test rollback"
-%%%
+```
 
 For staging:
 
-%%%bash
+```bash
 export ENVIRONMENT="staging"
 export EVENT_BUS_NAME="${CLOUD_NAME}-${ENVIRONMENT}-secops-bus"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-rollback"
-%%%
+```
 
 For prod:
 
-%%%bash
+```bash
 export ENVIRONMENT="prod"
 export EVENT_BUS_NAME="${CLOUD_NAME}-${ENVIRONMENT}-secops-bus"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-rollback"
-%%%
+```
 
 ---
 
@@ -157,10 +157,10 @@ Use the AWS access portal URL configured for IAM Identity Center in the bootstra
 
 Valid access portal URL formats include:
 
-%%%text
+```text
 https://d-xxxxxxxxxx.awsapps.com/start
 https://ssoins-xxxxxxxxxxxxxxxx.portal.us-east-1.app.aws
-%%%
+```
 
 A custom AWS access portal URL may also be used if configured.
 
@@ -170,23 +170,23 @@ After opening the AWS account, confirm the active role in the top-right console 
 
 Expected role name pattern:
 
-%%%text
+```text
 SecOps-Operator-<env>/<username>
-%%%
+```
 
 or:
 
-%%%text
+```text
 AWSReservedSSO_SecOps-Operator-<env>_<random>/<username>
-%%%
+```
 
 Examples:
 
-%%%text
+```text
 AWSReservedSSO_SecOps-Operator-dev_<random>/<username>
 AWSReservedSSO_SecOps-Operator-staging_<random>/<username>
 AWSReservedSSO_SecOps-Operator-prod_<random>/<username>
-%%%
+```
 
 ---
 
@@ -194,22 +194,22 @@ AWSReservedSSO_SecOps-Operator-prod_<random>/<username>
 
 If you want to run the rollback test from a local terminal, configure an AWS CLI SSO profile.
 
-%%%bash
+```bash
 aws configure sso --use-device-code
-%%%
+```
 
 For the prompts, use values similar to the following:
 
-%%%text
+```text
 SSO session name (Recommended): test
 SSO start URL [None]: <AWS access portal URL>
 SSO region [None]: us-east-1
 SSO registration scopes [sso:account:access]: sso:account:access
-%%%
+```
 
 The CLI may print output similar to:
 
-%%%text
+```text
 Attempting to automatically open the SSO authorization page in your default browser.
 If the browser does not open or you wish to use a different device to authorize this request, open the following URL:
 
@@ -218,7 +218,7 @@ https://d-xxxxxxxxxx.awsapps.com/start/#/device
 Then enter the code:
 
 XXXX-XXXX
-%%%
+```
 
 If the browser does not open automatically, open the provided URL manually and enter the code.
 
@@ -226,15 +226,15 @@ After authorization, select the target account and the `SecOps-Operator` role.
 
 If prompted for a profile name, use:
 
-%%%text
+```text
 operator
-%%%
+```
 
 Then set:
 
-%%%bash
+```bash
 export PROFILE_NAME="operator"
-%%%
+```
 
 ---
 
@@ -242,19 +242,19 @@ export PROFILE_NAME="operator"
 
 Before running rollback tests from the CLI, confirm your AWS CLI is authenticated to the correct account and role.
 
-%%%bash
+```bash
 aws sts get-caller-identity --profile "${PROFILE_NAME}"
-%%%
+```
 
 Expected output pattern:
 
-%%%json
+```json
 {
   "UserId": "<id-string>:<sso-user>",
   "Account": "<target-account-id>",
   "Arn": "arn:aws:sts::<target-account-id>:assumed-role/AWSReservedSSO_SecOps-Operator-<env>_<random>/<sso-user>"
 }
-%%%
+```
 
 Confirm:
 
@@ -272,13 +272,13 @@ Before running these commands, make sure your AWS CLI is authenticated to the ta
 
 ### Check Current Security Groups
 
-%%%bash
+```bash
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
   --instance-ids "${INSTANCE_ID}" \
   --query 'Reservations[0].Instances[0].SecurityGroups' \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 Before rollback, the instance should be attached to the quarantine security group.
 
@@ -288,12 +288,12 @@ After rollback, the instance should be restored to its original security group o
 
 ### Check Instance Tags
 
-%%%bash
+```bash
 aws ec2 describe-tags \
   --region "${AWS_REGION}" \
   --filters "Name=resource-id,Values=${INSTANCE_ID}" \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 Use this to confirm whether isolation and rollback metadata is present or updated.
 
@@ -303,11 +303,11 @@ Use this to confirm whether isolation and rollback metadata is present or update
 
 This may require a broader analyst, engineer, administrator, or CI/CD role because the `SecOps-Operator` permission set is intentionally limited.
 
-%%%bash
+```bash
 aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
   --region "${AWS_REGION}" \
   --since 15m
-%%%
+```
 
 ---
 
@@ -325,9 +325,9 @@ This test is performed entirely from the AWS Console.
 
 Sign in through the AWS access portal, open the target AWS account using the correct `SecOps-Operator` role, and navigate to:
 
-%%%text
+```text
 Amazon EventBridge -> Event buses -> <event-bus-name> -> Send events
-%%%
+```
 
 Use:
 
@@ -339,14 +339,14 @@ Use:
 
 Use this JSON in the **Detail** field:
 
-%%%json
+```json
 {
   "instance_id": "<QUARANTINED-EC2-INSTANCE-ID>",
   "approved_by": "secops@company.com",
   "ticket_id": "t-abc123",
   "reason": "Test rollback"
 }
-%%%
+```
 
 ### Expected Outcome
 
@@ -368,13 +368,13 @@ Validate that a locally configured AWS CLI SSO profile can submit a rollback eve
 
 Confirm the AWS CLI is configured for the correct region:
 
-%%%bash
+```bash
 aws configure get region --profile "${PROFILE_NAME}"
-%%%
+```
 
 Send the rollback event:
 
-%%%bash
+```bash
 aws events put-events \
   --region "${AWS_REGION}" \
   --entries "[
@@ -386,11 +386,11 @@ aws events put-events \
     }
   ]" \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "FailedEntryCount": 0,
   "Entries": [
@@ -399,7 +399,7 @@ aws events put-events \
     }
   ]
 }
-%%%
+```
 
 ### Expected Outcome
 
@@ -418,13 +418,13 @@ Confirm that the EC2 instance was restored to its pre-isolation security group c
 
 ### Check Security Groups
 
-%%%bash
+```bash
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
   --instance-ids "${INSTANCE_ID}" \
   --query 'Reservations[0].Instances[0].SecurityGroups' \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 ### Expected Outcome
 
@@ -442,7 +442,7 @@ Validate that the rollback workflow handles an invalid EC2 instance ID without m
 
 ### Manual Event from AWS CLI
 
-%%%bash
+```bash
 aws events put-events \
   --region "${AWS_REGION}" \
   --entries "[
@@ -454,11 +454,11 @@ aws events put-events \
     }
   ]" \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "FailedEntryCount": 0,
   "Entries": [
@@ -467,7 +467,7 @@ aws events put-events \
     }
   ]
 }
-%%%
+```
 
 ### Expected Outcome
 
@@ -489,7 +489,7 @@ Validate that the rollback workflow handles malformed rollback events safely.
 
 This event omits the required `instance_id` field.
 
-%%%bash
+```bash
 aws events put-events \
   --region "${AWS_REGION}" \
   --entries "[
@@ -501,11 +501,11 @@ aws events put-events \
     }
   ]" \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "FailedEntryCount": 0,
   "Entries": [
@@ -514,7 +514,7 @@ aws events put-events \
     }
   ]
 }
-%%%
+```
 
 ### Expected Outcome
 
@@ -536,7 +536,7 @@ This test depends on the EventBridge rule pattern.
 
 ### Manual Event from AWS CLI
 
-%%%bash
+```bash
 aws events put-events \
   --region "${AWS_REGION}" \
   --entries "[
@@ -548,11 +548,11 @@ aws events put-events \
     }
   ]" \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "FailedEntryCount": 0,
   "Entries": [
@@ -561,7 +561,7 @@ aws events put-events \
     }
   ]
 }
-%%%
+```
 
 ### Expected Outcome
 
@@ -582,7 +582,7 @@ This test depends on the EventBridge rule pattern.
 
 ### Manual Event from AWS CLI
 
-%%%bash
+```bash
 aws events put-events \
   --region "${AWS_REGION}" \
   --entries "[
@@ -594,11 +594,11 @@ aws events put-events \
     }
   ]" \
   --profile "${PROFILE_NAME}"
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "FailedEntryCount": 0,
   "Entries": [
@@ -607,7 +607,7 @@ aws events put-events \
     }
   ]
 }
-%%%
+```
 
 ### Expected Outcome
 
