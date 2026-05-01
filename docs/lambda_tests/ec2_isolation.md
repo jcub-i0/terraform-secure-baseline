@@ -52,11 +52,11 @@ For this test document:
 
 Example Identity Center groups:
 
-%%%text
+```text
 SecOps-Operator-Dev
 SecOps-Operator-Staging
 SecOps-Operator-Prod
-%%%
+```
 
 The operator workflow is primarily validated in the EC2 rollback test document, but isolation should be tested first so there is an instance available for rollback validation.
 
@@ -82,7 +82,7 @@ Before running these tests, confirm:
 
 Set these values before running the examples.
 
-%%%bash
+```bash
 export AWS_PAGER=""
 export AWS_REGION="us-east-1"
 export ENVIRONMENT="dev"
@@ -91,31 +91,31 @@ export ACCOUNT_ID="<YOUR-ACCOUNT-ID>"
 export INSTANCE_ID="<EC2-INSTANCE-ID>"
 export INSTANCE_ARN="arn:aws:ec2:${AWS_REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-isolation"
-%%%
+```
 
 For other environments, update:
 
-%%%bash
+```bash
 export ENVIRONMENT="staging"
-%%%
+```
 
 or:
 
-%%%bash
+```bash
 export ENVIRONMENT="prod"
-%%%
+```
 
 The Lambda function name is dynamically generated from:
 
-%%%text
+```text
 ${cloud_name}-${environment}-ec2-isolation
-%%%
+```
 
 Example:
 
-%%%text
+```text
 tf-secure-baseline-dev-ec2-isolation
-%%%
+```
 
 ---
 
@@ -125,28 +125,28 @@ Use the following commands to confirm the target instance state before and after
 
 ### Check Current Security Groups
 
-%%%bash
+```bash
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
   --instance-ids "${INSTANCE_ID}" \
   --query 'Reservations[0].Instances[0].SecurityGroups'
-%%%
+```
 
 ### Check Instance Tags
 
-%%%bash
+```bash
 aws ec2 describe-tags \
   --region "${AWS_REGION}" \
   --filters "Name=resource-id,Values=${INSTANCE_ID}"
-%%%
+```
 
 ### Check Lambda Logs
 
-%%%bash
+```bash
 aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
   --region "${AWS_REGION}" \
   --since 15m
-%%%
+```
 
 ---
 
@@ -168,7 +168,7 @@ Validate that a `HIGH` severity Security Hub finding for an EC2 instance causes 
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -208,16 +208,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -237,7 +237,7 @@ Validate that a `CRITICAL` severity Security Hub finding for an EC2 instance cau
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -277,16 +277,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -307,7 +307,7 @@ Validate that a `HIGH` severity finding for a non-EC2 resource does not trigger 
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -347,16 +347,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -377,7 +377,7 @@ Validate that a `MEDIUM` severity EC2 finding does not trigger isolation.
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -417,16 +417,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -447,7 +447,7 @@ Validate that a `LOW` severity EC2 finding does not trigger isolation.
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -487,16 +487,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -517,7 +517,7 @@ Validate that an EC2 finding with a non-actionable workflow status does not trig
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -557,16 +557,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -580,7 +580,7 @@ This does not require changing the payload. It validates that the same test patt
 
 ### Example
 
-%%%bash
+```bash
 export ENVIRONMENT="staging"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-isolation"
 
@@ -623,7 +623,7 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected Outcome
 
@@ -651,26 +651,26 @@ This test does not invoke the rollback Lambda directly. It confirms that isolati
 
 ### Verification Commands
 
-%%%bash
+```bash
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
   --instance-ids "${INSTANCE_ID}" \
   --query 'Reservations[0].Instances[0].SecurityGroups'
-%%%
+```
 
-%%%bash
+```bash
 aws ec2 describe-tags \
   --region "${AWS_REGION}" \
   --filters "Name=resource-id,Values=${INSTANCE_ID}"
-%%%
+```
 
 ### Follow-On Test
 
 After this check passes, proceed to:
 
-%%%text
+```text
 docs/lambda_tests/ec2_rollback.md
-%%%
+```
 
 The rollback workflow should be tested using the Identity Center `SecOps-Operator` role for the target environment.
 
@@ -684,7 +684,7 @@ Use this section to validate the event-driven workflow.
 
 ## Integration Path
 
-%%%text
+```text
 Security Hub Finding
     |
     v
@@ -698,7 +698,7 @@ EC2 Isolation Lambda
     |
     v
 EC2 Security Group Replacement + SNS Alert
-%%%
+```
 
 ## Expected Integration Behavior
 
@@ -720,13 +720,13 @@ Do not manually reattach security groups unless rollback testing is not being pe
 
 Preferred cleanup path:
 
-%%%text
+```text
 1. Confirm isolation occurred.
 2. Assume the correct SecOps-Operator role through IAM Identity Center.
 3. Send the approved rollback event to the environment-specific security operations EventBridge bus.
 4. Confirm original security groups are restored.
 5. Confirm rollback notification is sent.
-%%%
+```
 
 ---
 
