@@ -366,7 +366,7 @@ Expected Outcome:
 ```
 > NOTE: You can also confirm this via the AWS console by navigating to the Security Hub module, opening the referenced Security Hub finding, and checking the 'History' tab for 'Note Added'
 
-### TEST 4 -- HIGH FINDING WITH INVALID SECURITY HUB IDENTIFIERS
+### TEST 5 -- HIGH FINDING WITH INVALID SECURITY HUB IDENTIFIERS
 #### Expected Outcome
 * Lambda executes
 * No IP addresses are enriched
