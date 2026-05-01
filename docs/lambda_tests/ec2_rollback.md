@@ -268,7 +268,24 @@ Confirm:
 
 Use the following commands to confirm the target instance state before and after rollback.
 
-Before running these commands, make sure your AWS CLI is authenticated to the target environment using the `SecOps-Operator` SSO profile or another authorized role.
+These verification commands require read access to EC2 and CloudWatch Logs. The `SecOps-Operator` role is intentionally limited to EventBridge actions and should not be expected to run these commands.
+
+Run these verification commands from a separate terminal authenticated as one of the following:
+
+- IAM administrator user
+- SecOps-Analyst role
+- SecOps-Engineer role
+- Authorized CI/CD or break-glass role
+
+Before continuing, confirm your AWS CLI is authenticated to the correct target account.
+
+```bash
+aws sts get-caller-identity
+```
+
+Confirm the returned account ID matches the environment being tested.
+
+---
 
 ### Check Current Security Groups
 
@@ -276,8 +293,7 @@ Before running these commands, make sure your AWS CLI is authenticated to the ta
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
   --instance-ids "${INSTANCE_ID}" \
-  --query 'Reservations[0].Instances[0].SecurityGroups' \
-  --profile "${PROFILE_NAME}"
+  --query 'Reservations[0].Instances[0].SecurityGroups'
 ```
 
 Before rollback, the instance should be attached to the quarantine security group.
@@ -292,22 +308,23 @@ After rollback, the instance should be restored to its original security group o
 aws ec2 describe-tags \
   --region "${AWS_REGION}" \
   --filters "Name=resource-id,Values=${INSTANCE_ID}" \
-  --profile "${PROFILE_NAME}"
+  | grep -E -A4 '"Key": "(Isolated|OriginalSecurityGroups)"'
 ```
 
-Use this to confirm whether isolation and rollback metadata is present or updated.
+Use this to confirm whether isolation and rollback metadata is present or updated by confirming that the `Isolated` tag value is `true` and the `OriginalSecurityGroups` tag value is an existing security group ID.
 
 ---
 
 ### Check Lambda Logs
-
-This may require a broader analyst, engineer, administrator, or CI/CD role because the `SecOps-Operator` permission set is intentionally limited.
 
 ```bash
 aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
   --region "${AWS_REGION}" \
   --since 15m
 ```
+
+Use this to confirm whether the rollback Lambda executed successfully.
+> NOTE: This command returns nothing if you have not run the Lambda function yet.
 
 ---
 
