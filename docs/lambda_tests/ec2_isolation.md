@@ -122,9 +122,20 @@ tf-secure-baseline-dev-ec2-isolation
 
 ## Verification Commands
 
-- Specify that this should be done AFTER configuring the AWS CLI with either the role you assume or the IAM admin user.
-
 Use the following commands to confirm the target instance state before and after isolation.
+
+Before running these commands, make sure your AWS CLI is authenticated to the target environment using either:
+
+- The appropriate assumed role for that environment
+- An authorized IAM administrator user
+
+For example:
+
+```bash
+aws sts get-caller-identity
+```
+
+Confirm the returned account ID matches the environment you are testing before continuing.
 
 ### Check Current Security Groups
 
