@@ -24,7 +24,7 @@ This module provides automation for:
 
 ## Architecture
 
-%%%
+```
 Security Hub Finding
     |
     +--> EventBridge Rule: HIGH / CRITICAL EC2 Finding
@@ -55,7 +55,7 @@ EC2 Rollback Lambda
     |
     v
 Restore Original Security Groups + SNS Alert
-%%%
+```
 
 ---
 
@@ -108,13 +108,13 @@ When triggered, the Lambda function is designed to isolate affected EC2 instance
 
 ### Trigger
 
-%%%
+```
 source      = aws.securityhub
 detail-type = Security Hub Findings - Imported
 severity    = HIGH or CRITICAL
 resource    = AwsEc2Instance
 workflow    = NEW
-%%%
+```
 
 ### Behavior
 
@@ -130,10 +130,10 @@ This workflow is intentionally triggered through a custom SecOps EventBridge bus
 
 ### Trigger
 
-%%%
+```
 event bus = secops-bus
 source    = custom.rollback
-%%%
+```
 
 ### Behavior
 
@@ -151,21 +151,21 @@ The Lambda function enriches IP address indicators using an external threat inte
 
 ### Trigger
 
-%%%
+```
 source      = aws.securityhub
 detail-type = Security Hub Findings - Imported
 severity    = HIGH or CRITICAL
 workflow    = NEW
-%%%
+```
 
 ### Threat Intel Secret
 
 The module stores the AbuseIPDB API key in AWS Secrets Manager.
 
-%%%
+```
 Secret name prefix:
 <name_prefix>/threat-intel/api-keys-
-%%%
+```
 
 The IP enrichment Lambda reads the secret at runtime.
 
@@ -188,7 +188,7 @@ This module follows several security-focused design choices:
 
 ## Usage
 
-%%%hcl
+```hcl
 module "automation" {
   source = "../../modules/automation"
 
@@ -217,7 +217,7 @@ module "automation" {
   ip_enrich_abuseipdb_max_age        = 90
   ip_enrich_max_ips_extracted        = 25
 }
-%%%
+```
 
 ---
 
