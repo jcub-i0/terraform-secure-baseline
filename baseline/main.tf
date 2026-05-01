@@ -158,33 +158,33 @@ module "monitoring" {
 module "automation" {
   source = "../modules/automation"
 
-  cloud_name                               = var.cloud_name
-  account_id                               = data.aws_caller_identity.current.account_id
-  name_prefix                              = local.name_prefix
-  environment                              = var.environment
-  primary_region                           = var.primary_region
+  cloud_name     = var.cloud_name
+  account_id     = data.aws_caller_identity.current.account_id
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  primary_region = var.primary_region
 
-  vpc_id                                   = module.networking.vpc_id
-  serverless_private_subnet_ids            = module.networking.serverless_private_subnet_ids_list
-  interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
-  quarantine_sg_id                         = module.compute.quarantine_sg_id
+  vpc_id                        = module.networking.vpc_id
+  serverless_private_subnet_ids = module.networking.serverless_private_subnet_ids_list
+  interface_endpoints_sg_id     = module.vpc_endpoints.interface_endpoints_sg_id
+  quarantine_sg_id              = module.compute.quarantine_sg_id
 
   lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
   lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
 
-  secops_topic_arn                         = module.monitoring.secops_topic_arn
-  lambda_cmk_arn                           = module.security.lambda_cmk_arn
-  logs_cmk_arn                             = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn                  = module.security.secrets_manager_cmk_arn
+  secops_topic_arn        = module.monitoring.secops_topic_arn
+  lambda_cmk_arn          = module.security.lambda_cmk_arn
+  logs_cmk_arn            = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
 
-  abuseipdb_api_key                        = var.abuseipdb_api_key
+  abuseipdb_api_key = var.abuseipdb_api_key
 
-  ip_enrichment_write_to_securityhub       = var.ip_enrichment_write_to_securityhub
-  ip_enrich_max_ips_per_event              = var.ip_enrich_max_ips_per_event
-  ip_enrich_abuseipdb_max_age              = var.ip_enrich_abuseipdb_max_age
-  ip_enrich_max_ips_extracted              = var.ip_enrich_max_ips_extracted
+  ip_enrichment_write_to_securityhub = var.ip_enrichment_write_to_securityhub
+  ip_enrich_max_ips_per_event        = var.ip_enrich_max_ips_per_event
+  ip_enrich_abuseipdb_max_age        = var.ip_enrich_abuseipdb_max_age
+  ip_enrich_max_ips_extracted        = var.ip_enrich_max_ips_extracted
 }
 
 module "vpc_endpoints" {
