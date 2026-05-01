@@ -343,22 +343,22 @@ This test is performed entirely from the AWS Console.
 Sign in through the AWS access portal, open the target AWS account using the correct `SecOps-Operator` role, and navigate to:
 
 ```text
-Amazon EventBridge -> Event buses -> <event-bus-name> -> Send events
+Amazon EventBridge -> Event buses -> <secops-bus-name> -> Send events
 ```
 
 Use:
 
 | Field | Value |
 |------|-------|
+| Event bus | `<cloud_name>-<environment>-secops-bus` |
 | Event source | `custom.rollback` |
 | Detail type | `Ec2Rollback` |
-| Event bus | `<cloud_name>-<environment>-secops-bus` |
 
 Use this JSON in the **Detail** field:
 
 ```json
 {
-  "instance_id": "<QUARANTINED-EC2-INSTANCE-ID>",
+  "instance_id": "i-0ebd1a19189ae3825",
   "approved_by": "secops@company.com",
   "ticket_id": "t-abc123",
   "reason": "Test rollback"
