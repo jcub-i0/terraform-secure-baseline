@@ -59,7 +59,7 @@ Identity Center roles that depend on environment-specific policies (e.g., logs a
 3. **Re-apply Identity Center**
    - Pass policy names as variables, which are output by the `baseline` stack deployed by `environment/<env>`
    - Attach customer-managed policies to permission sets by defining policy name variables and re-apply the `identity_center` substack
-    > These variables to set prior to redeployment are `logs_cmk_decrypt_policy_name_<env>` and `logs_s3_readonly_policy_name_<env>`
+      > These variables to set prior to redeployment are `logs_cmk_decrypt_policy_name_<env>` and `logs_s3_readonly_policy_name_<env>`
 ---
 
 ## Inputs
