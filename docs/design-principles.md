@@ -92,7 +92,12 @@ The control plane manages:
 - Control-plane Terraform state
 - GitHub OIDC roles for control-plane automation
 
-Workload environments manage:
+Environment bootstrap stacks manage:
+
+- Environment-specific Terraform state resources
+- Environment-specific GitHub OIDC roles for CI/CD
+
+Workload baseline stacks manage:
 
 - Networking
 - Compute
