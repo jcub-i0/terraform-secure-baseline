@@ -503,6 +503,7 @@ Expected output if no previous note exists:
 ```json
 []
 ```
+> If you ran Test 1 with `WRITE_TO_SECURITYHUB` enabled, this test should return no additional IPs.
 
 ---
 
