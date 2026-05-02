@@ -80,14 +80,17 @@ bootstrap / control-plane account
 dev account
     |
     +--> Dev baseline infrastructure
+    +--> Dev account infrastructure
 
 staging account
     |
     +--> Staging baseline infrastructure
+    +--> Staging account infrastructure
 
 prod account
     |
     +--> Prod baseline infrastructure
+    +--> Staging account infrastructure
 ```
 
 This model provides:
