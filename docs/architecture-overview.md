@@ -491,7 +491,7 @@ Automation functions include:
 
 ## EC2 Isolation Workflow
 
-The EC2 Isolation workflow provides automated containment for high- and critical-severity EC2-related Security Hub findings.
+The `EC2 Isolation` workflow provides automated containment for high- and critical-severity EC2-related Security Hub findings.
 
 Workflow:
 
@@ -505,6 +505,9 @@ Default EventBridge Bus
 EC2 Isolation Lambda
     |
     v
+Snapshot attached EBS volumes
+    |
+    v
 Replace instance security groups with quarantine security group
     |
     v
@@ -514,6 +517,7 @@ Tag instance and send SNS notification
 The isolation Lambda:
 
 - Identifies qualifying EC2 findings
+- Snapshots attached EBS volumes prior to isolation
 - Stores or preserves original security group information
 - Replaces existing security groups with a quarantine security group
 - Tags the affected instance
@@ -525,7 +529,7 @@ This enables rapid containment of potentially compromised instances.
 
 ## EC2 Rollback Workflow
 
-The EC2 Rollback workflow provides controlled recovery after isolation.
+The `EC2 Rollback` workflow provides controlled recovery after isolation.
 
 Rollback is intentionally human-approved and triggered through the environment-specific SecOps event bus.
 
@@ -562,7 +566,7 @@ This creates a separation between:
 
 ## IP Enrichment Workflow
 
-The IP Enrichment workflow enriches public IP addresses found in Security Hub findings.
+The `IP Enrichment` workflow enriches public IP addresses found in Security Hub findings.
 
 Workflow:
 
@@ -686,6 +690,7 @@ The baseline uses security services that can generate meaningful cost, especiall
 Notable cost drivers include:
 
 - AWS Network Firewall
+- AWS Config
 - NAT Gateway
 - VPC endpoints
 - CloudWatch Logs
