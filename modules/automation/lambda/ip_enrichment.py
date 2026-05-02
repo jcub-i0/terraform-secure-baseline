@@ -423,6 +423,24 @@ def lambda_handler(event, context):
         logger.warning("No findings in event.")
         return {"statusCode": 400, "body": json.dumps({"message": "No findings in event"})}
     
+    invalid_finding_ids = [
+        f.get("Id")
+        for f in findings
+        if not _is_valid_securityhub_finding_id(f.get("Id"))
+    ]
+    if invalid_finding_ids:
+        logger.warning(
+            "Skipping processing due to invalid Security Hub finding ID(s): %s",
+            invalid_finding_ids[:5],
+        )
+        return {
+            "statusCode": 400,
+            "body": json.dumps({
+                "message": "Invalid Security Hub finding ID; skipping processing",
+                "invalidFindingIds": invalid_finding_ids[:5],
+            }),
+        }
+
     api_key = _get_abuseipdb_api_key()
     if not api_key:
         return {"statusCode": 500, "body": json.dumps({"message": "Missing AbuseIPDB API key"})}
