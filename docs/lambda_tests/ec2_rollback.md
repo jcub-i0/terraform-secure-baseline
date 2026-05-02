@@ -546,7 +546,7 @@ aws events put-events \
 
 ---
 
-## Test 7 - Wrong Detail Type
+## Test 6 - Wrong Detail Type
 
 ### Purpose
 
