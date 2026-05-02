@@ -273,8 +273,8 @@ These verification commands require read access to EC2 and CloudWatch Logs. The 
 Run these verification commands from a terminal in a separate window authenticated as one of the following:
 
 - IAM administrator user
-- SecOps-Analyst role
-- SecOps-Engineer role
+- SecOps-Analyst role (with `lambda:Invoke` permission attached)
+- SecOps-Engineer role (with `lambda:Invoke` permission attached)
 - Authorized CI/CD or break-glass role
 
 Before continuing, confirm your AWS CLI is authenticated to the correct target account.
