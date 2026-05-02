@@ -1,553 +1,152 @@
-# Quickstart - tf-secure-baseline
+# VALIDATION CHECKLIST (POST-DEPLOY)
 
 ## Purpose
 
-This guide provides the fastest practical path to deploying `tf-secure-baseline`.
+This checklist verifies that terraform-secure-baseline has successfully deployed a private-by-default environment after running `terraform apply`.
 
-It is intended to help users deploy the platform in the correct order and understand which stacks must be applied locally before GitHub Actions can manage the rest of the environment.
+It focuses on validating:
 
-This guide covers:
+- Private AWS access via VPC Endpoints (no NAT/IGW dependency)
+- Absence of general internet egress from workloads
+- Workload-to-database connectivity
+- Operational readiness for automated containment workflows (SOAR)
 
-- Initial AWS account setup
-- Local bootstrap deployment
-- Terraform backend creation
-- GitHub OIDC role creation
-- Environment baseline deployment
-- IAM Identity Center deployment
-- Post-deployment validation
+> Assumptions:
+> - You can reach EC2 via SSM Session Manager.
+> - Instances are in private subnets.
+> - Interface VPC Endpoints are enabled with Private DNS.
+> - Worklaod security groups are egress-restricted to endpoint SG + DB SG.
 
-For a deeper explanation of the architecture, see:
+## 0. Identity Targets
+From your workstation, capture:
+- Compute instance ID(s) (<INSTANCE_ID>)
+- RDS endpoint + port (if deployed) (<RDS_ENDPOINT_DNS_NAME> and <DB_PORT>)
 
-```text
-docs/architecture-overview.md
-```
-
----
-
-## Deployment Model
-
-`tf-secure-baseline` uses a multi-account deployment model.
-
-Expected AWS accounts:
-
-```text
-control-plane
-dev
-staging
-prod
-```
-
-The repository is organized into three major deployment areas:
-
-```text
-bootstrap/control_plane
-bootstrap/<env>
-environments/<env>
-```
-
-At a high level:
-
-| Area | Purpose |
-|------|---------|
-| `bootstrap/control_plane` | Centralized control plane resources |
-| `bootstrap/<env>/state` | Local bootstrap stack that creates remote state resources for an environment |
-| `bootstrap/<env>/account` | Creates GitHub OIDC roles for an environment |
-| `environments/<env>` | Deploys the full workload security baseline |
-
-The `state` stacks are applied locally first because they create the remote backend resources that later Terraform stacks depend on.
-
----
-
-## Prerequisites
-
-Install and configure:
-
-- Terraform
-- AWS CLI
-- Git
-- Access to the required AWS accounts
-- IAM permissions to create networking, IAM, KMS, S3, Lambda, EventBridge, Security Hub, GuardDuty, AWS Config, and related resources
-
-Verify AWS CLI access:
-
+**List SSM-managed instances:**
 ```bash
-aws sts get-caller-identity
+aws ssm describe-instance-information \
+  --query "InstanceInformationList[].[InstanceId,PingStatus,PlatformName,AgentVersion]" \
+  --output table
 ```
 
----
-
-## Clone Repository
-
+**List RDS endpoint + port:**
 ```bash
-git clone https://github.com/jcub-i0/terraform-secure-baseline.git
-cd terraform-secure-baseline
+aws rds describe-db-instances \
+  --query "DBInstances[].[DBInstanceIdentifier,Endpoint.Address,Endpoint.Port]" \
+  --output table
 ```
 
----
-
-## Configure AWS CLI Profiles
-
-Create or configure AWS CLI profiles for each account.
-
-Example profile names:
-
-```text
-bootstrap
-dev
-staging
-prod
-```
-
-Verify each profile before deploying:
-
+## 1. Validate SSM connectivity (no SSH required)
+**Start a Session Manager session:**
 ```bash
-aws sts get-caller-identity --profile bootstrap
-aws sts get-caller-identity --profile dev
-aws sts get-caller-identity --profile staging
-aws sts get-caller-identity --profile prod
+aws ssm start-session --target <INSTANCE_ID>
 ```
+Expected:
+- Session starts successfully
+- No SSH required
 
-Confirm each command returns the expected AWS account ID.
-
----
-
-# Phase 1 - Deploy Control Plane State
-
-The control-plane `state` stack creates backend resources for the control-plane substacks.
-
-This stack uses local Terraform state because it creates the remote backend resources.
-
+## 2. Validate Interface Endpoint DNS Resolution (Private DNS)
+**From inside the SSM session:**
 ```bash
-export AWS_PROFILE=bootstrap
-
-cd bootstrap/control_plane/state
-terraform init
-terraform apply
+getent hosts sts.us-east-1.amazonaws.com
+getent hosts ssm.us-east-1.amazonaws.com
+getent hosts secretsmanager.us-east-1.amazonaws.com
+getent hosts logs.us-east-1.amazonaws.com
+getent hosts kms.us-east-1.amazonaws.com
 ```
+Expected:
+- Commands return private RFC1918 IPs (i.e. 10.x.x.x) for each service
 
-Record the outputs, especially:
-
-```text
-tf_state_bucket_arn
-tf_state_bucket_cmk_arn
-tf_state_lock_table_arn
-```
-
-These values are used by the other control-plane substacks.
-
----
-
-# Phase 2 - Deploy Control Plane Account Stack
-
-The control-plane `account` stack creates GitHub OIDC roles for managing control-plane resources.
-
+## 3. Validate 443 Connectivity to AWS Services via Endpoints
+**From inside the SSM session:**
 ```bash
-cd ../account
-terraform init
-terraform apply
+for h in sts ssm secretsmanager logs kms; do
+  host="${h}.us-east-1.amazonaws.com"
+  timeout 3 bash -c "cat < /dev/null > /dev/tcp/${host}/443" \
+    && echo "OK  ${host}:443" || echo "FAIL ${host}:443"
+done
 ```
+Expected:
+- All should return 'OK'
 
-Record the outputs:
-
-```text
-plan_role_github_arn
-apply_role_github_arn
-```
-
-Add these values to the appropriate GitHub environment variables for:
-
-```text
-control-plane-plan
-control-plane
-```
-
-The control-plane account stack should generally be treated as manual/local-only because it creates the roles GitHub Actions uses to access the control plane.
-
----
-
-# Phase 3 - Deploy AWS Organizations Structure
-
-The `organizations` stack defines the AWS Organizations structure, including OUs such as:
-
-```text
-Workloads
-NonProd
-Prod
-```
-
-Before applying this stack, ensure:
-
-- AWS Organizations is enabled in the bootstrap account
-- The bootstrap account is the management account
-- `dev`, `staging`, and `prod` accounts have been invited and accepted into the organization
-
-Then apply:
-
+## 4. Validate No General Internet Egress
+**From inside the SSM session:**
 ```bash
-cd ../organizations
-terraform init
-terraform apply
+timeout 3 bash -c "cat < /dev/null > /dev/tcp/example.com/443" \
+  && echo "UNEXPECTED: internet works" || echo "GOOD: no internet egress"
 ```
+Expected:
+- 'GOOD: no internet egress'
 
----
-
-# Phase 4 - Deploy Environment State Stacks
-
-Each workload account needs its own Terraform backend resources.
-
-Apply each environment `state` stack locally.
-
-## Dev
-
+## 5. Validate Database Connectivity (Compute -> RDS)
+**From inside the SSM session:**
 ```bash
-export AWS_PROFILE=dev
-
-cd ../../../bootstrap/dev/state
-terraform init
-terraform apply
+RDS_HOST="<RDS_ENDPOINT_DNS_NAME>"
+DB_PORT="<DB_PORT>"
+timeout 3 bash -c "cat < /dev/null > /dev/tcp/${RDS_HOST}/${DB_PORT}" \
+  && echo "OK  DB reachable" || echo "FAIL DB unreachable"
 ```
+Expected:
+- 'OK DB reachable'
 
-## Staging
-
+## 6. Validate EC2 API Reachability (Recommended for SOAR)
+**From inside the SSM session:**
 ```bash
-export AWS_PROFILE=staging
-
-cd ../../staging/state
-terraform init
-terraform apply
+getent hosts ec2.us-east-1.amazonaws.com
+timeout 3 bash -c "cat < /dev/null > /dev/tcp/ec2.us-east-1.amazonaws.com/443" \
+  && echo "OK EC2 API reachable" || echo "FAIL EC2 API unreachable"
 ```
+Expected:
+- 'OK EC2 API reachable'
 
-## Prod
-
+## 7. Validate SOAR (EC2 Isolation and EC2 Rollback) -- High-Level
+### 7a. Verify EC2 Instance Isolation Lambda executes properly
+Refer to the lambda_tests/ec2_isolation.md file and trigger the EC2 Isolation Lambda function.
+**Verify the instance SG(s) changed:**
 ```bash
-export AWS_PROFILE=prod
-
-cd ../../prod/state
-terraform init
-terraform apply
+aws ec2 describe-instances \
+  --instance-ids <INSTANCE_ID> \
+  --query "Reservations[0].Instances[0].SecurityGroups" \
+  --output table
 ```
+Expected:
+- EC2 instance belongs to the 'Quarantine' SG
+### 7b. Verify EC2 Rollback Lambda executes properly
+Refer to the lambda_tests/ec2_rollback.md file and trigger the EC2 Rollback Lambda function via manual event push.
+Expected:
+- EC2 instance belongs to its original SG (NOT 'Quarantine')
 
-Record each environment's state outputs:
-
-```text
-tf_state_bucket_arn
-tf_state_bucket_cmk_arn
-tf_state_lock_table_arn
-```
-
-These values are used by the corresponding `bootstrap/<env>/account` and `environments/<env>` stacks.
-
----
-
-# Phase 5 - Deploy Environment Account Stacks
-
-Each environment account stack creates the GitHub OIDC roles used by GitHub Actions for that environment.
-
-## Dev
-
+## 8. Validate Monitoring Integrity (Tamper Detection)
+Trigger a test event that simulates modification of a protected service.
+These monitored actions are defined by the 'local.tamper_actions' variable in 'modules/security/tamper_detection/main.tf'
+**From your local terminal:**
 ```bash
-export AWS_PROFILE=dev
-
-cd ../../dev/account
-terraform init
-terraform apply
+aws cloudtrail stop-logging --name <TRAIL-NAME>
 ```
-
-## Staging
-
-```bash
-export AWS_PROFILE=staging
-
-cd ../../staging/account
-terraform init
-terraform apply
-```
-
-## Prod
-
-```bash
-export AWS_PROFILE=prod
-
-cd ../../prod/account
-terraform init
-terraform apply
-```
-
-Record the outputs from each account stack:
-
-```text
-plan_role_github_arn
-apply_role_github_arn
-```
-
-Add these to the appropriate GitHub environment variables:
-
-| GitHub Environment | Role Variable |
-|-------------------|---------------|
-| `dev-plan` | `PLAN_ROLE_GITHUB_ARN` |
-| `dev` | `APPLY_ROLE_GITHUB_ARN` |
-| `staging-plan` | `PLAN_ROLE_GITHUB_ARN` |
-| `staging` | `APPLY_ROLE_GITHUB_ARN` |
-| `prod-plan` | `PLAN_ROLE_GITHUB_ARN` |
-| `prod` | `APPLY_ROLE_GITHUB_ARN` |
-
----
-
-# Phase 6 - Configure GitHub Environment Variables
-
-Create GitHub environments for:
-
-```text
-dev-plan
-dev
-staging-plan
-staging
-prod-plan
-prod
-control-plane-plan
-control-plane
-```
-
-Common variables may include:
-
-```text
-PRIMARY_REGION
-TF_STATE_BUCKET_ARN
-TF_STATE_BUCKET_CMK_ARN
-TF_STATE_LOCK_TABLE_ARN
-BUCKET_ADMIN_PRINCIPALS
-ACCOUNT_ID_DEV
-ACCOUNT_ID_STAGING
-ACCOUNT_ID_PROD
-SECOPS_EMAILS
-BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS
-```
-
-Common secrets may include:
-
-```text
-ABUSEIPDB_API_KEY
-```
-
-Each GitHub environment should contain the variables appropriate for the AWS account and stack it manages.
-
----
-
-# Phase 7 - Deploy Environment Baseline
-
-Deploy each workload environment from the `environments/<env>` directory.
-
-You can deploy locally or through GitHub Actions once OIDC roles and GitHub environment variables are configured.
-
-## Dev
-
-```bash
-export AWS_PROFILE=dev
-
-cd ../../../environments/dev
-terraform init
-terraform plan
-terraform apply
-```
-
-## Staging
-
-```bash
-export AWS_PROFILE=staging
-
-cd ../staging
-terraform init
-terraform plan
-terraform apply
-```
-
-## Prod
-
-```bash
-export AWS_PROFILE=prod
-
-cd ../prod
-terraform init
-terraform plan
-terraform apply
-```
-
-Record environment outputs needed by the control-plane Identity Center stack, such as:
-
-```text
-logs_s3_readonly_policy_name
-logs_cmk_decrypt_policy_name
-secops_event_bus_arn
-```
-
-Exact output names may be environment-specific depending on the root module outputs.
-
----
-
-# Phase 8 - Deploy IAM Identity Center
-
-The Identity Center stack is deployed from the control plane.
-
-It creates environment-specific groups, permission sets, and account assignments.
-
-```bash
-export AWS_PROFILE=bootstrap
-
-cd ../../bootstrap/control_plane/identity_center
-terraform init
-terraform apply
-```
-
-At minimum, this creates the SecOps Operator access model used for the rollback workflow.
-
-Example groups:
-
-```text
-SecOps-Operator-Dev
-SecOps-Operator-Staging
-SecOps-Operator-Prod
-```
-
-If enabling optional Analyst or Engineer roles, pass the IAM policy names created by the environment baseline stacks.
-
-Example:
-
-```bash
-export TF_VAR_logs_s3_readonly_policy_name_dev="<dev-logs-s3-readonly-policy-name>"
-export TF_VAR_logs_cmk_decrypt_policy_name_dev="<dev-logs-cmk-decrypt-policy-name>"
-export TF_VAR_enable_secops_analyst_dev=true
-export TF_VAR_enable_secops_engineer_dev=true
-
-terraform apply
-```
-
-This avoids circular dependencies by allowing environment stacks to create environment-specific IAM policies first, then allowing Identity Center to attach those policies by name/path.
-
----
-
-# Phase 9 - Validate Deployment
-
-After deployment completes, run the validation checklist:
-
-```text
-docs/validation-checklist.md
-```
-
-Recommended validation order:
-
-1. Confirm Terraform state backends exist.
-2. Confirm GitHub OIDC roles can be assumed.
-3. Confirm baseline infrastructure exists in each environment.
-4. Confirm Security Hub, GuardDuty, AWS Config, and CloudTrail are active.
-5. Confirm SNS subscriptions are confirmed.
-6. Run Lambda tests:
-   - `docs/lambda_tests/ec2_isolation.md`
-   - `docs/lambda_tests/ec2_rollback.md`
-   - `docs/lambda_tests/ip_enrichment.md`
-
----
-
-## Deployment Order Summary
-
-```text
-1. bootstrap/control_plane/state
-2. bootstrap/control_plane/account
-3. bootstrap/control_plane/organizations
-4. bootstrap/<env>/state
-5. bootstrap/<env>/account
-6. environments/<env>
-7. bootstrap/control_plane/identity_center
-8. validation tests
-```
-
----
-
-## GitHub Actions
-
-After GitHub OIDC roles and environment variables are configured, CI/CD can manage normal plan/apply/destroy operations.
-
-Expected workflows:
-
-| Workflow | Purpose |
-|---------|---------|
-| Terraform Plan | Runs plans for environment and control-plane stacks |
-| Terraform Apply | Applies selected environment baseline |
-| Terraform Destroy | Cleans up Identity Center attachments, then destroys selected environment baseline |
-
-The destroy workflow first updates the Identity Center stack to remove environment-specific policy attachments before destroying the baseline stack.
-
-This prevents IAM delete conflicts caused by Identity Center-managed roles still attaching baseline-created IAM policies.
-
----
-
-## Important Notes
-
-### State Stacks Are Local Bootstrap Stacks
-
-The `state` substacks should be applied locally.
-
-They create the remote backend resources used by the other stacks.
-
-Do not treat them like normal GitHub-managed stacks.
-
----
-
-### Account Stacks Should Be Modified Carefully
-
-The `account` substacks create GitHub OIDC roles.
-
-If these roles are destroyed or misconfigured, GitHub Actions may lose access to AWS.
-
-The `bootstrap/control_plane/account` stack should generally be treated as manual/local-only.
-
----
-
-### Identity Center Depends on Environment Policies
-
-Some Identity Center permissions depend on IAM policies created by the environment baseline stacks.
-
-This is expected.
-
-The intended flow is:
-
-```text
-1. Deploy minimal Identity Center roles
-2. Deploy environment baseline
-3. Pass baseline-created policy names to Identity Center
-4. Re-apply Identity Center
-```
-
----
-
-### Cost Considerations
-
-The baseline includes services that can create meaningful cost, especially when deployed across multiple environments.
-
-Notable cost drivers include:
-
-- AWS Network Firewall
-- NAT Gateway
-- VPC endpoints
-- CloudWatch Logs
-- VPC Flow Logs
-- GuardDuty
-- Security Hub
-- Inspector
-- KMS requests
-- Backup storage
-
-Review estimated costs before deploying all environments.
-
----
-
-## Summary
-
-This quickstart deploys `tf-secure-baseline` in the intended order:
-
-- Bootstrap control-plane foundations
-- Bootstrap environment backends and GitHub OIDC roles
-- Deploy workload baselines
-- Deploy centralized Identity Center access
-- Validate security workflows
-
-After completion, the platform provides a multi-account AWS security baseline with centralized identity, secure CI/CD, logging, detection, and event-driven response automation.
+Expected:
+- EventBridge rule detects the change
+- SNS alert is generated
+- Defined SNS topic's notification path is exercised
+> NOTE:
+> This is a controlled validation step.
+> Restart CloudTrail logging immediately after the test:
+> ```bash
+> aws cloudtrail start-logging --name <TRAIL_NAME>
+> ```
+
+## 9. Quick Failure Triage Guide
+### SSM session fails:
+- Check interface endpoints exist: ssm, ssmmessages, ec2messages
+- Check compute egress to endpoint SG (443)
+- Check endpoint SG ingress from compute SG (443)
+- Check instance IAM role includes AmazonSSMManagedInstanceCore
+### AWS service 443 checks fail:
+- Check endpoint Private DNS enabled
+- Check endpoint is deployed in the correct subnets / AZs
+- Check endpoint SG ingress allows the workload SG
+### DB connectivity fails:
+- Confirm compute SG egress allows DB port to RDS SG
+- Confirm RDS SG ingress allows DB port from compute SG
+- Confirm RDS is in the correct subnets and available
+### EC2 API check fails:
+- Add interface endpoint 'ec2' (common requirement for VPC-only automation)
