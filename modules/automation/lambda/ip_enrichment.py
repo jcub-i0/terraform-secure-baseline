@@ -211,6 +211,25 @@ def _is_valid_securityhub_finding_id(finding_id: Any) -> bool:
     if not finding_id:
         return False
 
+    if not finding_id.startswith("arn:"):
+        return False
+    if "/finding/" not in finding_id:
+        return False
+
+    return True
+
+def _is_valid_securityhub_product_arn(product_arn: Any) -> bool:
+    """Basic structural validation for Security Hub ProductArn values"""
+    if not isinstance(product_arn, str):
+        return False
+
+    product_arn = product_arn.strip()
+    if not product_arn:
+        return False
+
+    # Security Hub product ARN is ARN-like and typically contains ":product/"
+    return product_arn.startswith("arn:") and ":product/" in product_arn
+
 def _abuse_severity(score: Optional[int]) -> str:
     if not isinstance(score, int):
         return "Unknown"
@@ -430,16 +449,9 @@ def lambda_handler(event, context):
     ]
     if invalid_finding_ids:
         logger.warning(
-            "Skipping processing due to invalid Security Hub finding ID(s): %s",
+            "One or more invalid Security Hub finding ID(s) detected. Enrichment will continue, but writeback may be skipped for invalid identifiers: %s",
             invalid_finding_ids[:5],
         )
-        return {
-            "statusCode": 400,
-            "body": json.dumps({
-                "message": "Invalid Security Hub finding ID; skipping processing",
-                "invalidFindingIds": invalid_finding_ids[:5],
-            }),
-        }
 
     api_key = _get_abuseipdb_api_key()
     if not api_key:
@@ -494,8 +506,14 @@ def lambda_handler(event, context):
             for f in findings:
                 fid = f.get("Id")
                 product_arn = f.get("ProductArn")
-                if fid and product_arn:
+                if _is_valid_securityhub_finding_id(fid) and _is_valid_securityhub_product_arn(product_arn):
                     identifiers.append({"Id": fid, "ProductArn": product_arn})
+                else:
+                    logger.warning(
+                        "Skipping invalid Security Hub writeback identifier pair (Id=%s, ProductArn=%s)",
+                        fid,
+                        product_arn,
+                    )
 
             if not identifiers:
                 logger.warning("No valid finding identifers; skipping Security Hub writeback.")
