@@ -62,7 +62,7 @@ The baseline is designed to provide:
 Each major environment is deployed into a dedicated AWS account.
 
 ```text
-bootstrap / control-plane
+control-plane
 dev
 staging
 prod
