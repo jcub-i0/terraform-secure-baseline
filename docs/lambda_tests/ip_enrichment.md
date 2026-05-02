@@ -93,9 +93,9 @@ Direct Lambda invocation requires a principal with permission to invoke the func
 Use one of the following:
 
 - IAM administrator user
-- SecOps-Engineer role
 - Authorized CI/CD role
-- Another role with `lambda:InvokeFunction`
+- Break-glass role
+- A specifically authorized engineering/debug role with `lambda:InvokeFunction`
 
 Security Hub writeback verification requires read access to Security Hub findings.
 
