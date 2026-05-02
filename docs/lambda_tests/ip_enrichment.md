@@ -8,7 +8,7 @@ The IP Enrichment Lambda processes Security Hub findings, extracts public IP add
 
 Depending on configuration, the Lambda can also write enrichment notes back to Security Hub findings.
 
-This test validates the IP enrichment workflow in the context of the full `tf-secure-baseline` architecture, including:
+This test validates the `IP Enrichment` workflow in the context of the full `tf-secure-baseline` architecture, including:
 
 - Multi-account environments: `dev`, `staging`, and `prod`
 - Security Hub finding ingestion
