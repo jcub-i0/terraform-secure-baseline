@@ -202,6 +202,34 @@ def _extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
         for category_id in sorted(category_ids)
     ]
 
+def _is_valid_securityhub_finding_id(finding_id: Any) -> bool:
+    """Basic structural validation for Security Hub finding IDs"""
+    if not isinstance(finding_id, str):
+        return False
+    
+    finding_id = finding_id.strip()
+    if not finding_id:
+        return False
+
+    if not finding_id.startswith("arn:"):
+        return False
+    if "/finding/" not in finding_id:
+        return False
+
+    return True
+
+def _is_valid_securityhub_product_arn(product_arn: Any) -> bool:
+    """Basic structural validation for Security Hub ProductArn values"""
+    if not isinstance(product_arn, str):
+        return False
+
+    product_arn = product_arn.strip()
+    if not product_arn:
+        return False
+
+    # Security Hub product ARN is ARN-like and typically contains ":product/"
+    return product_arn.startswith("arn:") and ":product/" in product_arn
+
 def _abuse_severity(score: Optional[int]) -> str:
     if not isinstance(score, int):
         return "Unknown"
@@ -293,7 +321,8 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     lines.append("🧠 IP Threat Intel IP Enrichment")
     lines.append("")
     lines.append(f"Total IPs enriched: {len(enriched)} (public-only)")
-    lines.append(f"📝 Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
+    writeback_status = finding_metadata.get("writeback_status", str(WRITE_TO_SECURITYHUB))
+    lines.append(f"📝 Security Hub writeback enabled: {writeback_status}")
     lines.append("")
 
     for entry in enriched:
@@ -414,6 +443,17 @@ def lambda_handler(event, context):
         logger.warning("No findings in event.")
         return {"statusCode": 400, "body": json.dumps({"message": "No findings in event"})}
     
+    invalid_finding_ids = [
+        f.get("Id")
+        for f in findings
+        if not _is_valid_securityhub_finding_id(f.get("Id"))
+    ]
+    if invalid_finding_ids:
+        logger.warning(
+            "One or more invalid Security Hub finding ID(s) detected. Enrichment will continue, but writeback may be skipped for invalid identifiers: %s",
+            invalid_finding_ids[:5],
+        )
+
     api_key = _get_abuseipdb_api_key()
     if not api_key:
         return {"statusCode": 500, "body": json.dumps({"message": "Missing AbuseIPDB API key"})}
@@ -457,6 +497,26 @@ def lambda_handler(event, context):
 
     finding_metadata["finding_url"] = finding_url
 
+    # Determine writeback status text for SNS message context
+    writeback_status = str(WRITE_TO_SECURITYHUB)
+    if WRITE_TO_SECURITYHUB:
+        valid_identifier_pairs = 0
+        invalid_identifier_pairs = 0
+        for f in findings:
+            fid = f.get("Id")
+            product_arn = f.get("ProductArn")
+            if _is_valid_securityhub_finding_id(fid) and _is_valid_securityhub_product_arn(product_arn):
+                valid_identifier_pairs += 1
+            else:
+                invalid_identifier_pairs += 1
+
+        if invalid_identifier_pairs > 0 and valid_identifier_pairs == 0:
+            writeback_status = "True (writeback skipped: invalid Security Hub identifier(s))"
+        elif invalid_identifier_pairs > 0:
+            writeback_status = "True (some identifier pairs invalid; skipped for those findings)"
+
+    finding_metadata["writeback_status"] = writeback_status
+
     subject = f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
     message = format_enrichment_message(finding_metadata, enriched)
     _publish_to_sns(subject, message)
@@ -467,8 +527,14 @@ def lambda_handler(event, context):
             for f in findings:
                 fid = f.get("Id")
                 product_arn = f.get("ProductArn")
-                if fid and product_arn:
+                if _is_valid_securityhub_finding_id(fid) and _is_valid_securityhub_product_arn(product_arn):
                     identifiers.append({"Id": fid, "ProductArn": product_arn})
+                else:
+                    logger.warning(
+                        "Skipping invalid Security Hub writeback identifier pair (Id=%s, ProductArn=%s)",
+                        fid,
+                        product_arn,
+                    )
 
             if not identifiers:
                 logger.warning("No valid finding identifers; skipping Security Hub writeback.")

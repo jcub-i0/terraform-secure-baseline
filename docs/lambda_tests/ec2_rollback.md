@@ -270,12 +270,12 @@ Use the following commands to confirm the target instance state before and after
 
 These verification commands require read access to EC2 and CloudWatch Logs. The `SecOps-Operator` role is intentionally limited to EventBridge actions and should not be expected to run these commands.
 
-Run these verification commands from a separate terminal authenticated as one of the following:
+Run these verification commands from a terminal in a separate window authenticated as one of the following:
 
 - IAM administrator user
-- SecOps-Analyst role
-- SecOps-Engineer role
-- Authorized CI/CD or break-glass role
+- Authorized CI/CD role
+- Break-glass role
+- A specifically authorized engineering/debug role with `lambda:InvokeFunction`
 
 Before continuing, confirm your AWS CLI is authenticated to the correct target account.
 
@@ -435,7 +435,7 @@ aws events put-events \
 
 Confirm that the EC2 instance was restored to its pre-isolation security group configuration.
 
-Run these from a terminal authenticated as either an IAM administrator user, the SecOps-Analyst role, SecOps-Engineer role, or an authorized CI/CD / break-glass role.
+Run these from a terminal authenticated as one of the identities defined in the `Verification Commands` section of this guide.
 
 ### Check Security Groups
 
@@ -546,7 +546,7 @@ aws events put-events \
 
 ---
 
-## Test 7 - Wrong Detail Type
+## Test 6 - Wrong Detail Type
 
 ### Purpose
 
