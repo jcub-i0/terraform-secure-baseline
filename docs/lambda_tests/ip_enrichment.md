@@ -60,22 +60,22 @@ Before running these tests, confirm:
 
 The IP Enrichment Lambda should have the following environment variables configured:
 
-%%%text
+```text
 SNS_TOPIC_ARN
 THREAT_INTEL_SECRET_ARN
 WRITE_TO_SECURITYHUB
 MAX_IPS_PER_EVENT
 ABUSEIPDB_MAX_AGE_DAYS
 MAX_IPS_EXTRACTED
-%%%
+```
 
 ### Writeback Behavior
 
 If:
 
-%%%text
+```text
 WRITE_TO_SECURITYHUB=true
-%%%
+```
 
 then full writeback validation requires:
 
@@ -109,7 +109,7 @@ Set these values before running the tests.
 
 Update the values for the environment you are testing.
 
-%%%bash
+```bash
 export AWS_PAGER=""
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
@@ -120,33 +120,33 @@ export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ip-enrichment"
 # Optional: only required for Security Hub writeback validation
 export REAL_SECURITY_HUB_FINDING_ID="<REAL-SECURITY-HUB-FINDING-ID>"
 export REAL_PRODUCT_ARN="<REAL-PRODUCT-ARN>"
-%%%
+```
 
 For staging:
 
-%%%bash
+```bash
 export ENVIRONMENT="staging"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ip-enrichment"
-%%%
+```
 
 For prod:
 
-%%%bash
+```bash
 export ENVIRONMENT="prod"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ip-enrichment"
-%%%
+```
 
 The Lambda function name is dynamically generated from:
 
-%%%text
+```text
 ${cloud_name}-${environment}-ip-enrichment
-%%%
+```
 
 Example:
 
-%%%text
+```text
 tf-secure-baseline-dev-ip-enrichment
-%%%
+```
 
 ---
 
@@ -154,9 +154,9 @@ tf-secure-baseline-dev-ip-enrichment
 
 Before running the tests, confirm your AWS CLI is authenticated to the target environment.
 
-%%%bash
+```bash
 aws sts get-caller-identity
-%%%
+```
 
 Confirm the returned account ID matches the environment being tested.
 
@@ -170,17 +170,17 @@ These commands require read access to Lambda, CloudWatch Logs, SNS, and optional
 
 ### Check Lambda Logs
 
-%%%bash
+```bash
 aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
   --region "${AWS_REGION}" \
   --since 15m
-%%%
+```
 
 ### Confirm Security Hub Finding Note
 
 Use this only when testing with a real finding ID and real ProductArn.
 
-%%%bash
+```bash
 aws securityhub get-findings \
   --region "${AWS_REGION}" \
   --filters "{
@@ -192,15 +192,15 @@ aws securityhub get-findings \
     ]
   }" \
   --query 'Findings[].Note'
-%%%
+```
 
 If the `Note` block is returned with `Text`, `UpdatedBy`, and `UpdatedAt`, the Lambda successfully wrote enrichment context back to the Security Hub finding.
 
 You can also confirm this in the AWS Console:
 
-%%%text
+```text
 Security Hub -> Findings -> Open finding -> History -> Note Added
-%%%
+```
 
 ---
 
@@ -223,7 +223,7 @@ Validate that the Lambda extracts public IPv4 addresses from a Security Hub find
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -271,29 +271,29 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 Expected Lambda response body pattern:
 
-%%%json
+```json
 {
   "statusCode": 200,
   "body": "{\"message\": \"Processing complete\", \"resultCount\": 2}"
 }
-%%%
+```
 
 ### Optional Security Hub Writeback Check
 
-%%%bash
+```bash
 aws securityhub get-findings \
   --region "${AWS_REGION}" \
   --filters "{
@@ -305,7 +305,7 @@ aws securityhub get-findings \
     ]
   }" \
   --query 'Findings[].Note'
-%%%
+```
 
 ---
 
@@ -326,7 +326,7 @@ Validate that the Lambda extracts public IPv6 addresses from a Security Hub find
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -374,25 +374,25 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 Expected Lambda response body pattern:
 
-%%%json
+```json
 {
   "statusCode": 200,
   "body": "{\"message\": \"Processing complete\", \"resultCount\": 2}"
 }
-%%%
+```
 
 ---
 
@@ -412,7 +412,7 @@ Validate that private, non-public IP addresses are ignored and not enriched.
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -460,29 +460,29 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 Expected Lambda response body pattern:
 
-%%%json
+```json
 {
   "statusCode": 200,
   "body": "{\"message\": \"No IPs enriched\", \"resultCount\": 0}"
 }
-%%%
+```
 
 ### Confirm Absence of Security Hub Writeback
 
-%%%bash
+```bash
 aws securityhub get-findings \
   --region "${AWS_REGION}" \
   --filters "{
@@ -494,13 +494,13 @@ aws securityhub get-findings \
     ]
   }" \
   --query 'Findings[].Note'
-%%%
+```
 
 Expected output if no previous note exists:
 
-%%%json
+```json
 []
-%%%
+```
 
 ---
 
@@ -520,7 +520,7 @@ Validate that a finding with no IP data is handled safely.
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -562,25 +562,25 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 Expected Lambda response body pattern:
 
-%%%json
+```json
 {
   "statusCode": 200,
   "body": "{\"message\": \"No IPs enriched\", \"resultCount\": 0}"
 }
-%%%
+```
 
 ---
 
@@ -600,7 +600,7 @@ Validate that enrichment still executes when public IPs are present, but Securit
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -645,16 +645,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 Expected Lambda response depends on implementation.
 
@@ -682,7 +682,7 @@ Validate that the Lambda handles an event with no findings safely.
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -703,25 +703,25 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 Expected Lambda response body pattern:
 
-%%%json
+```json
 {
   "statusCode": 400,
   "body": "{\"message\": \"No findings in event\"}"
 }
-%%%
+```
 
 ---
 
@@ -742,7 +742,7 @@ Validate that the Lambda can extract multiple public IP addresses embedded in fi
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -789,16 +789,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -817,7 +817,7 @@ Validate that duplicate public IP addresses do not cause duplicate enrichment re
 
 ### Manual Event via AWS CLI
 
-%%%bash
+```bash
 aws lambda invoke \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
@@ -865,16 +865,16 @@ aws lambda invoke \
 EOF
 )" \
 response.json && cat response.json && rm response.json
-%%%
+```
 
 ### Expected CLI Output
 
-%%%json
+```json
 {
   "StatusCode": 200,
   "ExecutedVersion": "$LATEST"
 }
-%%%
+```
 
 ---
 
@@ -886,7 +886,7 @@ Use this section to validate the event-driven workflow.
 
 ## Integration Path
 
-%%%text
+```text
 Security Hub Finding
     |
     v
@@ -904,7 +904,7 @@ AbuseIPDB Lookup
     +--> SNS Notification
     |
     +--> Optional Security Hub Note Writeback
-%%%
+```
 
 ## Expected Integration Behavior
 
