@@ -100,12 +100,13 @@ This model provides:
 - Separate Terraform state per account/environment
 - Cleaner access boundaries
 - Production-aligned account segmentation
+- Multi-AZ / Multi-region capabilities (if configured)
 
 ---
 
 ## Control Plane
 
-The control plane is deployed in the bootstrap/management account and manages organization-wide platform foundations.
+The control plane is deployed in the bootstrap/control-plane account and manages organization-wide platform foundations.
 
 Located at:
 
@@ -143,7 +144,7 @@ environments/staging
 environments/prod
 ```
 
-Each environment is deployed into its own AWS account and contains the full baseline infrastructure, including:
+Each environment is deployed into its own AWS account and contains the full `baseline` infrastructure, including:
 
 - VPC and subnet segmentation
 - AWS Network Firewall
@@ -169,7 +170,7 @@ Each environment is independently deployable, destroyable, and testable.
 
 ## Core Design Principles
 
-The baseline is designed around the following principles:
+The `baseline` is designed around the following principles:
 
 - Private-by-default infrastructure
 - Multi-account isolation
@@ -197,7 +198,7 @@ The VPC includes subnet tiers such as:
 - Private compute subnets
 - Private data subnets
 - Private serverless subnets
-- Endpoint subnets
+- Network Firewall subnets
 
 Application and compute workloads are placed in private subnets and do not receive public IP addresses.
 
@@ -254,6 +255,8 @@ Examples include endpoints for services such as:
 - KMS
 - EC2 Messages
 - SSM Messages
+- Security Hub
+- Lambda
 
 This supports private connectivity for management, logging, secrets retrieval, and automation workflows.
 
