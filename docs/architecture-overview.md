@@ -328,34 +328,50 @@ This prevents Terraform workflows from destroying the IAM roles they are activel
 
 Terraform state is separated by account, environment, and substack.
 
+The `state` substacks are special bootstrap stacks. They are applied locally and use local Terraform state because their purpose is to create the remote backend resources that other stacks depend on.
+
+State substacks create resources such as:
+
+- S3 bucket for Terraform state
+- KMS key for state encryption
+- DynamoDB table or S3 lockfile support for state locking
+
+After the state resources exist, other stacks use remote state backends.
+
 Example environment state layout:
 
 ```text
-bootstrap/dev.tfstate
-baseline/dev.tfstate
+bootstrap/dev/state
+    -> local Terraform state
+    -> creates remote backend resources for dev
 
-bootstrap/staging.tfstate
-baseline/staging.tfstate
+bootstrap/dev/account
+    -> remote backend key: bootstrap/dev.tfstate
 
-bootstrap/prod.tfstate
-baseline/prod.tfstate
+environments/dev
+    -> remote backend key: baseline/dev.tfstate
 ```
 
-Control-plane substacks use separate state files:
+Control-plane layout:
 
 ```text
-control-plane/account.tfstate
-control-plane/identity-center.tfstate
-control-plane/organizations.tfstate
+bootstrap/control_plane/state
+    -> local Terraform state
+    -> creates remote backend resources for control-plane stacks
+
+bootstrap/control_plane/account
+    -> remote backend key: control-plane/account.tfstate
+
+bootstrap/control_plane/identity_center
+    -> remote backend key: control-plane/identity-center.tfstate
+
+bootstrap/control_plane/organizations
+    -> remote backend key: control-plane/organizations.tfstate
 ```
 
 This separation reduces blast radius and prevents unrelated Terraform operations from affecting each other.
 
-The state backend uses:
-
-- S3 for state storage
-- KMS for state encryption
-- DynamoDB or S3 lockfile support for state locking, depending on stack configuration
+It also avoids the bootstrapping problem where Terraform would need a remote backend before the backend resources exist.
 
 ---
 
