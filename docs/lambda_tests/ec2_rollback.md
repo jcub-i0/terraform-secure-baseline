@@ -270,7 +270,7 @@ Use the following commands to confirm the target instance state before and after
 
 These verification commands require read access to EC2 and CloudWatch Logs. The `SecOps-Operator` role is intentionally limited to EventBridge actions and should not be expected to run these commands.
 
-Run these verification commands from a separate terminal authenticated as one of the following:
+Run these verification commands from a terminal in a separate window authenticated as one of the following:
 
 - IAM administrator user
 - SecOps-Analyst role
