@@ -810,6 +810,14 @@ response.json && cat response.json && rm response.json
 }
 ```
 
+Expected Lambda response body pattern:
+
+```json
+{
+  "statusCode": 200,
+  "body": "{\"message\": \"Processing complete\", \"resultCount\": 3}"
+}
+
 ---
 
 ## Test 8 - Duplicate IP Addresses
