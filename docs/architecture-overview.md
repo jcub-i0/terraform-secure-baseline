@@ -390,6 +390,7 @@ Operational and security activity is captured through:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
+- Flow logs
 
 Logs are designed to be:
 
@@ -420,12 +421,12 @@ Core detection services include:
 
 | Service | Purpose |
 |--------|---------|
-| GuardDuty | Threat detection |
-| Security Hub | Findings aggregation |
-| AWS Config | Configuration compliance |
-| Inspector | Vulnerability detection |
-| CloudTrail | API activity logging |
-| EventBridge | Event routing and automation trigger |
+| `GuardDuty` | Threat detection |
+| `Security Hub` | Findings aggregation |
+| `AWS Config` | Configuration compliance |
+| `Inspector` | Vulnerability detection |
+| `CloudTrail` | API activity logging |
+| `EventBridge` | Event routing and automation trigger |
 
 These services provide visibility into:
 
@@ -480,11 +481,11 @@ Automation functions include:
 
 | Function | Purpose |
 |---------|---------|
-| EC2 Isolation | Quarantines EC2 instances based on high-severity findings |
-| EC2 Rollback | Restores original security groups after approval |
-| IP Enrichment | Enriches public IPs from Security Hub findings |
-| Tamper Detection | Sends alerts for security control changes |
-| Break-glass Detection | Alerts on emergency admin role usage |
+| `EC2 Isolation` | Quarantines EC2 instances based on high-severity findings |
+| `EC2 Rollback` | Restores original security groups after approval |
+| `IP Enrichment` | Enriches public IPs from Security Hub findings |
+| `Tamper Detection` | Sends alerts for security control changes |
+| `Break-glass Detection` | Alerts on emergency admin role usage |
 
 ---
 
