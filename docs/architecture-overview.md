@@ -334,7 +334,7 @@ This prevents Terraform workflows from destroying the IAM roles they are activel
 
 Terraform state is separated by account, environment, and substack.
 
-The `state` substacks are special bootstrap stacks. They are applied locally and use local Terraform state because their purpose is to create the remote backend resources that other stacks depend on.
+The `state` substacks are special bootstrap stacks. They are applied locally and use local Terraform state because their purpose is to create the remote backend resources that other stacks depend on. While initially stored locally, the `state` stacks can use a remote backend following initial deployment.
 
 State substacks create resources such as:
 
