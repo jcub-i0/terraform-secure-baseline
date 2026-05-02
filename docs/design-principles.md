@@ -430,6 +430,7 @@ Modules support clear boundaries such as:
 - Patch management
 - Storage
 - VPC endpoints
+- Compute
 
 This makes the platform easier to understand, test, and adapt.
 
@@ -478,7 +479,7 @@ The baseline is designed to support security assurance efforts, but it does not 
 
 It can help produce evidence for areas such as:
 
-- Access control
+- Least privilege access control
 - Logging and monitoring
 - Change management
 - Encryption
@@ -568,6 +569,7 @@ Response automation includes:
 - IP enrichment
 - Tamper detection alerts
 - Break-glass role usage alerts
+- Config Auto-Remediation
 - SNS notifications
 
 ---
@@ -579,6 +581,7 @@ Recovery and resilience are supported through:
 - AWS Backup
 - Backup vaults
 - Retention policies
+- Pre-EC2 isolation snapshots
 - EC2 rollback
 - Patch management
 - Immutable logs
@@ -628,6 +631,8 @@ vpc_endpoints_only
 ```
 
 This would allow teams to choose different profiles for dev, staging, and production environments.
+
+For now, custom configurations are created from this baseline to fulfil desired needs for each environment.
 
 ---
 
