@@ -732,7 +732,13 @@ Expected Lambda response body pattern:
 
 ### Purpose
 
-Validate that the Lambda can extract multiple public IP addresses embedded in finding fields outside the `Network` object.
+### Purpose
+
+Validate that the Lambda can extract and enrich public IP addresses embedded in provider-specific finding fields, such as `ProductFields`.
+
+Security Hub findings are not always consistent about where network indicators appear. Some findings place IP addresses in normalized fields like `Network.SourceIpV4`, while others include them only in text-heavy or provider-specific fields.
+
+This test confirms the Lambda can still enrich public IP indicators even when they appear outside the dedicated Security Hub network fields.
 
 ### Expected Outcome
 
