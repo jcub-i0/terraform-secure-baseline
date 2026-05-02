@@ -202,6 +202,15 @@ def _extract_abuse_categories(result: Dict[str, Any]) -> List[str]:
         for category_id in sorted(category_ids)
     ]
 
+def _is_valid_securityhub_finding_id(finding_id: Any) -> bool:
+    """Basic structural validation for Security Hub finding IDs"""
+    if not isinstance(finding_id, str):
+        return False
+    
+    finding_id = finding_id.strip()
+    if not finding_id:
+        return False
+
 def _abuse_severity(score: Optional[int]) -> str:
     if not isinstance(score, int):
         return "Unknown"
