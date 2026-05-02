@@ -317,7 +317,7 @@ The baseline uses EventBridge and Lambda for security automation.
 
 Security events are routed into controlled workflows that can:
 
-- Isolate EC2 instances
+- Isolate and snapshot EC2 instances
 - Restore EC2 security groups after approval
 - Enrich IP addresses from findings
 - Alert on tampering
@@ -379,7 +379,9 @@ This reduces the chance that one compromised credential can perform every action
 Many resources are environment-specific, including:
 
 - KMS keys
+- Cloudwatch and CloudTrail Logs
 - S3 buckets
+- RDS instances
 - IAM policies
 - EventBridge buses
 - Lambda functions
@@ -407,7 +409,7 @@ State resources use:
 - Restricted administrative access
 - Separate state files per stack
 
-The state backend is intentionally separated from the infrastructure it manages.
+The `state` backend is intentionally separated from the infrastructure it manages.
 
 ---
 
