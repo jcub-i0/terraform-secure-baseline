@@ -88,8 +88,6 @@ Alerts are generated in near real-time when such changes are detected.
 
 ## Response Layer
 
-## Response Layer
-
 The baseline includes an automated response capability for high- and critical-severity EC2 security findings.
 
 Security Hub findings can trigger event-driven containment actions that isolate affected instances from active network access.
