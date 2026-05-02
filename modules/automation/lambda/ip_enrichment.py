@@ -321,7 +321,8 @@ def format_enrichment_message(finding_metadata: Dict[str, str], enriched: List[D
     lines.append("🧠 IP Threat Intel IP Enrichment")
     lines.append("")
     lines.append(f"Total IPs enriched: {len(enriched)} (public-only)")
-    lines.append(f"📝 Security Hub writeback enabled: {WRITE_TO_SECURITYHUB}")
+    writeback_status = finding_metadata.get("writeback_status", str(WRITE_TO_SECURITYHUB))
+    lines.append(f"📝 Security Hub writeback enabled: {writeback_status}")
     lines.append("")
 
     for entry in enriched:
@@ -495,6 +496,26 @@ def lambda_handler(event, context):
     )
 
     finding_metadata["finding_url"] = finding_url
+
+    # Determine writeback status text for SNS message context
+    writeback_status = str(WRITE_TO_SECURITYHUB)
+    if WRITE_TO_SECURITYHUB:
+        valid_identifier_pairs = 0
+        invalid_identifier_pairs = 0
+        for f in findings:
+            fid = f.get("Id")
+            product_arn = f.get("ProductArn")
+            if _is_valid_securityhub_finding_id(fid) and _is_valid_securityhub_product_arn(product_arn):
+                valid_identifier_pairs += 1
+            else:
+                invalid_identifier_pairs += 1
+
+        if invalid_identifier_pairs > 0 and valid_identifier_pairs == 0:
+            writeback_status = "True (writeback skipped: invalid Security Hub identifier(s))"
+        elif invalid_identifier_pairs > 0:
+            writeback_status = "True (some identifier pairs invalid; skipped for those findings)"
+
+    finding_metadata["writeback_status"] = writeback_status
 
     subject = f"🧠 [{finding_metadata['severity']}] IP Threat Intel Report: ({len(enriched)}) IP{'s' if len(enriched) != 1 else ''} Enriched"   
     message = format_enrichment_message(finding_metadata, enriched)
