@@ -213,6 +213,9 @@ NAT Gateway
     |
     v
 Internet Gateway
+    |
+    v
+Internet
 ```
 
 This makes private networking the default and public exposure the exception.
