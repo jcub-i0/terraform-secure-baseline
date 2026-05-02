@@ -196,6 +196,8 @@ aws securityhub get-findings \
 
 If the `Note` block is returned with `Text`, `UpdatedBy`, and `UpdatedAt`, the Lambda successfully wrote enrichment context back to the Security Hub finding.
 
+Before you run the `IP Enrichment` Lambda function, an empty list returned is expected.
+
 You can also confirm this in the AWS Console:
 
 ```text
