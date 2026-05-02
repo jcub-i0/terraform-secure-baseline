@@ -31,7 +31,7 @@ docs/architecture-overview.md
 Expected AWS accounts:
 
 ```text
-bootstrap / control-plane
+control-plane
 dev
 staging
 prod
