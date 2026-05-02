@@ -262,6 +262,8 @@ Examples of services commonly accessed through VPC endpoints include:
 - KMS
 - EC2 Messages
 - SSM Messages
+- Security Hub
+- Lambda
 
 ---
 
