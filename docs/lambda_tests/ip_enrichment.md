@@ -659,7 +659,14 @@ response.json && cat response.json && rm response.json
 }
 ```
 
-Expected Lambda response depends on implementation.
+Expected Lambda response body pattern:
+
+```json
+{
+  "statusCode": 200,
+  "body": "{\"message\": \"No valid identifers for Security Hub writeback\"}"
+}
+```
 
 Acceptable outcomes:
 
