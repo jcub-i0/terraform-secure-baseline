@@ -30,15 +30,35 @@ Terraform Stacks
     |       +--> organizations
     |       +--> identity_center
     |
+    +--> bootstrap/dev
+    |       +--> state
+    |       +--> account
+    |
+    +--> bootstrap/prod
+    |       +--> state
+    |       +--> account
+    |
+    |--> bootstrap/staging
+    |       +--> state
+    |       +--> account
+    |
     +--> environments/dev
+    |       +--> baseline
+    |
     +--> environments/staging
+    |       +--> baseline
+    |
     +--> environments/prod
+    |       +--> baseline
 ```
 
 At a high level:
 
-- The **control plane** manages foundational access, organization structure, and Terraform execution infrastructure.
-- The **environment stacks** deploy the actual security baseline into dedicated AWS accounts.
+- The **control plane** manages organization-wide structure, centralized identity, and control-plane CI/CD access.
+- Each **environment bootstrap stack** prepares that environment for Terraform automation.
+- Each **state substack** is applied locally first and creates the remote backend resources for that account/environment.
+- Each **account substack** creates the GitHub OIDC roles used by CI/CD for that account/environment.
+- Each **environment stack** deploys the actual security baseline into its dedicated AWS account.
 - GitHub Actions uses OIDC to assume environment-specific roles.
 - IAM Identity Center provides centralized human access.
 - EventBridge, Security Hub, Lambda, and SNS provide event-driven detection and response.
