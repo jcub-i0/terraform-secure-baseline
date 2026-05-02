@@ -742,8 +742,6 @@ This test confirms the Lambda can still enrich public IP indicators even when th
 
 ### Expected Outcome
 
-### Expected Outcome
-
 - Lambda executes successfully.
 - Public IP addresses are extracted from `ProductFields`.
 - IP reputation data is retrieved.
