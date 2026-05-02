@@ -742,11 +742,14 @@ This test confirms the Lambda can still enrich public IP indicators even when th
 
 ### Expected Outcome
 
+### Expected Outcome
+
 - Lambda executes successfully.
-- Multiple public IP addresses are extracted.
+- Public IP addresses are extracted from `ProductFields`.
 - IP reputation data is retrieved.
 - SNS notification is sent.
-- Result count reflects the number of enriched public IPs, subject to configured limits.
+- Result count reflects the number of unique enriched public IPs, subject to configured limits.
+- If valid Security Hub identifiers are supplied and `WRITE_TO_SECURITYHUB=true`, a note is written back to the finding.
 - No errors appear in CloudWatch Logs.
 
 ### Manual Event via AWS CLI
