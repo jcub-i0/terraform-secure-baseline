@@ -83,10 +83,22 @@ Terraform Stacks
     |       +--> account
     |       +--> organizations
     |       +--> identity_center
+    |--> bootstrap/dev
+    |       +--> state
+    |       +--> account
+    |--> bootstrap/prod
+    |       +--> state
+    |       +--> account
+    |--> bootstrap/dev
+    |       +--> state
+    |       +--> account
     |
     +--> environments/dev
+    |       +--> baseline
     +--> environments/staging
+    |       +--> baseline
     +--> environments/prod
+    |       +--> baseline
 ```
 
 The platform separates the control plane from the workload environments.
