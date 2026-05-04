@@ -101,7 +101,7 @@ prod
 Verify each profile before deploying:
 
 ```bash
-aws sts get-caller-identity --profile bootstrap
+aws sts get-caller-identity --profile control-plane
 aws sts get-caller-identity --profile dev
 aws sts get-caller-identity --profile staging
 aws sts get-caller-identity --profile prod
