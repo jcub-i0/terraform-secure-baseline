@@ -26,7 +26,18 @@ locals {
     "ScheduleKeyDeletion",
     "DisableKey",
     "PutKeyPolicy",
-    "UpdateKeyDescription"
+    "UpdateKeyDescription",
+
+    # CONFIG TAMPERING
+    "StopConfigurationRecorder",
+    "DeleteConfigurationRecorder",
+    "PutConfigurationRecorder",
+    "DeleteDeliveryChannel",
+    "PutDeliveryChannel",
+    "DeleteConfigRule",
+    "PutConfigRule",
+    "DeleteRemediationConfiguration",
+    "PutRemediationConfigurations"
   ]
 }
 
