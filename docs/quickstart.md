@@ -62,7 +62,7 @@ The `state` stacks are applied locally first because they create the remote back
 
 This configuration requires (4) AWS accounts for each environment: `dev`, `staging`, `prod`, and `control-plane`.
 
-Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI.
+Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.** 
 > You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step to keep initial deployment as simple as possible.
 
 Install and configure:
@@ -71,7 +71,7 @@ Install and configure:
 - AWS CLI
 - Git
 - Access to the required AWS accounts
-- IAM permissions to create networking, IAM, KMS, S3, Lambda, EventBridge, Security Hub, GuardDuty, AWS Config, and related resources
+- Admin-level IAM permissions to create AWS resources
 
 Verify AWS CLI access:
 
@@ -114,6 +114,7 @@ aws configure --profile dev
 > Default region name: us-east-1
 > Default output format: json 
 > ```
+Repeat this process for each `env`.
 
 Verify each profile before deploying:
 
@@ -127,16 +128,6 @@ aws sts get-caller-identity --profile prod
 Confirm each command returns the expected AWS account ID.
 
 ---
-
-PROFILE_NAME="operator"
-
-aws configure unset sso_start_url           --profile "$PROFILE_NAME"
-aws configure unset sso_region              --profile "$PROFILE_NAME"
-aws configure unset sso_account_id          --profile "$PROFILE_NAME"
-aws configure unset sso_role_name           --profile "$PROFILE_NAME"
-aws configure unset sso_session             --profile "$PROFILE_NAME"
-aws configure unset region                  --profile "$PROFILE_NAME"
-aws configure unset output                  --profile "$PROFILE_NAME"
 
 # Phase 1 - Deploy Control Plane State
 
