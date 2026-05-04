@@ -133,7 +133,26 @@ Confirm each command returns the expected AWS account ID.
 
 The control-plane `state` stack creates backend resources for the control-plane substacks.
 
-This stack uses local Terraform state because it creates the remote backend resources.
+This stack uses local Terraform state because it creates the remote backend resources. The `state` stack's local state can (and should) be migrated to a remote backend following initial deployment.
+
+The `state` stack has (4) variables:
+
+```
+cloud_name
+environment
+primary_region
+bucket_admin_principals
+```
+ 
+Its `terraform.tfvars` file defines all but `var.bucket_admin_principals` (type: `list(string)`). It's recommended that you add the ARNs of the administrative IAM user/role used by Terraform and the `root` user of the account to this variable.
+
+Example:
+
+```
+export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'
+```
+
+Deploy `control-plane`'s `state` stack:
 
 ```bash
 export AWS_PROFILE=control-plane
@@ -157,7 +176,7 @@ These values are used by the other control-plane substacks.
 
 # Phase 2 - Deploy Control Plane Account Stack
 
-The control-plane `account` stack creates GitHub OIDC roles for managing control-plane resources.
+The control-plane `account` stack creates `GitHub OIDC` roles for managing control-plane resources.
 
 ```bash
 cd ../account
