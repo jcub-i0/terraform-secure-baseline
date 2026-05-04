@@ -380,7 +380,7 @@ Each GitHub environment should contain the variables appropriate for the AWS acc
 
 # Phase 7 - Deploy Environment Baseline
 
-Deploy each workload environment from the `environments/<env>` directory.
+After setting necessary variables for each account, deploy each workload environment from the `environments/<env>` directory.
 
 You can deploy locally or through GitHub Actions once OIDC roles and GitHub environment variables are configured.
 
@@ -417,12 +417,14 @@ terraform plan
 terraform apply
 ```
 
-Record environment outputs needed by the control-plane Identity Center stack, such as:
+Record environment outputs needed by the `bootstrap/control-plane/identity_center` and (if using `GitHub OIDC`) `bootstrap/<env>/account` stacks, such as:
 
 ```text
 logs_s3_readonly_policy_name
 logs_cmk_decrypt_policy_name
 secops_event_bus_arn
+lambda_cmk_arn
+secrets_manager_cmk_arn
 ```
 
 Exact output names may be environment-specific depending on the root module outputs.
