@@ -63,6 +63,7 @@ The `state` stacks are applied locally first because they create the remote back
 This configuration requires (4) AWS accounts for each environment: `dev`, `staging`, `prod`, and `control-plane`.
 
 Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI.
+> You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step to keep initial deployment as simple as possible.
 
 Install and configure:
 
