@@ -63,7 +63,7 @@ The `state` stacks are applied locally first because they create the remote back
 This configuration requires (4) AWS accounts for each environment: `dev`, `staging`, `prod`, and `control-plane`.
 
 Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.** 
-> You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step to keep initial deployment as simple as possible.
+> You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step and using an IAM user named `baseline-admin` to keep initial deployment as simple as possible.
 
 Install and configure:
 
@@ -144,7 +144,9 @@ primary_region
 bucket_admin_principals
 ```
  
-Its `terraform.tfvars` file defines all but `var.bucket_admin_principals` (type: `list(string)`). It's recommended that you add the ARNs of the administrative IAM user/role used by Terraform and the `root` user of the account to this variable.
+`bootstrap/state/terraform.tfvars` defines all but the `bucket_admin_principals` variable (type: `list(string)`).
+ 
+It's recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, the ability to modify S3 bucket policies may be lost (this is by design -- security-by-default is highly emphasized.)
 
 Example:
 
