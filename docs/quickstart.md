@@ -336,7 +336,7 @@ Add these to the appropriate GitHub environment variables:
 
 ---
 
-# Phase 6 - Configure GitHub Environment Variables
+# Phase 6 - Configure GitHub Environment Variables (Skip if not using `GitHub OIDC`)
 
 Create GitHub environments for:
 
@@ -358,6 +358,8 @@ PRIMARY_REGION
 TF_STATE_BUCKET_ARN
 TF_STATE_BUCKET_CMK_ARN
 TF_STATE_LOCK_TABLE_ARN
+GITHUB_PLAN_ROLE_ARN
+GITHUB_APPLY_ROLE_ARN
 BUCKET_ADMIN_PRINCIPALS
 ACCOUNT_ID_DEV
 ACCOUNT_ID_STAGING
