@@ -146,7 +146,7 @@ bucket_admin_principals
  
 `bootstrap/state/terraform.tfvars` defines all but the `bucket_admin_principals` variable (type: `list(string)`).
  
-It's recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, the ability to modify S3 bucket policies may be lost (this is by design -- security-by-default is highly emphasized.)
+It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost** (this is by design -- security-by-default is highly emphasized.)
 
 Example:
 
