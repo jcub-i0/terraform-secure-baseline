@@ -133,22 +133,10 @@ Confirm each command returns the expected AWS account ID.
 
 The control-plane `state` stack creates backend resources for the control-plane substacks.
 
-This stack uses local Terraform state because it creates the remote backend resources. The `state` stack's local state can (and should) be migrated to a remote backend following initial deployment.
 
-The `state` stack has (4) variables:
-
-```
-cloud_name
-environment
-primary_region
-bucket_admin_principals
-```
+This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
  
-`bootstrap/state/terraform.tfvars` defines all but the `bucket_admin_principals` variable (type: `list(string)`).
- 
-It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost** (this is by design -- security-by-default is highly emphasized.)
-
-Example:
+It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost** (this is by design -- security-by-default is highly emphasized.).
 
 ```
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'
@@ -158,6 +146,7 @@ Deploy `control-plane`'s `state` stack:
 
 ```bash
 export AWS_PROFILE=control-plane
+export TF_VAR_bucket_admin_principals='["arn:aws:iam::<control-plane-account-id>:user/baseline-admin","arn:aws:iam::<control-plane-account-id>:root"]'
 
 cd bootstrap/control_plane/state
 terraform init
@@ -240,10 +229,15 @@ Each workload account needs its own Terraform backend resources.
 
 Apply each environment `state` stack locally.
 
+This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
+ 
+It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**.
+
 ## Dev
 
 ```bash
 export AWS_PROFILE=dev
+export TF_VAR_bucket_admin_principals='["arn:aws:iam::<dev-account-id>:user/baseline-admin","arn:aws:iam::<dev-account-id>:root"]'
 
 cd ../../../bootstrap/dev/state
 terraform init
@@ -254,6 +248,7 @@ terraform apply
 
 ```bash
 export AWS_PROFILE=staging
+export TF_VAR_bucket_admin_principals='["arn:aws:iam::<staging-account-id>:user/baseline-admin","arn:aws:iam::<staging-account-id>:root"]'
 
 cd ../../staging/state
 terraform init
@@ -264,6 +259,7 @@ terraform apply
 
 ```bash
 export AWS_PROFILE=prod
+export TF_VAR_bucket_admin_principals='["arn:aws:iam::<prod-account-id>:user/baseline-admin","arn:aws:iam::<prod-account-id>:root"]'
 
 cd ../../prod/state
 terraform init
