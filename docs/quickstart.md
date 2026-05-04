@@ -92,7 +92,7 @@ Create or configure AWS CLI profiles for each account.
 Example profile names:
 
 ```text
-bootstrap
+control-plane
 dev
 staging
 prod
@@ -110,6 +110,16 @@ aws sts get-caller-identity --profile prod
 Confirm each command returns the expected AWS account ID.
 
 ---
+
+PROFILE_NAME="operator"
+
+aws configure unset sso_start_url           --profile "$PROFILE_NAME"
+aws configure unset sso_region              --profile "$PROFILE_NAME"
+aws configure unset sso_account_id          --profile "$PROFILE_NAME"
+aws configure unset sso_role_name           --profile "$PROFILE_NAME"
+aws configure unset sso_session             --profile "$PROFILE_NAME"
+aws configure unset region                  --profile "$PROFILE_NAME"
+aws configure unset output                  --profile "$PROFILE_NAME"
 
 # Phase 1 - Deploy Control Plane State
 
