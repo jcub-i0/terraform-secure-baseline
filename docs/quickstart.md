@@ -136,7 +136,7 @@ The control-plane `state` stack creates backend resources for the control-plane 
 This stack uses local Terraform state because it creates the remote backend resources.
 
 ```bash
-export AWS_PROFILE=bootstrap
+export AWS_PROFILE=control-plane
 
 cd bootstrap/control_plane/state
 terraform init
