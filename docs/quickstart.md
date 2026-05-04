@@ -221,7 +221,7 @@ Prod
 Before applying this stack, ensure:
 
 - AWS Organizations is enabled in the bootstrap account
-- The bootstrap account is the management account
+- The `control-plane` account is the management account
 - `dev`, `staging`, and `prod` accounts have been invited and accepted into the organization
 
 Then apply:
