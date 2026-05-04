@@ -176,9 +176,13 @@ These values are used by the other control-plane substacks.
 
 ---
 
-# Phase 2 - Deploy Control Plane Account Stack
+# Phase 2 - Deploy Control Plane Account Stack (Skip if not using `GitHub OIDC`)
 
 The control-plane `account` stack creates `GitHub OIDC` roles for managing control-plane resources.
+
+By default, the `account` stack's `enable_github_oidc` variable is set to `false` to preserve simplicity during initial deployments. If you wish to enable `GitHub OIDC`, set `enable_github_oidc` to `true`, along with other variables that `enable_github_oidc` depends on.
+
+For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents, located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
 
 ```bash
 cd ../account
@@ -200,7 +204,7 @@ control-plane-plan
 control-plane
 ```
 
-The control-plane account stack should generally be treated as manual/local-only because it creates the roles GitHub Actions uses to access the control plane.
+The control-plane `account` stack should generally be treated as manual/local-only because it creates the roles GitHub Actions uses to access the control plane.
 
 ---
 
