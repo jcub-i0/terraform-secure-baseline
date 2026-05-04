@@ -278,9 +278,13 @@ These values are used by the corresponding `bootstrap/<env>/account` and `enviro
 
 ---
 
-# Phase 5 - Deploy Environment Account Stacks
+# Phase 5 - Deploy Environment Account Stacks (Skip if not using `GitHub-OIDC`)
 
-Each environment account stack creates the GitHub OIDC roles used by GitHub Actions for that environment.
+Each environment `account` stack creates the `GitHub OIDC` roles used by GitHub Actions for that environment.
+
+By default, the `account` stack's `enable_github_oidc` variable is set to `false` to preserve simplicity during initial deployments. If you wish to enable `GitHub OIDC`, set `enable_github_oidc` to `true`, along with other variables that `enable_github_oidc` depends on.
+
+For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents, located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
 
 ## Dev
 
