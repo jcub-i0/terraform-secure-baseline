@@ -455,7 +455,7 @@ SecOps-Operator-Staging
 SecOps-Operator-Prod
 ```
 
-If enabling optional Analyst or Engineer roles, pass the IAM policy names created by the environment baseline stacks.
+If enabling optional `SecOps-Analyst` or `SecOps-Engineer` roles, pass the IAM policy names created by the environment baseline stacks.
 
 Example:
 
