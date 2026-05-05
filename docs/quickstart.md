@@ -60,7 +60,7 @@ The `state` stacks are applied locally first because they create the remote back
 
 ## Prerequisites
 
-This configuration requires (4) AWS accounts for each environment: `dev`, `staging`, `prod`, and `control-plane`.
+This configuration requires **four AWS accounts**: `dev`, `staging`, `prod`, and `control-plane`.
 
 Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.** 
 > You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step and using an IAM user named `baseline-admin` in each account to keep initial deployment as simple as possible.
@@ -91,7 +91,23 @@ cd terraform-secure-baseline
 
 ## Configure AWS CLI Profiles
 
-Create or configure AWS CLI profiles for each account.
+Create or configure AWS CLI profiles for each AWS account.
+
+Because this deployment requires switching between multiple AWS accounts, it is recommended to use **four separate terminals**, each dedicated to a specific AWS account.
+
+This reduces the chance of applying Terraform in the wrong account and also makes environment-specific variables easier to manage.
+
+Whenever this guide says:
+
+```bash
+export AWS_PROFILE=<env>
+```
+
+interpret it as:
+
+> Run the following commands from the terminal dedicated to that environment.
+
+You may still run `export AWS_PROFILE=<env>` inside the dedicated terminal as an additional safety check.
 
 Example profile names:
 
@@ -102,18 +118,32 @@ staging
 prod
 ```
 
-Example: To create an AWS profile for the `dev` env, run the following:
+---
+
+### Create a Profile
+
+Example: create an AWS CLI profile for the `dev` account.
+
 ```bash
 aws configure --profile dev
 ```
-> Answer the prompts accordingly:
-> ```
-> AWS Access Key ID: <admin-iam-user-access-key>
-> AWS Secret Access Key: <admin-iam-user-secret-access-key>
-> Default region name: us-east-1
-> Default output format: json 
-> ```
-Repeat this process for each `env` / AWS account.
+
+Answer the prompts using credentials for the target account:
+
+```text
+AWS Access Key ID: <admin-iam-user-access-key>
+AWS Secret Access Key: <admin-iam-user-secret-access-key>
+Default region name: us-east-1
+Default output format: json
+```
+
+Repeat this process for each AWS account.
+
+> Note: This example uses IAM user access keys for simplicity during initial bootstrap. If your organization uses AWS SSO or another federation method, configure the profiles using that method instead.
+
+---
+
+### Verify Profiles
 
 Verify each profile before deploying:
 
