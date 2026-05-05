@@ -63,15 +63,14 @@ The `state` stacks are applied locally first because they create the remote back
 This configuration requires (4) AWS accounts for each environment: `dev`, `staging`, `prod`, and `control-plane`.
 
 Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.** 
-> You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step and using an IAM user named `baseline-admin` to keep initial deployment as simple as possible.
+> You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step and using an IAM user named `baseline-admin` in each account to keep initial deployment as simple as possible.
 
 Install and configure:
 
 - Terraform
 - AWS CLI
 - Git
-- Access to the required AWS accounts
-- Admin-level IAM permissions to create AWS resources
+- Admin-level IAM permissions in each account to create AWS resources
 
 Verify AWS CLI access:
 
@@ -114,7 +113,7 @@ aws configure --profile dev
 > Default region name: us-east-1
 > Default output format: json 
 > ```
-Repeat this process for each `env`.
+Repeat this process for each `env` / AWS account.
 
 Verify each profile before deploying:
 
@@ -133,10 +132,9 @@ Confirm each command returns the expected AWS account ID.
 
 The control-plane `state` stack creates backend resources for the control-plane substacks.
 
-
 This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
  
-It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost** (this is by design -- security-by-default is highly emphasized.).
+It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost** (this is by design -- security-by-default is highly emphasized).
 
 ```
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'
@@ -351,15 +349,13 @@ control-plane-plan
 control-plane
 ```
 
-Common variables may include:
+Variables in each GitHub environment may include:
 
 ```text
 PRIMARY_REGION
 TF_STATE_BUCKET_ARN
 TF_STATE_BUCKET_CMK_ARN
 TF_STATE_LOCK_TABLE_ARN
-GITHUB_PLAN_ROLE_ARN
-GITHUB_APPLY_ROLE_ARN
 BUCKET_ADMIN_PRINCIPALS
 ACCOUNT_ID_DEV
 ACCOUNT_ID_STAGING
@@ -368,7 +364,7 @@ SECOPS_EMAILS
 BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS
 ```
 
-Common secrets may include:
+Secrets may include:
 
 ```text
 ABUSEIPDB_API_KEY
@@ -380,11 +376,11 @@ Each GitHub environment should contain the variables appropriate for the AWS acc
 
 # Phase 7 - Deploy Environment Baseline
 
-After setting necessary variables for the workload environments (see `environment/<env>/variables.tf`), deploy each environment from the `environments/<env>` directory.
+After setting necessary variables for the workload environments (see `environment/<env>/variables.tf`), deploy each environment from the `environments/<env>/` directory.
 
-> If using `GitHub OIDC`, be sure to add the `apply_role_github_arn` and `plan_role_github_arn` output values for each environment's `bucket_admin_principals` variable.
+> If using `GitHub OIDC`, be sure to add the `apply_role_github_arn` output value to each environment's `bucket_admin_principals` variable.
 
-You can deploy locally or through GitHub Actions once OIDC roles and GitHub environment variables are configured.
+You can deploy through GitHub Actions once OIDC roles and GitHub environment variables are configured or you can deploy locally if not.
 
 ## Dev
 
@@ -419,7 +415,7 @@ terraform plan
 terraform apply
 ```
 
-Record environment outputs needed by the `bootstrap/control-plane/identity_center` and (if using `GitHub OIDC`) `bootstrap/<env>/account` stacks, such as:
+Record environment outputs needed by the `bootstrap/control-plane/identity_center/` and (if using `GitHub OIDC`) `bootstrap/<env>/account/` stacks, such as:
 
 ```text
 logs_s3_readonly_policy_name
@@ -479,7 +475,7 @@ staging
 staging-plan
 ```
 
-Setting these variables in each GitHub environment grants required access to GitHub roles, enabling CI/CD workflows to run smoothly.
+Setting these variables in each GitHub environment grants GitHub roles required access, enabling CI/CD workflows to run error-free.
 
 ---
 
