@@ -26,7 +26,18 @@ locals {
     "ScheduleKeyDeletion",
     "DisableKey",
     "PutKeyPolicy",
-    "UpdateKeyDescription"
+    "UpdateKeyDescription",
+
+    # CONFIG TAMPERING
+    "StopConfigurationRecorder",
+    "DeleteConfigurationRecorder",
+    "PutConfigurationRecorder",
+    "DeleteDeliveryChannel",
+    "PutDeliveryChannel",
+    "DeleteConfigRule",
+    "PutConfigRule",
+    "DeleteRemediationConfiguration",
+    "PutRemediationConfigurations"
   ]
 }
 
@@ -42,7 +53,8 @@ resource "aws_cloudwatch_event_rule" "tamper_detection" {
         "cloudtrail.amazonaws.com",
         "guardduty.amazonaws.com",
         "securityhub.amazonaws.com",
-        "kms.amazonaws.com"
+        "kms.amazonaws.com",
+        "config.amazonaws.com"
       ],
       "eventName" = local.tamper_actions
     }
