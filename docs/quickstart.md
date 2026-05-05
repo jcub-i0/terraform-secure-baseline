@@ -164,7 +164,7 @@ The control-plane `state` stack creates backend resources for the control-plane 
 
 This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
  
-It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost** (this is by design -- security-by-default is highly emphasized).
+It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**. This is an intended sympton of the configuration's security-by-default design.
 
 ```
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'
@@ -200,6 +200,8 @@ The control-plane `account` stack creates `GitHub OIDC` roles for managing contr
 By default, the `account` stack's `enable_github_oidc` variable is set to `false` to preserve simplicity during initial deployments. If you wish to enable `GitHub OIDC`, set `enable_github_oidc` to `true`, along with other variables that `enable_github_oidc` depends on.
 
 For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents, located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
+
+From `bootstrap/control_plane/state`:
 
 ```bash
 cd ../account
@@ -241,7 +243,7 @@ Before applying this stack, ensure:
 - The `control-plane` account is the management account
 - `dev`, `staging`, and `prod` accounts have been invited and accepted into the organization
 
-Then apply:
+Then apply (from `bootstrap/control_plane/account`):
 
 ```bash
 cd ../organizations
@@ -294,7 +296,7 @@ terraform init
 terraform apply
 ```
 
-Record each environment's state outputs:
+Record each environment's `state` outputs:
 
 ```text
 tf_state_bucket_arn
@@ -310,9 +312,9 @@ These values are used by the corresponding `bootstrap/<env>/account` and `enviro
 
 Each environment `account` stack creates the `GitHub OIDC` roles used by GitHub Actions for that environment.
 
-By default, the `account` stack's `enable_github_oidc` variable is set to `false` to preserve simplicity during initial deployments. If you wish to enable `GitHub OIDC`, set `enable_github_oidc` to `true`, along with other variables that `enable_github_oidc` depends on.
+By default, the `account` stack's `enable_github_oidc` variable is set to `false` to promote simplicity during initial deployments. If you wish to enable `GitHub OIDC`, set `enable_github_oidc` to `true`, along with other variables that `enable_github_oidc` depends on.
 
-For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents, located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
+For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
 
 ## Dev
 
@@ -366,7 +368,7 @@ Add these to the appropriate GitHub environment variables:
 
 # Phase 6 - Configure GitHub Environment Variables (Skip if not using `GitHub OIDC`)
 
-Create GitHub environments for:
+You should have the following GitHub environments:
 
 ```text
 dev-plan
