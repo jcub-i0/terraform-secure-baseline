@@ -431,18 +431,42 @@ secrets_manager_cmk_arn
 
 # Phase 8 - Reapply `Account` Stacks (Skip if not using `GitHub OIDC`)
 
-After successfully applying each environment's `baseline` stack, set the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables for each of those workloads, then reapply the `bootstrap/<env>/account` stacks.
+After successfully applying each environment's `baseline` stack, set the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables and reapply the `bootstrap/<env>/account` stacks for each environment.
 
-Example:
+## Dev
 
 ```bash
+export AWS_PROFILE=dev
+
 export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-cd ../bootstrap/<env>/account`
+cd ../bootstrap/dev/account`
 terraform apply
 ```
 
-Then be sure to also set these variables in the following GitHub environments:
+## Staging
+
+```bash
+export AWS_PROFILE=staging
+
+export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
+export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
+cd ../staging/account`
+terraform apply
+```
+
+## Prod
+
+```bash
+export AWS_PROFILE=prod
+
+export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
+export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
+cd ../prod/account`
+terraform apply
+```
+
+Be sure to also set these variables (`LAMBDA_CMK_ARN` and `SECRETS_MANAGER_CMK_ARN`) in the following GitHub environments:
 
 ```
 dev
