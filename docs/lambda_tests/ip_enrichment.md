@@ -824,6 +824,7 @@ Expected Lambda response body pattern:
   "statusCode": 200,
   "body": "{\"message\": \"Processing complete\", \"resultCount\": 3}"
 }
+```
 
 ---
 
