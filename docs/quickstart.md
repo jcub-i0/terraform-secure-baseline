@@ -380,7 +380,9 @@ Each GitHub environment should contain the variables appropriate for the AWS acc
 
 # Phase 7 - Deploy Environment Baseline
 
-After setting necessary variables for each account, deploy each workload environment from the `environments/<env>` directory.
+After setting necessary variables for the workload environments (see `environment/<env>/variables.tf`), deploy each environment from the `environments/<env>` directory.
+
+> If using `GitHub OIDC`, be sure to add the `apply_role_github_arn` and `plan_role_github_arn` output values for each environment's `bucket_admin_principals` variable.
 
 You can deploy locally or through GitHub Actions once OIDC roles and GitHub environment variables are configured.
 
@@ -532,8 +534,8 @@ docs/validation-checklist.md
 
 Recommended validation order:
 
-1. Confirm Terraform state backends exist.
-2. Confirm GitHub OIDC roles can be assumed.
+1. Confirm Terraform state backends exist in each AWS account, including `control-plane`.
+2. Confirm GitHub OIDC roles can be assumed by running a GitHub Actions workflow (if using `GitHub OIDC`).
 3. Confirm baseline infrastructure exists in each environment.
 4. Confirm Security Hub, GuardDuty, AWS Config, and CloudTrail are active.
 5. Confirm SNS subscriptions are confirmed.
@@ -569,7 +571,7 @@ Expected workflows:
 |---------|---------|
 | Terraform Plan | Runs plans for environment and control-plane stacks |
 | Terraform Apply | Applies selected environment baseline |
-| Terraform Destroy | Cleans up Identity Center attachments, then destroys selected environment baseline |
+| Terraform Destroy | Cleans up Identity Center attachments, then destroys selected environment `baseline` |
 
 The destroy workflow first updates the Identity Center stack to remove environment-specific policy attachments before destroying the baseline stack.
 
@@ -648,3 +650,35 @@ This quickstart deploys `tf-secure-baseline` in the intended order:
 - Validate security workflows
 
 After completion, the platform provides a multi-account AWS security baseline with centralized identity, secure CI/CD, logging, detection, and event-driven response automation.
+
+# Destruction / Cleanup Procedure
+
+If you wish to destroy the infrastructure you just created, the order in which you run the `terraform destroy` command is **VERY IMPORTANT**.
+
+**Seriously** - this can **ruin your night.** Be sure to run `terraform destroy` from the following directories in **THIS EXACT ORDER:**
+
+0. `bootstrap/control_plane/identity_center/`
+
+## Dev
+
+1. `environments/dev/`
+2. `bootstrap/dev/account/`
+3. `bootstrap/dev/state`
+
+## Staging
+
+4. `environments/staging/`
+5. `bootstrap/staging/account/`
+6. `bootstrap/staging/state`
+
+## Prod
+
+7. `environments/prod/`
+8. `bootstrap/prod/account/`
+9. `bootstrap/prod/state/`
+
+## Control-Plane
+
+10. `bootstrap/control_plane/organizations/`
+11. `bootstrap/control_plane/account/`
+12. `bootstrap/control_plane/state/`
