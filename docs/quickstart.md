@@ -431,7 +431,16 @@ Exact output names may be environment-specific depending on the root module outp
 
 ---
 
-# Phase 8 - Deploy IAM Identity Center
+# Phase 8 - Reapply `Account` Stacks
+
+After applying the environment `baseline` stacks, 
+
+lambda_cmk_arn
+secrets_manager_cmk_arn
+
+---
+
+# Phase 9 - Deploy IAM Identity Center
 
 The Identity Center stack is deployed from the control plane.
 
@@ -472,7 +481,7 @@ This avoids circular dependencies by allowing environment stacks to create envir
 
 ---
 
-# Phase 9 - Validate Deployment
+# Phase 10 - Validate Deployment
 
 After deployment completes, run the validation checklist:
 
