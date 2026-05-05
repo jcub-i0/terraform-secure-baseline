@@ -427,16 +427,33 @@ lambda_cmk_arn
 secrets_manager_cmk_arn
 ```
 
-Exact output names may be environment-specific depending on the root module outputs.
-
 ---
 
-# Phase 8 - Reapply `Account` Stacks
+# Phase 8 - Reapply `Account` Stacks (Skip if not using `GitHub OIDC`)
 
-After applying the environment `baseline` stacks, 
+After successfully applying each environment's `baseline` stack, set the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables for each of those workloads, then reapply the `bootstrap/<env>/account` stacks.
 
-lambda_cmk_arn
-secrets_manager_cmk_arn
+Example:
+
+```bash
+export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
+export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
+cd ../bootstrap/<env>/account`
+terraform apply
+```
+
+Then be sure to also set these variables in the following GitHub environments:
+
+```
+dev
+dev-plan
+prod
+prod-plan
+staging
+staging-plan
+```
+
+Setting these variables in each GitHub environment grants required access to GitHub roles, enabling CI/CD workflows to run smoothly.
 
 ---
 
