@@ -63,20 +63,24 @@ The `state` stacks are applied locally first because they create the remote back
 This configuration requires **four AWS accounts**: `dev`, `staging`, `prod`, and `control-plane`.
 
 Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.** 
-> You can also create an Administrative IAM role dedicated to Terraform-use to avoid long-lived credentials. We are skipping this step and using an IAM user named `baseline-admin` in each account to keep initial deployment as simple as possible.
+
+> Note: This example uses IAM user access keys for simplicity during initial bootstrap. If your organization uses AWS SSO or another federation method, configure the profiles using that method instead.
 
 Install and configure:
 
 - Terraform
+- Git (CLI)
+- A GitHub account with the following environments (if using `GitHub OIDC`):
+  - control-plane
+  - control-plane-plan
+  - dev
+  - dev-plan
+  - staging
+  - staging-plan
+  - prod
+  - prod-plan
 - AWS CLI
-- Git
 - Admin-level IAM permissions in each account to create AWS resources
-
-Verify AWS CLI access:
-
-```bash
-aws sts get-caller-identity
-```
 
 ---
 
@@ -368,19 +372,6 @@ Add these to the appropriate GitHub environment variables:
 
 # Phase 6 - Configure GitHub Environment Variables (Skip if not using `GitHub OIDC`)
 
-You should have the following GitHub environments:
-
-```text
-dev-plan
-dev
-staging-plan
-staging
-prod-plan
-prod
-control-plane-plan
-control-plane
-```
-
 Variables in each GitHub environment may include:
 
 ```text
@@ -408,7 +399,7 @@ Each GitHub environment should contain the variables appropriate for the AWS acc
 
 # Phase 7 - Deploy Environment Baseline
 
-After setting necessary variables for the workload environments (see `environment/<env>/variables.tf`), deploy each environment from the `environments/<env>/` directory.
+After setting necessary variables for the workload environments (see `environment/<env>/variables.tf`), deploy each environment from the `environments/<env>` directory.
 
 > If using `GitHub OIDC`, be sure to add the `apply_role_github_arn` output value to each environment's `bucket_admin_principals` variable.
 
@@ -447,7 +438,7 @@ terraform plan
 terraform apply
 ```
 
-Record environment outputs needed by the `bootstrap/control-plane/identity_center/` and (if using `GitHub OIDC`) `bootstrap/<env>/account/` stacks, such as:
+Record environment outputs needed by the `bootstrap/control-plane/identity_center` and (if using `GitHub OIDC`) `bootstrap/<env>/account` stacks, such as:
 
 ```text
 logs_s3_readonly_policy_name
@@ -768,27 +759,27 @@ terraform destroy
 
 ### Dev
 
-1. `environments/dev/`
-2. `bootstrap/dev/account/`
-3. `bootstrap/dev/state/`
+1. `environments/dev`
+2. `bootstrap/dev/account`
+3. `bootstrap/dev/state`
 
 ### Staging
 
-4. `environments/staging/`
-5. `bootstrap/staging/account/`
-6. `bootstrap/staging/state/`
+4. `environments/staging`
+5. `bootstrap/staging/account`
+6. `bootstrap/staging/state`
 
 ### Prod
 
-7. `environments/prod/`
-8. `bootstrap/prod/account/`
-9. `bootstrap/prod/state/`
+7. `environments/prod`
+8. `bootstrap/prod/account`
+9. `bootstrap/prod/state`
 
 ### Control Plane
 
-10. `bootstrap/control_plane/organizations/`
-11. `bootstrap/control_plane/account/`
-12. `bootstrap/control_plane/state/`
+10. `bootstrap/control_plane/organizations`
+11. `bootstrap/control_plane/account`
+12. `bootstrap/control_plane/state`
 
 ---
 
