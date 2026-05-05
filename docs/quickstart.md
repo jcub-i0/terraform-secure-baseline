@@ -649,32 +649,127 @@ After completion, the platform provides a multi-account AWS security baseline wi
 
 # Destruction / Cleanup Procedure
 
-If you wish to destroy the infrastructure you just created, the order in which you run the `terraform destroy` command is **VERY IMPORTANT**.
+If you wish to destroy the infrastructure you created, the order in which you run `terraform destroy` is **VERY IMPORTANT**.
 
-**Seriously** - this can **ruin your night.** Be sure to run `terraform destroy` from the following directories in **THIS EXACT ORDER:**
+**Seriously** - this can **ruin your night.** Be sure to destroy resources in the correct order.
 
-0. `bootstrap/control_plane/identity_center/`
+Destroying stacks out of order can cause failures such as:
 
-## Dev
+- IAM policies failing to delete because Identity Center still has them attached
+- GitHub Actions losing access because OIDC roles were destroyed too early
+- Terraform state backend resources being destroyed before dependent stacks are removed
+
+---
+
+## Single Environment Teardown
+
+If you are only destroying one environment, do **not** destroy the entire Identity Center stack first.
+
+Instead, first update the Identity Center stack to remove that environment’s optional policy attachments or role assignments.
+
+Example for `dev`:
+
+```bash
+cd bootstrap/control_plane/identity_center
+
+export TF_VAR_enable_secops_analyst_dev=false
+export TF_VAR_enable_secops_engineer_dev=false
+export TF_VAR_logs_s3_readonly_policy_name_dev=""
+export TF_VAR_logs_cmk_decrypt_policy_name_dev=""
+
+terraform apply
+```
+
+Then destroy the selected environment in this order:
+
+### Dev
+
+```bash
+cd environments/dev
+terraform destroy
+
+cd ../../bootstrap/dev/account
+terraform destroy
+
+cd ../state
+terraform destroy
+```
+
+### Staging
+
+```bash
+cd environments/staging
+terraform destroy
+
+cd ../../bootstrap/staging/account
+terraform destroy
+
+cd ../state
+terraform destroy
+```
+
+### Prod
+
+```bash
+cd environments/prod
+terraform destroy
+
+cd ../../bootstrap/prod/account
+terraform destroy
+
+cd ../state
+terraform destroy
+```
+
+---
+
+## Full Platform Teardown
+
+If you are destroying the entire platform, use this order:
+
+### 0. Identity Center
+
+```bash
+cd bootstrap/control_plane/identity_center
+terraform destroy
+```
+
+### Dev
 
 1. `environments/dev/`
 2. `bootstrap/dev/account/`
-3. `bootstrap/dev/state`
+3. `bootstrap/dev/state/`
 
-## Staging
+### Staging
 
 4. `environments/staging/`
 5. `bootstrap/staging/account/`
-6. `bootstrap/staging/state`
+6. `bootstrap/staging/state/`
 
-## Prod
+### Prod
 
 7. `environments/prod/`
 8. `bootstrap/prod/account/`
 9. `bootstrap/prod/state/`
 
-## Control-Plane
+### Control Plane
 
 10. `bootstrap/control_plane/organizations/`
 11. `bootstrap/control_plane/account/`
 12. `bootstrap/control_plane/state/`
+
+---
+
+## Important Notes
+
+- Do **not** destroy `bootstrap/<env>/account` before `environments/<env>`.
+  - The account stack contains the GitHub OIDC roles used by CI/CD.
+
+- Do **not** destroy `bootstrap/<env>/state` before all stacks using that backend are destroyed.
+  - The state stack contains the Terraform backend resources.
+
+- Do **not** destroy `bootstrap/control_plane/account` before other control-plane substacks.
+  - It contains the GitHub OIDC roles used to manage the control plane.
+
+- Destroying `bootstrap/control_plane/state` should always be last.
+  - It contains the backend resources for the control-plane stacks.
