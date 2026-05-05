@@ -910,6 +910,7 @@ Expected Lambda response body pattern:
   "body": "{\"message\": \"Processing complete\", \"resultCount\": 1}"
 }
 ```
+
 ---
 
 # EventBridge / Security Hub Integration Validation
