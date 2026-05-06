@@ -203,7 +203,7 @@ module "vpc_endpoints" {
   lambda_ec2_rollback_sg_id           = module.automation.lambda_ec2_rollback_sg_id
   compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
 }
-
+/*
 module "firewall" {
   source = "../modules/firewall"
 
@@ -216,6 +216,7 @@ module "firewall" {
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
   centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
+*/
 
 module "patch_management" {
   source = "../modules/patch_management"
