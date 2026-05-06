@@ -269,7 +269,7 @@ aws organizations describe-organization \
 Expected:
 
 - Organization exists.
-- The control-plane account is the management account.
+- The Organization's `MasterAccountId` equals that of the `control-plane` account ID.
 
 ## List OUs
 
