@@ -153,6 +153,15 @@ aws s3api head-bucket \
   --profile "${AWS_PROFILE}"
 ```
 
+## Check State Bucket Encryption
+
+```bash
+aws s3api get-bucket-encryption \
+  --bucket "${CLOUD_NAME}-${ENVIRONMENT}-state" \
+  --profile "${AWS_PROFILE}" \
+  --query 'ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault'
+```
+
 If your state bucket uses a different name, replace the bucket name accordingly.
 
 ## Check State Lock Table
@@ -164,13 +173,6 @@ aws dynamodb describe-table \
   --profile "${AWS_PROFILE}" \
   --query 'Table.TableStatus'
 ```
-
-## Expected Outcome
-
-- S3 state bucket exists.
-- KMS encryption is configured.
-- Locking resource exists if configured.
-- Terraform can initialize successfully in stacks that use the backend.
 
 ## Terraform Init Check
 
@@ -184,6 +186,13 @@ Expected:
 
 - Backend initializes successfully.
 - No state lock or access errors occur.
+
+## Expected Outcome
+
+- S3 state bucket exists.
+- KMS encryption is configured.
+- Locking resource exists if configured.
+- Terraform can initialize successfully in stacks that use the backend.
 
 ---
 
