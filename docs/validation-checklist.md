@@ -238,9 +238,9 @@ Run the Terraform Plan workflow in GitHub Actions.
 
 Expected:
 
-- GitHub successfully assumes the plan role.
-- `aws sts get-caller-identity` returns the expected account.
-- Terraform plan completes without OIDC errors.
+- `Configure AWS credentials from GitHub OIDC` step confirms GitHub successfully assumed the plan role.
+- `Verify Identity` step returns the expected account for `aws sts get-caller-identity`.
+- `Terraform Plan` completes without OIDC errors.
 
 ---
 
