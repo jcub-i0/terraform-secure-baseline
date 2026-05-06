@@ -63,40 +63,51 @@ Recommended validation order:
 
 ## Required Variables
 
+Because these validation checks require switching between different workload accounts, it is recommended to use **four separate terminals**, each dedicated to a specific account.
+
 Set these variables before running environment-specific checks.
 
-Update values for the environment being tested.
+### Dev
 
 ```bash
 export AWS_PAGER=""
+export AWS_PROFILE="dev"
+export ENVIRONMENT="dev"
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
-export ENVIRONMENT="dev"
-export AWS_PROFILE="dev"
-export ACCOUNT_ID="<TARGET-ACCOUNT-ID>"
+export ACCOUNT_ID="<DEV-ACCOUNT-ID>"
 ```
 
-For staging:
+### Staging
 
 ```bash
-export ENVIRONMENT="staging"
+export AWS_PAGER=""
 export AWS_PROFILE="staging"
+export ENVIRONMENT="staging"
+export AWS_REGION="us-east-1"
+export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<STAGING-ACCOUNT-ID>"
 ```
 
-For prod:
+### Prod
 
 ```bash
-export ENVIRONMENT="prod"
+export AWS_PAGER=""
 export AWS_PROFILE="prod"
+export ENVIRONMENT="prod"
+export AWS_REGION="us-east-1"
+export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<PROD-ACCOUNT-ID>"
 ```
 
-For control plane:
+### Control-Plane
 
 ```bash
-export ENVIRONMENT="control-plane"
+export AWS_PAGER=""
 export AWS_PROFILE="control-plane"
+export ENVIRONMENT="control-plane"
+export AWS_REGION="us-east-1"
+export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>"
 ```
 
