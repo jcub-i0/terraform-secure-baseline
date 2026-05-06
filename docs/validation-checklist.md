@@ -389,6 +389,13 @@ staging
 prod
 ```
 
+Run these checks for each environment (`dev`, `staging`, and `prod`), ensuring the appropriate environment profile is set beforehand.
+
+```text
+export AWS_PROFILE="<env>"
+export ENVIRONMENT="<env>"
+```
+
 ---
 
 ## 5.1 Validate VPC
