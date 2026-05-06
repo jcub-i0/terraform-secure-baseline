@@ -65,28 +65,35 @@ jobs:
 
     steps:
       - name: Checkout
+        if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials from GitHub OIDC
+        if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{vars.PLAN_ROLE_GITHUB_ARN}}
           aws-region: ${{vars.PRIMARY_REGION}}
 
       - name: Verify identity
+        if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         run: aws sts get-caller-identity
 
       - name: Setup Terraform
+        if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
+        if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         working-directory: ${{matrix.working_directory}}
         run: terraform init
 
       - name: Terraform Validate
+        if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         working-directory: ${{matrix.working_directory}}
         run: terraform validate
 
       - name: Terraform Plan
+        if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         working-directory: ${{matrix.working_directory}}
         run: terraform plan -no-color -lock-timeout=5m
