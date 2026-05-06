@@ -2,6 +2,18 @@ name: Terraform Plan
 
 on:
     workflow_dispatch:
+      inputs:
+        target_environment:
+          description: "Environment to plan"
+          required: true
+          default: "dev"
+          type: choice
+          options:
+            - dev
+            - staging
+            - prod
+            - control-plane-identity-center
+            - control-plane-organizations
     pull_request:
     push:
         branches:
