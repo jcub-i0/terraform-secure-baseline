@@ -1042,8 +1042,14 @@ Examples may include attempts to modify or disable:
 Only run this in a non-production environment unless explicitly approved.
 
 ```bash
+TRAIL_NAME="$(aws cloudtrail describe-trails \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'trailList[0].Name' \
+  --output text)"
+
 aws cloudtrail stop-logging \
-  --name "<TRAIL_NAME>" \
+  --name "#{TRAIL_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 ```
@@ -1058,7 +1064,7 @@ Immediately restart logging:
 
 ```bash
 aws cloudtrail start-logging \
-  --name "<TRAIL_NAME>" \
+  --name "${TRAIL_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 ```
@@ -1067,7 +1073,7 @@ Confirm CloudTrail is logging again:
 
 ```bash
 aws cloudtrail get-trail-status \
-  --name "<TRAIL_NAME>" \
+  --name "${TRAIL_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --query 'IsLogging'
