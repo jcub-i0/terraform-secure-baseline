@@ -1247,7 +1247,7 @@ Run the following workflows:
 - Terraform Plan
 - Terraform Apply
 - Terraform Destroy in a non-production environment only
-  > Ensure that the `bootstrap/<env>/account` stack has been reapplied with the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables are set before running the Terraform Destroy workflow
+  > Ensure that the `bootstrap/<env>/account` stack has been reapplied with the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables set before running the Terraform Destroy workflow
 
 Expected:
 
