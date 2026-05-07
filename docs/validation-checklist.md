@@ -1093,13 +1093,75 @@ true
 
 Confirm that use of the break-glass role generates an alert.
 
-If safe to test, assume or simulate use of the configured break-glass role.
+If safe to test, use one of the principal ARNs included in the `break_glass_trusted_principle_arns` variable to assume or simulate use of the configured break-glass role.
 
-Expected:
+This test requires the user assuming the `Break-Glass-Admin` role to be enrolled with MFA.
+
+Confirm your account is configured with an MFA device:
+
+```bash
+aws iam list-mfa-devices \
+  --user-name baseline-admin \
+  --profile "${AWS_PROFILE}" \
+  --query 'MFADevices[].[SerialNumber,EnableDate]' \
+  --output table
+```
+
+Expected output:
+
+```
+arn:aws:iam::<ACCOUNT_ID>:mfa/<DEVICE_NAME>
+```
+
+Then set the MFA serial:
+
+```bash
+export MFA_SERIAL="$(aws iam list-mfa-devices \
+  --user-name baseline-admin \
+  --profile "${AWS_PROFILE}" \
+  --query 'MFADevices[0].SerialNumber' \
+  --output text)"
+```
+
+Assume the `Break-Glass-Admin` role, replacing `<MFA_CODE>` with the six digit code from your authentication device:
+
+```bash
+export BREAK_GLASS_ROLE_ARN="$(aws iam list-roles \
+  --profile "${AWS_PROFILE}" \
+  --query 'Roles[?contains(RoleName, `BreakGlass`) || contains(RoleName, `break-glass`)].Arn | [0]' \
+  --output text)"
+
+aws sts assume-role \
+  --role-arn "${BREAK_GLASS_ROLE_ARN}" \
+  --role-session-name "break-glass-validation-test" \
+  --serial-number "${MFA_SERIAL}" \
+  --token-code "<MFA_CODE>" \
+  --profile "${AWS_PROFILE}" \
+  --output json
+```
+
+Expected output:
+
+```
+{
+    "Credentials": {
+        "AccessKeyId": "XXXXXX",
+        "SecretAccessKey": "XXXXXX",
+        "SessionToken": "XXXXXX",
+        "Expiration": "XXXXXX",
+    },
+    "AssumedRoleUser": {
+        "AssumedRoleId": "XXXXXX",
+        "Arn": "arn:aws:sts::<ACCOUNT_ID>:assumed-role/<CLOUD_NAME>-<ENVIRONMENT>-BreakGlass-Admin/break-glass-validation-test"
+    }
+}
+```
+
+Expected behavior after assuming the role:
 
 - CloudTrail records the role assumption.
 - EventBridge rule matches the activity.
-- SNS alert is sent.
+- Break-Glass SNS alert is sent.
 
 If testing role assumption is not appropriate, validate that:
 
