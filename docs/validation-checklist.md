@@ -238,9 +238,9 @@ Run the Terraform Plan workflow in GitHub Actions.
 
 Expected:
 
-- GitHub successfully assumes the plan role.
-- `aws sts get-caller-identity` returns the expected account.
-- Terraform plan completes without OIDC errors.
+- `Configure AWS credentials from GitHub OIDC` step confirms GitHub successfully assumed the plan role.
+- `Verify Identity` step returns the expected account for `aws sts get-caller-identity`.
+- `Terraform Plan` completes without OIDC errors.
 
 ---
 
@@ -269,7 +269,7 @@ aws organizations describe-organization \
 Expected:
 
 - Organization exists.
-- The control-plane account is the management account.
+- The Organization's `MasterAccountId` equals that of the `control-plane` account ID.
 
 ## List OUs
 
@@ -387,6 +387,13 @@ Run this section for each environment:
 dev
 staging
 prod
+```
+
+Run these checks for each environment (`dev`, `staging`, and `prod`), ensuring the appropriate environment profile is set beforehand.
+
+```text
+export AWS_PROFILE="<env>"
+export ENVIRONMENT="<env>"
 ```
 
 ---
@@ -526,6 +533,7 @@ s3
 Run from inside an SSM session:
 
 ```bash
+export AWS_REGION="us-east-1"
 getent hosts sts.${AWS_REGION}.amazonaws.com
 getent hosts ssm.${AWS_REGION}.amazonaws.com
 getent hosts secretsmanager.${AWS_REGION}.amazonaws.com
@@ -544,6 +552,7 @@ Expected:
 Run from inside an SSM session:
 
 ```bash
+export AWS_REGION="us-east-1"
 for h in sts ssm secretsmanager logs kms; do
   host="${h}.${AWS_REGION}.amazonaws.com"
   timeout 3 bash -c "cat < /dev/null > /dev/tcp/${host}/443" \
@@ -566,6 +575,8 @@ Confirm that outbound traffic behaves according to the deployed architecture.
 The default architecture may use AWS Network Firewall and NAT Gateway for controlled egress.
 
 ## Check Route Tables
+
+Run from your local CLI:
 
 ```bash
 aws ec2 describe-route-tables \
@@ -800,6 +811,7 @@ aws kms list-aliases \
 Expected aliases may include keys for:
 
 ```text
+state
 logs
 lambda
 ebs
@@ -843,26 +855,28 @@ Expected:
 
 ## Purpose
 
-Confirm that EventBridge rules exist for security automation.
+Confirm that EventBridge rules exist for security automation across all expected event buses.
+
+Check the default bus:
 
 ```bash
 aws events list-rules \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
+  --event-bus-name default \
   --query 'Rules[].[Name,State,EventBusName]' \
   --output table
 ```
 
 Expected rules may include:
 
+- Amazon Inspector rules (if enabled)
 - Security Hub high/critical finding handling
-- EC2 isolation trigger
-- IP enrichment trigger
 - Tamper detection
-- Break-glass detection
-- EC2 rollback trigger on the SecOps event bus
+- Break-glass detection (`break-glass-admin-assumed`)
+- EC2 isolation trigger (`EC2-High-Critical`)
 
-Validate custom event bus:
+Validate `secops` custom event bus:
 
 ```bash
 aws events list-event-buses \
@@ -875,10 +889,41 @@ aws events list-event-buses \
 Expected:
 
 ```text
+default
 secops-bus
 ```
 
-or an environment-prefixed equivalent, depending on configuration.
+Check the customer `SecOps` bus:
+
+```bash
+aws events list-rules \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --event-bus-name "${CLOUD_NAME}-${ENVIRONMENT}-secops-bus" \
+  --query 'Rules[].[Name,State,EventBusName]' \
+  --output table
+```
+
+Expected rules may include:
+
+- EC2 Rollback
+
+Confirm EventBridge Targets:
+
+```bash
+aws events list-targets-by-rule \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --rule "tf-secure-baseline-dev-securityhub-high-critical" \
+  --event-bus-name default \
+  --query 'Targets[].[Id,Arn]' \
+  --output table
+```
+
+Expected targets may include:
+
+- `IpEnrichment`
+- `sec-hub-to-secops-sns`
 
 ---
 
@@ -997,8 +1042,14 @@ Examples may include attempts to modify or disable:
 Only run this in a non-production environment unless explicitly approved.
 
 ```bash
+TRAIL_NAME="$(aws cloudtrail describe-trails \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'trailList[0].Name' \
+  --output text)"
+
 aws cloudtrail stop-logging \
-  --name "<TRAIL_NAME>" \
+  --name "#{TRAIL_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 ```
@@ -1013,7 +1064,7 @@ Immediately restart logging:
 
 ```bash
 aws cloudtrail start-logging \
-  --name "<TRAIL_NAME>" \
+  --name "${TRAIL_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 ```
@@ -1022,7 +1073,7 @@ Confirm CloudTrail is logging again:
 
 ```bash
 aws cloudtrail get-trail-status \
-  --name "<TRAIL_NAME>" \
+  --name "${TRAIL_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --query 'IsLogging'
@@ -1042,13 +1093,75 @@ true
 
 Confirm that use of the break-glass role generates an alert.
 
-If safe to test, assume or simulate use of the configured break-glass role.
+If safe to test, use one of the principal ARNs included in the `break_glass_trusted_principle_arns` variable to assume or simulate use of the configured break-glass role.
 
-Expected:
+This test requires the user assuming the `Break-Glass-Admin` role to be enrolled with MFA.
+
+Confirm your account is configured with an MFA device:
+
+```bash
+aws iam list-mfa-devices \
+  --user-name baseline-admin \
+  --profile "${AWS_PROFILE}" \
+  --query 'MFADevices[].[SerialNumber,EnableDate]' \
+  --output table
+```
+
+Expected output:
+
+```
+arn:aws:iam::<ACCOUNT_ID>:mfa/<DEVICE_NAME>
+```
+
+Then set the MFA serial:
+
+```bash
+export MFA_SERIAL="$(aws iam list-mfa-devices \
+  --user-name baseline-admin \
+  --profile "${AWS_PROFILE}" \
+  --query 'MFADevices[0].SerialNumber' \
+  --output text)"
+```
+
+Assume the `Break-Glass-Admin` role, replacing `<MFA_CODE>` with the six digit code from your authentication device:
+
+```bash
+export BREAK_GLASS_ROLE_ARN="$(aws iam list-roles \
+  --profile "${AWS_PROFILE}" \
+  --query 'Roles[?contains(RoleName, `BreakGlass`) || contains(RoleName, `break-glass`)].Arn | [0]' \
+  --output text)"
+
+aws sts assume-role \
+  --role-arn "${BREAK_GLASS_ROLE_ARN}" \
+  --role-session-name "break-glass-validation-test" \
+  --serial-number "${MFA_SERIAL}" \
+  --token-code "<MFA_CODE>" \
+  --profile "${AWS_PROFILE}" \
+  --output json
+```
+
+Expected output:
+
+```
+{
+    "Credentials": {
+        "AccessKeyId": "XXXXXX",
+        "SecretAccessKey": "XXXXXX",
+        "SessionToken": "XXXXXX",
+        "Expiration": "XXXXXX",
+    },
+    "AssumedRoleUser": {
+        "AssumedRoleId": "XXXXXX",
+        "Arn": "arn:aws:sts::<ACCOUNT_ID>:assumed-role/<CLOUD_NAME>-<ENVIRONMENT>-BreakGlass-Admin/break-glass-validation-test"
+    }
+}
+```
+
+Expected behavior after assuming the role:
 
 - CloudTrail records the role assumption.
 - EventBridge rule matches the activity.
-- SNS alert is sent.
+- Break-Glass SNS alert is sent.
 
 If testing role assumption is not appropriate, validate that:
 
@@ -1067,6 +1180,8 @@ Confirm backup and patch management resources exist if enabled.
 
 ## AWS Backup
 
+Confirm the backup vault exists:
+
 ```bash
 aws backup list-backup-vaults \
   --region "${AWS_REGION}" \
@@ -1075,10 +1190,28 @@ aws backup list-backup-vaults \
   --output table
 ```
 
+Confirm vault encryption is configured:
+
+```bash
+export BACKUP_VAULT_NAME="$(aws backup list-backup-vaults \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'BackupVaultList[0].BackupVaultName' \
+  --output text)"
+
+aws backup describe-backup-vault \
+  --backup-vault-name "${BACKUP_VAULT_NAME}" \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query '{Name:BackupVaultName,Arn:BackupVaultArn,EncryptionKeyArn:EncryptionKeyArn,RecoveryPoints:NumberOfRecoveryPoints}' \
+  --output table
+```
+
 Expected:
 
 - Backup vault exists.
-- Vault encryption is configured.
+- `EncryptionKeyArn` is populated.
+- `EncryptionKeyArn` points to the expected backup vault KMS CMK.
 
 ## SSM Patch Manager
 
@@ -1096,7 +1229,9 @@ aws ssm describe-maintenance-windows \
 
 Expected:
 
-- Patch baseline exists if enabled.
+- AWS-managed default patch baselines are visible.
+- If custom patch baselines are enabled, project-specific baselines appear.
+- If no custom patch baselines are configured, seeing only `AWS-*DefaultPatchBaseline` entries is acceptable.
 - Maintenance window exists if enabled.
 
 ---
@@ -1112,6 +1247,7 @@ Run the following workflows:
 - Terraform Plan
 - Terraform Apply
 - Terraform Destroy in a non-production environment only
+  > Ensure that the `bootstrap/<env>/account` stack has been reapplied after the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables are set before running the Terraform Destroy workflow
 
 Expected:
 
