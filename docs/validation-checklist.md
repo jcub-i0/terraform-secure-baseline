@@ -1229,7 +1229,9 @@ aws ssm describe-maintenance-windows \
 
 Expected:
 
-- Patch baseline exists if enabled.
+- AWS-managed default patch baselines are visible.
+- If custom patch baselines are enabled, project-specific baselines appear.
+- If no custom patch baselines are configured, seeing only `AWS-*DefaultPatchBaseline` entries is acceptable.
 - Maintenance window exists if enabled.
 
 ---
