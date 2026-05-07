@@ -890,7 +890,7 @@ Expected:
 
 ```text
 default
-<CLOUD_NAME>-<ENVIRONMENT>-secops-bus
+secops-bus
 ```
 
 Check the customer `SecOps` bus:
