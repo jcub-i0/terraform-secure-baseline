@@ -552,6 +552,7 @@ Expected:
 Run from inside an SSM session:
 
 ```bash
+export AWS_REGION="us-east-1"
 for h in sts ssm secretsmanager logs kms; do
   host="${h}.${AWS_REGION}.amazonaws.com"
   timeout 3 bash -c "cat < /dev/null > /dev/tcp/${host}/443" \
