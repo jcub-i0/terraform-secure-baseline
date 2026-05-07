@@ -533,6 +533,7 @@ s3
 Run from inside an SSM session:
 
 ```bash
+export AWS_REGION="us-east-1"
 getent hosts sts.${AWS_REGION}.amazonaws.com
 getent hosts ssm.${AWS_REGION}.amazonaws.com
 getent hosts secretsmanager.${AWS_REGION}.amazonaws.com
@@ -573,6 +574,8 @@ Confirm that outbound traffic behaves according to the deployed architecture.
 The default architecture may use AWS Network Firewall and NAT Gateway for controlled egress.
 
 ## Check Route Tables
+
+Run from your local CLI:
 
 ```bash
 aws ec2 describe-route-tables \
@@ -807,6 +810,7 @@ aws kms list-aliases \
 Expected aliases may include keys for:
 
 ```text
+state
 logs
 lambda
 ebs
