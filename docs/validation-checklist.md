@@ -855,7 +855,9 @@ Expected:
 
 ## Purpose
 
-Confirm that EventBridge rules on the `default` event bus exist for security automation.
+Confirm that EventBridge rules exist for security automation across all expected event buses.
+
+Check the default bus:
 
 ```bash
 aws events list-rules \
@@ -871,9 +873,10 @@ Expected rules may include:
 - Amazon Inspector rules (if enabled)
 - Security Hub high/critical finding handling
 - Tamper detection
-- Break-glass detection
+- Break-glass detection (`break-glass-admin-assumed`)
+- EC2 isolation trigger (`EC2-High-Critical`)
 
-Validate `secops` and custom event bus:
+Validate `secops` custom event bus:
 
 ```bash
 aws events list-event-buses \
@@ -886,10 +889,41 @@ aws events list-event-buses \
 Expected:
 
 ```text
-secops-bus
+default
+<CLOUD_NAME>-<ENVIRONMENT>-secops-bus
 ```
 
-or an environment-prefixed equivalent, depending on configuration.
+Check the customer `SecOps` bus:
+
+```bash
+aws events list-rules \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --event-bus-name "${CLOUD_NAME}-${ENVIRONMENT}-secops-bus" \
+  --query 'Rules[].[Name,State,EventBusName]' \
+  --output table
+```
+
+Expected rules may include:
+
+- EC2 Rollback
+
+Confirm EventBridge Targets:
+
+```bash
+aws events list-targets-by-rule \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --rule "tf-secure-baseline-dev-securityhub-high-critical" \
+  --event-bus-name default \
+  --query 'Targets[].[Id,Arn]' \
+  --output table
+```
+
+Expected targets may include:
+
+- `IpEnrichment`
+- `sec-hub-to-secops-sns`
 
 ---
 
