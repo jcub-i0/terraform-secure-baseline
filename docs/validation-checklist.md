@@ -1180,6 +1180,8 @@ Confirm backup and patch management resources exist if enabled.
 
 ## AWS Backup
 
+Confirm the backup vault exists:
+
 ```bash
 aws backup list-backup-vaults \
   --region "${AWS_REGION}" \
@@ -1188,10 +1190,28 @@ aws backup list-backup-vaults \
   --output table
 ```
 
+Confirm vault encryption is configured:
+
+```bash
+export BACKUP_VAULT_NAME="$(aws backup list-backup-vaults \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'BackupVaultList[0].BackupVaultName' \
+  --output text)"
+
+aws backup describe-backup-vault \
+  --backup-vault-name "${BACKUP_VAULT_NAME}" \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query '{Name:BackupVaultName,Arn:BackupVaultArn,EncryptionKeyArn:EncryptionKeyArn,RecoveryPoints:NumberOfRecoveryPoints}' \
+  --output table
+```
+
 Expected:
 
 - Backup vault exists.
-- Vault encryption is configured.
+- `EncryptionKeyArn` is populated.
+- `EncryptionKeyArn` points to the expected backup vault KMS CMK.
 
 ## SSM Patch Manager
 
