@@ -201,6 +201,25 @@ It provides technical cloud security foundations that should be paired with orga
 
 ---
 
+## Baseline, Not One-Size-Fits-All
+
+`tf-secure-baseline` is intended to be a **secure starting point**, not a universal product that fits every organization without changes.
+
+It provides opinionated defaults for common SaaS security needs, but every organization should review and adapt the baseline based on:
+
+- Application architecture
+- Data sensitivity
+- Compliance requirements
+- Network requirements
+- Existing identity model
+- CI/CD tooling
+- Budget constraints
+- Operational maturity
+
+The goal is to provide a strong foundation that teams can safely extend, not to replace environment-specific design decisions.
+
+---
+
 ## Adoption Maturity
 
 ### Good Fit
