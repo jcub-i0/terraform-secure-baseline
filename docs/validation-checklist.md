@@ -855,24 +855,23 @@ Expected:
 
 ## Purpose
 
-Confirm that EventBridge rules exist for security automation.
+Confirm that EventBridge rules on the `default` event bus exist for security automation.
 
 ```bash
 aws events list-rules \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
+  --event-bus-name default \
   --query 'Rules[].[Name,State,EventBusName]' \
   --output table
 ```
 
 Expected rules may include:
 
+- Amazon Inspector rules (if enabled)
 - Security Hub high/critical finding handling
-- EC2 isolation trigger
-- IP enrichment trigger
 - Tamper detection
 - Break-glass detection
-- EC2 rollback trigger on the SecOps event bus
 
 Validate `secops` and custom event bus:
 
