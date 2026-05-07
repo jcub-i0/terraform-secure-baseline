@@ -298,9 +298,9 @@ The control-plane account should manage:
 
 Workload accounts should host:
 
-- Dev baseline
-- Staging baseline
-- Prod baseline
+- Dev baseline and GitHub OIDC resources
+- Staging baseline and GitHub OIDC resources
+- Prod baseline and GitHub OIDC resources
 
 ---
 
@@ -331,13 +331,13 @@ Deploy `dev` first before deploying `staging` or `prod`.
 
 ## Phase 4 - Validate Controls
 
-After deployment, run:
+After deployment, review:
 
 ```text
 docs/validation-checklist.md
 ```
 
-Then run the Lambda workflow tests:
+Then run the Lambda workflow tests located at:
 
 ```text
 docs/lambda_tests/ec2_isolation.md
@@ -397,7 +397,7 @@ Before using the baseline for production workloads, review:
 
 ## Configuration Decisions
 
-Before adopting this baseline, answer the following questions.
+Before adopting this baseline, answer the following questions:
 
 ### Account Strategy
 
@@ -488,7 +488,7 @@ Before adopting this baseline, answer the following questions.
 
 Terraform state is sensitive and must be protected.
 
-State buckets should have:
+State buckets are automatically deployed with:
 
 - Encryption
 - Versioning
@@ -496,7 +496,7 @@ State buckets should have:
 - Locking
 - Controlled bucket administration
 
-The `state` substacks are applied locally first and should be handled carefully.
+The `state` substacks are applied locally first and should be handled carefully. After initial deployment, the local states can (and should) be moved to a more secure remote location.
 
 ---
 
@@ -508,7 +508,7 @@ The `account` substacks should be modified carefully.
 
 Do not destroy account stacks before destroying the baseline stacks they manage.
 
-The control-plane account stack should generally be treated as manual/local-only because it creates the roles GitHub uses to access the control plane.
+The `control-plane` account stack should generally be treated as manual/local-only because it creates the roles GitHub uses to access the control plane.
 
 ---
 
