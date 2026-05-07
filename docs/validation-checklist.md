@@ -874,7 +874,7 @@ Expected rules may include:
 - Break-glass detection
 - EC2 rollback trigger on the SecOps event bus
 
-Validate custom event bus:
+Validate `secops` and custom event bus:
 
 ```bash
 aws events list-event-buses \
