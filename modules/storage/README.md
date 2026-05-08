@@ -644,12 +644,11 @@ Expected:
 
 ### Confirm RDS Log Exports
 
-# CHECK ON THIS
 ```bash
 aws rds describe-db-instances \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --query 'DBInstances[].[DBInstanceIdentifier,EnabledCloudwatchLogsExports]' \
+  --query 'DBInstances[].{DBInstanceIdentifier:DBInstanceIdentifier,EnabledCloudwatchLogsExports:join(`, `, EnabledCloudwatchLogsExports)}' \
   --output table
 ```
 
