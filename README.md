@@ -468,6 +468,7 @@ Each module also includes its own local README.md.
 ### v1.1
 Potential improvements:
 
+- Dedicated subnets for Interface VPC Endpoints
 - Add configurable egress inspection modes:
   - network_firewall
   - nat_only
