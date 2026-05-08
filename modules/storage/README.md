@@ -579,22 +579,24 @@ This provides an additional Terraform-level guardrail against accidental deletio
 
 ```hcl
 module "storage" {
-  source = "../../modules/storage"
+  source = "../modules/storage"
 
   name_prefix                  = local.name_prefix
   environment                  = var.environment
   vpc_id                       = module.networking.vpc_id
-  db_port                      = "5432"
-  compute_sg_id                = module.networking.compute_sg_id
-  data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
+  account_id                   = data.aws_caller_identity.current.account_id
+  random_id                    = random_id.random_id.hex
+
+  db_port                      = var.db_port
   db_username                  = var.db_username
-  logs_cmk_arn                 = module.logging.logs_cmk_arn
-  account_id                   = var.account_id
-  random_id                    = random_id.bucket_suffix.hex
+
+  compute_sg_id                = module.compute.compute_sg_id
+  data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
+
+  logs_cmk_arn                 = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
   cloudtrail_arn               = module.logging.cloudtrail_arn
   bucket_admin_principals      = var.bucket_admin_principals
-  secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
-  cloud_name                   = var.cloud_name
 }
 ```
 
