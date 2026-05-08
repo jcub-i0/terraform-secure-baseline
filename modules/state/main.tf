@@ -61,7 +61,7 @@ resource "aws_kms_key" "state" {
 
 ## ALIAS FOR STATE CMK / KMS KEY
 resource "aws_kms_alias" "state" {
-  name          = "alias/${var.name_prefix}-state"
+  name          = "alias/${var.name_prefix}/state"
   target_key_id = aws_kms_key.state.key_id
 }
 
