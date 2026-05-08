@@ -447,6 +447,7 @@ The same pattern is used for each subnet tier.
 | `cloud_name` | Cloud or project name used by the broader baseline | Yes |
 | `azs` | List of Availability Zones where subnets and NAT Gateways are created | Yes |
 | `subnet_cidrs` | Map of subnet CIDR lists for each subnet tier | Yes |
+| `firewall_endpoint_ids_by_az` | Map of AWS Network Firewall endpoint IDs keyed by Availability Zone; used when routing private subnet egress through firewall endpoints | Yes |
 
 ---
 
@@ -542,14 +543,17 @@ Common examples:
 
 ```hcl
 module "networking" {
-  source = "../../modules/networking"
+module "networking" {
+  source = "../modules/networking"
 
-  name_prefix  = local.name_prefix
+  name_prefix   = local.name_prefix
+  environment   = var.environment
+  cloud_name    = var.cloud_name
   main_vpc_cidr = var.main_vpc_cidr
-  environment  = var.environment
-  cloud_name   = var.cloud_name
-  azs          = var.azs
-  subnet_cidrs = var.subnet_cidrs
+  azs           = var.azs
+  subnet_cidrs  = var.subnet_cidrs
+  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+}
 }
 ```
 
