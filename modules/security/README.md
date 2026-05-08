@@ -906,11 +906,18 @@ Check:
 Useful command:
 
 ```bash
-aws guardduty list-detector-features \
+aws guardduty get-detector \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --detector-id "${GUARDDUTY_DETECTOR_ID}"
+  --detector-id "${GUARDDUTY_DETECTOR_ID}" \
+  --query 'Features[].[Name,Status]' \
+  --output table
 ```
+
+Expected:
+
+- Configured GuardDuty features are listed
+- Enabled features show `ENABLED`
 
 ---
 
