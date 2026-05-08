@@ -560,7 +560,6 @@ This provides an additional Terraform-level guardrail against accidental deletio
 | `cloudtrail_arn` | CloudTrail ARN input for integration with logging resources | Yes |
 | `bucket_admin_principals` | List of IAM principal ARNs allowed to modify protected bucket settings | Yes |
 | `secrets_manager_cmk_arn` | KMS CMK ARN used to encrypt the RDS master secret | Yes |
-| `cloud_name` | Cloud or project name used by the broader baseline | Yes |
 
 ---
 
