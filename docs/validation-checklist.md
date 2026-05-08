@@ -518,7 +518,6 @@ Common endpoints include:
 ```text
 ssm
 ssmmessages
-ec2messages
 logs
 kms
 secretsmanager
