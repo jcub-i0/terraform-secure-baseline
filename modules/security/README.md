@@ -154,7 +154,7 @@ NIST 800-53 v5.0.0
 PCI DSS v4.0.1
 ```
 
-Only uncommented standards in `local.securityhub_standards` are subscribed.
+Only uncommented standards in `local.securityhub_standards` are subscribed. If you wish to enable any additional features, simply uncomment them in the `securityhub_standards` local variable.
 
 ---
 
