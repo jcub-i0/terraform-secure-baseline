@@ -195,10 +195,12 @@ module "vpc_endpoints" {
   environment                         = var.environment
   account_id                          = data.aws_caller_identity.current.account_id
   primary_region                      = var.primary_region
+
   compute_private_subnet_ids_map      = module.networking.compute_private_subnet_ids_map
   serverless_private_subnet_ids_map   = module.networking.serverless_private_subnet_ids_map
   subnet_cidrs                        = var.subnet_cidrs
   compute_sg_id                       = module.compute.compute_sg_id
+  
   lambda_ec2_isolation_sg_id          = module.automation.lambda_ec2_isolation_sg_id
   lambda_ec2_rollback_sg_id           = module.automation.lambda_ec2_rollback_sg_id
   compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
