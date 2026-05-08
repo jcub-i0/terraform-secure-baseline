@@ -63,20 +63,22 @@ module "compute" {
 module "storage" {
   source = "../modules/storage"
 
-  name_prefix                  = local.name_prefix
-  vpc_id                       = module.networking.vpc_id
-  environment                  = var.environment
-  db_port                      = var.db_port
+  name_prefix = local.name_prefix
+  environment = var.environment
+  vpc_id      = module.networking.vpc_id
+  account_id  = data.aws_caller_identity.current.account_id
+  random_id   = random_id.random_id.hex
+
+  db_port     = var.db_port
+  db_username = var.db_username
+
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
-  db_username                  = var.db_username
-  logs_cmk_arn                 = module.security.logs_cmk_arn
-  account_id                   = data.aws_caller_identity.current.account_id
-  random_id                    = random_id.random_id.hex
-  cloudtrail_arn               = module.logging.cloudtrail_arn
-  bucket_admin_principals      = var.bucket_admin_principals
-  secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
-  cloud_name                   = var.cloud_name
+
+  logs_cmk_arn            = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
+  cloudtrail_arn          = module.logging.cloudtrail_arn
+  bucket_admin_principals = var.bucket_admin_principals
 }
 
 module "iam" {
