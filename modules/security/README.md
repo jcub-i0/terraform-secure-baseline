@@ -473,7 +473,7 @@ enable_rules = {
 
 The IAM baseline is disabled by default.
 
-This is likely because IAM/global resource recording can require additional AWS Config behavior and should be enabled intentionally.
+This is because IAM/global resource recording can require additional AWS Config behavior and should be enabled intentionally.
 
 ---
 
