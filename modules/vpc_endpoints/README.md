@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `vpc_endpoints` module provisions private AWS service access for the workload VPC.
+The `vpc_endpoints` module provisions private AWS service access for the workload VPCs.
 
 This module creates:
 
