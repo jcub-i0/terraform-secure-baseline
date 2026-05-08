@@ -25,14 +25,14 @@ resource "random_id" "random_id" { byte_length = 4 }
 module "networking" {
   source = "../modules/networking"
 
-  name_prefix   = local.name_prefix
-  environment   = var.environment
-  cloud_name    = var.cloud_name
+  name_prefix = local.name_prefix
+  environment = var.environment
+  cloud_name  = var.cloud_name
 
   main_vpc_cidr = var.main_vpc_cidr
   subnet_cidrs  = var.subnet_cidrs
   azs           = var.azs
-  
+
   # firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 
