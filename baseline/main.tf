@@ -76,7 +76,6 @@ module "storage" {
   cloudtrail_arn               = module.logging.cloudtrail_arn
   bucket_admin_principals      = var.bucket_admin_principals
   secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
-  cloud_name                   = var.cloud_name
 }
 
 module "iam" {
