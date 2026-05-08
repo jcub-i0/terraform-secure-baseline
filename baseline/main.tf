@@ -113,16 +113,16 @@ module "security" {
   current_region               = data.aws_region.current.region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
-  guardduty_features           = var.guardduty_features
-  enable_rules                 = var.enable_rules
+  guardduty_features = var.guardduty_features
+  enable_rules       = var.enable_rules
 
-  config_enabled               = var.config_enabled
-  config_role_arn              = module.iam.config_role_arn
-  config_remediation_role_arn  = module.iam.config_remediation_role_arn
+  config_enabled              = var.config_enabled
+  config_role_arn             = module.iam.config_role_arn
+  config_remediation_role_arn = module.iam.config_remediation_role_arn
 
-  compliance_topic_arn         = module.monitoring.compliance_topic_arn
-  secops_topic_arn             = module.monitoring.secops_topic_arn
-  secops_event_bus_name        = module.automation.secops_event_bus_name
+  compliance_topic_arn  = module.monitoring.compliance_topic_arn
+  secops_topic_arn      = module.monitoring.secops_topic_arn
+  secops_event_bus_name = module.automation.secops_event_bus_name
 }
 
 module "logging" {
