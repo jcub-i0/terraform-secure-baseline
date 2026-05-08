@@ -473,7 +473,7 @@ enable_rules = {
 
 The IAM baseline is disabled by default.
 
-This is because IAM/global resource recording can require additional AWS Config behavior and should be enabled intentionally.
+This is because IAM/global resource recording can require additional AWS Config behavior and should be enabled intentionally. The `iam_policy_changes` Log Metric Filter resource, defined in the `monitoring` module, also does a great job at notifying upon suspicious actions relating to IAM policies.
 
 ---
 
