@@ -505,7 +505,7 @@ Expected:
 - Instances are in private compute subnets
 - Instances have private IP addresses
 - Public IP address should be empty or `None`
-- Instance type is `t3.micro`
+- Instance type is `t3.micro` (or whatever is configured)
 
 ---
 
