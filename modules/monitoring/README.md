@@ -864,7 +864,7 @@ Break-glass usage should be investigated immediately unless it is tied to a know
 
 SNS email subscriptions do not become active until the recipient confirms the subscription.
 
-After deploying this module, each address in `secops_emails` should receive a confirmation email.
+After deploying this module, each address in the `secops_emails` variable should receive a confirmation email.
 
 Until confirmed, the subscription remains in:
 
