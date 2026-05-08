@@ -125,12 +125,12 @@ module "security" {
 module "logging" {
   source = "../modules/logging"
 
-  cloud_name                  = var.cloud_name
-  environment                 = var.environment
-  name_prefix                 = local.name_prefix
+  cloud_name  = var.cloud_name
+  environment = var.environment
+  name_prefix = local.name_prefix
 
-  vpc_id                      = module.networking.vpc_id
-  account_id                  = data.aws_caller_identity.current.account_id
+  vpc_id     = module.networking.vpc_id
+  account_id = data.aws_caller_identity.current.account_id
 
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
