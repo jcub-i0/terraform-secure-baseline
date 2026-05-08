@@ -699,16 +699,28 @@ Expected:
 
 ### Confirm Centralized Logs Bucket Exists
 
+List the S3 buckets in the account:
+
 ```bash
-aws s3api head-bucket \
-  --bucket "${CENTRALIZED_LOGS_BUCKET}" \
+aws s3 ls \
   --profile "${AWS_PROFILE}"
 ```
 
 Expected:
 
-- Command succeeds
-- No output is returned on success
+- The Terraform state bucket is listed.
+- The centralized logs bucket is listed.
+- The centralized logs bucket name includes the expected naming pattern:
+
+```text
+<name_prefix>-centralized-logs-<random_id>
+```
+
+Notes:
+
+- This confirms the bucket is visible to the caller.
+- This command is useful as a quick account-level sanity check.
+- Use the centralized logs bucket name from this output for the more specific bucket validation commands below.
 
 ---
 
@@ -716,7 +728,7 @@ Expected:
 
 ```bash
 aws s3api get-bucket-encryption \
-  --bucket "${CENTRALIZED_LOGS_BUCKET}" \
+  --bucket "${CENTRALIZED_LOGS_BUCKET_NAME}" \
   --profile "${AWS_PROFILE}"
 ```
 
