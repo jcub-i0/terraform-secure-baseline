@@ -706,6 +706,7 @@ aws kms list-aliases \
 
 Expected aliases include:
 
+- `alias/<name_prefix>/state-cmk`
 - `alias/<name_prefix>/logs-cmk`
 - `alias/<name_prefix>/ebs-cmk`
 - `alias/<name_prefix>/lambda-cmk`
