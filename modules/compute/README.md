@@ -832,23 +832,37 @@ If the environment uses controlled egress, confirm:
 
 ### EBS Volume Is Not Encrypted With Expected Key
 
-Check:
-
-- `ebs_cmk_arn` points to the expected EBS CMK
-- The KMS key is enabled
-- EC2 has permission to use the key
-- The root block device was created after the correct key was configured
-
-Useful command:
+First, get the EBS volume IDs attached to the Terraform-managed EC2 instances:
 
 ```bash
+INSTANCE_IDS=$(aws ec2 describe-instances \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
+  --query 'Reservations[].Instances[].InstanceId' \
+  --output text)
+
+VOLUME_IDS=$(aws ec2 describe-instances \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --instance-ids ${INSTANCE_IDS} \
+  --query 'Reservations[].Instances[].BlockDeviceMappings[].Ebs.VolumeId' \
+  --output text)
+
 aws ec2 describe-volumes \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
-  --query 'Volumes[].[VolumeId,Encrypted,KmsKeyId]' \
+  --volume-ids ${VOLUME_IDS} \
+  --query 'Volumes[].[VolumeId,Encrypted,KmsKeyId,Size,VolumeType,State]' \
   --output table
 ```
+
+Expected:
+
+- Encrypted is `true`
+- KMS key is the expected EBS CMK
+- Volume type is `gp3`
+- Volume size is 20 GB
 
 ---
 
