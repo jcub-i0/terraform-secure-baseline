@@ -133,11 +133,13 @@ This design keeps endpoint access restricted to known internal security groups i
 
 ## Network Placement
 
-Interface Endpoints are deployed into the compute private subnets:
+Interface Endpoints are currently deployed into the compute private subnets. This is acceptable for the current baseline because the endpoints primarily support private compute workloads and security automation.
 
 ```hcl
 local.interface_endpoint_subnets = var.compute_private_subnet_ids_map
 ```
+
+In a larger production deployment, dedicated endpoint subnets may be preferred to separate endpoint ENIs from workload ENIs and reduce private IP consumption in compute subnets. This will likely be a feature in a future release.
 
 The S3 Gateway Endpoint is associated with the compute private route tables:
 
