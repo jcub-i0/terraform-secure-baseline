@@ -108,18 +108,21 @@ module "security" {
   name_prefix                  = local.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
-  config_role_arn              = module.iam.config_role_arn
-  centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
-  current_region               = data.aws_region.current.region
   account_id                   = data.aws_caller_identity.current.account_id
-  compliance_topic_arn         = module.monitoring.compliance_topic_arn
   primary_region               = var.primary_region
-  guardduty_features           = var.guardduty_features
-  config_remediation_role_arn  = module.iam.config_remediation_role_arn
-  secops_event_bus_name        = module.automation.secops_event_bus_name
-  secops_topic_arn             = module.monitoring.secops_topic_arn
-  enable_rules                 = var.enable_rules
-  config_enabled               = var.config_enabled
+  current_region               = data.aws_region.current.region
+  centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
+
+  guardduty_features = var.guardduty_features
+  enable_rules       = var.enable_rules
+
+  config_enabled              = var.config_enabled
+  config_role_arn             = module.iam.config_role_arn
+  config_remediation_role_arn = module.iam.config_remediation_role_arn
+
+  compliance_topic_arn  = module.monitoring.compliance_topic_arn
+  secops_topic_arn      = module.monitoring.secops_topic_arn
+  secops_event_bus_name = module.automation.secops_event_bus_name
 }
 
 module "logging" {
