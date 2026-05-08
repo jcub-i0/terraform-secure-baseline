@@ -904,6 +904,39 @@ If this route is enabled later, ensure firewall endpoint IDs are passed by Avail
 
 ---
 
+### Network Firewall Traffic Control
+
+AWS Network Firewall is not intended to act as a simple pass-through route to the Internet.
+
+The broader baseline design uses Network Firewall as an egress inspection and control layer. Private workload traffic should be routed through Network Firewall before reaching NAT Gateway, allowing firewall policy rules to restrict outbound access.
+
+Depending on the firewall policy, this can support controls such as:
+
+- Allowing only approved outbound destinations
+- Restricting traffic by domain or protocol
+- Blocking known malicious destinations
+- Enforcing centralized egress inspection
+- Creating a controlled choke point for private subnet internet access
+
+The intended model is:
+
+```text
+Private Compute Subnets
+    |
+    v
+AWS Network Firewall policy enforcement
+    |
+    v
+NAT Gateway
+    |
+    v
+Internet Gateway
+```
+
+This means private workloads should not be treated as having unrestricted internet access just because a NAT Gateway exists.
+
+---
+
 ### Security Group Policy Is Separate
 
 The parent networking module creates the VPC and route structure.
