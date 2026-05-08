@@ -327,7 +327,14 @@ EventBridge Rule
 EC2 Isolation Lambda
     |
     v
+Snapshot EBS volume(s)
+    |
+    v
 Replace instance security groups with Quarantine SG
+    |
+    v
+Update instance tags
+
 ```
 
 This allows high or critical EC2 findings to trigger automated containment.
