@@ -77,7 +77,7 @@ This module has no outputs.
 
 ## Usage Example
 
-%%%hcl
+```hcl
 module "security_policy" {
   source = "../../modules/networking/security_policy"
 
@@ -88,7 +88,7 @@ module "security_policy" {
   lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
   db_port                    = var.db_port
 }
-%%%
+```
 
 ---
 
