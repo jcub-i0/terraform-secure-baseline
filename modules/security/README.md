@@ -666,7 +666,8 @@ aws inspector2 batch-get-account-status \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --account-ids "${ACCOUNT_ID}" \
-  --query 'accounts[0].resourceStatus'
+  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
+  --output table
 ```
 
 Expected:
