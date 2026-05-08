@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `security` module provisions core AWS security services, encryption keys, and security control integrations for the workload environment.
+The `security` module provisions core AWS security services, encryption keys, and security control integrations for the workload environments.
 
 This includes:
 
