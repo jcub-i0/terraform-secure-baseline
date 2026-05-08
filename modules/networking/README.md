@@ -552,7 +552,7 @@ module "networking" {
   main_vpc_cidr = var.main_vpc_cidr
   subnet_cidrs  = var.subnet_cidrs
   azs           = var.azs
-  
+
   firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 ```
@@ -561,14 +561,14 @@ Example with security policy child module wiring in the root stack:
 
 ```hcl
 module "security_policy" {
-  source = "../../modules/networking/security_policy"
+  source = "../modules/networking/security_policy"
 
-  interface_endpoints_sg_id    = module.vpc_endpoints.interface_endpoints_sg_id
-  compute_sg_id                = module.compute.compute_sg_id
-  data_sg_id                   = module.storage.data_sg_id
-  db_port                      = var.db_port
-  lambda_ec2_isolation_sg_id   = module.automation.lambda_ec2_isolation_sg_id
-  lambda_ec2_rollback_sg_id    = module.automation.lambda_ec2_rollback_sg_id
+  compute_sg_id              = module.compute.compute_sg_id
+  data_sg_id                 = module.storage.data_sg_id
+  lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
+  lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
+  interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
+  db_port                    = var.db_port
 }
 ```
 
