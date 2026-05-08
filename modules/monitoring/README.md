@@ -213,7 +213,7 @@ EventBridge permissions are scoped with source account and source ARN conditions
 
 ### SecOps Email Subscriptions
 
-Creates email subscriptions for each address in `secops_emails`:
+Creates email subscriptions for each address in the `secops_emails` variable:
 
 ```hcl
 resource "aws_sns_topic_subscription" "secops"
