@@ -454,7 +454,7 @@ Also check:
 
 Note:
 
-If the `ec2messages` endpoint is not present, SSM behavior may vary depending on the operating system, agent version, and AWS service requirements. Add it if Session Manager connectivity is unreliable.
+This module intentionally does not create an ec2messages endpoint. AWS recommends using ssmmessages for Systems Manager communication, and ec2messages is not supported in AWS Regions launched in 2024 or later.
 
 ---
 
