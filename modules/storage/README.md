@@ -453,7 +453,7 @@ This supports centralized firewall flow log delivery into the logs bucket.
 
 ## Important Production Notes
 
-Several resources currently include comments indicating settings that should be changed for production.
+Several resources currently include comments indicating settings that should be changed for production. They do not have the production-ready values to enable testing and demos during initial deployment.
 
 ### RDS Deletion Protection
 
