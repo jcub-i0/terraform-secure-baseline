@@ -796,7 +796,7 @@ Expected:
 
 ```bash
 aws s3api get-bucket-policy \
-  --bucket "${CENTRALIZED_LOGS_BUCKET}" \
+  --bucket "${CENTRALIZED_LOGS_BUCKET_NAME}" \
   --profile "${AWS_PROFILE}" \
   --query Policy \
   --output text
