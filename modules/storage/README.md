@@ -879,12 +879,12 @@ These principals are allowed to modify protected bucket settings such as:
 - Bucket policy
 - Versioning configuration
 
-Include only trusted administrative principals.
+Include only trusted administrative principals in the `bucket_admin_principals` variable before applying.
 
 Common examples may include:
 
-- Account admin role
-- Break-glass role
+- Account admin principal (roll or user)
+- Break-glass principal (roll or user)
 - GitHub Apply role, if CI/CD manages this bucket
 - Account root, if intentionally used as an administrative fallback
 
