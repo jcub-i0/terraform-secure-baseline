@@ -477,7 +477,7 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled" {
   }
 }
 
-### IAM POLICY CHANGES (CONSIDER ALSO ADDING 'DeletePolicy', 'DetachRolePolicy', and 'UpdateAssumeRolePolicy')
+### IAM POLICY CHANGES
 resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
   name           = "IamPolicyChanges"
   log_group_name = var.cloudtrail_logs_group_name
