@@ -218,6 +218,8 @@ Several keys currently include:
 prevent_destroy = false # CHANGE THIS IN PROD
 ```
 
+This is to promote simplicity during initial deployment testing/demo operations.
+
 For production, review whether `prevent_destroy` should be set to `true`.
 
 ---
