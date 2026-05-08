@@ -125,17 +125,20 @@ module "security" {
 module "logging" {
   source = "../modules/logging"
 
-  name_prefix                 = local.name_prefix
-  environment                 = var.environment
   cloud_name                  = var.cloud_name
-  centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
-  logs_cmk_arn                = module.security.logs_cmk_arn
-  cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
-  account_id                  = data.aws_caller_identity.current.account_id
-  flowlogs_role_arn           = module.iam.flowlogs_role_arn
+  environment                 = var.environment
+  name_prefix                 = local.name_prefix
+
   vpc_id                      = module.networking.vpc_id
-  firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
+  account_id                  = data.aws_caller_identity.current.account_id
+
+  centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
+  logs_cmk_arn                = module.security.logs_cmk_arn
+
+  cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
+  flowlogs_role_arn           = module.iam.flowlogs_role_arn
+  firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
   cw_to_firehose_role_arn     = module.iam.cw_to_firehose_role_arn
 }
 
