@@ -1294,7 +1294,19 @@ Check:
 
 - Instance has SSM agent installed and running.
 - Instance IAM role includes SSM permissions.
-- Interface endpoints exist for `ssm`, `ssmmessages`, and `ec2messages`.
+- Interface endpoints exist for:
+  - `sts`
+  - `logs`
+  - `ssm`
+  - `ssmmessages`
+  - `secretsmanager`
+  - `kms`
+  - `config`
+  - `sns`
+  - `ec2`
+  - `events`
+  - `securityhub`
+  - `lambda`
 - Endpoint security group allows inbound 443 from workload security group.
 - Workload security group allows outbound 443 to endpoint security group.
 - Instance has network path to SSM endpoints.
