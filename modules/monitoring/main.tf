@@ -482,7 +482,20 @@ resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
   name           = "IamPolicyChanges"
   log_group_name = var.cloudtrail_logs_group_name
 
-  pattern = "{ ($.eventSource = \"iam.amazonaws.com\") && (($.eventName = \"CreatePolicy\") || ($.eventName = \"PutRolePolicy\") || ($.eventName = \"AttachRolePolicy\") || ($.eventName = \"DeletePolicy\" || ($.eventName = \"DetachRolePolicy\" || ($.eventName = \"UpdateAssumeRolePolicy\"))))}"
+  pattern = join(" ", [
+    "{",
+    "($.eventSource = \"iam.amazonaws.com\")",
+    "&&",
+    "(",
+    "($.eventName = \"CreatePolicy\")",
+    "|| ($.eventName = \"PutRolePolicy\")",
+    "|| ($.eventName = \"AttachRolePolicy\")",
+    "|| ($.eventName = \"DeletePolicy\")",
+    "|| ($.eventName = \"DetachRolePolicy\")",
+    "|| ($.eventName = \"UpdateAssumeRolePolicy\")",
+    ")",
+    "}",
+  ])
 
   metric_transformation {
     name      = "IamPolicyChanges"
