@@ -628,7 +628,16 @@ If instances do not appear, check IAM instance profile permissions, SSM Agent st
 
 ### Confirm Bootstrap Log
 
-From an SSM Session Manager session on the instance:
+Start an SSM Session Manager session on the instance:
+
+```bash
+aws ssm start-session \
+  --target "${INSTANCE_ID}" \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}"
+```
+
+From that SSM Session Manager session:
 
 ```bash
 sudo cat /var/log/instance-bootstrap.log
@@ -700,6 +709,8 @@ set -euo pipefail
 ```
 
 This means unexpected command failures can stop the script early.
+
+Also ensure that the EC2 instance has a valid outbound path for package installation and AWS service access, either through controlled NAT egress, approved firewall rules, or required VPC endpoints.
 
 ---
 
