@@ -498,35 +498,23 @@ This is because IAM/global resource recording can require additional AWS Config 
 
 ```hcl
 module "security" {
-  source = "../../modules/security"
+  source = "../modules/security"
 
-  cloud_name                   = var.cloud_name
   name_prefix                  = local.name_prefix
+  cloud_name                   = var.cloud_name
   environment                  = var.environment
-  primary_region               = var.primary_region
-  current_region               = var.primary_region
-  account_id                   = var.account_id
-
   config_role_arn              = module.iam.config_role_arn
-  config_remediation_role_arn  = module.iam.config_remediation_role_arn
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
+  current_region               = data.aws_region.current.region
+  account_id                   = data.aws_caller_identity.current.account_id
   compliance_topic_arn         = module.monitoring.compliance_topic_arn
-  secops_topic_arn             = module.monitoring.secops_topic_arn
-  secops_event_bus_name        = module.automation.secops_event_bus_name
-
-  config_enabled               = true
+  primary_region               = var.primary_region
   guardduty_features           = var.guardduty_features
-
-  enable_rules = {
-    s3_baseline         = true
-    cloudtrail_baseline = true
-    rds_baseline        = true
-    ebs_baseline        = true
-    sg_baseline         = true
-    iam_baseline        = false
-    ec2_baseline        = true
-    kms_baseline        = true
-  }
+  config_remediation_role_arn  = module.iam.config_remediation_role_arn
+  secops_event_bus_name        = module.automation.secops_event_bus_name
+  secops_topic_arn             = module.monitoring.secops_topic_arn
+  enable_rules                 = var.enable_rules
+  config_enabled               = var.config_enabled
 }
 ```
 
