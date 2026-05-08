@@ -216,7 +216,7 @@ module "vpc_endpoints" {
   serverless_private_subnet_ids_map   = module.networking.serverless_private_subnet_ids_map
   subnet_cidrs                        = var.subnet_cidrs
   compute_sg_id                       = module.compute.compute_sg_id
-  
+
   lambda_ec2_isolation_sg_id          = module.automation.lambda_ec2_isolation_sg_id
   lambda_ec2_rollback_sg_id           = module.automation.lambda_ec2_rollback_sg_id
   compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
@@ -345,6 +345,7 @@ Expected:
 From an EC2 instance in a private compute subnet:
 
 ```bash
+export AWS_REGION="us-east-1"
 dig ssm.${AWS_REGION}.amazonaws.com
 dig logs.${AWS_REGION}.amazonaws.com
 dig kms.${AWS_REGION}.amazonaws.com
@@ -368,8 +369,12 @@ aws ssm describe-instance-information \
 
 Expected:
 
-- Private EC2 instances managed by SSM appear in the output
-- Instances do not require public IP addresses for SSM management
+- Private EC2 instances appear in Systems Manager.
+- `PingStatus` is `Online`.
+- `LastPingDateTime` is recent.
+- Inspector-created Linux associations may show `Success`.
+- Inspector-created non-Linux associations may show `Skipped` with `InvalidPlatform` on Ubuntu/Linux instances.
+- `InvalidPlatform` on skipped Inspector associations does not indicate SSM connectivity failure when the Linux Inspector associations are successful.
 
 ---
 
