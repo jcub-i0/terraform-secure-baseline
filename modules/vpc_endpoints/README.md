@@ -443,7 +443,6 @@ Check that these endpoints exist and are available:
 ```text
 ssm
 ssmmessages
-ec2messages
 ```
 
 Also check:
