@@ -610,7 +610,7 @@ Expected:
 ### Confirm GuardDuty Features
 
 ```bash
-aws guardduty list-detector-features \
+aws guardduty get-detector \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --detector-id "${GUARDDUTY_DETECTOR_ID}" \
