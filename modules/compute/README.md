@@ -421,21 +421,20 @@ Management should generally occur through AWS Systems Manager Session Manager.
 
 ```hcl
 module "compute" {
-  source = "../../modules/compute"
+  source = "../modules/compute"
 
-  name_prefix                   = local.name_prefix
-  vpc_id                        = module.networking.vpc_id
-  environment                   = var.environment
+  name_prefix                    = local.name_prefix
+  vpc_id                         = module.networking.vpc_id
+  environment                    = var.environment
+
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
+  instance_profile_name          = module.iam.instance_profile_name
+  ebs_cmk_arn                    = module.security.ebs_cmk_arn
 
-  instance_profile_name         = module.iam.ec2_instance_profile_name
-  ebs_cmk_arn                   = module.security.ebs_cmk_arn
-
-  interface_endpoints_sg_id     = module.vpc_endpoints.interface_endpoints_sg_id
-  data_sg_id                    = module.storage.data_sg_id
-  db_port                       = var.db_port
-
-  patch_tag_value               = var.patch_tag_value
+  interface_endpoints_sg_id      = module.vpc_endpoints.interface_endpoints_sg_id
+  data_sg_id                     = module.storage.data_sg_id
+  db_port                        = var.db_port
+  patch_tag_value                = var.patch_tag_value
 }
 ```
 
