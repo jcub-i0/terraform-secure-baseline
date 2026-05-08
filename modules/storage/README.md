@@ -644,6 +644,7 @@ Expected:
 
 ### Confirm RDS Log Exports
 
+# CHECK ON THIS
 ```bash
 aws rds describe-db-instances \
   --region "${AWS_REGION}" \
@@ -778,7 +779,7 @@ Expected:
 
 ```bash
 aws s3api get-bucket-lifecycle-configuration \
-  --bucket "${CENTRALIZED_LOGS_BUCKET}" \
+  --bucket "${CENTRALIZED_LOGS_BUCKET_NAME}" \
   --profile "${AWS_PROFILE}"
 ```
 
