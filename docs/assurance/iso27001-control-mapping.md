@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes how `tf-secure-baseline` infrastructure controls align with selected ISO/IEC 27001:2022 Annex A control themes.
+This document describes how `tf-secure-baseline` infrastructure controls align with selected **ISO/IEC 27001:2022 Annex A** control themes.
 
 The baseline is designed to support ISO 27001 readiness by implementing technical safeguards across AWS environments that handle sensitive data, such as PII.
 
