@@ -1,6 +1,5 @@
 # SNS and SQS
 ## SNS RESOURCES FOR CONFIG
-### CONFIG DOES NOT HAVE AN SNS SUBSCRIPTION (YET)
 ### CONFIG SNS TOPIC
 resource "aws_sns_topic" "compliance" {
   name              = "${var.name_prefix}-compliance-notifications"
