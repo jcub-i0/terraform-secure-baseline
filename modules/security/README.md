@@ -672,10 +672,10 @@ aws inspector2 batch-get-account-status \
 
 Expected:
 
-- EC2 scanning is enabled
-- Lambda scanning is enabled
-- Lambda code scanning is enabled
-
+- Account status is `ENABLED`
+- EC2 scanning is `ENABLED`
+- Lambda scanning is `ENABLED`
+- Lambda code scanning is `ENABLED`
 ---
 
 ### Confirm Inspector Security Hub Product Subscription
