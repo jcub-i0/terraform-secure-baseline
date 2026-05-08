@@ -148,11 +148,7 @@ The secret uses the Secrets Manager CMK:
 kms_key_id = var.secrets_manager_cmk_arn
 ```
 
-The secret name uses a generated suffix through `name_prefix`:
-
-```hcl
-name_prefix = "${var.name_prefix}/database/rds-master-"
-```
+The secret name uses a generated suffix through the `name_prefix` variable.
 
 ---
 
