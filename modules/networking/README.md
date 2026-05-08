@@ -18,6 +18,7 @@ This includes:
 - Public route tables
 - Private route tables
 - Route table associations
+- AWS Network Firewall egress routing
 - Outputs for downstream modules
 - Security group rule wiring through the `security_policy` child module
 
@@ -40,10 +41,10 @@ It supports:
 - Per-AZ route table segmentation
 - DNS support for private AWS service access
 - Downstream VPC endpoint deployment
-- Downstream Network Firewall routing integration
+- Network Firewall routing integration
 - Centralized security group rule management through the `security_policy` child module
 
-The module is designed to provide the baseline network structure without tightly coupling every route, firewall, and security group behavior into a single file.
+The module is designed to provide the baseline network structure without tightly coupling every firewall policy and security group behavior into a single file.
 
 ---
 
@@ -243,7 +244,7 @@ The NAT Gateways depend on the Internet Gateway:
 depends_on = [aws_internet_gateway.igw]
 ```
 
-The intended design is to support per-AZ private outbound egress.
+The intended design is to support per-AZ private outbound egress after traffic has been inspected by AWS Network Firewall.
 
 ---
 
@@ -280,11 +281,7 @@ resource "aws_route_table" "compute_private"
 
 Each compute private route table is associated with the corresponding compute private subnet.
 
-Current note:
-
-The default route from compute private subnets to AWS Network Firewall is present in commented code and not currently active in this module.
-
-Commented pattern:
+The compute private route tables include a default route to the AWS Network Firewall endpoint in the same Availability Zone:
 
 ```hcl
 resource "aws_route" "compute_default_to_firewall" {
@@ -296,7 +293,7 @@ resource "aws_route" "compute_default_to_firewall" {
 }
 ```
 
-This indicates the expected future or external integration point for routing private compute egress through Network Firewall endpoints.
+This routes private compute egress through AWS Network Firewall before traffic can continue toward NAT Gateway and the Internet Gateway.
 
 ---
 
@@ -319,7 +316,7 @@ route {
 
 Each firewall private route table is associated with the corresponding firewall private subnet.
 
-This supports the broader intended egress path:
+This supports the broader egress path:
 
 ```text
 Private Workloads
@@ -447,7 +444,7 @@ The same pattern is used for each subnet tier.
 | `cloud_name` | Cloud or project name used by the broader baseline | Yes |
 | `azs` | List of Availability Zones where subnets and NAT Gateways are created | Yes |
 | `subnet_cidrs` | Map of subnet CIDR lists for each subnet tier | Yes |
-| `firewall_endpoint_ids_by_az` | Map of AWS Network Firewall endpoint IDs keyed by Availability Zone; used when routing private subnet egress through firewall endpoints | Yes |
+| `firewall_endpoint_ids_by_az` | Map of AWS Network Firewall endpoint IDs keyed by Availability Zone; used to route private compute subnet egress through firewall endpoints | Yes |
 
 ---
 
@@ -545,9 +542,9 @@ Common examples:
 module "networking" {
   source = "../modules/networking"
 
-  name_prefix   = local.name_prefix
-  environment   = var.environment
-  cloud_name    = var.cloud_name
+  name_prefix = local.name_prefix
+  environment = var.environment
+  cloud_name  = var.cloud_name
 
   main_vpc_cidr = var.main_vpc_cidr
   subnet_cidrs  = var.subnet_cidrs
@@ -593,16 +590,15 @@ Outputs from this module are consumed by many other modules.
 
 ### Common Upstream Inputs
 
-This module is usually one of the first workload modules deployed.
+This module is usually one of the first workload modules deployed, but the compute private default route depends on AWS Network Firewall endpoint IDs.
 
-It mostly depends on:
+Those endpoint IDs are passed in through:
 
-- Environment variables
-- CIDR planning
-- Availability Zone selection
-- Naming locals
+```hcl
+firewall_endpoint_ids_by_az
+```
 
-Other modules generally depend on networking outputs.
+Because of that dependency, the root stack must ensure the firewall endpoint IDs are available before the compute private default routes are created.
 
 ---
 
@@ -770,26 +766,22 @@ Expected:
 
 ---
 
-### Confirm Compute Private Route Tables
+### Confirm Compute Private Route Tables Route to Network Firewall
 
 ```bash
 aws ec2 describe-route-tables \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-RT-*" \
-  --query 'RouteTables[].[RouteTableId,Routes]' \
-  --output json
+  --query 'RouteTables[].[RouteTableId,Routes[?DestinationCidrBlock==`0.0.0.0/0`].[VpcEndpointId]|[0][0]]' \
+  --output table
 ```
 
 Expected:
 
 - Compute private route tables exist
-- Route table associations point to compute private subnets
-- Default egress routing depends on the broader firewall/VPC endpoint routing design
-
-Note:
-
-In the current parent module, the compute private default route to Network Firewall is commented out.
+- Each compute private route table has a default route to a Network Firewall endpoint
+- The firewall endpoint ID is AZ-aligned with the subnet route table
 
 ---
 
@@ -865,16 +857,16 @@ If a future public-facing resource needs a public IP address, assign it explicit
 
 ---
 
-### Private Subnets Do Not Automatically Have Internet Egress
+### Private Subnets Do Not Automatically Bypass Inspection
 
-Compute, data, and serverless private route tables do not currently include a default route to the Internet in this parent module.
+Compute private route tables send default outbound traffic to AWS Network Firewall endpoints.
 
-This is intentional for a private-first architecture.
+This is intentional for a private-first, inspected-egress architecture.
 
 Private outbound access should be provided intentionally through:
 
 - AWS Network Firewall routing
-- NAT Gateway routing
+- NAT Gateway routing after firewall inspection
 - VPC endpoints
 - Explicit route table changes
 
@@ -882,11 +874,9 @@ Private outbound access should be provided intentionally through:
 
 ### Network Firewall Integration
 
-The module includes a commented placeholder for routing compute private egress to Network Firewall endpoints.
+The module routes compute private egress to Network Firewall endpoints.
 
-This suggests the intended design is inspected egress.
-
-Current intended high-level flow:
+Current high-level flow:
 
 ```text
 Compute Private Subnets
@@ -904,7 +894,7 @@ NAT Gateway
 Internet Gateway
 ```
 
-If this route is enabled later, ensure firewall endpoint IDs are passed by Availability Zone and that routing remains AZ-aligned.
+Ensure firewall endpoint IDs are passed by Availability Zone and that routing remains AZ-aligned.
 
 ---
 
@@ -912,7 +902,7 @@ If this route is enabled later, ensure firewall endpoint IDs are passed by Avail
 
 AWS Network Firewall is not intended to act as a simple pass-through route to the Internet.
 
-The broader baseline design uses Network Firewall as an egress inspection and control layer. Private workload traffic should be routed through Network Firewall before reaching NAT Gateway, allowing firewall policy rules to restrict outbound access.
+The broader baseline design uses Network Firewall as an egress inspection and control layer. Private workload traffic is routed through Network Firewall before reaching NAT Gateway, allowing firewall policy rules to restrict outbound access.
 
 Depending on the firewall policy, this can support controls such as:
 
@@ -1000,6 +990,8 @@ Check:
 - Compute security group allows egress to endpoints
 - DNS support and DNS hostnames are enabled on the VPC
 - Route tables are associated with the expected subnets
+- Compute private route tables route default egress to Network Firewall endpoints
+- Firewall policy allows the required traffic
 - Controlled NAT/firewall egress exists if the service does not have a VPC endpoint
 
 ---
@@ -1008,9 +1000,9 @@ Check:
 
 Check:
 
-- Private subnet route table has the intended outbound path
-- Network Firewall route is configured if using inspected egress
-- Firewall policy allows the required domains
+- Compute private subnet route table routes default traffic to the Network Firewall endpoint
+- Network Firewall route is AZ-aligned
+- Firewall policy allows the required package repository domains
 - NAT Gateway is available
 - DNS resolution works
 - Security group egress allows HTTPS where intended
@@ -1060,7 +1052,8 @@ Check:
 - Default routes
 - NAT Gateway route placement
 - Firewall route placement
-- Whether the compute default route to firewall is intentionally commented out
+- Whether compute private default routes point to the expected firewall endpoint IDs
+- Whether firewall private route tables point to the expected NAT Gateways
 
 Useful command:
 
@@ -1082,12 +1075,13 @@ aws ec2 describe-route-tables \
 - All private subnet tiers disable public IP assignment.
 - Data subnets do not receive a default internet route in this parent module.
 - Serverless subnets do not receive a default internet route in this parent module.
-- Compute private default internet routing is not active in the current parent module.
+- Compute private default internet routing is sent to AWS Network Firewall endpoints.
 - Firewall private route tables route outbound traffic to NAT Gateways.
 - NAT Gateways are deployed per Availability Zone.
 - Security group rules are managed separately in the `security_policy` child module.
 - Private AWS service access should be handled through VPC endpoints where possible.
 - Internet egress should be routed intentionally through controlled firewall/NAT paths.
+- Network Firewall policy should restrict outbound traffic instead of allowing unrestricted internet access.
 
 ---
 
@@ -1100,7 +1094,7 @@ This module follows:
 - Separation of public, compute, data, serverless, and firewall layers
 - Per-AZ routing patterns
 - DNS support for AWS-native private connectivity
-- Explicit egress design
+- Inspected egress through AWS Network Firewall
 - Separation between network infrastructure and security group policy
 - Production-aligned VPC foundations
 
@@ -1112,6 +1106,6 @@ This module follows:
 - The number of subnet CIDRs per tier should match the number of Availability Zones.
 - The module currently creates one NAT Gateway per Availability Zone.
 - The module currently creates route tables per subnet tier per Availability Zone.
-- The compute private route table default route to Network Firewall is currently commented out.
+- The compute private route table default route points to AWS Network Firewall endpoints.
 - The `security_policy` child module should receive security group IDs from compute, storage, automation, and VPC endpoint modules.
 - Future versions may make egress modes configurable, such as `network_firewall`, `nat_only`, or `vpc_endpoints_only`.
