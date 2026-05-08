@@ -51,9 +51,11 @@ module "compute" {
   name_prefix                    = local.name_prefix
   vpc_id                         = module.networking.vpc_id
   environment                    = var.environment
+
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
+
   interface_endpoints_sg_id      = module.vpc_endpoints.interface_endpoints_sg_id
   data_sg_id                     = module.storage.data_sg_id
   db_port                        = var.db_port
