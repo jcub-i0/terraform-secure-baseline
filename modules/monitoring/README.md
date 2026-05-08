@@ -445,7 +445,7 @@ This is a high-priority security alert.
 
 ### IAM Policy Change Detection
 
-Creates a metric filter for selected IAM policy changes:
+Creates a metric filter for selected IAM policy and role trust policy changes:
 
 ```hcl
 resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes"
@@ -458,6 +458,9 @@ Current filter detects:
 CreatePolicy
 PutRolePolicy
 AttachRolePolicy
+DeletePolicy
+DetachRolePolicy
+UpdateAssumeRolePolicy
 ```
 
 Metric name:
@@ -475,15 +478,15 @@ Alarm name format:
 Expected behavior:
 
 - Selected IAM policy changes create a metric value.
-- The alarm triggers when IAM policy changes are greater than or equal to 1 within a 5-minute period.
+- Selected IAM policy detach/delete events create a metric value.
+- Role trust policy updates create a metric value.
+- The alarm triggers when IAM policy change count is greater than or equal to 1 within a 5-minute period.
 
-The code comments note that future expansion may include additional IAM events such as:
+Security relevance:
 
-```text
-DeletePolicy
-DetachRolePolicy
-UpdateAssumeRolePolicy
-```
+- `CreatePolicy`, `PutRolePolicy`, and `AttachRolePolicy` may indicate privilege creation, privilege expansion, or policy attachment activity.
+- `DeletePolicy` and `DetachRolePolicy` may indicate attempted permission removal, cleanup, or defense evasion.
+- `UpdateAssumeRolePolicy` is especially important because it changes who can assume a role, which can create privilege escalation or persistence risk.
 
 ---
 
