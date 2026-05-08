@@ -351,7 +351,7 @@ PatchGroup = var.patch_tag_value
 
 This allows the patch management module to target instances by patch group.
 
-The actual patch baseline and maintenance window behavior is managed outside this module.
+The actual patch baseline and maintenance window behavior is managed outside this module, at `modules/patch_management/`.
 
 ---
 
