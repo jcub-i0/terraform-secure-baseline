@@ -523,21 +523,21 @@ Security relevance:
 
 ```hcl
 module "monitoring" {
-  source = "../../modules/monitoring"
+  source = "../modules/monitoring"
 
   name_prefix                         = local.name_prefix
   environment                         = var.environment
-  logs_cmk_arn                        = module.kms.logs_cmk_arn
+  logs_cmk_arn                        = module.security.logs_cmk_arn
   cloudtrail_logs_group_name          = module.logging.cloudtrail_logs_group_name
   secops_emails                       = var.secops_emails
   tamper_detection_rule_arn           = module.security.tamper_detection_rule_arn
-  account_id                          = var.account_id
-  lambda_ip_enrichment_role_arn       = module.automation.lambda_ip_enrichment_role_arn
-  lambda_ec2_isolation_role_arn       = module.automation.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn        = module.automation.lambda_ec2_rollback_role_arn
+  account_id                          = data.aws_caller_identity.current.account_id
+  lambda_ip_enrichment_role_arn       = module.iam.lambda_ip_enrichment_role_arn
+  lambda_ec2_isolation_role_arn       = module.iam.lambda_ec2_isolation_role_arn
+  lambda_ec2_rollback_role_arn        = module.iam.lambda_ec2_rollback_role_arn
   break_glass_admin_role_arn          = module.iam.break_glass_admin_role_arn
-  securityhub_high_critical_rule_name = module.automation.securityhub_high_critical_rule_name
   securityhub_high_critical_rule_arn  = module.automation.securityhub_high_critical_rule_arn
+  securityhub_high_critical_rule_name = module.automation.securityhub_high_critical_rule_name
 }
 ```
 
