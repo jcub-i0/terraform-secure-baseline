@@ -564,6 +564,13 @@ aws ec2 describe-instances \
 Then describe the returned volume IDs:
 
 ```bash
+VOLUME_IDS=$(aws ec2 describe-instances \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
+  --query 'Reservations[].Instances[].BlockDeviceMappings[].Ebs.VolumeId' \
+  --output text)
+
 aws ec2 describe-volumes \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
