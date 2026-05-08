@@ -135,7 +135,7 @@ The module uses:
 for_each = var.compute_private_subnet_ids_map
 ```
 
-This means the number of EC2 instances is driven by the number of entries in the compute private subnet map.
+This means that by default, the number of EC2 instances is driven by the number of entries in the compute private subnet map.
 
 Each instance is deployed into a private compute subnet.
 
