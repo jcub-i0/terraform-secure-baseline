@@ -10,7 +10,6 @@ locals {
     "logs",
     "ssm",
     "ssmmessages",
-    "ec2messages",
     "secretsmanager",
     "kms",
     "config",
