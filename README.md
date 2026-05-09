@@ -24,7 +24,7 @@ It provides a secure, multi-account cloud foundation with:
 - Automated detection and response
 - GitHub OIDC-based CI/CD
 - Environment isolation across `dev`, `staging`, and `prod`
-- SOC 2 / ISO 27001-aligned security architecture
+- SOC 2 / ISO 27001-aligned security architecture to support audit readiness
 
 This project is intended for SaaS companies, startups, and engineering teams that need a repeatable AWS security foundation without building every security control from scratch.
 
