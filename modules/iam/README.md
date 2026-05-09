@@ -2,173 +2,158 @@
 
 ## Overview
 
-The `iam` module provisions IAM roles, instance profiles, service roles, and shared policies used across the baseline.
+The `iam` module provisions IAM roles, instance profiles, and policies required by the baseline’s AWS services and automation workflows.
 
-This module supports:
+This module includes IAM resources for:
 
-- EC2 instance access to SSM and CloudWatch
-- Lambda execution roles for security automation
+- EC2 instance management
+- Lambda security automation
 - CloudTrail delivery to CloudWatch Logs
 - VPC Flow Logs delivery to CloudWatch Logs
-- CloudWatch Logs delivery to Kinesis Firehose
-- Firehose delivery to centralized S3 logs
-- AWS Config service and remediation roles
-- AWS Backup service role
-- SSM Patch Manager maintenance window role
-- EventBridge role for SecOps event bus publishing
-- IAM Access Analyzer
+- CloudWatch Logs forwarding to Firehose
+- Firehose delivery to S3
+- AWS Config service and remediation
+- AWS Backup
+- SSM Patch Manager
+- Access Analyzer
+- EventBridge integration with the SecOps event bus
 - Shared read-only log access policies
-- Break-glass administrator access
+- Emergency break-glass administration
 
-This module is intentionally broad because many other modules depend on IAM roles and policies before they can function correctly.
-
----
-
-## Purpose
-
-The purpose of this module is to provide least-privilege service roles and shared access policies required by the secure baseline.
-
-It supports:
-
-- Secure EC2 instance management
-- Security automation Lambda execution
-- Centralized logging delivery
-- AWS Config recording and remediation
-- Backup and restore operations
-- Patch management operations
-- Security event routing
-- Emergency administrative access
-- Read-only access to centralized logs
-- KMS decrypt access for logs analysis
-
-This module does not manage IAM Identity Center permission sets. Identity Center access is managed separately in the control-plane Identity Center stack.
+This module does **not** manage IAM Identity Center users, groups, permission sets, or account assignments.
 
 ---
 
-## Resources Created
+## File Layout
 
-### EC2 Instance Role and Instance Profile
+| File | Purpose |
+|---|---|
+| `ec2.tf` | EC2 instance role and instance profile |
+| `lambda.tf` | Lambda execution roles and policies |
+| `logging.tf` | CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs delivery roles |
+| `config.tf` | AWS Config service-linked role and remediation role |
+| `backup.tf` | AWS Backup service role |
+| `patch_management.tf` | SSM Patch Manager maintenance window role |
+| `security_integrations.tf` | Access Analyzer and EventBridge/SecOps integration role |
+| `shared_policies.tf` | Shared log read-only and KMS decrypt policies |
+| `break_glass.tf` | Emergency break-glass administrator role |
+| `variables.tf` | Input variables consumed by the IAM module |
+| `outputs.tf` | IAM role, policy, and instance profile outputs consumed by other modules |
 
-Creates an EC2 IAM role:
+---
 
-```hcl
-resource "aws_iam_role" "ec2_role"
-```
+## `ec2.tf`
 
-Creates an EC2 instance profile:
+The `ec2.tf` file creates the IAM resources required by EC2 compute instances.
 
-```hcl
-resource "aws_iam_instance_profile" "ec2_profile"
+Resources include:
+
+- EC2 IAM role
+- EC2 instance profile
+- AWS-managed SSM policy attachment
+- AWS-managed CloudWatch Agent policy attachment
+
+The EC2 role is trusted by:
+
+```text
+ec2.amazonaws.com
 ```
 
 Attached AWS-managed policies:
 
 | Policy | Purpose |
 |---|---|
-| `AmazonSSMManagedInstanceCore` | Allows EC2 instances to register with Systems Manager |
-| `CloudWatchAgentServerPolicy` | Allows EC2 instances to publish logs and metrics to CloudWatch |
+| `AmazonSSMManagedInstanceCore` | Allows EC2 instances to register with and be managed by Systems Manager |
+| `CloudWatchAgentServerPolicy` | Allows the CloudWatch Agent to publish logs and metrics |
 
-The instance profile is consumed by the `compute` module.
+The instance profile output is consumed by the `compute` module so EC2 instances can inherit the role.
 
 ---
 
-### Lambda Execution Roles
+## `lambda.tf`
 
-Creates execution roles and custom policies for the baseline automation Lambdas.
+The `lambda.tf` file creates execution roles and permissions for security automation Lambda functions.
 
 Lambda roles include:
 
 | Role | Purpose |
 |---|---|
-| EC2 Isolation Lambda role | Allows automated EC2 isolation actions |
-| EC2 Rollback Lambda role | Allows manual rollback of isolated EC2 instances |
-| IP Enrichment Lambda role | Allows Security Hub finding enrichment with threat intelligence |
+| EC2 Isolation Lambda role | Allows automated isolation of EC2 instances after high/critical findings |
+| EC2 Rollback Lambda role | Allows approved rollback of isolated EC2 instances |
+| IP Enrichment Lambda role | Allows enrichment of findings using threat intelligence data |
 
-The Lambda roles use AWS-managed policies for:
+Common AWS-managed policy attachments include:
 
-- Lambda basic execution logging
-- Lambda VPC ENI access
-- AWS X-Ray write access
-
-Custom Lambda policies allow the functions to perform only the baseline-specific actions they need.
-
----
+| Policy | Purpose |
+|---|---|
+| `AWSLambdaVPCAccessExecutionRole` | Allows VPC-attached Lambda ENI operations |
+| `AWSLambdaBasicExecutionRole` | Allows Lambda logging to CloudWatch Logs |
+| `AWSXRayDaemonWriteAccess` | Allows Lambda X-Ray trace publishing |
 
 ### EC2 Isolation Lambda Permissions
 
-The EC2 Isolation Lambda policy allows:
+The EC2 Isolation Lambda policy allows selected EC2 response actions such as:
 
-- Describing EC2 instances
-- Modifying EC2 instance security group attachments
-- Describing security groups
-- Creating tags
-- Creating snapshots
-- Publishing alerts to the SecOps SNS topic
-- Using the logs CMK for encrypted SNS publishing
-
-This role is used by the EC2 isolation automation workflow.
-
----
+- Describe instances
+- Modify instance attributes
+- Describe security groups
+- Create tags
+- Create snapshots
+- Publish alerts to the SecOps SNS topic
+- Use the logs CMK for SNS-related encryption operations
 
 ### EC2 Rollback Lambda Permissions
 
-The EC2 Rollback Lambda policy allows:
+The EC2 Rollback Lambda policy allows selected EC2 rollback actions such as:
 
-- Describing EC2 instances
-- Modifying EC2 instance security group attachments
-- Describing security groups
-- Creating tags
-- Publishing alerts to the SecOps SNS topic
-- Using the logs CMK for encrypted SNS publishing
-
-This role is used to restore original instance security groups after an approved rollback event.
-
----
+- Describe instances
+- Modify instance attributes
+- Describe security groups
+- Create tags
+- Publish alerts to the SecOps SNS topic
+- Use the logs CMK for SNS-related encryption operations
 
 ### IP Enrichment Lambda Permissions
 
 The IP Enrichment Lambda policy allows:
 
-- Reading the threat intelligence API key secret from Secrets Manager
-- Decrypting the secret with the Secrets Manager CMK
-- Publishing enriched alerts to the SecOps SNS topic
-- Using the logs CMK for encrypted SNS publishing
-- Updating Security Hub findings with enrichment notes
+- Read access to the threat intelligence API keys secret
+- Publish enriched alerts to the SecOps SNS topic
+- Use the logs CMK for SNS-related encryption operations
+- Update Security Hub findings with enrichment notes
+- Use the Secrets Manager CMK to decrypt the threat intelligence secret
 
-This role is used by the Security Hub finding enrichment workflow.
+The Lambda role ARNs are consumed by automation and monitoring resources.
 
 ---
 
+## `logging.tf`
+
+The `logging.tf` file creates IAM roles and policies required for log delivery and forwarding.
+
+Resources include:
+
+| Role | Trusted Service | Purpose |
+|---|---|---|
+| CloudTrail CloudWatch role | `cloudtrail.amazonaws.com` | Allows CloudTrail to write to CloudWatch Logs |
+| VPC Flow Logs role | `vpc-flow-logs.amazonaws.com` | Allows VPC Flow Logs to write to CloudWatch Logs |
+| CloudWatch Logs to Firehose role | `logs.amazonaws.com` | Allows CloudWatch Logs subscription filters to send records to Firehose |
+| Firehose Flow Logs role | `firehose.amazonaws.com` | Allows Firehose to deliver VPC Flow Logs to S3 |
+
 ### CloudTrail Role
 
-Creates a CloudTrail role:
+Allows CloudTrail to write events to the CloudTrail CloudWatch Log Group.
 
-```hcl
-resource "aws_iam_role" "cloudtrail"
-```
-
-This role allows CloudTrail to write events to the CloudTrail CloudWatch Log Group.
-
-Allowed CloudWatch Logs actions include:
+Primary actions:
 
 - `logs:CreateLogStream`
 - `logs:PutLogEvents`
 
-The logging module consumes this role ARN.
-
----
-
 ### VPC Flow Logs Role
 
-Creates a VPC Flow Logs role:
+Allows VPC Flow Logs to publish to the Flow Logs CloudWatch Log Group.
 
-```hcl
-resource "aws_iam_role" "flowlogs"
-```
-
-This role allows VPC Flow Logs to write to the VPC Flow Logs CloudWatch Log Group.
-
-Allowed CloudWatch Logs actions include:
+Primary actions include:
 
 - `logs:CreateLogGroup`
 - `logs:CreateLogStream`
@@ -176,109 +161,111 @@ Allowed CloudWatch Logs actions include:
 - `logs:DescribeLogGroups`
 - `logs:DescribeLogStreams`
 
-The logging module consumes this role ARN.
-
----
-
 ### CloudWatch Logs to Firehose Role
 
-Creates a role for CloudWatch Logs subscription delivery to Firehose:
+Allows CloudWatch Logs subscription filters to send VPC Flow Log events into the Firehose delivery stream.
 
-```hcl
-resource "aws_iam_role" "cw_to_firehose"
-```
-
-This role allows CloudWatch Logs to send VPC Flow Log records to the Firehose delivery stream.
-
-Allowed Firehose actions include:
+Primary actions:
 
 - `firehose:PutRecord`
 - `firehose:PutRecordBatch`
 
----
-
 ### Firehose Flow Logs Role
 
-Creates a Firehose delivery role:
+Allows Firehose to deliver archived VPC Flow Logs to the centralized logs bucket.
 
-```hcl
-resource "aws_iam_role" "firehose_flow_logs"
-```
+Primary permissions include:
 
-This role allows Kinesis Data Firehose to deliver VPC Flow Logs to the centralized logs S3 bucket.
-
-Allowed actions include:
-
-- S3 write and multipart upload operations
-- S3 bucket location/list operations
-- KMS encrypt/decrypt/data key operations using the logs CMK
+- S3 write/list/location access to the centralized logs bucket
+- KMS encrypt/decrypt/data key permissions on the logs CMK
 
 ---
 
-### AWS Config Role
+## `config.tf`
 
-Creates the AWS Config service-linked role:
+The `config.tf` file creates IAM resources for AWS Config and remediation workflows.
 
-```hcl
-resource "aws_iam_service_linked_role" "config"
+Resources include:
+
+- AWS Config service-linked role
+- AWS Config remediation role
+- SSM Automation managed policy attachment
+- S3 public access block remediation policy
+
+### AWS Config Service-Linked Role
+
+Creates the AWS Config service-linked role for:
+
+```text
+config.amazonaws.com
 ```
 
-This role is used by AWS Config.
+This role allows AWS Config to perform its service functions in the account.
 
----
+### Config Remediation Role
 
-### AWS Config Remediation Role
+Creates a remediation role trusted by:
 
-Creates an AWS Config remediation role:
-
-```hcl
-resource "aws_iam_role" "config_remediation"
+```text
+ssm.amazonaws.com
 ```
 
-This role is assumed by SSM Automation and is used for remediation actions.
+The role includes a source account condition using:
 
-Attached AWS-managed policy:
+```hcl
+"aws:SourceAccount" = var.account_id
+```
+
+The role is attached to the AWS-managed:
 
 ```text
 AmazonSSMAutomationRole
 ```
 
-The module also creates a custom remediation policy for S3 public access block remediation.
-
-Allowed actions include:
-
-- `s3:GetBucketPublicAccessBlock`
-- `s3:PutBucketPublicAccessBlock`
-- `s3:GetBucketPolicy`
-- `s3:PutBucketPolicy`
+It also includes an inline policy for S3 public access block remediation.
 
 ---
 
-### AWS Backup Service Role
+## `backup.tf`
 
-Creates an AWS Backup service role:
+The `backup.tf` file creates the IAM role used by AWS Backup.
 
-```hcl
-resource "aws_iam_role" "backup"
+Resources include:
+
+- AWS Backup service role
+- AWS-managed backup policy attachment
+- AWS-managed restore policy attachment
+
+The backup role is trusted by:
+
+```text
+backup.amazonaws.com
 ```
 
 Attached AWS-managed policies:
 
 | Policy | Purpose |
 |---|---|
-| `AWSBackupServiceRolePolicyForBackup` | Allows AWS Backup to create backups |
-| `AWSBackupServiceRolePolicyForRestores` | Allows AWS Backup to restore backups |
+| `AWSBackupServiceRolePolicyForBackup` | Allows AWS Backup to create and manage backups |
+| `AWSBackupServiceRolePolicyForRestores` | Allows AWS Backup to perform restores |
 
-The backup module consumes this role ARN.
+The role ARN is consumed by the backup module.
 
 ---
 
-### Patch Maintenance Window Role
+## `patch_management.tf`
 
-Creates a Patch Manager maintenance window role:
+The `patch_management.tf` file creates the IAM role used by SSM Patch Manager maintenance windows.
 
-```hcl
-resource "aws_iam_role" "patch_maintenance_window"
+Resources include:
+
+- Patch maintenance window IAM role
+- AWS-managed maintenance window policy attachment
+
+The role is trusted by:
+
+```text
+ssm.amazonaws.com
 ```
 
 Attached AWS-managed policy:
@@ -287,35 +274,20 @@ Attached AWS-managed policy:
 AmazonSSMMaintenanceWindowRole
 ```
 
-This role is consumed by the patch management module.
+The role ARN is consumed by the patch management module.
 
 ---
 
-### EventBridge SecOps Bus Role
+## `security_integrations.tf`
 
-Creates an EventBridge role:
+The `security_integrations.tf` file creates security integration resources used by the baseline.
 
-```hcl
-resource "aws_iam_role" "eventbridge_putevents_to_secops"
-```
+Resources include:
 
-This role allows EventBridge to put events onto the SecOps event bus.
+- IAM Access Analyzer account analyzer
+- EventBridge role for forwarding events to the SecOps event bus
 
-Allowed action:
-
-```text
-events:PutEvents
-```
-
-Allowed resource:
-
-```hcl
-var.secops_event_bus_arn
-```
-
----
-
-### IAM Access Analyzer
+### Access Analyzer
 
 Creates an account-level IAM Access Analyzer:
 
@@ -323,65 +295,75 @@ Creates an account-level IAM Access Analyzer:
 resource "aws_accessanalyzer_analyzer" "main"
 ```
 
-Analyzer name format:
+Analyzer type:
 
 ```text
-<name_prefix>-account-access-analyzer
+ACCOUNT
 ```
 
-This helps identify resources shared outside the account.
+This helps identify external access to supported resources.
+
+### EventBridge to SecOps Bus Role
+
+Creates a role trusted by:
+
+```text
+events.amazonaws.com
+```
+
+The role allows EventBridge to call:
+
+```text
+events:PutEvents
+```
+
+against the SecOps event bus ARN provided by:
+
+```hcl
+var.secops_event_bus_arn
+```
 
 ---
 
-### Shared Centralized Logs Read-Only Policy
+## `shared_policies.tf`
 
-Creates a shared IAM policy for read-only access to the centralized logs bucket:
+The `shared_policies.tf` file creates reusable IAM customer-managed policies that can be attached by other access-management layers.
 
-```hcl
-resource "aws_iam_policy" "logs_s3_readonly"
-```
+Shared policies include:
 
-Policy name format:
+| Policy | Purpose |
+|---|---|
+| `<name_prefix>-CentralizedLogsS3ReadOnly` | Read-only access to the centralized logs S3 bucket |
+| `<name_prefix>-LogsKmsDecrypt` | KMS decrypt and describe access for the logs CMK |
 
-```text
-<name_prefix>-CentralizedLogsS3ReadOnly
-```
+### Centralized Logs S3 Read-Only Policy
 
-This policy allows:
+Allows read-only access to the centralized logs bucket.
 
-- Listing the centralized logs bucket
-- Reading centralized log objects
-- Reading object versions
-- Reading object tags
+Allowed bucket-level actions:
 
-It does not allow write or delete access.
+- `s3:ListBucket`
+- `s3:GetBucketLocation`
 
-This policy can be attached through IAM Identity Center customer-managed policy attachments.
+Allowed object-level actions:
 
----
+- `s3:GetObject`
+- `s3:GetObjectVersion`
+- `s3:GetObjectTagging`
+- `s3:GetObjectVersionTagging`
 
-### Shared Logs CMK Decrypt Policy
+This policy does not allow object writes or deletes.
 
-Creates a shared IAM policy for decrypting logs encrypted with the logs CMK:
+### Logs CMK Decrypt Policy
 
-```hcl
-resource "aws_iam_policy" "logs_cmk_decrypt"
-```
-
-Policy name format:
-
-```text
-<name_prefix>-LogsKmsDecrypt
-```
-
-This policy allows:
+Allows:
 
 - `kms:Decrypt`
 - `kms:DescribeKey`
 
-Only against the logs CMK.
+against the logs CMK.
 
-This policy is commonly paired with centralized logs S3 read-only access.
+These shared policies are useful for IAM Identity Center customer-managed policy attachments or other controlled read-only operational access patterns.
 
 ---
 
@@ -495,7 +477,7 @@ Expected output:
 | Name | Description | Required |
 |---|---|---:|
 | `cloud_name` | Cloud or project name used by the broader baseline | Yes |
-| `name_prefix` | Prefix used for IAM resource naming | Yes |
+| `name_prefix` | Prefix used for resource naming | Yes |
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
 | `cloudtrail_log_group_arn` | ARN of the CloudTrail CloudWatch Log Group | Yes |
 | `secops_topic_arn` | ARN of the SecOps SNS topic | Yes |
@@ -507,9 +489,9 @@ Expected output:
 | `flowlogs_firehose_delivery_stream_arn` | ARN of the VPC Flow Logs Firehose delivery stream | Yes |
 | `flowlogs_log_group_arn` | ARN of the VPC Flow Logs CloudWatch Log Group | Yes |
 | `secops_event_bus_arn` | ARN of the SecOps EventBridge event bus | Yes |
-| `threat_intel_api_keys_arn` | ARN of the threat intelligence API keys secret | Yes |
-| `lambda_ip_enrichment_log_group_arn` | ARN of the IP Enrichment Lambda log group | Yes |
-| `break_glass_trusted_principal_arns` | List of IAM principal ARNs allowed to assume the break-glass role with MFA | Yes |
+| `threat_intel_api_keys_arn` | ARN of the Secrets Manager secret containing threat intelligence API keys | Yes |
+| `lambda_ip_enrichment_log_group_arn` | ARN of the IP Enrichment Lambda CloudWatch Log Group | Yes |
+| `break_glass_trusted_principal_arns` | List of trusted IAM principal ARNs allowed to assume the break-glass role with MFA | Yes |
 
 ---
 
@@ -518,16 +500,16 @@ Expected output:
 | Name | Description |
 |---|---|
 | `instance_profile_name` | Name of the EC2 IAM instance profile |
-| `cloudtrail_role_arn` | ARN of the CloudTrail CloudWatch Logs role |
-| `flowlogs_role_arn` | ARN of the VPC Flow Logs role |
+| `cloudtrail_role_arn` | ARN of the CloudTrail CloudWatch Logs delivery role |
+| `flowlogs_role_arn` | ARN of the VPC Flow Logs delivery role |
 | `config_role_arn` | ARN of the AWS Config service-linked role |
-| `lambda_ec2_isolation_role_arn` | ARN of the EC2 Isolation Lambda role |
-| `lambda_ec2_rollback_role_arn` | ARN of the EC2 Rollback Lambda role |
-| `lambda_ip_enrichment_role_arn` | ARN of the IP Enrichment Lambda role |
+| `lambda_ec2_isolation_role_arn` | ARN of the EC2 Isolation Lambda execution role |
+| `lambda_ec2_rollback_role_arn` | ARN of the EC2 Rollback Lambda execution role |
+| `lambda_ip_enrichment_role_arn` | ARN of the IP Enrichment Lambda execution role |
 | `config_remediation_role_arn` | ARN of the AWS Config remediation role |
 | `firehose_flow_logs_role_arn` | ARN of the Firehose Flow Logs delivery role |
 | `cw_to_firehose_role_arn` | ARN of the CloudWatch Logs to Firehose role |
-| `eventbridge_putevents_to_secops_role_arn` | ARN of the EventBridge role that can publish to the SecOps event bus |
+| `eventbridge_putevents_to_secops_role_arn` | ARN of the EventBridge role allowed to put events to the SecOps event bus |
 | `patch_maintenance_window_role_arn` | ARN of the SSM Patch Manager maintenance window role |
 | `backup_service_role_arn` | ARN of the AWS Backup service role |
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
@@ -536,76 +518,38 @@ Expected output:
 
 ---
 
-## Usage Example
+## Validation
 
-```hcl
-module "iam" {
-  source = "../../modules/iam"
+### Confirm IAM Roles Exist
 
-  cloud_name  = var.cloud_name
-  name_prefix = local.name_prefix
-  environment = var.environment
-
-  account_id     = var.account_id
-  primary_region = var.primary_region
-
-  cloudtrail_log_group_arn              = module.logging.cloudtrail_log_group_arn
-  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
-  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
-
-  centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
-
-  secops_topic_arn    = module.monitoring.secops_topic_arn
-  secops_event_bus_arn = module.automation.secops_event_bus_arn
-
-  logs_cmk_arn            = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
-
-  threat_intel_api_keys_arn        = module.automation.threat_intel_api_keys_arn
-  lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
-
-  break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
-}
+```bash
+aws iam list-roles \
+  --profile "${AWS_PROFILE}" \
+  --query 'Roles[?contains(RoleName, `'"${NAME_PREFIX}"'`)].[RoleName,Arn]' \
+  --output table
 ```
 
----
+Expected:
 
-## Dependency Notes
-
-This module is consumed by many other modules.
-
-| IAM Output | Typical Consumer |
-|---|---|
-| `instance_profile_name` | Compute module |
-| `cloudtrail_role_arn` | Logging module |
-| `flowlogs_role_arn` | Logging module |
-| `firehose_flow_logs_role_arn` | Logging module |
-| `cw_to_firehose_role_arn` | Logging module |
-| `config_role_arn` | Security / Config baseline module |
-| `config_remediation_role_arn` | Security / Config baseline module |
-| `lambda_ec2_isolation_role_arn` | Automation module and monitoring SNS policy |
-| `lambda_ec2_rollback_role_arn` | Automation module and monitoring SNS policy |
-| `lambda_ip_enrichment_role_arn` | Automation module and monitoring SNS policy |
-| `patch_maintenance_window_role_arn` | Patch management module |
-| `backup_service_role_arn` | Backup module |
-| `logs_s3_readonly_policy_name` | IAM Identity Center customer-managed policy attachment |
-| `logs_cmk_decrypt_policy_name` | IAM Identity Center customer-managed policy attachment |
-| `break_glass_admin_role_arn` | Monitoring module break-glass detection |
-
-Because of these dependencies, IAM is usually deployed early in the baseline.
-
-Some IAM policies reference resources created by other modules, so the root stack must handle dependency ordering carefully.
+- EC2 compute role exists
+- Lambda automation roles exist
+- Logging delivery roles exist
+- Config remediation role exists
+- Backup role exists
+- Patch maintenance window role exists
+- EventBridge SecOps role exists
+- Break-glass admin role exists
 
 ---
-
-## Validation
 
 ### Confirm EC2 Instance Profile
 
 ```bash
 aws iam get-instance-profile \
   --profile "${AWS_PROFILE}" \
-  --instance-profile-name "${NAME_PREFIX}-ec2_compute_instance_profile"
+  --instance-profile-name "${NAME_PREFIX}-ec2_compute_instance_profile" \
+  --query 'InstanceProfile.[InstanceProfileName,Arn,Roles[0].RoleName]' \
+  --output table
 ```
 
 Expected:
@@ -615,170 +559,149 @@ Expected:
 
 ---
 
-### Confirm EC2 Role Policies
+### Confirm Lambda Role Policy Attachments
 
 ```bash
 aws iam list-attached-role-policies \
   --profile "${AWS_PROFILE}" \
-  --role-name "${NAME_PREFIX}-ec2_compute_role" \
+  --role-name "${NAME_PREFIX}-lambda-ec2-isolation-role" \
   --query 'AttachedPolicies[].[PolicyName,PolicyArn]' \
   --output table
 ```
 
-Expected attached policies:
+Expected:
 
-- `AmazonSSMManagedInstanceCore`
-- `CloudWatchAgentServerPolicy`
+- Lambda VPC access policy is attached
+- Lambda basic execution policy is attached
+- X-Ray write policy is attached
+- Custom EC2 isolation policy is attached
 
----
+Repeat for:
 
-### Confirm Lambda Roles
-
-```bash
-aws iam list-roles \
-  --profile "${AWS_PROFILE}" \
-  --query 'Roles[?contains(RoleName, `lambda`) && contains(RoleName, `'"${NAME_PREFIX}"'`)].[RoleName,Arn]' \
-  --output table
-```
-
-Expected roles include:
-
-- EC2 Isolation Lambda role
-- EC2 Rollback Lambda role
-- IP Enrichment Lambda role
+- `${NAME_PREFIX}-lambda-ec2-rollback`
+- `${NAME_PREFIX}-lambda-ip-enrichment`
 
 ---
 
-### Confirm Logging Roles
-
-```bash
-aws iam list-roles \
-  --profile "${AWS_PROFILE}" \
-  --query 'Roles[?contains(RoleName, `'"${NAME_PREFIX}"'`) && (contains(RoleName, `cloudtrail`) || contains(RoleName, `VpcFlowLogs`) || contains(RoleName, `FirehoseFlowLogs`) || contains(RoleName, `CloudWatchLogsToFirehose`))].[RoleName,Arn]' \
-  --output table
-```
-
-Expected roles include:
-
-- CloudTrail role
-- VPC Flow Logs role
-- Firehose Flow Logs role
-- CloudWatch Logs to Firehose role
-
----
-
-### Confirm Config Roles
+### Confirm CloudTrail Role
 
 ```bash
 aws iam get-role \
   --profile "${AWS_PROFILE}" \
-  --role-name AWSServiceRoleForConfig
+  --role-name "${NAME_PREFIX}-cloudtrail-cloudwatch-role" \
+  --query 'Role.[RoleName,Arn]' \
+  --output table
+```
+
+Expected:
+
+- CloudTrail delivery role exists
+- Trust policy allows CloudTrail to assume the role
+
+---
+
+### Confirm VPC Flow Logs Role
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name "${NAME_PREFIX}-VpcFlowLogsRole" \
+  --query 'Role.[RoleName,Arn]' \
+  --output table
+```
+
+Expected:
+
+- VPC Flow Logs role exists
+- Trust policy allows VPC Flow Logs to assume the role
+
+---
+
+### Confirm Firehose Role
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name "${NAME_PREFIX}-FirehoseFlowLogsRole" \
+  --query 'Role.[RoleName,Arn]' \
+  --output table
+```
+
+Expected:
+
+- Firehose delivery role exists
+- Trust policy allows Firehose to assume the role
+
+---
+
+### Confirm AWS Config Service-Linked Role
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name AWSServiceRoleForConfig \
+  --query 'Role.[RoleName,Arn]' \
+  --output table
 ```
 
 Expected:
 
 - AWS Config service-linked role exists
 
-Then confirm the remediation role:
-
-```bash
-aws iam get-role \
-  --profile "${AWS_PROFILE}" \
-  --role-name "${NAME_PREFIX}-ConfigRemediationRole"
-```
-
-Expected:
-
-- Config remediation role exists
-- Trust policy allows SSM to assume the role
-
 ---
 
 ### Confirm Backup Role
 
 ```bash
-aws iam list-attached-role-policies \
+aws iam get-role \
   --profile "${AWS_PROFILE}" \
   --role-name "${NAME_PREFIX}-backup-role" \
-  --query 'AttachedPolicies[].[PolicyName,PolicyArn]' \
+  --query 'Role.[RoleName,Arn]' \
   --output table
 ```
 
-Expected attached policies:
+Expected:
 
-- `AWSBackupServiceRolePolicyForBackup`
-- `AWSBackupServiceRolePolicyForRestores`
+- Backup role exists
+- Trust policy allows AWS Backup to assume the role
 
 ---
 
 ### Confirm Patch Maintenance Window Role
 
 ```bash
-aws iam list-attached-role-policies \
+aws iam get-role \
   --profile "${AWS_PROFILE}" \
   --role-name "${NAME_PREFIX}-patch-mw-role" \
-  --query 'AttachedPolicies[].[PolicyName,PolicyArn]' \
+  --query 'Role.[RoleName,Arn]' \
   --output table
 ```
 
 Expected:
 
-- `AmazonSSMMaintenanceWindowRole` is attached
+- Patch maintenance window role exists
+- Trust policy allows SSM to assume the role
 
 ---
 
-### Confirm Shared Log Access Policies
+### Confirm Shared Policies
 
 ```bash
 aws iam list-policies \
-  --scope Local \
   --profile "${AWS_PROFILE}" \
+  --scope Local \
   --query 'Policies[?contains(PolicyName, `CentralizedLogsS3ReadOnly`) || contains(PolicyName, `LogsKmsDecrypt`)].[PolicyName,Arn]' \
   --output table
 ```
 
-Expected policies:
-
-- `<name_prefix>-CentralizedLogsS3ReadOnly`
-- `<name_prefix>-LogsKmsDecrypt`
-
----
-
-### Confirm Access Analyzer
-
-```bash
-aws accessanalyzer list-analyzers \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'analyzers[].[name,type,status]' \
-  --output table
-```
-
 Expected:
 
-- Account-level analyzer exists
-- Analyzer status is `ACTIVE`
+- Centralized logs S3 read-only policy exists
+- Logs CMK decrypt policy exists
 
 ---
 
-### Confirm Break-Glass Role
-
-```bash
-aws iam get-role \
-  --profile "${AWS_PROFILE}" \
-  --role-name "${NAME_PREFIX}-BreakGlass-Admin" \
-  --query 'Role.[RoleName,Arn,Description]' \
-  --output table
-```
-
-Expected:
-
-- Break-glass role exists
-- Role description indicates emergency-only administrator access
-
----
-
-### Confirm Break-Glass MFA Requirement
+### Confirm Break-Glass Role MFA Requirement
 
 ```bash
 aws iam get-role \
@@ -789,153 +712,119 @@ aws iam get-role \
 
 Expected:
 
-- Trust policy includes `aws:MultiFactorAuthPresent`
-- MFA condition is set to `true`
 - Trusted principals match `break_glass_trusted_principal_arns`
+- Trust policy includes MFA enforcement using `aws:MultiFactorAuthPresent`
 
 ---
 
-## Operational Considerations
+### Confirm Access Analyzer
 
-### IAM Identity Center Is Separate
-
-This module does not create IAM Identity Center groups, permission sets, or account assignments.
-
-Those are managed by the control-plane Identity Center stack.
-
-This module only creates IAM roles and policies inside the workload account.
-
----
-
-### Shared Policies Support Identity Center Attachments
-
-The shared policies:
-
-```text
-<name_prefix>-CentralizedLogsS3ReadOnly
-<name_prefix>-LogsKmsDecrypt
+```bash
+aws accessanalyzer list-analyzers \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'analyzers[?contains(name, `'"${NAME_PREFIX}"'`)].[name,arn,status,type]' \
+  --output table
 ```
 
-are intended to support controlled read-only access to centralized logs.
+Expected:
 
-They can be attached to IAM Identity Center permission sets by name/path after the workload baseline has created them.
-
----
-
-### Break-Glass Access Should Be Rare
-
-The break-glass role has administrator access and should be treated as highly sensitive.
-
-Usage should be:
-
-- Rare
-- Time-bound
-- Logged
-- Alerted
-- Reviewed after use
-
-Routine administration should happen through IAM Identity Center, not break-glass access.
-
----
-
-### IAM Policies Use `jsonencode`
-
-This module currently defines many IAM policies with Terraform `jsonencode()`.
-
-This is valid and readable.
-
-A future refactor could move policies to `aws_iam_policy_document`, but that is not required for v1.
-
----
-
-### Some Permissions Are Broad by Design
-
-Some automation roles require broad resource scope for operational reasons.
-
-Examples:
-
-- EC2 isolation needs to inspect and modify EC2 instance attributes
-- EC2 rollback needs to restore security group attachments
-- Security Hub enrichment may update findings
-
-These permissions should be reviewed during production hardening, but they support the current baseline automation model.
+- Account analyzer exists
+- Analyzer status is active
+- Analyzer type is `ACCOUNT`
 
 ---
 
 ## Troubleshooting
 
-### EC2 Instances Do Not Register With SSM
+### EC2 Instances Do Not Register with SSM
 
 Check:
 
-- EC2 instance profile exists
+- EC2 instance profile is attached to the instance
 - EC2 role has `AmazonSSMManagedInstanceCore`
-- Instance was launched with the correct instance profile
-- VPC endpoints or controlled egress allow SSM connectivity
+- Instance has outbound access to SSM through VPC endpoints or controlled egress
+- SSM Agent is installed and running
 
 ---
 
-### CloudTrail Cannot Write to CloudWatch Logs
+### Lambda Cannot Create ENIs
+
+Check:
+
+- Lambda role has `AWSLambdaVPCAccessExecutionRole`
+- Lambda subnets and security groups are valid
+- Account has available ENI capacity
+- VPC endpoint/security group rules allow required AWS API access
+
+---
+
+### Lambda Cannot Publish to SNS
+
+Check:
+
+- Lambda role allows `sns:Publish` to the SecOps topic
+- SecOps SNS topic policy allows the Lambda role to publish
+- Logs CMK permissions allow SNS encryption operations
+- The Lambda is using the expected role
+
+---
+
+### IP Enrichment Lambda Cannot Read Threat Intel Secret
+
+Check:
+
+- Lambda role allows `secretsmanager:GetSecretValue`
+- Lambda role allows `kms:Decrypt` on the Secrets Manager CMK
+- Secret ARN matches `threat_intel_api_keys_arn`
+- Secret is not scheduled for deletion
+
+---
+
+### CloudTrail Is Not Writing to CloudWatch Logs
 
 Check:
 
 - CloudTrail role exists
-- Trust policy allows `cloudtrail.amazonaws.com`
+- CloudTrail role trust policy allows `cloudtrail.amazonaws.com`
 - Inline policy allows `logs:CreateLogStream` and `logs:PutLogEvents`
-- Resource matches the CloudTrail log group ARN pattern
+- CloudTrail is configured with the correct role ARN
+- CloudTrail log group ARN matches `cloudtrail_log_group_arn`
 
 ---
 
-### VPC Flow Logs Cannot Write to CloudWatch Logs
+### VPC Flow Logs Are Not Writing to CloudWatch Logs
 
 Check:
 
-- VPC Flow Logs role exists
+- Flow Logs role exists
 - Trust policy allows `vpc-flow-logs.amazonaws.com`
-- Inline policy allows required CloudWatch Logs actions
-- Resource matches the VPC Flow Logs log group ARN pattern
+- Inline policy allows writes to the Flow Logs log group
+- Flow Log configuration references the correct role ARN
 
 ---
 
-### Firehose Cannot Deliver Logs to S3
+### Firehose Cannot Deliver to S3
 
 Check:
 
 - Firehose role exists
 - Trust policy allows `firehose.amazonaws.com`
-- Role can write to the centralized logs bucket
-- Role can use the logs CMK
-- Centralized logs bucket policy allows the delivery path
+- Role has S3 permissions on the centralized logs bucket
+- Role has KMS permissions on the logs CMK
+- Centralized logs bucket policy allows delivery
 
 ---
 
-### Lambda Automation Fails With AccessDenied
-
-Check the relevant Lambda role:
-
-- EC2 Isolation Lambda role
-- EC2 Rollback Lambda role
-- IP Enrichment Lambda role
-
-Then check:
-
-- Custom policy is attached
-- AWS-managed Lambda execution policies are attached
-- SNS topic ARN matches the SecOps topic
-- KMS permissions allow SNS publishing and secret decryption where required
-- Secrets Manager secret ARN matches the configured threat intelligence secret
-
----
-
-### AWS Config Remediation Fails
+### Config Remediation Fails
 
 Check:
 
 - Config remediation role exists
-- Trust policy allows SSM to assume the role
+- Trust policy allows `ssm.amazonaws.com`
+- Source account condition matches the workload account
 - `AmazonSSMAutomationRole` is attached
-- Custom S3 public access block remediation policy is attached
-- Remediation action is using the expected role ARN
+- Inline remediation policy includes the required service actions
 
 ---
 
@@ -943,51 +832,39 @@ Check:
 
 Check:
 
-- Caller ARN is listed in `break_glass_trusted_principal_arns`
-- MFA is enabled for the trusted IAM user
-- The `assume-role` command includes `--serial-number`
-- The `assume-role` command includes a valid `--token-code`
+- Caller is listed in `break_glass_trusted_principal_arns`
+- Caller has MFA enabled
+- Caller provided MFA in the `assume-role` command
 - Caller has permission to call `sts:AssumeRole`
-- Role name includes the expected `name_prefix`
+- Role name includes the configured `name_prefix`
 
 ---
 
 ## Security Notes
 
-- EC2 instances use an IAM instance profile instead of static credentials.
-- Lambda functions use dedicated execution roles.
-- Logging services use dedicated delivery roles.
-- Firehose can write only to the centralized logs bucket and use the logs CMK.
-- AWS Config uses a service-linked role and a separate remediation role.
-- AWS Backup uses AWS-managed backup and restore policies.
-- Patch Manager uses a dedicated maintenance window role.
-- Shared log access policies are read-only and decrypt-only.
-- Break-glass access requires MFA.
-- Break-glass access is emergency-only and should be monitored.
-- IAM Access Analyzer is enabled at the account level.
-
----
-
-## Design Principles
-
-This module follows:
-
-- Dedicated service roles
-- Least privilege where practical
-- Separation between automation, logging, backup, patching, and emergency access
-- No static credentials for compute or Lambda workloads
-- Shared reusable policies for log access
-- Emergency access with MFA enforcement
-- IAM Identity Center integration through customer-managed policy names
-- Operational readability over premature policy abstraction
+- EC2 instances use IAM instance profiles instead of static credentials.
+- Lambda automation roles are separated by function.
+- Lambda roles use AWS-managed baseline execution policies plus focused custom permissions.
+- Logging delivery roles are service-specific.
+- Firehose delivery is scoped to the centralized logs bucket and logs CMK.
+- Config remediation uses a dedicated remediation role.
+- Backup and patch management use dedicated service roles.
+- Access Analyzer is enabled at the account level.
+- Shared log access policies provide read-only log access and KMS decrypt access without write/delete permissions.
+- Break-glass access requires MFA and should be used only during emergencies.
+- Break-glass role usage should be monitored through CloudTrail/EventBridge/SecOps alerts.
+- This module does not create the emergency IAM user used to assume the break-glass role.
 
 ---
 
 ## Notes
 
-- Deploy this module early because many modules require its IAM role outputs.
-- The break-glass IAM user is not created by this module.
-- The break-glass role name includes `name_prefix`.
-- The shared logs policy names are exported for use by Identity Center.
-- The module currently uses `jsonencode()` for IAM policy definitions.
-- IAM Identity Center permission sets and assignments are managed outside this module.
+- Deploy this module before modules that require IAM role ARNs.
+- The `compute` module consumes the EC2 instance profile name.
+- The `logging` module consumes CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs role ARNs.
+- The `security` module consumes Config role and remediation role ARNs.
+- The `automation` module consumes Lambda execution role ARNs.
+- The `backup` module consumes the AWS Backup role ARN.
+- The `patch_management` module consumes the maintenance window role ARN.
+- Shared policy names may be passed to IAM Identity Center for customer-managed policy attachment.
+- The existing Break-Glass section was preserved closely and adjusted only for the module’s current role naming pattern. :contentReference[oaicite:0]{index=0}
