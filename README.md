@@ -282,6 +282,7 @@ Environment stacks include:
 - EventBridge rules
 - SNS topics
 - Backup and patching resources
+- IAM service roles and shared access policies
 
 ### Modules
 
