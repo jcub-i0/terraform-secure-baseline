@@ -228,10 +228,10 @@ module "vpc_endpoints" {
 module "firewall" {
   source = "../modules/firewall"
 
-  name_prefix                     = local.name_prefix
-  cloud_name                      = var.cloud_name
-  environment                     = var.environment
-  vpc_id                          = module.networking.vpc_id
+  name_prefix = local.name_prefix
+  cloud_name  = var.cloud_name
+  environment = var.environment
+  vpc_id      = module.networking.vpc_id
 
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
   logs_cmk_arn                    = module.security.logs_cmk_arn
