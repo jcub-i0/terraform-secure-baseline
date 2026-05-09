@@ -66,11 +66,11 @@ jobs:
     steps:
       - name: Checkout
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configure AWS credentials from GitHub OIDC
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{vars.PLAN_ROLE_GITHUB_ARN}}
           aws-region: ${{vars.PRIMARY_REGION}}
@@ -81,7 +81,7 @@ jobs:
 
       - name: Setup Terraform
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
 
       - name: Terraform Init
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment

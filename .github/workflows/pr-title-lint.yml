@@ -10,8 +10,7 @@ on:
       - opened
       - reopened
       - edited
-      # - synchronize (if you use required Actions)
-
+      
 jobs:
   main:
     name: Validate PR title

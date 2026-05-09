@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
         # CREATE CLEAN EVIDENCE DIRECTORY
       - name: Prepare Report Directory
@@ -58,7 +58,7 @@ jobs:
           terraform validate -no-color 2>&1 | tee reports/terraform-validate.txt
 
       - name: Install tflint
-        uses: terraform-linters/setup-tflint@v4
+        uses: terraform-linters/setup-tflint@v6
 
       - name: Initialize tflint
         run: tflint --init
@@ -87,7 +87,7 @@ jobs:
           checkov -d . -o json --soft-fail > reports/checkov.json || true
 
       - name: Upload Scan Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
             name: ci-evidence
             path: reports/
