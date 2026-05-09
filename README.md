@@ -188,7 +188,7 @@ The **environment** stacks manage:
 
 Compute workloads are deployed in private subnets by default.
 
-The baseline avoids public IPs for application infrastructure and uses controlled outbound access.
+The baseline avoids public IPs for application infrastructure and routes private compute egress through controlled inspection paths, including AWS Network Firewall, NAT Gateway, and VPC endpoints where appropriate.
 
 ### Multi-Account Isolation
 
