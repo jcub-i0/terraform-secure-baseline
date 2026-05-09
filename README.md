@@ -28,6 +28,8 @@ It provides a secure, multi-account cloud foundation with:
 
 This project is intended for SaaS companies, startups, and engineering teams that need a repeatable AWS security foundation without building every security control from scratch.
 
+> This baseline supports SOC 2 and ISO 27001 readiness, but it does not replace an organization’s full compliance program, ISMS, policies, risk management process, or formal audit requirements.
+
 ---
 
 ## What This Project Provides
