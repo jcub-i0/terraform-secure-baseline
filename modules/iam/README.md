@@ -336,6 +336,8 @@ Shared policies include:
 | `<name_prefix>-CentralizedLogsS3ReadOnly` | Read-only access to the centralized logs S3 bucket |
 | `<name_prefix>-LogsKmsDecrypt` | KMS decrypt and describe access for the logs CMK |
 
+This file is intended to grow as more resources depend on the same IAM roles/policies.
+
 ### Centralized Logs S3 Read-Only Policy
 
 Allows read-only access to the centralized logs bucket.
