@@ -342,6 +342,7 @@ Detects attempts to disable, delete, or modify critical security services such a
 - CloudTrail
 - GuardDuty
 - Security Hub
+- AWS Config
 - KMS
 
 ### Break-Glass Monitoring
