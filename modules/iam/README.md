@@ -520,6 +520,40 @@ Expected output:
 
 ---
 
+## Example Module Call
+
+The IAM module is called from the environment or baseline root module and receives context from the shared naming variables, account metadata, logging, monitoring, storage, automation, and security modules.
+
+```hcl
+module "iam" {
+  source = "../modules/iam"
+
+  cloud_name     = var.cloud_name
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  account_id     = data.aws_caller_identity.current.account_id
+  primary_region = var.primary_region
+
+  cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
+  secops_topic_arn         = module.monitoring.secops_topic_arn
+  logs_cmk_arn             = module.security.logs_cmk_arn
+
+  centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
+  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
+  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
+  secops_event_bus_arn                  = module.automation.secops_event_bus_arn
+
+  threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
+  lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
+  secrets_manager_cmk_arn            = module.security.secrets_manager_cmk_arn
+  break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
+}
+```
+
+This module call wires IAM roles and policies to the rest of the baseline, including CloudTrail logging, VPC Flow Logs delivery, Security Operations notifications, EventBridge automation, Secrets Manager access, and break-glass access controls.
+
+---
+
 ## Validation
 
 ### Confirm IAM Roles Exist
