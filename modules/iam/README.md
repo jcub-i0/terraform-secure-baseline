@@ -20,7 +20,7 @@ This module includes IAM resources for:
 - Shared read-only log access policies
 - Emergency break-glass administration
 
-This module does **not** manage IAM Identity Center users, groups, permission sets, or account assignments.
+This module does **not** manage IAM Identity Center users, groups, permission sets, or account assignments. Those resources are managed in `bootstrap/control_plane/identity_center` sub-stack.
 
 ---
 
