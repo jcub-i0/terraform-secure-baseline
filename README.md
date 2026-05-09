@@ -86,10 +86,10 @@ Terraform Stacks
     |--> bootstrap/dev
     |       +--> state
     |       +--> account
-    |--> bootstrap/prod
+    |--> bootstrap/staging
     |       +--> state
     |       +--> account
-    |--> bootstrap/dev
+    |--> bootstrap/prod
     |       +--> state
     |       +--> account
     |
