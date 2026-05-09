@@ -232,6 +232,7 @@ module "firewall" {
   cloud_name                      = var.cloud_name
   environment                     = var.environment
   vpc_id                          = module.networking.vpc_id
+  
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
   logs_cmk_arn                    = module.security.logs_cmk_arn
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
