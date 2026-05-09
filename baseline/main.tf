@@ -33,7 +33,7 @@ module "networking" {
   subnet_cidrs  = var.subnet_cidrs
   azs           = var.azs
 
-  # firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 
 module "security_policy" {
@@ -224,7 +224,7 @@ module "vpc_endpoints" {
   compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
 }
 
-/*
+
 module "firewall" {
   source = "../modules/firewall"
 
@@ -232,13 +232,13 @@ module "firewall" {
   cloud_name                      = var.cloud_name
   environment                     = var.environment
   vpc_id                          = module.networking.vpc_id
-  
+
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
   logs_cmk_arn                    = module.security.logs_cmk_arn
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
   centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
-*/
+
 
 module "patch_management" {
   source = "../modules/patch_management"
