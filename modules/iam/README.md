@@ -601,8 +601,9 @@ Repeat for:
 - `${NAME_PREFIX}-lambda-ip-enrichment`
 
 ---
-
 ### Confirm CloudTrail Role
+
+Confirm the CloudTrail delivery role exists:
 
 ```bash
 aws iam get-role \
@@ -615,11 +616,30 @@ aws iam get-role \
 Expected:
 
 - CloudTrail delivery role exists
-- Trust policy allows CloudTrail to assume the role
+- Role ARN is returned
+
+Then confirm the trust policy allows CloudTrail to assume the role:
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name "${NAME_PREFIX}-cloudtrail-cloudwatch-role" \
+  --query 'Role.AssumeRolePolicyDocument.Statement'
+```
+
+Expected:
+
+- Trust policy allows the CloudTrail service principal:
+
+```text
+cloudtrail.amazonaws.com
+```
 
 ---
 
 ### Confirm VPC Flow Logs Role
+
+Confirm the VPC Flow Logs role exists:
 
 ```bash
 aws iam get-role \
@@ -632,11 +652,30 @@ aws iam get-role \
 Expected:
 
 - VPC Flow Logs role exists
-- Trust policy allows VPC Flow Logs to assume the role
+- Role ARN is returned
+
+Then confirm the trust policy allows VPC Flow Logs to assume the role:
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name "${NAME_PREFIX}-VpcFlowLogsRole" \
+  --query 'Role.AssumeRolePolicyDocument.Statement'
+```
+
+Expected:
+
+- Trust policy allows the VPC Flow Logs service principal:
+
+```text
+vpc-flow-logs.amazonaws.com
+```
 
 ---
 
 ### Confirm Firehose Role
+
+Confirm the Firehose delivery role exists:
 
 ```bash
 aws iam get-role \
@@ -649,11 +688,30 @@ aws iam get-role \
 Expected:
 
 - Firehose delivery role exists
-- Trust policy allows Firehose to assume the role
+- Role ARN is returned
+
+Then confirm the trust policy allows Firehose to assume the role:
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name "${NAME_PREFIX}-FirehoseFlowLogsRole" \
+  --query 'Role.AssumeRolePolicyDocument.Statement'
+```
+
+Expected:
+
+- Trust policy allows the Firehose service principal:
+
+```text
+firehose.amazonaws.com
+```
 
 ---
 
 ### Confirm AWS Config Service-Linked Role
+
+Confirm the AWS Config service-linked role exists:
 
 ```bash
 aws iam get-role \
@@ -666,6 +724,24 @@ aws iam get-role \
 Expected:
 
 - AWS Config service-linked role exists
+- Role ARN is returned
+
+Optional: confirm the trust policy is for AWS Config:
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name AWSServiceRoleForConfig \
+  --query 'Role.AssumeRolePolicyDocument.Statement'
+```
+
+Expected:
+
+- Trust policy allows the AWS Config service principal:
+
+```text
+config.amazonaws.com
+```
 
 ---
 
@@ -707,6 +783,8 @@ backup.amazonaws.com
 
 ### Confirm Patch Maintenance Window Role
 
+Confirm the Patch Maintenance Window role exists:
+
 ```bash
 aws iam get-role \
   --profile "${AWS_PROFILE}" \
@@ -717,8 +795,25 @@ aws iam get-role \
 
 Expected:
 
-- Patch maintenance window role exists
-- Trust policy allows SSM to assume the role
+- Patch Maintenance Window role exists
+- Role ARN is returned
+
+Then confirm the trust policy allows SSM to assume the role:
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name "${NAME_PREFIX}-patch-mw-role" \
+  --query 'Role.AssumeRolePolicyDocument.Statement'
+```
+
+Expected:
+
+- Trust policy allows the SSM service principal:
+
+```text
+ssm.amazonaws.com
+```
 
 ---
 
