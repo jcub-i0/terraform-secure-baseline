@@ -179,7 +179,7 @@ resource "aws_route_table" "compute_private" {
     Terraform   = "true"
   }
 }
-/*
+
 resource "aws_route" "compute_default_to_firewall" {
   for_each               = local.az_index_map
   route_table_id         = aws_route_table.compute_private[each.key].id
@@ -187,7 +187,7 @@ resource "aws_route" "compute_default_to_firewall" {
 
   vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
 }
-*/
+
 ### FIREWALL PRIVATE ROUTE TABLE PER AZ
 resource "aws_route_table" "firewall_private" {
   for_each = local.az_index_map
