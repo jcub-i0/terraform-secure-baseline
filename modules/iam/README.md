@@ -671,6 +671,8 @@ Expected:
 
 ### Confirm Backup Role
 
+Confirm the AWS Backup role exists:
+
 ```bash
 aws iam get-role \
   --profile "${AWS_PROFILE}" \
@@ -682,7 +684,24 @@ aws iam get-role \
 Expected:
 
 - Backup role exists
-- Trust policy allows AWS Backup to assume the role
+- Role ARN is returned
+
+Then confirm the trust policy allows AWS Backup to assume the role:
+
+```bash
+aws iam get-role \
+  --profile "${AWS_PROFILE}" \
+  --role-name "${NAME_PREFIX}-backup-role" \
+  --query 'Role.AssumeRolePolicyDocument.Statement'
+```
+
+Expected:
+
+- Trust policy allows the AWS Backup service principal:
+
+```text
+backup.amazonaws.com
+```
 
 ---
 
