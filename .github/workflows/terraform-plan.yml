@@ -81,7 +81,7 @@ jobs:
 
       - name: Setup Terraform
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
 
       - name: Terraform Init
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
