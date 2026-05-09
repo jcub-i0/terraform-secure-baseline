@@ -533,14 +533,31 @@ aws iam list-roles \
 
 Expected:
 
-- EC2 compute role exists
-- Lambda automation roles exist
-- Logging delivery roles exist
-- Config remediation role exists
-- Backup role exists
-- Patch maintenance window role exists
-- EventBridge SecOps role exists
-- Break-glass admin role exists
+
+- EC2 compute role exists:
+  - `${NAME_PREFIX}-ec2_compute_role`
+- Lambda automation roles exist:
+  - `${NAME_PREFIX}-lambda-ec2-isolation-role`
+  - `${NAME_PREFIX}-lambda-ec2-rollback`
+  - `${NAME_PREFIX}-lambda-ip-enrichment`
+- Logging delivery roles exist:
+  - `${NAME_PREFIX}-cloudtrail-cloudwatch-role`
+  - `${NAME_PREFIX}-VpcFlowLogsRole`
+  - `${NAME_PREFIX}-CloudWatchLogsToFirehose`
+  - `${NAME_PREFIX}-FirehoseFlowLogsRole`
+- Config remediation role exists:
+  - `${NAME_PREFIX}-ConfigRemediationRole`
+- Backup role exists:
+  - `${NAME_PREFIX}-backup-role`
+- Patch maintenance window role exists:
+  - `${NAME_PREFIX}-patch-mw-role`
+- EventBridge SecOps role exists:
+  - `${NAME_PREFIX}-EventBridgePutEventsToSecopsBus`
+- Break-glass admin role exists:
+  - `${NAME_PREFIX}-BreakGlass-Admin`
+- GitHub OIDC roles may also appear if the environment account bootstrap stack has been deployed:
+  - `${NAME_PREFIX}-github-plan-role`
+  - `${NAME_PREFIX}-github-apply-role`
 
 ---
 
