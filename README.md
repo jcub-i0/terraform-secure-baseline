@@ -47,6 +47,7 @@ Key capabilities include:
 - Event-driven security automation
 - EC2 isolation and rollback workflows
 - Tamper detection
+- Private AWS service access through VPC endpoints
 - Break-glass role monitoring
 - Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
