@@ -54,7 +54,7 @@ jobs:
           run: aws sts get-caller-identity
 
         - name: Setup Terraform
-          uses: hashicorp/setup-terraform@v3
+          uses: hashicorp/setup-terraform@v4
 
         - name: Terraform Init Identity Center
           working-directory: ./bootstrap/control_plane/identity_center
