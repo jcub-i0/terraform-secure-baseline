@@ -394,7 +394,7 @@ In production environments, this should reference a dedicated emergency IAM user
 - No routine use
 - Credentials stored securely
 
-> ⚠️ This module does NOT create the break-glass IAM user. This is intentional and must be managed by the deploying organization.
+> ⚠️ This file does NOT create the break-glass IAM user. This is intentional and must be managed by the deploying organization.
 
 ### How to Use
 
