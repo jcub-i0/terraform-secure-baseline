@@ -24,9 +24,11 @@ It provides a secure, multi-account cloud foundation with:
 - Automated detection and response
 - GitHub OIDC-based CI/CD
 - Environment isolation across `dev`, `staging`, and `prod`
-- SOC 2 / ISO 27001-aligned security architecture
+- SOC 2 / ISO 27001-aligned security architecture to support audit readiness
 
 This project is intended for SaaS companies, startups, and engineering teams that need a repeatable AWS security foundation without building every security control from scratch.
+
+> This baseline supports SOC 2 and ISO 27001 readiness, but it does not replace an organization’s full compliance program, ISMS, policies, risk management process, or formal audit requirements.
 
 ---
 
@@ -47,6 +49,7 @@ Key capabilities include:
 - Event-driven security automation
 - EC2 isolation and rollback workflows
 - Tamper detection
+- Private AWS service access through VPC endpoints
 - Break-glass role monitoring
 - Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
@@ -86,10 +89,10 @@ Terraform Stacks
     |--> bootstrap/dev
     |       +--> state
     |       +--> account
-    |--> bootstrap/prod
+    |--> bootstrap/staging
     |       +--> state
     |       +--> account
-    |--> bootstrap/dev
+    |--> bootstrap/prod
     |       +--> state
     |       +--> account
     |
@@ -188,7 +191,7 @@ The **environment** stacks manage:
 
 Compute workloads are deployed in private subnets by default.
 
-The baseline avoids public IPs for application infrastructure and uses controlled outbound access.
+The baseline avoids public IPs for application infrastructure and routes private compute egress through controlled inspection paths, including AWS Network Firewall, NAT Gateway, and VPC endpoints where appropriate.
 
 ### Multi-Account Isolation
 
@@ -281,6 +284,7 @@ Environment stacks include:
 - EventBridge rules
 - SNS topics
 - Backup and patching resources
+- IAM service roles and shared access policies
 
 ### Modules
 
@@ -340,6 +344,7 @@ Detects attempts to disable, delete, or modify critical security services such a
 - CloudTrail
 - GuardDuty
 - Security Hub
+- AWS Config
 - KMS
 
 ### Break-Glass Monitoring
