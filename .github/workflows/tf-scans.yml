@@ -20,6 +20,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: tf-scans-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   terraform_static_analysis:
     name: Static Analysis - ${{matrix.name}}
