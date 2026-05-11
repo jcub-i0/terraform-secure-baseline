@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   terraform_static_analysis:
+    name: Static Analysis - ${{matrix.name}}
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: "true"
