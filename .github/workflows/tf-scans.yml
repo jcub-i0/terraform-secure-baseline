@@ -136,5 +136,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
             name: ci-evidence-${{matrix.name}}
-            path: ${REPORT_DIR}/
+            path: ${{env.REPORT_DIR}}/
             if-no-files-found: error
