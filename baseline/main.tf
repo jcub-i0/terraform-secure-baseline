@@ -112,7 +112,6 @@ module "security" {
   environment                  = var.environment
   account_id                   = var.account_id
   primary_region               = var.primary_region
-  current_region               = data.aws_region.current.region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   guardduty_features = var.guardduty_features
