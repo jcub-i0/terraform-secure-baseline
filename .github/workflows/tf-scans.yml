@@ -80,9 +80,6 @@ jobs:
         with:
           terraform_version: 1.15.2
 
-      - name: Create Plugin Cache Directory
-        run: mkdir -p ~/.terraform.d/plugin-cache
-
       - name: Terraform Format Check
         working-directory: ${{matrix.working_directory}}
         run: |
