@@ -29,9 +29,10 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: ${{matrix.working_directory}}
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v6
 
         # CREATE CLEAN EVIDENCE DIRECTORY
