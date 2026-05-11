@@ -440,7 +440,6 @@ Refer to the child module README for detailed detection coverage.
 | `primary_region` | Primary AWS region for regional security services | Yes |
 | `config_role_arn` | IAM role ARN used by AWS Config | Yes |
 | `centralized_logs_bucket_name` | Name of the centralized logs bucket used by AWS Config | Yes |
-| `current_region` | Current AWS region, used in service-specific KMS policy statements | Yes |
 | `account_id` | AWS account ID | Yes |
 | `compliance_topic_arn` | SNS topic ARN used for compliance notifications | Yes |
 | `guardduty_features` | List of GuardDuty detector features to enable | Yes |
@@ -505,7 +504,6 @@ module "security" {
   environment                  = var.environment
   account_id                   = data.aws_caller_identity.current.account_id
   primary_region               = var.primary_region
-  current_region               = data.aws_region.current.region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   guardduty_features = var.guardduty_features
