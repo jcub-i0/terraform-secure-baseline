@@ -7,10 +7,10 @@ name: Terraform Static Analysis
 on:
   push:
     paths:
-      - '**.tf'
+      - '**/*.tf'
   pull_request:
     paths:
-      - '**.tf'
+      - '**/*.tf'
   workflow_dispatch:
 
 permissions:
