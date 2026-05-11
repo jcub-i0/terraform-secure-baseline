@@ -468,21 +468,25 @@ Each module also includes its own local README.md.
 
 ---
 
-## Roadmap
+## v1.1 Roadmap
 
-### v1.1
-Potential improvements:
+### Primary v1.1 Scope
 
-- Dedicated subnets for Interface VPC Endpoints
-- Add configurable egress inspection modes:
-  - network_firewall
-  - nat_only
-  - vpc_endpoints_only
-- Refactor IAM policies from jsonencode() to aws_iam_policy_document
-- Add additional Service Control Policies
-- Add cross-account GuardDuty aggregation
-- Add cross-account Security Hub aggregation
-- Improve automated validation and test coverage
+1. Add more automated validation/tests
+2. Refactor IAM policies from `jsonencode()` to `aws_iam_policy_document`
+3. Add cost-optimized deployment profile
+4. Add configurable egress modes:
+   - `network_firewall`
+   - `nat_only`
+   - `vpc_endpoints_only`
+5. Add dedicated subnets for Interface VPC Endpoints
+
+### Stretch Goals / Future Candidates
+
+6. Improve dashboarding / evidence outputs
+7. Add SCP strategy and Terraform implementation
+8. Add cross-account GuardDuty aggregation
+9. Add cross-account Security Hub aggregation
 
 ---
 
