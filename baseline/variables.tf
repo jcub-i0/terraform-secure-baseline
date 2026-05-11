@@ -23,7 +23,7 @@ variable "account_id" {
 
 variable "random_id" {
   description = "Random 4-digit string"
-  type = string
+  type        = string
 }
 
 variable "main_vpc_cidr" {
