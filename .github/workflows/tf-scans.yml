@@ -94,14 +94,17 @@ jobs:
         uses: terraform-linters/setup-tflint@v6
 
       - name: Initialize TFLint
+        working-directory: ${{matrix.working_directory}}
         run: tflint --init
 
       - name: Run TFLint (compact)
+        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           tflint --recursive -f compact 2>&1 | tee reports/tflint-compact.txt || true
 
       - name: Run TFLint (JUnit)
+        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           tflint --recursive -f junit > reports/tflint-junit.xml || true
@@ -110,11 +113,13 @@ jobs:
         run: pip install checkov
 
       - name: Run Checkov Scan (JUNIT)
+        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           checkov -d . -o junitxml --soft-fail > reports/checkov-junit.xml || true
 
       - name: Run Checkov Scan (JSON)
+        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           checkov -d . -o json --soft-fail > reports/checkov.json || true
