@@ -21,6 +21,11 @@ variable "account_id" {
   type        = string
 }
 
+variable "random_id" {
+  description = "Random 4-digit string"
+  type = string
+}
+
 variable "main_vpc_cidr" {
   description = "CIDR block for the primary VPC"
   default     = "10.0.0.0/16"
