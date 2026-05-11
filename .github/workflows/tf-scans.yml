@@ -70,12 +70,12 @@ jobs:
       - name: Initialize TFLint
         run: tflint --init
 
-      - name: Run tflint (compact)
+      - name: Run TFLint (compact)
         run: |
           set -o pipefail
           tflint -f compact 2>&1 | tee reports/tflint-compact.txt || true
 
-      - name: Run tflint (JUnit)
+      - name: Run TFLint (JUnit)
         run: |
           set -o pipefail
           tflint -f junit > reports/tflint-junit.xml || true
