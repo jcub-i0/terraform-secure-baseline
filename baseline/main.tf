@@ -66,7 +66,7 @@ module "storage" {
   environment = var.environment
   vpc_id      = module.networking.vpc_id
   account_id  = var.account_id
-  random_id   = random_id.random_id.hex
+  random_id   = var.random_id
 
   db_port     = var.db_port
   db_username = var.db_username
