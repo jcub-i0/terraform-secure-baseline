@@ -26,6 +26,29 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_PLUGIN_CACHE_DIR: "/home/runner/.terraform.d/plugin-cache"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        working_directory:
+          - environments/dev
+          - environmnets/staging
+          - environments/prod
+
+          - bootstrap/control_plane/account
+          - bootstrap/control_plane/identity_center
+          - bootstrap/control_plane/organizations
+          - bootstrap/control_plane/state
+
+          - bootstrap/dev/account
+          - bootstrap/dev/state
+
+          - bootstrap/staging/account
+          - bootstrap/staging/state
+
+          - bootstrap/prod/account
+          - bootstrap/prod/state
+
     defaults:
       run:
         shell: bash
