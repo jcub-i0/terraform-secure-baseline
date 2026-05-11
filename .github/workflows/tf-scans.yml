@@ -30,25 +30,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        working_directory:
-          - environments/dev
-          - environmnets/staging
-          - environments/prod
-
-          - bootstrap/control_plane/account
-          - bootstrap/control_plane/identity_center
-          - bootstrap/control_plane/organizations
-          - bootstrap/control_plane/state
-
-          - bootstrap/dev/account
-          - bootstrap/dev/state
-
-          - bootstrap/staging/account
-          - bootstrap/staging/state
-
-          - bootstrap/prod/account
-          - bootstrap/prod/state
-
+        include:
+          - name: env-dev
+            working_directory: environments/dev
+          - name: env-staging
+            working_directory: environments/staging
+          - name: env-prod
+            working_directory: environments/prod
+          - name: control-plane-account
+            working_directory: bootstrap/control_plane/account
+          - name: control-plane-identity-center
+            working_directory: bootstrap/control_plane/identity_center
+          - name: control-plane-organizations
+            working_directory: bootstrap/control_plane/organizations
+          - name: control-plane-state
+            working_directory: bootstrap/control_plane/state
+          - name: dev-account
+            working_directory: bootstrap/dev/account
+          - name: dev-state
+            working_directory: bootstrap/dev/state
+          - name: staging-account
+            working_directory: bootstrap/staging/account
+          - name: staging-state
+            working_directory: bootstrap/staging/state
+          - name: prod-account
+            working_directory: bootstrap/prod/account
+          - name: prod-state
+            working_directory: bootstrap/prod/state
     defaults:
       run:
         shell: bash
