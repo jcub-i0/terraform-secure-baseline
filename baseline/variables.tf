@@ -16,6 +16,11 @@ variable "primary_region" {
   default     = "us-east-1"
 }
 
+variable "account_id" {
+  description = "ID of the AWS account where infrastructure is deployed"
+  type = string
+}
+
 variable "main_vpc_cidr" {
   description = "CIDR block for the primary VPC"
   default     = "10.0.0.0/16"
