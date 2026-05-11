@@ -110,13 +110,13 @@ jobs:
         working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
-          tflint --recursive -f compact 2>&1 | tee "${REPORT_DIR}/tflint-compact.txt" || true
+          tflint --recursive -f compact 2>&1 | tee "${REPORT_DIR}/tflint-compact.txt"
 
       - name: Run TFLint (JUnit)
         working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
-          tflint --recursive -f junit > "${REPORT_DIR}/tflint-junit.xml" || true
+          tflint --recursive -f junit > "${REPORT_DIR}/tflint-junit.xml"
 
       - name: Install Checkov
         run: pip install checkov
