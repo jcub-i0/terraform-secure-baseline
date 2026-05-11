@@ -4,9 +4,6 @@
 
 name: Terraform Static Analysis
 
-permissions:
-  contents: read
-
 on:
   push:
     paths:
@@ -14,6 +11,10 @@ on:
   pull_request:
     paths:
       - '**.tf'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   terraform_static_analysis:
