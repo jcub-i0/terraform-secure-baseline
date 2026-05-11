@@ -3,7 +3,6 @@ locals {
 }
 
 data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
 resource "random_id" "random_id" { byte_length = 4 }
 
 module "baseline" {
