@@ -135,6 +135,6 @@ jobs:
       - name: Upload Scan Results
         uses: actions/upload-artifact@v6
         with:
-            name: ci-evidence
+            name: ci-evidence-${{matrix.name}}
             path: ${REPORT_DIR}/
             if-no-files-found: error
