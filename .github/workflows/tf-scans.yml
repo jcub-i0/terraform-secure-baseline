@@ -9,12 +9,12 @@ on:
     paths:
       - '**/*.tf'
       - '**/*.tfvars'
-      - '**/.github/workflows/tf-scans.yml'
+      - '.github/workflows/tf-scans.yml'
   pull_request:
     paths:
       - '**/*.tf'
       - '**/*.tfvars'
-      - '**/.github/workflows/tf-scans.yml'
+      - '.github/workflows/tf-scans.yml'
   workflow_dispatch:
 
 permissions:
