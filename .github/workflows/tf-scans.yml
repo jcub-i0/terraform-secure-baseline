@@ -82,19 +82,16 @@ jobs:
           terraform_version: 1.15.2
 
       - name: Terraform Format Check
-        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           terraform fmt -check -recursive | tee "${REPORT_DIR}/terraform-fmt.txt"
 
       - name: Terraform Init (no backend)
-        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           terraform init -backend=false -input=false -no-color | tee "${REPORT_DIR}/terraform-init.txt"
 
       - name: Terraform Validate
-        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           terraform validate -no-color 2>&1 | tee "${REPORT_DIR}/terraform-validate.txt"
@@ -103,17 +100,14 @@ jobs:
         uses: terraform-linters/setup-tflint@v6
 
       - name: Initialize TFLint
-        working-directory: ${{matrix.working_directory}}
         run: tflint --init
 
       - name: Run TFLint (compact)
-        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           tflint --recursive -f compact 2>&1 | tee "${REPORT_DIR}/tflint-compact.txt"
 
       - name: Run TFLint (JUnit)
-        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           tflint --recursive -f junit > "${REPORT_DIR}/tflint-junit.xml"
@@ -122,13 +116,11 @@ jobs:
         run: pip install checkov
 
       - name: Run Checkov Scan (JUNIT)
-        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           checkov -d . -o junitxml --soft-fail > "${REPORT_DIR}/checkov-junit.xml" || true
 
       - name: Run Checkov Scan (JSON)
-        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           checkov -d . -o json --soft-fail > "${REPORT_DIR}/checkov.json" || true
