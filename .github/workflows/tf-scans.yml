@@ -58,7 +58,7 @@ jobs:
             working_directory: bootstrap/prod/account
           - name: prod-state
             working_directory: bootstrap/prod/state
-            
+
     defaults:
       run:
         shell: bash
@@ -71,8 +71,9 @@ jobs:
         # CREATE CLEAN EVIDENCE DIRECTORY
       - name: Prepare Report Directory
         run: |
-          rm -rf reports
-          mkdir -p reports
+          rm -rf "${REPORT_DIR}"
+          mkdir -p "${REPORT_DIR}"
+          mkdir -p "${TF_PLUGIN_CACHE_DIR}"
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
