@@ -18,7 +18,7 @@ variable "primary_region" {
 
 variable "account_id" {
   description = "ID of the AWS account where infrastructure is deployed"
-  type = string
+  type        = string
 }
 
 variable "main_vpc_cidr" {
