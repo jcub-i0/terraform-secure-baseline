@@ -6,7 +6,7 @@ module "identity_center_dev" {
   secops_operator_group_name   = "SecOps-Operator-Dev"
   secops_event_bus_arn         = "arn:aws:events:${var.primary_region_dev}:${var.account_id_dev}:event-bus/secops-bus"
   enable_secops_analyst        = var.enable_secops_analyst_dev
-  secops_analyst_group_name    = var.secops_analyst_group_name
+  secops_analyst_group_name    = "${var.secops_analyst_group_name}-Dev"
   enable_secops_engineer       = var.enable_secops_engineer_dev
   secops_engineer_group_name   = "SecOps-Engineer-Dev"
   logs_cmk_decrypt_policy_name = var.logs_cmk_decrypt_policy_name_dev
