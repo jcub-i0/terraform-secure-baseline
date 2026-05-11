@@ -73,16 +73,19 @@ jobs:
         run: mkdir -p ~/.terraform.d/plugin-cache
 
       - name: Terraform Format Check
+        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           terraform fmt -check -recursive | tee reports/terraform-fmt.txt
 
       - name: Terraform Init (no backend)
+        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           terraform init -backend=false -input=false -no-color | tee reports/terraform-init.txt
 
       - name: Terraform Validate
+        working-directory: ${{matrix.working_directory}}
         run: |
           set -o pipefail
           terraform validate -no-color 2>&1 | tee reports/terraform-validate.txt
