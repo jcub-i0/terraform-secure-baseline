@@ -64,12 +64,6 @@ variable "primary_region_staging" {
   description = "Primary region used by the 'staging' environment"
 }
 
-variable "secops_analyst_group_name" {
-  description = "Name of the SecOps-Analyst IAM group"
-  type        = string
-  default     = null
-}
-
 variable "logs_s3_readonly_policy_name_dev" {
   description = "'Name' attribute of the 'dev' env's logs_s3_readonly policy"
   type        = string
