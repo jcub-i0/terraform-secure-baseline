@@ -64,10 +64,10 @@ jobs:
           set -o pipefail
           terraform validate -no-color 2>&1 | tee reports/terraform-validate.txt
 
-      - name: Install tflint
+      - name: Install TFLint
         uses: terraform-linters/setup-tflint@v6
 
-      - name: Initialize tflint
+      - name: Initialize TFLint
         run: tflint --init
 
       - name: Run tflint (compact)
