@@ -26,6 +26,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_PLUGIN_CACHE_DIR: "/home/runner/.terraform.d/plugin-cache"
+      REPORT_DIR: ${{github.workspace}}/reports/${{matrix.working_directory}}
 
     strategy:
       fail-fast: false
