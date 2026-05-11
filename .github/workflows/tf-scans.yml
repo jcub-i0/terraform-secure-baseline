@@ -96,12 +96,12 @@ jobs:
       - name: Run TFLint (compact)
         run: |
           set -o pipefail
-          tflint -f compact 2>&1 | tee reports/tflint-compact.txt || true
+          tflint --recursive -f compact 2>&1 | tee reports/tflint-compact.txt || true
 
       - name: Run TFLint (JUnit)
         run: |
           set -o pipefail
-          tflint -f junit > reports/tflint-junit.xml || true
+          tflint --recursive -f junit > reports/tflint-junit.xml || true
 
       - name: Install Checkov
         run: pip install checkov
