@@ -12,6 +12,7 @@ module "baseline" {
   cloud_name                         = var.cloud_name
   environment                        = var.environment
   account_id                         = data.aws_caller_identity.current.account_id
+  random_id = random_id.random_id.hex
   primary_region                     = var.primary_region
   bucket_admin_principals            = var.bucket_admin_principals
   abuseipdb_api_key                  = var.abuseipdb_api_key
