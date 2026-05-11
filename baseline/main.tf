@@ -13,11 +13,6 @@ locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
 }
 
-# GLOBAL RESOURCES
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-resource "random_id" "random_id" { byte_length = 4 }
-
 ###############
 # MODULE CALLS
 ###############
