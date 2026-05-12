@@ -54,7 +54,6 @@ jobs:
             --retry-wait-time 5
             --max-retries 3
             --timeout 20
-            --exclude-mail
             --include-fragments
             './**/*.md'
           fail: true
