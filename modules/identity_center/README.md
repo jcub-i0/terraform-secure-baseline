@@ -184,7 +184,7 @@ To confirm the module is working:
 
   1. Log into IAM Identity Center portal:
     - `https://<your-org>.awsapps.com/start
-  
+
   2. Verify access:
     - SecOps-Analyst sees read-only data
     - SecOps-Engineer can perform response actions
@@ -193,7 +193,7 @@ To confirm the module is working:
   3. Confirm IAM roles exist:
     - Navigate to `IAM` ➔ `Roles`
     - Locate `AWSReservedSSO_SecOps-*` roles
-  
+
   4. Test access via CLI:
     ```bash
     aws sts get-caller-identity --profile <profile-name>
@@ -207,17 +207,17 @@ To confirm the module is working:
 > Note:
 > - `<profile-name>` is the local AWS CLI profile configured via `aws configure sso`
 > - This profile is mapped to the IAM Identity Center permission set (i.e., `SecOps-Analyst`)
-  
-5. Validate permissions:
-  - SecOps-Analyst:
-    - Can view logs and findings
-    - Cannot modify resources
-    
-  - SecOps-Engineer:
-    - Can update findings and modify EC2 instances
 
-  - SecOps-Operator:
-    - Can publish events to EventBridge Rollback bus only
+5. Validate permissions:
+- SecOps-Analyst:
+  - Can view logs and findings
+  - Cannot modify resources
+
+- SecOps-Engineer:
+  - Can update findings and modify EC2 instances
+
+- SecOps-Operator:
+  - Can publish events to EventBridge Rollback bus only
 
 ---
 

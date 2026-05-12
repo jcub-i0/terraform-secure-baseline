@@ -24,7 +24,7 @@ This module provides automation for:
 
 ## Architecture
 
-```
+```text
 Security Hub Finding
     |
     +--> EventBridge Rule: HIGH / CRITICAL EC2 Finding
@@ -42,7 +42,6 @@ Security Hub Finding
             |
             v
         Threat Intel Lookup + SNS Alert
-
 
 SecOps Operator
     |
@@ -108,7 +107,7 @@ When triggered, the Lambda function is designed to isolate affected EC2 instance
 
 ### Trigger
 
-```
+```text
 source      = aws.securityhub
 detail-type = Security Hub Findings - Imported
 severity    = HIGH or CRITICAL
@@ -130,7 +129,7 @@ This workflow is intentionally triggered through a custom SecOps EventBridge bus
 
 ### Trigger
 
-```
+```text
 event bus = secops-bus
 source    = custom.rollback
 ```
@@ -151,7 +150,7 @@ The Lambda function enriches IP address indicators using an external threat inte
 
 ### Trigger
 
-```
+```text
 source      = aws.securityhub
 detail-type = Security Hub Findings - Imported
 severity    = HIGH or CRITICAL
@@ -162,7 +161,7 @@ workflow    = NEW
 
 The module stores the AbuseIPDB API key in AWS Secrets Manager.
 
-```
+```text
 Secret name prefix:
 <name_prefix>/threat-intel/api-keys-
 ```

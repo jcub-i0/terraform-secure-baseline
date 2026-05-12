@@ -41,7 +41,7 @@ module "github_oidc" {
 
   tf_state_bucket_arn     = "arn:aws:s3:::your-tf-state-bucket"
   tf_state_bucket_cmk_arn = "arn:aws:kms:...:key/..."
-  
+
   enable_apply_role_github = true
 }
 ```

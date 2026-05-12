@@ -299,18 +299,18 @@ Each module contains its own `README.md` describing its purpose, inputs, outputs
 
 This baseline integrates several AWS-native security services:
 
-| Service |	Purpose |
+| Service |  Purpose |
 |---------|---------|
 | GuardDuty | Threat detection |
 | Security Hub | Security findings aggregation |
 | AWS Config | Compliance rule evaluation |
 | CloudTrail | API activity logging |
 | CloudWatch | Metrics, logs, and alarms |
-| Inspector	| Vulnerability scanning |
+| Inspector  | Vulnerability scanning |
 | EventBridge | Security event routing |
-| SNS |	Alert delivery |
-| KMS |	Encryption key management |
-| IAM Identity Center |	Centralized human access |
+| SNS |  Alert delivery |
+| KMS |  Encryption key management |
+| IAM Identity Center |  Centralized human access |
 | AWS Backup | Backup orchestration |
 | SSM Patch Manager | Patch management |
 
@@ -457,8 +457,8 @@ Important docs include:
 | Document | Purpose |
 |----------|---------|
 | docs/quickstart.md | End-to-end deployment guide |
-| docs/architecture-overview.md	| Architecture explanation |
-| docs/design-principles.md	| Design principles and rationale |
+| docs/architecture-overview.md  | Architecture explanation |
+| docs/design-principles.md  | Design principles and rationale |
 | docs/adoption-guide.md | Guidance for adapting the baseline |
 | docs/validation-checklist.md | Post-deployment validation checklist |
 | docs/assurance/ | Compliance-oriented documentation |

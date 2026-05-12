@@ -23,7 +23,7 @@ These events may indicate an attempt to weaken logging, detection, encryption, o
 
 ## Architecture
 
-```
+```text
 AWS API Call
     |
     v
