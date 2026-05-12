@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   docs_validation:
-    name: Validate Markdown docs
+    name: Validate Markdown Docs
     runs-on: ubuntu-latest
 
     steps:
