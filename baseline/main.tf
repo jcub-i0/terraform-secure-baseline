@@ -13,11 +13,6 @@ locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
 }
 
-# GLOBAL RESOURCES
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-resource "random_id" "random_id" { byte_length = 4 }
-
 ###############
 # MODULE CALLS
 ###############
@@ -70,8 +65,8 @@ module "storage" {
   name_prefix = local.name_prefix
   environment = var.environment
   vpc_id      = module.networking.vpc_id
-  account_id  = data.aws_caller_identity.current.account_id
-  random_id   = random_id.random_id.hex
+  account_id  = var.account_id
+  random_id   = var.random_id
 
   db_port     = var.db_port
   db_username = var.db_username
@@ -91,7 +86,7 @@ module "iam" {
   cloud_name     = var.cloud_name
   name_prefix    = local.name_prefix
   environment    = var.environment
-  account_id     = data.aws_caller_identity.current.account_id
+  account_id     = var.account_id
   primary_region = var.primary_region
 
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
@@ -115,9 +110,8 @@ module "security" {
   name_prefix                  = local.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
-  account_id                   = data.aws_caller_identity.current.account_id
+  account_id                   = var.account_id
   primary_region               = var.primary_region
-  current_region               = data.aws_region.current.region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   guardduty_features = var.guardduty_features
@@ -140,7 +134,7 @@ module "logging" {
   name_prefix = local.name_prefix
 
   vpc_id     = module.networking.vpc_id
-  account_id = data.aws_caller_identity.current.account_id
+  account_id = var.account_id
 
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
@@ -157,7 +151,7 @@ module "monitoring" {
 
   name_prefix = local.name_prefix
   environment = var.environment
-  account_id  = data.aws_caller_identity.current.account_id
+  account_id  = var.account_id
 
   cloudtrail_logs_group_name          = module.logging.cloudtrail_logs_group_name
   logs_cmk_arn                        = module.security.logs_cmk_arn
@@ -177,7 +171,7 @@ module "automation" {
   source = "../modules/automation"
 
   cloud_name     = var.cloud_name
-  account_id     = data.aws_caller_identity.current.account_id
+  account_id     = var.account_id
   name_prefix    = local.name_prefix
   environment    = var.environment
   primary_region = var.primary_region
@@ -211,7 +205,7 @@ module "vpc_endpoints" {
   name_prefix    = local.name_prefix
   vpc_id         = module.networking.vpc_id
   environment    = var.environment
-  account_id     = data.aws_caller_identity.current.account_id
+  account_id     = var.account_id
   primary_region = var.primary_region
 
   compute_private_subnet_ids_map    = module.networking.compute_private_subnet_ids_map

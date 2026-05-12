@@ -4,74 +4,117 @@
 
 name: Terraform Static Analysis
 
-permissions:
-  contents: read
-
 on:
   push:
     paths:
-      - '**.tf'
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/tf-scans.yml'
   pull_request:
     paths:
-      - '**.tf'
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/tf-scans.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tf-scans-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   terraform_static_analysis:
+    name: Static Analysis - ${{matrix.name}}
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: "true"
       TF_PLUGIN_CACHE_DIR: "/home/runner/.terraform.d/plugin-cache"
+      REPORT_DIR: ${{github.workspace}}/reports/${{matrix.name}}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: env-dev
+            working_directory: environments/dev
+          - name: env-staging
+            working_directory: environments/staging
+          - name: env-prod
+            working_directory: environments/prod
+          - name: control-plane-account
+            working_directory: bootstrap/control_plane/account
+          - name: control-plane-identity-center
+            working_directory: bootstrap/control_plane/identity_center
+          - name: control-plane-organizations
+            working_directory: bootstrap/control_plane/organizations
+          - name: control-plane-state
+            working_directory: bootstrap/control_plane/state
+          - name: dev-account
+            working_directory: bootstrap/dev/account
+          - name: dev-state
+            working_directory: bootstrap/dev/state
+          - name: staging-account
+            working_directory: bootstrap/staging/account
+          - name: staging-state
+            working_directory: bootstrap/staging/state
+          - name: prod-account
+            working_directory: bootstrap/prod/account
+          - name: prod-state
+            working_directory: bootstrap/prod/state
+
     defaults:
       run:
         shell: bash
+        working-directory: ${{matrix.working_directory}}
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v6
 
         # CREATE CLEAN EVIDENCE DIRECTORY
       - name: Prepare Report Directory
         run: |
-          rm -rf reports
-          mkdir -p reports
+          rm -rf "${REPORT_DIR}"
+          mkdir -p "${REPORT_DIR}"
+          mkdir -p "${TF_PLUGIN_CACHE_DIR}"
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: 1.14.4
-
-      - name: Create Plugin Cache Directory
-        run: mkdir -p ~/.terraform.d/plugin-cache
+          terraform_version: 1.15.2
 
       - name: Terraform Format Check
         run: |
           set -o pipefail
-          terraform fmt -check -recursive | tee reports/terraform-fmt.txt
+          terraform fmt -check -recursive | tee "${REPORT_DIR}/terraform-fmt.txt"
 
       - name: Terraform Init (no backend)
         run: |
           set -o pipefail
-          terraform init -backend=false -input=false -no-color | tee reports/terraform-init.txt
+          terraform init -backend=false -input=false -no-color | tee "${REPORT_DIR}/terraform-init.txt"
 
       - name: Terraform Validate
         run: |
           set -o pipefail
-          terraform validate -no-color 2>&1 | tee reports/terraform-validate.txt
+          terraform validate -no-color 2>&1 | tee "${REPORT_DIR}/terraform-validate.txt"
 
-      - name: Install tflint
+      - name: Install TFLint
         uses: terraform-linters/setup-tflint@v6
 
-      - name: Initialize tflint
+      - name: Initialize TFLint
         run: tflint --init
 
-      - name: Run tflint (compact)
+      - name: Run TFLint (compact)
         run: |
           set -o pipefail
-          tflint -f compact 2>&1 | tee reports/tflint-compact.txt || true
+          tflint --recursive -f compact 2>&1 | tee "${REPORT_DIR}/tflint-compact.txt"
 
-      - name: Run tflint (JUnit)
+      - name: Run TFLint (JUnit)
         run: |
           set -o pipefail
-          tflint -f junit > reports/tflint-junit.xml || true
+          tflint --recursive -f junit > "${REPORT_DIR}/tflint-junit.xml"
 
       - name: Install Checkov
         run: pip install checkov
@@ -79,16 +122,16 @@ jobs:
       - name: Run Checkov Scan (JUNIT)
         run: |
           set -o pipefail
-          checkov -d . -o junitxml --soft-fail > reports/checkov-junit.xml || true
+          checkov -d . -o junitxml --soft-fail > "${REPORT_DIR}/checkov-junit.xml" || true
 
       - name: Run Checkov Scan (JSON)
         run: |
           set -o pipefail
-          checkov -d . -o json --soft-fail > reports/checkov.json || true
+          checkov -d . -o json --soft-fail > "${REPORT_DIR}/checkov.json" || true
 
       - name: Upload Scan Results
         uses: actions/upload-artifact@v6
         with:
-            name: ci-evidence
-            path: reports/
+            name: ci-evidence-${{matrix.name}}
+            path: ${{env.REPORT_DIR}}/
             if-no-files-found: error

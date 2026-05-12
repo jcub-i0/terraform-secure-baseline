@@ -1,8 +1,3 @@
-variable "cloud_name" {
-  description = "The name of this cloud environment"
-  type        = string
-}
-
 variable "enable_secops_analyst_dev" {
   description = "Determines whether SecOps-Analyst resources are deployed in the 'dev' env"
   type        = bool
@@ -67,18 +62,6 @@ variable "primary_region_prod" {
 variable "primary_region_staging" {
   type        = string
   description = "Primary region used by the 'staging' environment"
-}
-
-variable "secops_analyst_group_name" {
-  description = "Name of the SecOps-Analyst IAM group"
-  type        = string
-  default     = null
-}
-
-variable "secops_engineer_group_name" {
-  description = "Name of the SecOps-Engineer IAM group"
-  type        = string
-  default     = null
 }
 
 variable "logs_s3_readonly_policy_name_dev" {
