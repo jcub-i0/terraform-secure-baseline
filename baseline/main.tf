@@ -11,6 +11,16 @@
 
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
+
+  is_production_profile = var.deployment_profile == "production"
+  is_development_profile = var.deployment_profile == "development"
+  is_minimal_profile = var.deployment_profile == "minimal"
+
+  effective_egress_mode = (
+    var.deployment_profile == "production" ? "network_firewall" :
+    var.deployment_profile == "development" ? "nat_only" :
+    "vpc_endpoints_only"
+  )
 }
 
 ###############
