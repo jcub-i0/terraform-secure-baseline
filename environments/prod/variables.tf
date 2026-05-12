@@ -24,6 +24,23 @@ variable "deployment_profile" {
   }
 }
 
+variable "egress_mode" {
+  description = "Private subnet egress mode. Valid values: network_firewall, nat_only, vpc_endpoints_only, or auto."
+  type        = string
+  default     = "auto"
+
+  validation {
+    condition = contains([
+      "auto",
+      "network_firewall",
+      "nat_only",
+      "vpc_endpoints_only"
+    ], var.egress_mode)
+
+    error_message = "egress_mode must be one of: auto, network_firewall, nat_only, vpc_endpoints_only."
+  }
+}
+
 variable "primary_region" {
   description = "Primary Region used"
   type        = string
