@@ -170,7 +170,7 @@ This stack uses local Terraform state because it creates the remote backend reso
 
 It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**. This is an intended sympton of the configuration's security-by-default design.
 
-```
+```bash
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'
 ```
 
@@ -489,7 +489,7 @@ terraform apply
 
 Be sure to also set these variables (`LAMBDA_CMK_ARN` and `SECRETS_MANAGER_CMK_ARN`) in the following GitHub environments:
 
-```
+```text
 dev
 dev-plan
 prod
