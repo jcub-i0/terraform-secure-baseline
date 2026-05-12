@@ -24,7 +24,7 @@ This module provides automation for:
 
 ## Architecture
 
-```
+```text
 Security Hub Finding
     |
     +--> EventBridge Rule: HIGH / CRITICAL EC2 Finding
