@@ -55,6 +55,8 @@ jobs:
             --max-retries 3
             --timeout 20
             --include-fragments
+            --exclude-path .terraform
+            --exclude-path node_modules
             './**/*.md'
           fail: true
 
