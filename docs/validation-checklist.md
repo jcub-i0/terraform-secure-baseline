@@ -1108,7 +1108,7 @@ aws iam list-mfa-devices \
 
 Expected output:
 
-```
+```text
 arn:aws:iam::<ACCOUNT_ID>:mfa/<DEVICE_NAME>
 ```
 
@@ -1141,7 +1141,7 @@ aws sts assume-role \
 
 Expected output:
 
-```
+```json
 {
     "Credentials": {
         "AccessKeyId": "XXXXXX",
