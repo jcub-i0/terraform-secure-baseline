@@ -111,7 +111,6 @@ Grouped by:
 
 ## Failed Controls
 
-
 Displays **failed Security Hub compliance controls** across enabled frameworks.
 
 This provides a quick view of **compliance posture** and highlights security configuration issues.

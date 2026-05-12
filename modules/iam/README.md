@@ -567,7 +567,6 @@ aws iam list-roles \
 
 Expected:
 
-
 - EC2 compute role exists:
   - `${NAME_PREFIX}-ec2_compute_role`
 - Lambda automation roles exist:

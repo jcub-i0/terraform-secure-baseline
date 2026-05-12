@@ -43,7 +43,6 @@ Security Hub Finding
             v
         Threat Intel Lookup + SNS Alert
 
-
 SecOps Operator
     |
     | custom.rollback event
