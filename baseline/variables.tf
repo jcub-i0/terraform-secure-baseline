@@ -10,6 +10,22 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "deployment_profile" {
+  description = "Deployment profile controlling cost/security defaults. Valid values: production, development, minimal."
+  type = string
+  default = "production"
+
+  validation {
+    condition = contains([
+      "production",
+      "development",
+      "minimal"
+    ], var.deployment_profile)
+
+    error_message = "deployment_profile must be one of: production, development, minimal."
+  }
+}
+
 variable "primary_region" {
   description = "Primary Region used"
   type        = string
