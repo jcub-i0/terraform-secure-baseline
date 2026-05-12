@@ -27,6 +27,10 @@ locals {
     var.deployment_profile == "development" ? 30 :
     14
   )
+
+  effective_backup_enabled = var.deployment_profile == "production"
+
+  effective_inspector_enabled = var.deployment_profile != "minimal"
 }
 
 ###############
