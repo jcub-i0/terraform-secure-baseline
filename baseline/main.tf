@@ -21,6 +21,12 @@ locals {
     var.deployment_profile == "development" ? "nat_only" :
     "vpc_endpoints_only"
   )
+
+  effective_cloudwatch_log_retention_days = (
+    var.deployment_profile == "production" ? 90 :
+    var.deployment_profile == "development" ? 30 :
+    14
+  )
 }
 
 ###############
