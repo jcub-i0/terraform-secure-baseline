@@ -973,7 +973,7 @@ After running tests, confirm:
 
 Errors associated with these tests are often the result of an invalid environment variable.
 
-Ensure that all environment variables are correctly set prior to following the troubleshooting steps outlined below. 
+Ensure that all environment variables are correctly set prior to following the troubleshooting steps outlined below.
 
 ## Lambda invocation fails
 

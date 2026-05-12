@@ -662,7 +662,7 @@ This test does not invoke the rollback Lambda directly. It confirms that isolati
 
 ### Expected Outcome
 
-After running one of the `EC2 Isolation` tests that results in an isolated instance (Test 1 or 2), ensure the following: 
+After running one of the `EC2 Isolation` tests that results in an isolated instance (Test 1 or 2), ensure the following:
 
 - Instance is isolated
 - Snapshot is taken of EBS volume(s) associated with the instance
@@ -754,7 +754,7 @@ Preferred cleanup path:
 
 Errors associated with these tests are often the result of an invalid environment variable.
 
-Ensure that all environment variables are correctly set prior to following the troubleshooting steps outlined below. 
+Ensure that all environment variables are correctly set prior to following the troubleshooting steps outlined below.
 
 ## Lambda invocation succeeds but instance is not isolated
 

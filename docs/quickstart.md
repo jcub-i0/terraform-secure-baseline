@@ -62,7 +62,7 @@ The `state` stacks are applied locally first because they create the remote back
 
 This configuration requires **four AWS accounts**: `dev`, `staging`, `prod`, and `control-plane`.
 
-Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.** 
+Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.**
 
 > Note: This example uses IAM user access keys for simplicity during initial bootstrap. If your organization uses AWS SSO or another federation method, configure the profiles using that method instead.
 
@@ -167,7 +167,7 @@ Confirm each command returns the expected AWS account ID.
 The control-plane `state` stack creates backend resources for the control-plane substacks.
 
 This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
- 
+
 It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**. This is an intended sympton of the configuration's security-by-default design.
 
 ```
@@ -264,7 +264,7 @@ Each workload account needs its own Terraform backend resources.
 Apply each environment `state` stack locally.
 
 This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
- 
+
 It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**.
 
 ## Dev

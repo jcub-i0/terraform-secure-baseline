@@ -40,11 +40,11 @@ GitHub Actions
 AWS IAM OIDC Provider
     |
     | sts:AssumeRoleWithWebIdentity
-    v 
+    v
 GitHub-Plan / GitHub-Apply IAM Roles
     |
     | Terraform permissions
-    v 
+    v
 Target Terraform Stack
 ```
 

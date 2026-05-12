@@ -8,17 +8,17 @@ The `config_baseline` module establishes an opinionated AWS Config security base
 
 It provides:
 
-- Continuous configuration monitoring  
-- Foundational security guardrails  
-- Minimal but high-signal compliance checks  
-- Safe auto-remediation for critical misconfigurations  
+- Continuous configuration monitoring
+- Foundational security guardrails
+- Minimal but high-signal compliance checks
+- Safe auto-remediation for critical misconfigurations
 
 This module is designed to:
 
-✔ Improve security posture  
-✔ Reduce misconfiguration risk  
-✔ Support audit readiness (SOC2 / ISO-style controls)  
-✔ Avoid breaking workloads  
+✔ Improve security posture
+✔ Reduce misconfiguration risk
+✔ Support audit readiness (SOC2 / ISO-style controls)
+✔ Avoid breaking workloads
 
 ---
 
@@ -30,9 +30,9 @@ Enables configuration tracking across supported AWS resources.
 
 Includes:
 
-- Delivery channel to centralized logging S3 bucket  
-- KMS encryption support  
-- SNS integration for compliance alerts  
+- Delivery channel to centralized logging S3 bucket
+- KMS encryption support
+- SNS integration for compliance alerts
 
 ---
 
@@ -64,11 +64,11 @@ Protects against accidental data exposure.
 
 Includes:
 
-- Public access prohibited  
-- Public read prohibited  
-- Public write prohibited  
-- Server-side encryption required  
-- Versioning enabled  
+- Public access prohibited
+- Public read prohibited
+- Public write prohibited
+- Server-side encryption required
+- Versioning enabled
 
 ---
 
@@ -78,9 +78,9 @@ Ensures audit logging remains active.
 
 Includes:
 
-- CloudTrail enabled  
-- Multi-region trails enabled  
-- Log file validation enabled  
+- CloudTrail enabled
+- Multi-region trails enabled
+- Log file validation enabled
 
 ---
 
@@ -90,8 +90,8 @@ Protects data at rest and prevents exposure.
 
 Includes:
 
-- Storage encryption required  
-- Public accessibility prohibited  
+- Storage encryption required
+- Public accessibility prohibited
 
 ---
 
@@ -101,7 +101,7 @@ Protects data at rest.
 
 Includes:
 
-- EBS volumes must be encrypted  
+- EBS volumes must be encrypted
 
 ---
 
@@ -111,7 +111,7 @@ Prevents common remote access exposure.
 
 Includes:
 
-- SSH from 0.0.0.0/0 prohibited  
+- SSH from 0.0.0.0/0 prohibited
 
 ---
 
@@ -121,8 +121,8 @@ Improves identity security.
 
 Includes:
 
-- Root MFA required  
-- Password policy enforcement  
+- Root MFA required
+- Password policy enforcement
 
 Disabled by default to avoid unnecessary AWS Config scope expansion and cost, as these checks rely on global IAM resource types.
 
@@ -137,10 +137,10 @@ Improves compute-level security posture.
 
 Includes:
 
-- IMDSv2 required  
-- EBS optimization required  
-- Orphaned volume detection  
-- Public IP assignment prohibited  
+- IMDSv2 required
+- EBS optimization required
+- Orphaned volume detection
+- Public IP assignment prohibited
 
 ---
 
