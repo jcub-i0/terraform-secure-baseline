@@ -16,16 +16,16 @@ locals {
   is_development_profile = var.deployment_profile == "development"
   is_minimal_profile     = var.deployment_profile == "minimal"
 
-  effective_egress_mode = (
+  profile_default_egress_mode = (
     var.deployment_profile == "production" ? "network_firewall" :
     var.deployment_profile == "development" ? "nat_only" :
     "vpc_endpoints_only"
   )
 
-  effective_cloudwatch_log_retention_days = (
-    var.deployment_profile == "production" ? 90 :
-    var.deployment_profile == "development" ? 30 :
-    14
+  effective_egress_mode = (
+    var.egress_mode == "auto"
+    ? local.profile_default_egress_mode
+    : var.egress_mode
   )
 
   effective_backup_enabled = var.deployment_profile == "production"
