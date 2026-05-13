@@ -279,6 +279,14 @@ Creates one compute private route table per Availability Zone:
 resource "aws_route_table" "compute_private"
 ```
 
+Compute private default routing depends on `egress_mode`:
+
+| egress_mode | Compute private default route |
+|---|---|
+| `network_firewall` | AWS Network Firewall endpoint |
+| `nat_only` | NAT Gateway |
+| `vpc_endpoints_only` | No default route |
+
 Each compute private route table is associated with the corresponding compute private subnet.
 
 The compute private route tables include a default route to the AWS Network Firewall endpoint in the same Availability Zone:
