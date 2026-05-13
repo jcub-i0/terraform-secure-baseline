@@ -4,4 +4,4 @@ primary_region = "us-east-1"
 config_enabled = false
 backup_enabled = true
 
-deployment_profile = "development"
+deployment_profile = "production"
