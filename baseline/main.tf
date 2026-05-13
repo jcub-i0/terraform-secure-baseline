@@ -48,6 +48,8 @@ module "networking" {
   subnet_cidrs  = var.subnet_cidrs
   azs           = var.azs
 
+  egress_mode = local.effective_egress_mode
+
   firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
 }
 
