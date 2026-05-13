@@ -245,6 +245,7 @@ module "vpc_endpoints" {
 }
 
 module "firewall" {
+  count = local.effective_egress_mode == "network_firewall" ? 1 : 0
   source = "../modules/firewall"
 
   name_prefix = local.name_prefix
