@@ -50,7 +50,11 @@ module "networking" {
 
   egress_mode = local.effective_egress_mode
 
-  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+  firewall_endpoint_ids_by_az = (
+    local.effective_egress_mode == "network_firewall"
+    ? module.firewall.firewall_endpoint_ids_by_az
+    : {}
+  )
 }
 
 module "security_policy" {
