@@ -5,7 +5,7 @@ output "vpc_id" {
 # For for_each patterns
 output "nat_gateway_ids_map" {
   description = "map(string) of NATGW IDs by AZ"
-  value = { for az, natgw in aws_nat_gateway.natgw : az => natgw.id }
+  value       = { for az, natgw in aws_nat_gateway.natgw : az => natgw.id }
 }
 
 output "public_subnet_ids_map" {
