@@ -181,8 +181,8 @@ resource "aws_route_table" "compute_private" {
 }
 
 resource "aws_route" "compute_default_to_firewall" {
-  for_each               = var.egress_mode == "network_firewall" ? local.az_index_map : {}
-  
+  for_each = var.egress_mode == "network_firewall" ? local.az_index_map : {}
+
   route_table_id         = aws_route_table.compute_private[each.key].id
   destination_cidr_block = "0.0.0.0/0"
 
