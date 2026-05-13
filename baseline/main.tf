@@ -52,7 +52,7 @@ module "networking" {
 
   firewall_endpoint_ids_by_az = (
     local.effective_egress_mode == "network_firewall"
-    ? module.firewall.firewall_endpoint_ids_by_az
+    ? module.firewall[0].firewall_endpoint_ids_by_az
     : {}
   )
 }
