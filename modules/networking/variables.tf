@@ -23,7 +23,9 @@ variable "subnet_cidrs" {
 }
 
 variable "firewall_endpoint_ids_by_az" {
+  description = "Map of AWS Network Firewall endpoint IDs keyed by Availability Zone; required when 'egress_mode' is 'network_firewall'."
   type = map(string)
+  default = {}
 }
 
 variable "egress_mode" {
