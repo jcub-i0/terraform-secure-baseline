@@ -189,6 +189,15 @@ resource "aws_route" "compute_default_to_firewall" {
   vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
 }
 
+resource "aws_route" "compute_default_to_nat" {
+  for_each = var.egress_mode == "nat_only" ? local.az_index_map : {}
+
+  route_table_id = aws_route_table.compute_private[each.key]
+  destination_cidr_block = "0.0.0.0/0"
+
+  nat_gateway_id = aws_nat_gateway.natgw[each.key].id
+}
+
 ### FIREWALL PRIVATE ROUTE TABLE PER AZ
 resource "aws_route_table" "firewall_private" {
   for_each = local.az_index_map
