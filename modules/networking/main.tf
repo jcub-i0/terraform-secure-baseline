@@ -156,7 +156,7 @@ resource "aws_route_table" "public" {
 resource "aws_route" "public_compute_return_to_firewall" {
   for_each = var.egress_mode == "network_firewall" ? local.az_index_map : {}
 
-  route_table_id = aws_route_table.public[each.key].id
+  route_table_id         = aws_route_table.public[each.key].id
   destination_cidr_block = var.subnet_cidrs.compute_private[each.value]
 
   vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
