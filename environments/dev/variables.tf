@@ -11,7 +11,7 @@ variable "environment" {
 variable "deployment_profile" {
   description = "Deployment profile controlling cost/security defaults. Valid values: production, development, minimal."
   type        = string
-  default     = "development"
+  default     = "production"
 
   validation {
     condition = contains([
