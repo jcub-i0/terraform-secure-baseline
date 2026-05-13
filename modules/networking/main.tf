@@ -192,7 +192,7 @@ resource "aws_route" "compute_default_to_firewall" {
 resource "aws_route" "compute_default_to_nat" {
   for_each = var.egress_mode == "nat_only" ? local.az_index_map : {}
 
-  route_table_id = aws_route_table.compute_private[each.key]
+  route_table_id         = aws_route_table.compute_private[each.key]
   destination_cidr_block = "0.0.0.0/0"
 
   nat_gateway_id = aws_nat_gateway.natgw[each.key].id
