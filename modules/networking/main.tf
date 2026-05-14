@@ -232,12 +232,12 @@ resource "aws_route_table" "firewall_private" {
 }
 
 resource "aws_route" "firewall_private" {
-  for_each = local.az_index_map
+  for_each = var.egress_mode == "network_firewall" ? local.az_index_map : {}
 
-  route_table_id         = aws_route_table.firewall_private.id
+  route_table_id         = aws_route_table.firewall_private[each.key].id
   destination_cidr_block = "0.0.0.0/0"
 
-  nat_gateway_id = aws_nat_gateway.natgw.id
+  nat_gateway_id = aws_nat_gateway.natgw[each.key].id
 }
 
 ### DATA PRIVATE ROUTE TABLE PER AZ
