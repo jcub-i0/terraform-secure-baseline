@@ -66,6 +66,10 @@ variable "logs_cmk_arn" {
   type = string
 }
 
+variable "cloudwatch_retention_days" {
+  type = string
+}
+
 variable "ip_enrichment_write_to_securityhub" {
   type = bool
 }
