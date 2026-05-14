@@ -29,8 +29,8 @@ locals {
   # Explicit egress_mode values override the profile default.
   # ---------------------------------------------------------------------------
   profile_default_egress_mode = (
-    var.deployment_profile == "production" ? "network_firewall" :
-    var.deployment_profile == "development" ? "nat_only" :
+    local.is_production_profile ? "network_firewall" :
+    local.is_development_profile ? "nat_only" :
     "vpc_endpoints_only"
   )
 
@@ -47,8 +47,8 @@ locals {
   # default retention period. Explicit values override the profile default.
   # ---------------------------------------------------------------------------
   profile_default_cloudwatch_retention_days = (
-    var.deployment_profile == "production" ? 90 :
-    var.deployment_profile == "development" ? 30 :
+    local.is_production_profile ? 90 :
+    local.is_development_profile ? 30 :
     14
   )
 
@@ -65,8 +65,8 @@ locals {
   # If Config is disabled, all Config rule groups are forced off.
   # ---------------------------------------------------------------------------
   profile_default_enable_config = (
-    var.deployment_profile == "production" ? true :
-    var.deployment_profile == "development" ? true :
+    local.is_production_profile ? true :
+    local.is_development_profile ? true :
     false
   )
 
@@ -96,8 +96,8 @@ locals {
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
-  effective_backup_enabled = var.deployment_profile == "production"
-  effective_inspector_enabled = var.deployment_profile != "minimal"
+  effective_backup_enabled = local.is_production_profile
+  effective_inspector_enabled = !local.is_minimal_profile
 }
 
 ###############
