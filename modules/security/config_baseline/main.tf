@@ -52,7 +52,7 @@ resource "time_sleep" "wait_for_config_recorder" {
 ## CONFIGURATION RECORDER STATUS
 resource "aws_config_configuration_recorder_status" "config" {
   name       = aws_config_configuration_recorder.config.name
-  is_enabled = var.config_enabled
+  is_enabled = var.enable_config
 
   depends_on = [
     time_sleep.wait_for_config_recorder

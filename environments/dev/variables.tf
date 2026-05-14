@@ -59,7 +59,7 @@ variable "abuseipdb_api_key" {
   default     = null
 }
 
-variable "config_enabled" {
+variable "enable_config" {
   description = "Define whether AWS Config is enabled or not"
   type        = bool
 }

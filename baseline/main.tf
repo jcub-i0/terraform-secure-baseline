@@ -157,7 +157,7 @@ module "security" {
   guardduty_features = var.guardduty_features
   enable_rules       = var.enable_rules
 
-  config_enabled              = var.config_enabled
+  enable_config              = var.enable_config
   config_role_arn             = module.iam.config_role_arn
   config_remediation_role_arn = module.iam.config_remediation_role_arn
 
