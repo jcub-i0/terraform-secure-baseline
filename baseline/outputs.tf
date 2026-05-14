@@ -23,6 +23,11 @@ output "deployment_profile" {
   value       = var.deployment_profile
 }
 
+output "egress_mode" {
+  description = "Selected egress mode input."
+  value       = var.egress_mode
+}
+
 output "effective_egress_mode" {
   description = "Effective egress mode after resolving deployment_profile and egress_mode"
   value       = local.effective_egress_mode
@@ -31,11 +36,6 @@ output "effective_egress_mode" {
 output "effective_cloudwatch_retention_days" {
   description = "Effective CloudWatch Logs retention period after resolving deployment_profile and cloudwatch_retention_days override"
   value       = local.effective_cloudwatch_retention_days
-}
-
-output "egress_mode" {
-  description = "Selected egress mode input."
-  value       = var.egress_mode
 }
 
 output "effective_enable_config" {
