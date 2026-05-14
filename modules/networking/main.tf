@@ -160,6 +160,13 @@ resource "aws_route" "public_compute_return_to_firewall" {
   destination_cidr_block = var.subnet_cidrs.compute_private[each.value]
 
   vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+
+  lifecycle {
+    precondition {
+      condition = contains(keys(var.firewall_endpoint_ids_by_az), each.key)
+      error_message = "'firewall_endpoint_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
+    }
+  }
 }
 
 ## PUBLIC ROUTE TABLE ASSOCIATION
