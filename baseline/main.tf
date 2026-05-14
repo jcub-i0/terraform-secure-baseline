@@ -40,6 +40,18 @@ locals {
     : local.profile_default_cloudwatch_retention_days
   )
 
+  profile_default_enable_config = (
+    var.deployment_profile == "production" ? true :
+    var.deployment_profile == "development" ? true :
+    false
+  )
+
+  effective_enable_config = (
+    var.enable_config != null
+    ? var.enable_config
+    : local.profile_default_enable_config
+  )
+
   effective_backup_enabled = var.deployment_profile == "production"
 
   effective_inspector_enabled = var.deployment_profile != "minimal"
