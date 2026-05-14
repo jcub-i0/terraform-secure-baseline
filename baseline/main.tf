@@ -35,9 +35,9 @@ locals {
   )
 
   effective_cloudwatch_retention_days = (
-    var.deployment_profile == "production" ? 90 :
-    var.deployment_profile == "development" ? 30 :
-    14
+    var.cloudwatch_retention_days != null
+    ? var.cloudwatch_retention_days
+    : local.profile_default_cloudwatch_retention_days
   )
 
   effective_backup_enabled = var.deployment_profile == "production"
