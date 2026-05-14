@@ -52,7 +52,7 @@ locals {
     : local.profile_default_enable_config
   )
 
-  effective_enable_rules = local.effective_enable_config ? var.enable_rules : {
+  disabled_enable_rules = {
     s3_baseline         = false
     cloudtrail_baseline = false
     rds_baseline        = false
@@ -62,6 +62,12 @@ locals {
     ec2_baseline        = false
     kms_baseline        = false
   }
+
+  effective_enable_rules = (
+    local.effective_enable_config
+    ? var.enable_rules
+    : local.disabled_enable_rules
+  )
 
   effective_backup_enabled = var.deployment_profile == "production"
 
