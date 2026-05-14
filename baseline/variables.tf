@@ -45,8 +45,8 @@ variable "egress_mode" {
 
 variable "cloudwatch_retention_days" {
   description = "CloudWatch log retention in days. Set to null to use the deployment_profile default."
-  type = number
-  default = null
+  type        = number
+  default     = null
 
   validation {
     condition = (
