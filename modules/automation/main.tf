@@ -110,7 +110,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
 ### CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   name              = "/aws/lambda/${var.name_prefix}-ec2-isolation"
-  retention_in_days = 30
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
@@ -271,7 +271,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
 ### CLOUDWATCH LOG GROUP FOR EC2 ROLLBACK LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   name              = "/aws/lambda/${var.name_prefix}-ec2-rollback"
-  retention_in_days = 30
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
@@ -394,7 +394,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
 ### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   name              = "/aws/lambda/${var.name_prefix}-ip-enrichment"
-  retention_in_days = 30
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
