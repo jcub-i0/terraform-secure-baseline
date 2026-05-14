@@ -40,20 +40,20 @@ output "effective_cloudwatch_retention_days" {
 
 output "effective_enable_config" {
   description = "Effective AWS Config enablement after resolving deployment_profile and enable_config override"
-  value = module.baseline.effective_enable_config
+  value       = module.baseline.effective_enable_config
 }
 
 output "effective_enable_rules" {
   description = "Effective AWS Config rule group settings after resolving deployment_profile, enable_config, and enable_rules"
-  value = module.baseline.effective_enable_rules
+  value       = module.baseline.effective_enable_rules
 }
 
 output "effective_backup_enabled" {
   description = "Effective AWS Backup enablement after resolving deployment_profile"
-  value = module.baseline.effective_backup_enabled
+  value       = module.baseline.effective_backup_enabled
 }
 
 output "effective_inspector_enabled" {
   description = "Effective Inspector enablement after resolving deployment_profile"
-  value = module.baseline.effective_inspector_enabled
+  value       = module.baseline.effective_inspector_enabled
 }
