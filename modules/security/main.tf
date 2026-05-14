@@ -557,7 +557,7 @@ module "config_baseline" {
 
   name_prefix                  = var.name_prefix
   environment                  = var.environment
-  enable_config               = var.enable_config
+  enable_config                = var.enable_config
   config_role_arn              = var.config_role_arn
   compliance_topic_arn         = var.compliance_topic_arn
   config_remediation_role_arn  = var.config_remediation_role_arn

@@ -169,7 +169,7 @@ module "security" {
   guardduty_features = var.guardduty_features
   enable_rules       = var.enable_rules
 
-  enable_config              = local.effective_enable_config
+  enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
   config_remediation_role_arn = module.iam.config_remediation_role_arn
 
