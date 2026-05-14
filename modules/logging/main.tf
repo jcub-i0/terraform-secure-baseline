@@ -2,7 +2,7 @@
 ## CLOUDTRAIL LOG GROUP
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${var.name_prefix}"
-  retention_in_days = 90
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
@@ -15,7 +15,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 ## FLOW LOGS LOG GROUP
 resource "aws_cloudwatch_log_group" "flowlogs" {
   name              = "/aws/flowlogs/${var.name_prefix}"
-  retention_in_days = 90
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
