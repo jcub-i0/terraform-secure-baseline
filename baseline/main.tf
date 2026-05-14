@@ -52,6 +52,17 @@ locals {
     : local.profile_default_enable_config
   )
 
+  effective_enable_rules = local.effective_enable_config ? var.enable_rules : {
+    s3_baseline         = false
+    cloudtrail_baseline = false
+    rds_baseline        = false
+    ebs_baseline        = false
+    sg_baseline         = false
+    iam_baseline        = false
+    ec2_baseline        = false
+    kms_baseline        = false
+  }
+
   effective_backup_enabled = var.deployment_profile == "production"
 
   effective_inspector_enabled = var.deployment_profile != "minimal"
@@ -167,7 +178,7 @@ module "security" {
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   guardduty_features = var.guardduty_features
-  enable_rules       = var.enable_rules
+  enable_rules       = local.effective_enable_rules
 
   enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
