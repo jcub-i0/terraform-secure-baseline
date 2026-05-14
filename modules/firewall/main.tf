@@ -1,7 +1,7 @@
 # CLOUDWATCH LOG GROUP FOR NETWORK FIREWALL
 resource "aws_cloudwatch_log_group" "network_firewall" {
   name              = var.network_firewall_log_group_name
-  retention_in_days = 30
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
