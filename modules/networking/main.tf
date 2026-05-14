@@ -1,6 +1,8 @@
 locals {
   # Loop over var.azs using the index (indx) to pick the CIDR for that AZ
   az_index_map = { for indx, az in var.azs : az => indx }
+
+  nat_enabled = var.egress_mode != "vpc_endpoints_only"
 }
 
 # CREATE MAIN VPC
@@ -110,7 +112,7 @@ resource "aws_internet_gateway" "igw" {
 
 ## EIP
 resource "aws_eip" "nat" {
-  for_each = local.az_index_map
+  for_each = local.nat_enabled ? local.az_index_map : {}
   domain   = "vpc"
 
   tags = {
@@ -122,7 +124,8 @@ resource "aws_eip" "nat" {
 
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
-  for_each      = local.az_index_map
+  for_each = local.nat_enabled ? local.az_index_map : {}
+
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.public[each.key].id
 
@@ -160,6 +163,13 @@ resource "aws_route" "public_compute_return_to_firewall" {
   destination_cidr_block = var.subnet_cidrs.compute_private[each.value]
 
   vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+
+  lifecycle {
+    precondition {
+      condition     = contains(keys(var.firewall_endpoint_ids_by_az), each.key)
+      error_message = "'firewall_endpoint_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
+    }
+  }
 }
 
 ## PUBLIC ROUTE TABLE ASSOCIATION
@@ -191,6 +201,13 @@ resource "aws_route" "compute_default_to_firewall" {
   destination_cidr_block = "0.0.0.0/0"
 
   vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+
+  lifecycle {
+    precondition {
+      condition     = contains(keys(var.firewall_endpoint_ids_by_az), each.key)
+      error_message = "'firewall_endpoint_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
+    }
+  }
 }
 
 resource "aws_route" "compute_default_to_nat" {
@@ -207,16 +224,20 @@ resource "aws_route_table" "firewall_private" {
   for_each = local.az_index_map
   vpc_id   = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.natgw[each.key].id
-  }
-
   tags = {
     Name        = "${var.name_prefix}-Firewall-Private-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
+}
+
+resource "aws_route" "firewall_private" {
+  for_each = var.egress_mode == "network_firewall" ? local.az_index_map : {}
+
+  route_table_id         = aws_route_table.firewall_private[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+
+  nat_gateway_id = aws_nat_gateway.natgw[each.key].id
 }
 
 ### DATA PRIVATE ROUTE TABLE PER AZ

@@ -4,7 +4,7 @@
 
 The `config_baseline` module establishes an opinionated AWS Config security baseline designed for small–mid scale SaaS environments handling sensitive data (e.g., PII).
 
-`config_baseline` will only be deployed if the `config_enabled` variable in `variables.tf` is set to `true`.
+`config_baseline` will only be deployed if the `enable_config` variable in `variables.tf` is set to `true`.
 
 It provides:
 

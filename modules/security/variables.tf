@@ -46,7 +46,7 @@ variable "secops_topic_arn" {
   type = string
 }
 
-variable "config_enabled" {
+variable "enable_config" {
   type = bool
 }
 

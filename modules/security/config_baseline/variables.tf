@@ -6,7 +6,7 @@ variable "environment" {
   type = string
 }
 
-variable "config_enabled" {
+variable "enable_config" {
   type    = bool
   default = false
 }

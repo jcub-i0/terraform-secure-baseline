@@ -22,6 +22,10 @@ variable "logs_cmk_arn" {
   type = string
 }
 
+variable "cloudwatch_retention_days" {
+  type = string
+}
+
 variable "network_firewall_log_group_name" {
   type    = string
   default = "/aws/firewall/egress"

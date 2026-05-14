@@ -22,6 +22,10 @@ variable "logs_cmk_arn" {
   type = string
 }
 
+variable "cloudwatch_retention_days" {
+  type = string
+}
+
 variable "cloudtrail_role_arn" {
   type = string
 }

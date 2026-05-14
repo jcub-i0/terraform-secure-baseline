@@ -446,7 +446,7 @@ Refer to the child module README for detailed detection coverage.
 | `config_remediation_role_arn` | IAM role ARN used by AWS Config remediation actions | Yes |
 | `secops_event_bus_name` | Name of the SecOps EventBridge event bus | Yes |
 | `secops_topic_arn` | SNS topic ARN used for SecOps alerts | Yes |
-| `config_enabled` | Whether AWS Config baseline resources are enabled | Yes |
+| `enable_config` | Whether AWS Config baseline resources are enabled | Yes |
 | `enable_rules` | Object controlling which Config baseline rule groups are enabled | No |
 
 ---
@@ -509,7 +509,7 @@ module "security" {
   guardduty_features = var.guardduty_features
   enable_rules       = var.enable_rules
 
-  config_enabled              = var.config_enabled
+  enable_config              = var.enable_config
   config_role_arn             = module.iam.config_role_arn
   config_remediation_role_arn = module.iam.config_remediation_role_arn
 
