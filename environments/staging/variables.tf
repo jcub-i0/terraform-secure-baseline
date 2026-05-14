@@ -60,13 +60,40 @@ variable "abuseipdb_api_key" {
 }
 
 variable "enable_config" {
-  description = "Define whether AWS Config is enabled or not"
+  description = "Whether to enable AWS Config. Set to null to use the deployment_profile default."
   type        = bool
+  default     = null
+}
+
+variable "enable_rules" {
+  description = "Rules to be enabled in the 'config_baseline' module"
+  type = object({
+    s3_baseline         = bool
+    cloudtrail_baseline = bool
+    rds_baseline        = bool
+    ebs_baseline        = bool
+    sg_baseline         = bool
+    iam_baseline        = bool
+    ec2_baseline        = bool
+    kms_baseline        = bool
+  })
+
+  default = {
+    s3_baseline         = true
+    cloudtrail_baseline = true
+    rds_baseline        = true
+    ebs_baseline        = true
+    sg_baseline         = true
+    iam_baseline        = false
+    ec2_baseline        = true
+    kms_baseline        = true
+  }
 }
 
 variable "backup_enabled" {
-  description = "Define whether backup resources are enabled"
+  description = "Whether to enable AWS Backup. Set to null to use the deployment_profile default."
   type        = bool
+  default     = null
 }
 
 variable "break_glass_trusted_principal_arns" {
