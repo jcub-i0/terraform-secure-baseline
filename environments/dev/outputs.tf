@@ -20,15 +20,15 @@ output "logs_s3_readonly_policy_name" {
 
 output "deployment_profile" {
   description = "Selected deployment profile"
-  value = module.baseline.deployment_profile
+  value       = module.baseline.deployment_profile
 }
 
 output "egress_mode" {
   description = "Selected egress mode input"
-  value = module.baseline.egress_mode
+  value       = module.baseline.egress_mode
 }
 
 output "effective_egress_mode" {
   description = "Effective egress mode after resolving deployment_profile and egress_mode"
-  value = module.baseline.effective_egress_mode
+  value       = module.baseline.effective_egress_mode
 }
