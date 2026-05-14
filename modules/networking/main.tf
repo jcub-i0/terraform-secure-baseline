@@ -195,7 +195,7 @@ resource "aws_route" "compute_default_to_firewall" {
   lifecycle {
     precondition {
       condition     = contains(keys(var.firewall_endpoint_ids_by_az), each.key)
-      error_message = "'firewall_endpoints_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
+      error_message = "'firewall_endpoint_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
     }
   }
 }
