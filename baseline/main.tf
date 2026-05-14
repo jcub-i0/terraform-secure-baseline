@@ -96,7 +96,7 @@ locals {
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
-  effective_backup_enabled = local.is_production_profile
+  effective_backup_enabled    = local.is_production_profile
   effective_inspector_enabled = !local.is_minimal_profile
 }
 
