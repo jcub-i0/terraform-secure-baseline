@@ -10,12 +10,24 @@
 # ==================================================================== 
 
 locals {
+  # ---------------------------------------------------------------------------
+  # Naming
+  # ---------------------------------------------------------------------------
   name_prefix = "${var.cloud_name}-${var.environment}"
 
+  # ---------------------------------------------------------------------------
+  # Deployment profile flags
+  # ---------------------------------------------------------------------------
   is_production_profile  = var.deployment_profile == "production"
   is_development_profile = var.deployment_profile == "development"
   is_minimal_profile     = var.deployment_profile == "minimal"
 
+  # ---------------------------------------------------------------------------
+  # Egress mode
+  #
+  # If egress_mode is "auto", the deployment profile selects the default.
+  # Explicit egress_mode values override the profile default.
+  # ---------------------------------------------------------------------------
   profile_default_egress_mode = (
     var.deployment_profile == "production" ? "network_firewall" :
     var.deployment_profile == "development" ? "nat_only" :
@@ -28,6 +40,12 @@ locals {
     : var.egress_mode
   )
 
+  # ---------------------------------------------------------------------------
+  # CloudWatch Logs retention
+  #
+  # If cloudwatch_retention_days is null, the deployment profile selects the
+  # default retention period. Explicit values override the profile default.
+  # ---------------------------------------------------------------------------
   profile_default_cloudwatch_retention_days = (
     var.deployment_profile == "production" ? 90 :
     var.deployment_profile == "development" ? 30 :
@@ -40,6 +58,12 @@ locals {
     : local.profile_default_cloudwatch_retention_days
   )
 
+  # ---------------------------------------------------------------------------
+  # AWS Config
+  #
+  # If enable_config is null, the deployment profile selects the default.
+  # If Config is disabled, all Config rule groups are forced off.
+  # ---------------------------------------------------------------------------
   profile_default_enable_config = (
     var.deployment_profile == "production" ? true :
     var.deployment_profile == "development" ? true :
@@ -69,8 +93,10 @@ locals {
     : local.disabled_enable_rules
   )
 
+  # ---------------------------------------------------------------------------
+  # Cost-sensitive service defaults
+  # ---------------------------------------------------------------------------
   effective_backup_enabled = var.deployment_profile == "production"
-
   effective_inspector_enabled = var.deployment_profile != "minimal"
 }
 
