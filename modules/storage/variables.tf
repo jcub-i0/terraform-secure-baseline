@@ -31,6 +31,10 @@ variable "logs_cmk_arn" {
   type = string
 }
 
+variable "cloudwatch_retention_days" {
+  type = string
+}
+
 variable "account_id" {
   description = "The ID of the AWS account Terraform is using"
   type        = string
