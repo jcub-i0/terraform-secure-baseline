@@ -33,6 +33,7 @@ jobs:
         TF_VAR_apply_role_github_arn: ${{vars.APPLY_ROLE_GITHUB_ARN}}
         TF_VAR_plan_role_github_arn: ${{vars.PLAN_ROLE_GITHUB_ARN}}
         TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
+        TF_VAR_deployment_profile: ${{vars.DEPLOYMENT_PROFILE}}
         TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
         TF_VAR_tf_state_bucket_cmk_arn: ${{vars.TF_STATE_BUCKET_CMK_ARN}}
         TF_VAR_tf_state_lock_table_arn: ${{vars.TF_STATE_LOCK_TABLE_ARN}}

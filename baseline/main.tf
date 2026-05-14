@@ -48,7 +48,13 @@ module "networking" {
   subnet_cidrs  = var.subnet_cidrs
   azs           = var.azs
 
-  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+  egress_mode = local.effective_egress_mode
+
+  firewall_endpoint_ids_by_az = (
+    local.effective_egress_mode == "network_firewall"
+    ? module.firewall[0].firewall_endpoint_ids_by_az
+    : {}
+  )
 }
 
 module "security_policy" {
@@ -238,8 +244,8 @@ module "vpc_endpoints" {
   compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
 }
 
-
 module "firewall" {
+  count  = local.effective_egress_mode == "network_firewall" ? 1 : 0
   source = "../modules/firewall"
 
   name_prefix = local.name_prefix
@@ -252,7 +258,6 @@ module "firewall" {
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
   centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
 }
-
 
 module "patch_management" {
   source = "../modules/patch_management"

@@ -146,16 +146,20 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.igw.id
   }
 
-  route {
-    cidr_block      = var.subnet_cidrs.compute_private[each.value]
-    vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
-  }
-
   tags = {
     Name        = "${var.name_prefix}-Public-Route-Table-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
+}
+
+resource "aws_route" "public_compute_return_to_firewall" {
+  for_each = var.egress_mode == "network_firewall" ? local.az_index_map : {}
+
+  route_table_id         = aws_route_table.public[each.key].id
+  destination_cidr_block = var.subnet_cidrs.compute_private[each.value]
+
+  vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
 }
 
 ## PUBLIC ROUTE TABLE ASSOCIATION
@@ -181,11 +185,21 @@ resource "aws_route_table" "compute_private" {
 }
 
 resource "aws_route" "compute_default_to_firewall" {
-  for_each               = local.az_index_map
+  for_each = var.egress_mode == "network_firewall" ? local.az_index_map : {}
+
   route_table_id         = aws_route_table.compute_private[each.key].id
   destination_cidr_block = "0.0.0.0/0"
 
   vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+}
+
+resource "aws_route" "compute_default_to_nat" {
+  for_each = var.egress_mode == "nat_only" ? local.az_index_map : {}
+
+  route_table_id         = aws_route_table.compute_private[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+
+  nat_gateway_id = aws_nat_gateway.natgw[each.key].id
 }
 
 ### FIREWALL PRIVATE ROUTE TABLE PER AZ
