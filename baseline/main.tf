@@ -112,6 +112,8 @@ module "storage" {
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
 
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+
   logs_cmk_arn            = module.security.logs_cmk_arn
   secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
   cloudtrail_arn          = module.logging.cloudtrail_arn
@@ -178,6 +180,8 @@ module "logging" {
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
   logs_cmk_arn                = module.security.logs_cmk_arn
 
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+
   cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
   flowlogs_role_arn           = module.iam.flowlogs_role_arn
   firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
@@ -224,6 +228,8 @@ module "automation" {
   lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
 
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+
   secops_topic_arn        = module.monitoring.secops_topic_arn
   lambda_cmk_arn          = module.security.lambda_cmk_arn
   logs_cmk_arn            = module.security.logs_cmk_arn
@@ -264,6 +270,8 @@ module "firewall" {
   cloud_name  = var.cloud_name
   environment = var.environment
   vpc_id      = module.networking.vpc_id
+
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
   logs_cmk_arn                    = module.security.logs_cmk_arn
