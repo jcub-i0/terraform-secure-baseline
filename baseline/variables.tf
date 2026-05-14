@@ -43,6 +43,25 @@ variable "egress_mode" {
   }
 }
 
+variable "cloudwatch_retention_days" {
+  description = "CloudWatch log retention in days. Set to null to use the deployment_profile default."
+  type = number
+  default = null
+
+  validation {
+    condition = (
+      var.cloudwatch_retention_days == null ||
+      contains([
+        1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180,
+        365, 400, 545, 731, 1096, 1827, 2192, 2557,
+        3653
+      ], var.cloudwatch_retention_days)
+    )
+
+    error_message = "cloudwatch_retention_days must be null or a valid CLoudWatch Logs retention value."
+  }
+}
+
 variable "primary_region" {
   description = "Primary Region used"
   type        = string
