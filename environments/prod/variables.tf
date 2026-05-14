@@ -60,13 +60,15 @@ variable "abuseipdb_api_key" {
 }
 
 variable "enable_config" {
-  description = "Define whether AWS Config is enabled or not"
+  description = "Whether to enable AWS Config. Set to null to use the deployment_profile default."
   type        = bool
+  default     = null
 }
 
 variable "backup_enabled" {
-  description = "Define whether backup resources are enabled"
+  description = "Whether to enable AWS Backup. Set to null to use the deployment_profile default."
   type        = bool
+  default     = null
 }
 
 variable "break_glass_trusted_principal_arns" {

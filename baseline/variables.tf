@@ -170,11 +170,16 @@ variable "enable_rules" {
   }
 }
 
-# ENABLE IN PROD
 variable "enable_config" {
-  description = "Define whether AWS Config is enabled or not"
+  description = "Whether to enable AWS Config. Set to null to use the deployment_profile default."
   type        = bool
-  default     = false
+  default     = null
+}
+
+variable "backup_enabled" {
+  description = "Whether to enable AWS Backup. Set to null to use the deployment_profile default."
+  type        = bool
+  default     = null
 }
 
 variable "ip_enrichment_write_to_securityhub" {
@@ -211,12 +216,6 @@ variable "patch_tag_value" {
   description = "Tag value used to target patchable instances (the key is 'PatchGroup' by default)"
   type        = string
   default     = "weekly-linux"
-}
-
-variable "backup_enabled" {
-  description = "Define whether backup resources are enabled"
-  type        = bool
-  default     = true
 }
 
 variable "backup_schedule" {
