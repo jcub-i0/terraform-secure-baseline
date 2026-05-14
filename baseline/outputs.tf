@@ -22,3 +22,8 @@ output "deployment_profile" {
   description = "Selected deployment profile"
   value = var.deployment_profile
 }
+
+output "egress_mode" {
+  description = "Selected egress mode input"
+  value = var.egress_mode
+}
