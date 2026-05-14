@@ -112,7 +112,7 @@ resource "aws_internet_gateway" "igw" {
 
 ## EIP
 resource "aws_eip" "nat" {
-  for_each = local.az_index_map
+  for_each = local.nat_enabled ? local.az_index_map : {}
   domain   = "vpc"
 
   tags = {
@@ -124,7 +124,8 @@ resource "aws_eip" "nat" {
 
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
-  for_each      = local.az_index_map
+  for_each      = local.nat_enabled ? local.az_index_map : {}
+
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.public[each.key].id
 
@@ -223,16 +224,20 @@ resource "aws_route_table" "firewall_private" {
   for_each = local.az_index_map
   vpc_id   = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.natgw[each.key].id
-  }
-
   tags = {
     Name        = "${var.name_prefix}-Firewall-Private-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
+}
+
+resource "aws_route" "firewall_private" {
+  for_each = local.az_index_map
+
+  route_table_id = aws_route_table.firewall_private.id
+  destination_cidr_block = "0.0.0.0/0"
+
+  nat_gateway_id = aws_nat_gateway.natgw.id
 }
 
 ### DATA PRIVATE ROUTE TABLE PER AZ
