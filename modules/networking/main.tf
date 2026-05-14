@@ -124,7 +124,7 @@ resource "aws_eip" "nat" {
 
 ## NATGW
 resource "aws_nat_gateway" "natgw" {
-  for_each      = local.nat_enabled ? local.az_index_map : {}
+  for_each = local.nat_enabled ? local.az_index_map : {}
 
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.public[each.key].id
@@ -234,7 +234,7 @@ resource "aws_route_table" "firewall_private" {
 resource "aws_route" "firewall_private" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.firewall_private.id
+  route_table_id         = aws_route_table.firewall_private.id
   destination_cidr_block = "0.0.0.0/0"
 
   nat_gateway_id = aws_nat_gateway.natgw.id
