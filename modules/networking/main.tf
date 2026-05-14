@@ -1,6 +1,8 @@
 locals {
   # Loop over var.azs using the index (indx) to pick the CIDR for that AZ
   az_index_map = { for indx, az in var.azs : az => indx }
+
+  nat_enabled = var.egress_mode != "vpc_endpoints_only"
 }
 
 # CREATE MAIN VPC
