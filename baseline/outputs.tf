@@ -27,3 +27,8 @@ output "egress_mode" {
   description = "Selected egress mode input"
   value = var.egress_mode
 }
+
+output "effective_egress_mode" {
+  description = "Effective egress mode after resolving deployment_profile and egress_mode"
+  value = local.effective_egress_mode
+}
