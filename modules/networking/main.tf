@@ -163,7 +163,7 @@ resource "aws_route" "public_compute_return_to_firewall" {
 
   lifecycle {
     precondition {
-      condition = contains(keys(var.firewall_endpoint_ids_by_az), each.key)
+      condition     = contains(keys(var.firewall_endpoint_ids_by_az), each.key)
       error_message = "'firewall_endpoint_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
     }
   }
