@@ -17,3 +17,8 @@ output "logs_s3_readonly_policy_name" {
   description = "'Name' attribute of the 'Logs S3 Readonly Policy' resource"
   value       = module.iam.logs_s3_readonly_policy_name
 }
+
+output "deployment_profile" {
+  description = "Selected deployment profile"
+  value = var.deployment_profile
+}
