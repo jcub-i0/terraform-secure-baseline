@@ -32,3 +32,8 @@ output "effective_egress_mode" {
   description = "Effective egress mode after resolving deployment_profile and egress_mode"
   value       = module.baseline.effective_egress_mode
 }
+
+output "effective_cloudwatch_retention_days" {
+  description = "Effective CloudWatch Logs retention period after resolving deployment_profile and cloudwatch_retention_days override"
+  value       = module.baseline.effective_cloudwatch_retention_days
+}
