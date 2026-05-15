@@ -98,6 +98,22 @@ resource "aws_subnet" "firewall_private" {
   }
 }
 
+## VPC ENDPOINT SUBNETS
+resource "aws_subnet" "endpoint_private" {
+  for_each = local.az_index_map
+  map_public_ip_on_launch = false
+
+  vpc_id = aws_vpc.main.id
+  cidr_block = var.subnet_cidrs.endpoint_private[each.value]
+  availability_zone = each.key
+
+  tags = {
+    Name = "${var.name_prefix}-Endpoint-Private-${each.key}"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
+
 # CREATE IGW, EIP, and NATGW
 ## IGW
 resource "aws_internet_gateway" "igw" {
