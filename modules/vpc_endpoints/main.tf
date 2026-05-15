@@ -1,6 +1,6 @@
 locals {
   interface_endpoint_subnets         = var.endpoint_private_subnet_ids_map
-  interface_endpoint_route_table_ids = var.endpoint_private_rt_ids_map
+  interface_endpoint_rt_ids = var.endpoint_private_rt_ids_map
   endpoint_subnet_cidrs = flatten([
     var.subnet_cidrs["compute_private"]
   ])
@@ -27,7 +27,7 @@ resource "aws_vpc_endpoint" "s3" {
   service_name      = "com.amazonaws.${var.primary_region}.s3"
   vpc_endpoint_type = "Gateway"
 
-  route_table_ids = values(local.interface_endpoint_route_table_ids)
+  route_table_ids = values(local.interface_endpoint_rt_ids)
 
   tags = {
     Name        = "${var.name_prefix}-S3-Gateway-Endpoint"
