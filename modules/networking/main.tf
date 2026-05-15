@@ -243,12 +243,12 @@ resource "aws_route" "firewall_private" {
 ### ENDPOINT PRIVATE ROUTE TABLE PER AZ
 resource "aws_route_table" "endpoint_private" {
   for_each = local.az_index_map
-  vpc_id = aws_vpc.main.id
+  vpc_id   = aws_vpc.main.id
 
   tags = {
-    Name = "${var.name_prefix}-Endpoint-Private-RT-${each.key}"
+    Name        = "${var.name_prefix}-Endpoint-Private-RT-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
