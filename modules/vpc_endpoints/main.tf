@@ -1,5 +1,5 @@
 locals {
-  interface_endpoint_subnets = var.endpoint_private_subnet_ids_map
+  interface_endpoint_subnet_ids_map = var.endpoint_private_subnet_ids_map
   interface_endpoint_rt_ids  = var.endpoint_private_rt_ids_map
   endpoint_subnet_cidrs = flatten([
     var.subnet_cidrs["endpoint_private"]
@@ -57,7 +57,7 @@ resource "aws_vpc_endpoint" "interface" {
   vpc_id              = var.vpc_id
   service_name        = "com.amazonaws.${var.primary_region}.${each.key}"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = values(local.interface_endpoint_subnets)
+  subnet_ids          = values(local.interface_endpoint_subnet_ids_map)
   security_group_ids  = [aws_security_group.interface_endpoints_sg.id]
   private_dns_enabled = true
 
