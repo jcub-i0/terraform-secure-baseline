@@ -240,6 +240,18 @@ resource "aws_route" "firewall_private" {
   nat_gateway_id = aws_nat_gateway.natgw[each.key].id
 }
 
+### ENDPOINT PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "endpoint_private" {
+  for_each = local.az_index_map
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.name_prefix}-Endpoint-Private-RT-${each.key}"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
+
 ### DATA PRIVATE ROUTE TABLE PER AZ
 resource "aws_route_table" "data_private" {
   for_each = local.az_index_map
