@@ -102,6 +102,7 @@ variable "subnet_cidrs" {
     "data_private"       = ["10.0.32.0/24", "10.0.33.0/24"]
     "serverless_private" = ["10.0.48.0/24", "10.0.49.0/24"]
     "firewall_private"   = ["10.0.64.0/24", "10.0.65.0/24"]
+    "endpoint_private" = ["10.0.128.0/24", "10.0.129.0/24"]
   }
 }
 
