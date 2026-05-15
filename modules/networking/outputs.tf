@@ -2,7 +2,7 @@ output "vpc_id" {
   value = aws_vpc.main.id
 }
 
-# For for_each patterns
+# For resources using for_each patterns
 output "nat_gateway_ids_map" {
   description = "map(string) of NATGW IDs by AZ"
   value       = { for az, natgw in aws_nat_gateway.natgw : az => natgw.id }
