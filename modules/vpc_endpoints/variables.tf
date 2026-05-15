@@ -19,6 +19,10 @@ variable "primary_region" {
 }
 
 # SUBNET VARIABLES
+variable "endpoint_private_subnet_ids_map" {
+  type = map(string)
+}
+
 variable "compute_private_subnet_ids_map" {
   type = map(string)
 }
