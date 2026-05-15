@@ -307,6 +307,13 @@ resource "aws_route_table_association" "firewall_private" {
   subnet_id      = aws_subnet.firewall_private[each.key].id
 }
 
+resource "aws_route_table_association" "endpoint_private" {
+  for_each = local.az_index_map
+
+  route_table_id = aws_route_table.endpoint_private[each.key].id
+  subnet_id = aws_subnet.endpoint_private[each.key].id
+}
+
 resource "aws_route_table_association" "data_private" {
   for_each = local.az_index_map
 
