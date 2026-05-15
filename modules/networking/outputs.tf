@@ -35,7 +35,7 @@ output "firewall_private_subnet_ids_map" {
 
 output "endpoint_private_subnet_ids_map" {
   description = "map(string) of Endpoint Private Subnet IDs"
-  value = { for az, subnet in aws_subnet.endpoint_private : az => aws_subnet.id }
+  value       = { for az, subnet in aws_subnet.endpoint_private : az => aws_subnet.id }
 }
 
 output "endpoint_private_rt_ids_map" {
