@@ -47,7 +47,7 @@ variable "lambda_ec2_rollback_sg_id" {
   type = string
 }
 
-variable "compute_private_route_table_ids_map" {
-  description = "map(string) of Compute Private Route Table IDs"
+variable "endpoint_private_rt_ids_map" {
+  description = "map(string) of Endpoint Private Route Table IDs"
   type        = map(string)
 }
