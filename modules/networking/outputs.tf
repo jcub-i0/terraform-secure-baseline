@@ -35,7 +35,7 @@ output "firewall_private_subnet_ids_map" {
 
 output "endpoint_private_rt_ids_map" {
   description = "map(string) of Endpoint Private Route Table IDs"
-  value = { for az, rt in aws_route_table.endpoint_private : az => rt.id}
+  value       = { for az, rt in aws_route_table.endpoint_private : az => rt.id }
 }
 
 # For resources that need list(string) (i.e. RDS)
