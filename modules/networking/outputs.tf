@@ -61,5 +61,5 @@ output "firewall_private_subnet_ids_list" {
 
 output "endpoint_private_subnet_ids_list" {
   description = "list(string) of Endpoint Private Subnet IDs"
-  value = [for subnet in aws_subnet.aws_subnet.endpoint_private : subnet.id]
+  value       = [for subnet in aws_subnet.aws_subnet.endpoint_private : subnet.id]
 }
