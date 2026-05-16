@@ -54,5 +54,5 @@ variable "endpoint_private_rt_ids_map" {
 
 variable "s3_gateway_endpoint_rt_ids_list" {
   description = "Route table IDs that should use the S3 Gateway VPC Endpoint"
-  type = list(string)
+  type        = list(string)
 }
