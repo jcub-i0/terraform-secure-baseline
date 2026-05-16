@@ -216,10 +216,10 @@ module "vpc_endpoints" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  compute_private_subnet_ids_map    = module.networking.compute_private_subnet_ids_map
-  serverless_private_subnet_ids_map = module.networking.serverless_private_subnet_ids_map
-  endpoint_private_subnet_ids_map   = module.networking.endpoint_private_subnet_ids_map
-  endpoint_private_route_table_ids_map       = module.networking.endpoint_private_rt
+  compute_private_subnet_ids_map       = module.networking.compute_private_subnet_ids_map
+  serverless_private_subnet_ids_map    = module.networking.serverless_private_subnet_ids_map
+  endpoint_private_subnet_ids_map      = module.networking.endpoint_private_subnet_ids_map
+  endpoint_private_route_table_ids_map = module.networking.endpoint_private_rt
   s3_gateway_endpoint_rt_ids_list = concat(
     values(module.networking.endpoint_private_route_table_ids_map)
   )
