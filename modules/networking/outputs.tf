@@ -18,6 +18,11 @@ output "compute_private_subnet_ids_map" {
   value       = { for az, subnet in aws_subnet.compute_private : az => subnet.id }
 }
 
+output "compute_private_route_table_ids_map" {
+  description = "map(String) of Compute Private Route Table IDs"
+  value = { for az, subnet in aws_subnet.compute_private : az => subnet.id }
+}
+
 output "data_private_subnet_ids_map" {
   description = "map(string) of Data Private Subnet IDs"
   value       = { for az, subnet in aws_subnet.data_private : az => subnet.id }
