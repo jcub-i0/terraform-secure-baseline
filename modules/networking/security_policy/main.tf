@@ -63,6 +63,8 @@ resource "aws_security_group_rule" "compute_egress_to_db" {
 }
 
 resource "aws_security_group_rule" "compute_egress_to_internet_https" {
+  count = var.egress_mode == "vpc_endpoints_only" ? 0 : 1
+
   type              = "egress"
   security_group_id = var.compute_sg_id
   from_port         = 443
