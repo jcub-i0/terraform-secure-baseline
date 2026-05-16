@@ -36,6 +36,7 @@ module "networking" {
 module "security_policy" {
   source = "../modules/networking/security_policy"
 
+  egress_mode = local.effective_egress_mode
   compute_sg_id              = module.compute.compute_sg_id
   data_sg_id                 = module.storage.data_sg_id
   lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
