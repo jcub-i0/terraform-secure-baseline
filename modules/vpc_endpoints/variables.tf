@@ -19,6 +19,10 @@ variable "primary_region" {
 }
 
 # SUBNET VARIABLES
+variable "endpoint_private_subnet_ids_map" {
+  type = map(string)
+}
+
 variable "compute_private_subnet_ids_map" {
   type = map(string)
 }
@@ -43,7 +47,12 @@ variable "lambda_ec2_rollback_sg_id" {
   type = string
 }
 
-variable "compute_private_route_table_ids_map" {
-  description = "map(string) of Compute Private Route Table IDs"
+variable "endpoint_private_route_table_ids_map" {
+  description = "map(string) of Endpoint Private Route Table IDs"
   type        = map(string)
+}
+
+variable "s3_gateway_endpoint_rt_ids_list" {
+  description = "Route table IDs that should use the S3 Gateway VPC Endpoint"
+  type        = list(string)
 }

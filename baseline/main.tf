@@ -36,6 +36,7 @@ module "networking" {
 module "security_policy" {
   source = "../modules/networking/security_policy"
 
+  egress_mode                = local.effective_egress_mode
   compute_sg_id              = module.compute.compute_sg_id
   data_sg_id                 = module.storage.data_sg_id
   lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
@@ -216,14 +217,22 @@ module "vpc_endpoints" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  compute_private_subnet_ids_map    = module.networking.compute_private_subnet_ids_map
-  serverless_private_subnet_ids_map = module.networking.serverless_private_subnet_ids_map
-  subnet_cidrs                      = var.subnet_cidrs
-  compute_sg_id                     = module.compute.compute_sg_id
+  compute_private_subnet_ids_map       = module.networking.compute_private_subnet_ids_map
+  serverless_private_subnet_ids_map    = module.networking.serverless_private_subnet_ids_map
+  endpoint_private_subnet_ids_map      = module.networking.endpoint_private_subnet_ids_map
+  endpoint_private_route_table_ids_map = module.networking.endpoint_private_route_table_ids_map
 
-  lambda_ec2_isolation_sg_id          = module.automation.lambda_ec2_isolation_sg_id
-  lambda_ec2_rollback_sg_id           = module.automation.lambda_ec2_rollback_sg_id
-  compute_private_route_table_ids_map = module.networking.compute_private_route_table_ids_map
+  s3_gateway_endpoint_rt_ids_list = concat(
+    values(module.networking.endpoint_private_route_table_ids_map),
+    values(module.networking.compute_private_route_table_ids_map),
+    values(module.networking.serverless_private_route_table_ids_map)
+  )
+
+  subnet_cidrs  = var.subnet_cidrs
+  compute_sg_id = module.compute.compute_sg_id
+
+  lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
+  lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
 }
 
 module "firewall" {

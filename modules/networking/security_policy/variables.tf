@@ -1,3 +1,7 @@
+variable "egress_mode" {
+  type = string
+}
+
 variable "compute_sg_id" {
   type = string
 }

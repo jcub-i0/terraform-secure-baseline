@@ -98,6 +98,22 @@ resource "aws_subnet" "firewall_private" {
   }
 }
 
+## VPC ENDPOINT SUBNETS
+resource "aws_subnet" "endpoint_private" {
+  for_each                = local.az_index_map
+  map_public_ip_on_launch = false
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.subnet_cidrs.endpoint_private[each.value]
+  availability_zone = each.key
+
+  tags = {
+    Name        = "${var.name_prefix}-Endpoint-Private-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
 # CREATE IGW, EIP, and NATGW
 ## IGW
 resource "aws_internet_gateway" "igw" {
@@ -240,6 +256,18 @@ resource "aws_route" "firewall_private" {
   nat_gateway_id = aws_nat_gateway.natgw[each.key].id
 }
 
+### ENDPOINT PRIVATE ROUTE TABLE PER AZ
+resource "aws_route_table" "endpoint_private" {
+  for_each = local.az_index_map
+  vpc_id   = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.name_prefix}-Endpoint-Private-RT-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
 ### DATA PRIVATE ROUTE TABLE PER AZ
 resource "aws_route_table" "data_private" {
   for_each = local.az_index_map
@@ -277,6 +305,13 @@ resource "aws_route_table_association" "firewall_private" {
 
   route_table_id = aws_route_table.firewall_private[each.key].id
   subnet_id      = aws_subnet.firewall_private[each.key].id
+}
+
+resource "aws_route_table_association" "endpoint_private" {
+  for_each = local.az_index_map
+
+  route_table_id = aws_route_table.endpoint_private[each.key].id
+  subnet_id      = aws_subnet.endpoint_private[each.key].id
 }
 
 resource "aws_route_table_association" "data_private" {
