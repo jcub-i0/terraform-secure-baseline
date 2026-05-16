@@ -27,7 +27,7 @@ resource "aws_vpc_endpoint" "s3" {
   service_name      = "com.amazonaws.${var.primary_region}.s3"
   vpc_endpoint_type = "Gateway"
 
-  route_table_ids = values(local.interface_endpoint_route_table_ids_map)
+  route_table_ids = var.s3_gateway_endpoint_rt_ids_list
 
   tags = {
     Name        = "${var.name_prefix}-S3-Gateway-Endpoint"
