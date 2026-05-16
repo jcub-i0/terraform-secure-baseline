@@ -20,7 +20,7 @@ output "compute_private_subnet_ids_map" {
 
 output "compute_private_route_table_ids_map" {
   description = "map(String) of Compute Private Route Table IDs"
-  value       = { for az, subnet in aws_subnet.compute_private : az => subnet.id }
+  value       = { for az, subnet in aws_route_table.compute_private : az => subnet.id }
 }
 
 output "data_private_subnet_ids_map" {
@@ -45,7 +45,7 @@ output "firewall_private_subnet_ids_map" {
 
 output "endpoint_private_subnet_ids_map" {
   description = "map(string) of Endpoint Private Subnet IDs"
-  value       = { for az, subnet in aws_subnet.endpoint_private : az => aws_subnet.id }
+  value       = { for az, subnet in aws_subnet.endpoint_private : az => subnet.id }
 }
 
 output "endpoint_private_route_table_ids_map" {
@@ -81,5 +81,5 @@ output "firewall_private_subnet_ids_list" {
 
 output "endpoint_private_subnet_ids_list" {
   description = "list(string) of Endpoint Private Subnet IDs"
-  value       = [for subnet in aws_subnet.aws_subnet.endpoint_private : subnet.id]
+  value       = [for subnet in aws_subnet.endpoint_private : subnet.id]
 }
