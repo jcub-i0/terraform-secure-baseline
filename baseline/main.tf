@@ -221,7 +221,9 @@ module "vpc_endpoints" {
   endpoint_private_subnet_ids_map      = module.networking.endpoint_private_subnet_ids_map
   endpoint_private_route_table_ids_map = module.networking.endpoint_private_rt
   s3_gateway_endpoint_rt_ids_list = concat(
-    values(module.networking.endpoint_private_route_table_ids_map)
+    values(module.networking.endpoint_private_route_table_ids_map),
+    values(module.networking.compute_private_route_table_ids_map),
+    values(module.networking.serverless_private_route_table_ids_map)
   )
 
   subnet_cidrs  = var.subnet_cidrs
