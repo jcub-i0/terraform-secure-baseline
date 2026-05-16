@@ -20,7 +20,7 @@ output "compute_private_subnet_ids_map" {
 
 output "compute_private_route_table_ids_map" {
   description = "map(String) of Compute Private Route Table IDs"
-  value = { for az, subnet in aws_subnet.compute_private : az => subnet.id }
+  value       = { for az, subnet in aws_subnet.compute_private : az => subnet.id }
 }
 
 output "data_private_subnet_ids_map" {
@@ -35,7 +35,7 @@ output "serverless_private_subnet_ids_map" {
 
 output "serverless_private_route_table_ids_map" {
   description = "map(string) of Serverless Private Route Table IDs"
-  value = { for az, rt in aws_route_table.aws_subnet.serverless_private : az => rt.id }
+  value       = { for az, rt in aws_route_table.aws_subnet.serverless_private : az => rt.id }
 }
 
 output "firewall_private_subnet_ids_map" {
