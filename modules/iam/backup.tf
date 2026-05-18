@@ -34,10 +34,10 @@ resource "aws_iam_role" "backup" {
 # ATTACH AWS-MANAGED BACKUP POLICIES
 resource "aws_iam_role_policy_attachment" "backup" {
   role       = aws_iam_role.backup.name
-  policy_arn = data.aws_iam_policy.backup.arn
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
 }
 
 resource "aws_iam_role_policy_attachment" "backup_restore" {
   role       = aws_iam_role.backup.name
-  policy_arn = data.aws_iam_policy.backup_restore.arn
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
 }
