@@ -7,19 +7,19 @@
 
 data "aws_iam_policy_document" "break_glass_admin_assume_role" {
   statement {
-    sid = "AllowEmergencyAssumeRoleWithMFA"
-    effect = "Allow"
+    sid     = "AllowEmergencyAssumeRoleWithMFA"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = var.break_glass_trusted_principal_arns
     }
 
     condition {
-      test = "Bool"
+      test     = "Bool"
       variable = "aws:MultiFactorAuthPresent"
-      values = ["true"]
+      values   = ["true"]
     }
   }
 }
