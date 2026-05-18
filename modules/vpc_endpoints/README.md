@@ -245,18 +245,23 @@ module "vpc_endpoints" {
   name_prefix    = local.name_prefix
   vpc_id         = module.networking.vpc_id
   environment    = var.environment
-  account_id     = data.aws_caller_identity.current.account_id
+  account_id     = var.account_id
   primary_region = var.primary_region
 
-  endpoint_private_subnet_ids_map = module.networking.endpoint_private_subnet_ids_map
-  endpoint_private_rt_ids_map     = module.networking.endpoint_private_route_table_ids_map
+  compute_private_subnet_ids_map       = module.networking.compute_private_subnet_ids_map
+  serverless_private_subnet_ids_map    = module.networking.serverless_private_subnet_ids_map
+  endpoint_private_subnet_ids_map      = module.networking.endpoint_private_subnet_ids_map
+  endpoint_private_route_table_ids_map = module.networking.endpoint_private_route_table_ids_map
 
-  s3_gateway_endpoint_route_table_ids = concat(
+  s3_gateway_endpoint_rt_ids_list = concat(
+    values(module.networking.endpoint_private_route_table_ids_map),
     values(module.networking.compute_private_route_table_ids_map),
     values(module.networking.serverless_private_route_table_ids_map)
   )
 
-  compute_sg_id              = module.compute.compute_sg_id
+  subnet_cidrs  = var.subnet_cidrs
+  compute_sg_id = module.compute.compute_sg_id
+
   lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
   lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
 }
