@@ -17,7 +17,10 @@ This checklist validates:
 - GitHub OIDC roles
 - Control-plane resources
 - Environment baseline infrastructure
+- Deployment profile resolution
+- Egress mode behavior
 - Networking and private connectivity
+- Dedicated VPC endpoint subnet placement
 - Logging and monitoring
 - Security services
 - IAM Identity Center access
@@ -51,13 +54,15 @@ Recommended validation order:
 3. GitHub OIDC validation
 4. Control-plane validation
 5. Environment baseline validation
-6. Networking validation
-7. Logging validation
-8. Security service validation
-9. Identity Center validation
-10. Lambda workflow validation
-11. Alerting validation
-12. Destroy safety validation
+6. Deployment profile validation
+7. Networking validation
+8. VPC endpoint validation
+9. Logging validation
+10. Security service validation
+11. Identity Center validation
+12. Lambda workflow validation
+13. Alerting validation
+14. Destroy safety validation
 
 ---
 
@@ -76,6 +81,7 @@ export ENVIRONMENT="dev"
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<DEV-ACCOUNT-ID>"
+export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
 ### Staging
@@ -87,6 +93,7 @@ export ENVIRONMENT="staging"
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<STAGING-ACCOUNT-ID>"
+export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
 ### Prod
@@ -98,6 +105,7 @@ export ENVIRONMENT="prod"
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<PROD-ACCOUNT-ID>"
+export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
 ### Control-Plane
@@ -109,6 +117,7 @@ export ENVIRONMENT="control-plane"
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>"
+export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
 ---
@@ -255,6 +264,7 @@ Run these checks using the control-plane profile.
 ```bash
 export AWS_PROFILE="control-plane"
 export ENVIRONMENT="control-plane"
+export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
 ---
@@ -389,16 +399,50 @@ staging
 prod
 ```
 
-Run these checks for each environment (`dev`, `staging`, and `prod`), ensuring the appropriate environment profile is set beforehand.
+Run these checks for each environment, ensuring the appropriate environment profile is set beforehand.
 
-```text
+```bash
 export AWS_PROFILE="<env>"
 export ENVIRONMENT="<env>"
+export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
 ---
 
-## 5.1 Validate VPC
+## 5.1 Validate Terraform Outputs
+
+From the target environment directory:
+
+```bash
+terraform output
+```
+
+Expected outputs include:
+
+```text
+deployment_profile
+egress_mode
+effective_egress_mode
+effective_cloudwatch_retention_days
+effective_enable_config
+effective_enable_rules
+effective_backup_enabled
+effective_inspector_enabled
+```
+
+Expected profile behavior:
+
+| `deployment_profile` | Default `effective_egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention |
+|---|---|---:|---:|---:|---:|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days |
+
+If `egress_mode`, `enable_config`, `backup_enabled`, `cloudwatch_retention_days`, or related overrides are explicitly set, the effective outputs should reflect those overrides.
+
+---
+
+## 5.2 Validate VPC
 
 ```bash
 aws ec2 describe-vpcs \
@@ -416,7 +460,7 @@ Expected:
 
 ---
 
-## 5.2 Validate Subnets
+## 5.3 Validate Subnets
 
 ```bash
 aws ec2 describe-subnets \
@@ -430,12 +474,16 @@ aws ec2 describe-subnets \
 Expected:
 
 - Public subnets exist.
-- Private compute/data/serverless/endpoint subnets exist, depending on configuration.
+- Private compute subnets exist.
+- Private data subnets exist.
+- Private serverless subnets exist.
+- Private endpoint subnets exist.
+- Private firewall subnets exist when Network Firewall mode is used.
 - Private subnets do not auto-assign public IPs.
 
 ---
 
-## 5.3 Validate EC2 Instances
+## 5.4 Validate EC2 Instances
 
 ```bash
 aws ec2 describe-instances \
@@ -497,6 +545,10 @@ Expected:
 
 Confirm that VPC endpoints exist for private AWS service access.
 
+Interface VPC Endpoints should be deployed into dedicated endpoint private subnets.
+
+The S3 Gateway Endpoint should be associated with the private route tables that need S3 access.
+
 ## List VPC Endpoints
 
 ```bash
@@ -512,18 +564,101 @@ Expected:
 - Required endpoints exist.
 - Interface endpoints are `available`.
 - Private DNS is enabled where expected.
+- S3 Gateway Endpoint exists.
 
 Common endpoints include:
 
 ```text
+sts
 ssm
 ssmmessages
 logs
 kms
 secretsmanager
 ec2
+events
+sns
+securityhub
+lambda
 s3
 ```
+
+---
+
+## Validate Endpoint Private Subnets
+
+```bash
+aws ec2 describe-subnets \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Endpoint-Private-*" \
+  --query 'Subnets[].[Tags[?Key==`Name`]|[0].Value,SubnetId,AvailabilityZone,CidrBlock,MapPublicIpOnLaunch]' \
+  --output table
+```
+
+Expected:
+
+- Endpoint private subnets exist in each configured Availability Zone.
+- Endpoint private subnets use the expected CIDR ranges.
+- `MapPublicIpOnLaunch` is `false`.
+
+---
+
+## Validate Interface Endpoint Subnet Placement
+
+```bash
+aws ec2 describe-vpc-endpoints \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=vpc-endpoint-type,Values=Interface" \
+  --query 'VpcEndpoints[].[ServiceName,State,SubnetIds]' \
+  --output table
+```
+
+Expected:
+
+- Interface Endpoints are deployed into endpoint private subnets.
+- Interface Endpoint state is `available`.
+- Interface Endpoint subnet IDs match the dedicated endpoint private subnet IDs.
+
+---
+
+## Validate Endpoint Private Route Tables
+
+```bash
+aws ec2 describe-route-tables \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Endpoint-Private-RT-*" \
+  --query 'RouteTables[].[Tags[?Key==`Name`]|[0].Value,RouteTableId,Routes]' \
+  --output json
+```
+
+Expected:
+
+- Endpoint private route tables exist.
+- Endpoint private route tables are associated with endpoint private subnets.
+- No `0.0.0.0/0` default route is required.
+- Route tables should contain the implicit local VPC route.
+
+---
+
+## Validate S3 Gateway Endpoint Route Tables
+
+```bash
+aws ec2 describe-vpc-endpoints \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=service-name,Values=com.amazonaws.${AWS_REGION}.s3" \
+  --query 'VpcEndpoints[0].RouteTableIds' \
+  --output table
+```
+
+Expected:
+
+- S3 Gateway Endpoint exists.
+- Route table IDs include the private route tables intentionally passed to the VPC endpoints module.
+- S3 Gateway Endpoint route tables commonly include compute private route tables and serverless private route tables.
 
 ---
 
@@ -569,9 +704,15 @@ Expected:
 
 ## Purpose
 
-Confirm that outbound traffic behaves according to the deployed architecture.
+Confirm that outbound traffic behaves according to the selected `deployment_profile` and effective `egress_mode`.
 
-The default architecture may use AWS Network Firewall and NAT Gateway for controlled egress.
+The baseline supports three egress modes:
+
+| `egress_mode` | Network Firewall | NAT Gateway | Compute private default route |
+|---|---:|---:|---|
+| `network_firewall` | Yes | Yes | Network Firewall endpoint |
+| `nat_only` | No | Yes | NAT Gateway |
+| `vpc_endpoints_only` | No | No | No default route |
 
 ## Check Route Tables
 
@@ -591,6 +732,66 @@ Expected:
 - Private subnet routes follow the intended egress path.
 - Workloads do not route directly to the Internet Gateway.
 - If Network Firewall is enabled, private egress routes should pass through firewall endpoints before NAT/IGW.
+- If `nat_only` is enabled, compute private route tables should route `0.0.0.0/0` to NAT Gateway.
+- If `vpc_endpoints_only` is enabled, compute private route tables should not have a `0.0.0.0/0` route.
+
+---
+
+## Check Network Firewall Presence
+
+```bash
+aws network-firewall list-firewalls \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'Firewalls[?contains(FirewallName, `'"${NAME_PREFIX}"'`)].[FirewallName,FirewallArn]' \
+  --output table
+```
+
+Expected:
+
+- `network_firewall`: matching firewall exists.
+- `nat_only`: no matching firewall exists.
+- `vpc_endpoints_only`: no matching firewall exists.
+
+---
+
+## Check NAT Gateway Presence
+
+```bash
+aws ec2 describe-nat-gateways \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filter "Name=vpc-id,Values=${VPC_ID}" \
+  --query 'NatGateways[].[NatGatewayId,State,SubnetId,NatGatewayAddresses[0].PublicIp]' \
+  --output table
+```
+
+Expected:
+
+- `network_firewall`: NAT Gateways exist and are `available`.
+- `nat_only`: NAT Gateways exist and are `available`.
+- `vpc_endpoints_only`: no NAT Gateways are expected.
+
+---
+
+## Check Compute Private Default Routes
+
+```bash
+aws ec2 describe-route-tables \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-RT-*" \
+  --query 'RouteTables[].{Name:Tags[?Key==`Name`]|[0].Value,Routes:Routes[?DestinationCidrBlock==`0.0.0.0/0`]}' \
+  --output json
+```
+
+Expected:
+
+- `network_firewall`: default route points to a Network Firewall endpoint.
+- `nat_only`: default route points to a NAT Gateway.
+- `vpc_endpoints_only`: no default route is present.
+
+---
 
 ## Optional Internet Egress Test
 
@@ -603,8 +804,8 @@ timeout 5 bash -c "cat < /dev/null > /dev/tcp/example.com/443" \
 
 Expected result depends on your egress design:
 
-- If controlled NAT/Network Firewall egress is enabled, internet access may succeed.
-- If using a VPC-endpoints-only posture, internet egress should fail.
+- If `network_firewall` or `nat_only` is enabled, internet access may succeed depending on route tables, firewall policy, and security group rules.
+- If using `vpc_endpoints_only`, internet egress should fail.
 
 ---
 
@@ -702,11 +903,30 @@ Expected:
 
 ---
 
+## 9.4 Validate CloudWatch Log Retention
+
+```bash
+aws logs describe-log-groups \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'logGroups[?contains(logGroupName, `'"${NAME_PREFIX}"'`) || contains(logGroupName, `/aws/lambda/`) || contains(logGroupName, `/aws/cloudtrail/`) || contains(logGroupName, `/aws/vpc-flow-logs/`)].[logGroupName,retentionInDays]' \
+  --output table
+```
+
+Expected:
+
+- Relevant baseline log groups have retention configured.
+- `production` defaults to 90 days unless overridden.
+- `development` defaults to 30 days unless overridden.
+- `minimal` defaults to 14 days unless overridden.
+
+---
+
 # 10. Validate Security Services
 
 ## Purpose
 
-Confirm that core AWS security services are enabled.
+Confirm that core AWS security services are enabled according to the selected deployment profile and explicit overrides.
 
 ---
 
@@ -771,9 +991,9 @@ aws configservice describe-configuration-recorder-status \
 
 Expected:
 
-- Configuration recorder exists.
-- Delivery channel exists.
-- Recorder is enabled and recording.
+- If `effective_enable_config = true`, configuration recorder exists, delivery channel exists, and recorder is enabled.
+- If `effective_enable_config = false`, AWS Config resources may be absent or disabled, depending on current state and configuration.
+- If Config is disabled, Config rule groups should be forced off.
 
 ---
 
@@ -783,13 +1003,15 @@ Expected:
 aws inspector2 batch-get-account-status \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --account-ids "${ACCOUNT_ID}"
+  --account-ids "${ACCOUNT_ID}" \
+  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
+  --output table
 ```
 
 Expected:
 
-- Inspector account status is returned.
-- Enabled resource types match configuration.
+- If `effective_inspector_enabled = true`, Inspector account/resource statuses should be enabled according to configuration.
+- If `effective_inspector_enabled = false`, Inspector may be disabled or return no enabled resource status.
 
 ---
 
@@ -817,6 +1039,10 @@ ebs
 backup_vault
 secrets_manager
 ```
+
+Note:
+
+Backup-related KMS aliases may only exist when backup resources are enabled.
 
 ---
 
@@ -869,7 +1095,7 @@ aws events list-rules \
 
 Expected rules may include:
 
-- Amazon Inspector rules (if enabled)
+- Amazon Inspector rules, if enabled
 - Security Hub high/critical finding handling
 - Tamper detection
 - Break-glass detection (`break-glass-admin-assumed`)
@@ -913,7 +1139,7 @@ Confirm EventBridge Targets:
 aws events list-targets-by-rule \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --rule "tf-secure-baseline-dev-securityhub-high-critical" \
+  --rule "${CLOUD_NAME}-${ENVIRONMENT}-securityhub-high-critical" \
   --event-bus-name default \
   --query 'Targets[].[Id,Arn]' \
   --output table
@@ -1048,7 +1274,7 @@ TRAIL_NAME="$(aws cloudtrail describe-trails \
   --output text)"
 
 aws cloudtrail stop-logging \
-  --name "#{TRAIL_NAME}" \
+  --name "${TRAIL_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 ```
@@ -1092,9 +1318,9 @@ true
 
 Confirm that use of the break-glass role generates an alert.
 
-If safe to test, use one of the principal ARNs included in the `break_glass_trusted_principle_arns` variable to assume or simulate use of the configured break-glass role.
+If safe to test, use one of the principal ARNs included in the `break_glass_trusted_principal_arns` variable to assume or simulate use of the configured break-glass role.
 
-This test requires the user assuming the `Break-Glass-Admin` role to be enrolled with MFA.
+This test requires the user assuming the `BreakGlass-Admin` role to be enrolled with MFA.
 
 Confirm your account is configured with an MFA device:
 
@@ -1122,7 +1348,7 @@ export MFA_SERIAL="$(aws iam list-mfa-devices \
   --output text)"
 ```
 
-Assume the `Break-Glass-Admin` role, replacing `<MFA_CODE>` with the six digit code from your authentication device:
+Assume the `BreakGlass-Admin` role, replacing `<MFA_CODE>` with the six digit code from your authentication device:
 
 ```bash
 export BREAK_GLASS_ROLE_ARN="$(aws iam list-roles \
@@ -1147,7 +1373,7 @@ Expected output:
         "AccessKeyId": "XXXXXX",
         "SecretAccessKey": "XXXXXX",
         "SessionToken": "XXXXXX",
-        "Expiration": "XXXXXX",
+        "Expiration": "XXXXXX"
     },
     "AssumedRoleUser": {
         "AssumedRoleId": "XXXXXX",
@@ -1179,7 +1405,13 @@ Confirm backup and patch management resources exist if enabled.
 
 ## AWS Backup
 
-Confirm the backup vault exists:
+Confirm the effective backup setting first:
+
+```bash
+terraform output effective_backup_enabled
+```
+
+If backup is enabled, confirm the backup vault exists:
 
 ```bash
 aws backup list-backup-vaults \
@@ -1206,11 +1438,16 @@ aws backup describe-backup-vault \
   --output table
 ```
 
-Expected:
+Expected when backup is enabled:
 
 - Backup vault exists.
 - `EncryptionKeyArn` is populated.
 - `EncryptionKeyArn` points to the expected backup vault KMS CMK.
+
+Expected when backup is disabled:
+
+- Project-specific backup vaults and plans may be absent.
+- This is expected for lower-cost profiles such as `development` and `minimal` unless backup is explicitly enabled.
 
 ## SSM Patch Manager
 
@@ -1243,6 +1480,8 @@ Confirm that CI/CD workflows operate successfully.
 
 Run the following workflows:
 
+- Terraform Static Analysis
+- Docs Validation
 - Terraform Plan
 - Terraform Apply
 - Terraform Destroy in a non-production environment only
@@ -1250,6 +1489,8 @@ Run the following workflows:
 
 Expected:
 
+- Static analysis workflow succeeds.
+- Docs validation workflow succeeds.
 - Plan workflow succeeds for expected stacks.
 - Apply workflow can deploy selected environment.
 - Destroy workflow first cleans up Identity Center attachments and then destroys selected environment baseline.
@@ -1288,6 +1529,29 @@ Important rules:
 
 # 22. Quick Failure Triage Guide
 
+## Profile or Egress Mode Looks Wrong
+
+Check:
+
+- Environment `deployment_profile` value.
+- Environment `egress_mode` value.
+- Terraform output `effective_egress_mode`.
+- Any explicit override variables such as `enable_config`, `backup_enabled`, `cloudwatch_retention_days`, or `egress_mode`.
+
+Useful command from the environment directory:
+
+```bash
+terraform output
+```
+
+Expected:
+
+- `deployment_profile` shows the selected profile.
+- `egress_mode` shows the selected input.
+- `effective_egress_mode` shows the resolved routing mode.
+
+---
+
 ## SSM Session Fails
 
 Check:
@@ -1310,6 +1574,7 @@ Check:
 - Endpoint security group allows inbound 443 from workload security group.
 - Workload security group allows outbound 443 to endpoint security group.
 - Instance has network path to SSM endpoints.
+- Interface Endpoints are deployed into endpoint private subnets.
 
 ---
 
@@ -1320,7 +1585,7 @@ Check:
 - Private DNS is enabled on the endpoint.
 - VPC DNS hostnames are enabled.
 - VPC DNS resolution is enabled.
-- Endpoint exists in the expected VPC and subnets.
+- Endpoint exists in the expected VPC and endpoint private subnets.
 - Security groups allow traffic.
 
 ---
@@ -1332,6 +1597,7 @@ Check:
 - Endpoint security group allows traffic.
 - Workload security group egress allows 443.
 - Route tables are correct.
+- Interface Endpoints are deployed into endpoint private subnets.
 - Network Firewall rules allow required egress if applicable.
 - NAT Gateway exists if internet egress is expected.
 
@@ -1341,12 +1607,19 @@ Check:
 
 Check:
 
+- Effective egress mode.
 - Route tables.
 - NAT Gateway routes.
 - Network Firewall policy.
 - Security group egress.
 - NACLs.
 - Whether the selected environment is intended to allow controlled internet egress.
+
+Expected by mode:
+
+- `network_firewall`: internet egress may be available through Network Firewall and NAT, depending on firewall policy.
+- `nat_only`: internet egress may be available through NAT.
+- `vpc_endpoints_only`: general internet egress should not be available.
 
 ---
 
@@ -1371,6 +1644,36 @@ Check:
 - Account is correct.
 - Terraform apply completed successfully.
 - Service-linked roles exist.
+
+---
+
+## AWS Config Is Missing
+
+Check:
+
+- `effective_enable_config` output.
+- `enable_config` override value.
+- `deployment_profile`.
+
+Expected:
+
+- `production` and `development` enable AWS Config by default.
+- `minimal` disables AWS Config by default unless explicitly overridden.
+
+---
+
+## Backup Resources Are Missing
+
+Check:
+
+- `effective_backup_enabled` output.
+- `backup_enabled` override value.
+- `deployment_profile`.
+
+Expected:
+
+- `production` enables backup by default.
+- `development` and `minimal` disable backup by default unless explicitly overridden.
 
 ---
 
@@ -1422,8 +1725,11 @@ A successful validation means:
 - GitHub OIDC roles work if enabled.
 - Control-plane resources are deployed.
 - Environment baselines exist.
+- Deployment profile outputs resolve correctly.
+- Egress mode behavior matches the selected profile or override.
 - Private networking and endpoint access work.
-- Logging and security services are active.
+- Interface Endpoints are deployed into dedicated endpoint private subnets.
+- Logging and security services are active where expected.
 - Identity Center access is configured.
 - EC2 isolation and rollback work.
 - IP enrichment works.

@@ -38,6 +38,8 @@ It supports:
 
 This module is required by other security and monitoring components that depend on CloudTrail and VPC Flow Log data.
 
+The following assumes that `deployment_profile` is set to `production` and `cloudwatch_retention_days` is either `null` or `90`. Different values for either of these variables (especially `cloudwatch_retention_days`) may result in outcomes that differ from those depicted below.
+
 ---
 
 ## Resources Created

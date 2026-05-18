@@ -34,11 +34,11 @@ Terraform Stacks
     |       +--> state
     |       +--> account
     |
-    +--> bootstrap/prod
+    +--> bootstrap/staging
     |       +--> state
     |       +--> account
     |
-    |--> bootstrap/staging
+    +--> bootstrap/prod
     |       +--> state
     |       +--> account
     |
@@ -90,7 +90,7 @@ staging account
 prod account
     |
     +--> Prod baseline infrastructure
-    +--> Staging account infrastructure
+    +--> Prod account infrastructure
 ```
 
 This model provides:
@@ -100,7 +100,7 @@ This model provides:
 - Separate Terraform state per account/environment
 - Cleaner access boundaries
 - Production-aligned account segmentation
-- Multi-AZ / Multi-region capabilities (if configured)
+- Multi-AZ / Multi-region capabilities, if configured
 
 ---
 
@@ -144,27 +144,76 @@ environments/staging
 environments/prod
 ```
 
-Each environment is deployed into its own AWS account and contains the full `baseline` infrastructure, including:
+Each environment is deployed into its own AWS account and contains the `baseline` infrastructure.
+
+Depending on the selected `deployment_profile` and `egress_mode`, each environment may deploy different cost/security combinations.
+
+Environment stacks can include:
 
 - VPC and subnet segmentation
-- AWS Network Firewall
-- NAT Gateway
+- Deployment profile and egress mode resolution
+- AWS Network Firewall, when enabled by egress mode
+- NAT Gateways, when required by egress mode
 - VPC endpoints
+- Dedicated VPC endpoint subnets
 - EC2 workloads
 - S3 buckets
 - KMS keys
 - CloudTrail
 - CloudWatch
-- AWS Config
+- AWS Config, when enabled by profile or override
 - GuardDuty
 - Security Hub
-- Inspector
+- Inspector, when enabled by profile
 - EventBridge rules
 - Lambda automation
 - SNS topics
 - Backup and patch management resources
 
 Each environment is independently deployable, destroyable, and testable.
+
+---
+
+## Deployment Profiles
+
+The baseline supports deployment profiles that set environment-appropriate defaults.
+
+Profiles are intended to provide a clear cost/security posture while still allowing explicit overrides.
+
+| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention | Intended use |
+|---|---|---:|---:|---:|---:|---|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+
+The profile defines defaults only. Explicit variables can override profile defaults.
+
+For example:
+
+```hcl
+deployment_profile = "development"
+egress_mode        = "network_firewall"
+```
+
+This allows a development environment to use the production-style egress inspection path when needed.
+
+---
+
+## Egress Modes
+
+The baseline supports configurable egress modes for private compute subnet routing.
+
+| `egress_mode` | Network Firewall | NAT Gateway | Compute private default route | Intended use |
+|---|---:|---:|---|---|
+| `network_firewall` | Yes | Yes | `0.0.0.0/0` to Network Firewall endpoint | Production / sensitive workloads |
+| `nat_only` | No | Yes | `0.0.0.0/0` to NAT Gateway | Lower-cost dev/staging |
+| `vpc_endpoints_only` | No | No | No default route | Private AWS-only / minimal testing |
+
+When `egress_mode = "auto"`, the effective egress mode is selected from the `deployment_profile`.
+
+Important:
+
+When `egress_mode = "vpc_endpoints_only"`, Network Firewall and NAT Gateways are not deployed, and compute private subnets do not receive a default internet route. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation may fail unless package access is provided another way.
 
 ---
 
@@ -179,12 +228,13 @@ The `baseline` is designed around the following principles:
 - Centralized visibility
 - Detection integrity
 - Controlled egress
+- Configurable cost/security profiles
 - Automated containment
 - Human-approved recovery
 - Immutable and encrypted logging
 - Least-privilege access
 
-These principles guide the structure of the Terraform modules, account layout, IAM model, and security automation workflows.
+These principles guide the structure of the Terraform modules, account layout, IAM model, deployment profiles, egress modes, and security automation workflows.
 
 ---
 
@@ -198,11 +248,12 @@ The VPC includes subnet tiers such as:
 - Private compute subnets
 - Private data subnets
 - Private serverless subnets
-- Network Firewall subnets
+- Private firewall subnets
+- Private VPC endpoint subnets
 
 Application and compute workloads are placed in private subnets and do not receive public IP addresses.
 
-Typical outbound path:
+For production-style inspected egress, the typical outbound path is:
 
 ```text
 Private Compute Subnets
@@ -220,7 +271,22 @@ Internet Gateway
 Internet
 ```
 
-This provides centralized egress inspection while keeping workloads private.
+For lower-cost development egress, the typical outbound path is:
+
+```text
+Private Compute Subnets
+    |
+    v
+NAT Gateway
+    |
+    v
+Internet Gateway
+    |
+    v
+Internet
+```
+
+For private AWS-only operation, compute private subnets do not receive a default internet route and rely on VPC endpoints for supported AWS service access.
 
 ---
 
@@ -235,16 +301,76 @@ The baseline supports:
 - VPC endpoints for AWS service access
 - Route table segmentation
 - Security group restrictions
+- Deployment profile-based cost/security defaults
+- Egress mode overrides per environment
 
 Where possible, access to AWS services should occur through VPC endpoints instead of public internet paths.
 
 This reduces unnecessary internet exposure and improves control over workload communication.
+
+### Network Firewall Mode
+
+When the effective egress mode is `network_firewall`, private compute traffic is routed through AWS Network Firewall before reaching NAT Gateway.
+
+```text
+Private Compute Subnets
+    |
+    v
+AWS Network Firewall policy enforcement
+    |
+    v
+NAT Gateway
+    |
+    v
+Internet Gateway
+```
+
+This allows the environment to enforce centralized outbound inspection and domain/protocol restrictions.
+
+### NAT-Only Mode
+
+When the effective egress mode is `nat_only`, Network Firewall is not deployed and private compute traffic routes directly to NAT Gateway.
+
+```text
+Private Compute Subnets
+    |
+    v
+NAT Gateway
+    |
+    v
+Internet Gateway
+```
+
+This mode is intended for lower-cost development and staging environments where full egress inspection is not required.
+
+### VPC-Endpoints-Only Mode
+
+When the effective egress mode is `vpc_endpoints_only`, neither Network Firewall nor NAT Gateway is deployed.
+
+```text
+Private Compute Subnets
+    |
+    v
+VPC Endpoints for supported AWS services
+```
+
+This mode is intended for minimal/private testing and workloads that do not require general internet access.
 
 ---
 
 ## VPC Endpoints
 
 VPC endpoints are used to reduce dependency on public internet access for AWS service communication.
+
+The baseline deploys Interface VPC Endpoints into dedicated private endpoint subnets.
+
+These endpoint subnets:
+
+- Are separate from compute, data, serverless, public, and firewall subnets
+- Have their own route tables
+- Do not require a default internet route
+- Host Interface Endpoint ENIs
+- Allow workloads to reach supported AWS services over private VPC-local paths
 
 Examples include endpoints for services such as:
 
@@ -257,6 +383,11 @@ Examples include endpoints for services such as:
 - SSM Messages
 - Security Hub
 - Lambda
+- EventBridge
+- SNS
+- STS
+
+Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
 This supports private connectivity for management, logging, secrets retrieval, and automation workflows.
 
@@ -390,7 +521,7 @@ Operational and security activity is captured through:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
-- Flow logs
+- Network Firewall flow and alert logs, when Network Firewall is deployed
 
 Logs are designed to be:
 
@@ -405,11 +536,19 @@ The centralized logs bucket is configured with controls such as:
 
 - KMS encryption
 - S3 versioning
-- Object Lock
+- Object Lock, where enabled
 - Restricted bucket policies
 - Lifecycle transitions
 
-This supports monitoring continuity, incident response, and evidence preservation.
+CloudWatch Logs retention is profile-aware by default:
+
+| `deployment_profile` | Default CloudWatch retention |
+|---|---:|
+| `production` | 90 days |
+| `development` | 30 days |
+| `minimal` | 14 days |
+
+This supports monitoring continuity, incident response, and evidence preservation while allowing lower-cost profiles for non-production environments.
 
 ---
 
@@ -436,6 +575,8 @@ These services provide visibility into:
 - Vulnerable resources
 - Security service tampering
 - Policy violations
+
+Some detection and compliance services are profile-aware. For example, AWS Config remains enabled by default for `production` and `development`, while `minimal` disables it by default unless explicitly overridden. Inspector is enabled by default for `production` and `development`, and disabled by default for `minimal`.
 
 ---
 
@@ -596,7 +737,7 @@ This provides additional context for investigation and triage.
 
 ## Configuration Monitoring
 
-AWS Config continuously evaluates infrastructure posture against defined managed rules.
+AWS Config continuously evaluates infrastructure posture against defined managed rules when enabled.
 
 The configuration baseline supports checks related to:
 
@@ -609,7 +750,17 @@ The configuration baseline supports checks related to:
 - EC2 hardening
 - KMS key hygiene
 
-This supports exposure prevention, encryption enforcement, and monitoring consistency.
+AWS Config enablement is profile-aware:
+
+| `deployment_profile` | AWS Config default |
+|---|---:|
+| `production` | Enabled |
+| `development` | Enabled |
+| `minimal` | Disabled |
+
+If AWS Config is disabled, Config rule groups are forced off. If AWS Config is explicitly enabled, rule group settings follow the configured `enable_rules` object.
+
+This supports exposure prevention, encryption enforcement, and monitoring consistency while still allowing lower-cost minimal deployments.
 
 ---
 
@@ -643,7 +794,15 @@ The baseline includes support for operational resilience through:
 - Maintenance windows
 - Patch groups
 
-These controls support recovery readiness and operational hygiene.
+AWS Backup enablement is profile-aware:
+
+| `deployment_profile` | Backup default |
+|---|---:|
+| `production` | Enabled |
+| `development` | Disabled |
+| `minimal` | Disabled |
+
+This keeps production recovery controls enabled by default while reducing cost in lower-cost profiles unless backup is explicitly enabled.
 
 ---
 
@@ -699,22 +858,26 @@ Notable cost drivers include:
 - KMS requests
 - Backup storage
 
-The default design prioritizes security and production readiness.
+The default design prioritizes security and production readiness, but deployment profiles and egress modes allow teams to choose different cost/security tradeoffs per environment.
 
-Future enhancements may include configurable deployment profiles, such as:
+| `deployment_profile` | Cost/security intent |
+|---|---|
+| `production` | Full baseline for sensitive workloads |
+| `development` | Lower-cost development baseline with NAT-only egress |
+| `minimal` | Lowest-cost AWS-private testing profile |
 
-```text
-network_firewall
-nat_only
-vpc_endpoints_only
-```
+| `egress_mode` | Cost/security intent |
+|---|---|
+| `network_firewall` | Highest egress control, highest network inspection cost |
+| `nat_only` | Lower-cost internet egress without Network Firewall |
+| `vpc_endpoints_only` | Lowest egress cost, no general internet route |
 
-This would allow teams to choose different cost/security tradeoffs per environment.
+These profiles do not replace environment-specific review. Production deployments should still review deletion protection, retention periods, Object Lock, KMS lifecycle protections, backup requirements, and access controls before use.
 
 ---
 
 ## Summary
 
-`tf-secure-baseline` implements a multi-account AWS security baseline with centralized identity, secure networking, encrypted logging, continuous detection, event-driven response, and GitHub OIDC-based CI/CD.
+`tf-secure-baseline` implements a multi-account AWS security baseline with centralized identity, secure networking, encrypted logging, continuous detection, event-driven response, deployment profile support, configurable egress modes, dedicated VPC endpoint subnets, and GitHub OIDC-based CI/CD.
 
-The architecture is designed to provide a secure starting point for SaaS companies and teams handling sensitive data while remaining modular enough to adapt to different environments and organizational requirements.
+The architecture is designed to provide a secure starting point for SaaS companies and teams handling sensitive data while remaining modular enough to adapt to different environments, cost requirements, and organizational security expectations.

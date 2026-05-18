@@ -12,13 +12,15 @@ This includes:
 - Private data subnets
 - Private serverless subnets
 - Private firewall subnets
+- Private endpoint subnets for Interface VPC Endpoints
 - Internet Gateway
-- Elastic IPs for NAT Gateways
-- NAT Gateways
+- Conditional Elastic IPs for NAT Gateways
+- Conditional NAT Gateways
 - Public route tables
 - Private route tables
 - Route table associations
-- AWS Network Firewall egress routing
+- Configurable private compute egress routing
+- Optional AWS Network Firewall egress routing
 - Outputs for downstream modules
 - Security group rule wiring through the `security_policy` child module
 
@@ -37,14 +39,42 @@ It supports:
 - Private database placement for RDS/data resources
 - Private serverless placement for Lambda functions
 - Dedicated firewall subnet placement
-- Per-AZ NAT Gateway deployment
+- Dedicated VPC endpoint subnet placement
 - Per-AZ route table segmentation
+- Conditional NAT Gateway deployment
+- Configurable egress modes
 - DNS support for private AWS service access
 - Downstream VPC endpoint deployment
-- Network Firewall routing integration
+- Optional Network Firewall routing integration
 - Centralized security group rule management through the `security_policy` child module
 
 The module is designed to provide the baseline network structure without tightly coupling every firewall policy and security group behavior into a single file.
+
+---
+
+## Egress Modes
+
+The module supports configurable private compute egress through `egress_mode`.
+
+| `egress_mode` | Network Firewall | NAT Gateway | Compute private default route | Intended use |
+|---|---:|---:|---|---|
+| `network_firewall` | Yes | Yes | AWS Network Firewall endpoint | Production / sensitive workloads |
+| `nat_only` | No | Yes | NAT Gateway | Lower-cost development/testing |
+| `vpc_endpoints_only` | No | No | No default route | AWS-private / lowest-cost testing |
+
+The effective egress mode is normally resolved by the baseline stack from `deployment_profile` and `egress_mode`.
+
+Typical profile behavior:
+
+| `deployment_profile` | Default `egress_mode` |
+|---|---|
+| `production` | `network_firewall` |
+| `development` | `nat_only` |
+| `minimal` | `vpc_endpoints_only` |
+
+Important:
+
+When `egress_mode = "vpc_endpoints_only"`, NAT Gateways and Network Firewall are not deployed, and compute private subnets do not receive a default internet route. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access.
 
 ---
 
@@ -92,7 +122,7 @@ var.subnet_cidrs.public
 
 Public subnets are used for:
 
-- NAT Gateways
+- NAT Gateways when NAT is enabled
 - Internet Gateway routing
 - Public edge infrastructure if needed in the future
 
@@ -202,6 +232,38 @@ Firewall private subnets are intended for:
 
 Public IP assignment on launch is disabled.
 
+These subnets are primarily used when:
+
+```text
+egress_mode = "network_firewall"
+```
+
+---
+
+### Endpoint Private Subnets
+
+Creates one endpoint private subnet per Availability Zone:
+
+```hcl
+resource "aws_subnet" "endpoint_private"
+```
+
+Subnet CIDRs come from:
+
+```hcl
+var.subnet_cidrs.vpc_endpoints_private
+```
+
+Endpoint private subnets are intended for:
+
+- Interface VPC Endpoint ENIs
+- Private AWS service access
+- Dedicated endpoint placement separate from compute workloads
+
+Public IP assignment on launch is disabled.
+
+These subnets do not require a default internet route. Interface Endpoint ENIs are reachable from compute and serverless workloads over normal VPC-local routing and security group rules.
+
 ---
 
 ### Internet Gateway
@@ -212,28 +274,46 @@ Creates an Internet Gateway for the VPC:
 resource "aws_internet_gateway" "igw"
 ```
 
-The Internet Gateway is used by public route tables and NAT Gateway egress.
+The Internet Gateway is used by public route tables and NAT Gateway egress when NAT is enabled.
 
 ---
 
 ### Elastic IPs for NAT Gateways
 
-Creates one Elastic IP per Availability Zone:
+Creates one Elastic IP per Availability Zone when NAT is enabled:
 
 ```hcl
 resource "aws_eip" "nat"
 ```
 
+NAT is enabled when:
+
+```hcl
+var.egress_mode != "vpc_endpoints_only"
+```
+
 Each Elastic IP is used by a NAT Gateway in the matching public subnet.
+
+No NAT Elastic IPs are created when:
+
+```text
+egress_mode = "vpc_endpoints_only"
+```
 
 ---
 
 ### NAT Gateways
 
-Creates one NAT Gateway per Availability Zone:
+Creates one NAT Gateway per Availability Zone when NAT is enabled:
 
 ```hcl
 resource "aws_nat_gateway" "natgw"
+```
+
+NAT is enabled when:
+
+```hcl
+var.egress_mode != "vpc_endpoints_only"
 ```
 
 Each NAT Gateway is deployed into the corresponding public subnet.
@@ -244,7 +324,13 @@ The NAT Gateways depend on the Internet Gateway:
 depends_on = [aws_internet_gateway.igw]
 ```
 
-The intended design is to support per-AZ private outbound egress after traffic has been inspected by AWS Network Firewall.
+NAT Gateway behavior by egress mode:
+
+| `egress_mode` | NAT Gateway behavior |
+|---|---|
+| `network_firewall` | NAT Gateways are deployed after Network Firewall inspection |
+| `nat_only` | NAT Gateways are deployed as the compute egress path |
+| `vpc_endpoints_only` | NAT Gateways are not deployed |
 
 ---
 
@@ -269,6 +355,10 @@ route {
 
 Each public route table is associated with the corresponding public subnet.
 
+When `egress_mode = "network_firewall"`, the module also creates return-path routes from the public route tables back to compute private CIDRs through the appropriate Network Firewall endpoint.
+
+This supports symmetric routing for inspected egress traffic.
+
 ---
 
 ### Compute Private Route Tables
@@ -279,29 +369,21 @@ Creates one compute private route table per Availability Zone:
 resource "aws_route_table" "compute_private"
 ```
 
+Each compute private route table is associated with the corresponding compute private subnet.
+
 Compute private default routing depends on `egress_mode`:
 
-| egress_mode | Compute private default route |
+| `egress_mode` | Compute private default route |
 |---|---|
 | `network_firewall` | AWS Network Firewall endpoint |
 | `nat_only` | NAT Gateway |
 | `vpc_endpoints_only` | No default route |
 
-Each compute private route table is associated with the corresponding compute private subnet.
+When `egress_mode = "network_firewall"`, compute private route tables send default egress to the AWS Network Firewall endpoint in the same Availability Zone.
 
-The compute private route tables include a default route to the AWS Network Firewall endpoint in the same Availability Zone:
+When `egress_mode = "nat_only"`, compute private route tables send default egress directly to the NAT Gateway in the same Availability Zone.
 
-```hcl
-resource "aws_route" "compute_default_to_firewall" {
-  for_each               = local.az_index_map
-  route_table_id         = aws_route_table.compute_private[each.key].id
-  destination_cidr_block = "0.0.0.0/0"
-
-  vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
-}
-```
-
-This routes private compute egress through AWS Network Firewall before traffic can continue toward NAT Gateway and the Internet Gateway.
+When `egress_mode = "vpc_endpoints_only"`, no default route is created for compute private route tables.
 
 ---
 
@@ -313,18 +395,11 @@ Creates one firewall private route table per Availability Zone:
 resource "aws_route_table" "firewall_private"
 ```
 
-Each firewall private route table includes a default route to the NAT Gateway in the same Availability Zone:
-
-```hcl
-route {
-  cidr_block     = "0.0.0.0/0"
-  nat_gateway_id = aws_nat_gateway.natgw[each.key].id
-}
-```
-
 Each firewall private route table is associated with the corresponding firewall private subnet.
 
-This supports the broader egress path:
+When `egress_mode = "network_firewall"`, each firewall private route table includes a default route to the NAT Gateway in the same Availability Zone.
+
+This supports the broader inspected egress path:
 
 ```text
 Private Workloads
@@ -341,6 +416,8 @@ NAT Gateway
     v
 Internet Gateway
 ```
+
+When `egress_mode` is `nat_only` or `vpc_endpoints_only`, firewall private route tables do not receive a default NAT route.
 
 ---
 
@@ -370,9 +447,25 @@ resource "aws_route_table" "serverless_private"
 
 Each serverless private route table is associated with the corresponding serverless private subnet.
 
-No default internet route is created in these route tables.
+No default internet route is created in these route tables by this module.
 
 This keeps serverless workloads private unless explicit routing is added elsewhere.
+
+---
+
+### Endpoint Private Route Tables
+
+Creates one endpoint private route table per Availability Zone:
+
+```hcl
+resource "aws_route_table" "endpoint_private"
+```
+
+Each endpoint private route table is associated with the corresponding endpoint private subnet.
+
+Endpoint private route tables do not receive a default internet route.
+
+This is intentional. Interface Endpoint ENIs do not need outbound internet access to serve private AWS service traffic from workloads inside the VPC.
 
 ---
 
@@ -386,7 +479,7 @@ modules/networking/security_policy
 
 The `security_policy` module manages security group rules that connect resources created by other modules.
 
-This README intentionally does not go deep into the child module because it should have its own README.
+This README intentionally does not go deep into the child module because it has its own README.
 
 At a high level, the child module manages rules for:
 
@@ -395,7 +488,7 @@ At a high level, the child module manages rules for:
 - Lambda rollback access to Interface VPC Endpoints over TCP/443
 - Compute access to the database port
 - Database ingress from compute
-- Compute HTTPS egress through controlled egress paths
+- Compute HTTPS egress through configured egress paths
 - Interface Endpoint security group ingress and egress
 
 This split keeps base VPC/subnet/route resources in the parent networking module while keeping security group policy rules in a focused child module.
@@ -404,7 +497,7 @@ This split keeps base VPC/subnet/route resources in the parent networking module
 
 ## Network Segmentation
 
-The module creates five subnet tiers across the configured Availability Zones:
+The module creates six subnet tiers across the configured Availability Zones:
 
 | Subnet tier | Purpose |
 |---|---|
@@ -413,8 +506,9 @@ The module creates five subnet tiers across the configured Availability Zones:
 | Data private | RDS and data-layer resources |
 | Serverless private | VPC-attached Lambda and serverless workloads |
 | Firewall private | AWS Network Firewall endpoints and inspected egress path |
+| Endpoint private | Interface VPC Endpoint ENIs |
 
-This segmentation supports separation of duties between workload, data, serverless, public egress, and inspection layers.
+This segmentation supports separation of duties between workload, data, serverless, public egress, inspection, and private AWS service access layers.
 
 ---
 
@@ -450,9 +544,10 @@ The same pattern is used for each subnet tier.
 | `main_vpc_cidr` | CIDR block for the main workload VPC | Yes |
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
 | `cloud_name` | Cloud or project name used by the broader baseline | Yes |
-| `azs` | List of Availability Zones where subnets and NAT Gateways are created | Yes |
+| `azs` | List of Availability Zones where subnets and per-AZ resources are created | Yes |
 | `subnet_cidrs` | Map of subnet CIDR lists for each subnet tier | Yes |
-| `firewall_endpoint_ids_by_az` | Map of AWS Network Firewall endpoint IDs keyed by Availability Zone; used to route private compute subnet egress through firewall endpoints | Yes |
+| `egress_mode` | Effective private compute egress mode. Valid values: `network_firewall`, `nat_only`, `vpc_endpoints_only` | Yes |
+| `firewall_endpoint_ids_by_az` | Map of AWS Network Firewall endpoint IDs keyed by Availability Zone; required when `egress_mode = "network_firewall"` | No |
 
 ---
 
@@ -464,11 +559,12 @@ Expected keys include:
 
 ```hcl
 subnet_cidrs = {
-  public             = [...]
-  compute_private    = [...]
-  data_private       = [...]
-  serverless_private = [...]
-  firewall_private   = [...]
+  public                = [...]
+  compute_private       = [...]
+  data_private          = [...]
+  serverless_private    = [...]
+  firewall_private      = [...]
+  vpc_endpoints_private = [...]
 }
 ```
 
@@ -479,16 +575,16 @@ For example:
 ```hcl
 azs = [
   "us-east-1a",
-  "us-east-1b",
-  "us-east-1c"
+  "us-east-1b"
 ]
 
 subnet_cidrs = {
-  public             = ["10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24"]
-  compute_private    = ["10.0.10.0/24", "10.0.11.0/24", "10.0.12.0/24"]
-  data_private       = ["10.0.20.0/24", "10.0.21.0/24", "10.0.22.0/24"]
-  serverless_private = ["10.0.30.0/24", "10.0.31.0/24", "10.0.32.0/24"]
-  firewall_private   = ["10.0.40.0/24", "10.0.41.0/24", "10.0.42.0/24"]
+  public                = ["10.0.0.0/24", "10.0.1.0/24"]
+  compute_private       = ["10.0.16.0/24", "10.0.17.0/24"]
+  data_private          = ["10.0.32.0/24", "10.0.33.0/24"]
+  serverless_private    = ["10.0.48.0/24", "10.0.49.0/24"]
+  firewall_private      = ["10.0.64.0/24", "10.0.65.0/24"]
+  vpc_endpoints_private = ["10.0.128.0/24", "10.0.129.0/24"]
 }
 ```
 
@@ -506,12 +602,17 @@ The number of CIDRs in each subnet tier should match the number of Availability 
 | `data_private_subnet_ids_map` | Map of data private subnet IDs by Availability Zone |
 | `serverless_private_subnet_ids_map` | Map of serverless private subnet IDs by Availability Zone |
 | `firewall_private_subnet_ids_map` | Map of firewall private subnet IDs by Availability Zone |
+| `endpoint_private_subnet_ids_map` | Map of endpoint private subnet IDs by Availability Zone |
 | `public_subnet_ids_list` | List of public subnet IDs |
 | `compute_private_subnet_ids_list` | List of compute private subnet IDs |
 | `data_private_subnet_ids_list` | List of data private subnet IDs |
 | `serverless_private_subnet_ids_list` | List of serverless private subnet IDs |
 | `firewall_private_subnet_ids_list` | List of firewall private subnet IDs |
+| `endpoint_private_subnet_ids_list` | List of endpoint private subnet IDs |
 | `compute_private_route_table_ids_map` | Map of compute private route table IDs by Availability Zone |
+| `serverless_private_route_table_ids_map` | Map of serverless private route table IDs by Availability Zone |
+| `endpoint_private_route_table_ids_map` | Map of endpoint private route table IDs by Availability Zone |
+| `nat_gateway_ids_by_az` | Map of NAT Gateway IDs by Availability Zone. Empty when NAT is disabled |
 
 ---
 
@@ -539,7 +640,7 @@ Common examples:
 
 | Output type | Use case |
 |---|---|
-| Map | EC2 instances per subnet/AZ, VPC endpoints, per-AZ routing |
+| Map | EC2 instances per subnet/AZ, Interface VPC Endpoints, per-AZ routing |
 | List | RDS DB subnet groups, Lambda subnet config, AWS Network Firewall subnet mappings |
 
 ---
@@ -550,15 +651,21 @@ Common examples:
 module "networking" {
   source = "../modules/networking"
 
-  name_prefix = local.name_prefix
-  environment = var.environment
-  cloud_name  = var.cloud_name
+  name_prefix   = local.name_prefix
+  environment   = var.environment
+  cloud_name    = var.cloud_name
 
   main_vpc_cidr = var.main_vpc_cidr
   subnet_cidrs  = var.subnet_cidrs
   azs           = var.azs
 
-  firewall_endpoint_ids_by_az = module.firewall.firewall_endpoint_ids_by_az
+  egress_mode = local.effective_egress_mode
+
+  firewall_endpoint_ids_by_az = (
+    local.effective_egress_mode == "network_firewall"
+    ? module.firewall[0].firewall_endpoint_ids_by_az
+    : {}
+  )
 }
 ```
 
@@ -574,6 +681,7 @@ module "security_policy" {
   lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
   interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
   db_port                    = var.db_port
+  egress_mode                = local.effective_egress_mode
 }
 ```
 
@@ -589,24 +697,23 @@ Outputs from this module are consumed by many other modules.
 |---|---|
 | `vpc_id` | Compute, storage, VPC endpoints, automation, firewall |
 | `public_subnet_ids_map` | NAT Gateway routing or public resources |
-| `compute_private_subnet_ids_map` | Compute, VPC endpoints |
+| `compute_private_subnet_ids_map` | Compute |
 | `compute_private_subnet_ids_list` | Workload placement or validation |
 | `data_private_subnet_ids_list` | RDS DB subnet group |
 | `serverless_private_subnet_ids_map` | Lambda/security automation placement |
 | `firewall_private_subnet_ids_map` | AWS Network Firewall subnet mappings |
+| `endpoint_private_subnet_ids_map` | Interface VPC Endpoint subnet placement |
 | `compute_private_route_table_ids_map` | S3 Gateway VPC Endpoint route table associations |
+| `serverless_private_route_table_ids_map` | Optional S3 Gateway VPC Endpoint route table associations |
+| `nat_gateway_ids_by_az` | NAT-only compute private default routing |
 
 ### Common Upstream Inputs
 
-This module is usually one of the first workload modules deployed, but the compute private default route depends on AWS Network Firewall endpoint IDs.
+This module is usually one of the first workload modules deployed.
 
-Those endpoint IDs are passed in through:
+For `network_firewall` mode, Network Firewall endpoint IDs must be available so compute private route tables can route default egress through the correct per-AZ firewall endpoint.
 
-```hcl
-firewall_endpoint_ids_by_az
-```
-
-Because of that dependency, the root stack must ensure the firewall endpoint IDs are available before the compute private default routes are created.
+For `nat_only` and `vpc_endpoints_only`, `firewall_endpoint_ids_by_az` can be an empty map.
 
 ---
 
@@ -673,7 +780,28 @@ Expected:
 - Data private subnets exist
 - Serverless private subnets exist
 - Firewall private subnets exist
+- Endpoint private subnets exist
 - Subnets exist across the configured Availability Zones
+- `MapPublicIpOnLaunch` is `false`
+
+---
+
+### Confirm Endpoint Private Subnets
+
+```bash
+aws ec2 describe-subnets \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Endpoint-Private-*" \
+  --query 'Subnets[].[Tags[?Key==`Name`]|[0].Value,SubnetId,AvailabilityZone,CidrBlock,MapPublicIpOnLaunch]' \
+  --output table
+```
+
+Expected:
+
+- Endpoint private subnets exist
+- Endpoint private subnet CIDRs match `var.subnet_cidrs.vpc_endpoints_private`
+- Endpoint private subnets exist across the configured Availability Zones
 - `MapPublicIpOnLaunch` is `false`
 
 ---
@@ -710,10 +838,16 @@ aws ec2 describe-nat-gateways \
 
 Expected:
 
+For `network_firewall` or `nat_only`:
+
 - One NAT Gateway exists per configured Availability Zone
 - NAT Gateway state is `available`
 - Each NAT Gateway is deployed into a public subnet
 - Each NAT Gateway has an Elastic IP address
+
+For `vpc_endpoints_only`:
+
+- No NAT Gateways should be returned for this VPC
 
 ---
 
@@ -752,7 +886,35 @@ Expected:
 - Data private route tables exist
 - Serverless private route tables exist
 - Firewall private route tables exist
+- Endpoint private route tables exist
 - Each route table is associated with the expected subnet tier
+
+---
+
+### Confirm Compute Private Route Tables
+
+```bash
+aws ec2 describe-route-tables \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-RT-*" \
+  --query 'RouteTables[].{Name:Tags[?Key==`Name`]|[0].Value,RouteTableId:RouteTableId,DefaultRoutes:Routes[?DestinationCidrBlock==`0.0.0.0/0`]}' \
+  --output json
+```
+
+Expected:
+
+For `network_firewall`:
+
+- Each compute private route table has a default route to a Network Firewall endpoint
+
+For `nat_only`:
+
+- Each compute private route table has a default route to a NAT Gateway
+
+For `vpc_endpoints_only`:
+
+- Compute private route tables have no `0.0.0.0/0` default route
 
 ---
 
@@ -769,27 +931,34 @@ aws ec2 describe-route-tables \
 
 Expected:
 
+For `network_firewall`:
+
 - Firewall private route tables exist
 - Each firewall private route table has a default route to a NAT Gateway
 
+For `nat_only` or `vpc_endpoints_only`:
+
+- Firewall private route tables should not have a default NAT route
+
 ---
 
-### Confirm Compute Private Route Tables Route to Network Firewall
+### Confirm Endpoint Private Route Tables Have No Default Route
 
 ```bash
 aws ec2 describe-route-tables \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-RT-*" \
-  --query 'RouteTables[].[RouteTableId,Routes[?DestinationCidrBlock==`0.0.0.0/0`].[VpcEndpointId]|[0][0]]' \
-  --output table
+  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:Name,Values=${NAME_PREFIX}-Endpoint-Private-RT-*" \
+  --query 'RouteTables[].{Name:Tags[?Key==`Name`]|[0].Value,RouteTableId:RouteTableId,Routes:Routes}' \
+  --output json
 ```
 
 Expected:
 
-- Compute private route tables exist
-- Each compute private route table has a default route to a Network Firewall endpoint
-- The firewall endpoint ID is AZ-aligned with the subnet route table
+- Endpoint private route tables exist
+- Endpoint private route tables are associated with endpoint private subnets
+- Only the local VPC route should exist
+- No `0.0.0.0/0` default route should exist
 
 ---
 
@@ -811,6 +980,7 @@ Expected:
 - Data private route tables are associated with data private subnets
 - Serverless private route tables are associated with serverless private subnets
 - Firewall private route tables are associated with firewall private subnets
+- Endpoint private route tables are associated with endpoint private subnets
 
 ---
 
@@ -829,6 +999,7 @@ Plan enough address space for future growth, especially in:
 - Compute private subnets
 - Serverless private subnets
 - Data private subnets
+- Endpoint private subnets
 - VPC endpoint ENIs
 - Firewall endpoint placement
 
@@ -836,9 +1007,15 @@ Plan enough address space for future growth, especially in:
 
 ### NAT Gateway Cost
 
-This module creates one NAT Gateway per Availability Zone.
+NAT Gateways are one of the main cost drivers in this architecture.
 
-This improves availability and keeps egress AZ-local, but it increases cost.
+NAT Gateway deployment depends on `egress_mode`:
+
+| `egress_mode` | NAT Gateway deployment |
+|---|---:|
+| `network_firewall` | Yes |
+| `nat_only` | Yes |
+| `vpc_endpoints_only` | No |
 
 Cost drivers include:
 
@@ -847,7 +1024,9 @@ Cost drivers include:
 - Elastic IP usage
 - Cross-AZ traffic if routing is misaligned
 
-For lower-cost development environments, future versions may support configurable egress modes.
+For lower-cost development environments, use `egress_mode = "nat_only"`.
+
+For lowest-cost AWS-private testing, use `egress_mode = "vpc_endpoints_only"`.
 
 ---
 
@@ -867,7 +1046,7 @@ If a future public-facing resource needs a public IP address, assign it explicit
 
 ### Private Subnets Do Not Automatically Bypass Inspection
 
-Compute private route tables send default outbound traffic to AWS Network Firewall endpoints.
+In `network_firewall` mode, compute private route tables send default outbound traffic to AWS Network Firewall endpoints.
 
 This is intentional for a private-first, inspected-egress architecture.
 
@@ -875,6 +1054,7 @@ Private outbound access should be provided intentionally through:
 
 - AWS Network Firewall routing
 - NAT Gateway routing after firewall inspection
+- Direct NAT routing in `nat_only` mode
 - VPC endpoints
 - Explicit route table changes
 
@@ -882,9 +1062,9 @@ Private outbound access should be provided intentionally through:
 
 ### Network Firewall Integration
 
-The module routes compute private egress to Network Firewall endpoints.
+When `egress_mode = "network_firewall"`, the module routes compute private egress to Network Firewall endpoints.
 
-Current high-level flow:
+High-level flow:
 
 ```text
 Compute Private Subnets
@@ -939,6 +1119,37 @@ This means private workloads should not be treated as having unrestricted intern
 
 ---
 
+### VPC Endpoints Only Mode
+
+When `egress_mode = "vpc_endpoints_only"`:
+
+- NAT Gateways are not deployed
+- Network Firewall is not deployed
+- Compute private subnets do not receive a default internet route
+- Endpoint private subnets still host Interface VPC Endpoints
+- S3 Gateway Endpoint access depends on route table associations
+- Workloads can access supported AWS services privately through VPC endpoints
+
+This mode is intended for AWS-private testing or workloads that do not require third-party internet access.
+
+Important:
+
+EC2 user data package installation may fail in this mode unless package repository access is provided another way.
+
+---
+
+### Endpoint Private Subnets
+
+Interface VPC Endpoints are deployed into dedicated endpoint private subnets.
+
+These subnets have their own route tables and do not require a default internet route.
+
+Workloads in compute and serverless subnets reach Interface Endpoints over VPC-local routing and security group rules.
+
+S3 Gateway Endpoints are different. They attach to route tables rather than subnets. The S3 Gateway Endpoint should be associated with the route tables that need private S3 access, such as compute private route tables.
+
+---
+
 ### Security Group Policy Is Separate
 
 The parent networking module creates the VPC and route structure.
@@ -962,6 +1173,7 @@ Check:
 - CIDRs do not overlap
 - CIDRs fit inside `main_vpc_cidr`
 - Each subnet CIDR list has the same number of entries as `var.azs`
+- `vpc_endpoints_private` is defined in `subnet_cidrs`
 - Availability Zone names are valid for the selected region
 - Account has permissions to create subnets
 
@@ -971,6 +1183,7 @@ Check:
 
 Check:
 
+- `egress_mode` requires NAT Gateway deployment
 - Internet Gateway exists
 - Public subnet exists
 - Elastic IP allocation succeeded
@@ -989,18 +1202,41 @@ aws ec2 describe-nat-gateways \
 
 ---
 
+### NAT Gateway Is Missing
+
+Check the active egress mode.
+
+NAT Gateways are not deployed when:
+
+```text
+egress_mode = "vpc_endpoints_only"
+```
+
+If NAT is expected, confirm the effective egress mode from Terraform outputs:
+
+```bash
+terraform output effective_egress_mode
+```
+
+Expected:
+
+- `network_firewall` or `nat_only` should deploy NAT Gateways
+- `vpc_endpoints_only` should not deploy NAT Gateways
+
+---
+
 ### Private Instances Cannot Reach AWS Services
 
 Check:
 
 - Required VPC endpoints exist
+- Interface Endpoints are deployed into endpoint private subnets
 - Interface endpoint security group allows traffic from compute
 - Compute security group allows egress to endpoints
 - DNS support and DNS hostnames are enabled on the VPC
 - Route tables are associated with the expected subnets
-- Compute private route tables route default egress to Network Firewall endpoints
-- Firewall policy allows the required traffic
-- Controlled NAT/firewall egress exists if the service does not have a VPC endpoint
+- The selected `egress_mode` supports the needed traffic path
+- Firewall policy allows the required traffic when using `network_firewall`
 
 ---
 
@@ -1008,12 +1244,16 @@ Check:
 
 Check:
 
-- Compute private subnet route table routes default traffic to the Network Firewall endpoint
-- Network Firewall route is AZ-aligned
-- Firewall policy allows the required package repository domains
-- NAT Gateway is available
-- DNS resolution works
-- Security group egress allows HTTPS where intended
+- Effective egress mode
+- Compute private route table default route
+- NAT Gateway availability if using `nat_only`
+- Network Firewall route and policy if using `network_firewall`
+- DNS resolution
+- Security group egress rules
+
+Important:
+
+If `egress_mode = "vpc_endpoints_only"`, package repository access is not expected unless another private package access pattern has been implemented.
 
 ---
 
@@ -1031,6 +1271,8 @@ Validate:
 - Lambda isolation egress to Interface Endpoint SG on TCP/443
 - Lambda rollback egress to Interface Endpoint SG on TCP/443
 - Interface Endpoint SG ingress from approved source security groups on TCP/443
+- Interface Endpoints are deployed into endpoint private subnets
+- Endpoint private route tables exist and are associated correctly
 
 ---
 
@@ -1055,13 +1297,14 @@ Validate:
 
 Check:
 
+- Effective egress mode
 - Route table names
 - Route table associations
 - Default routes
 - NAT Gateway route placement
 - Firewall route placement
-- Whether compute private default routes point to the expected firewall endpoint IDs
-- Whether firewall private route tables point to the expected NAT Gateways
+- Whether compute private default routes point to the expected destination for the active egress mode
+- Whether endpoint private route tables have no default route
 
 Useful command:
 
@@ -1083,9 +1326,11 @@ aws ec2 describe-route-tables \
 - All private subnet tiers disable public IP assignment.
 - Data subnets do not receive a default internet route in this parent module.
 - Serverless subnets do not receive a default internet route in this parent module.
-- Compute private default internet routing is sent to AWS Network Firewall endpoints.
-- Firewall private route tables route outbound traffic to NAT Gateways.
-- NAT Gateways are deployed per Availability Zone.
+- Endpoint private subnets do not receive a default internet route.
+- Compute private default routing depends on `egress_mode`.
+- Network Firewall is deployed only when `egress_mode = "network_firewall"`.
+- NAT Gateways are not deployed when `egress_mode = "vpc_endpoints_only"`.
+- Firewall private route tables route outbound traffic to NAT Gateways only in `network_firewall` mode.
 - Security group rules are managed separately in the `security_policy` child module.
 - Private AWS service access should be handled through VPC endpoints where possible.
 - Internet egress should be routed intentionally through controlled firewall/NAT paths.
@@ -1099,12 +1344,14 @@ This module follows:
 
 - Private-first networking
 - Multi-AZ subnet segmentation
-- Separation of public, compute, data, serverless, and firewall layers
+- Separation of public, compute, data, serverless, firewall, and endpoint layers
 - Per-AZ routing patterns
 - DNS support for AWS-native private connectivity
-- Inspected egress through AWS Network Firewall
+- Configurable egress behavior
+- Optional inspected egress through AWS Network Firewall
+- Dedicated subnet placement for Interface VPC Endpoints
 - Separation between network infrastructure and security group policy
-- Production-aligned VPC foundations
+- Production-aligned VPC foundations with lower-cost deployment options
 
 ---
 
@@ -1112,8 +1359,11 @@ This module follows:
 
 - Deploy this module early because most other modules depend on its outputs.
 - The number of subnet CIDRs per tier should match the number of Availability Zones.
-- The module currently creates one NAT Gateway per Availability Zone.
-- The module currently creates route tables per subnet tier per Availability Zone.
-- The compute private route table default route points to AWS Network Firewall endpoints.
+- The module creates one NAT Gateway per Availability Zone only when NAT is enabled.
+- NAT is enabled for `network_firewall` and `nat_only` modes.
+- NAT is disabled for `vpc_endpoints_only` mode.
+- The module creates route tables per subnet tier per Availability Zone.
+- The compute private route table default route depends on `egress_mode`.
+- Interface VPC Endpoints should use `endpoint_private_subnet_ids_map`.
+- S3 Gateway Endpoint route table associations should include the route tables that need private S3 access.
 - The `security_policy` child module should receive security group IDs from compute, storage, automation, and VPC endpoint modules.
-- Future versions may make egress modes configurable, such as `network_firewall`, `nat_only`, or `vpc_endpoints_only`.

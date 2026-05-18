@@ -20,6 +20,8 @@ It provides a secure, multi-account cloud foundation with:
 
 - Centralized identity and access management
 - Secure-by-default networking
+- Configurable deployment profiles
+- Configurable egress modes
 - Centralized logging and monitoring
 - Automated detection and response
 - GitHub OIDC-based CI/CD
@@ -43,13 +45,16 @@ Key capabilities include:
 - IAM Identity Center access management
 - GitHub Actions OIDC federation
 - Private-first networking
-- AWS Network Firewall egress inspection
+- Configurable deployment profiles for production, development, and minimal deployments
+- Configurable egress modes for Network Firewall, NAT-only, or VPC-endpoints-only operation
+- AWS Network Firewall egress inspection when enabled
+- Dedicated private subnets for Interface VPC Endpoints
+- Private AWS service access through VPC endpoints
 - Centralized CloudTrail, Config, and VPC Flow Logs
 - GuardDuty, Security Hub, Inspector, and AWS Config
 - Event-driven security automation
 - EC2 isolation and rollback workflows
 - Tamper detection
-- Private AWS service access through VPC endpoints
 - Break-glass role monitoring
 - Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
@@ -86,20 +91,25 @@ Terraform Stacks
     |       +--> account
     |       +--> organizations
     |       +--> identity_center
-    |--> bootstrap/dev
+    |
+    +--> bootstrap/dev
     |       +--> state
     |       +--> account
-    |--> bootstrap/staging
+    |
+    +--> bootstrap/staging
     |       +--> state
     |       +--> account
-    |--> bootstrap/prod
+    |
+    +--> bootstrap/prod
     |       +--> state
     |       +--> account
     |
     +--> environments/dev
     |       +--> baseline
+    |
     +--> environments/staging
     |       +--> baseline
+    |
     +--> environments/prod
     |       +--> baseline
 ```
@@ -107,13 +117,16 @@ Terraform Stacks
 The platform separates the control plane from the workload environments.
 
 The **control plane** manages:
+
 - Terraform backend infrastructure
 - GitHub OIDC execution roles
 - AWS Organizations structure
 - IAM Identity Center access
 
 The **environment** stacks manage:
+
 - Networking
+- Deployment profile and egress mode behavior
 - Logging
 - Monitoring
 - Security services
@@ -124,6 +137,7 @@ The **environment** stacks manage:
 - Patch management
 
 ---
+
 ## Repository Structure
 
 ```text
@@ -191,11 +205,18 @@ The **environment** stacks manage:
 
 Compute workloads are deployed in private subnets by default.
 
-The baseline avoids public IPs for application infrastructure and routes private compute egress through controlled inspection paths, including AWS Network Firewall, NAT Gateway, and VPC endpoints where appropriate.
+The baseline avoids public IPs for application infrastructure and routes private compute egress through controlled paths, including AWS Network Firewall, NAT Gateway, and VPC endpoints where appropriate.
+
+### Configurable Cost/Security Profiles
+
+The baseline supports deployment profiles that select sensible defaults for each environment type.
+
+Profiles allow teams to run a full production-style architecture where needed while using lower-cost defaults for development or minimal testing environments.
 
 ### Multi-Account Isolation
 
 The platform separates environments into dedicated AWS accounts:
+
 ```text
 dev
 staging
@@ -226,6 +247,7 @@ Permission sets and account assignments are managed centrally from the control p
 ### Event-Driven Security Automation
 
 Security events are routed through EventBridge and trigger automated workflows such as:
+
 - EC2 isolation
 - EC2 rollback
 - IP threat enrichment
@@ -258,28 +280,32 @@ Substacks include:
 ### Environment Stacks
 
 Located at:
+
 ```text
 environments/dev
 environments/staging
 environments/prod
 ```
 
-Each environment stack deploys the full security baseline into its respective AWS account.
+Each environment stack deploys the security baseline into its respective AWS account.
 
 Environment stacks include:
+
+- Deployment profile and egress mode resolution
 - VPC and subnets
-- AWS Network Firewall
-- NAT Gateway
+- Dedicated VPC endpoint subnets
+- AWS Network Firewall, when enabled by egress mode
+- NAT Gateway, when required by egress mode
 - VPC endpoints
 - EC2 workloads
 - S3 storage
 - KMS keys
 - CloudTrail
 - CloudWatch
-- AWS Config
+- AWS Config, when enabled by profile or override
 - GuardDuty
 - Security Hub
-- Inspector
+- Inspector, when enabled by profile
 - Lambda automation
 - EventBridge rules
 - SNS topics
@@ -289,30 +315,72 @@ Environment stacks include:
 ### Modules
 
 Reusable Terraform modules live under:
+
 ```text
 modules/
 ```
 
 Each module contains its own `README.md` describing its purpose, inputs, outputs, and behavior.
 
+---
+
+## Deployment Profiles and Egress Modes
+
+The baseline supports deployment profiles that set default cost/security behavior per environment.
+
+| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention | Intended use |
+|---|---|---:|---:|---:|---:|---|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+
+The profile sets defaults only. Explicit variables can override profile defaults.
+
+For example:
+
+```hcl
+deployment_profile = "development"
+egress_mode        = "network_firewall"
+```
+
+The baseline also supports explicit egress modes:
+
+| `egress_mode` | Network Firewall | NAT Gateway | Compute private default route |
+|---|---:|---:|---|
+| `network_firewall` | Yes | Yes | Network Firewall endpoint |
+| `nat_only` | No | Yes | NAT Gateway |
+| `vpc_endpoints_only` | No | No | No default route |
+
+When `egress_mode = "auto"`, the effective egress mode is selected from `deployment_profile`.
+
+Important:
+
+When `egress_mode = "vpc_endpoints_only"`, Network Firewall and NAT Gateways are not deployed, and compute private subnets do not receive a default internet route. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation may fail unless package access is provided another way.
+
+---
+
 ## Security Services
 
 This baseline integrates several AWS-native security services:
 
-| Service |  Purpose |
+| Service | Purpose |
 |---------|---------|
 | GuardDuty | Threat detection |
 | Security Hub | Security findings aggregation |
 | AWS Config | Compliance rule evaluation |
 | CloudTrail | API activity logging |
 | CloudWatch | Metrics, logs, and alarms |
-| Inspector  | Vulnerability scanning |
+| Inspector | Vulnerability scanning |
 | EventBridge | Security event routing |
-| SNS |  Alert delivery |
-| KMS |  Encryption key management |
-| IAM Identity Center |  Centralized human access |
+| SNS | Alert delivery |
+| KMS | Encryption key management |
+| IAM Identity Center | Centralized human access |
 | AWS Backup | Backup orchestration |
 | SSM Patch Manager | Patch management |
+
+Some services are profile-aware. For example, AWS Config and Inspector are enabled by default in `production` and `development`, while `minimal` disables them by default unless explicitly overridden.
+
+---
 
 ## Automation Workflows
 
@@ -323,6 +391,7 @@ The baseline includes several security automation workflows.
 Triggered by High- and Critical-severity Security Hub findings.
 
 Actions include:
+
 - Replacing existing security groups with a quarantine security group
 - Snapshotting the EBS volume(s)
 - Tagging the instance
@@ -341,6 +410,7 @@ Enriches IP-related Security Hub findings using threat intelligence sources and 
 ### Tamper Detection
 
 Detects attempts to disable, delete, or modify critical security services such as:
+
 - CloudTrail
 - GuardDuty
 - Security Hub
@@ -356,10 +426,12 @@ Detects use of the break-glass administrator role and sends a high-priority aler
 GitHub Actions workflows use GitHub OIDC to assume AWS IAM roles.
 
 Typical workflows include:
+
 - `Terraform Plan`
 - `Terraform Apply`
 - `Terraform Destroy`
 - `Terraform Static Analysis`
+- `Docs Validation`
 - `Lint PR`
 
 Each environment uses its own GitHub environment and AWS role for `Terraform Plan`, `Terraform Apply`, and `Terraform Destroy` workflows.
@@ -394,6 +466,7 @@ At a high level, deployment follows this order:
 6. Validate **security automation workflows**
 
 Detailed instructions are provided in:
+
 ```text
 docs/quickstart.md
 ```
@@ -405,6 +478,7 @@ docs/quickstart.md
 Terraform state is separated by **stack** and **environment**.
 
 Example layout:
+
 ```text
 bootstrap/dev.tfstate
 baseline/dev.tfstate
@@ -417,6 +491,7 @@ baseline/prod.tfstate
 ```
 
 Control-plane substacks use separate state files:
+
 ```text
 control-plane/account.tfstate
 control-plane/identity-center.tfstate
@@ -429,25 +504,36 @@ This separation prevents accidental cross-stack changes and reduces the blast ra
 
 ## Cost Considerations
 
-This baseline uses **AWS Network Firewall** for centralized egress inspection.
+This baseline supports multiple cost/security profiles.
 
-AWS Network Firewall provides strong security controls, but it can increase cost, especially when deployed across multiple environments and Availability Zones.
+The full production-style baseline uses AWS Network Firewall for centralized egress inspection. AWS Network Firewall provides strong security controls, but it can increase cost, especially when deployed across multiple environments and Availability Zones.
 
 Recommended usage:
-- Use the full architecture for production or sensitive workloads
-- Consider a reduced-cost profile for dev or staging environments
-- Review NAT Gateway, Network Firewall, VPC endpoint, CloudWatch, and logging costs regularly
 
-Future versions may include configurable egress profiles such as:
-- `network_firewall`
-- `nat_only`
-- `vpc_endpoints_only`
+- Use `deployment_profile = "production"` for production or sensitive workloads.
+- Use `deployment_profile = "development"` for lower-cost development/testing environments.
+- Use `deployment_profile = "minimal"` for private AWS-only testing where general internet access is not required.
+- Review NAT Gateway, Network Firewall, VPC endpoint, CloudWatch, logging, Inspector, AWS Config, and Backup costs regularly.
+
+Cost-sensitive behavior includes:
+
+| Setting | Production | Development | Minimal |
+|---|---:|---:|---:|
+| Network Firewall | Enabled | Disabled by default | Disabled |
+| NAT Gateway | Enabled | Enabled | Disabled |
+| AWS Config | Enabled | Enabled | Disabled by default |
+| Inspector | Enabled | Enabled | Disabled |
+| AWS Backup | Enabled | Disabled | Disabled |
+| CloudWatch retention | 90 days | 30 days | 14 days |
+
+The exact behavior can be overridden with explicit variables where supported.
 
 ---
 
 ## Documentation
 
 System-level documentation is located in:
+
 ```text
 docs/
 ```
@@ -457,8 +543,8 @@ Important docs include:
 | Document | Purpose |
 |----------|---------|
 | docs/quickstart.md | End-to-end deployment guide |
-| docs/architecture-overview.md  | Architecture explanation |
-| docs/design-principles.md  | Design principles and rationale |
+| docs/architecture-overview.md | Architecture explanation |
+| docs/design-principles.md | Design principles and rationale |
 | docs/adoption-guide.md | Guidance for adapting the baseline |
 | docs/validation-checklist.md | Post-deployment validation checklist |
 | docs/assurance/ | Compliance-oriented documentation |
@@ -507,6 +593,6 @@ This project is intended for:
 
 `tf-secure-baseline` is a deployable AWS security foundation for sensitive workloads.
 
-It combines multi-account architecture, centralized identity, secure networking, logging, monitoring, automated response, and GitHub OIDC CI/CD into a **reusable Terraform platform**.
+It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dedicated VPC endpoint subnets, logging, monitoring, automated response, and GitHub OIDC CI/CD into a **reusable Terraform platform**.
 
 The goal is to provide a **secure-by-default foundation** that can be adapted, extended, and used as the starting point for production SaaS environments.
