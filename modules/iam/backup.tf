@@ -1,15 +1,5 @@
 # BACKUP-RELATED IAM RESOURCES
 
-# PULL THE AWS-MANAGED BACKUP ROLE POLICY FOR BACKUP CREATION
-data "aws_iam_policy" "backup" {
-  name = "AWSBackupServiceRolePolicyForBackup"
-}
-
-# PULL THE AWS-MANAGED BACKUP ROLE POLICY FOR BACKUP RESTORATION
-data "aws_iam_policy" "backup_restore" {
-  name = "AWSBackupServiceRolePolicyForRestores"
-}
-
 # AWS BACKUP SERVICE TRUST POLICY
 data "aws_iam_policy_document" "backup_assume_role" {
   statement {
