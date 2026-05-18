@@ -5,6 +5,7 @@
 # It should only be used if IAM Identity Center (SSO) is unavailable.
 # All usage should be monitored and audited.
 
+# BREAK-GLASS ADMIN TRUST POLICY
 data "aws_iam_policy_document" "break_glass_admin_assume_role" {
   statement {
     sid     = "AllowEmergencyAssumeRoleWithMFA"
