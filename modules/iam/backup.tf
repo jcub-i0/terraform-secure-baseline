@@ -10,20 +10,25 @@ data "aws_iam_policy" "backup_restore" {
   name = "AWSBackupServiceRolePolicyForRestores"
 }
 
+# AWS BACKUP SERVICE TRUST POLICY
+data "aws_iam_policy_document" "backup_assume_role" {
+  statement {
+    sid = "AllowAWSBackupServiceAssumeRole"
+    effect = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "Service"
+      identifiers = ["backup.amazonaws.com"]
+    }
+  }
+}
+
 # AWS BACKUP SERVICE ROLE
 resource "aws_iam_role" "backup" {
   name = "${var.name_prefix}-backup-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "backup.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  assume_role_policy = data.aws_iam_policy_document.backup_assume_role.json
 }
 
 # ATTACH AWS-MANAGED BACKUP POLICIES
