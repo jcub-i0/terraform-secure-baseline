@@ -47,6 +47,9 @@ The baseline is designed to provide:
 - No long-lived CI/CD credentials
 - Private-first networking
 - Controlled outbound access
+- Configurable deployment profiles
+- Configurable egress modes
+- Dedicated private subnets for Interface VPC Endpoints
 - Centralized logging and monitoring
 - Automated detection and response
 - Human-approved recovery workflows
@@ -205,7 +208,9 @@ Compute resources should not receive public IP addresses.
 
 Inbound exposure is minimized, and outbound traffic is controlled through explicit network paths.
 
-Typical outbound path:
+The exact outbound path depends on the selected `deployment_profile` and effective `egress_mode`.
+
+Production-style inspected egress:
 
 ```text
 Private Compute Subnets
@@ -221,6 +226,30 @@ Internet Gateway
     |
     v
 Internet
+```
+
+Lower-cost NAT-only egress:
+
+```text
+Private Compute Subnets
+    |
+    v
+NAT Gateway
+    |
+    v
+Internet Gateway
+    |
+    v
+Internet
+```
+
+Private AWS-only egress:
+
+```text
+Private Compute Subnets
+    |
+    v
+VPC Endpoints for supported AWS services
 ```
 
 This makes private networking the default and public exposure the exception.
@@ -239,14 +268,52 @@ The baseline uses controls such as:
 - VPC endpoints
 - Security groups
 - Explicit service access paths
+- Egress mode selection
 
 The goal is to reduce unmonitored outbound communication and create a central location for inspection and restriction.
 
 This is especially important for workloads that process sensitive data.
 
+The supported egress modes are:
+
+| `egress_mode` | Network Firewall | NAT Gateway | Compute private default route | Intended use |
+|---|---:|---:|---|---|
+| `network_firewall` | Yes | Yes | Network Firewall endpoint | Production / sensitive workloads |
+| `nat_only` | No | Yes | NAT Gateway | Lower-cost dev/staging |
+| `vpc_endpoints_only` | No | No | No default route | Private AWS-only / minimal testing |
+
+When `egress_mode = "auto"`, the effective egress mode is selected from the `deployment_profile`.
+
 ---
 
-## 8. Prefer Private AWS Service Access
+## 8. Deployment Profiles Should Provide Safe Defaults
+
+Deployment profiles provide a practical way to balance security, cost, and operational needs across environments.
+
+The baseline supports profiles such as:
+
+| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention | Intended use |
+|---|---|---:|---:|---:|---:|---|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+
+Profiles define defaults, not hard limits.
+
+Explicit variables can override profile defaults when needed.
+
+For example, a development environment can still use Network Firewall by setting:
+
+```hcl
+deployment_profile = "development"
+egress_mode        = "network_firewall"
+```
+
+This keeps the baseline adaptable while preserving clear default behavior.
+
+---
+
+## 9. Prefer Private AWS Service Access
 
 Where practical, AWS service access should use VPC endpoints instead of public internet paths.
 
@@ -265,14 +332,42 @@ Examples of services commonly accessed through VPC endpoints include:
 - CloudWatch Logs
 - Secrets Manager
 - KMS
-- EC2 Messages
 - SSM Messages
 - Security Hub
 - Lambda
+- EventBridge
+- SNS
+- STS
+
+Interface VPC Endpoints are deployed into dedicated private endpoint subnets.
+
+This keeps endpoint ENIs separate from compute, data, serverless, firewall, and public subnet tiers.
+
+The S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
 ---
 
-## 9. Centralized Logging and Evidence Preservation
+## 10. Endpoint Subnets Should Be Dedicated
+
+Interface Endpoint ENIs should not compete with workload ENIs in compute subnets when the architecture can avoid it.
+
+The baseline uses dedicated private subnets for Interface VPC Endpoints.
+
+This provides:
+
+- Cleaner subnet segmentation
+- Reduced private IP pressure in compute subnets
+- Easier endpoint inventory and troubleshooting
+- Clearer route table ownership
+- Better separation between workload placement and AWS service access infrastructure
+
+Endpoint private subnets do not require a default internet route.
+
+Workloads reach Interface Endpoints through normal VPC-local routing and security group rules.
+
+---
+
+## 11. Centralized Logging and Evidence Preservation
 
 Security and operational logs should be centralized, encrypted, and protected from tampering.
 
@@ -283,21 +378,23 @@ The baseline captures data from services such as:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
+- Network Firewall logs, when Network Firewall is deployed
 
 The logging design emphasizes:
 
 - KMS encryption
 - Versioning
 - Restricted bucket policies
-- Object Lock
+- Object Lock, where enabled
 - Lifecycle retention
+- Profile-aware CloudWatch retention
 - Long-term forensic usefulness
 
 Logs are treated as security evidence, not just operational telemetry.
 
 ---
 
-## 10. Detection Integrity
+## 12. Detection Integrity
 
 Detection systems must be protected from tampering.
 
@@ -316,7 +413,7 @@ A security platform should detect attempts to weaken the security platform itsel
 
 ---
 
-## 11. Event-Driven Security Automation
+## 13. Event-Driven Security Automation
 
 The baseline uses EventBridge and Lambda for security automation.
 
@@ -332,7 +429,7 @@ This enables rapid response without requiring humans to manually execute every a
 
 ---
 
-## 12. Automated Containment, Human-Approved Recovery
+## 14. Automated Containment, Human-Approved Recovery
 
 Containment can happen automatically when a high-confidence security condition is detected.
 
@@ -363,7 +460,7 @@ This design supports fast containment while preventing uncontrolled automatic re
 
 ---
 
-## 13. Least Privilege by Workflow
+## 15. Least Privilege by Workflow
 
 Permissions are designed around workflows rather than broad job titles.
 
@@ -379,7 +476,7 @@ This reduces the chance that one compromised credential can perform every action
 
 ---
 
-## 14. Environment-Specific Permissions
+## 16. Environment-Specific Permissions
 
 Many resources are environment-specific, including:
 
@@ -400,7 +497,7 @@ This avoids circular dependencies and preserves environment isolation.
 
 ---
 
-## 15. Immutable and Encrypted State
+## 17. Immutable and Encrypted State
 
 Terraform state is sensitive because it can contain resource identifiers, outputs, and sometimes secrets or references to sensitive infrastructure.
 
@@ -418,7 +515,7 @@ The `state` backend is intentionally separated from the infrastructure it manage
 
 ---
 
-## 16. Modular but Opinionated
+## 18. Modular but Opinionated
 
 The repository is organized into reusable modules, but the baseline remains opinionated.
 
@@ -443,7 +540,7 @@ The goal is not maximum abstraction. The goal is a secure and maintainable basel
 
 ---
 
-## 17. Secure Defaults Over Maximum Flexibility
+## 19. Secure Defaults Over Maximum Flexibility
 
 The baseline favors secure defaults even if they require more setup.
 
@@ -456,12 +553,30 @@ Examples include:
 - Event-driven alerting
 - Identity Center access
 - GitHub OIDC instead of static credentials
+- Profile defaults that keep production security controls enabled
+- Egress defaults that route production workloads through Network Firewall
 
 The platform can be customized, but defaults should guide users toward safer outcomes.
 
 ---
 
-## 18. Operational Recoverability
+## 20. Cost Controls Should Be Explicit
+
+Security controls have cost implications.
+
+The baseline makes major cost/security tradeoffs explicit through deployment profiles and egress modes rather than hiding them inside ad hoc environment differences.
+
+Examples:
+
+- `production` keeps the full baseline enabled by default.
+- `development` lowers cost by using NAT-only egress and disabling backup by default.
+- `minimal` removes Network Firewall and NAT Gateway by default and relies on VPC endpoints for supported AWS services.
+
+This helps teams understand why an environment costs what it costs and what security tradeoffs are being made.
+
+---
+
+## 21. Operational Recoverability
 
 Security architecture must support recovery, not just prevention.
 
@@ -474,11 +589,15 @@ The baseline includes controls such as:
 - Patch management support
 - Centralized logs for investigation
 
-This supports operational resilience after incidents, mistakes, or misconfigurations.
+Backup defaults are profile-aware.
+
+Production enables backup by default, while lower-cost profiles can disable backup unless explicitly overridden.
+
+This supports operational resilience after incidents, mistakes, or misconfigurations while keeping development costs manageable.
 
 ---
 
-## 19. Audit and Assurance Readiness
+## 22. Audit and Assurance Readiness
 
 The baseline is designed to support security assurance efforts, but it does not guarantee certification.
 
@@ -491,6 +610,8 @@ It can help produce evidence for areas such as:
 - Incident response
 - Vulnerability management
 - Backup and recovery
+- Network segmentation
+- Controlled egress
 
 However, SOC 2 and ISO 27001 also require business processes, policies, risk management, vendor management, and human operational controls.
 
@@ -516,6 +637,8 @@ The baseline is designed to reduce risk from common cloud security threats.
 - Accidental data loss
 - Operator mistakes
 - Weak CI/CD credential handling
+- Unrestricted outbound internet access from private workloads
+- Excessive cloud security cost causing teams to disable controls informally
 
 ---
 
@@ -548,6 +671,7 @@ Detection and visibility are provided through:
 - EventBridge
 - VPC Flow Logs
 - Lambda automation logs
+- Network Firewall logs, when deployed
 
 ---
 
@@ -562,6 +686,22 @@ Access control is implemented through:
 - Least-privilege IAM policies
 - Break-glass monitoring
 - No long-lived CI/CD credentials
+
+---
+
+### Network Control
+
+Network control is implemented through:
+
+- Private subnet placement
+- Public subnet public IP auto-assignment disabled
+- Configurable egress modes
+- AWS Network Firewall, when enabled
+- NAT Gateway, when required
+- Dedicated endpoint private subnets
+- Interface VPC Endpoints
+- S3 Gateway Endpoint
+- Security group-to-security group rules
 
 ---
 
@@ -583,7 +723,7 @@ Response automation includes:
 
 Recovery and resilience are supported through:
 
-- AWS Backup
+- AWS Backup, when enabled
 - Backup vaults
 - Retention policies
 - Pre-EC2 isolation snapshots
@@ -606,7 +746,7 @@ The platform balances:
 - Cost awareness
 - Audit readiness
 
-The design intentionally prioritizes security and visibility over lowest possible cost.
+The design intentionally prioritizes security and visibility over lowest possible cost for production environments, while still allowing lower-cost development and minimal profiles.
 
 ---
 
@@ -625,19 +765,25 @@ Notable cost drivers include:
 - KMS requests
 - Backup storage
 
-The default design favors stronger production security.
+The default production design favors stronger security.
 
-Future versions may introduce configurable cost/security profiles, such as:
+Deployment profiles and egress modes allow teams to choose different cost/security tradeoffs for dev, staging, and production environments.
 
-```text
-network_firewall
-nat_only
-vpc_endpoints_only
-```
+| `deployment_profile` | Cost/security intent |
+|---|---|
+| `production` | Full baseline for sensitive workloads |
+| `development` | Lower-cost development baseline with NAT-only egress |
+| `minimal` | Lowest-cost AWS-private testing profile |
 
-This would allow teams to choose different profiles for dev, staging, and production environments.
+| `egress_mode` | Cost/security intent |
+|---|---|
+| `network_firewall` | Highest egress control, highest network inspection cost |
+| `nat_only` | Lower-cost internet egress without Network Firewall |
+| `vpc_endpoints_only` | Lowest egress cost, no general internet route |
 
-For now, custom configurations are created from this baseline to fulfil desired needs for each environment.
+These profiles do not replace environment-specific review.
+
+Production deployments should still review deletion protection, retention periods, Object Lock, KMS lifecycle protections, backup requirements, and access controls before use.
 
 ---
 
@@ -742,6 +888,7 @@ The intended outcomes of this baseline are:
 - More consistent access control
 - Faster containment of EC2-related incidents
 - Better security evidence collection
+- Clearer cost/security tradeoffs by environment
 - A reusable foundation for client or internal SaaS environments
 
 ---
@@ -757,6 +904,8 @@ Its design favors:
 - Centralized identity
 - Immutable logging
 - Event-driven detection and response
+- Configurable egress control
+- Dedicated private endpoint access
 - Secure CI/CD
 - Practical audit readiness
 
