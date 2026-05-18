@@ -13,6 +13,7 @@ This guide covers:
 - Terraform backend creation
 - GitHub OIDC role creation
 - Environment baseline deployment
+- Deployment profile and egress mode selection
 - IAM Identity Center deployment
 - Post-deployment validation
 
@@ -58,6 +59,55 @@ The `state` stacks are applied locally first because they create the remote back
 
 ---
 
+## Deployment Profiles and Egress Modes
+
+Before deploying an environment baseline, decide which deployment profile and egress mode should be used.
+
+Deployment profiles provide cost/security defaults for each environment.
+
+| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention | Intended use |
+|---|---|---:|---:|---:|---:|---|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+
+The `egress_mode` controls private compute subnet outbound routing.
+
+| `egress_mode` | Network Firewall | NAT Gateway | Compute private default route |
+|---|---:|---:|---|
+| `network_firewall` | Yes | Yes | Network Firewall endpoint |
+| `nat_only` | No | Yes | NAT Gateway |
+| `vpc_endpoints_only` | No | No | No default route |
+
+Recommended starting values:
+
+| Environment | Recommended `deployment_profile` | Recommended `egress_mode` |
+|---|---|---|
+| `dev` | `development` | `auto` |
+| `staging` | `development` or `production` | `auto` |
+| `prod` | `production` | `auto` |
+
+When `egress_mode = "auto"`, the effective egress mode is selected from the deployment profile.
+
+Example:
+
+```hcl
+deployment_profile = "development"
+egress_mode        = "auto"
+```
+
+This resolves to:
+
+```text
+effective_egress_mode = nat_only
+```
+
+Important:
+
+When `egress_mode = "vpc_endpoints_only"`, NAT Gateways and Network Firewall are not deployed, and private compute subnets do not receive a default internet route. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation may fail unless package access is provided another way.
+
+---
+
 ## Prerequisites
 
 This configuration requires **four AWS accounts**: `dev`, `staging`, `prod`, and `control-plane`.
@@ -69,8 +119,8 @@ Upon initial deployment, each AWS account must have an Admin-level IAM user with
 Install and configure:
 
 - Terraform
-- Git (CLI)
-- A GitHub account with the following environments (if using `GitHub OIDC`):
+- Git CLI
+- A GitHub account with the following environments, if using `GitHub OIDC`:
   - control-plane
   - control-plane-plan
   - dev
@@ -166,9 +216,9 @@ Confirm each command returns the expected AWS account ID.
 
 The control-plane `state` stack creates backend resources for the control-plane substacks.
 
-This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
+This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can and should be migrated to a remote backend following initial deployment.
 
-It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**. This is an intended sympton of the configuration's security-by-default design.
+It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to the `bucket_admin_principals` variable. Otherwise, **the ability to modify S3 bucket policies may be lost**. This is an intended symptom of the configuration's security-by-default design.
 
 ```bash
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'
@@ -247,7 +297,7 @@ Before applying this stack, ensure:
 - The `control-plane` account is the management account
 - `dev`, `staging`, and `prod` accounts have been invited and accepted into the organization
 
-Then apply (from `bootstrap/control_plane/account`):
+Then apply from `bootstrap/control_plane/account`:
 
 ```bash
 cd ../organizations
@@ -263,7 +313,7 @@ Each workload account needs its own Terraform backend resources.
 
 Apply each environment `state` stack locally.
 
-This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can (and should) be migrated to a remote backend following initial deployment.
+This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can and should be migrated to a remote backend following initial deployment.
 
 It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**.
 
@@ -385,6 +435,8 @@ ACCOUNT_ID_STAGING
 ACCOUNT_ID_PROD
 SECOPS_EMAILS
 BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS
+DEPLOYMENT_PROFILE
+EGRESS_MODE
 ```
 
 Secrets may include:
@@ -395,15 +447,34 @@ ABUSEIPDB_API_KEY
 
 Each GitHub environment should contain the variables appropriate for the AWS account and stack it manages.
 
+If deployment profile and egress mode are set through Terraform variable files instead of GitHub environment variables, make sure the configured values match the intended environment behavior.
+
+Recommended environment defaults:
+
+| Environment | `deployment_profile` | `egress_mode` |
+|---|---|---|
+| `dev` | `development` | `auto` |
+| `staging` | `development` or `production` | `auto` |
+| `prod` | `production` | `auto` |
+
 ---
 
 # Phase 7 - Deploy Environment Baseline
 
-After setting necessary variables for the workload environments (see `environment/<env>/variables.tf`), deploy each environment from the `environments/<env>` directory.
+After setting necessary variables for the workload environments (see `environments/<env>/variables.tf`), deploy each environment from the `environments/<env>` directory.
 
 > If using `GitHub OIDC`, be sure to add the `apply_role_github_arn` output value to each environment's `bucket_admin_principals` variable.
 
 You can deploy through GitHub Actions once OIDC roles and GitHub environment variables are configured or you can deploy locally if not.
+
+Before applying, review the environment's profile settings:
+
+```hcl
+deployment_profile = "development"
+egress_mode        = "auto"
+```
+
+The effective settings are exposed as Terraform outputs after deployment.
 
 ## Dev
 
@@ -438,7 +509,7 @@ terraform plan
 terraform apply
 ```
 
-Record environment outputs needed by the `bootstrap/control-plane/identity_center` and (if using `GitHub OIDC`) `bootstrap/<env>/account` stacks, such as:
+Record environment outputs needed by the `bootstrap/control-plane/identity_center` and, if using `GitHub OIDC`, `bootstrap/<env>/account` stacks, such as:
 
 ```text
 logs_s3_readonly_policy_name
@@ -447,6 +518,21 @@ secops_event_bus_arn
 lambda_cmk_arn
 secrets_manager_cmk_arn
 ```
+
+Also confirm the effective profile outputs:
+
+```text
+deployment_profile
+egress_mode
+effective_egress_mode
+effective_cloudwatch_retention_days
+effective_enable_config
+effective_enable_rules
+effective_backup_enabled
+effective_inspector_enabled
+```
+
+These outputs confirm how profile defaults and explicit overrides resolved for the environment.
 
 ---
 
@@ -461,7 +547,7 @@ export AWS_PROFILE=dev
 
 export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-cd ../bootstrap/dev/account`
+cd ../../bootstrap/dev/account
 terraform apply
 ```
 
@@ -472,7 +558,7 @@ export AWS_PROFILE=staging
 
 export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-cd ../staging/account`
+cd ../../bootstrap/staging/account
 terraform apply
 ```
 
@@ -483,11 +569,11 @@ export AWS_PROFILE=prod
 
 export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-cd ../prod/account`
+cd ../../bootstrap/prod/account
 terraform apply
 ```
 
-Be sure to also set these variables (`LAMBDA_CMK_ARN` and `SECRETS_MANAGER_CMK_ARN`) in the following GitHub environments:
+Be sure to also set these variables, `LAMBDA_CMK_ARN` and `SECRETS_MANAGER_CMK_ARN`, in the following GitHub environments:
 
 ```text
 dev
@@ -509,7 +595,7 @@ The Identity Center stack is deployed from the control plane.
 It creates environment-specific groups, permission sets, and account assignments.
 
 ```bash
-export AWS_PROFILE=bootstrap
+export AWS_PROFILE=control-plane
 
 cd ../../bootstrap/control_plane/identity_center
 terraform init
@@ -554,14 +640,22 @@ docs/validation-checklist.md
 Recommended validation order:
 
 1. Confirm Terraform state backends exist in each AWS account, including `control-plane`.
-2. Confirm GitHub OIDC roles can be assumed by running a GitHub Actions workflow (if using `GitHub OIDC`).
+2. Confirm GitHub OIDC roles can be assumed by running a GitHub Actions workflow, if using `GitHub OIDC`.
 3. Confirm baseline infrastructure exists in each environment.
-4. Confirm Security Hub, GuardDuty, AWS Config, and CloudTrail are active.
-5. Confirm SNS subscriptions are confirmed.
-6. Run Lambda tests:
-   - `docs/lambda_tests/ec2_isolation.md`
-   - `docs/lambda_tests/ec2_rollback.md`
-   - `docs/lambda_tests/ip_enrichment.md`
+4. Confirm deployment profile outputs resolved correctly.
+5. Confirm egress mode behavior:
+   - `network_firewall`: Network Firewall and NAT Gateway are deployed, compute private default route points to firewall endpoints.
+   - `nat_only`: Network Firewall is not deployed, NAT Gateway is deployed, compute private default route points to NAT.
+   - `vpc_endpoints_only`: Network Firewall and NAT Gateway are not deployed, compute private subnets have no default route.
+6. Confirm dedicated endpoint private subnets exist.
+7. Confirm Interface VPC Endpoints are deployed into endpoint private subnets.
+8. Confirm S3 Gateway Endpoint is associated with the expected private route tables.
+9. Confirm Security Hub, GuardDuty, AWS Config, and CloudTrail are active where expected by profile.
+10. Confirm SNS subscriptions are confirmed.
+11. Run Lambda tests:
+    - `docs/lambda_tests/ec2_isolation.md`
+    - `docs/lambda_tests/ec2_rollback.md`
+    - `docs/lambda_tests/ip_enrichment.md`
 
 ---
 
@@ -574,8 +668,9 @@ Recommended validation order:
 4. bootstrap/<env>/state
 5. bootstrap/<env>/account
 6. environments/<env>
-7. bootstrap/control_plane/identity_center
-8. validation tests
+7. bootstrap/<env>/account re-apply with defined CMK variables (if using GitHub OIDC)
+8. bootstrap/control_plane/identity_center
+9. validation tests
 ```
 
 ---
@@ -588,6 +683,8 @@ Expected workflows:
 
 | Workflow | Purpose |
 |---------|---------|
+| Terraform Static Analysis | Runs static Terraform validation and scanning |
+| Docs Validation | Runs documentation linting and link checks |
 | Terraform Plan | Runs plans for environment and control-plane stacks |
 | Terraform Apply | Applies selected environment baseline |
 | Terraform Destroy | Cleans up Identity Center attachments, then destroys selected environment `baseline` |
@@ -637,6 +734,46 @@ The intended flow is:
 
 ---
 
+### Deployment Profiles Affect Resource Creation
+
+Deployment profiles and egress modes affect which resources are created.
+
+Examples:
+
+- `production` with `egress_mode = "auto"` deploys Network Firewall and NAT Gateway.
+- `development` with `egress_mode = "auto"` deploys NAT Gateway but not Network Firewall.
+- `minimal` with `egress_mode = "auto"` does not deploy Network Firewall or NAT Gateway.
+
+Always review the Terraform plan before applying a profile change, especially when switching between egress modes.
+
+---
+
+### Dedicated Endpoint Subnets
+
+Interface VPC Endpoints are deployed into dedicated endpoint private subnets.
+
+These subnets have their own route tables and do not require a default internet route.
+
+Workloads reach Interface Endpoints over VPC-local routing and security group rules.
+
+---
+
+### Minimal Mode Has No General Internet Egress
+
+When `egress_mode = "vpc_endpoints_only"`, private compute subnets do not have a default route to the internet.
+
+This means workloads can reach configured AWS services through VPC endpoints, but they cannot reach:
+
+- Operating system package repositories
+- Public container registries
+- External SaaS APIs
+- Third-party internet services
+- AWS services without configured VPC endpoints
+
+Use this mode only when this behavior is acceptable or when another access path is intentionally provided.
+
+---
+
 ### Cost Considerations
 
 The baseline includes services that can create meaningful cost, especially when deployed across multiple environments.
@@ -654,6 +791,8 @@ Notable cost drivers include:
 - KMS requests
 - Backup storage
 
+Deployment profiles and egress modes can reduce cost for non-production environments, but they also change security and connectivity behavior.
+
 Review estimated costs before deploying all environments.
 
 ---
@@ -665,10 +804,11 @@ This quickstart deploys `tf-secure-baseline` in the intended order:
 - Bootstrap control-plane foundations
 - Bootstrap environment backends and GitHub OIDC roles
 - Deploy workload baselines
+- Confirm deployment profile and egress mode behavior
 - Deploy centralized Identity Center access
 - Validate security workflows
 
-After completion, the platform provides a multi-account AWS security baseline with centralized identity, secure CI/CD, logging, detection, and event-driven response automation.
+After completion, the platform provides a multi-account AWS security baseline with centralized identity, secure CI/CD, logging, detection, configurable egress behavior, private VPC endpoint access, and event-driven response automation.
 
 # Destruction / Cleanup Procedure
 
