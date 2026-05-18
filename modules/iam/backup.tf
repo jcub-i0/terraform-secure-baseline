@@ -3,12 +3,12 @@
 # AWS BACKUP SERVICE TRUST POLICY
 data "aws_iam_policy_document" "backup_assume_role" {
   statement {
-    sid = "AllowAWSBackupServiceAssumeRole"
-    effect = "Allow"
+    sid     = "AllowAWSBackupServiceAssumeRole"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["backup.amazonaws.com"]
     }
   }
