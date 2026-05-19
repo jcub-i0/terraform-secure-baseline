@@ -31,6 +31,11 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 resource "aws_iam_role" "lambda_ec2_isolation" {
   name               = "${var.name_prefix}-lambda-ec2-isolation-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+
+  tags = {
+    Name      = "Lambda-EC2-Isolation-Role"
+    Terraform = "true"
+  }
 }
 
 ### EC2 ISOLATION IAM POLICY
@@ -106,6 +111,11 @@ resource "aws_iam_role_policy_attachment" "ec2_isolation_xray_attach" {
 resource "aws_iam_role" "lambda_ec2_rollback" {
   name               = "${var.name_prefix}-lambda-ec2-rollback"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+
+  tags = {
+    Name      = "Lambda-EC2-Rollback-Role"
+    Terraform = "true"
+  }
 }
 
 ### EC2 ROLLBACK IAM POLICY
