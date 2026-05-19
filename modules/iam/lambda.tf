@@ -103,17 +103,7 @@ resource "aws_iam_role_policy_attachment" "ec2_isolation_xray_attach" {
 ### EC2 ROLLBACK LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_rollback" {
   name = "${var.name_prefix}-lambda-ec2-rollback"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
 ### EC2 ROLLBACK IAM POLICY
