@@ -1,4 +1,3 @@
-
 # LAMBDA ROLES
 ## AWS-MANAGED POLICIES FOR LAMBDA LOGGING & VPC ENI ACCESS
 data "aws_iam_policy" "lambda_vpc" {
