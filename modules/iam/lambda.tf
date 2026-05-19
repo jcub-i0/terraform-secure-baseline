@@ -36,7 +36,7 @@ resource "aws_iam_role" "lambda_ec2_isolation" {
 ### EC2 ISOLATION IAM POLICY
 data "aws_iam_policy_document" "lambda_ec2_isolation" {
   statement {
-    sid = "AllowEC2IsolationActions"
+    sid    = "AllowEC2IsolationActions"
     effect = "Allow"
     actions = [
       "ec2:DescribeInstances",
@@ -50,7 +50,7 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
   }
 
   statement {
-    sid = "AllowSNSSecurityAlerts"
+    sid    = "AllowSNSSecurityAlerts"
     effect = "Allow"
     actions = [
       "sns:Publish"
@@ -60,7 +60,7 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
   }
 
   statement {
-    sid = "AllowLogsKMSUsage"
+    sid    = "AllowLogsKMSUsage"
     effect = "Allow"
     actions = [
       "kms:GenerateDataKey*",
@@ -73,7 +73,7 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
 }
 
 resource "aws_iam_policy" "lambda_ec2_isolation" {
-  name = "${var.name_prefix}-lambda-ec2-isolation"
+  name   = "${var.name_prefix}-lambda-ec2-isolation"
   policy = data.aws_iam_policy_document.lambda_ec2_isolation
 }
 
