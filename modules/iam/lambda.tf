@@ -15,7 +15,7 @@ data "aws_iam_policy" "lambda_xray" {
 # LAMBDA TRUST POLICY
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
-    sid     = "LambdaEC2IsolationAssumeRole"
+    sid     = "AllowLambdaAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
