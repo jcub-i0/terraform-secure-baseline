@@ -41,23 +41,25 @@ resource "aws_iam_role_policy_attachment" "config_ssm_automation" {
 }
 
 ## CONFIG REMEDIATION S3 PUBLIC ACCESS BLOCK POLICY
+data "aws_iam_policy_document" "s3_public_remediation" {
+  statement {
+    sid = "AllowS3PublicAccessBlockRemediation"
+    effect = "Allow"
+
+    actions = [
+      "s3:GetBucketPublicAccessBlock",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:GetBucketPolicy",
+      "s3:PutBucketPolicy"
+    ]
+
+    resources = ["*"]
+  }
+}
+
 resource "aws_iam_role_policy" "s3_public_remediation" {
   name = "${var.name_prefix}-S3PublicAccessBlockRemediation"
   role = aws_iam_role.config_remediation.id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetBucketPublicAccessBlock",
-          "s3:PutBucketPublicAccessBlock",
-          "s3:GetBucketPolicy",
-          "s3:PutBucketPolicy"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.config_remediation_assume_role.json
 }
