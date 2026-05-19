@@ -188,7 +188,7 @@ resource "aws_iam_role" "lambda_ip_enrichment" {
 
 data "aws_iam_policy_document" "lambda_ip_enrichment" {
   statement {
-    sid = "AllowThreatIntelSecretRead"
+    sid    = "AllowThreatIntelSecretRead"
     effect = "Allow"
     actions = [
       "secretsmanager:GetSecretValue",
@@ -199,15 +199,15 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
   }
 
   statement {
-    sid = "AllowSNSSecurityAlerts"
-    effect = "Allow"
+    sid     = "AllowSNSSecurityAlerts"
+    effect  = "Allow"
     actions = ["sns:Publish"]
 
     resources = [var.secops_topic_arn]
   }
 
   statement {
-    sid = "AllowLogsKMSUsage"
+    sid    = "AllowLogsKMSUsage"
     effect = "Allow"
     actions = [
       "kms:GenerateDataKey*",
@@ -219,14 +219,14 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
   }
 
   statement {
-    sid = "AllowSecurityHubFindingUpdates"
-    effect = "Allow"
-    actions = ["securityhub:BatchUpdateFindings"]
+    sid       = "AllowSecurityHubFindingUpdates"
+    effect    = "Allow"
+    actions   = ["securityhub:BatchUpdateFindings"]
     resources = ["*"]
   }
 
   statement {
-    sid = "AllowSecretsManagerKMSUsage"
+    sid    = "AllowSecretsManagerKMSUsage"
     effect = "Allow"
     actions = [
       "kms:Decrypt",
@@ -240,7 +240,7 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
 resource "aws_iam_policy" "lambda_ip_enrichment" {
   name        = "${var.name_prefix}-lambda-ip-enrichment-policy"
   description = "Permissions for IP Enrichment Lambda"
-  policy = data.aws_iam_policy_document.lambda_ip_enrichment.json
+  policy      = data.aws_iam_policy_document.lambda_ip_enrichment.json
 }
 
 ### ATTACH LAMBDA_IP_ENRICHMENT IAM POLICY TO IP ENRICHMENT LAMBDA
