@@ -102,7 +102,7 @@ resource "aws_iam_role_policy_attachment" "ec2_isolation_xray_attach" {
 ## EC2 ROLLBACK LAMBDA
 ### EC2 ROLLBACK LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_rollback" {
-  name = "${var.name_prefix}-lambda-ec2-rollback"
+  name               = "${var.name_prefix}-lambda-ec2-rollback"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
