@@ -4,12 +4,12 @@
 
 data "aws_iam_policy_document" "patch_maintenance_window" {
   statement {
-    sid = "AllowSSMAssumeRole"
-    effect = "Allow"
+    sid     = "AllowSSMAssumeRole"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
-    
+
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["ssm.amazonaws.com"]
     }
   }
