@@ -30,7 +30,7 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 ### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
   name               = "${var.name_prefix}-lambda-ec2-isolation-role"
-  assume_role_policy = data.aws_iam_policy_document.lambda_ec2_isolation_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
 ### EC2 ISOLATION IAM POLICY
