@@ -12,26 +12,26 @@ resource "aws_iam_service_linked_role" "config" {
 # CONFIG REMEDIATION TRUST POLICY
 data "aws_iam_policy_document" "config_remediation_assume_role" {
   statement {
-    sid = "AllowSSMAssumeRoleFromAccount"
-    effect = "Allow"
+    sid     = "AllowSSMAssumeRoleFromAccount"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["ssm.amazonaws.com"]
     }
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
   }
 }
 
 # CONFIG REMEDIATION ROLE
 resource "aws_iam_role" "config_remediation" {
-  name = "${var.name_prefix}-ConfigRemediationRole"
+  name               = "${var.name_prefix}-ConfigRemediationRole"
   assume_role_policy = data.aws_iam_policy_document.config_remediation_assume_role.json
 }
 
