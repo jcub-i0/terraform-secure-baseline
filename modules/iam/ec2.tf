@@ -3,12 +3,12 @@
 # EC2 TRUST POLICY
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
-    sid = "AllowEC2AssumeRole"
-    effect = "Allow"
+    sid     = "AllowEC2AssumeRole"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = "ec2.amazonaws.com"
     }
   }
@@ -16,7 +16,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 
 ## EC2 ROLE
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.name_prefix}-ec2_compute_role"
+  name               = "${var.name_prefix}-ec2_compute_role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 }
 
