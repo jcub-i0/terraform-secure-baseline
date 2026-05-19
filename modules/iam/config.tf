@@ -43,7 +43,7 @@ resource "aws_iam_role_policy_attachment" "config_ssm_automation" {
 ## CONFIG REMEDIATION S3 PUBLIC ACCESS BLOCK POLICY
 data "aws_iam_policy_document" "s3_public_remediation" {
   statement {
-    sid = "AllowS3PublicAccessBlockRemediation"
+    sid    = "AllowS3PublicAccessBlockRemediation"
     effect = "Allow"
 
     actions = [
