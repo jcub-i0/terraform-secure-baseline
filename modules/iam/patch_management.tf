@@ -21,8 +21,8 @@ resource "aws_iam_role" "patch_maintenance_window" {
   assume_role_policy = data.aws_iam_policy_document.patch_maintenance_window.json
 
   tags = {
-    Name      = "${var.name_prefix}-PatchMaintenanceWindowRole"
-    Terraform = "true"
+    Name        = "${var.name_prefix}-PatchMaintenanceWindowRole"
+    Terraform   = "true"
     Environment = var.environment
   }
 }
