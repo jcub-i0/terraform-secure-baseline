@@ -23,6 +23,7 @@ resource "aws_iam_role" "patch_maintenance_window" {
   tags = {
     Name      = "${var.name_prefix}-PatchMaintenanceWindowRole"
     Terraform = "true"
+    Environment = var.environment
   }
 }
 
