@@ -12,9 +12,8 @@ data "aws_iam_policy" "lambda_xray" {
   arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
-## EC2 ISOLATION LAMBDA
-### EC2 ISOLATION LAMBDA TRUST POLICY
-data "aws_iam_policy_document" "lambda_ec2_isolation_assume_role" {
+# LAMBDA TRUST POLICY
+data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
     sid     = "LambdaEC2IsolationAssumeRole"
     effect  = "Allow"
@@ -27,6 +26,7 @@ data "aws_iam_policy_document" "lambda_ec2_isolation_assume_role" {
   }
 }
 
+## EC2 ISOLATION LAMBDA
 ### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
   name               = "${var.name_prefix}-lambda-ec2-isolation-role"
