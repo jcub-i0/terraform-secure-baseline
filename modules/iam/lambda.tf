@@ -173,9 +173,9 @@ resource "aws_iam_role_policy_attachment" "ec2_rollback_xray_attach" {
 ## IP ENRICHMENT LAMBDA
 ### IP ENRICHMENT LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ip_enrichment" {
-  name = "${var.name_prefix}-lambda-ip-enrichment"
+  name               = "${var.name_prefix}-lambda-ip-enrichment"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
-  
+
   tags = {
     Name      = "Lambda-IP-Enrichment-Role"
     Terraform = "true"
