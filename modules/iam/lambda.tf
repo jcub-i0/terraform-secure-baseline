@@ -74,7 +74,7 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
 
 resource "aws_iam_policy" "lambda_ec2_isolation" {
   name   = "${var.name_prefix}-lambda-ec2-isolation"
-  policy = data.aws_iam_policy_document.lambda_ec2_isolation
+  policy = data.aws_iam_policy_document.lambda_ec2_isolation.json
 }
 
 ### ATTACH EC2 ISOLATION POLICY TO EC2 ISOLATION EXECUTION ROLE
