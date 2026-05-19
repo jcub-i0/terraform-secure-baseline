@@ -35,6 +35,7 @@ resource "aws_iam_role" "lambda_ec2_isolation" {
   tags = {
     Name      = "Lambda-EC2-Isolation-Role"
     Terraform = "true"
+    Environment = var.environment
   }
 }
 
@@ -115,6 +116,7 @@ resource "aws_iam_role" "lambda_ec2_rollback" {
   tags = {
     Name      = "Lambda-EC2-Rollback-Role"
     Terraform = "true"
+    Environment = var.environment
   }
 }
 
@@ -193,6 +195,7 @@ resource "aws_iam_role" "lambda_ip_enrichment" {
   tags = {
     Name      = "Lambda-IP-Enrichment-Role"
     Terraform = "true"
+    Environment = var.environment
   }
 }
 
