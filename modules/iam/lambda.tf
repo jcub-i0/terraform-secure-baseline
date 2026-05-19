@@ -33,8 +33,8 @@ resource "aws_iam_role" "lambda_ec2_isolation" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 
   tags = {
-    Name      = "Lambda-EC2-Isolation-Role"
-    Terraform = "true"
+    Name        = "Lambda-EC2-Isolation-Role"
+    Terraform   = "true"
     Environment = var.environment
   }
 }
@@ -114,8 +114,8 @@ resource "aws_iam_role" "lambda_ec2_rollback" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 
   tags = {
-    Name      = "Lambda-EC2-Rollback-Role"
-    Terraform = "true"
+    Name        = "Lambda-EC2-Rollback-Role"
+    Terraform   = "true"
     Environment = var.environment
   }
 }
@@ -193,8 +193,8 @@ resource "aws_iam_role" "lambda_ip_enrichment" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 
   tags = {
-    Name      = "Lambda-IP-Enrichment-Role"
-    Terraform = "true"
+    Name        = "Lambda-IP-Enrichment-Role"
+    Terraform   = "true"
     Environment = var.environment
   }
 }
