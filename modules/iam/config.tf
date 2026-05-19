@@ -61,5 +61,5 @@ resource "aws_iam_role_policy" "s3_public_remediation" {
   name = "${var.name_prefix}-S3PublicAccessBlockRemediation"
   role = aws_iam_role.config_remediation.id
 
-  policy = data.aws_iam_policy_document.config_remediation_assume_role.json
+  policy = data.aws_iam_policy_document.s3_public_remediation.json
 }
