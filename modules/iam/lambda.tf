@@ -147,10 +147,9 @@ data "aws_iam_policy_document" "lambda_ec2_rollback" {
     sid    = "AllowLogsKMSUsage"
     effect = "Allow"
     actions = [
-      "ec2:DescribeInstances",
-      "ec2:ModifyInstanceAttribute",
-      "ec2:DescribeSecurityGroups",
-      "ec2:CreateTags"
+      "kms:GenerateDataKey*",
+      "kms:Decrypt",
+      "kms:DescribeKey"
     ]
 
     resources = [var.logs_cmk_arn]
