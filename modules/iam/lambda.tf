@@ -109,43 +109,45 @@ resource "aws_iam_role" "lambda_ec2_rollback" {
 }
 
 ### EC2 ROLLBACK IAM POLICY
+data "aws_iam_policy_document" "lambda_ec2_rollback" {
+  statement {
+    sid = "AllowEC2RollbackActions"
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeInstances",
+      "ec2:ModifyInstanceAttribute",
+      "ec2:DescribeSecurityGroups",
+      "ec2:CreateTags"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "AllowSNSSecurityAlerts"
+    effect = "Allow"
+    actions = ["sns:Publish"]
+
+    resources = [var.secops_topic_arn]
+  }
+
+  statement {
+    sid = "AllowLogsKMSUsage"
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeInstances",
+      "ec2:ModifyInstanceAttribute",
+      "ec2:DescribeSecurityGroups",
+      "ec2:CreateTags"
+    ]
+
+    resources = [var.logs_cmk_arn]
+  }
+}
+
 resource "aws_iam_policy" "lambda_ec2_rollback" {
   name = "${var.name_prefix}-lambda-rollback-policy"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # CUSTOM POLICY FOR EC2 CONTROL
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DescribeInstances",
-          "ec2:ModifyInstanceAttribute",
-          "ec2:DescribeSecurityGroups",
-          "ec2:CreateTags"
-        ]
-        Resource = "*"
-      },
-      # ALLOW LAMBDA TO CALL SNS
-      {
-        Effect = "Allow"
-        Action = [
-          "sns:Publish"
-        ]
-        Resource = var.secops_topic_arn
-      },
-      # ALLOW USE OF LOGS KMS KEY (USED FOR SNS)
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:GenerateDataKey*",
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = var.logs_cmk_arn
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.lambda_ec2_rollback.json
 }
 
 ### ATTACH EC2 ROLLBACK POLICY TO EC2 ROLLBACK EXECUTION ROLE
