@@ -13,20 +13,24 @@ data "aws_iam_policy" "lambda_xray" {
 }
 
 ## EC2 ISOLATION LAMBDA
+### EC2 ISOLATION LAMBDA TRUST POLICY
+data "aws_iam_policy_document" "lambda_ec2_isolation_assume_role" {
+  statement {
+    sid = "LambdaEC2IsolationAssumeRole"
+    effect = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
 ### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
   name = "${var.name_prefix}-lambda-ec2-isolation-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  assume_role_policy = data.aws_iam_policy_document.lambda_ec2_isolation_assume_role.json
 }
 
 ### EC2 ISOLATION IAM POLICY
