@@ -36,7 +36,7 @@ resource "aws_iam_policy" "logs_s3_readonly" {
 # GENERIC POLICY TO ALLOW DECRYPTION OF OBJECTS ENCRYPTED WITH THE LOGS CMK
 data "aws_iam_policy_document" "logs_cmk_decrypt" {
   statement {
-    sid = "AllowDecryptLogsKey"
+    sid    = "AllowDecryptLogsKey"
     effect = "Allow"
     actions = [
       "kms:Decrypt",
@@ -50,5 +50,5 @@ data "aws_iam_policy_document" "logs_cmk_decrypt" {
 resource "aws_iam_policy" "logs_cmk_decrypt" {
   name        = "${var.name_prefix}-LogsKmsDecrypt"
   description = "Allow decryption of objects encrypted with the Logs CMK"
-  policy = data.aws_iam_policy_document.logs_cmk_decrypt.json
+  policy      = data.aws_iam_policy_document.logs_cmk_decrypt.json
 }
