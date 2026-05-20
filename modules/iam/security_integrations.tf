@@ -16,8 +16,7 @@ resource "aws_accessanalyzer_analyzer" "main" {
   }
 }
 
-# EVENTBRIDGE ROLE
-## EVENTBRIDGE ROLE TRUST POLICY
+## EVENTBRIDGE TRUST POLICY
 data "aws_iam_policy_document" "eventbridge_putevents_to_secops_assume_role" {
   statement {
     sid     = "AllowEventBridgeAssumeRole"
