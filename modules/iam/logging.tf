@@ -129,20 +129,25 @@ resource "aws_iam_role_policy" "cw_to_firehose" {
 }
 
 # KINESIS FIREHOSE
+## KINESIS FIREHOSE TRUST POLICY
+data "aws_iam_policy_document" "firehose_flow_logs_assume_role" {
+  statement {
+    sid = "AllowFirehoseAssumeRole"
+    effect = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "Service"
+      identifiers = ["firehose.amazonaws.com"]
+    }
+  }
+}
+
 ## FIREHOSE FLOW LOGS ROLE
 resource "aws_iam_role" "firehose_flow_logs" {
   name = "${var.name_prefix}-FirehoseFlowLogsRole"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "firehose.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  assume_role_policy = data.aws_iam_policy_document.firehose_flow_logs_assume_role.json
 }
 
 ## FIREHOSE FLOW LOGS POLICY
