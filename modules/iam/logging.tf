@@ -112,7 +112,7 @@ resource "aws_iam_role" "cw_to_firehose" {
 ## POLICY FOR CLOUDWATCH TO FIREHOSE ROLE
 data "aws_iam_policy_document" "cw_to_firehose" {
   statement {
-    sid = "AllowCloudWatchLogsWriteToFirehose"
+    sid    = "AllowCloudWatchLogsWriteToFirehose"
     effect = "Allow"
     actions = [
       "firehose:PutRecord",
@@ -124,7 +124,7 @@ data "aws_iam_policy_document" "cw_to_firehose" {
 }
 
 resource "aws_iam_role_policy" "cw_to_firehose" {
-  role = aws_iam_role.cw_to_firehose.id
+  role   = aws_iam_role.cw_to_firehose.id
   policy = data.iam_policy_document.cw_to_firehose.json
 }
 
