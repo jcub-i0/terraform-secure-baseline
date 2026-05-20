@@ -3,7 +3,7 @@
 # GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
 data "aws_iam_policy_document" "logs_s3_readonly" {
   statement {
-    sid = "ListCentralizedLogsBucket"
+    sid    = "ListCentralizedLogsBucket"
     effect = "Allow"
     actions = [
       "s3:ListBucket",
@@ -14,7 +14,7 @@ data "aws_iam_policy_document" "logs_s3_readonly" {
   }
 
   statement {
-    sid = "ReadCentralizedLogsObjects"
+    sid    = "ReadCentralizedLogsObjects"
     effect = "Allow"
     actions = [
       "s3:GetObject",
@@ -30,7 +30,7 @@ data "aws_iam_policy_document" "logs_s3_readonly" {
 resource "aws_iam_policy" "logs_s3_readonly" {
   name        = "${var.name_prefix}-CentralizedLogsS3ReadOnly"
   description = "Read-only access to Centralized Logs S3 bucket (no delete, no write)"
-  policy = data.aws_iam_policy_document.logs_s3_readonly
+  policy      = data.aws_iam_policy_document.logs_s3_readonly
 }
 
 ## GENERIC POLICY TO ALLOW DECRYPTION OF OBJECTS ENCRYPTED WITH THE LOGS CMK
