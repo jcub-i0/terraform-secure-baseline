@@ -20,19 +20,19 @@ resource "aws_accessanalyzer_analyzer" "main" {
 ## EVENTBRIDGE ROLE TRUST POLICY
 data "aws_iam_policy_document" "eventbridge_putevents_to_secops_assume_role" {
   statement {
-    sid = "AllowEventBridgeAssumeRole"
-    effect = "Allow"
+    sid     = "AllowEventBridgeAssumeRole"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["events.amazonaws.com"]
     }
   }
 }
 
 resource "aws_iam_role" "eventbridge_putevents_to_secops" {
-  name = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
+  name               = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
   assume_role_policy = data.aws_iam_policy_document.eventbridge_putevents_to_secops_assume_role.json
 }
 
