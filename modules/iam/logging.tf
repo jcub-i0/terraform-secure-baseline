@@ -100,6 +100,12 @@ data "aws_iam_policy_document" "cw_to_firehose_assume_role" {
       type        = "Service"
       identifiers = ["logs.amazonaws.com"]
     }
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:logs:${var.primary_region}:${var.account_id}:*"]
+    }
   }
 }
 
