@@ -3,12 +3,12 @@
 ## CLOUDTRAIL TRUST POLICY
 data "aws_iam_policy_document" "cloudtrail_assume_role" {
   statement {
-    sid = "AllowCloudTrailAssumeRole"
-    effect = "Allow"
+    sid     = "AllowCloudTrailAssumeRole"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
   }
@@ -16,7 +16,7 @@ data "aws_iam_policy_document" "cloudtrail_assume_role" {
 
 ## CLOUDTRAIL ROLE
 resource "aws_iam_role" "cloudtrail" {
-  name = "${var.name_prefix}-cloudtrail-cloudwatch-role"
+  name               = "${var.name_prefix}-cloudtrail-cloudwatch-role"
   assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume_role.json
 }
 
