@@ -132,12 +132,12 @@ resource "aws_iam_role_policy" "cw_to_firehose" {
 ## KINESIS FIREHOSE TRUST POLICY
 data "aws_iam_policy_document" "firehose_flow_logs_assume_role" {
   statement {
-    sid = "AllowFirehoseAssumeRole"
-    effect = "Allow"
+    sid     = "AllowFirehoseAssumeRole"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["firehose.amazonaws.com"]
     }
   }
