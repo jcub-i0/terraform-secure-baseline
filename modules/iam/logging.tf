@@ -41,20 +41,25 @@ resource "aws_iam_role_policy" "cloudtrail" {
 }
 
 # VPC FLOWLOGS
+
+## FLOWLOGS TRUST POLICY
+data "aws_iam_policy_document" "flowlogs_assume_role" {
+  statement {
+    sid = "AllowFlowLogsAssumeRole"
+    effect = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "Service"
+      identifiers = "vpc-flow-logs.amazonaws.com"
+    }
+  }
+}
+
 ## FLOWLOGS ROLE
 resource "aws_iam_role" "flowlogs" {
   name = "${var.name_prefix}-VpcFlowLogsRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "vpc-flow-logs.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  assume_role_policy = data.aws_iam_policy_document.flowlogs_assume_role.json
 
   tags = {
     Role = "VPCFlowLogs"
