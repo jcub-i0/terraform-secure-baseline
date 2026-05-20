@@ -5,28 +5,32 @@
 # It should only be used if IAM Identity Center (SSO) is unavailable.
 # All usage should be monitored and audited.
 
+# BREAK-GLASS ADMIN TRUST POLICY
+data "aws_iam_policy_document" "break_glass_admin_assume_role" {
+  statement {
+    sid     = "AllowEmergencyAssumeRoleWithMFA"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = var.break_glass_trusted_principal_arns
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+  }
+}
+
+# BREAK-GLASS ADMIN ROLE
 resource "aws_iam_role" "break_glass_admin" {
   name        = "${var.name_prefix}-BreakGlass-Admin"
   description = "Emergency-only administrator role to be used if IAM Identity Center access is unavailable"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowEmergencyAssumeRoleWithMFA"
-        Effect = "Allow"
-        Principal = {
-          AWS = var.break_glass_trusted_principal_arns
-        }
-        Action = "sts:AssumeRole"
-        Condition = {
-          Bool = {
-            "aws:MultiFactorAuthPresent" = "true"
-          }
-        }
-      }
-    ]
-  })
+  assume_role_policy = data.aws_iam_policy_document.break_glass_admin_assume_role.json
 
   tags = {
     Name        = "${var.name_prefix}-BreakGlass-Admin"

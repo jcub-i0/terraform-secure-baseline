@@ -9,25 +9,30 @@ resource "aws_iam_service_linked_role" "config" {
   aws_service_name = "config.amazonaws.com"
 }
 
+# CONFIG REMEDIATION TRUST POLICY
+data "aws_iam_policy_document" "config_remediation_assume_role" {
+  statement {
+    sid     = "AllowSSMAssumeRoleFromAccount"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ssm.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+  }
+}
+
 # CONFIG REMEDIATION ROLE
 resource "aws_iam_role" "config_remediation" {
-  name = "${var.name_prefix}-ConfigRemediationRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ssm.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-      Condition = {
-        StringEquals = {
-          "aws:SourceAccount" = var.account_id
-        }
-      }
-    }]
-  })
+  name               = "${var.name_prefix}-ConfigRemediationRole"
+  assume_role_policy = data.aws_iam_policy_document.config_remediation_assume_role.json
 }
 
 resource "aws_iam_role_policy_attachment" "config_ssm_automation" {
@@ -36,23 +41,25 @@ resource "aws_iam_role_policy_attachment" "config_ssm_automation" {
 }
 
 ## CONFIG REMEDIATION S3 PUBLIC ACCESS BLOCK POLICY
+data "aws_iam_policy_document" "s3_public_remediation" {
+  statement {
+    sid    = "AllowS3PublicAccessBlockRemediation"
+    effect = "Allow"
+
+    actions = [
+      "s3:GetBucketPublicAccessBlock",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:GetBucketPolicy",
+      "s3:PutBucketPolicy"
+    ]
+
+    resources = ["*"]
+  }
+}
+
 resource "aws_iam_role_policy" "s3_public_remediation" {
   name = "${var.name_prefix}-S3PublicAccessBlockRemediation"
   role = aws_iam_role.config_remediation.id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetBucketPublicAccessBlock",
-          "s3:PutBucketPublicAccessBlock",
-          "s3:GetBucketPolicy",
-          "s3:PutBucketPolicy"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.s3_public_remediation.json
 }
