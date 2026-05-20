@@ -39,8 +39,8 @@ resource "aws_iam_role" "eventbridge_putevents_to_secops" {
 # ALLOW EVENTBRIDGE TO PUT EVENTS TO SECOPS BUS
 data "aws_iam_policy_document" "eventbridge_putevents_to_secops" {
   statement {
-    sid = "AllowEventBridgePutEventsToSecopsBus"
-    effect = "Allow"
+    sid     = "AllowEventBridgePutEventsToSecopsBus"
+    effect  = "Allow"
     actions = ["events:PutEvents"]
 
     resources = [var.secops_event_bus_arn]
@@ -48,6 +48,6 @@ data "aws_iam_policy_document" "eventbridge_putevents_to_secops" {
 }
 
 resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
-  role = aws_iam_role.eventbridge_putevents_to_secops.id
+  role   = aws_iam_role.eventbridge_putevents_to_secops.id
   policy = data.aws_iam_policy_document.eventbridge_putevents_to_secops.json
 }
