@@ -65,7 +65,7 @@ resource "aws_iam_role" "flowlogs" {
   }
 }
 
-### FLOWLOGS ROLE POLICY
+## FLOWLOGS ROLE POLICY
 data "aws_iam_policy_document" "flowlogs" {
   statement {
     sid    = "AllowFlowLogsWriteToCloudWatchLogs"
