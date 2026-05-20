@@ -23,7 +23,7 @@ resource "aws_iam_role" "cloudtrail" {
 ## CLOUDTRAIL ROLE POLICY
 data "aws_iam_policy_document" "cloudtrail" {
   statement {
-    sid = "AllowCloudTrailWriteToCloudWatchLogs"
+    sid    = "AllowCloudTrailWriteToCloudWatchLogs"
     effect = "Allow"
     actions = [
       "logs:CreateLogStream",
@@ -36,7 +36,7 @@ data "aws_iam_policy_document" "cloudtrail" {
 
 ## CLOUDTRAIL ROLE POLICY
 resource "aws_iam_role_policy" "cloudtrail" {
-  role = aws_iam_role.cloudtrail.id
+  role   = aws_iam_role.cloudtrail.id
   policy = data.aws_iam_policy_document.cloudtrail.json
 }
 
