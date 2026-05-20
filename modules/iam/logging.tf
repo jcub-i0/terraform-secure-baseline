@@ -20,7 +20,7 @@ resource "aws_iam_role" "cloudtrail" {
   assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume_role.json
 }
 
-##CLOUDTRAIL ROLE POLICY
+## CLOUDTRAIL ROLE POLICY
 resource "aws_iam_role_policy" "cloudtrail" {
   role = aws_iam_role.cloudtrail.id
 
