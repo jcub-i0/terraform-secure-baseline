@@ -50,7 +50,7 @@ data "aws_iam_policy_document" "flowlogs_assume_role" {
 
     principals {
       type        = "Service"
-      identifiers = "vpc-flow-logs.amazonaws.com"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
     }
   }
 }
