@@ -145,14 +145,14 @@ data "aws_iam_policy_document" "firehose_flow_logs_assume_role" {
 
 ## FIREHOSE FLOW LOGS ROLE
 resource "aws_iam_role" "firehose_flow_logs" {
-  name = "${var.name_prefix}-FirehoseFlowLogsRole"
+  name               = "${var.name_prefix}-FirehoseFlowLogsRole"
   assume_role_policy = data.aws_iam_policy_document.firehose_flow_logs_assume_role.json
 }
 
 ## FIREHOSE FLOW LOGS POLICY
 data "aws_iam_policy_document" "firehose_flow_logs" {
   statement {
-    sid = "AllowFirehoseWriteToCentralizedLogsS3"
+    sid    = "AllowFirehoseWriteToCentralizedLogsS3"
     effect = "Allow"
     actions = [
       "s3:PutObject",
@@ -160,7 +160,7 @@ data "aws_iam_policy_document" "firehose_flow_logs" {
       "s3:ListBucket",
       "s3:GetBucketLocation"
     ]
-    
+
     resources = [
       var.centralized_logs_bucket_arn,
       "${var.centralized_logs_bucket_arn}/*"
@@ -168,7 +168,7 @@ data "aws_iam_policy_document" "firehose_flow_logs" {
   }
 
   statement {
-    sid = "AllowFirehoseUseLogsKMSKey"
+    sid    = "AllowFirehoseUseLogsKMSKey"
     effect = "Allow"
     actions = [
       "kms:Encrypt",
@@ -176,12 +176,12 @@ data "aws_iam_policy_document" "firehose_flow_logs" {
       "kms:GenerateDataKey*",
       "kms:DescribeKey"
     ]
-    
+
     resources = [var.logs_cmk_arn]
   }
 }
 
 resource "aws_iam_role_policy" "firehose_flow_logs" {
-  role = aws_iam_role.firehose_flow_logs.id
+  role   = aws_iam_role.firehose_flow_logs.id
   policy = data.aws_iam_policy_document.firehose_flow_logs.json
 }
