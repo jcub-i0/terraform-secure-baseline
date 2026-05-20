@@ -92,12 +92,12 @@ resource "aws_iam_role_policy" "flowlogs" {
 ## CLOUDWATCH TO FIREHOSE TRUST POLICY
 data "aws_iam_policy_document" "cw_to_firehose_assume_role" {
   statement {
-    sid = "AllowCloudWatchLogsAssumeRole"
-    effect = "Allow"
+    sid     = "AllowCloudWatchLogsAssumeRole"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["logs.amazonaws.com"]
     }
   }
@@ -105,7 +105,7 @@ data "aws_iam_policy_document" "cw_to_firehose_assume_role" {
 
 ## CLOUDWATCH TO FIREHOSE ROLE
 resource "aws_iam_role" "cw_to_firehose" {
-  name = "${var.name_prefix}-CloudWatchLogsToFirehose"
+  name               = "${var.name_prefix}-CloudWatchLogsToFirehose"
   assume_role_policy = data.aws_iam_policy_document.cw_to_firehose_assume_role.json
 }
 
