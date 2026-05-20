@@ -34,7 +34,6 @@ data "aws_iam_policy_document" "cloudtrail" {
   }
 }
 
-## CLOUDTRAIL ROLE POLICY
 resource "aws_iam_role_policy" "cloudtrail" {
   role   = aws_iam_role.cloudtrail.id
   policy = data.aws_iam_policy_document.cloudtrail.json
