@@ -66,24 +66,26 @@ resource "aws_iam_role" "flowlogs" {
 }
 
 ### FLOWLOGS ROLE POLICY
+data "aws_iam_policy_document" "flowlogs" {
+  statement {
+    sid = "AllowFlowLogsWriteToCloudWatchLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams"
+    ]
+
+    resources = ["${var.flowlogs_log_group_arn}:*"]
+  }
+}
+
 resource "aws_iam_role_policy" "flowlogs" {
   name = "${var.name_prefix}-VpcFlowLogsPolicy"
   role = aws_iam_role.flowlogs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
-      ]
-      Resource = "${var.flowlogs_log_group_arn}:*"
-    }]
-  })
+  policy = data.aws_iam_policy_document.flowlogs
 }
 
 ## CLOUDWATCH TO FIREHOSE ROLE
