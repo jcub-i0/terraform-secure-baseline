@@ -1,18 +1,23 @@
 # CLOUDTRAIL
+
+## CLOUDTRAIL TRUST POLICY
+data "aws_iam_policy_document" "cloudtrail_assume_role" {
+  statement {
+    sid = "AllowCloudTrailAssumeRole"
+    effect = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+  }
+}
+
 ## CLOUDTRAIL ROLE
 resource "aws_iam_role" "cloudtrail" {
   name = "${var.name_prefix}-cloudtrail-cloudwatch-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "cloudtrail.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+  assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume_role.json
 }
 
 ##CLOUDTRAIL ROLE POLICY
