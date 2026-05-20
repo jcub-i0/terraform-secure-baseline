@@ -85,7 +85,7 @@ data "aws_iam_policy_document" "flowlogs" {
 resource "aws_iam_role_policy" "flowlogs" {
   name   = "${var.name_prefix}-VpcFlowLogsPolicy"
   role   = aws_iam_role.flowlogs.id
-  policy = data.aws_iam_policy_document.flowlogs
+  policy = data.aws_iam_policy_document.flowlogs.json
 }
 
 ## CLOUDWATCH TO FIREHOSE ROLE
