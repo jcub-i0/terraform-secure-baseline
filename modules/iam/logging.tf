@@ -110,20 +110,22 @@ resource "aws_iam_role" "cw_to_firehose" {
 }
 
 ### POLICY FOR CLOUDWATCH TO FIREHOSE ROLE
+data "aws_iam_policy_document" "cw_to_firehose" {
+  statement {
+    sid = "AllowCloudWatchLogsWriteToFirehose"
+    effect = "Allow"
+    actions = [
+      "firehose:PutRecord",
+      "firehose:PutRecordBatch"
+    ]
+
+    resources = [var.flowlogs_firehose_delivery_stream_arn]
+  }
+}
+
 resource "aws_iam_role_policy" "cw_to_firehose" {
   role = aws_iam_role.cw_to_firehose.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "firehose:PutRecord",
-        "firehose:PutRecordBatch"
-      ]
-      Resource = var.flowlogs_firehose_delivery_stream_arn
-    }]
-  })
+  policy = data.iam_policy_document.cw_to_firehose.json
 }
 
 # KINESIS FIREHOSE
