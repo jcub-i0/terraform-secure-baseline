@@ -146,7 +146,6 @@ data "aws_iam_policy_document" "firehose_flow_logs_assume_role" {
 ## FIREHOSE FLOW LOGS ROLE
 resource "aws_iam_role" "firehose_flow_logs" {
   name = "${var.name_prefix}-FirehoseFlowLogsRole"
-
   assume_role_policy = data.aws_iam_policy_document.firehose_flow_logs_assume_role.json
 }
 
