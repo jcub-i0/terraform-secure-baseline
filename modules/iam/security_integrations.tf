@@ -17,20 +17,26 @@ resource "aws_accessanalyzer_analyzer" "main" {
 }
 
 # EVENTBRIDGE ROLE
-resource "aws_iam_role" "eventbridge_putevents_to_secops" {
-  name = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
+## EVENTBRIDGE ROLE TRUST POLICY
+data "aws_iam_policy_document" "eventbridge_putevents_to_secops_assume_role" {
+  statement {
+    sid = "AllowEventBridgeAssumeRole"
+    effect = "Allow"
+    actions = ["sts:AssumeRole"]
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "events.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
+    principals {
+      type = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+  }
 }
 
-# ALLOW EVENTBRIDGE TO PUT EVENTS TO SECOPS BUS
+resource "aws_iam_role" "eventbridge_putevents_to_secops" {
+  name = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
+  assume_role_policy = data.aws_iam_policy_document.eventbridge_putevents_to_secops_assume_role.json
+}
+
+## ALLOW EVENTBRIDGE TO PUT EVENTS TO SECOPS BUS
 resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
   role = aws_iam_role.eventbridge_putevents_to_secops.id
   policy = jsonencode({
