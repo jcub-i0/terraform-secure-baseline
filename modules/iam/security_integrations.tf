@@ -30,6 +30,7 @@ data "aws_iam_policy_document" "eventbridge_putevents_to_secops_assume_role" {
   }
 }
 
+# EVENTBRIDGE ROLE
 resource "aws_iam_role" "eventbridge_putevents_to_secops" {
   name               = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
   assume_role_policy = data.aws_iam_policy_document.eventbridge_putevents_to_secops_assume_role.json
