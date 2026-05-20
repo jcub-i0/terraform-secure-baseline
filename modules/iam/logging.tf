@@ -65,7 +65,7 @@ resource "aws_iam_role" "flowlogs" {
   }
 }
 
-### POLICY FOR FLOWLOGS ROLE
+### FLOWLOGS ROLE POLICY
 resource "aws_iam_role_policy" "flowlogs" {
   name = "${var.name_prefix}-VpcFlowLogsPolicy"
   role = aws_iam_role.flowlogs.id
