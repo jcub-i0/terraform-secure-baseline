@@ -2,7 +2,7 @@
 # IAM Role for Maintenance Window task 
 ########################################
 
-data "aws_iam_policy_document" "patch_maintenance_window" {
+data "aws_iam_policy_document" "patch_maintenance_window_assume_role" {
   statement {
     sid     = "AllowSSMAssumeRole"
     effect  = "Allow"
@@ -18,7 +18,7 @@ data "aws_iam_policy_document" "patch_maintenance_window" {
 resource "aws_iam_role" "patch_maintenance_window" {
   name = "${var.name_prefix}-patch-mw-role"
 
-  assume_role_policy = data.aws_iam_policy_document.patch_maintenance_window.json
+  assume_role_policy = data.aws_iam_policy_document.patch_maintenance_window_assume_role.json
 
   tags = {
     Name        = "${var.name_prefix}-PatchMaintenanceWindowRole"
