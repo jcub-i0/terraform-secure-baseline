@@ -44,7 +44,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 ## FLOWLOGS TRUST POLICY
 data "aws_iam_policy_document" "flowlogs_assume_role" {
   statement {
-    sid     = "AllowFlowLogsAssumeRole"
+    sid     = "AllowVPCFlowLogsAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
