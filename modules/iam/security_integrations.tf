@@ -36,7 +36,7 @@ resource "aws_iam_role" "eventbridge_putevents_to_secops" {
   assume_role_policy = data.aws_iam_policy_document.eventbridge_putevents_to_secops_assume_role.json
 }
 
-## ALLOW EVENTBRIDGE TO PUT EVENTS TO SECOPS BUS
+# ALLOW EVENTBRIDGE TO PUT EVENTS TO SECOPS BUS
 resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
   role = aws_iam_role.eventbridge_putevents_to_secops.id
   policy = jsonencode({
