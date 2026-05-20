@@ -109,7 +109,7 @@ resource "aws_iam_role" "cw_to_firehose" {
   assume_role_policy = data.aws_iam_policy_document.cw_to_firehose_assume_role.json
 }
 
-### POLICY FOR CLOUDWATCH TO FIREHOSE ROLE
+## POLICY FOR CLOUDWATCH TO FIREHOSE ROLE
 data "aws_iam_policy_document" "cw_to_firehose" {
   statement {
     sid = "AllowCloudWatchLogsWriteToFirehose"
