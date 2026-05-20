@@ -130,7 +130,7 @@ resource "aws_iam_role_policy" "cw_to_firehose" {
 
 # KINESIS FIREHOSE
 ## KINESIS FIREHOSE TRUST POLICY
-data "aws_iam_policy_document" "firehose_flow_logs_assume_role" {
+data "aws_iam_policy_document" "firehose_flowlogs_assume_role" {
   statement {
     sid     = "AllowFirehoseAssumeRole"
     effect  = "Allow"
@@ -144,13 +144,13 @@ data "aws_iam_policy_document" "firehose_flow_logs_assume_role" {
 }
 
 ## FIREHOSE FLOW LOGS ROLE
-resource "aws_iam_role" "firehose_flow_logs" {
+resource "aws_iam_role" "firehose_flowlogs" {
   name               = "${var.name_prefix}-FirehoseFlowLogsRole"
-  assume_role_policy = data.aws_iam_policy_document.firehose_flow_logs_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.firehose_flowlogs_assume_role.json
 }
 
 ## FIREHOSE FLOW LOGS POLICY
-data "aws_iam_policy_document" "firehose_flow_logs" {
+data "aws_iam_policy_document" "firehose_flowlogs" {
   statement {
     sid    = "AllowFirehoseWriteToCentralizedLogsS3"
     effect = "Allow"
@@ -181,7 +181,7 @@ data "aws_iam_policy_document" "firehose_flow_logs" {
   }
 }
 
-resource "aws_iam_role_policy" "firehose_flow_logs" {
-  role   = aws_iam_role.firehose_flow_logs.id
-  policy = data.aws_iam_policy_document.firehose_flow_logs.json
+resource "aws_iam_role_policy" "firehose_flowlogs" {
+  role   = aws_iam_role.firehose_flowlogs.id
+  policy = data.aws_iam_policy_document.firehose_flowlogs.json
 }
