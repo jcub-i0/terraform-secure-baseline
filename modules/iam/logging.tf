@@ -68,7 +68,7 @@ resource "aws_iam_role" "flowlogs" {
 ### FLOWLOGS ROLE POLICY
 data "aws_iam_policy_document" "flowlogs" {
   statement {
-    sid = "AllowFlowLogsWriteToCloudWatchLogs"
+    sid    = "AllowFlowLogsWriteToCloudWatchLogs"
     effect = "Allow"
     actions = [
       "logs:CreateLogGroup",
@@ -83,8 +83,8 @@ data "aws_iam_policy_document" "flowlogs" {
 }
 
 resource "aws_iam_role_policy" "flowlogs" {
-  name = "${var.name_prefix}-VpcFlowLogsPolicy"
-  role = aws_iam_role.flowlogs.id
+  name   = "${var.name_prefix}-VpcFlowLogsPolicy"
+  role   = aws_iam_role.flowlogs.id
   policy = data.aws_iam_policy_document.flowlogs
 }
 
