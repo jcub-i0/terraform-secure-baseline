@@ -150,37 +150,38 @@ resource "aws_iam_role" "firehose_flow_logs" {
 }
 
 ## FIREHOSE FLOW LOGS POLICY
+data "aws_iam_policy_document" "firehose_flow_logs" {
+  statement {
+    sid = "AllowFirehoseWriteToCentralizedLogsS3"
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListBucket",
+      "s3:GetBucketLocation"
+    ]
+    
+    resources = [
+      var.centralized_logs_bucket_arn,
+      "${var.centralized_logs_bucket_arn}/*"
+    ]
+  }
+
+  statement {
+    sid = "AllowFirehoseUseLogsKMSKey"
+    effect = "Allow"
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey"
+    ]
+    
+    resources = [var.logs_cmk_arn]
+  }
+}
+
 resource "aws_iam_role_policy" "firehose_flow_logs" {
   role = aws_iam_role.firehose_flow_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # ALLOW FIREHOSE TO USE CENTRALIZED LOGS S3 BUCKET
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:AbortMultipartUpload",
-          "s3:ListBucket",
-          "s3:GetBucketLocation"
-        ]
-        Resource = [
-          var.centralized_logs_bucket_arn,
-          "${var.centralized_logs_bucket_arn}/*"
-        ]
-      },
-      # ALLOW FIREHOSE TO USE LOGS KMS KEY
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = var.logs_cmk_arn
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.firehose_flow_logs.json
 }
