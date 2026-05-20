@@ -34,22 +34,21 @@ resource "aws_iam_policy" "logs_s3_readonly" {
 }
 
 # GENERIC POLICY TO ALLOW DECRYPTION OF OBJECTS ENCRYPTED WITH THE LOGS CMK
+data "aws_iam_policy_document" "logs_cmk_decrypt" {
+  statement {
+    sid = "AllowDecryptLogsKey"
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey"
+    ]
+
+    resources = [var.logs_cmk_arn]
+  }
+}
+
 resource "aws_iam_policy" "logs_cmk_decrypt" {
   name        = "${var.name_prefix}-LogsKmsDecrypt"
   description = "Allow decryption of objects encrypted with the Logs CMK"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowDecryptLogsKey"
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = var.logs_cmk_arn
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.logs_cmk_decrypt.json
 }
