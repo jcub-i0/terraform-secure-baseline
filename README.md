@@ -77,49 +77,50 @@ This baseline is designed for:
 ## High-Level Architecture
 
 ```text
+Manual / Local Bootstrap
+    |
+    v
+Bootstrap Stacks
+    |
+    +--> bootstrap/control_plane/state
+    +--> bootstrap/control_plane/account
+    +--> bootstrap/control_plane/organizations
+    |
+    +--> bootstrap/dev/state
+    +--> bootstrap/dev/account
+    |
+    +--> bootstrap/staging/state
+    +--> bootstrap/staging/account
+    |
+    +--> bootstrap/prod/state
+    +--> bootstrap/prod/account
+
 GitHub Actions
     |
     | OIDC
     v
-GitHub Plan / Apply IAM Roles
+Environment Plan / Apply Roles
     |
     v
-Terraform Stacks
+Workload Environment Stacks
     |
-    +--> bootstrap/control_plane
-    |       +--> state
-    |       +--> account
-    |       +--> organizations
-    |       +--> identity_center
+    +--> environments/dev/baseline
+    +--> environments/staging/baseline
+    +--> environments/prod/baseline
+
+Control Plane Governance
     |
-    +--> bootstrap/dev
-    |       +--> state
-    |       +--> account
-    |
-    +--> bootstrap/staging
-    |       +--> state
-    |       +--> account
-    |
-    +--> bootstrap/prod
-    |       +--> state
-    |       +--> account
-    |
-    +--> environments/dev
-    |       +--> baseline
-    |
-    +--> environments/staging
-    |       +--> baseline
-    |
-    +--> environments/prod
-    |       +--> baseline
+    +--> bootstrap/control_plane/identity_center
 ```
+
+Initial `state`, `account`, and `organizations` bootstrap stacks are applied locally/manual-first. After the environment GitHub OIDC roles exist, GitHub Actions can plan/apply supported workload baseline stacks. The Terraform Destroy workflow uses the control-plane apply role first to clean up Identity Center policy attachments, then uses the selected workload environment apply role to destroy that environment.
 
 The platform separates the control plane from the workload environments.
 
 The **control plane** manages:
 
-- Terraform backend infrastructure
-- GitHub OIDC execution roles
+- Control-plane Terraform backend infrastructure
+- Control-plane GitHub OIDC execution roles
 - AWS Organizations structure
 - IAM Identity Center access
 
