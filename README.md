@@ -193,6 +193,7 @@ The **environment** stacks manage:
 ├── .github
 │   └── workflows
 │
+├── CHANGELOG.md
 ├── README.md
 └── SECURITY.md
 ```
@@ -554,25 +555,48 @@ Each module also includes its own local README.md.
 
 ---
 
-## v1.1 Roadmap
+## Current Release Highlights
 
-### Primary v1.1 Scope
+### v1.1.0
 
-1. Add more automated validation/tests
-2. Refactor IAM policies from `jsonencode()` to `aws_iam_policy_document`
-3. Add cost-optimized deployment profile
-4. Add configurable egress modes:
-   - `network_firewall`
-   - `nat_only`
-   - `vpc_endpoints_only`
-5. Add dedicated subnets for Interface VPC Endpoints
+This release adds cost/security profile support, configurable egress behavior, dedicated VPC endpoint subnets, improved validation workflows, and IAM policy maintainability improvements.
 
-### Stretch Goals / Future Candidates
+Highlights:
 
-6. Improve dashboarding / evidence outputs
-7. Add SCP strategy and Terraform implementation
-8. Add cross-account GuardDuty aggregation
-9. Add cross-account Security Hub aggregation
+- Added deployment profiles for:
+  - `production`
+  - `development`
+  - `minimal`
+- Added configurable egress modes:
+  - `network_firewall`
+  - `nat_only`
+  - `vpc_endpoints_only`
+- Added dedicated private subnets for Interface VPC Endpoints.
+- Added profile-aware defaults for:
+  - AWS Config
+  - AWS Backup
+  - Inspector
+  - CloudWatch Logs retention
+- Added effective Terraform outputs for deployment profile and resolved feature settings.
+- Improved Terraform Static Analysis workflow coverage.
+- Added Docs Validation workflow.
+- Refactored IAM module policies from inline `jsonencode()` policy JSON to `aws_iam_policy_document` data sources.
+- Updated documentation for deployment profiles, egress modes, and dedicated VPC endpoint subnets.
+
+---
+
+## Future Roadmap
+
+Potential future improvements include:
+
+- Improve dashboarding / evidence outputs
+- Add SCP strategy and Terraform implementation
+- Add cross-account GuardDuty aggregation
+- Add cross-account Security Hub aggregation
+- Add post-deploy validation scripts
+- Continue refactoring remaining IAM policy JSON outside `modules/iam`
+- Add configurable VPC endpoint service lists
+- Add additional deployment profile-controlled services
 
 ---
 
