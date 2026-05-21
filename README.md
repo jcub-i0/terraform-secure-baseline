@@ -77,49 +77,50 @@ This baseline is designed for:
 ## High-Level Architecture
 
 ```text
+Manual / Local Bootstrap
+    |
+    v
+Bootstrap Stacks
+    |
+    +--> bootstrap/control_plane/state
+    +--> bootstrap/control_plane/account
+    +--> bootstrap/control_plane/organizations
+    |
+    +--> bootstrap/dev/state
+    +--> bootstrap/dev/account
+    |
+    +--> bootstrap/staging/state
+    +--> bootstrap/staging/account
+    |
+    +--> bootstrap/prod/state
+    +--> bootstrap/prod/account
+
 GitHub Actions
     |
     | OIDC
     v
-GitHub Plan / Apply IAM Roles
+Environment Plan / Apply Roles
     |
     v
-Terraform Stacks
+Workload Environment Stacks
     |
-    +--> bootstrap/control_plane
-    |       +--> state
-    |       +--> account
-    |       +--> organizations
-    |       +--> identity_center
+    +--> environments/dev/baseline
+    +--> environments/staging/baseline
+    +--> environments/prod/baseline
+
+Control Plane Governance
     |
-    +--> bootstrap/dev
-    |       +--> state
-    |       +--> account
-    |
-    +--> bootstrap/staging
-    |       +--> state
-    |       +--> account
-    |
-    +--> bootstrap/prod
-    |       +--> state
-    |       +--> account
-    |
-    +--> environments/dev
-    |       +--> baseline
-    |
-    +--> environments/staging
-    |       +--> baseline
-    |
-    +--> environments/prod
-    |       +--> baseline
+    +--> bootstrap/control_plane/identity_center
 ```
+
+Initial `state`, `account`, and `organizations` bootstrap stacks are applied locally/manual-first. After the environment GitHub OIDC roles exist, GitHub Actions can plan/apply supported workload baseline stacks. The Terraform Destroy workflow uses the control-plane apply role first to clean up Identity Center policy attachments, then uses the selected workload environment apply role to destroy that environment.
 
 The platform separates the control plane from the workload environments.
 
 The **control plane** manages:
 
-- Terraform backend infrastructure
-- GitHub OIDC execution roles
+- Control-plane Terraform backend infrastructure
+- Control-plane GitHub OIDC execution roles
 - AWS Organizations structure
 - IAM Identity Center access
 
@@ -193,6 +194,7 @@ The **environment** stacks manage:
 ├── .github
 │   └── workflows
 │
+├── CHANGELOG.md
 ├── README.md
 └── SECURITY.md
 ```
@@ -554,25 +556,48 @@ Each module also includes its own local README.md.
 
 ---
 
-## v1.1 Roadmap
+## Current Release Highlights
 
-### Primary v1.1 Scope
+### v1.1.0
 
-1. Add more automated validation/tests
-2. Refactor IAM policies from `jsonencode()` to `aws_iam_policy_document`
-3. Add cost-optimized deployment profile
-4. Add configurable egress modes:
-   - `network_firewall`
-   - `nat_only`
-   - `vpc_endpoints_only`
-5. Add dedicated subnets for Interface VPC Endpoints
+This release adds cost/security profile support, configurable egress behavior, dedicated VPC endpoint subnets, improved validation workflows, and IAM policy maintainability improvements.
 
-### Stretch Goals / Future Candidates
+Highlights:
 
-6. Improve dashboarding / evidence outputs
-7. Add SCP strategy and Terraform implementation
-8. Add cross-account GuardDuty aggregation
-9. Add cross-account Security Hub aggregation
+- Added deployment profiles for:
+  - `production`
+  - `development`
+  - `minimal`
+- Added configurable egress modes:
+  - `network_firewall`
+  - `nat_only`
+  - `vpc_endpoints_only`
+- Added dedicated private subnets for Interface VPC Endpoints.
+- Added profile-aware defaults for:
+  - AWS Config
+  - AWS Backup
+  - Inspector
+  - CloudWatch Logs retention
+- Added effective Terraform outputs for deployment profile and resolved feature settings.
+- Improved Terraform Static Analysis workflow coverage.
+- Added Docs Validation workflow.
+- Refactored IAM module policies from inline `jsonencode()` policy JSON to `aws_iam_policy_document` data sources.
+- Updated documentation for deployment profiles, egress modes, and dedicated VPC endpoint subnets.
+
+---
+
+## Future Roadmap
+
+Potential future improvements include:
+
+- Improve dashboarding / evidence outputs
+- Add SCP strategy and Terraform implementation
+- Add cross-account GuardDuty aggregation
+- Add cross-account Security Hub aggregation
+- Add post-deploy validation scripts
+- Continue refactoring remaining IAM policy JSON outside `modules/iam`
+- Add configurable VPC endpoint service lists
+- Add additional deployment profile-controlled services
 
 ---
 
