@@ -590,14 +590,16 @@ Highlights:
 
 Potential future improvements include:
 
+- Add core post-deploy validation scripts
 - Improve dashboarding / evidence outputs
+- Add configurable VPC endpoint service lists
+- Add additional deployment profile-controlled services
+- Continue refactoring remaining IAM policy JSON outside modules/iam
 - Add SCP strategy and Terraform implementation
 - Add cross-account GuardDuty aggregation
 - Add cross-account Security Hub aggregation
-- Add post-deploy validation scripts
-- Continue refactoring remaining IAM policy JSON outside `modules/iam`
-- Add configurable VPC endpoint service lists
-- Add additional deployment profile-controlled services
+- Add org-level validation scripts for SCP / GuardDuty / Security Hub aggregation
+- Optional dummy SaaS app using fake data
 
 ---
 
