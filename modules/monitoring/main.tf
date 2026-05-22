@@ -296,7 +296,7 @@ data "aws_iam_policy_document" "secops" {
 
     condition {
       test     = "StringEquals"
-      variable = "aws:SourceArn"
+      variable = "aws:SourceAccount"
       values   = [var.account_id]
     }
 
