@@ -310,7 +310,7 @@ data "aws_iam_policy_document" "secops" {
 
 resource "aws_sns_topic_policy" "secops" {
   arn    = aws_sns_topic.secops.arn
-  policy = data.aws_iam_policy_document.secops
+  policy = data.aws_iam_policy_document.secops.json
 }
 
 ### SECOPS SNS SUBSCRIPTION
