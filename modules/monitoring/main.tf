@@ -255,6 +255,7 @@ data "aws_iam_policy_document" "secops" {
     }
   }
 
+  # ALLOW SECURITY HUB INSCOPE FINDINGS EVENT RULE
   statement {
     sid     = "AllowEventBridgeTamperDetectionAlerts"
     effect  = "Allow"
