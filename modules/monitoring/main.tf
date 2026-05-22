@@ -231,52 +231,52 @@ data "aws_iam_policy_document" "secops" {
 
   # ALLOW BREAK-GLASS EVENT RULE
   statement {
-    sid    = "AllowEventBridgePublishBreakGlassAlerts"
-    effect = "Allow"
+    sid     = "AllowEventBridgePublishBreakGlassAlerts"
+    effect  = "Allow"
     actions = ["sns:Publish"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = "events.amazonaws.com"
     }
 
     resources = [aws_sns_topic.secops.arn]
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
 
     condition {
-      test = "ArnEquals"
+      test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values = [aws_cloudwatch_event_rule.break_glass_assumed.arn]
+      values   = [aws_cloudwatch_event_rule.break_glass_assumed.arn]
     }
   }
 
   statement {
-    sid    = "AllowEventBridgeTamperDetectionAlerts"
-    effect = "Allow"
-    actions   = ["sns:Publish"]
+    sid     = "AllowEventBridgeTamperDetectionAlerts"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = "events.amazonaws.com"
     }
 
     resources = [aws_sns_topic.secops.arn]
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
 
     condition {
-      test = "ArnEquals"
+      test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values = [var.tamper_detection_rule_arn]
+      values   = [var.tamper_detection_rule_arn]
     }
   }
 }
