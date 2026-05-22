@@ -127,7 +127,7 @@ data "aws_iam_policy_document" "state_bucket" {
 
   # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
   statement {
-    sid = "DenyBucketPolicyChanges"
+    sid    = "DenyBucketPolicyChanges"
     effect = "Deny"
 
     actions = [
@@ -136,16 +136,16 @@ data "aws_iam_policy_document" "state_bucket" {
     ]
 
     principals {
-      type = "*"
+      type        = "*"
       identifiers = ["*"]
     }
 
     resources = [aws_s3_bucket.state.arn]
 
     condition {
-      test = "ForAnyValue:ArnNotEquals"
+      test     = "ForAnyValue:ArnNotEquals"
       variable = "aws:PrincipalArn"
-      values = var.bucket_admin_principals
+      values   = var.bucket_admin_principals
     }
   }
 }
