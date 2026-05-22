@@ -192,58 +192,7 @@ data "aws_iam_policy_document" "state_bucket" {
 
 resource "aws_s3_bucket_policy" "state" {
   bucket = aws_s3_bucket.state.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
-      {
-        Sid       = "DenyBucketPolicyChanges"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "s3:PutBucketPolicy",
-          "s3:DeleteBucketPolicy"
-        ]
-        Resource = aws_s3_bucket.state.arn
-        Condition = {
-          "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principals
-          }
-        }
-      },
-      #DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
-      {
-        Sid       = "DenyVersioningChanges"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "s3:PutBucketVersioning"
-        ]
-        Resource = aws_s3_bucket.state.arn
-        Condition = {
-          "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principals
-          }
-        }
-      },
-      # DENY CHANGES TO THE BUCKET ENCRYPTION CONFIG UNLESS ADMIN PRINCIPAL
-      {
-        Sid       = "DenyEncryptionConfigChanges"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "s3:PutEncryptionConfiguration"
-        ]
-        Resource = aws_s3_bucket.state.arn
-        Condition = {
-          "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principals
-          }
-        }
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.state_bucket.json
 }
 
 # STATE DYNAMODB LOCK TABLE
