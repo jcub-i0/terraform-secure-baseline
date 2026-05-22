@@ -197,40 +197,40 @@ resource "aws_cloudwatch_event_bus" "secops" {
 #### SECURITY OPERATIONS EVENT BUS POLICY
 data "aws_iam_policy_document" "secops_bus_policy" {
   statement {
-    sid = "AllowSecOpsRollbackOnly"
-    effect = "Allow"
-    actions = ["events:PutEvents"]
+    sid       = "AllowSecOpsRollbackOnly"
+    effect    = "Allow"
+    actions   = ["events:PutEvents"]
     resources = [aws_cloudwatch_event_bus.secops.arn]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = ["*"]
     }
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "events:source"
-      values = ["custom.rollback"]
+      values   = ["custom.rollback"]
     }
   }
 
   statement {
-    sid = "AllowEventBridgeForwardingRole"
-    effect = "Allow"
-    actions = ["events:PutEvents"]
+    sid       = "AllowEventBridgeForwardingRole"
+    effect    = "Allow"
+    actions   = ["events:PutEvents"]
     resources = [aws_cloudwatch_event_bus.secops.arn]
-    
+
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "events:source"
-      values = ["aws.securityhub"]
+      values   = ["aws.securityhub"]
     }
   }
 }
 
 resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
   event_bus_name = aws_cloudwatch_event_bus.secops.name
-  policy = data.aws_iam_policy_document.secops_bus_policy.json
+  policy         = data.aws_iam_policy_document.secops_bus_policy.json
 }
 
 #### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
