@@ -68,6 +68,7 @@ data "aws_iam_policy_document" "plan_oidc_assume_role" {
   }
 }
 
+# GitHub-Plan permissions policy
 resource "aws_iam_role" "github_plan" {
   name               = "${var.name_prefix}-github-plan-role"
   assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role.json
