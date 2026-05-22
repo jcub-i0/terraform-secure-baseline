@@ -106,7 +106,7 @@ data "aws_iam_policy_document" "github_plan" {
     sid    = "SecretsManagerRandomPassword"
     effect = "Allow"
     actions = ["secretsmanager:GetRandomPassword"]
-    resources = "*"
+    resources = ["*"]
   }
 
   dynamic "statement" {
