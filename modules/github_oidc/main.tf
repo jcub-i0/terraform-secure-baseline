@@ -74,6 +74,101 @@ resource "aws_iam_role" "github_plan" {
   assume_role_policy = data.aws_iam_policy_document.plan_oidc_assume_role.json
 }
 
+data "aws_iam_policy_document" "github_plan" {
+  statement {
+    sid = "TerraformStateBucketList"
+    effect = "Allow"
+    actions = ["s3:ListBucket"]
+    resources = [var.tf_state_bucket_arn]
+  }
+
+  statement {
+    sid    = "TerraformStateObjectAccess"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject"
+    ]
+    resources = ["${var.tf_state_bucket_arn}/*"]
+  }
+  
+  statement {
+    sid    = "SecretsManagerRead"
+    effect = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
+    ]
+  }
+
+  statement {
+    sid    = "SecretsManagerRandomPassword"
+    effect = "Allow"
+    actions = ["secretsmanager:GetRandomPassword"]
+    resources = "*"
+  }
+
+  dynamic "statement" {
+    for_each = var.tf_state_lock_table_arn != null ? [var.tf_state_lock_table_arn] : []
+
+    content {
+      sid = "TerraformStateLockAccess"
+      effect = "Allow"
+      actions = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:UpdateItem"
+      ]
+      resources = [var.tf_state_lock_table_arn]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.tf_state_bucket_cmk_arn != null ? [var.tf_state_bucket_cmk_arn] : []
+
+    content {
+      sid = "TerraformStateBucketKmsAccess"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey"
+      ]
+      resources = [var.tf_state_bucket_cmk_arn]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.lambda_cmk_arn != null ? [var.lambda_cmk_arn] : []
+    
+    content {
+      sid    = "LambdaKmsDecrypt"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ]
+      resources = [var.lambda_cmk_arn]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.secrets_manager_cmk_arn != null ? [var.secrets_manager_cmk_arn] : []
+    content {
+      sid    = "SecretsManagerKmsDecrypt"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ]
+      resources = [var.secrets_manager_cmk_arn]
+    }
+  }
+}
+
 resource "aws_iam_policy" "github_plan" {
   name = "${var.name_prefix}-github-plan-policy"
 
