@@ -116,6 +116,120 @@ resource "aws_sns_topic" "secops" {
 }
 
 ### SECOPS SNS TOPIC POLICY
+data "aws_iam_policy_document" "secops" {
+  statement {
+    sid    = "EnableRootPermissions"
+    effect = "Allow"
+
+    actions = [
+      "sns:GetTopicAttributes",
+      "sns:SetTopicAttributes",
+      "sns:AddPermission",
+      "sns:RemovePermission",
+      "sns:DeleteTopic",
+      "sns:Subscribe",
+      "sns:ListSubscriptionsByTopic",
+      "sns:Publish"
+    ]
+
+    principals {
+      type = "AWS"
+      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+  }
+
+  statement {
+    sid    = "AllowCloudWatchPublish"
+    effect = "Allow"
+    actions   = ["sns:Publish"]
+
+    principals {
+      type = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+  }
+
+  statement {
+    sid       = "AllowEventBridgePublish"
+    effect    = "Allow"
+    actions    = ["sns:Publish"]
+
+    principals {
+      type = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    resources  = [aws_sns_topic.secops.arn]
+
+    condition {
+      test = "StringEquals"
+      variable = "aws:SourceAccount"
+      values = [var.account_id]
+    }
+  }
+
+  statement {
+    sid    = "AllowIpEnrichmentLambdaPublish"
+    effect = "Allow"
+    actions   = ["sns:Publish"]
+
+    principals {
+      type = "AWS"
+      identifiers = [var.lambda_ip_enrichment_role_arn]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test = "StringEquals"
+      variable = "aws:SourceAccount"
+      values = [var.account_id]
+    }
+  }
+
+  statement {
+    sid    = "AllowEc2IsolationLambdaPublish"
+    effect = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type = "AWS"
+      identifiers = [var.lambda_ec2_isolation_role_arn]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test = "StringEquals"
+      variable = "aws:SourceAccount"
+      values = [var.account_id]
+    }
+  }
+
+  statement {
+    sid    = "AllowEc2RollbackLambdaPublish"
+    effect = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type = "AWS"
+      identifiers = [var.lambda_ec2_rollback_role_arn]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test = "StringEquals"
+      variable = "aws:SourceAccount"
+      values = [var.account_id]
+    }
+  }
+}
+
 resource "aws_sns_topic_policy" "secops" {
   arn = aws_sns_topic.secops.arn
   policy = jsonencode({
