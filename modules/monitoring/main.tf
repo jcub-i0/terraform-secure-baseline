@@ -112,7 +112,6 @@ resource "aws_sns_topic" "secops" {
 ### SECOPS SNS TOPIC POLICY
 resource "aws_sns_topic_policy" "secops" {
   arn = aws_sns_topic.secops.arn
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
