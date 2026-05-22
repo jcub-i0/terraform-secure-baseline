@@ -222,6 +222,8 @@ resource "aws_iam_role" "github_apply" {
 
 ## GitHub-Apply role policy
 data "aws_iam_policy_document" "github_apply" {
+  count = var.enable_apply_role_github ? 1 : 0
+
   statement {
     sid       = "TerraformStateBucketList"
     effect    = "Allow"
@@ -319,7 +321,7 @@ data "aws_iam_policy_document" "github_apply" {
 resource "aws_iam_policy" "github_apply" {
   count  = var.enable_apply_role_github ? 1 : 0
   name   = "${var.name_prefix}-github-apply-policy"
-  policy = data.aws_iam_policy_document.github_apply.json
+  policy = data.aws_iam_policy_document.github_apply[0].json
 }
 
 resource "aws_iam_role_policy_attachment" "github_apply_attach" {
