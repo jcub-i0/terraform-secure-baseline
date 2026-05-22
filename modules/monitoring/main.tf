@@ -280,6 +280,32 @@ data "aws_iam_policy_document" "secops" {
       values   = [var.tamper_detection_rule_arn]
     }
   }
+
+  # ALLOW SECURITY HUB INSCOPE FINDINGS EVENT RULE
+  statement {
+    sid    = "AllowSecurityHubFindingAlerts"
+    effect = "Allow"
+    actions   = ["sns:Publish"]
+
+    principals {
+      type = "Service"
+      identifiers = ["events.amazon.com"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test = "StringEquals"
+      variable = "aws:SourceArn"
+      values = [var.account_id]
+    }
+
+    condition {
+      test = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [var.securityhub_high_critical_rule_arn]
+    }
+  }
 }
 
 resource "aws_sns_topic_policy" "secops" {
