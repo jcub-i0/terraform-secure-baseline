@@ -283,33 +283,33 @@ data "aws_iam_policy_document" "secops" {
 
   # ALLOW SECURITY HUB INSCOPE FINDINGS EVENT RULE
   statement {
-    sid    = "AllowSecurityHubFindingAlerts"
-    effect = "Allow"
-    actions   = ["sns:Publish"]
+    sid     = "AllowSecurityHubFindingAlerts"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["events.amazon.com"]
     }
 
     resources = [aws_sns_topic.secops.arn]
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceArn"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
 
     condition {
-      test = "ArnEquals"
+      test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values = [var.securityhub_high_critical_rule_arn]
+      values   = [var.securityhub_high_critical_rule_arn]
     }
   }
 }
 
 resource "aws_sns_topic_policy" "secops" {
-  arn = aws_sns_topic.secops.arn
+  arn    = aws_sns_topic.secops.arn
   policy = data.aws_iam_policy_document.secops
 }
 
