@@ -76,9 +76,9 @@ resource "aws_iam_role" "github_plan" {
 
 data "aws_iam_policy_document" "github_plan" {
   statement {
-    sid = "TerraformStateBucketList"
-    effect = "Allow"
-    actions = ["s3:ListBucket"]
+    sid       = "TerraformStateBucketList"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
     resources = [var.tf_state_bucket_arn]
   }
 
@@ -92,10 +92,10 @@ data "aws_iam_policy_document" "github_plan" {
     ]
     resources = ["${var.tf_state_bucket_arn}/*"]
   }
-  
+
   statement {
-    sid    = "SecretsManagerRead"
-    effect = "Allow"
+    sid     = "SecretsManagerRead"
+    effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
       "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
@@ -103,9 +103,9 @@ data "aws_iam_policy_document" "github_plan" {
   }
 
   statement {
-    sid    = "SecretsManagerRandomPassword"
-    effect = "Allow"
-    actions = ["secretsmanager:GetRandomPassword"]
+    sid       = "SecretsManagerRandomPassword"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetRandomPassword"]
     resources = ["*"]
   }
 
@@ -113,7 +113,7 @@ data "aws_iam_policy_document" "github_plan" {
     for_each = var.tf_state_lock_table_arn != null ? [var.tf_state_lock_table_arn] : []
 
     content {
-      sid = "TerraformStateLockAccess"
+      sid    = "TerraformStateLockAccess"
       effect = "Allow"
       actions = [
         "dynamodb:GetItem",
@@ -129,7 +129,7 @@ data "aws_iam_policy_document" "github_plan" {
     for_each = var.tf_state_bucket_cmk_arn != null ? [var.tf_state_bucket_cmk_arn] : []
 
     content {
-      sid = "TerraformStateBucketKmsAccess"
+      sid    = "TerraformStateBucketKmsAccess"
       effect = "Allow"
       actions = [
         "kms:Decrypt",
@@ -143,7 +143,7 @@ data "aws_iam_policy_document" "github_plan" {
 
   dynamic "statement" {
     for_each = var.lambda_cmk_arn != null ? [var.lambda_cmk_arn] : []
-    
+
     content {
       sid    = "LambdaKmsDecrypt"
       effect = "Allow"
@@ -170,7 +170,7 @@ data "aws_iam_policy_document" "github_plan" {
 }
 
 resource "aws_iam_policy" "github_plan" {
-  name = "${var.name_prefix}-github-plan-policy"
+  name   = "${var.name_prefix}-github-plan-policy"
   policy = data.aws_iam_policy_document.github_plan.json
 }
 
