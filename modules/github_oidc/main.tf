@@ -317,8 +317,8 @@ data "aws_iam_policy_document" "github_apply" {
 }
 
 resource "aws_iam_policy" "github_apply" {
-  count = var.enable_apply_role_github ? 1 : 0
-  name = "${var.name_prefix}-github-apply-policy"
+  count  = var.enable_apply_role_github ? 1 : 0
+  name   = "${var.name_prefix}-github-apply-policy"
   policy = data.aws_iam_policy_document.github_apply.json
 }
 
