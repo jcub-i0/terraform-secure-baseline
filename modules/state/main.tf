@@ -148,6 +148,24 @@ data "aws_iam_policy_document" "state_bucket" {
       values   = var.bucket_admin_principals
     }
   }
+
+  # DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
+  statement {
+    sid = "DenyVersioningChanges"
+    effect = "Allow"
+    actions = ["s3:PutBucketVersioning"]
+
+    principals {
+      type = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test = "ForAnyValue:ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values = var.bucket_admin_principals
+    }
+  }
 }
 
 resource "aws_s3_bucket_policy" "state" {
