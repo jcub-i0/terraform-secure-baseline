@@ -121,7 +121,7 @@ data "aws_iam_policy_document" "github_plan" {
         "dynamodb:DeleteItem",
         "dynamodb:UpdateItem"
       ]
-      resources = [var.tf_state_lock_table_arn]
+      resources = [statement.value]
     }
   }
 
@@ -137,7 +137,7 @@ data "aws_iam_policy_document" "github_plan" {
         "kms:Encrypt",
         "kms:GenerateDataKey"
       ]
-      resources = [var.tf_state_bucket_cmk_arn]
+      resources = [statement.value]
     }
   }
 
@@ -151,7 +151,7 @@ data "aws_iam_policy_document" "github_plan" {
         "kms:Decrypt",
         "kms:DescribeKey"
       ]
-      resources = [var.lambda_cmk_arn]
+      resources = [statement.value]
     }
   }
 
@@ -164,7 +164,7 @@ data "aws_iam_policy_document" "github_plan" {
         "kms:Decrypt",
         "kms:DescribeKey"
       ]
-      resources = [var.secrets_manager_cmk_arn]
+      resources = [statement.value]
     }
   }
 }
