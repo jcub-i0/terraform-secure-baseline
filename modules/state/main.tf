@@ -124,6 +124,8 @@ resource "aws_s3_bucket_ownership_controls" "state" {
 
 # STATE S3 BUCKET POLICY
 data "aws_iam_policy_document" "state_bucket" {
+
+  # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
   statement {
     sid = "DenyBucketPolicyChanges"
     effect = "Deny"
