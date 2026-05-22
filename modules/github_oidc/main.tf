@@ -221,111 +221,105 @@ resource "aws_iam_role" "github_apply" {
 }
 
 ## GitHub-Apply role policy
+data "aws_iam_policy_document" "github_apply" {
+  statement {
+    sid       = "TerraformStateBucketList"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [var.tf_state_bucket_arn]
+  }
+
+  statement {
+    sid    = "TerraformStateObjectAccess"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject"
+    ]
+    resources = ["${var.tf_state_bucket_arn}/*"]
+  }
+
+  statement {
+    sid     = "SecretsManagerRead"
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
+    ]
+  }
+
+  statement {
+    sid       = "SecretsManagerRandomPassword"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetRandomPassword"]
+    resources = ["*"]
+  }
+
+  dynamic "statement" {
+    for_each = var.tf_state_lock_table_arn != null ? [var.tf_state_lock_table_arn] : []
+
+    content {
+      sid    = "TerraformStateLockAccess"
+      effect = "Allow"
+      actions = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:UpdateItem"
+      ]
+      resources = [statement.value]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.tf_state_bucket_cmk_arn != null ? [var.tf_state_bucket_cmk_arn] : []
+
+    content {
+      sid    = "TerraformStateBucketKmsAccess"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey"
+      ]
+      resources = [statement.value]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.lambda_cmk_arn != null ? [var.lambda_cmk_arn] : []
+
+    content {
+      sid    = "LambdaKmsDecrypt"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ]
+      resources = [statement.value]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.secrets_manager_cmk_arn != null ? [var.secrets_manager_cmk_arn] : []
+    content {
+      sid    = "SecretsManagerKmsDecrypt"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ]
+      resources = [statement.value]
+    }
+  }
+}
+
 resource "aws_iam_policy" "github_apply" {
   count = var.enable_apply_role_github ? 1 : 0
-
   name = "${var.name_prefix}-github-apply-policy"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = concat(
-      [
-        {
-          Sid    = "TerraformStateBucketList"
-          Effect = "Allow"
-          Action = [
-            "s3:ListBucket"
-          ]
-          Resource = [
-            var.tf_state_bucket_arn
-          ]
-        },
-        {
-          Sid    = "TerraformStateObjectAccess"
-          Effect = "Allow"
-          Action = [
-            "s3:GetObject",
-            "s3:PutObject",
-            "s3:DeleteObject"
-          ]
-          Resource = [
-            "${var.tf_state_bucket_arn}/*"
-          ]
-        },
-        {
-          Sid    = "SecretsManagerRead"
-          Effect = "Allow"
-          Action = [
-            "secretsmanager:GetSecretValue"
-          ]
-          Resource = [
-            "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
-          ]
-        },
-        {
-          Sid    = "SecretsManagerRandomPassword"
-          Effect = "Allow"
-          Action = [
-            "secretsmanager:GetRandomPassword"
-          ]
-          Resource = "*"
-        },
-      ],
-
-      var.tf_state_lock_table_arn != null ? [
-        {
-          Sid    = "TerraformStateLockAccess"
-          Effect = "Allow"
-          Action = [
-            "dynamodb:GetItem",
-            "dynamodb:PutItem",
-            "dynamodb:DeleteItem",
-            "dynamodb:UpdateItem"
-          ]
-          Resource = var.tf_state_lock_table_arn
-        }
-      ] : [],
-      var.tf_state_bucket_cmk_arn != null ? [
-        {
-          Sid    = "TerraformStateBucketKmsAccess"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.tf_state_bucket_cmk_arn
-          ]
-        }
-      ] : [],
-      var.lambda_cmk_arn != null ? [
-        {
-          Sid    = "LambdaKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.lambda_cmk_arn
-          ]
-        }
-      ] : [],
-      var.secrets_manager_cmk_arn != null ? [
-        {
-          Sid    = "SecretsManagerKmsDecrypt"
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:DescribeKey"
-          ]
-          Resource = [
-            var.secrets_manager_cmk_arn
-          ]
-        }
-      ] : []
-    )
-  })
+  policy = data.aws_iam_policy_document.github_apply.json
 }
 
 resource "aws_iam_role_policy_attachment" "github_apply_attach" {
