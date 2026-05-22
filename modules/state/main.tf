@@ -160,6 +160,8 @@ data "aws_iam_policy_document" "state_bucket" {
       identifiers = ["*"]
     }
 
+    resources = [aws_s3_bucket.state.arn]
+
     condition {
       test = "ForAnyValue:ArnNotEquals"
       variable = "aws:PrincipalArn"
