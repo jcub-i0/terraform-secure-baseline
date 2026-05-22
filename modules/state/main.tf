@@ -123,6 +123,31 @@ resource "aws_s3_bucket_ownership_controls" "state" {
 }
 
 # STATE S3 BUCKET POLICY
+data "aws_iam_policy_document" "state_bucket" {
+  statement {
+    sid = "DenyBucketPolicyChanges"
+    effect = "Deny"
+
+    actions = [
+      "s3:PutBucketPolicy",
+      "s3:DeleteBucketPolicy"
+    ]
+
+    principals {
+      type = "*"
+      identifiers = ["*"]
+    }
+
+    resources = [aws_s3_bucket.state.arn]
+
+    condition {
+      test = "ForAnyValue:ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values = var.bucket_admin_principals
+    }
+  }
+}
+
 resource "aws_s3_bucket_policy" "state" {
   bucket = aws_s3_bucket.state.id
 
