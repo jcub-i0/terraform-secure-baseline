@@ -228,6 +228,32 @@ data "aws_iam_policy_document" "secops" {
       values   = [var.account_id]
     }
   }
+
+  # ALLOW BREAK-GLASS EVENT RULE
+  statement {
+    sid    = "AllowEventBridgePublishBreakGlassAlerts"
+    effect = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type = "Service"
+      identifiers = "events.amazonaws.com"
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test = "StringEquals"
+      variable = "aws:SourceAccount"
+      values = [var.account_id]
+    }
+
+    condition {
+      test = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [aws_cloudwatch_event_rule.break_glass_assumed.arn]
+    }
+  }
 }
 
 resource "aws_sns_topic_policy" "secops" {
