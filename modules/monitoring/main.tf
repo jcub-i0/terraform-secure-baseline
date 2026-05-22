@@ -172,63 +172,6 @@ data "aws_iam_policy_document" "secops" {
     }
   }
 
-  statement {
-    sid     = "AllowIpEnrichmentLambdaPublish"
-    effect  = "Allow"
-    actions = ["sns:Publish"]
-
-    principals {
-      type        = "AWS"
-      identifiers = [var.lambda_ip_enrichment_role_arn]
-    }
-
-    resources = [aws_sns_topic.secops.arn]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [var.account_id]
-    }
-  }
-
-  statement {
-    sid     = "AllowEc2IsolationLambdaPublish"
-    effect  = "Allow"
-    actions = ["sns:Publish"]
-
-    principals {
-      type        = "AWS"
-      identifiers = [var.lambda_ec2_isolation_role_arn]
-    }
-
-    resources = [aws_sns_topic.secops.arn]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [var.account_id]
-    }
-  }
-
-  statement {
-    sid     = "AllowEc2RollbackLambdaPublish"
-    effect  = "Allow"
-    actions = ["sns:Publish"]
-
-    principals {
-      type        = "AWS"
-      identifiers = [var.lambda_ec2_rollback_role_arn]
-    }
-
-    resources = [aws_sns_topic.secops.arn]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [var.account_id]
-    }
-  }
-
   # ALLOW BREAK-GLASS EVENT RULE
   statement {
     sid     = "AllowEventBridgePublishBreakGlassAlerts"
