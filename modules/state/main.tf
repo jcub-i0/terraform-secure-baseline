@@ -151,41 +151,41 @@ data "aws_iam_policy_document" "state_bucket" {
 
   # DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
   statement {
-    sid = "DenyVersioningChanges"
-    effect = "Deny"
+    sid     = "DenyVersioningChanges"
+    effect  = "Deny"
     actions = ["s3:PutBucketVersioning"]
 
     principals {
-      type = "*"
+      type        = "*"
       identifiers = ["*"]
     }
 
     resources = [aws_s3_bucket.state.arn]
 
     condition {
-      test = "ForAnyValue:ArnNotEquals"
+      test     = "ForAnyValue:ArnNotEquals"
       variable = "aws:PrincipalArn"
-      values = var.bucket_admin_principals
+      values   = var.bucket_admin_principals
     }
   }
 
   # DENY CHANGES TO THE BUCKET ENCRYPTION CONFIG UNLESS ADMIN PRINCIPAL
   statement {
-    sid = "DenyEncryptionConfigChanges"
-    effect = "Deny"
+    sid     = "DenyEncryptionConfigChanges"
+    effect  = "Deny"
     actions = ["s3:PutEncryptionConfiguration"]
 
     principals {
-      type = "*"
+      type        = "*"
       identifiers = ["*"]
     }
 
     resources = [aws_s3_bucket.state.arn]
 
     condition {
-      test = "ForAnyValue:ArnNotEquals"
+      test     = "ForAnyValue:ArnNotEquals"
       variable = "aws:PrincipalArn"
-      values = var.bucket_admin_principals
+      values   = var.bucket_admin_principals
     }
   }
 }
