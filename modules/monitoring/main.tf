@@ -15,7 +15,7 @@ resource "aws_sns_topic" "compliance" {
 ### CONFIG SNS TOPIC POLICY
 data "aws_iam_policy_document" "compliance" {
   statement {
-    sid = "EnableRootPermissions"
+    sid    = "EnableRootPermissions"
     effect = "Allow"
     actions = [
       "sns:GetTopicAttributes",
@@ -29,7 +29,7 @@ data "aws_iam_policy_document" "compliance" {
     ]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = ["arn:aws:iam::${var.account_id}:root"]
     }
 
@@ -37,21 +37,21 @@ data "aws_iam_policy_document" "compliance" {
   }
 
   statement {
-    sid = "AllowConfigPublish"
-    effect = "Allow"
+    sid     = "AllowConfigPublish"
+    effect  = "Allow"
     actions = ["sns:Publish"]
 
     resources = [aws_sns_topic.compliance.arn]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["config.amazonaws.com"]
     }
   }
 }
 
 resource "aws_sns_topic_policy" "compliance" {
-  arn = aws_sns_topic.compliance.arn
+  arn    = aws_sns_topic.compliance.arn
   policy = data.aws_iam_policy_document.compliance.json
 }
 
