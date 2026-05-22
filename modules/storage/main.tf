@@ -236,6 +236,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "centralized_logs" {
 
 ## S3 BUCKET POLICIES
 ### CENTRALIZED LOGS S3 BUCKET POLICY
+data "aws_iam_policy_document" "centralized_logs" {
+  # DENY DELETING ANY OBJECTS/VERSIONS (IMMUTABILITY)
+  statement {
+    sid = "DenyDeleteLogs"
+    effect = "Deny"
+
+    actions = [
+      "s3:DeleteObject",
+      "s3:DeleteObjectVersion"
+    ]
+
+    principals {
+      type = "*"
+      identifiers = ["*"]
+    }
+
+    resources = ["${aws_s3_bucket.centralized_logs.arn}/*"]
+  }
+}
+
 resource "aws_s3_bucket_policy" "centralized_logs" {
   bucket = aws_s3_bucket.centralized_logs.id
 
