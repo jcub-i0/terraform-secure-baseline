@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.1
+
+### Changed
+- Refactored IAM, SNS topic, EventBridge bus, and S3 bucket policies to use `aws_iam_policy_document` data sources instead of inline `jsonencode()` policy documents.
+- Improved policy readability, consistency, and maintainability across IAM roles, managed policies, inline policies, trust policies, and resource-based policies.
+- Removed redundant Lambda principals from the SecOps SNS topic policy, relying instead on Lambda execution role permissions for direct SNS publishing.
+- Added stronger bucket policy protections for state and centralized logging buckets using explicit deny controls and admin-principal exceptions.
+
 ## v1.1.0
 
 ### Added
