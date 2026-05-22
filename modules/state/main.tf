@@ -152,7 +152,7 @@ data "aws_iam_policy_document" "state_bucket" {
   # DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
   statement {
     sid = "DenyVersioningChanges"
-    effect = "Allow"
+    effect = "Deny"
     actions = ["s3:PutBucketVersioning"]
 
     principals {
