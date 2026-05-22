@@ -133,7 +133,7 @@ data "aws_iam_policy_document" "secops" {
     ]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = ["arn:aws:iam::${var.account_id}:root"]
     }
 
@@ -141,12 +141,12 @@ data "aws_iam_policy_document" "secops" {
   }
 
   statement {
-    sid    = "AllowCloudWatchPublish"
-    effect = "Allow"
-    actions   = ["sns:Publish"]
+    sid     = "AllowCloudWatchPublish"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["cloudwatch.amazonaws.com"]
     }
 
@@ -154,78 +154,78 @@ data "aws_iam_policy_document" "secops" {
   }
 
   statement {
-    sid       = "AllowEventBridgePublish"
-    effect    = "Allow"
-    actions    = ["sns:Publish"]
+    sid     = "AllowEventBridgePublish"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["events.amazonaws.com"]
     }
 
-    resources  = [aws_sns_topic.secops.arn]
+    resources = [aws_sns_topic.secops.arn]
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
   }
 
   statement {
-    sid    = "AllowIpEnrichmentLambdaPublish"
-    effect = "Allow"
-    actions   = ["sns:Publish"]
+    sid     = "AllowIpEnrichmentLambdaPublish"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = [var.lambda_ip_enrichment_role_arn]
     }
 
     resources = [aws_sns_topic.secops.arn]
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
   }
 
   statement {
-    sid    = "AllowEc2IsolationLambdaPublish"
-    effect = "Allow"
+    sid     = "AllowEc2IsolationLambdaPublish"
+    effect  = "Allow"
     actions = ["sns:Publish"]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = [var.lambda_ec2_isolation_role_arn]
     }
 
     resources = [aws_sns_topic.secops.arn]
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
   }
 
   statement {
-    sid    = "AllowEc2RollbackLambdaPublish"
-    effect = "Allow"
+    sid     = "AllowEc2RollbackLambdaPublish"
+    effect  = "Allow"
     actions = ["sns:Publish"]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = [var.lambda_ec2_rollback_role_arn]
     }
 
     resources = [aws_sns_topic.secops.arn]
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values = [var.account_id]
+      values   = [var.account_id]
     }
   }
 }
