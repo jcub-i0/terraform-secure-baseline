@@ -13,40 +13,46 @@ resource "aws_sns_topic" "compliance" {
 }
 
 ### CONFIG SNS TOPIC POLICY
+data "aws_iam_policy_document" "compliance" {
+  statement {
+    sid = "EnableRootPermissions"
+    effect = "Allow"
+    actions = [
+      "sns:GetTopicAttributes",
+      "sns:SetTopicAttributes",
+      "sns:AddPermission",
+      "sns:RemovePermission",
+      "sns:DeleteTopic",
+      "sns:Subscribe",
+      "sns:ListSubscriptionsByTopic",
+      "sns:Publish"
+    ]
+
+    principals {
+      type = "AWS"
+      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+    }
+
+    resources = [aws_sns_topic.compliance.arn]
+  }
+
+  statement {
+    sid = "AllowConfigPublish"
+    effect = "Allow"
+    actions = ["sns:Publish"]
+
+    resources = [aws_sns_topic.compliance.arn]
+
+    principals {
+      type = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+  }
+}
+
 resource "aws_sns_topic_policy" "compliance" {
   arn = aws_sns_topic.compliance.arn
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # ALLOW ROOT
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
-        }
-        Action = [
-          "SNS:GetTopicAttributes",
-          "SNS:SetTopicAttributes",
-          "SNS:AddPermission",
-          "SNS:RemovePermission",
-          "SNS:DeleteTopic",
-          "SNS:Subscribe",
-          "SNS:ListSubscriptionsByTopic",
-          "SNS:Publish"
-        ]
-        Resource = aws_sns_topic.compliance.arn
-      },
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.compliance.arn
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.compliance.json
 }
 
 ### COMPLIANCE SNS SUBSCRIPTION
