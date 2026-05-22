@@ -254,6 +254,31 @@ data "aws_iam_policy_document" "secops" {
       values = [aws_cloudwatch_event_rule.break_glass_assumed.arn]
     }
   }
+
+  statement {
+    sid    = "AllowEventBridgeTamperDetectionAlerts"
+    effect = "Allow"
+    actions   = ["sns:Publish"]
+
+    principals {
+      type = "Service"
+      identifiers = "events.amazonaws.com"
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test = "StringEquals"
+      variable = "aws:SourceAccount"
+      values = [var.account_id]
+    }
+
+    condition {
+      test = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [var.tamper_detection_rule_arn]
+    }
+  }
 }
 
 resource "aws_sns_topic_policy" "secops" {
