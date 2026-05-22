@@ -218,7 +218,11 @@ The control-plane `state` stack creates backend resources for the control-plane 
 
 This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can and should be migrated to a remote backend following initial deployment.
 
-It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to the `bucket_admin_principals` variable. Otherwise, **the ability to modify S3 bucket policies may be lost**. This is an intended symptom of the configuration's security-by-default design.
+It is strongly recommended to include both the administrative Terraform IAM principal and the account root principal in `bucket_admin_principals`.
+
+This variable defines which principals are allowed to modify protected state bucket controls, including the bucket policy, versioning configuration, and encryption configuration. If this list is empty or does not include the correct administrative principal, Terraform or account administrators may lose the ability to modify these settings.
+
+This behavior is intentional and supports the module’s security-by-default design.
 
 ```bash
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'

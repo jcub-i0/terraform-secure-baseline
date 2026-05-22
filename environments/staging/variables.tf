@@ -47,9 +47,13 @@ variable "primary_region" {
 }
 
 variable "bucket_admin_principals" {
-  description = "Principals allowed to manage bucket guardrails (policy/versioning)"
+  description = "IAM principal ARNs allowed to administer protected S3 bucket settings."
   type        = list(string)
-  default     = []
+
+  validation {
+    condition     = length(var.bucket_admin_principals) > 0
+    error_message = "bucket_admin_principals must contain at least one IAM principal ARN."
+  }
 }
 
 variable "abuseipdb_api_key" {

@@ -236,179 +236,265 @@ resource "aws_s3_bucket_lifecycle_configuration" "centralized_logs" {
 
 ## S3 BUCKET POLICIES
 ### CENTRALIZED LOGS S3 BUCKET POLICY
+data "aws_iam_policy_document" "centralized_logs" {
+  # DENY DELETING ANY OBJECTS/VERSIONS (IMMUTABILITY)
+  statement {
+    sid    = "DenyDeleteLogs"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions = [
+      "s3:DeleteObject",
+      "s3:DeleteObjectVersion"
+    ]
+
+    resources = ["${aws_s3_bucket.centralized_logs.arn}/*"]
+  }
+
+  # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
+  statement {
+    sid    = "DenyBucketPolicyChanges"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions = [
+      "s3:PutBucketPolicy",
+      "s3:DeleteBucketPolicy"
+    ]
+
+    resources = [aws_s3_bucket.centralized_logs.arn]
+
+    condition {
+      test     = "ForAnyValue:ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values   = var.bucket_admin_principals
+    }
+  }
+
+  # DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
+  statement {
+    sid     = "DenyVersioningChanges"
+    effect  = "Deny"
+    actions = ["s3:PutBucketVersioning"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = [aws_s3_bucket.centralized_logs.arn]
+
+    condition {
+      test     = "ForAnyValue:ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values   = var.bucket_admin_principals
+    }
+  }
+
+  # ENFORCE ENCRYPTION ON ALL PUTS
+  statement {
+    sid     = "DenyUnencryptedObjectUploads"
+    effect  = "Deny"
+    actions = ["s3:PutObject"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = ["${aws_s3_bucket.centralized_logs.arn}/*"]
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["aws:kms"]
+    }
+  }
+
+  # DENY ANYTHING LACKING ENCRYPTION
+  statement {
+    sid     = "DenyMissingEncryptionHeader"
+    effect  = "Deny"
+    actions = ["s3:PutObject"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = ["${aws_s3_bucket.centralized_logs.arn}/*"]
+
+    condition {
+      test     = "Null"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["true"]
+    }
+  }
+
+  # CONFIG - ALLOW CONFIG TO CHECK ACL
+  statement {
+    sid     = "AWSConfigAclCheck"
+    effect  = "Allow"
+    actions = ["s3:GetBucketAcl"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+
+    resources = [aws_s3_bucket.centralized_logs.arn]
+  }
+
+  # CONFIG - ALLOW CONFIG TO WRITE OBJECTS
+  statement {
+    sid     = "AWSConfigWrite"
+    effect  = "Allow"
+    actions = ["s3:PutObject"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+
+    resources = ["${aws_s3_bucket.centralized_logs.arn}/Config/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["aws:kms"]
+    }
+  }
+
+  # CONFIG - ALLOW CONFIG TO CHECK FOR BUCKET
+  statement {
+    sid     = "AWSConfigBucketExistenceCheck"
+    effect  = "Allow"
+    actions = ["s3:ListBucket"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+
+    resources = [aws_s3_bucket.centralized_logs.arn]
+  }
+
+  # CLOUDTRAIL - ALLOW CLOUDTRAIL TO VERIFY BUCKET ACL
+  statement {
+    sid     = "AWSCloudTrailAclCheck"
+    effect  = "Allow"
+    actions = ["s3:GetBucketAcl"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+
+    resources = [aws_s3_bucket.centralized_logs.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+  }
+
+  # CLOUDTRAIL - ALLOW CLOUDTRAIL TO WRITE LOGS
+  statement {
+    sid     = "AWSCloudTrailWrite"
+    effect  = "Allow"
+    actions = ["s3:PutObject"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+
+    resources = ["${aws_s3_bucket.centralized_logs.arn}/CloudTrail/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["aws:kms"]
+    }
+  }
+
+  # NETWORK FIREWALL LOG DELIVERY - ACL CHECK
+  statement {
+    sid     = "AllowFirewallLogDeliveryAclCheck"
+    effect  = "Allow"
+    actions = ["s3:GetBucketAcl"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["delivery.logs.amazonaws.com"]
+    }
+
+    resources = [aws_s3_bucket.centralized_logs.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+  }
+
+  # NETWORK FIREWALL LOG DELIVERY - WRITE
+  statement {
+    sid     = "AllowFirewallLogDeliveryWrite"
+    effect  = "Allow"
+    actions = ["s3:PutObject"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["delivery.logs.amazonaws.com"]
+    }
+
+    resources = [
+      "${aws_s3_bucket.centralized_logs.arn}/firewall/flow/AWSLogs/${var.account_id}/*"
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["aws:kms"]
+    }
+  }
+}
+
 resource "aws_s3_bucket_policy" "centralized_logs" {
   bucket = aws_s3_bucket.centralized_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # DENY DELETING ANY OBJECTS/VERSIONS (IMMUTABILITY)
-      {
-        Sid       = "DenyDeleteLogs"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "s3:DeleteObject",
-          "s3:DeleteObjectVersion"
-        ]
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/*"
-      },
-      # DENY CHANGING BUCKET POLICY UNLESS BUCKET ADMIN PRINCIPAL
-      {
-        Sid       = "DenyBucketPolicyChanges"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "s3:PutBucketPolicy",
-          "s3:DeleteBucketPolicy"
-        ]
-        Resource = aws_s3_bucket.centralized_logs.arn
-        Condition = {
-          "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principals
-          }
-        }
-      },
-      #DENY DISABLING VERSIONING UNLESS BUCKET ADMIN PRINCIPAL
-      {
-        Sid       = "DenyVersioningChanges"
-        Effect    = "Deny"
-        Principal = "*"
-        Action = [
-          "s3:PutBucketVersioning"
-        ]
-        Resource = aws_s3_bucket.centralized_logs.arn
-        Condition = {
-          "ForAnyValue:ArnNotEquals" = {
-            "aws:PrincipalArn" : var.bucket_admin_principals
-          }
-        }
-      },
-      # ENFORCE ENCRYPTION ON ALL PUTS
-      {
-        Sid       = "DenyUnencryptedObjectUploads"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.centralized_logs.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      },
-      # DENY ANYTHING LACKING ENCRYPTION
-      {
-        Sid       = "DenyMissingEncryptionHeader"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.centralized_logs.arn}/*"
-        Condition = {
-          Null = {
-            "s3:x-amz-server-side-encryption" = "true"
-          }
-        }
-      },
-      # CONFIG
-      ## ALLOW CONFIG TO CHECK ACL
-      {
-        Sid    = "AWSConfigAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.centralized_logs.arn
-      },
-      ## ALLOW CONFIG TO WRITE OBJECTS
-      {
-        Sid    = "AWSConfigWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/Config/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl"                    = "bucket-owner-full-control"
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      },
-      # ALLOW CONFIG TO CHECK FOR BUCKET
-      {
-        Sid    = "AWSConfigBucketExistenceCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "s3:ListBucket"
-        Resource = aws_s3_bucket.centralized_logs.arn
-      },
-      # CLOUDTRAIL
-      ## ALLOW CLOUDTRAIL TO VERIFY BUCKET ACL
-      {
-        Sid    = "AWSCloudTrailAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.centralized_logs.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-        }
-      },
-      ## ALLOW CLOUDTRAIL TO WRITE LOGS
-      {
-        Sid    = "AWSCloudTrailWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/CloudTrail/*"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount"               = var.account_id
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      },
-      {
-        Sid    = "AllowFirewallLogDeliveryAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.centralized_logs.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-        }
-      },
-      {
-        Sid    = "AllowFirewallLogDeliveryWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.centralized_logs.arn}/firewall/flow/AWSLogs/${var.account_id}/*"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount"               = var.account_id
-            "s3:x-amz-acl"                    = "bucket-owner-full-control"
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.centralized_logs.json
 }

@@ -13,40 +13,46 @@ resource "aws_sns_topic" "compliance" {
 }
 
 ### CONFIG SNS TOPIC POLICY
-resource "aws_sns_topic_policy" "compliance" {
-  arn = aws_sns_topic.compliance.arn
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # ALLOW ROOT
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
-        }
-        Action = [
-          "SNS:GetTopicAttributes",
-          "SNS:SetTopicAttributes",
-          "SNS:AddPermission",
-          "SNS:RemovePermission",
-          "SNS:DeleteTopic",
-          "SNS:Subscribe",
-          "SNS:ListSubscriptionsByTopic",
-          "SNS:Publish"
-        ]
-        Resource = aws_sns_topic.compliance.arn
-      },
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.compliance.arn
-      }
+data "aws_iam_policy_document" "compliance" {
+  statement {
+    sid    = "EnableRootPermissions"
+    effect = "Allow"
+    actions = [
+      "sns:GetTopicAttributes",
+      "sns:SetTopicAttributes",
+      "sns:AddPermission",
+      "sns:RemovePermission",
+      "sns:DeleteTopic",
+      "sns:Subscribe",
+      "sns:ListSubscriptionsByTopic",
+      "sns:Publish"
     ]
-  })
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+    }
+
+    resources = [aws_sns_topic.compliance.arn]
+  }
+
+  statement {
+    sid     = "AllowConfigPublish"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
+
+    resources = [aws_sns_topic.compliance.arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "compliance" {
+  arn    = aws_sns_topic.compliance.arn
+  policy = data.aws_iam_policy_document.compliance.json
 }
 
 ### COMPLIANCE SNS SUBSCRIPTION
@@ -110,151 +116,144 @@ resource "aws_sns_topic" "secops" {
 }
 
 ### SECOPS SNS TOPIC POLICY
-resource "aws_sns_topic_policy" "secops" {
-  arn = aws_sns_topic.secops.arn
+data "aws_iam_policy_document" "secops" {
+  statement {
+    sid    = "EnableRootPermissions"
+    effect = "Allow"
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # ALLOW ROOT
-      {
-        Sid    = "EnableRootPermissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
-        }
-        Action = [
-          "SNS:GetTopicAttributes",
-          "SNS:SetTopicAttributes",
-          "SNS:AddPermission",
-          "SNS:RemovePermission",
-          "SNS:DeleteTopic",
-          "SNS:Subscribe",
-          "SNS:ListSubscriptionsByTopic",
-          "SNS:Publish"
-        ]
-        Resource = aws_sns_topic.secops.arn
-      },
-      {
-        Sid    = "AllowCloudWatchPublish"
-        Effect = "Allow"
-        Principal = {
-          "Service" = "cloudwatch.amazonaws.com"
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
-      },
-      {
-        Sid       = "AllowEventBridgePublish"
-        Effect    = "Allow"
-        Principal = { Service = "events.amazonaws.com" }
-        Action    = "sns:Publish"
-        Resource  = aws_sns_topic.secops.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-        }
-      },
-      {
-        Sid    = "AllowIpEnrichmentLambdaPublish"
-        Effect = "Allow"
-        Principal = {
-          AWS = var.lambda_ip_enrichment_role_arn
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-        }
-      },
-      {
-        Sid    = "AllowEc2IsolationLambdaPublish"
-        Effect = "Allow"
-        Principal = {
-          AWS = var.lambda_ec2_isolation_role_arn
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-        }
-      },
-      {
-        Sid    = "AllowEc2RollbackLambdaPublish"
-        Effect = "Allow"
-        Principal = {
-          AWS = var.lambda_ec2_rollback_role_arn
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-        }
-      },
-      # EVENTBRIDGE PERMISSIONS
-      ## ALLOW BREAK-GLASS EVENT RULE
-      {
-        Sid    = "AllowEventBridgePublishBreakGlassAlerts"
-        Effect = "Allow"
-        Principal = {
-          Service = "events.amazonaws.com"
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-          ArnEquals = {
-            "aws:SourceArn" = aws_cloudwatch_event_rule.break_glass_assumed.arn
-          }
-        }
-      },
-      ## ALLOW TAMPER DETECTION EVENT RULE
-      {
-        Sid    = "AllowEventBridgeTamperDetectionAlerts"
-        Effect = "Allow"
-        Principal = {
-          Service = "events.amazonaws.com"
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-          ArnEquals = {
-            "aws:SourceArn" = var.tamper_detection_rule_arn
-          }
-        }
-      },
-      ## ALLOW SECURITY HUB INSCOPE FINDINGS EVENT RULE
-      {
-        Sid    = "AllowSecurityHubFindingAlerts"
-        Effect = "Allow"
-        Principal = {
-          Service = "events.amazonaws.com"
-        }
-        Action   = "sns:Publish"
-        Resource = aws_sns_topic.secops.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.account_id
-          }
-          ArnEquals = {
-            "aws:SourceArn" = var.securityhub_high_critical_rule_arn
-          }
-        }
-      }
+    actions = [
+      "sns:GetTopicAttributes",
+      "sns:SetTopicAttributes",
+      "sns:AddPermission",
+      "sns:RemovePermission",
+      "sns:DeleteTopic",
+      "sns:Subscribe",
+      "sns:ListSubscriptionsByTopic",
+      "sns:Publish"
     ]
-  })
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+  }
+
+  statement {
+    sid     = "AllowCloudWatchPublish"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+  }
+
+  statement {
+    sid     = "AllowEventBridgePublish"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+  }
+
+  # ALLOW BREAK-GLASS EVENT RULE
+  statement {
+    sid     = "AllowEventBridgePublishBreakGlassAlerts"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_cloudwatch_event_rule.break_glass_assumed.arn]
+    }
+  }
+
+  # ALLOW TAMPER DETECTION EVENT RULE
+  statement {
+    sid     = "AllowEventBridgeTamperDetectionAlerts"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [var.tamper_detection_rule_arn]
+    }
+  }
+
+  # ALLOW SECURITY HUB INSCOPE FINDINGS EVENT RULE
+  statement {
+    sid     = "AllowSecurityHubFindingAlerts"
+    effect  = "Allow"
+    actions = ["sns:Publish"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    resources = [aws_sns_topic.secops.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [var.securityhub_high_critical_rule_arn]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "secops" {
+  arn    = aws_sns_topic.secops.arn
+  policy = data.aws_iam_policy_document.secops.json
 }
 
 ### SECOPS SNS SUBSCRIPTION
