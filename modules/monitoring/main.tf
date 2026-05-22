@@ -289,7 +289,7 @@ data "aws_iam_policy_document" "secops" {
 
     principals {
       type        = "Service"
-      identifiers = ["events.amazon.com"]
+      identifiers = ["events.amazonaws.com"]
     }
 
     resources = [aws_sns_topic.secops.arn]
