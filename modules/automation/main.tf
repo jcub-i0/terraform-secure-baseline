@@ -195,43 +195,42 @@ resource "aws_cloudwatch_event_bus" "secops" {
 }
 
 #### SECURITY OPERATIONS EVENT BUS POLICY
+data "aws_iam_policy_document" "secops_bus_policy" {
+  statement {
+    sid = "AllowSecOpsRollbackOnly"
+    effect = "Allow"
+    actions = ["events:PutEvents"]
+    resources = [aws_cloudwatch_event_bus.secops.arn]
+
+    principals {
+      type = "AWS"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test = "StringEquals"
+      variable = "events:source"
+      values = ["custom.rollback"]
+    }
+  }
+
+  statement {
+    sid = "AllowEventBridgeForwardingRole"
+    effect = "Allow"
+    actions = ["events:PutEvents"]
+    resources = [aws_cloudwatch_event_bus.secops.arn]
+    
+    condition {
+      test = "StringEquals"
+      variable = "events:source"
+      values = ["aws.securityhub"]
+    }
+  }
+}
+
 resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
   event_bus_name = aws_cloudwatch_event_bus.secops.name
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      # ALLOW MANUAL EC2 ROLLBACK INJECTION FROM SECOPS-OPERATOR
-      {
-        Sid    = "AllowSecOpsRollbackOnly"
-        Effect = "Allow"
-        Principal = {
-          AWS = "*"
-        }
-        Action   = "events:PutEvents"
-        Resource = aws_cloudwatch_event_bus.secops.arn
-        Condition = {
-          StringEquals = {
-            "events:source" = "custom.rollback"
-          }
-        }
-      },
-      # ALLOW EVENTBRIDGE FORWARDING ROLE TO PUT EVENTS ON BUS
-      {
-        Sid    = "AllowEventBridgeForwardingRole"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
-        }
-        Action   = "events:PutEvents"
-        Resource = aws_cloudwatch_event_bus.secops.arn
-        Condition = {
-          StringEquals = {
-            "events:source" = "aws.securityhub"
-          }
-        }
-      }
-    ]
-  })
+  policy = data.aws_iam_policy_document.secops_bus_policy.json
 }
 
 #### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
