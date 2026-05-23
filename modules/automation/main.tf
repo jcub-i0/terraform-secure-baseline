@@ -220,6 +220,11 @@ data "aws_iam_policy_document" "secops_bus_policy" {
     actions   = ["events:PutEvents"]
     resources = [aws_cloudwatch_event_bus.secops.arn]
 
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+    }
+
     condition {
       test     = "StringEquals"
       variable = "events:source"
