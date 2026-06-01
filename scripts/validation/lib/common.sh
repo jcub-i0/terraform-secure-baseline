@@ -90,3 +90,78 @@ get_environment_dir() {
 
   echo "${repo_root}/environments/${env_name}"
 }
+
+# -----------------------------------------------------------------------------
+# AWS helpers
+# -----------------------------------------------------------------------------
+
+aws_cli_base_args() {
+  local aws_profile="$1"
+  local aws_region="$2"
+
+  local args=()
+
+  if [[ -n "$aws_profile" ]]; then
+    args+=(--profile "$aws_profile")
+  fi
+
+  if [[ -n "$aws_region" ]]; then
+    args+=(--region "$aws_region")
+  fi
+
+  printf '%q ' "${args[@]}"
+}
+
+get_aws_accounts_id() {
+  local aws_profile="$1"
+  local aws_region="$2"
+
+  if [[ -n "$aws_profile" && -n "$aws_region" ]]; then
+    aws sts get-caller-identity \
+      --profile "$aws_profile" \
+      --region "$aws_region" \
+      --query Account \
+      --output text
+  elif [[ -n "$aws_profile" ]]; then
+    aws sts get-caller-identity \
+      --profile "$aws_profile" \
+      --query Account \
+      --output text
+  elif [[ -n "$aws_region" ]]; then
+    aws sts get-caller-identity \
+      --region "$aws_region" \
+      --query Account \
+      --output text
+  else
+    aws sts get-caller-identity \
+      --query Account \
+      --output text
+  fi
+}
+
+get_aws_caller_arn() {
+  local aws_profile="$1"
+  local aws_region="$2"
+
+  if [[ -n "$aws_profile" && -n "$aws_region" ]]; then
+    aws sts get-caller-identity \
+      --profile "$aws_profile" \
+      --region "$aws_region" \
+      --query Arn \
+      --output text
+  elif [[ -n "$aws_profile" ]]; then
+    aws sts get-caller-identity \
+      --profile "$aws_profile" \
+      --query Arn \
+      --output text
+  elif [[ -n "$aws_region" ]]; then
+    aws sts get-caller-identity \
+      --region "$aws_region" \
+      --query Arn \
+      --output text
+  else
+    aws sts get-caller-identity \
+      --query Arn \
+      --output text
+  fi
+}
