@@ -75,3 +75,18 @@ require_file() {
     fail "Required file not found: $file"
   fi
 }
+
+# -----------------------------------------------------------------------------
+# Repo / path helpers
+# -----------------------------------------------------------------------------
+
+get_repo_root() {
+  git rev-parse --show-toplevel 2>/dev/null || pwd
+}
+
+get_environment_dir() {
+  local repo_root="$1"
+  local env_name="$2"
+
+  echo "${repo_root}/environments/${env_name}"
+}
