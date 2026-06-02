@@ -112,7 +112,7 @@ aws_cli_base_args() {
   printf '%q ' "${args[@]}"
 }
 
-get_aws_accounts_id() {
+get_aws_account_id() {
   local aws_profile="$1"
   local aws_region="$2"
 
