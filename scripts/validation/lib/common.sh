@@ -165,3 +165,34 @@ get_aws_caller_arn() {
       --output text
   fi
 }
+
+# -----------------------------------------------------------------------------
+# Terraform helpers
+# -----------------------------------------------------------------------------
+
+terraform_output_json() {
+  local env_dir="$1"
+
+  terraform -chdir="$env_dir" output -json
+}
+
+terraform_output_raw() {
+  local env_dir="$1"
+  local output_name="$2"
+
+  terraform -chdir="$env_dir" output -raw "$output_name"
+}
+
+terraform_output_exists() {
+  local outputs_json="$1"
+  local output_name="$2"
+
+  echo "$outputs_json" | jq -e --arg name "$output_name" 'has($name)' >/dev/null
+}
+
+get_terraform_output_value() {
+  local outputs_json="$1"
+  local output_name="$2"
+
+  echo "$outputs_json" | jq -r --arg name "$output_name" '.[$name].value'
+}
