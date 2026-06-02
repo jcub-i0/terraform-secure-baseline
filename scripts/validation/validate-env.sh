@@ -92,3 +92,22 @@ for output_name in "${REQUIRED_OUTPUTS[@]}"; do
   fi
 done
 
+section "Checking effective baseline settings"
+
+DEPLOYMENT_PROFILE="$(get_terraform_output_value "$OUTPUTS_JSON" deployment_profile)"
+EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" egress_mode)"
+EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
+EFFECTIVE_CLOUDWATCH_RETENTION_DAYS="$(get_terraform_output_value "$OUTPUTS_JSON" effective_cloudwatch_retention_days)"
+EFFECTIVE_ENABLE_CONFIG="$(get_terraform_output_value "$OUTPUTS_JSON" effective_enable_config)"
+EFFECTIVE_BACKUP_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled)"
+EFFECTIVE_INSPECTOR_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_inspector_enabled)"
+
+require_value_in_list "$DEPOYMENT_PROFILE" "production development minimal" "deployment_profile"
+success "deployment_profile is valid: $DEPLOYMENT_PROFILE"
+
+require_value_in_list "$EGRESS_MODE" "auto network_firewall nat_only vpc_endpoints_only" "egress_mode"
+success "egress_mode is valid: $EGRESS_MODE"
+
+require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
+success "effective_egress_mode is valid: $EFFECTIVE_EGRESS_MODE"
+
