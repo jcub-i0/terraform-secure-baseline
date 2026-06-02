@@ -78,7 +78,7 @@ info "AWS caller ARN: $AWS_CALLER_ARN"
 
 section "Checking Terraform environment outputs"
 
-if [[ ! -d "${ENV_DIR}/.terraform"  ]]; then
+if [[ ! -d "${ENV_DIR}/.terraform" ]]; then
   warn "Terraform has not been initialized in ${ENV_DIR}"
   warn "Run: terraform -chdir=${ENV_DIR} init"
 fi
