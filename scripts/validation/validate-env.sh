@@ -131,7 +131,7 @@ success "effective_egress_mode is valid: $EFFECTIVE_EGRESS_MODE"
 
 section "Environment Summary"
 
-cat >>SUMMARY
+cat <<SUMMARY
 Environment:                            ${ENV_NAME}
 AWS profile:                            ${AWS_PROFILE:-<default>}
 AWS region:                             ${AWS_REGION}
