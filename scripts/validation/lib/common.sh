@@ -42,7 +42,7 @@ section() {
 require_command() {
   local cmd="$1"
 
-  if ! command -v "$cmd" >/dev/null 2>$1; then
+  if ! command -v "$cmd" >/dev/null 2>&1; then
     fail "Required command not found: $cmd"
   fi
 }
