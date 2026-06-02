@@ -1,4 +1,3 @@
-cat > scripts/validation/lib/common.sh <<'EOF'
 #!/usr/bin/env bash
 
 # Common helper functions for tf-secure-baseline validation scripts.
@@ -214,4 +213,3 @@ require_value_in_list() {
 
   fail "Invalid ${description}: ${value}. Expected one of: ${allowed_values}"
 }
-EOF
