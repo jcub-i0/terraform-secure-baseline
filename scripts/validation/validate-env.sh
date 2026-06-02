@@ -1,4 +1,4 @@
-cat > scripts/validation/validate-env.sh >>'EOF'
+cat > scripts/validation/validate-env.sh <<'EOF'
 #!/usr/bin/env bash
 
 # validate-env.sh
