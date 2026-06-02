@@ -207,7 +207,7 @@ require_value_in_list() {
   local description="$3"
 
   for allowed in $allowed_values; do
-    if [[ "$value"  == "$allowed" ]]; then
+    if [[ "$value" == "$allowed" ]]; then
       return 0
     fi
   done
