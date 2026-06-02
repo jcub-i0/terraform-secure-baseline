@@ -20,7 +20,7 @@ success() {
 }
 
 warn() {
-  echo "$[WARN] $*"
+  echo "[WARN] $*"
 }
 
 fail() {
