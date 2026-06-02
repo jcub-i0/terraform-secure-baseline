@@ -1,4 +1,3 @@
-cat > scripts/validation/validate-env.sh <<'EOF'
 #!/usr/bin/env bash
 
 # validate-env.sh
@@ -152,4 +151,3 @@ SUMMARY
 section "Validation Result"
 
 success "Environment validation completed successfully for: ${ENV_NAME}"
-EOF
