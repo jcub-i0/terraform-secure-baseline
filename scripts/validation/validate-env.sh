@@ -57,3 +57,38 @@ fi
 success "AWS credentials are valid"
 info "AWS account ID: $AWS_ACCOUNT_ID"
 info "AWS caller ARN: $AWS_CALLER_ARN"
+
+section "Checking Terraform environment outputs"
+
+if [[ ! -d "${ENV_DIR}/.terraform"  ]]; then
+  warn "Terraform has not been initialized in ${ENV_DIR}"
+  warn "Run: terraform -chdir=${ENV_DIR} init"
+fi
+
+OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
+
+if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
+  fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
+fi
+
+success "Terraform outputs are readable"
+
+REQUIRED_OUTPUTS=(
+    deployment_profile
+    egress_mode
+    effective_egress_mode
+    effective_cloudwatch_retention_days
+    effective_enable_config
+    effective_enable_rules
+    effective_backup_enabled
+    effective_inspector_enabled
+)
+
+for output_name in "${REQUIRED_OUTPUTS[@]}"; do
+  if terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
+    success "Required output exists: $output_name"
+  else
+    fail "Missing required Terraform output: $output_name"
+  fi
+done
+
