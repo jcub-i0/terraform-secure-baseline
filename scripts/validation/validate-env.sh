@@ -114,17 +114,17 @@ success "effective_egress_mode is valid: $EFFECTIVE_EGRESS_MODE"
 section "Environment Summary"
 
 cat >>SUMMARY
-Environment:    ${ENV_NAME}
-AWS profile:    ${AWS_PROFILE:-<default>}
-AWS region:     ${AWS_REGION}
-AWS account ID: ${AWS_ACCOUNT_ID}
-AWS caller ARN: ${AWS_CALLER_ARN}
+Environment:                            ${ENV_NAME}
+AWS profile:                            ${AWS_PROFILE:-<default>}
+AWS region:                             ${AWS_REGION}
+AWS account ID:                         ${AWS_ACCOUNT_ID}
+AWS caller ARN:                         ${AWS_CALLER_ARN}
 
-Terraform environment directory:    ${ENV_DIR}
+Terraform environment directory:        ${ENV_DIR}
 
-deployment_profile: ${DEPLOYMENT_PROFILE}
-egress_mode:        ${EGRESS_MODE}
-effective_egress_mode:  ${EFFECTIVE_EGRESS_MODE}
+deployment_profile:                     ${DEPLOYMENT_PROFILE}
+egress_mode:                            ${EGRESS_MODE}
+effective_egress_mode:                  ${EFFECTIVE_EGRESS_MODE}
 effective_cloudwatch_retention_days:    ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS}
 effective_enable_config:                ${EFFECTIVE_ENABLE_CONFIG}
 effective_backup_enabled:               ${EFFECTIVE_BACKUP_ENABLED}
