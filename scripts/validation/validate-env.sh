@@ -28,6 +28,24 @@ fi
 
 section "tf-secure-baseline Environment Validation"
 
+require_env_name "$ENV_NAME"
+
+section "Checking required local commands"
+
+require_command aws
+success "aws CLI found"
+
+require_command terraform
+success "terraform found"
+
+require_command jq
+success "jq found"
+
+require_command git
+success "git found"
+
+section "Resolving repository paths"
+
 REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
@@ -102,7 +120,7 @@ EFFECTIVE_ENABLE_CONFIG="$(get_terraform_output_value "$OUTPUTS_JSON" effective_
 EFFECTIVE_BACKUP_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled)"
 EFFECTIVE_INSPECTOR_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_inspector_enabled)"
 
-require_value_in_list "$DEPOYMENT_PROFILE" "production development minimal" "deployment_profile"
+require_value_in_list "$DEPLOYMENT_PROFILE" "production development minimal" "deployment_profile"
 success "deployment_profile is valid: $DEPLOYMENT_PROFILE"
 
 require_value_in_list "$EGRESS_MODE" "auto network_firewall nat_only vpc_endpoints_only" "egress_mode"
