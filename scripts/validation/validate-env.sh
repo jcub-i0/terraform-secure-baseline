@@ -131,4 +131,7 @@ effective_backup_enabled:               ${EFFECTIVE_BACKUP_ENABLED}
 effective_inspector_enabled:            ${EFFECTIVE_INSPECTOR_ENABLED}
 SUMMARY
 
+section "Validation Result"
 
+success "Environment validation completed successfully for: ${ENV_NAME}"
+EOF
