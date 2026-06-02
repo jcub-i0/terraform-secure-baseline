@@ -92,14 +92,14 @@ fi
 success "Terraform outputs are readable"
 
 REQUIRED_OUTPUTS=(
-    deployment_profile
-    egress_mode
-    effective_egress_mode
-    effective_cloudwatch_retention_days
-    effective_enable_config
-    effective_enable_rules
-    effective_backup_enabled
-    effective_inspector_enabled
+  deployment_profile
+  egress_mode
+  effective_egress_mode
+  effective_cloudwatch_retention_days
+  effective_enable_config
+  effective_enable_rules
+  effective_backup_enabled
+  effective_inspector_enabled
 )
 
 for output_name in "${REQUIRED_OUTPUTS[@]}"; do
