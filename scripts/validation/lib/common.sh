@@ -196,3 +196,22 @@ get_terraform_output_value() {
 
   echo "$outputs_json" | jq -r --arg name "$output_name" '.[$name].value'
 }
+
+# -----------------------------------------------------------------------------
+# Value validation helpers
+# -----------------------------------------------------------------------------
+
+require_value_in_list() {
+  local value="$1"
+  local allowed_values="$2"
+  local description="$3"
+
+  for allowed in $allowed_values; do
+    if [[ "$value"  == "$allowed" ]]; then
+      return 0
+    fi
+  done
+
+  fail "Invalid ${description}: ${value}. Expected one of: ${allowed_values}"
+}
+EOF
