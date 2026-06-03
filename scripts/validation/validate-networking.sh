@@ -55,3 +55,35 @@ success "jq found"
 
 require_command git
 success "git found"
+
+section "Resolving repository paths and Terraform outputs
+
+REPO_ROOT="$(get_repo_root)
+ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
+
+info "Respository root: $REPO_ROOT"
+info "Environment: $ENV_NAME"
+info "Environment dir: $ENV_DIR"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
+
+require_directory "$ENV_DIR"
+success "Environment directory exists"
+
+OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
+
+if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
+  fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
+fi
+
+if ! terraform_output_exists "$OUTPUTS_JSON" effective_egress_mode; then
+  fail "Missing required Terraform output: effective_egress_mode"
+fi
+
+EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
+require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
+
+success "effective_egress_mode is valid: $EFFECTIVE_EGRESS_MODE"
+
+section "Resolving VPC"
