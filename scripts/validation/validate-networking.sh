@@ -213,7 +213,7 @@ case "$EFFECTIVE_EGRESS_MODE" in
   network_firewall)
     MISSING_DEFAULT_ROUTES="$(
       echo "$DEFAULT_ROUTES_JSON" |
-        jq '[.[] | select ((.default_routes | length) == 0)] | length'
+        jq '[.[] | select((.default_routes | length) == 0)] | length'
     )"
 
     NON_FIREWALL_DEFAULT_ROUTES="$(
