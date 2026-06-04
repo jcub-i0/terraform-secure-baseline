@@ -281,3 +281,20 @@ if [[ "$PUBLIC_IP_MAPPING_COUNT" -eq 0 ]]; then
 else
   fail "One or more compute private subnets have MapPublicIpOnLaunch enabled."
 fi
+
+section "Networking Summary"
+
+cat <<SUMMARY
+Environment: ${ENV_NAME}
+AWS profile: ${AWS_PROFILE:-<default>}
+AWS region: ${AWS_REGION}
+Name prefix: ${NAME_PREFIX}
+VPC ID: ${VPC_ID}
+effective_egress_mode: ${EFFECTIVE_EGRESS_MODE}
+
+NAT Gateway count: ${NAT_GATEWAY_COUNT}
+Matching Network Firewalls: ${MATCHING_FIREWALL_COUNT}
+Compute route tables: ${COMPUTE_RT_COUNT}
+Compute private subnets: ${COMPUTE_SUBNET_COUNT}
+Compute default routes: ${DEFAULT_ROUTE_COUNT}
+SUMMARY
