@@ -61,12 +61,12 @@ section "Resolving repository paths and Terraform outputs"
 REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
-info "Repository root: $REPO_ROOT"
-info "Environment: $ENV_NAME"
-info "Environment dir: $ENV_DIR"
-info "Name prefix: $NAME_PREFIX"
-info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
-info "AWS_REGION: $AWS_REGION"
+info "Repository root:  $REPO_ROOT"
+info "Environment:      $ENV_NAME"
+info "Environment dir:  $ENV_DIR"
+info "Name prefix:      $NAME_PREFIX"
+info "AWS_PROFILE:      ${AWS_PROFILE:-<default>}"
+info "AWS_REGION:       $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -291,18 +291,18 @@ fi
 section "Networking Summary"
 
 cat <<SUMMARY
-Environment: ${ENV_NAME}
-AWS profile: ${AWS_PROFILE:-<default>}
-AWS region: ${AWS_REGION}
-Name prefix: ${NAME_PREFIX}
-VPC ID: ${VPC_ID}
-effective_egress_mode: ${EFFECTIVE_EGRESS_MODE}
+Environment:                ${ENV_NAME}
+AWS profile:                ${AWS_PROFILE:-<default>}
+AWS region:                 ${AWS_REGION}
+Name prefix:                ${NAME_PREFIX}
+VPC ID:                     ${VPC_ID}
+effective_egress_mode:      ${EFFECTIVE_EGRESS_MODE}
 
-NAT Gateway count: ${NAT_GATEWAY_COUNT}
+NAT Gateway count:          ${NAT_GATEWAY_COUNT}
 Matching Network Firewalls: ${MATCHING_FIREWALL_COUNT}
-Compute route tables: ${COMPUTE_RT_COUNT}
-Compute private subnets: ${COMPUTE_SUBNET_COUNT}
-Compute default routes: ${DEFAULT_ROUTE_COUNT}
+Compute route tables:       ${COMPUTE_RT_COUNT}
+Compute private subnets:    ${COMPUTE_SUBNET_COUNT}
+Compute default routes:     ${DEFAULT_ROUTE_COUNT}
 SUMMARY
 
 section "Validation Result"
