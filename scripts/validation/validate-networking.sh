@@ -168,5 +168,86 @@ case "$EFFECTIVE_EGRESS_MODE" in
     ;;
 esac
 
+section "Checking compute private route tables"
 
-    
+COMPUTE_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-RT-*" \
+    --output json
+)"
+
+COMPUTE_RT_COUNT="$(echo "$COMPUTE_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+
+if [[ "$COMPUTE_RT_COUNT" -eq 0 ]]; then
+  fail "No compute private route tables found using tag pattern: ${NAME_PREFIX}-Compute-Private-RT-*"
+fi
+
+success "Found compute private route tables: $COMPUTE_RT_COUNT"
+
+DEFAULT_ROUTES_JSON="$(
+  echo "$COMPUTE_ROUTE_TABLES_JSON" |
+    jq '[.RouteTables[] | {
+      route_table_id: .RouteTableId,
+      name: (.Tags[]? | select(.Key == "Name") | .Value),
+      default_routes: [.Route[]? | select(.DestinationCidrBlock == "0.0.0.0/0"")]
+    }]'
+)"
+
+DEFAULT_ROUTE_COUNT="$(
+  echo "$DEFAULT_ROUTES_JSON" |
+    jq '[.[] | .default_routes[]?] | length'
+)"
+
+info "Compute private default route count: $DEFAULT_ROUTE_COUNT"
+
+case "$EFFECTIVE_EGRESS_MODE" in
+  network_firewall)
+    MISSING_DEFAULT_ROUTES="$(
+      echo "$DEFAULT_ROUTE_JSON" |
+        jq '[.[] | select ((.default_routes | length) == 0)] | length'
+    )"
+
+    NON_FIREWALL_DEFAULT_ROUTES="$(
+      echo "$DEFAULT_ROUTES_JSON" |
+        jq '[.[] | .default_routes[]? | select(.VpcEndpointId == null)] | length'
+    )"
+
+    if [[ "$MISSING_DEFAULT_ROUTES" -eq 0 && "$NON_FIREWALL_DEFAULT_ROUTES" -eq 0 ]]; then
+      success "Compute private default routes point to firewall VPC endpoints as expected"
+    else
+      echo "$DEFAULT_ROUTES_JSON" | jq .
+      fail "Expected all compute private default routes to point to firewall VPC endpoints."
+    fi
+    ;;
+
+  nat_only)
+    MISSING_DEFAULT_ROUTES="$(
+      echo "$DEFAULT_ROUTES_JSON" |
+        jq '[.[] | select((.default_routes | length) == 0)] | length'
+    )"
+
+    NON_NAT_DEFAULT_ROUTES="$(
+      echo "$DEFAULT_ROUTES_JSON" |
+        jq '[.[] | .default_routes[]? | select(.NatGatewayId == null)] | length'
+    )"
+
+    if [[ "$MISSING_DEFAULT_ROUTES" -eq 0 && "$NON_NAT_DEFAULT_ROUTES" -eq 0 ]]; then
+      success "Compute private default routes point to NAT Gateways as expected"
+    else
+      echo "$DEFAULT_ROUTES_JSON" | jq .
+      fail "Expected all compute private default routes to point to NAT Gateways."
+    fi
+    ;;
+
+  vpc_endpoints_only)
+    if [[ "$DEFAULT_ROUTE_COUNT" -eq 0 ]]; then
+      success "No compute private default routes found as expected for vpc_endpoints_only"
+    else
+      echo "$DEFAULT_ROUTES_JSON" | jq .
+      fail "Expected no 0.0.0.0/0 routes in compute private route tables for vpc_endpoints_only."
+    fi
+    ;;
+esac
