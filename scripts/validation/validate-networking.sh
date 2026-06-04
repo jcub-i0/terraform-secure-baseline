@@ -141,3 +141,32 @@ case "$EFFECTIVE_EGRESS_MODE" in
     fi
     ;;
 esac
+
+section "Checking AWS Network Firewall"
+
+NETWORK_FIREWALLS_JSON="$(
+  echo "$NETWORK_FIREWALL_JSON" |
+    jq --args prefix "$NAME_PREFIX" '[.Firewalls[]? | select(.FirewallName | contains($prefix))] | length'
+)"
+
+info "Matching Network Firewall count: $MATCHING_FIREWALL_COUNT"
+
+case "$EFFECTIVE_EGRESS_MODE" in
+  network_firewall)
+    if [[ "$MATCHING_FIREWALL_COUNT" -gt 0 ]]; then
+      success "Network Firewall exists as expected for network_firewall mode"
+    else
+      fail "Expected Network Firewall for network_firewall mode, but none were found."
+    fi
+    ;;
+  nat_only|vpc_endpoints_only)
+    if [[ "$MATCHING_FIREWALL_COUNT" -eq 0 ]]; then
+      success "No Network Firewall found as expected for ${EFFECTIVE_EGRESS_MODE}"
+    else
+      fail "Expected no Network Firewall for ${EFFECTIVE_EGRESS_MODE}, but found ${MATCHING_FIREWALL_COUNT}."
+    fi
+    ;;
+esac
+
+
+    
