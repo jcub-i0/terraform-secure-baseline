@@ -58,7 +58,7 @@ success "git found"
 
 section "Resolving repository paths and Terraform outputs"
 
-REPO_ROOT="$(get_repo_root)
+REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
 info "Respository root: $REPO_ROOT"
