@@ -1,3 +1,13 @@
+output "vpc_id" {
+  description = "ID of the main VPC"
+  value       = module.baseline.vpc_id
+}
+
+output "name_prefix" {
+  description = "Prefix/suffix used in naming convention ({CLOUD_NAME}-{ENV})"
+  value       = module.baseline.name_prefix
+}
+
 output "lambda_cmk_arn" {
   description = "ARN of the 'staging' env's CMK used to encrypt Lambda functions"
   value       = module.baseline.lambda_cmk_arn
