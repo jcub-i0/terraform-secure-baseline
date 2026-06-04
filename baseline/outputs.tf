@@ -1,11 +1,11 @@
 output "vpc_id" {
   description = "ID of the main VPC"
-  value = module.networking.vpc_id
+  value       = module.networking.vpc_id
 }
 
 output "name_prefix" {
   description = "Prefix/suffix used in naming convention ({CLOUD_NAME}-{ENV})"
-  value = local.name_prefix
+  value       = local.name_prefix
 }
 
 output "lambda_cmk_arn" {
