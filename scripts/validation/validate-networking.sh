@@ -251,3 +251,33 @@ case "$EFFECTIVE_EGRESS_MODE" in
     fi
     ;;
 esac
+
+section "Checking subnet placement basics"
+
+COMPUTE_SUBNETS_JSON="$(
+  aws ec2 describe-subnets \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-*" \
+    --output json
+)"
+
+COMPUTE_SUBNET_COUNT="$(echo "$COMPUTE_SUBNETS_JSON" | jq '.Subnets | length')"
+
+if [[ "$COMPUTE_SUBNET_COUNT" -gt 0 ]]; then
+  success "Found comute private subnets: $COMPUTE_SUBNET_COUNT"
+else
+  fail "No compute prviate subnets found using tag pattern: ${NAME_PREFIX}-Compute-Private-*"
+fi
+
+PUBLIC_IP_MAPPING_COUNT="$(
+  echo "$COMPUTE_SUBNETS_JSON" |
+    jq '[.Subnets[] | select(.MapPublicIpOnLaunch == true)] | length'
+)"
+
+if [[ "$PUBLIC_IP_MAPPING_COUNT" -eq 0 ]]; then
+  success "Compute private subnets do not auto-assign public IPs"
+else
+  fail "One or more compute private subnets have MapPublicIpOnLaunch enabled."
+fi
