@@ -111,3 +111,33 @@ if [[ -z "$VPC_ID" || "$VPC_ID" == "None" ]]; then
 fi
 
 success "Resolved VPC ID: $VPC_ID"
+
+section "Checking NAT Gateways"
+
+NAT_GATEWAYS_JSON="$(
+  aws ec2 describe-nat-gateways \
+    "${aws_args[@]}" \
+    --filter "Name=vpc-id,Values=${VPC_ID}" "Name=state,Values=available,pending" \
+    --output json
+)"
+
+NAT_GATEWAY_COUNT="$(echo "$NAT_GATEWAYS_JSON" | jq '.NatGateways | length')"
+
+info "NAT Gateway count: $NAT_GATEWAY_COUNT"
+
+case "$EFFECTIVE_EGRESS_MODE" in
+  network_firewall|nat_only)
+    if [[ "$NAT_GATEWAY_COUNT" -gt 0 ]]; then
+      success "NAT Gateway exists as expected for ${EFFECTIVE_EGRESS_MODE}"
+    else
+      fail "Expected NAT Gateway for ${EFFECTIVE_EGRESS_MODE}, but none were found."
+    fi
+    ;;
+  vpc_endpoints_only)
+    if [[ "$NAT_GATEWAY_COUNT" -eq 0 ]]; then
+      success "No NAT Gateway found as expected for vpc_endpoints_only"
+    else
+      fail "Expected no NAT Gateway for vpc_endpoints_only, but found ${NAT_GATEWAY_COUNT}."
+    fi
+    ;;
+esac
