@@ -179,7 +179,7 @@ section "Checking compute private route tables"
 COMPUTE_ROUTE_TABLES_JSON="$(
   aws ec2 describe-route-tables \
     "${aws_args[@]}" \
-    --filters
+    --filters \
       "Name=vpc-id,Values=${VPC_ID}" \
       "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-RT-*" \
     --output json
