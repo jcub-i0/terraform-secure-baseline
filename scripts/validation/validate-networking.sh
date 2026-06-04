@@ -274,7 +274,7 @@ COMPUTE_SUBNET_COUNT="$(echo "$COMPUTE_SUBNETS_JSON" | jq '.Subnets | length')"
 if [[ "$COMPUTE_SUBNET_COUNT" -gt 0 ]]; then
   success "Found compute private subnets: $COMPUTE_SUBNET_COUNT"
 else
-  fail "No compute prviate subnets found using tag pattern: ${NAME_PREFIX}-Compute-Private-*"
+  fail "No compute private subnets found using tag pattern: ${NAME_PREFIX}-Compute-Private-*"
 fi
 
 PUBLIC_IP_MAPPING_COUNT="$(
