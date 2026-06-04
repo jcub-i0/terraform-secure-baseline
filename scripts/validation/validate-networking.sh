@@ -298,3 +298,7 @@ Compute route tables: ${COMPUTE_RT_COUNT}
 Compute private subnets: ${COMPUTE_SUBNET_COUNT}
 Compute default routes: ${DEFAULT_ROUTE_COUNT}
 SUMMARY
+
+section "Validation Result"
+
+success "Networking validation completed successfully for: ${ENV_NAME}"
