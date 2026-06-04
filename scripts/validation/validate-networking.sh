@@ -145,8 +145,14 @@ esac
 section "Checking AWS Network Firewall"
 
 NETWORK_FIREWALLS_JSON="$(
-  echo "$NETWORK_FIREWALL_JSON" |
-    jq --args prefix "$NAME_PREFIX" '[.Firewalls[]? | select(.FirewallName | contains($prefix))] | length'
+  aws network-firewall list-firewalls \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+MATCHING_FIREWALL_COUNT="$(
+  echo "$NETWORK_FIREWALLS_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '[.Firewalls[]? | select(.FirewallName | contains($prefix))] | length'
 )"
 
 info "Matching Network Firewall count: $MATCHING_FIREWALL_COUNT"
