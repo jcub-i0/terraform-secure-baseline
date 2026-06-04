@@ -198,7 +198,7 @@ DEFAULT_ROUTES_JSON="$(
     jq '[.RouteTables[] | {
       route_table_id: .RouteTableId,
       name: (.Tags[]? | select(.Key == "Name") | .Value),
-      default_routes: [.Route[]? | select(.DestinationCidrBlock == "0.0.0.0/0"")]
+      default_routes: [.Routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]
     }]'
 )"
 
