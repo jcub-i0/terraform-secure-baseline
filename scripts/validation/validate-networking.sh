@@ -61,7 +61,7 @@ section "Resolving repository paths and Terraform outputs"
 REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
-info "Respository root: $REPO_ROOT"
+info "Repository root: $REPO_ROOT"
 info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
 info "Name prefix: $NAME_PREFIX"
