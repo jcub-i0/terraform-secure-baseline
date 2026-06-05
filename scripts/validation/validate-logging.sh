@@ -402,4 +402,4 @@ SUMMARY
 
 section "Validation Result"
 
-success "Logging validation completed successfully for: ${ENV_NAME}
+success "Logging validation completed successfully for: ${ENV_NAME}"
