@@ -258,7 +258,7 @@ FLOW_LOGS_JSON="$(
     --output json
 )"
 
-FLOW_LOG_CLOUNT="$(echo "$FLOW_LOGS_JSON" | jq '.FlowLogs | length')"
+FLOW_LOG_COUNT="$(echo "$FLOW_LOGS_JSON" | jq '.FlowLogs | length')"
 
 if [[ "$FLOW_LOG_COUNT" -gt 0 ]]; then
   success "Found VPC Flow Logs for VPC: $FLOW_LOG_COUNT"
