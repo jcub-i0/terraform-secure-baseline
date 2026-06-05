@@ -211,7 +211,7 @@ INTERFACE_ENDPOINTS_JSON="$(
     "${aws_args[@]}" \
     --filters \
       "Name=vpc-id,Values=${VPC_ID}" \
-      "Name=tag:vpc-endpoint-type,Values=Interface" \
+      "Name=vpc-endpoint-type,Values=Interface" \
     --output json
 )"
 
