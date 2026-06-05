@@ -199,7 +199,7 @@ else
 fi
 
 if [[ -n "$PRIMARY_TRAIL_BUCKET" && "$PRIMARY_TRAIL_BUCKET" != "null" ]]; then
-  success "CloudTrail has S3 bucket delievery configured: $PRIMARY_TRAIL_BUCKET"
+  success "CloudTrail has S3 bucket delivery configured: $PRIMARY_TRAIL_BUCKET"
 else
   fail "CloudTrail does not have S3 bucket delivery configured"
 fi
