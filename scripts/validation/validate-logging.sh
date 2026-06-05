@@ -399,3 +399,7 @@ ACTIVE VPC Flow Log count: ${ACTIVE_FLOW_LOG_COUNT}
 Matching CloudWatch log groups: ${MATCHING_LOG_GROUP_COUNT}
 Expected CloudWatch retention days: ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS:-<unknown>}
 SUMMARY
+
+section "Validation Result"
+
+success "Logging validation completed successfully for: ${ENV_NAME}
