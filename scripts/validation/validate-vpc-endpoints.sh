@@ -121,4 +121,39 @@ if [[ -z "$VPC_ID" || "$VPC_ID" == "None" ]]; then
   fail "Unable to resolve VPC ID. Expected VPC Name tag matching ${NAME_PREFIX}-Main or ${NAME_PREFIX}-VPC. Consider exporting NAME_PREFIX or adding a vpc_id Terraform output."
 fi
 
-success "Resolved VPC ID: $VPC_ID
+success "Resolved VPC ID: $VPC_ID"
+
+section "Checking endpoint private subnets"
+
+ENDPOINT_SUBNETS_JSON="$(
+  aws ec2 describe-subnets \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Endpoint-Private-*" \
+    --output json
+)"
+
+ENDPOINT_SUBNET_COUNT="$(echo "$ENDPOINT_SUBNETS_JSON" | jq '.Subnets | length')"
+
+if [[ "$ENDPOINT_SUBNET_COUNT" -gt 0 ]]; then
+  success "Found endpoint private subnets: $ENDPOINT_SUBNET_COUNT"
+else
+  fail "No endpoint private subnets found using tag pattern: ${NAME_PREFIX}-Endpoint-Private-*"
+fi
+
+ENDPOINT_SUBNET_IDS_JSON="$(
+  echo "$ENDPOINT_SUBNETS_JSON" |
+    jq '[.Subnets[].SubnetId]'
+)"
+
+PUBLIC_IP_MAPPING_COUNT="$(
+  echo "$ENDPOINT_SUBNETS_JSON" |
+    jq '[.Subnets[] | select(.MapPublicIpOnLaunch == true)] | length'
+)"
+
+if [[ "$PUBLIC_IP_MAPPING_COUNT" -eq 0 ]]; then
+  success "Endpoint private subnets do not auto-assign public IPs"
+else
+  fail "One or more endpoint private subnets have MapPublicIpOnLaunch enabled."
+fi
