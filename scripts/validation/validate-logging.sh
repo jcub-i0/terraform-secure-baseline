@@ -372,7 +372,7 @@ if [[ -n "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" && "$MATCHING_LOG_GROUP_COUNT" -
   else
     echo "$MATCHING_LOG_GROUPS_JSON" |
       jq '[.[] | select(.retentionInDays == null) | {logGroupName}]'
-    warn "One or more matching CloudWatch log groups have no explicity retention. This may be acceptable for AWS-manged groups, but should be reviewed."
+    warn "One or more matching CloudWatch log groups have no explicit retention. This may be acceptable for AWS-manged groups, but should be reviewed."
   fi
 fi
 
