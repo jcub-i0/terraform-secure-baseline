@@ -275,7 +275,7 @@ ACTIVE_FLOW_LOG_COUNT="$(
 if [[ "$ACTIVE_FLOW_LOG_COUNT" -gt 0 ]]; then
   success "At least one VPC Flow Log is ACTIVE"
 else
-  echo "$FLOW_LOGS_JSON" | jq '[.FlowLogs[] | {FlowLogId, FlowLogStatus, DeliverLogStatus, LogDestinationType, LogDestination}]'
+  echo "$FLOW_LOGS_JSON" | jq '[.FlowLogs[] | {FlowLogId, FlowLogStatus, DeliverLogsStatus, LogDestinationType, LogDestination}]'
   fail "No ACTIVE VPC Flow Logs found for VPC: $VPC_ID"
 fi
 
@@ -290,7 +290,7 @@ else
   echo "$FLOW_LOGS_JSON" | jq '[.FlowLogs[] | select(.DeliverLogsStatus != null and .DeliverLogsStatus != "SUCCESS") | {
     FlowLogId,
     FlowLogStatus,
-    DeliverLogStatus,
+    DeliverLogsStatus,
     DeliverLogsErrorMessage,
     LogDestinationType,
     LogDestination
@@ -373,7 +373,7 @@ if [[ -n "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" && "$MATCHING_LOG_GROUP_COUNT" -
   else
     echo "$MATCHING_LOG_GROUPS_JSON" |
       jq '[.[] | select(.retentionInDays == null) | {logGroupName}]'
-    warn "One or more matching CloudWatch log groups have no explicit retention. This may be acceptable for AWS-manged groups, but should be reviewed."
+    warn "One or more matching CloudWatch log groups have no explicit retention. This may be acceptable for AWS-managed groups, but should be reviewed."
   fi
 fi
 
