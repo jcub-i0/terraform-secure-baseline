@@ -416,3 +416,22 @@ else
   warn "No serverless private route tables found. Skipping serverless S3 Gateway coverage check."
 fi
 
+section "VPC Endpoints Summary"
+
+cat <<SUMMARY
+Environment: ${ENV_NAME}
+AWS profile: ${AWS_PROFILE:-<default>}
+AWS region: ${AWS_REGION}
+Name prefix: ${NAME_PREFIX}
+VPC ID: ${VPC_ID}
+effective_egress_mode: ${EFFECTIVE_EGRESS_MODE}
+
+Endpoint private subnets: ${ENDPOINT_SUBNET_COUNT}
+Endpoint private route tables: ${ENDPOITN_RT_COUNT}
+Interface VPC Endpoints: ${INTERFACE_ENDPOINT_COUNT}
+S3 Gateway Endpoint count: ${S3_ENDPOINT_COUNT}
+S3 Gateway route table associations: ${S3_ROUTE_TABLE_COUNT}
+Compute private route tables: ${COMPUTE_RT_COUNT}
+Serverless private route tables: ${SERVERLESS_RT_COUNT}
+SUMMARY
+
