@@ -435,3 +435,6 @@ Compute private route tables: ${COMPUTE_RT_COUNT}
 Serverless private route tables: ${SERVERLESS_RT_COUNT}
 SUMMARY
 
+section "Validation Result"
+
+success "VPC Endpoints validation copmleted successfully for: ${ENV_NAME}"
