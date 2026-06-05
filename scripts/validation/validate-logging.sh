@@ -249,3 +249,51 @@ else
   warn "CloudTrail does not show CloudWatch Logs integration in describe-trails output."
 fi
 
+section "Checking VPC Flow Logs"
+
+FLOW_LOGS_JSON="$(
+  aws ec2 describe-flow-logs \
+    "${aws_args[@]}" \
+    --filter "Name=resource-id,Values=${VPC_ID}" \
+    --output json
+)"
+
+FLOW_LOG_CLOUNT="$(echo "$FLOW_LOGS_JSON" | jq '.FlowLogs | length')"
+
+if [[ "$FLOW_LOG_COUNT" -gt 0 ]]; then
+  success "Found VPC Flow Logs for VPC: $FLOW_LOG_COUNT"
+else
+  fail "No VPC Flow Logs found for VPC: $VPC_ID"
+fi
+
+ACTIVE_FLOW_LOG_COUNT="$(
+  echo "$FLOW_LOGS_JSON" |
+    jq '[.FlowLogs[] | select(.FlowLogStatus == "ACTIVE")] | length'
+)"
+
+if [[ "$ACTIVE_FLOW_LOG_COUNT" -gt 0 ]]; then
+  success "At least one VPC Flow Log is ACTIVE"
+else
+  echo "$FLOW_LOGS_JSON" | jq '[.FlowLogs[] | {FlowLogId, FlowLogStatus, DeliverLogStatus, LogDestinationType, LogDestination}]'
+  fail "No ACTIVE VPC Flow Logs found for VPC: $VPC_ID"
+fi
+
+FLOW_LOG_DELIVERY_ISSUE_COUNT="$(
+  echo "$FLOW_LOGS_JSON" |
+    jq '[.FlowLogs[] | select(.DeliverLogsStatus != null and .DeliverLogsStatus != "SUCCESS")] | length'
+)"
+
+if [[ "$FLOW_LOG_DELIVERY_ISSUE_COUNT" -eq 0 ]]; then
+  success "No VPC Flow Log delivery issues reported"
+else
+  echo "$FLOW_LOGS_JSON" | jq '[.FlowLogs[] | select(.DeliverLogsStatus != null and .DeliverLogsStatus != "SUCCESS") | {
+    FlowLogId,
+    FlowLogStatus,
+    DeliverLogStatus,
+    DeliverLogsErrorMessage,
+    LogDestinationType,
+    LogDestination
+  }]'
+  warn "One or more VPC Flow Logs report delivery issues."
+fi
+
