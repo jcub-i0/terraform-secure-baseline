@@ -157,3 +157,49 @@ if [[ "$PUBLIC_IP_MAPPING_COUNT" -eq 0 ]]; then
 else
   fail "One or more endpoint private subnets have MapPublicIpOnLaunch enabled."
 fi
+
+section "Checking endpoint private route tables"
+
+ENDPOINT_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values="${NAME_PREFIX}-Endpoint-Private-RT-*"
+    --output json
+)"
+
+ENDPOINT_RT_COUNT="$(echo "$ENDPOINT_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+
+if [[ "$ENDPOINT_RT_COUNT" -gt 0 ]]; then
+  success "Found endpoint private route tables: $ENDPOINT_RT_COUNT"
+else
+  fail "No endpoint private route tables found using tag pattern: ${NAME_PREFIX}-Endpoint-Private-RT-*"
+fi
+
+ENDPOINT_DEFAULT_ROUTE_COUNT="$(
+  echo "$ENDPOINT_ROUTE_TABLES_JSON" |
+    jq '[.RouteTables[].Routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")] | length'
+)"
+
+if [[ "$ENDPOINT_DEFAULT_ROUTE_COUNT" -eq 0 ]]; then
+  success "Endpoint private route tables do not have default routes"
+else
+  echo "$ENDPOINT_ROUTE_TABLES_JSON" | jq '[.RouteTables[] | {
+    route_table_id: .RouteTableId,
+    name: (.Tags[]? | select(.Key == "Name") | .Value),
+    default_routes: [.Routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]
+  }]'
+  fail "Expected endpoint private route tables to have no 0.0.0.0/0 default routes."
+fi
+
+ENDPOINT_RT_ASSOCIATION_COUNT="$(
+  echo "$ENDPOINT_ROUTE_TABLES_JSON" |
+    jq '[.RouteTables[].Associations[]? | select(.SubnetId != null)] | length'
+)"
+
+if [[ "$ENDPOINT_RT_ASSOCIATION_COUNT" -gt 0 ]]; then
+  success "Endpoint private route tables have subnet associations: $ENDPOINT_RT_ASSOCIATION_COUNT"
+else
+  fail "Endpoint private route tables do not appear to have subnet associations."
+fi
