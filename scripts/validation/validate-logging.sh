@@ -110,7 +110,7 @@ else
   VPC_ID="$(
     aws ec2 describe-vpcs \
       "${aws_args[@]}" \
-      --filters
+      --filters \
         "Name=tag:Name,Values=${NAME_PREFIX}-Main,${NAME_PREFIX}-VPC" \
         "Name=tag:Environment,Values=${ENV_NAME}" \
       --query 'Vpcs[0].VpcId' \
