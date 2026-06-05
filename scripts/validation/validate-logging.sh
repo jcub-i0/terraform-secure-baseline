@@ -297,3 +297,82 @@ else
   warn "One or more VPC Flow Logs report delivery issues."
 fi
 
+section "Checking CloudWatch log groups"
+
+LOG_GROUPS_JSON="$(
+  aws logs describe-log-groups \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+MATCHING_LOG_GROUPS_JSON="$(
+  echo "$LOG_GROUPS_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '[.logGroups[]? | select(.logGroupName | contains($prefix))]'
+)"
+
+MATCHING_LOG_GROUP_COUNT="$(echo "$MATCHING_LOG_GROUPS_JSON" | jq 'length')"
+
+if [[ "$MATCHING_LOG_GROUP_COUNT" -gt 0 ]]; then
+  success "Found CloudWatch log groups matching name prefix: $MATCHING_LOG_GROUP_COUNT"
+else
+  warn "No CloudWatch log groups found containing name prefix: $NAME_PREFIX"
+fi
+
+if [[ -n "$PRIMARY_TRAIL_LOG_GROUP_ARN" ]]; then
+  CLOUDTRAIL_LOG_GROUP_NAME="$(
+    echo "$PRIMARY_TRAIL_LOG_GROUP_ARN" |
+      sed -E 's#^arn:aws:logs:[^:]+:[^:]+:log-group:##' |
+      sed -E 's#:log-stream:.*$##'
+  )"
+
+  CLOUDTRAIL_LOG_GROUP_MATCH_COUNT="$(
+    echo "$LOG_GROUPS_JSON" |
+      jq --arg name "$CLOUDTRAIL_LOG_GROUP_NAME" '[.logGroups[]? | select(.logGroupName == $name)] | length'
+  )"
+
+  if [[ "$CLOUDTRAIL_LOG_GROUP_MATCH_COUNT" -gt 0 ]]; then
+    success "CloudTrail CloudWatch log group exists: $CLOUDTRAIL_LOG_GROUP_NAME"
+  else
+    warn "CloudTrail CloudWatch log group ARN was configured, but the log group was not found: $CLOUDTRAIL_LOG_GROUP_NAME"
+  fi
+fi
+
+if [[ -n "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" && "$MATCHING_LOG_GROUP_COUNT" -gt 0 ]]; then
+  LOG_GROUPS_WITH_UNEXPECTED_RETENTION="$(
+    echo "$MATCHING_LOG_GROUPS_JSON" |
+      jq --argjson expected "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" '
+        [
+          .[]
+          | select(.retentionInDays != null and .retentionInDays != $expected)
+          | {
+              logGroupName,
+              retentionInDays,
+              expectedRetentionInDays: $expected
+            }
+        ]
+      '
+  )"
+
+  UNEXPETED_RETENTION_COUNT="$(echo "$LOG_GROUPS_WITH_UNEXPECTED_RETENTION" | jq 'length')"
+
+  if [[ "$UNEXPECTED_RETENTION_COUNT" -eq 0 ]]; then
+    success "Matching CloudWatch log groups with explicit retention match expected retention days"
+  else
+    echo "$LOG_GROUPS_WITH_UNEXPECTED_RETENTION" | jq .
+    fail "One or more matching CloudWatch log groups have unexpected retention."
+  fi
+
+  LOG_GROUPS_WITH_NO_RETENTION_COUNT="$(
+    echo "$MATCHING_LOG_GROUPS_JSON" |
+      jq '[.[] | select(.retentionInDays == null)] length'
+  )"
+
+  if [[ "$LOG_GROUPS_WITH_NO_RETENTION_COUNT" -eq 0 ]]; then
+    success "All matching CloudWatch log groups have explicit retention configured"
+  else
+    echo "$MATCHING_LOG_GROUPS_JSON" |
+      jq '[.[] | select(.retentionInDays == null) | {logGroupName}]'
+    warn "One or more matching CloudWatch log groups have no explicity retention. This may be acceptable for AWS-manged groups, but should be reviewed."
+  fi
+fi
+
