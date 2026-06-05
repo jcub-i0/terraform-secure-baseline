@@ -180,10 +180,10 @@ PRIMARY_TRAIL_HOME_REGION="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].HomeRegi
 PRIMARY_TRAIL_BUCKET="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].S3BucketName')"
 PRIMARY_TRAIL_LOG_GROUP_ARN="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].CloudWatchLogsLogGroupArn // empty')"
 
-info "Primary CloudTrail name: $PRIMARY_TRAIL_NAME"
-info "Primary CloudTrail ARN: $PRIMARY_TRAIL_ARN"
-info "Primary CloudTrail home region: $PRIMARY_TRAIL_HOME_REGION"
-info "Primary CloudTrail S3 bucket: $PRIMARY_TRAIL_BUCKET"
+info "Primary CloudTrail name:          $PRIMARY_TRAIL_NAME"
+info "Primary CloudTrail ARN:           $PRIMARY_TRAIL_ARN"
+info "Primary CloudTrail home region:   $PRIMARY_TRAIL_HOME_REGION"
+info "Primary CloudTrail S3 bucket:     $PRIMARY_TRAIL_BUCKET"
 
 MULTI_REGION_TRAIL_COUNT="$(
   echo "$MATCHING_TRAILS_JSON" |
