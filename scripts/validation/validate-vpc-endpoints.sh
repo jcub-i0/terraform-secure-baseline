@@ -322,7 +322,7 @@ else
 fi
 
 S3_ENDPOINT_STATE="$(
-  echo "$S3_ENDPOINT_JSON" |
+  echo "$S3_ENDPOINTS_JSON" |
     jq -r '.VpcEndpoints[0].State'
 )"
 
