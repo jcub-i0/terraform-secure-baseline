@@ -229,7 +229,7 @@ else
 fi
 
 LATEST_DELIVERY_ERROR="$(echo "$TRAIL_STATUS_JSON" | jq -r '.LatestDeliveryError // empty')"
-LATEST_CLOUDWATCH_DELIVERY_ERROR="$(echo "$TRAIL_STATUS_JSON" | jq -r '.LatestCloudWatchDeliveryError // empty')"
+LATEST_CLOUDWATCH_DELIVERY_ERROR="$(echo "$TRAIL_STATUS_JSON" | jq -r '.LatestCloudWatchLogsDeliveryError // empty')"
 
 if [[ -z "$LATEST_DELIVERY_ERROR" ]]; then
   success "CloudTrail does not report an S3 delivery error"
