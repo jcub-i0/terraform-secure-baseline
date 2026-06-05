@@ -353,7 +353,7 @@ if [[ -n "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" && "$MATCHING_LOG_GROUP_COUNT" -
       '
   )"
 
-  UNEXPETED_RETENTION_COUNT="$(echo "$LOG_GROUPS_WITH_UNEXPECTED_RETENTION" | jq 'length')"
+  UNEXPECTED_RETENTION_COUNT="$(echo "$LOG_GROUPS_WITH_UNEXPECTED_RETENTION" | jq 'length')"
 
   if [[ "$UNEXPECTED_RETENTION_COUNT" -eq 0 ]]; then
     success "Matching CloudWatch log groups with explicit retention match expected retention days"
