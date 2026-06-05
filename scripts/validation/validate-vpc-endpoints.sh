@@ -90,7 +90,7 @@ fi
 
 if terraform_output_exists "$OUTPUTS_JSON" effective_egress_mode; then
   EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
-  require_value_in_list "$EFFECTIVE_EGRESS_MODE" "networking_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
+  require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
   success "effective_egress_mode is valid: $EFFECTIVE_EGRESS_MODE"
 else
   warn "Missing Terraform output: effective_egress_mode"
