@@ -228,7 +228,7 @@ NON_AVAILABLE_INTERFACE_ENDPOINT_COUNT="$(
     jq '[.VpcEndpoints[] | select(.State != "available")] | length'
 )"
 
-if [[ "$NON_ABAILABLE_INTERFACE_ENDPOINT_COUNT" -eq 0 ]]; then
+if [[ "$NON_AVAILABLE_INTERFACE_ENDPOINT_COUNT" -eq 0 ]]; then
   success "All Interface VPC Endpoints are available"
 else
   echo "$INTERFACE_ENDPOINTS_JSON" | jq '[.VpcEndpoints[] | select(.State != "available") | {
