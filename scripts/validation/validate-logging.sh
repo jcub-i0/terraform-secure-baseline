@@ -151,3 +151,101 @@ aws s3api head-bucket \
 
 success "Centralized logs bucket exists: $CENTRALIZED_LOGS_BUCKET_NAME"
 
+section "Checking CloudTrail"
+
+TRAILS_JSON="$(
+  aws cloudtrail describe-trails \
+    "${aws_args[@]}" \
+    --include-shadow-trails false \
+    --output json
+)"
+
+MATCHING_TRAILS_JSON="$(
+  echo "$TRAILS_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '[.trailList[]? | select(.Name | contains($prefix))]'
+)"
+
+MATCHING_TRAIL_COUNT="$(echo "$MATCHING_TRAILS_JSON" | jq 'length')"
+
+if [[ "$MATCHING_TRAIL_COUNT" -gt 0 ]]; then
+  success "Found CloudTrail trails matching name prefix: $MATCHING_TRAIL_COUNT"
+else
+  echo "$TRAILS_JSON" | jq '.trailList[]? | {Name, TrailARN, HomeRegion}'
+  fail "No CloudTrail trails found containing name prefix: $NAME_PREFIX"
+fi
+
+PRIMARY_TRAIL_NAME="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].Name')"
+PRIMARY_TRAIL_ARN="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].TrailArn')"
+PRIMARY_TRAIL_HOME_REGION="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].HomeRegion')"
+PRIMARY_TRAIL_BUCKET="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].S3BucketName')"
+PRIMARY_TRAIL_LOG_GROUP_ARN="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].CloudWatchLogsLogGroupArn // empty')"
+
+info "Primary CloudTrail name: $PRIMARY_TRAIL_NAME"
+info "Primary CloudTrail ARN: $PRIMARY_TRAIL_ARN"
+info "Primary CloudTrail home region: $PRIMARY_TRAIL_HOME_REGION"
+info "Primary CloudTrail S3 bucket: $PRIMARY_TRAIL_BUCKET"
+
+MULTI_REGION_TRAIL_COUNT="$(
+  echo "$MATCHING_TRAILS_JSON" |
+    jq '[.[] | select(.IsMultiRegionTrail == true)] | length'
+)"
+
+if [[ "$MULTI_REGION_TRAIL_COUNT" -gt 0 ]]; then
+  success "At least one matching CloudTrail is multi-region"
+else
+  echo "$MATCHING_TRAILS_JSON" | jq '[.[] | {Name, IsMultiRegionTrail}]'
+  fail "Expected at least one matching CloudTrail to be multi-region."
+fi
+
+if [[ -n "$PRIMARY_TRAIL_BUCKET" && "$PRIMARY_TRAIL_BUCKET" != "null" ]]; then
+  success "CloudTrail has S3 bucket delievery configured: $PRIMARY_TRAIL_BUCKET"
+else
+  fail "CloudTrail does not ahve S3 bucket delivery configured"
+fi
+
+if [[ "$PRIMARY_TRAIL_BUCKET" == "$CENTRALIZED_LOGS_BUCKET_NAME" ]]; then
+  success "CloudTrail writes to the centralized logs bucket"
+else
+  warn "CloudTrail S3 bucket does not exactly match resolved centralized logs bucket."
+  warn "CloudTrail bucket: $PRIMARY_TRAIL_BUCKET"
+  warn "Centralized logs bucket: $CENTRALIZED_LOGS_BUCKET_NAME"
+fi
+
+TRAIL_STATUS_JSON="$(
+  aws cloudtrail get-trail-status \
+    "${aws_args[@]}" \
+    --name "$PRIMARY_TRAIL_ARN" \
+    --output json
+)"
+
+IS_LOGGING="$(echo "$TRAIL_STATUS_JSON" | jq -r '.IsLogging')"
+
+if [[ "$IS_LOGGING" == "true" ]]; then
+  success "CloudTrail is actively logging"
+else
+  echo "$TRAIL_STATUS_JSON" | jq .
+  fail "CloudTrail is not actively logging."
+fi
+
+LATEST_DELIVERY_ERROR="$(echo "$TRAIL_STATUS_JSON" | jq -r '.LatestDeliveryError // empty')"
+LATEST_CLOUDWATCH_DELIVERY_ERROR="$(echo "$TRAIL_STATUS_JSON" | jq -r '.LatestCloudWatchDeliveryError // empty')"
+
+if [[ -z "$LATEST_DELIVERY_ERROR" ]]; then
+  success "CloudTrail does not report an S3 delivery error"
+else
+  warn "CloudTrail reports latest S3 delivery error: $LATEST_DELIVERY_ERROR"
+fi
+
+if [[ -n "$PRIMARY_TRAIL_LOG_GROUP_ARN" ]]; then
+  success "CloudTrail has CloudWatch Logs ingestion configured"
+  info "CloudTrail CloudWatch Logs log group ARN: $PRIMARY_TRAIL_LOG_GROUP_ARN"
+
+  if [[ -z "$LATEST_CLOUDWATCH_DELIVERY_ERROR" ]]; then
+    success "CloudTrail does not report a CloudWatch Logs delivery error"
+  else
+    warn "CloudTrail reports latest CloudWatch Logs delivery error: $LATEST_CLOUDWATCH_DELIVERY_ERROR"
+  fi
+else
+  warn "CloudTrail does not show CloudWatch Logs integration in describe-trails output."
+fi
+
