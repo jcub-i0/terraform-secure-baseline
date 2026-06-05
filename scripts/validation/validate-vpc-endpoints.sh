@@ -203,3 +203,75 @@ if [[ "$ENDPOINT_RT_ASSOCIATION_COUNT" -gt 0 ]]; then
 else
   fail "Endpoint private route tables do not appear to have subnet associations."
 fi
+
+section "Checking Interface VPC Endpoints"
+
+INTERFACE_ENDPOINTS_JSON="$(
+  aws ec2 describe-vpc-endpoints \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:vpc-endpoint-type,Values=Interface" \
+    --output json
+)"
+
+INTERFACE_ENDPOINT_COUNT="$(echo "$INTERFACE_ENDPOINTS_JSON" | jq '.VpcEndpoints | length')"
+
+if [[ "$INTERFACE_ENDPOINT_COUNT" -gt 0 ]]; then
+  success "Found Interface VPC Endpoints: $INTERFACE_ENDPOINT_COUNT"
+else
+  fail "No Interface VPC Endpoints found."
+fi
+
+NON_AVAILABLE_INTERFACE_ENDPOINT_COUNT="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq '[.VpcEndpoints[] | select(.State != "available")] | length'
+)"
+
+if [[ "$NON_ABAILABLE_INTERFACE_ENDPOINT_COUNT" -eq 0 ]]; then
+  success "All Interface VPC Endpoints are available"
+else
+  echo "$INTERFACE_ENDPOINTS_JSON" | jq '[.VpcEndpoints[] | select(.State != "available") | {
+    service_name: .ServiceName,
+    state: .State,
+    endpoint_id: .VpcEndpointId
+  }]'
+  fail "One or more Interface VPC Endpoints are not available."
+fi
+
+INTERFACE_ENDPOINTS_OUTSIDE_ENDPOINT_SUBNETS="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq --argjson allowed "$ENDPOINT_SUBNET_IDS_JSON" '
+      [
+        .VpcEndpoints[]
+        | {
+            service_name: .ServiceName,
+            endpoint_id: .VpcEndpointId,
+            subnet_ids: .SubnetIds,
+            unexpected_subnet_ids: ([.SubnetIds[]] - $allowed)
+          }
+        | select((.unexpected_subnet_ids | length) > 0)
+      ]
+      | length
+    '
+)"
+
+if [[ "$INTERFACE_ENDPOINTS_OUTSIDE_ENDPOINT_SUBNETS" -eq 0 ]]; then
+  success "Interface VPC Endpoints are deployed only into endpoint private subnets"
+else
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq --argjson allowed "$ENDPOINT_SUBNET_IDS_JSON" '
+      [
+        .VpcEndpoints[]
+        | {
+            service_name: .ServiceName,
+            endpoint_id: .VpcEndpointId,
+            subnet_ids: .SubnetIds,
+            unexpected_subnet_ids: ([.SubnetIds[]] - $allowed)
+          }
+        | select((.unexpected_subnet_ids | length) > 0)
+      ]
+    '
+  fail "One or more Interface VPC Endpoints are not deployed exclusively into endpoint private subnets."
+fi
+
