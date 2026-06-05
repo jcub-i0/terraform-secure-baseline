@@ -345,7 +345,7 @@ S3_ROUTE_TABLE_COUNT="$(
 if [[ "$S3_ROUTE_TABLE_COUNT" -gt 0 ]]; then
   success "S3 Gateway VPC Endpoint has route table associations: $S3_ROUTE_TABLE_COUNT"
 else
-  fail "S3 Gateway VPC Endpoitn has no route table associations."
+  fail "S3 Gateway VPC Endpoint has no route table associations."
 fi
 
 section "Checking S3 Gateway route table coverage"
@@ -427,7 +427,7 @@ VPC ID: ${VPC_ID}
 effective_egress_mode: ${EFFECTIVE_EGRESS_MODE}
 
 Endpoint private subnets: ${ENDPOINT_SUBNET_COUNT}
-Endpoint private route tables: ${ENDPOITN_RT_COUNT}
+Endpoint private route tables: ${ENDPOINT_RT_COUNT}
 Interface VPC Endpoints: ${INTERFACE_ENDPOINT_COUNT}
 S3 Gateway Endpoint count: ${S3_ENDPOINT_COUNT}
 S3 Gateway route table associations: ${S3_ROUTE_TABLE_COUNT}
