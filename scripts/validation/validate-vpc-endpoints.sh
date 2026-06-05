@@ -165,7 +165,7 @@ ENDPOINT_ROUTE_TABLES_JSON="$(
     "${aws_args[@]}" \
     --filters \
       "Name=vpc-id,Values=${VPC_ID}" \
-      "Name=tag:Name,Values="${NAME_PREFIX}-Endpoint-Private-RT-*"
+      "Name=tag:Name,Values=${NAME_PREFIX}-Endpoint-Private-RT-*" \
     --output json
 )"
 
