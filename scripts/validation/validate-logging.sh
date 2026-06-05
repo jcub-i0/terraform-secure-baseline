@@ -105,7 +105,7 @@ if terraform_output_exists "$OUTPUTS_JSON" vpc_id; then
   VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
   info "Resolved VPC ID from Terraform output: $VPC_ID"
 else
-  warn "Terraform output vpc_id not found. Failing back to AWS tag lookup."
+  warn "Terraform output vpc_id not found. Falling back to AWS tag lookup."
 
   VPC_ID="$(
     aws ec2 describe-vpcs \
