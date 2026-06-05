@@ -365,7 +365,7 @@ if [[ -n "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" && "$MATCHING_LOG_GROUP_COUNT" -
 
   LOG_GROUPS_WITH_NO_RETENTION_COUNT="$(
     echo "$MATCHING_LOG_GROUPS_JSON" |
-      jq '[.[] | select(.retentionInDays == null)] length'
+      jq '[.[] | select(.retentionInDays == null)] | length'
   )"
 
   if [[ "$LOG_GROUPS_WITH_NO_RETENTION_COUNT" -eq 0 ]]; then
