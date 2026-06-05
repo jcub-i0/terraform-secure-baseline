@@ -137,7 +137,7 @@ else
   CENTRALIZED_LOGS_BUCKET_NAME="$(
     aws s3api list-buckets \
       "${aws_args[@]}" \
-      --query "Buckets[?contains(Name, \'${NAME_PREFIX}\') && contains(Name, \'logs\')].Name | [0]" \
+      --query "Buckets[?contains(Name, \`${NAME_PREFIX}\`) && contains(Name, \`logs\`)].Name | [0]" \
       --output text
   )"
 fi
