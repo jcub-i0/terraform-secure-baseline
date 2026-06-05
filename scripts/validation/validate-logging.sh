@@ -176,7 +176,7 @@ else
 fi
 
 PRIMARY_TRAIL_NAME="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].Name')"
-PRIMARY_TRAIL_ARN="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].TrailArn')"
+PRIMARY_TRAIL_ARN="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].TrailARN')"
 PRIMARY_TRAIL_HOME_REGION="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].HomeRegion')"
 PRIMARY_TRAIL_BUCKET="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].S3BucketName')"
 PRIMARY_TRAIL_LOG_GROUP_ARN="$(echo "$MATCHING_TRAILS_JSON" | jq -r '.[0].CloudWatchLogsLogGroupArn // empty')"
