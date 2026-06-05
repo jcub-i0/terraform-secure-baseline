@@ -98,3 +98,27 @@ else
 fi
 
 section "Resolving VPC"
+
+# Prefer Terraform output if present. Fall back to AWS tag lookup.
+if terraform_output_exists "$OUTPUTS_JSON" vpc_id; then
+  VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
+  info "Resolved VPC ID from Terraform output: $VPC_ID"
+else
+  warn "Terraform output vpc_id not found. Falling back to AWS tag lookup."
+
+  VPC_ID="$(
+    aws ec2 describe-vpcs \
+      "${aws_args[@]}" \
+      --filters \
+        "Name=tag:Name,Values=${NAME_PREFIX}-Main,${NAME_PREFIX}-VPC" \
+        "Name=tag:Environment,Values=${ENV_NAME}" \
+      --query 'Vpcs[0].VpcId' \
+      --output text
+  )"
+fi
+
+if [[ -z "$VPC_ID" || "$VPC_ID" == "None" ]]; then
+  fail "Unable to resolve VPC ID. Expected VPC Name tag matching ${NAME_PREFIX}-Main or ${NAME_PREFIX}-VPC. Consider exporting NAME_PREFIX or adding a vpc_id Terraform output."
+fi
+
+success "Resolved VPC ID: $VPC_ID
