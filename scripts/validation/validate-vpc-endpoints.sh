@@ -437,4 +437,4 @@ SUMMARY
 
 section "Validation Result"
 
-success "VPC Endpoints validation copmleted successfully for: ${ENV_NAME}"
+success "VPC Endpoints validation completed successfully for: ${ENV_NAME}"
