@@ -376,3 +376,26 @@ if [[ -n "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" && "$MATCHING_LOG_GROUP_COUNT" -
   fi
 fi
 
+section "Logging Summary"
+
+cat <<SUMMARY
+Environment: ${ENV_NAME}
+AWS profile: ${AWS_PROFILE:-<default>}
+AWS region: ${AWS_REGION}
+Name prefix: ${NAME_PREFIX}
+VPC ID: ${VPC_ID}
+
+Centralized logs bucket: ${CENTRALIZED_LOGS_BUCKET_NAME}
+
+CloudTrail count: ${MATCHING_TRAIL_COUNT}
+Primary CloudTrail: ${PRIMARY_TRAIL_NAME}
+CloudTrail home region: ${PRIMARY_TRAIL_HOME_REGION}
+CloudTrail is logging: ${IS_LOGGING}
+CloudTrail S3 bucket: ${PRIMARY_TRAIL_BUCKET}
+
+VPC Flow Log count: ${FLOW_LOG_COUNT}
+ACTIVE VPC Flow Log count: ${ACTIVE_FLOW_LOG_COUNT}
+
+Matching CloudWatch log groups: ${MATCHING_LOG_GROUP_COUNT}
+Expected CloudWatch retention days: ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS:-<unknown>}
+SUMMARY
