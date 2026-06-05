@@ -347,3 +347,72 @@ if [[ "$S3_ROUTE_TABLE_COUNT" -gt 0 ]]; then
 else
   fail "S3 Gateway VPC Endpoitn has no route table associations."
 fi
+
+section "Checking S3 Gateway route table coverage"
+
+COMPUTE_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${Name_PREFIX}-Compute-Private-RT-*" \
+    --output json
+)"
+
+SERVERLESS_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Serverless-Private-RT-*" \
+    --output json
+)"
+
+COMPUTE_RT_IDS_JSON="$(echo "$COMPUTE_ROUTE_TABLES_JSON" | jq '[.RouteTables[].RouteTableId]')"
+SERVERLESS_RT_IDS_JSON="$(echo "$SERVERLESS_ROUTE_TABLES_JSON" | jq '[.RouteTables[].RouteTableId]')"
+
+COMPUTE_RT_COUNT="$(echo "$COMPUTE_RT_IDS_JSON" | jq 'length')"
+SERVERLESS_RT_COUNT="$(echo "$SERVERLESS_RT_IDS_JSON" | jq 'length')"
+
+if [[ "$COMPUTE_RT_COUNT" -eq 0 ]]; then
+  fail "No compute private route tables found for S3 Gateway Endpoint coverage check."
+fi
+
+MISSING_COMPUTE_S3_ASSOCIATIONS="$(
+  jq -n \
+    --argjson expected "$COMPUTE_RT_IDS_JSON" \
+    --argjson actual "$S3_ROUTE_TABLE_IDS_JSON" \
+    '$expected - $actual | length'
+)"
+
+if [[ "$MISSING_COMPUTE_S3_ASSOCIATIONS" -eq 0 ]]; then
+  success "S3 Gateway Endpoint is associated with all compute private route tables"
+else
+  jq -n \
+    --argjson expected "$COMPUTE_RT_IDS_JSON" \
+    --argjson actual "$S3_ROUTE_TABLE_IDS_JSON" \
+    '{missing_compute_route_table_ids: ($expected - $actual)}'
+  fail "S3 Gateway Endpoint is missing one or more compute private route table associations."
+fi
+
+if [[ "$SERVERLESS_RT_COUNT" -gt 0 ]]; then
+  MISSING_SERVERLESS_S3_ASSOCIATIONS="$(
+    jq -n \
+      --argjson expected "$SERVERLESS_RT_IDS_JSON" \
+      --argjson actual "$S3_ROUTE_TABLE_IDS_JSON" \
+      '$expected - $actual | length'
+  )"
+
+  if [[ "$MISSING_SERVERLESS_S3_ASSOCIATIONS" -eq 0 ]]; then
+    success "S3 Gateway Endpoint is associated with all serverless private route tables"
+  else
+    jq -n \
+      --argjson expected "$SERVERLESS_RT_IDS_JSON" \
+      --argjson actual "$S3_ROUTE_TABLE_IDS_JSON" \
+      '{missing_serverless_route_table_ids: ($expected - $actual)}'
+    fail "S3 Gateway Endpoint is missing one or more serverless private route table associations."
+  fi
+else
+  warn "No serverless private route tables found. Skipping serverless S3 Gateway coverage check."
+fi
+
