@@ -300,3 +300,50 @@ if [[ "${#MISSING_INTERFACE_SERVICES[@]}" -gt 0 ]]; then
   printf '\n' >&2
   exit 1
 fi
+
+section "Checking S3 Gateway VPC Endpoint"
+
+S3_ENDPOINTS_JSON="$(
+  aws ec2 describe-vpc-endpoints \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=service-name,Values=com.amazonaws.${AWS_REGION}.s3" \
+      "Name=vpc-endpoint-type,Values=Gateway" \
+    --output json
+)"
+
+S3_ENDPOINT_COUNT="$(echo "$S3_ENDPOINTS_JSON" | jq '.VpcEndpoints | length')"
+
+if [[ "$S3_ENDPOINT_COUNT" -gt 0 ]]; then
+  success "S3 Gateway VPC Endpoint exists"
+else
+  fail "S3 Gateway VPC Endpoint not found."
+fi
+
+S3_ENDPOINT_STATE="$(
+  echo "$S3_ENDPOINT_JSON" |
+    jq -r '.VpcEndpoints[0].State'
+)"
+
+if [[ "$S3_ENDPOINT_STATE" == "available" ]]; then
+  success "S3 Gateway VPC Endpoint is available"
+else
+  fail "S3 Gateway VPC Endpoint is ${S3_ENDPOINT_STATE}, expected available."
+fi
+
+S3_ROUTE_TABLE_IDS_JSON="$(
+  echo "$S3_ENDPOINTS_JSON" |
+    jq '[.VpcEndpoints[0].RouteTableIds[]?]'
+)"
+
+S3_ROUTE_TABLE_COUNT="$(
+  echo "$S3_ROUTE_TABLE_IDS_JSON" |
+    jq 'length'
+)"
+
+if [[ "$S3_ROUTE_TABLE_COUNT" -gt 0 ]]; then
+  success "S3 Gateway VPC Endpoint has route table associations: $S3_ROUTE_TABLE_COUNT"
+else
+  fail "S3 Gateway VPC Endpoitn has no route table associations."
+fi
