@@ -275,3 +275,28 @@ else
   fail "One or more Interface VPC Endpoints are not deployed exclusively into endpoint private subnets."
 fi
 
+section "Checking expected Interface VPC Endpoint services"
+
+MISSING_INTERFACE_SERVICES=()
+
+for short_service_name in $EXPECTED_INTERFACE_ENDPOINT_SERVICES; do
+  full_service_name="com.amazonaws.${AWS_REGION}.${short_service_name}"
+
+  matching_count="$(
+    echo "$INTERFACE_ENDPOINTS_JSON" |
+      jq --arg service "$full_service_name" '[.VpcEndpoints[] | select(.ServiceName == $service)] | length'
+  )"
+  
+  if [[ "$matching_count" -gt 0 ]]; then
+    success "Interface endpoint exists: $short_service_name"
+  else
+    MISSING_INTERFACE_SERVICES+=("$short_service_name")
+  fi
+done
+
+if [[ "${#MISSING_INTERFACE_SERVICES[@]}" -gt 0 ]]; then
+  printf '[FAIL] Missing expected Interface VPC Endpoints:' >&2
+  printf ' %s' "${MISSING_INTERFACE_SERVICES[@]}" >&2
+  printf '\n' >&2
+  exit 1
+fi
