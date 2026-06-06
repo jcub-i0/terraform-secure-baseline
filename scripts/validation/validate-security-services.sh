@@ -208,7 +208,7 @@ SECURITY_HUB_SUBSCRIBED_AT="$(
 )"
 
 info "Security Hub ARN: ${SECURITY_HUB_ARN:-<unknown>}"
-info "Security Hub subscribed at: ${SECURITY_HUB_SUSCRIBED_AT:-<unknown>}"
+info "Security Hub subscribed at: ${SECURITY_HUB_SUBSCRIBED_AT:-<unknown>}"
 
 section "Checking Inspector"
 
