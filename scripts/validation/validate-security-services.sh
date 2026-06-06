@@ -112,3 +112,27 @@ success "effective_enable_config is valid: $EFFECTIVE_ENABLE_CONFIG"
 success "effective_backup_enabled is valid: $EFFECTIVE_BACKUP_ENABLED"
 success "effective_inspector_enabled is valid: $EFFECTIVE_INSPECTOR_ENABLED"
 
+section "Checking AWS caller identity"
+
+ACCOUNT_ID="$(
+  aws sts get-caller-identity \
+    "${aws_args[@]}" \
+    --query Account \
+    --output text
+)"
+
+CALLER_ARN="$(
+  aws sts get-caller-identity \
+    "${aws_args[@]}"
+    --query Arn \
+    --output text
+)"
+
+if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
+  fail "Unable to resolve AWS account ID"
+fi
+
+success "AWS credentials are valid"
+info "AWS account ID: $ACCOUNT_ID"
+info "AWS caller ARN: $CALLER_ARN"
+
