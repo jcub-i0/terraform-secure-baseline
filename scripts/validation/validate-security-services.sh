@@ -316,7 +316,7 @@ if [[ "$EFFECTIVE_ENABLE_CONFIG" == "true" ]]; then
   if [[ "$CONFIG_DELIVERY_CHANNEL_COUNT" -gt 0 ]]; then
     success "AWS Config delivery channel exists"
   else
-    fail  "effective_enable_config=true, but not AWS Config delivery channel was found."
+    fail  "effective_enable_config=true, but no AWS Config delivery channel was found."
   fi
 
   CONFIG_RULES_JSON="$(
