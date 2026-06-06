@@ -63,7 +63,7 @@ success "jq found"
 require_command git
 success "git found"
 
-section "Resolving respository paths and Terraform outputs"
+section "Resolving repository paths and Terraform outputs"
 
 REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
