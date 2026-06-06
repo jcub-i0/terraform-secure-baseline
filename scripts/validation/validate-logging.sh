@@ -157,7 +157,7 @@ section "Checking CloudTrail"
 TRAILS_JSON="$(
   aws cloudtrail describe-trails \
     "${aws_args[@]}" \
-    --include-shadow-trails false \
+    --no-include-shadow-trails \
     --output json
 )"
 
