@@ -8,6 +8,11 @@ output "name_prefix" {
   value       = local.name_prefix
 }
 
+output "centralized_logs_bucket_name" {
+  description = "Name of the Centralized Logs S3 bucket ('bucket' S3 attribute)"
+  value       = module.storage.centralized_logs_bucket_name
+}
+
 output "lambda_cmk_arn" {
   description = "ARN of the CMK used to encrypt Lambda functions"
   value       = module.security.lambda_cmk_arn
