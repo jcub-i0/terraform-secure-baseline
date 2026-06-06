@@ -345,7 +345,7 @@ section "Checking AWS Backup"
 BACKUP_VAULT_COUNT="0"
 BACKUP_PLAN_COUNT="0"
 
-if [[ "EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
+if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
   BACKUP_VAULTS_JSON="$(
     aws backup list-backup-vaults \
       "${aws_args[@]}" \
