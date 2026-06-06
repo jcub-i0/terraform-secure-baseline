@@ -292,7 +292,7 @@ if [[ "$EFFECTIVE_ENABLE_CONFIG" == "true" ]]; then
 
   CONFIG_RECORDERS_NOT_RECORDING_COUNT="$(
     echo "$CONFIG_RECORDER_STATUS_JSON" |
-      jq '[.ConfigurationRecorderStatus[]? | select(.recording != true)] | length'
+      jq '[.ConfigurationRecordersStatus[]? | select(.recording != true)] | length'
   )"
 
   if [[ "$CONFIG_RECORDERS_NOT_RECORDING_COUNT" -eq 0 ]]; then
