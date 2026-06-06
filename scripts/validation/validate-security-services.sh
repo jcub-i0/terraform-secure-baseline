@@ -181,3 +181,33 @@ fi
 
 info "GuardDuty detector ID: $GUARDDUTY_DETECTOR_ID"
 
+section "Checking Security Hub"
+
+SECURITY_HUB_JSON=""
+SECURITY_HUB_ENABLED="false"
+
+if SECURITY_HUB_JSON="$(
+  aws securityhub describe-hub \
+    "${aws_args[@]}" \
+    --output json 2>/dev/null
+)"; then
+  SECURITY_HUB_ENABLED="true"
+  success "Security Hub is enabled"
+else
+  fail "Security Hub is not enabled or describe-hub failed in region ${AWS_REIGON}."
+fi
+
+SECURITY_HUB_ARN="$(
+  echo "$SECURITY_HUB_JSON" |
+    jq -r '.HubArn // empty'
+)"
+
+SECURITY_HUB_SUBSCRIBED_AT="$(
+  echo "$SECURITY_HUB_JSON" |
+    jq -r '.SubscribedAt // empty'
+)"
+
+info "Security Hub ARN: ${SECURITY_HUB_ARN:-<unknown>}"
+info "Security Hub subscribed at: ${SECURITY_HUB_SUSCRIBED_AT:-<unknown>}"
+
+
