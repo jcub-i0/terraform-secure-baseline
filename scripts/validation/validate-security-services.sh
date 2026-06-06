@@ -416,3 +416,7 @@ AWS Config rule count:              ${CONFIG_RULE_COUNT}
 AWS Backup vault count:             ${BACKUP_VAULT_COUNT}
 AWS Backup plan count:              ${BACKUP_PLAN_COUNT}
 SUMMARY
+
+section "Validation Result"
+
+success "Security services validation completed successfully for: ${ENV_NAME}"
