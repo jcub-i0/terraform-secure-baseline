@@ -182,7 +182,7 @@ validate_service_trust() {
     local expected_service="$2"
 
     local role_json
-    role_json="$(get_role_json "$role_json")"
+    role_json="$(get_role_json "$role_name")"
 
     if trust_has_service_principal "$role_json" "$expected_service"; then
       success "Trust policy for ${role_name} includes service principal: ${expected_service}"
