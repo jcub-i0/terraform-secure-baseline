@@ -323,7 +323,7 @@ if [[ -n "$PRIMARY_TRAIL_LOG_GROUP_ARN" ]]; then
   CLOUDTRAIL_LOG_GROUP_NAME="$(
     echo "$PRIMARY_TRAIL_LOG_GROUP_ARN" |
       sed -E 's#^arn:aws:logs:[^:]+:[^:]+:log-group:##' |
-      sed -E 's#:log-stream:.*$##'
+      sed -E 's#:(\*|log-stream:.*)$##'
   )"
 
   CLOUDTRAIL_LOG_GROUP_MATCH_COUNT="$(
