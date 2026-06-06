@@ -123,7 +123,7 @@ ACCOUNT_ID="$(
 
 CALLER_ARN="$(
   aws sts get-caller-identity \
-    "${aws_args[@]}"
+    "${aws_args[@]}" \
     --query Arn \
     --output text
 )"
