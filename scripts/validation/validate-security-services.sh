@@ -340,3 +340,46 @@ else
   warn "This is expected if Config was intentionally disabled."
 fi
 
+section "Checking AWS Backup"
+
+BACKUP_VAULT_COUNT="0"
+BACKUP_PLAN_COUNT="0"
+
+if [[ "EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
+  BACKUP_VAULTS_JSON="$(
+    aws backup list-backup-vaults \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  BACKUP_VAULT_COUNT="$(
+    echo "$BACKUP_VAULTS_JSON" |
+      jq -r '.BackupVaultList | length'
+  )"
+
+  if [[ "$BACKUP_VAULT_COUNT" -gt 0 ]]; then
+    success "AWS Backup vaults exist: $BACKUP_VAULT_COUNT"
+  else
+    fail "effective_backup_enabled=true, but no AWS Backup vaults were found."
+  fi
+
+  BACKUP_PLANS_JSON="$(
+    aws backup list-backup-plans \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  BACKUP_PLAN_COUNT="$(
+    echo "$BACKUP_PLANS_JSON" |
+      jq -r '.BackupPlansList | length'
+  )"
+
+  if [[ "$BACKUP_PLAN_COUNT" -gt 0 ]]; then
+    success "AWS Backup plans exist: $BACKUP_PLAN_COUNT"
+  else
+    fail "effective_backup_enabled=true, but no AWS Backup plans were found."
+  fi
+else
+  warn "effective_backup_enabled=false. Skipping AWS Backup validation."
+  warn "This is expected for development/minimal profiles or explicity cost-control overrides."
+fi
