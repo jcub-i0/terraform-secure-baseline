@@ -194,7 +194,7 @@ if SECURITY_HUB_JSON="$(
   SECURITY_HUB_ENABLED="true"
   success "Security Hub is enabled"
 else
-  fail "Security Hub is not enabled or describe-hub failed in region ${AWS_REIGON}."
+  fail "Security Hub is not enabled or describe-hub failed in region ${AWS_REGION}."
 fi
 
 SECURITY_HUB_ARN="$(
