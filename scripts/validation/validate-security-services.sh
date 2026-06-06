@@ -63,3 +63,52 @@ success "jq found"
 require_command git
 success "git found"
 
+section "Resolving respository paths and Terraform outputs"
+
+REPO_ROOT="$(get_repo_root)"
+ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
+
+info "Repository root: $REPO_ROOT"
+info "Environment: $ENV_NAME"
+info "Environment dir: $ENV_DIR"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
+
+require_directory "$ENV_DIR"
+success "Environment directory exists"
+
+OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
+
+if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
+  fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
+fi
+
+success "Terraform outputs are readable"
+
+REQUIRED_OUTPUTS=(
+  effective_enableconfig
+  effective_backup_enabled
+  effective_inspector_enabled
+)
+
+for output_name in "${REQUIRED_OUTPUTS[@]}"; do
+  if terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
+    success "Required output exists: $output_name"
+  else
+    fail "Missing required Terraform output: $output_name"
+  fi
+done
+
+EFFECTIVE_ENABLE_CONFIG="$(get_terraform_output_value "$OUTPUTS_JSON" effective_enable_config)"
+EFFECTIVE_BACKUP_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled)"
+EFFECTIVE_INSPECTOR_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_inspector_enabled)"
+
+require_value_in_list "$EFFECTIVE_ENABLE_CONFIG" "true false" "effective_enable_config"
+require_value_in_list "$EFFECTIVE_BACKUP_ENABLED" "true false" "effective_backup_enabled"
+require_value_in_list "$EFFECTIVE_INSPECTOR_ENABLED" "true false" "effective_inspector_enabled"
+
+success "effective_enable_config is valid: $EFFECTIVE_ENABLE_CONFIG"
+success "effective_backup_enabled is valid: $EFFECTIVE_BACKUP_ENABLED"
+success "effective_inspector_enabled is valid: $EFFECTIVE_INSPECTOR_ENABLED"
+
