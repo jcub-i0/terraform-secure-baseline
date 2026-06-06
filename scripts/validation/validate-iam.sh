@@ -84,7 +84,7 @@ success "Environment directory exists"
 OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
 
 if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
-  fail "No Terraform outputs foudn for ${ENV_DIR}. Has this environment been applied?"
+  fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
 fi
 
 success "Terraform outputs are readable"
