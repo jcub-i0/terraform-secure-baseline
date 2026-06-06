@@ -260,3 +260,83 @@ else
   warn "effective_inspector_enabled=false. Skipping Inspector validation."
 fi
 
+section "Checking AWS Config"
+
+CONFIG_RECORDER_COUNT="0"
+CONFIG_DELIVERY_CHANNEL_COUNT="0"
+CONFIG_RULE_COUNT="0"
+
+if [[ "$EFFECTIVE_ENABLE_CONFIG" == "true" ]]; then
+  CONFIG_RECORDERS_JSON="$(
+    aws configservice describe-configuration-recorders \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  CONFIG_RECORDER_COUNT="$(
+    echo "$CONFIG_RECORDERS_JSON" |
+      jq '.ConfigurationRecorders | length'
+  )"
+
+  if [[ "$CONFIG_RECORDER_COUNT" -gt 0 ]]; then
+    success "AWS Config configuration recorder exists"
+  else
+    fail "effective_enable_config=true, but no AWS Config configuration recorder was found."
+  fi
+
+  CONFIG_RECORDER_STATUS_JSON="$(
+    aws configservice describe-configuration-recorder-status \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  CONFIG_RECORDERS_NOT_RECORDING_COUNT="$(
+    echo "$CONFIG_RECORDER_STATUS_JSON" |
+      jq '[.ConfigurationRecorderStatus[]? | select(.recording != true)] | length'
+  )"
+
+  if [[ "$CONFIG_RECORDERS_NOT_RECORDING_COUNT" -eq 0 ]]; then
+    success "AWS Config recorder is recording"
+  else
+    echo "$CONFIG_RECORDER_STATUS_JSON" | jq .
+    fail "One or more AWS Config recorders are not recording."
+  fi
+  
+  CONFIG_DELIVERY_CHANNELS_JSON="$(
+    aws configservice describe-delivery-channels \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  CONFIG_DELIVERY_CHANNEL_COUNT="$(
+    echo "$CONFIG_DELIVERY_CHANNELS_JSON" |
+      jq -r '.DeliveryChannels | length'
+  )"
+
+  if [[ "$CONFIG_DELIVERY_CHANNEL_COUNT" -gt 0 ]]; then
+    success "AWS Config delivery channel exists"
+  else
+    fail  "effective_enable_config=true, but not AWS Config delivery channel was found."
+  fi
+
+  CONFIG_RULES_JSON="$(
+    aws configservice describe-config-rules \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  CONFIG_RULE_COUNT="$(
+    echo "$CONFIG_RULES_JSON" |
+      jq '.ConfigRules | length'
+  )"
+
+  if [[ "$CONFIG_RULE_COUNT" -gt 0 ]]; then
+    success "AWS Config rules exist: $CONFIG_RULE_COUNT"
+  else
+    warn "AWS Config is enabled, but no Config rules were found."
+  fi
+else
+  warn "effective_enable_config=false. Skipping AWS Config validation."
+  warn "This is expected if Config was intentionally disabled."
+fi
+
