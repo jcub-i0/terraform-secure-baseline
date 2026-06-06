@@ -383,3 +383,36 @@ else
   warn "effective_backup_enabled=false. Skipping AWS Backup validation."
   warn "This is expected for development/minimal profiles or explicity cost-control overrides."
 fi
+
+section "Security Services Summary"
+
+cat <<SUMMARY
+Environment: ${ENV_NAME}
+AWS profile: ${AWS_PROFILE:-<default>}
+AWS region: ${AWS_REGION}
+AWS account ID: ${ACCOUNT_ID}
+Name prefix: ${NAME_PREFIX}
+
+effective_enable_config: ${EFFECTIVE_ENABLE_CONFIG}
+effective_backup_enabled: ${EFFECTIVE_BACKUP_ENABLED}
+effective_inspector_enabled: ${EFFECTIVE_INSPECTOR_ENABLED}
+
+GuardDuty detector count: ${GUARDDUTY_DETECTOR_COUNT}
+GuardDuty detector ID: ${GUARDDUTY_DETECTOR_ID}
+GuardDuty status: ${GUARDDUTY_STATUS}
+
+Security Hub enabled: ${SECURITY_HUB_ENABLED}
+Security Hub ARN: ${SECURITY_HUB_ARN:-<unknown>}
+
+Inspector account status: ${INSPECTOR_ACCOUNT_STATUS}
+Inspector EC2 status: ${INSPECTOR_EC2_STATUS}
+Inspector Lambda status: ${INSPECTOR_LAMBDA_STATUS}
+Inspector Lambd code status: ${INSPECTOR_LAMBDA_CODE_STATUS}
+
+AWS Config recorder count: ${CONFIG_RECORDER_COUNT}
+AWS Config delivery channel count: ${CONFIG_DELIVERY_CHANNEL_COUNT}
+AWS Config rule count: ${CONFIG_RULE_COUNT}
+
+AWS Backup vault count: ${BACKUP_VAULT_COUNT}
+AWS Backup plan count: ${BACKUP_PLAN_COUNT}
+SUMMARY
