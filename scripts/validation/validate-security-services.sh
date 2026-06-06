@@ -87,7 +87,7 @@ fi
 success "Terraform outputs are readable"
 
 REQUIRED_OUTPUTS=(
-  effective_enableconfig
+  effective_enable_config
   effective_backup_enabled
   effective_inspector_enabled
 )
