@@ -381,7 +381,7 @@ if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
   fi
 else
   warn "effective_backup_enabled=false. Skipping AWS Backup validation."
-  warn "This is expected for development/minimal profiles or explicity cost-control overrides."
+  warn "This is expected for development/minimal profiles or explicit cost-control overrides."
 fi
 
 section "Security Services Summary"
