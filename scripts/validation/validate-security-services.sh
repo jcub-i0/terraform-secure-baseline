@@ -227,7 +227,7 @@ if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
   )"
 
   INSPECTOR_ACCOUNT_STATUS="$(
-    echo "$INSPECTOR_ACCOUNT_STATUS" |
+    echo "$INSPECTOR_ACCOUNT_STATUS_JSON" |
       jq -r '.accounts[0].state.status // "unknown"'
   )"
 
