@@ -253,7 +253,7 @@ validate_role_has_some_policy() {
     )"
 
     if [[ "$attached_count" -gt 0 || "$inline_count" -gt 0 ]]; then
-      success "IAM role has attached or inline policies: ${role_name} attached="${attached_count} inline="${inline_count}"
+      success "IAM role has attached or inline policies: ${role_name} attached=${attached_count} inline=${inline_count}"
     else
       warn "IAM role has no attached or inline policies: ${role_name}"
     fi
