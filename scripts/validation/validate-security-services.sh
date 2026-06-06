@@ -136,3 +136,48 @@ success "AWS credentials are valid"
 info "AWS account ID: $ACCOUNT_ID"
 info "AWS caller ARN: $CALLER_ARN"
 
+section "Checking GuardDuty"
+
+GUARDDUTY_DETECTORS_JSON="$(
+  aws guardduty list-detectors \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+GUARDDUTY_DETECTOR_COUNT="$(
+  echo "$GUARDDUTY_DETECTORS_JSON" |
+    jq '.DetectorIds | length'
+)"
+
+if [[ "$GUARDDUTY_DETECTOR_COUNT" -gt 0 ]]; then
+  success "GuardDuty detector exists"
+else
+  fail "No GuardDuty detector found in region ${AWS_REGION}."
+fi
+
+GUARDDUTY_DETECTOR_ID="$(
+  echo "$GUARDDUTY_DETECTORS_JSON" |
+    jq -r '.DetectorIds[0]'
+)"
+
+GUARDDUTY_DETECTOR_JSON="$(
+  aws guardduty get-detector \
+    "${aws_args[@]}" \
+    --detector-id "$GUARDDUTY_DETECTOR_ID" \
+    --output json
+)"
+
+GUARDDUTY_STATUS="$(
+  echo "$GUARDDUTY_DETECTOR_JSON" |
+    jq -r '.Status'
+)"
+
+if [[ "$GUARDDUTY_STATUS" == "ENABLED" ]]; then
+  success "GuardDuty detector is enabled"
+else
+  echo "$GUARDDUTY_DETECTOR_JSON" | jq .
+  fail  "GuardDuty detector is not enabled. Current status: ${GUARDDUTY_STATUS}"
+fi
+
+info "GuardDuty detector ID: $GUARDDUTY_DETECTOR_ID"
+
