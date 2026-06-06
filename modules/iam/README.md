@@ -570,7 +570,7 @@ Expected:
 - EC2 compute role exists:
   - `${NAME_PREFIX}-ec2_compute_role`
 - Lambda automation roles exist:
-  - `${NAME_PREFIX}-lambda-ec2-isolation-role`
+  - `${NAME_PREFIX}-lambda-ec2-isolation`
   - `${NAME_PREFIX}-lambda-ec2-rollback`
   - `${NAME_PREFIX}-lambda-ip-enrichment`
 - Logging delivery roles exist:
@@ -616,7 +616,7 @@ Expected:
 ```bash
 aws iam list-attached-role-policies \
   --profile "${AWS_PROFILE}" \
-  --role-name "${NAME_PREFIX}-lambda-ec2-isolation-role" \
+  --role-name "${NAME_PREFIX}-lambda-ec2-isolation" \
   --query 'AttachedPolicies[].[PolicyName,PolicyArn]' \
   --output table
 ```
