@@ -210,4 +210,53 @@ SECURITY_HUB_SUBSCRIBED_AT="$(
 info "Security Hub ARN: ${SECURITY_HUB_ARN:-<unknown>}"
 info "Security Hub subscribed at: ${SECURITY_HUB_SUSCRIBED_AT:-<unknown>}"
 
+section "Checking Inspector"
+
+INSPECTOR_ACCOUNT_STATUS_JSON=""
+INSPECTOR_ACCOUNT_STATUS="unknown"
+INSPECTOR_EC2_STATUS="unknown"
+INSPECTOR_LAMBDA_STATUS="unknown"
+INSPECTOR_LAMBDA_CODE_STATUS="unknown"
+
+if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
+  INSPECTOR_ACCOUNT_STATUS_JSON="$(
+    aws inspector2 batch-get-account-status \
+      "${aws_args[@]}" \
+      --account-ids "$ACCOUNT_ID" \
+      --output json
+  )"
+
+  INSPECTOR_ACCOUNT_STATUS="$(
+    echo "$INSPECTOR_ACCOUNT_STATUS" |
+      jq -r '.accounts[0].state.status // "unknown"'
+  )"
+
+  INSPECTOR_EC2_STATUS="$(
+    echo "$INSPECTOR_ACCOUNT_STATUS_JSON" |
+      jq -r '.accounts[0].resourceState.ec2.status // "unknown"'
+  )"
+
+  INSPECTOR_LAMBDA_STATUS="$(
+    echo "$INSPECTOR_ACCOUNT_STATUS_JSON" |
+      jq -r '.accounts[0].resourceState.lambda.status // "unknown"'
+  )"
+
+  INSPECTOR_LAMBDA_CODE_STATUS="$(
+    echo "$INSPECTOR_ACCOUNT_STATUS_JSON" |
+      jq -r '.accounts[0].resourceState.lambdaCode.status // "unknown"'
+  )"
+
+  if [[ "$INSPECTOR_ACCOUNT_STATUS" == "ENABLED" ]]; then
+    success "Inspector account status is ENABLED"
+  else
+    echo "$INSPECTOR_ACCOUNT_STATUS_JSON" | jq .
+    fail "Inspector was expected to be enabled, but account status is: ${INSPECTOR_ACCOUNT_STATUS}"
+  fi
+
+  info "Inspector EC2 status: $INSPECTOR_EC2_STATUS"
+  info "Inspector Lambda status: $INSPECTOR_LAMBDA_STATUS"
+  info "Inspector Lambda code status: $INSPECTOR_LAMBDA_CODE_STATUS"
+else
+  warn "effective_inspector_enabled=false. Skipping Inspector validation."
+fi
 
