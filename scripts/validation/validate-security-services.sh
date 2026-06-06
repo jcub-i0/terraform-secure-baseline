@@ -407,7 +407,7 @@ Security Hub ARN:                   ${SECURITY_HUB_ARN:-<unknown>}
 Inspector account status:           ${INSPECTOR_ACCOUNT_STATUS}
 Inspector EC2 status:               ${INSPECTOR_EC2_STATUS}
 Inspector Lambda status:            ${INSPECTOR_LAMBDA_STATUS}
-Inspector Lambd code status:        ${INSPECTOR_LAMBDA_CODE_STATUS}
+Inspector Lambda code status:        ${INSPECTOR_LAMBDA_CODE_STATUS}
 
 AWS Config recorder count:          ${CONFIG_RECORDER_COUNT}
 AWS Config delivery channel count:  ${CONFIG_DELIVERY_CHANNEL_COUNT}
