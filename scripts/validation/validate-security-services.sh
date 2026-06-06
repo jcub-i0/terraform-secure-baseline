@@ -38,7 +38,7 @@ fi
 
 require_env_name "$ENV_NAME"
 
-aws_args()
+aws_args=()
 if [[ -n "$AWS_PROFILE" ]]; then
   aws_args+=(--profile "$AWS_PROFILE")
 fi
