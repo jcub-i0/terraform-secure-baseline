@@ -217,7 +217,7 @@ trust_has_mfa_condition() {
             | contains("aws:MultiFactorAuthPresent")
           )
         )
-      '>/dev/null
+      ' >/dev/null
 }
 
 managed_policy_exists_by_name() {
