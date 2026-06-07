@@ -341,3 +341,21 @@ validate_service_trust "$BACKUP_ROLE" "backup.amazonaws.com"
 validate_service_trust "$PATCH_MW_ROLE" "ssm.amazonaws.com"
 validate_service_trust "$EVENTBRIDGE_SECOPS_ROLE" "events.amazonaws.com"
 
+section "Validating break-glass role trust policy"
+
+BREAK_GLASS_ROLE_JSON="$(get_role_json "$BREAK_GLASS_ROLE")"
+
+if trust_has_aws_principal "$BREAK_GLASS_ROLE_JSON"; then
+  success "Break-glass role trust policy includes an AWS principal"
+else
+  echo "$BREAK_GLASS_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
+  fail "Break-glass role trust policy does not include an AWS principal."
+fi
+
+if trust_has_mfa_condition "$BREAK_GLASS_ROLE_JSON"; then
+  success "Break-glass role trust policy includes MFA condition"
+else
+  echo "$BREAK_GLASS_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
+  warn "Break-glass role trust policy does not appear to include aws:MultiFactorAuthPresent. Review manually if MFA is enforced elsewhere."
+fi
+
