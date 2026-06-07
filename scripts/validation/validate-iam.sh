@@ -421,7 +421,7 @@ if terraform_output_exists "$OUTPUTS_JSON" logs_s3_readonly_policy_name; then
     fail "Terraform output logs_s3_readonly_policy_name exists, but IAM policy was not found: $LOGS_S3_READONLY_POLICY_NAME"
   fi
 else
-  warn "Terraform output logs_s3_readonly_policy_name not found. Skipping shared logs s3 policy check."
+  warn "Terraform output logs_s3_readonly_policy_name not found. Skipping shared logs S3 policy check."
 fi
 
 if terraform_output_exists "$OUTPUTS_JSON" logs_cmk_decrypt_policy_name; then
