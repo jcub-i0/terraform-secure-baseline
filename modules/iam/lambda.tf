@@ -29,11 +29,11 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 ## EC2 ISOLATION LAMBDA
 ### EC2 ISOLATION LAMBDA EXECUTION ROLE
 resource "aws_iam_role" "lambda_ec2_isolation" {
-  name               = "${var.name_prefix}-lambda-ec2-isolation-role"
+  name               = "${var.name_prefix}-lambda-ec2-isolation"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 
   tags = {
-    Name        = "Lambda-EC2-Isolation-Role"
+    Name        = "lambda-ec2-isolation"
     Terraform   = "true"
     Environment = var.environment
   }
