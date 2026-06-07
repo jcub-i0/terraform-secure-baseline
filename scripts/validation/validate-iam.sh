@@ -456,3 +456,7 @@ GitHub apply role present:    ${GITHUB_APPLY_PRESENT}
 Logs S3 policy output:        ${LOGS_S3_READONLY_POLICY_NAME:-<missing>}
 Logs CMK policy output:       ${LOGS_CMK_DECRYPT_POLICY_NAME:-<missing>}
 SUMMARY
+
+section "Validation Result"
+
+success "IAM validation completed successfully for: ${ENV_NAME}"
