@@ -259,3 +259,45 @@ validate_role_has_some_policy() {
     fi
 }
 
+section "Validating expected IAM role"
+
+# Core compute
+EC2_ROLE="${NAME_PREFIX}-ec2_compute_role"
+
+# Lambda automation
+LAMBDA_ISOLATION_ROLE="${NAME_PREFIX}-lambda-ec2-isolation"
+LAMBDA_ROLLBACK_ROLE="${NAME_PREFIX}-lambda-ec2-rollback"
+LAMBDA_IP_ENRICHMENT_ROLE="${NAME_PREFIX}-lambda-ip-enrichment"
+
+# Logging
+CLOUDTRAIL_CW_ROLE="${NAME_PREFIX}-cloudtrail-cloudwatch-role"
+VPC_FLOW_LOGS_ROLE="${NAME_PREFIX}-VpcFlowLogsRole"
+CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE="${NAME_PREFIX}-CloudWatchLogsToFirehose"
+FIREHOSE_FLOW_LOGS_ROLE="${NAME_PREFIX}-FirehoseFlowLogsRole"
+
+# Security / operations
+CONFIG_REMEDIATION_ROLE="${NAME_PREFIX}-ConfigRemediationRole"
+BACKUP_ROLE="${NAME_PREFIX}-backup-role"
+PATCH_MW_ROLE="${NAME_PREFIX}-patch-mw-role"
+EVENTBRIDGE_SECOPS_ROLE="${NAME_PREFIX}-EventBridgePutEventsToSecopsBus"
+BREAK_GLASS_ROLE="${NAME_PREFIX}-BreakGlass-Admin"
+
+EXPECTED_ROLES=(
+  "$EC2_ROLE"
+  "$LAMBDA_ISOLATION_ROLE"
+  "$LAMBDA_ROLLBACK_ROLE"
+  "$LAMBDA_IP_ENRICHMENT_ROLE"
+  "$CLOUDTRAIL_CW_ROLE"
+  "$VPC_FLOW_LOGS_ROLE"
+  "$CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE"
+  "$FIREHOSE_FLOW_LOGS_ROLE"
+  "$CONFIG_REMEDIATION_ROLE"
+  "$BACKUP_ROLE"
+  "$PATCH_MW_ROLE"
+  "$EVENTBRIDGE_SECOPS_ROLE"
+  "$BREAK_GLASS_ROLE"
+)
+
+for role_name in "${EXPECTED_ROLES[@]}"; do
+  validate_role_exists "$role_name"
+done
