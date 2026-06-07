@@ -452,7 +452,7 @@ AWS region:                   ${AWS_REGION}
 AWS account ID:               ${ACCOUNT_ID}
 Name prefix:                  ${NAME_PREFIX}
 
-Expected baseline roles:      ${#EXPECTED_ROLES[@]}
+Baseline roles validated:     ${#EXPECTED_ROLES[@]}
 GitHub plan role present:     ${GITHUB_PLAN_PRESENT}
 GitHub apply role present:    ${GITHUB_APPLY_PRESENT}
 
