@@ -365,3 +365,41 @@ for role_name in "${EXPECTED_ROLES[@]}"; do
   validate_role_has_some_policy "$role_name"
 done
 
+section "Checking optional GitHub OIDC roles"
+
+GITHUB_PLAN_ROLE="${NAME_PREFIX}-github-plan-role"
+GITHUB_APPLY_ROLE="${NAME_PREFIX}-github-apply-role"
+
+GITHUB_PLAN_PRESENT="false"
+GITHUB_APPLY_PRESENT="false"
+
+if validate_optional_role_exists "$GITHUB_PLAN_ROLE"; then
+  GITHUB_PLAN_PRESENT="true"
+fi
+
+if validate_optional_role_exists "$GITHUB_APPLY_ROLE"; then
+  GITHUB_APPLY_PRESENT="true"
+fi
+
+if [[ "$GITHUB_PLAN_PRESENT" == "true" ]]; then
+  GITHUB_PLAN_ROLE_JSON="$(get_role_json "$GITHUB_PLAN_ROLE")"
+
+  if echo "$GITHUB_PLAN_ROLE_JSON" | jq -e '.Role.AssumeRolePolicyDocument.Statement | tostring | contains("token.actions.githubusercontent.com")' >/dev/null; then
+    success "GitHub plan role trust references GitHub OIDC provider"
+  else
+    echo "$GITHUB_PLAN_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
+    warn "GitHub plan role exists but trust policy does not appear to reference token.actions.githubusercontent.com"
+  fi
+fi
+
+if [[ "$GITHUB_APPLY_PRESENT" == "true" ]]; then
+  GITHUB_APPLY_ROLE_JSON="$(get_role_json "$GITHUB_APPLY_ROLE")"
+
+  if echo "$GITHUB_APPLY_ROLE_JSON" | jq -e '.Role.AssumeRolePolicyDocument.Statement | tostring | contains("token.actions.githubusercontent.com")' >/dev/null; then
+    success "GitHub apply role trust references GitHub OIDC provider"
+  else
+    echo "$GITHUB_APPLY_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
+    warn "GitHub apply role exists but trust policy does not appear to reference token.actions.githubusercontent.com"
+  fi
+fi
+
