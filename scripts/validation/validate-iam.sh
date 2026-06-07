@@ -359,3 +359,9 @@ else
   warn "Break-glass role trust policy does not appear to include aws:MultiFactorAuthPresent. Review manually if MFA is enforced elsewhere."
 fi
 
+section "Checking role policy attachments"
+
+for role_name in "${EXPECTED_ROLES[@]}"; do
+  validate_role_has_some_policy "$role_name"
+done
+
