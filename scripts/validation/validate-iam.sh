@@ -439,3 +439,20 @@ if terraform_output_exists "$OUTPUTS_JSON" logs_cmk_decrypt_policy_name; then
 else
   warn "Terraform output logs_cmk_decrypt_policy_name not found. Skipping shared logs CMK decrypt policy check."
 fi
+
+section "IAM Summary"
+
+cat <<SUMMARY
+Environment:                  ${ENV_NAME}
+AWS profile:                  ${AWS_PROFILE:-<default>}
+AWS region:                   ${AWS_REGION}
+AWS account ID:               ${ACCOUNT_ID}
+Name prefix:                  ${NAME_PREFIX}
+
+Expected baseline roles:      ${#EXPECTED_ROLES[@]}
+GitHub plan role present:     ${GITHUB_PLAN_PRESENT}
+GitHub apply role present:    ${GITHUB_APPLY_PRESENT}
+
+Logs S3 policy output:        ${LOGS_S3_READONLY_POLICY_NAME:-<missing>}
+Logs CMK policy output:       ${LOGS_CMK_DECRYPT_POLICY_NAME:-<missing>}
+SUMMARY
