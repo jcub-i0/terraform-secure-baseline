@@ -301,3 +301,43 @@ EXPECTED_ROLES=(
 for role_name in "${EXPECTED_ROLES[@]}"; do
   validate_role_exists "$role_name"
 done
+
+section "Validating service trust policies"
+
+validate_service_trust "$EC2_ROLE" "ec2.amazonaws.com"
+
+validate_service_trust "$LAMBDA_ISOLATION_ROLE" "lambda.amazonaws.com"
+validate_service_trust "$LAMBDA_ROLLBACK_ROLE" "lambda.amazonaws.com"
+validate_service_trust "$LAMBDA_IP_ENRICHMENT_ROLE" "lambda.amazonaws.com"
+
+validate_service_trust "$CLOUDTRAIL_CW_ROLE" "cloudtrail.amazonaws.com"
+validate_service_trust "$VPC_FLOW_LOGS_ROLE" "vpc-flow-logs.amazonaws.com"
+validate_service_trust "$FIREHOSE_FLOW_LOGS_ROLE" "firehose.amazonaws.com"
+
+# CloudWatch Logs service principals are often regional, i.e.
+# logs.us-east-1.amazonaws.com. Validate the regional form first.
+if trust_has_service_principal "$(get_role_json "$CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE")" "logs.${AWS_REGION}.amazonaws.com"; then
+  success "Trust policy for ${CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE} includes service principal: logs.${AWS_REGION}.amazonaws.com"
+elif trust_has_service_principal "$(get_role_json "$CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE")" "logs.amazonaws.com"; then
+  success "Trust policy for ${CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE} includes service principal: logs.amazonaws.com"
+else
+  get_role_json "$CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE" | jq '.Role.AssumeRolePolicyDocument'
+  fail "Trust policy for ${CLOUDWATCH_LOGS_TO_FIREHOSE_ROLE} does not include expected CloudWatch Logs service principal."
+fi
+
+# Depending on implementation, Config remediation may be assumed by SSM Automation
+# or by Config. Accept either to avoid false negatives.
+CONFIG_REMEDIATION_ROLE="$(get_role_json "$CONFIG_REMEDIATION_ROLE")"
+if trust_has_service_principal "$CONFIG_REMEDIATION_ROLE_JSON" "ssm.amazonaws.com"; then
+  success "Trust policy for ${CONFIG_REMEDIATION_ROLE} includes service principal: ssm.amazonaws.com"
+elif trust_has_service_principal "$CONFIG_REMEDIATION_ROLE_JSON" "config.amazonaws.com"; then
+  success "Trust policy for ${CONFIG_REMEDIATION_ROLE} includes service principal: config.amazonaws.com"
+else
+  echo "$CONFIG_REMEDIATION_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
+  fail "Trust policy for ${CONFIG_REMEDIATION_ROLE} does not include ssm.amazonaws.com or config.amazonaws.com."
+fi
+
+validate_service_trust "$BACKUP_ROLE" "backup.amazonaws.com"
+validate_service_trust "$PATCH_MW_ROLE" "ssm.amazonaws.com"
+validate_service_trust "$EVENTBRIDGE_SECOPS_ROLE" "events.amazonaws.com"
+
