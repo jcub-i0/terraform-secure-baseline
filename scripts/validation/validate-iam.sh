@@ -259,7 +259,7 @@ validate_role_has_some_policy() {
     fi
 }
 
-section "Validating expected IAM role"
+section "Validating expected IAM roles"
 
 # Core compute
 EC2_ROLE="${NAME_PREFIX}-ec2_compute_role"
