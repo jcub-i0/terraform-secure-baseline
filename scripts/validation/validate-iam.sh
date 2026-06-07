@@ -403,3 +403,39 @@ if [[ "$GITHUB_APPLY_PRESENT" == "true" ]]; then
   fi
 fi
 
+section "Checking shared IAM policies from Terraform outputs"
+
+LOGS_S3_READONLY_POLICY_NAME=""
+LOGS_CMK_DECRYPT_POLICY_NAME=""
+
+if terraform_output_exists "$OUTPUTS_JSON" logs_s3_readonly_policy_name; then
+  LOGS_S3_READONLY_POLICY_NAME="$(get_terraform_output_value "$OUTPUTS_JSON" logs_s3_readonly_policy_name)"
+  info "Resolved logs_s3_readonly_policy_name: $LOGS_S3_READONLY_POLICY_NAME"
+
+  LOGS_S3_POLICY_ARN="$(managed_policy_exists_by_name "$LOGS_S3_READONLY_POLICY_NAME")"
+
+  if [[ -n "$LOGS_S3_POLICY_ARN" && "$LOGS_S3_POLICY_ARN" != "None" ]]; then
+    success "Shared IAM policy exists: $LOGS_S3_READONLY_POLICY_NAME"
+    info "Policy ARN: $LOGS_S3_POLICY_ARN"
+  else
+    fail "Terraform output logs_s3_readonly_policy_name exists, but IAM policy was not found: $LOGS_S3_READONLY_POLICY_NAME"
+  fi
+else
+  warn "Terraform output logs_s3_readonly_policy_name not found. Skipping shared logs s3 policy check."
+fi
+
+if terraform_output_exists "$OUTPUTS_JSON" logs_cmk_decrypt_policy_name; then
+  LOGS_CMK_DECRYPT_POLICY_NAME="$(get_terraform_output_value "$OUTPUTS_JSON" logs_cmk_decrypt_policy_name)"
+  info "Resolved logs_cmk_decrypt_policy_name: $LOGS_CMK_DECRYPT_POLICY_NAME"
+
+  LOGS_CMK_POLICY_ARN="$(managed_policy_exists_by_name "$LOGS_CMK_DECRYPT_POLICY_NAME")"
+
+  if [[ -n "$LOGS_CMK_POLICY_ARN" && "$LOGS_CMK_POLICY_ARN" != "None" ]]; then
+    success "Shared IAM policy exists: $LOGS_CMK_DECRYPT_POLICY_NAME"
+    info "Policy ARN: $LOGS_CMK_POLICY_ARN"
+  else
+    fail "Terraform output logs_cmk_decrypt_policy_name exists, but IAM policy was not found: $LOGS_CMK_DECRYPT_POLICY_NAME"
+  fi
+else
+  warn "Terraform output logs_cmk_decrypt_policy_name not found. Skipping shared logs CMK decrypt policy check."
+fi
