@@ -327,7 +327,7 @@ fi
 
 # Depending on implementation, Config remediation may be assumed by SSM Automation
 # or by Config. Accept either to avoid false negatives.
-CONFIG_REMEDIATION_ROLE="$(get_role_json "$CONFIG_REMEDIATION_ROLE")"
+CONFIG_REMEDIATION_ROLE_JSON="$(get_role_json "$CONFIG_REMEDIATION_ROLE")"
 if trust_has_service_principal "$CONFIG_REMEDIATION_ROLE_JSON" "ssm.amazonaws.com"; then
   success "Trust policy for ${CONFIG_REMEDIATION_ROLE} includes service principal: ssm.amazonaws.com"
 elif trust_has_service_principal "$CONFIG_REMEDIATION_ROLE_JSON" "config.amazonaws.com"; then
