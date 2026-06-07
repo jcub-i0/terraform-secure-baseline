@@ -298,8 +298,11 @@ EXPECTED_ROLES=(
   "$BREAK_GLASS_ROLE"
 )
 
+VALIDATED_ROLE_COUNT=0
+
 for role_name in "${EXPECTED_ROLES[@]}"; do
   validate_role_exists "$role_name"
+  VALIDATED_ROLE_COUNT=$((VALIDATED_ROLE_COUNT + 1))
 done
 
 section "Validating service trust policies"
