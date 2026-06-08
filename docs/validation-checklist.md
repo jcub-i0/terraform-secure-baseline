@@ -124,12 +124,39 @@ export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 
 ## Automated Workload Validation
 
-For deployed workload environments, the manual checks for environment outputs, networking, VPC endpoints, logging, security services, and IAM can be run with:
+For deployed workload environments, the safe, read-only workload-account checks for environment outputs, networking, VPC endpoints, logging, security services, and IAM can be run with the validation scripts in `scripts/validation/`.
+
+Set the expected account ID when running validation so the scripts can confirm that the selected AWS profile is pointed at the correct workload account.
 
 ```bash
-AWS_PROFILE=dev AWS_REGION=us-east-1 ./scripts/validation/validate-all.sh dev
-AWS_PROFILE=staging AWS_REGION=us-east-1 ./scripts/validation/validate-all.sh staging
-AWS_PROFILE=prod AWS_REGION=us-east-1 ./scripts/validation/validate-all.sh prod
+AWS_PAGER="" \
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/validation/validate-all.sh dev
+
+AWS_PAGER="" \
+AWS_PROFILE=staging \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
+./scripts/validation/validate-all.sh staging
+
+AWS_PAGER="" \
+AWS_PROFILE=prod \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+./scripts/validation/validate-all.sh prod
+```
+
+If a non-default naming convention is used, pass `NAME_PREFIX` explicitly:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+NAME_PREFIX="tf-secure-baseline-dev" \
+./scripts/validation/validate-all.sh dev
 ```
 
 These scripts automate the safe, read-only workload-account checks in this checklist.
