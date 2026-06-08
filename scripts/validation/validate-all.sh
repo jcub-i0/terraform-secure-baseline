@@ -86,6 +86,25 @@ Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}
 Validation scripts failed: ${FAILED_SCRIPT}/${TOTAL_COUNT}
 SUMMARY
 
+if [[ "${PASSED_COUNT}" -gt 0 ]]; then
+  echo
+  echo "Passed scripts:"
+  for script_name in "${PASS_SCRIPTS[@]}"; do
+    echo "- ${script_name}"
+  done
+fi
+
+if [[ "$FAILED_COUNT" -gt 0 ]]; then
+  echo
+  echo "Failed scripts:"
+  for script_name in "${FAILED_SCRIPTS[@]}"; do
+    echo "- ${script_name}"
+  done
+
+  section "Validation Result"
+  fail "Full validation suite completed with ${FAILED_COUNT} failed script(s)."
+fi
+
 section "Validation Result"
 
 success "Full validation suite completed successfully for: ${ENV_NAME}"
