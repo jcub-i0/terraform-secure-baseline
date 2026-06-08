@@ -122,6 +122,22 @@ export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 
 ---
 
+## Automated Workload Validation
+
+For deployed workload environments, the manual checks for environment outputs, networking, VPC endpoints, logging, security services, and IAM can be run with:
+
+```bash
+AWS_PROFILE=dev AWS_REGION=us-east-1 ./scripts/validation/validate-all.sh dev
+AWS_PROFILE=staging AWS_REGION=us-east-1 ./scripts/validation/validate-all.sh staging
+AWS_PROFILE=prod AWS_REGION=us-east-1 ./scripts/validation/validate-all.sh prod
+```
+
+These scripts automate the safe, read-only workload-account checks in this checklist.
+
+Manual validation is still required for control-plane resources, Identity Center assignments, live Lambda workflow tests, tamper tests, break-glass tests, GitHub Actions workflow review, and destroy safety.
+
+---
+
 # 1. Validate AWS CLI Identity
 
 ## Purpose
