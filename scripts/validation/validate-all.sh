@@ -53,8 +53,10 @@ FAILED_SCRIPTS=()
 for validation_script in "${VALIDATION_SCRIPTS[@]}"; do
   script_path="${SCRIPT_DIR}/${validation_script}"
 
-  if [[ -x "$script_path" ]]; then
-    fail "Validation script not found or not executable: $script_path"
+  if [[ ! -x "$script_path" ]]; then
+    warn "Validation script not found or not executable: $script_path"
+    FAILED_SCRIPTS+=("$validation_script")
+    continue
   fi
 
   section "Running ${validation_script}"
@@ -63,10 +65,14 @@ for validation_script in "${VALIDATION_SCRIPTS[@]}"; do
     PASSED_COUNT=$((PASSED_COUNT + 1))
     success "${validation_script} completed successfully"
   else
-    FAILED_SCRIPT="$validation_script"
-    fail "${validation_script} failed."
+    FAILED_SCRIPTS+="$validation_script"
+    warn "${validation_script} failed."
   fi
 done
+
+PASSED_COUNT="${#PASSED_SCRIPTS[@]}"
+FAILED_COUNT="${#FAILED_SCRIPTS[@]}"
+TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
 
 section "Full Validation Summary"
 
@@ -76,8 +82,8 @@ AWS profile: ${AWS_PROFILE:-<default>}
 AWS region: ${AWS_REGION}
 Name prefix: ${NAME_PREFIX}
 
-Validation scripts passed: ${PASSED_COUNT}/${#VALIDATION_SCRIPTS[@]}
-Failed script: ${FAILED_SCRIPT:-<none>}
+Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}
+Validation scripts failed: ${FAILED_SCRIPT}/${TOTAL_COUNT}
 SUMMARY
 
 section "Validation Result"
