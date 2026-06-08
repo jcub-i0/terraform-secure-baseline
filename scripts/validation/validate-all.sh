@@ -47,8 +47,8 @@ VALIDATION_SCRIPTS=(
   "validate-iam.sh"
 )
 
-PASSED_COUNT=0
-FAILED_SCRIPT=""
+PASSED_SCRIPTS=()
+FAILED_SCRIPTS=()
 
 for validation_script in "${VALIDATION_SCRIPTS[@]}"; do
   script_path="${SCRIPT_DIR}/${validation_script}"
