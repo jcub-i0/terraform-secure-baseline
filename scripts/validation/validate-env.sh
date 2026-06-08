@@ -148,7 +148,7 @@ Environment:                            ${ENV_NAME}
 AWS profile:                            ${AWS_PROFILE:-<default>}
 AWS region:                             ${AWS_REGION}
 AWS account ID:                         ${AWS_ACCOUNT_ID}
-Expected AWS account ID: ${EXPECTED_ACCOUNT_ID:-<not set>}
+Expected AWS account ID:                ${EXPECTED_ACCOUNT_ID:-<not set>}
 AWS caller ARN:                         ${AWS_CALLER_ARN}
 
 Terraform environment directory:        ${ENV_DIR}
