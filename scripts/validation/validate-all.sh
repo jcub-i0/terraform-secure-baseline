@@ -67,3 +67,16 @@ for validation_script in "${VALIDATION_SCRIPTS[@]}"; do
     fail "${validation_script} failed."
   fi
 done
+
+section "Full Validation Summary"
+
+cat <<SUMMARY
+Environment: ${ENV_NAME}
+AWS profile: ${AWS_PROFILE:-<default>}
+AWS region: ${AWS_REGION}
+Name prefix: ${NAME_PREFIX}
+
+Validation scripts passed: ${PASSED_COUNT}/${#VALIDATION_SCRIPTS[@]}
+Failed script: ${FAILED_SCRIPT:-<none>}
+SUMMARY
+
