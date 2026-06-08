@@ -77,13 +77,13 @@ TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
 section "Full Validation Summary"
 
 cat <<SUMMARY
-Environment: ${ENV_NAME}
-AWS profile: ${AWS_PROFILE:-<default>}
-AWS region: ${AWS_REGION}
-Name prefix: ${NAME_PREFIX}
+Environment:                ${ENV_NAME}
+AWS profile:                ${AWS_PROFILE:-<default>}
+AWS region:                 ${AWS_REGION}
+Name prefix:                ${NAME_PREFIX}
 
-Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}
-Validation scripts failed: ${FAILED_COUNT}/${TOTAL_COUNT}
+Validation scripts passed:  ${PASSED_COUNT}/${TOTAL_COUNT}
+Validation scripts failed:  ${FAILED_COUNT}/${TOTAL_COUNT}
 SUMMARY
 
 if [[ "${PASSED_COUNT}" -gt 0 ]]; then
