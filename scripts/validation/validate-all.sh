@@ -89,7 +89,7 @@ SUMMARY
 if [[ "${PASSED_COUNT}" -gt 0 ]]; then
   echo
   echo "Passed scripts:"
-  for script_name in "${PASS_SCRIPTS[@]}"; do
+  for script_name in "${PASSED_SCRIPTS[@]}"; do
     echo "- ${script_name}"
   done
 fi
