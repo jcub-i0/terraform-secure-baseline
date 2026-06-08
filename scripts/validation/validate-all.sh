@@ -64,7 +64,7 @@ for validation_script in "${VALIDATION_SCRIPTS[@]}"; do
 
   section "Running ${validation_script}"
 
-  if AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" NAME_PREFIX="$NAME_PREFIX" "$script_path" "$ENV_NAME"; then
+  if AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" NAME_PREFIX="$NAME_PREFIX" EXPECTED_ACCOUNT_ID="$EXPECTED_ACCOUNT_ID" "$script_path" "$ENV_NAME"; then
     PASSED_SCRIPTS+=("$validation_script")
     success "${validation_script} completed successfully"
   else
