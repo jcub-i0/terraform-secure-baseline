@@ -80,3 +80,6 @@ Validation scripts passed: ${PASSED_COUNT}/${#VALIDATION_SCRIPTS[@]}
 Failed script: ${FAILED_SCRIPT:-<none>}
 SUMMARY
 
+section "Validation Result"
+
+success "Full validation suite completed successfully for: ${ENV_NAME}"
