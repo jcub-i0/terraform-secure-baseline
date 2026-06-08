@@ -22,6 +22,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 ENV_NAME="${1:-}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
