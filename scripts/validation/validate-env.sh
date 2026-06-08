@@ -13,6 +13,8 @@
 
 set -euo pipefail
 
+export AWS_PAGER=""
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
@@ -20,6 +22,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 ENV_NAME="${1:-}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
@@ -74,6 +77,16 @@ fi
 success "AWS credentials are valid"
 info "AWS account ID: $AWS_ACCOUNT_ID"
 info "AWS caller ARN: $AWS_CALLER_ARN"
+
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  if [[ "$AWS_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
+    success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
+  else
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${AWS_ACCOUNT_ID}"
+  fi
+else
+  warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
+fi
 
 section "Checking Terraform environment outputs"
 
@@ -135,6 +148,7 @@ Environment:                            ${ENV_NAME}
 AWS profile:                            ${AWS_PROFILE:-<default>}
 AWS region:                             ${AWS_REGION}
 AWS account ID:                         ${AWS_ACCOUNT_ID}
+Expected AWS account ID:                ${EXPECTED_ACCOUNT_ID:-<not set>}
 AWS caller ARN:                         ${AWS_CALLER_ARN}
 
 Terraform environment directory:        ${ENV_DIR}
