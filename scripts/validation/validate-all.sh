@@ -33,3 +33,37 @@ require_env_name "$ENV_NAME"
 
 section "tf-secure-baseline Full Validation Suite"
 
+info "Environment: $ENV_NAME"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
+info "NAME_PREFIX: $NAME_PREFIX"
+
+VALIDATION_SCRIPTS=(
+  "validate-env.sh"
+  "validate-networking.sh"
+  "validate-vpc-endpoints.sh"
+  "validate-logging.sh"
+  "validate-security-services.sh"
+  "validate-iam.sh"
+)
+
+PASSED_COUNT=0
+FAILED_SCRIPT=""
+
+for validation_script in "${VALIDATION_SCRIPTS[@]}"; do
+  script_path="${SCRIPT_DIR}/${validation_script}"
+
+  if [[ -x "$script_path" ]]; then
+    fail "Validation script not found or not executable: $script_path"
+  fi
+
+  section "Running ${validation_script}"
+
+  if AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" NAME_PREFIX="$NAME_PREFIX" "$script_path" "$ENV_NAME"; then
+    PASSED_COUNT=$((PASSED_COUNT + 1))
+    success "${validation_script} completed successfully"
+  else
+    FAILED_SCRIPT="$validation_script"
+    fail "${validation_script} failed."
+  fi
+done
