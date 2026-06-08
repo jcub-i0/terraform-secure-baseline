@@ -65,7 +65,7 @@ for validation_script in "${VALIDATION_SCRIPTS[@]}"; do
     PASSED_COUNT=$((PASSED_COUNT + 1))
     success "${validation_script} completed successfully"
   else
-    FAILED_SCRIPTS+="$validation_script"
+    FAILED_SCRIPTS+=("$validation_script")
     warn "${validation_script} failed."
   fi
 done
@@ -83,7 +83,7 @@ AWS region: ${AWS_REGION}
 Name prefix: ${NAME_PREFIX}
 
 Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}
-Validation scripts failed: ${FAILED_SCRIPT}/${TOTAL_COUNT}
+Validation scripts failed: ${FAILED_COUNT}/${TOTAL_COUNT}
 SUMMARY
 
 if [[ "${PASSED_COUNT}" -gt 0 ]]; then
