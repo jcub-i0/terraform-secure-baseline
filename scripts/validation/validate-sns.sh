@@ -160,7 +160,6 @@ echo "$MATCHING_TOPICS_JSON" |
 # -----------------------------------------------------------------------------
 # SNS helper functions
 # -----------------------------------------------------------------------------
-
 find_topic_by_keyword() {
   local keyword="$1"
 
@@ -171,14 +170,14 @@ find_topic_by_keyword() {
         | select((.TopicArn | ascii_downcase) | contains($keyword))
         | .TopicArn
       ]
-      first // empty
+      | first // empty
     '
 }
 
 validate_topic() {
   local label="$1"
   local keyword="$2"
-  local requried="$3"
+  local required="$3"
 
   local topic_arn
   local attrs_json
@@ -232,7 +231,7 @@ validate_topic() {
       --output json
   )"
 
-  subscription_count="$(echo "$subscription_json" | jq '.Subscriptions | length')"
+  subscription_count="$(echo "$subscriptions_json" | jq '.Subscriptions | length')"
 
   if [[ "$subscription_count" -gt 0 ]]; then
     success "SNS topic for ${label} has subscriptions: $subscription_count"
