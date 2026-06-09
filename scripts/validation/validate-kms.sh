@@ -85,7 +85,7 @@ info "AWS_REGION: $AWS_REGION"
 require_directory "$ENV_DIR"
 success "Environmnet directory exists"
 
-$OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
+OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
 
 if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
   fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
