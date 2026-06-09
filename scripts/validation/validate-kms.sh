@@ -137,3 +137,114 @@ else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
 
+# -----------------------------------------------------------------------------
+# KMS helper functions
+# -----------------------------------------------------------------------------
+
+find_alias_by_keyword() {
+  local keyword="$1"
+
+  echo "$ALIASES_JSON" |
+    jq -r --arg prefix "$NAME_PREFIX" --arg keyword "$keyword" '
+      [
+        .Aliases[]
+        | select(.TargetKeyId != null)
+        | select(.AliasName | contains($prefix))
+        | select((.AliasName | ascii_downcase) | contains($keyword))
+        | .AliasName
+      ]
+      | first // empty
+    '
+}
+
+validate_alias_and_key() {
+  local label="$1"
+  local keyword="$2"
+  local required="$3"
+
+  local alias_name
+  local key_id
+  local key_metadata_json
+  local key_state
+  local key_manager
+  local key_rotation_enabled
+
+  alias_name="$(find_alias_by_keyword "$keyword")"
+
+  if [[ -z "$alias_name" ]]; then
+    if [[ "$required" == "true" ]]; then
+      fail "Required KMS alias not found for ${label}. Expected alias containing prefix '${NAME_PREFIX}' and keyword '${keyword}'."
+    else
+      warn "Optional KMS alias not found for ${label}. Expected alias containing prefix '${NAME_PREFIX}' and keyword '${keyword}'."
+      return 0
+    fi
+  fi
+
+  success "KMS alias exists for ${label}: ${alias_name}"
+
+  key_id="$(
+    echo "$ALIASES_JSON" |
+      jq -r --arg alias_name "$alias_name" '
+        .Aliases[]
+        | select(.AliasName == $alias_name)
+        | .TargetKeyId
+      '
+  )"
+
+  if [[ -z "$key_id" || "$key_id" == "null" ]]; then
+    fail "KMS alias ${alias_name} does not have a TargetKeyId."
+  fi
+
+  key_metadata_json="$(
+    aws kms describe-key \
+      "${aws_args[@]}" \
+      --key-id "$alias_name" \
+      --output json
+  )"
+
+  key_state="$(
+    echo "$key_metadata_json" |
+      jq -r '.KeyMetadata.KeyState'
+  )"
+
+  key_manager="$(
+    echo "$key_metadata_json" |
+      jq -r '.KeyMetadata.KeyManager'
+  )"
+
+  if [[ "$key_state" == "Enabled" ]]; then
+    success "KMS key for ${label} is enabled"
+  else
+    echo "$key_metadata_json" | jq '.KeyMetadata'
+    fail "KMS key for ${label} is not enabled. Current state: ${key_state}"
+  fi
+
+  if [[ "$key_manager" == "CUSTOMER" ]]; then
+    success "KMS key for ${label} is customer managed"
+  else
+    warn "KMS key for ${label} is not customer managed. KeyManager=${key_manager}"
+  fi
+
+  if key_rotation_enabled="$(
+    aws kms get-key-rotation-status \
+      "${aws_args[@]}" \
+      --key-id "$alias_name" \
+      --query 'KeyRotationEnabled' \
+      --output text 2>/dev/null
+  )"; then
+    if [[ "$key_rotation_enabled" == "True" || "$key_rotation_enabled" == "true" ]]; then
+      success "KMS key rotation is enabled for ${label}"
+    else
+      warn "KMS key rotation is not enabled for ${label}"
+    fi
+  else
+    warn "Unable to read key rotation status for ${label}. This may be expected for some key types."
+    key_rotation_enabled="unknown"
+  fi
+
+  VALIDATED_KEY_COUNT=$((VALIDATED_KEY_COUNT + 1))
+
+  KMS_SUMMARY_ROWS+=("${label}|${alias_name}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
+}
+
+
