@@ -270,3 +270,87 @@ validate_topic() {
 
   SNS_SUMMARY_ROWS+=("${label}|${topic_arn}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|${subscriptions_deleted}|${kms_key_id:-<none>}")
 }
+
+section "Validating expected SNS topics"
+
+VALIDATED_TOPIC_COUNT=0
+REQUIRED_TOPIC_COUNT=0
+OPTIONAL_TOPIC_COUNT=0
+TOTAL_SUBSCRIPTION_COUNT=0
+TOTAL_PENDING_SUBSCRIPTION_COUNT=0
+SNS_SUMMARY_ROWS=()
+
+# Keep these broad enough to match current topic names.
+# These labels correspond to common baseline notification patterns:
+# - security / SecOps alerts
+# - compliance or general baseline notifications
+# - automation workflow notifications
+#
+# If actual topic names are more specific, adjust the keywords after
+# the first test run.
+
+validate_topic "security alerts" "security" "false"
+validate_topic "secops alerts" "secops" "false"
+validate_topic "compliance alerts" "compliance" "false"
+validate_topic "automation notifications" "automation" "false"
+validate_topic "alerts" "alert" "false"
+
+if [[ "$VALIDATED_TOPIC_COUNT" -eq 0 ]]; then
+  warn "No expected SNS topic keywords matched. Falling back to validating all environment-matching topics."
+
+  while IFS= read -r topic_arn; do
+    [[ -z "$topic_arn" ]] && continue
+
+    keyword="$(basename "$topic_arn")"
+
+    # Direct fallback validation for any matching topic.
+    attrs_json="$(
+      aws sns get-topic-attributes \
+        "${aws_args[@]}" \
+        --topic-arn "$topic_arn" \
+        --output json
+    )"
+
+    kms_key_id="$(echo "$attrs_json" | jq -r '.Attributes.KmsMasterKeyId // empty')"
+    subscriptions_confirmed="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsConfirmed // "0"')"
+    subscriptions_pending="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
+    subscriptions_deleted="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
+
+    subscriptions_json="$(
+      aws sns list-subscriptions-by-topic \
+        "${aws_args[@]}" \
+        --topic-arn "$topic_arn" \
+        --output json
+    )"
+
+    subscription_count="$(echo "$subscriptions_json" | jq '.Subscriptions | length')"
+
+    pending_count="$(
+      echo "$subscriptions_json" |
+        jq '[.Subscriptions[] | select(.SubscriptionArn == "PendingConfirmation")] | length'
+    )"
+
+    if [[ "$pending_count" -eq 0 ]]; then
+      success "SNS topic has no pending subscription confirmations: $topic_arn"
+    else
+      warn "SNS topic has pending subscription confirmations: $topic_arn"
+    fi
+
+    if [[ -n "$kms_key_id" ]]; then
+      success "SNS topic has KMS encryption configured: $topic_arn"
+    else
+      warn "SNS topic does not show KMS encryption in topic attributes: $topic_arn"
+    fi
+
+    VALIDATED_TOPIC_COUNT=$((VALIDATED_TOPIC_COUNT + 1))
+    OPTIONAL_TOPIC_COUNT=$((OPTIONAL_TOPIC_COUNT + 1))
+    TOTAL_SUBSCRIPTION_COUNT=$((TOTAL_SUBSCRIPTION_COUNT + subscription_count))
+    TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_count))
+
+    SNS_SUMMARY_ROWS+=("${keyword}|${topic_arn}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|${subscriptions_deleted}|${kms_key_id:-<none>}")
+  done < <(echo "$MATCHING_TOPICS_JSON" | jq -r '.[].TopicArn')
+fi
+
+if [[ "$VALIDATED_TOPIC_COUNT" -eq 0 ]]; then
+  fail "SNS topics were found for the environment, but none could be validated."
+fi
