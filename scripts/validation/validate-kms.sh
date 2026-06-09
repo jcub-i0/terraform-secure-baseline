@@ -300,3 +300,36 @@ else
   warn "effective_backup_enabled=false. Skipping required Backup CMK validation."
   validate_alias_and_key "backup" "backup" "false"
 fi
+
+section "KMS Summary"
+
+cat <<SUMMARY
+Environment:                  ${ENV_NAME}
+AWS profile:                  ${AWS_PROFILE:-<default>}
+AWS region:                   ${AWS_REGION}
+AWS account ID:               ${ACCOUNT_ID}
+Name prefix:                  ${NAME_PREFIX}
+
+Matching environment aliases: ${MATCHING_ALIAS_COUNT}
+Validated KMS keys:           ${VALIDATED_KEY_COUNT}
+effective_backup_enabled:     ${EFFECTIVE_BACKUP_ENABLED}
+SUMMARY
+
+if [[ "${#KMS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
+  echo
+  echo "Validated keys:"
+  printf '%s\n' "${KMS_SUMMARY_ROWS[@]}" |
+    awk -F'|' '
+      BEGIN {
+        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", "Label", "Alias", "KeyId", "State", "Manager", "Rotation"
+        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", "-----", "-----", "-----", "-----", "-------", "--------"
+      }
+      {
+        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", $1, $2, $3, $4, $5, $6
+      }
+    '
+fi
+
+section "Validation Result"
+
+success "KMS validation completed successfully for: ${ENV_NAME}"
