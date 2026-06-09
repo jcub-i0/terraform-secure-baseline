@@ -354,3 +354,35 @@ fi
 if [[ "$VALIDATED_TOPIC_COUNT" -eq 0 ]]; then
   fail "SNS topics were found for the environment, but none could be validated."
 fi
+
+section "SNS Summary"
+
+cat <<SUMMARY
+Environment:                        ${ENV_NAME}
+AWS profile:                        ${AWS_PROFILE:-<default>}
+AWS region:                         ${AWS_REGION}
+AWS account ID:                     ${ACCOUNT_ID}
+Name prefix:                        ${NAME_PREFIX}
+
+Matching environment topics:        ${MATCHING_TOPIC_COUNT}
+Required SNS topics validated:      ${REQUIRED_TOPIC_COUNT}
+Optional SNS topics validated:      ${OPTIONAL_TOPIC_COUNT}
+Total SNS topics validated:         ${VALIDATED_TOPIC_COUNT}
+Total subscriptions discovered:     ${TOTAL_SUBSCRIPTION_COUNT}
+Pending subscription confirmations: ${TOTAL_PENDING_SUBSCRIPTION_COUNT}
+SUMMARY
+
+if [[ "${#SNS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
+  echo
+  echo "Validated topics:"
+  printf '%s\n' "${SNS_SUMMARY_ROWS[@]}" |
+    awk -F'|' '
+      BEGIN {
+        printf "%-28s %-95s %-14s %-10s %-10s %-10s %-40s\n", "Label", "TopicArn", "Subscriptions", "Confirmed", "Pending", "Deleted", "KmsKeyId"
+        printf "%-28s %-95s %-14s %-10s %-10s %-10s %-40s\n", "-----", "--------", "-------------", "---------", "-------", "-------", "--------"
+      }
+      {
+        printf "%-28s %-95s %-14s %-10s %-10s %-10s %-40s\n", $1, $2, $3, $4, $5, $6, $7
+      }
+    '
+fi
