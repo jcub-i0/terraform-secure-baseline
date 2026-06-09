@@ -313,7 +313,7 @@ if [[ "$VALIDATED_TOPIC_COUNT" -eq 0 ]]; then
     kms_key_id="$(echo "$attrs_json" | jq -r '.Attributes.KmsMasterKeyId // empty')"
     subscriptions_confirmed="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsConfirmed // "0"')"
     subscriptions_pending="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
-    subscriptions_deleted="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
+    subscriptions_deleted="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsDeleted // "0"')"
 
     subscriptions_json="$(
       aws sns list-subscriptions-by-topic \
