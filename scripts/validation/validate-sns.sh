@@ -54,3 +54,19 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--profile "$AWS_REGION")
 fi
 
+section "tf-secure-baseline SNS Validation"
+
+section "Checking required local commands"
+
+require_command aws
+success "aws CLI found"
+
+require_command terraform
+success "terraform found"
+
+require_command jq
+success "jq cound"
+
+require_command git
+success "git found"
+
