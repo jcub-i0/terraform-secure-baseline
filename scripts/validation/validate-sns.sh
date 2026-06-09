@@ -51,7 +51,7 @@ if [[ -n "$AWS_PROFILE" ]]; then
 fi
 
 if [[ -n "$AWS_REGION" ]]; then
-  aws_args+=(--profile "$AWS_REGION")
+  aws_args+=(--region "$AWS_REGION")
 fi
 
 section "tf-secure-baseline SNS Validation"
