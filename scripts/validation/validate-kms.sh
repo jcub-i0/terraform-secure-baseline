@@ -281,3 +281,22 @@ echo "$ALIASES_JSON" |
     | select(.AliasName | contains($prefix))
     | "- " + .AliasName
   '
+
+section "Validating expected KMS aliases and keys"
+
+VALIDATED_KEY_COUNT=0
+KMS_SUMMARY_ROWS=()
+
+# Required workload/environment keys.
+validate_alias_and_key "logs" "logs" "true"
+validate_alias_and_key "lambda" "lambda" "true"
+validate_alias_and_key "ebs" "ebs" "true"
+validate_alias_and_key "secrets manager" "secrets" "true"
+
+# Backup is profile/override dependent.
+if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
+  validate_alias_and_key "backup" "backup" "true"
+else
+  warn "effective_backup_enabled=false. Skipping required Backup CMK validation."
+  validate_alias_and_key "backup" "backup" "false"
+fi
