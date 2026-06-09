@@ -156,3 +156,117 @@ fi
 info "Matching SNS topics:"
 echo "$MATCHING_TOPICS_JSON" |
   jq -r '.[] | "- " + .TopicArn'
+
+# -----------------------------------------------------------------------------
+# SNS helper functions
+# -----------------------------------------------------------------------------
+
+find_topic_by_keyword() {
+  local keyword="$1"
+
+  echo "$MATCHING_TOPICS_JSON" |
+    jq -r --arg keyword "$keyword" '
+      [
+        .[]
+        | select((.TopicArn | ascii_downcase) | contains($keyword))
+        | .TopicArn
+      ]
+      first // empty
+    '
+}
+
+validate_topic() {
+  local label="$1"
+  local keyword="$2"
+  local requried="$3"
+
+  local topic_arn
+  local attrs_json
+  local display_name
+  local kms_key_id
+  local subscriptions_confirmed
+  local subscriptions_pending
+  local subscriptions_deleted
+  local subscriptions_json
+  local subscription_count
+  local pending_count
+
+  topic_arn="$(find_topic_by_keyword "$keyword")"
+
+  if [[ -z "$topic_arn" ]]; then
+    if [[ "$required" == "true" ]]; then
+      fail "Required SNS topic not found for ${label}. Expected topic ARN containing prefix '${NAME_PREFIX}' and keyword '${keyword}'."
+    else
+      warn "Optional SNS topic not found for ${label}. Expected topic ARN containing prefix '${NAME_PREFIX}' and keyword '${keyword}'."
+      return 0
+    fi
+  fi
+
+  success "SNS topic exists for ${label}: ${topic_arn}"
+
+  attrs_json="$(
+    aws sns get-topic-attributes \
+      "${aws_args[@]}" \
+      --topic-arn "$topic_arn" \
+      --output json
+  )"
+
+  display_name="$(echo "$attrs_json" | jq -r '.Attributes.DisplayName // empty')"
+  kms_key_id="$(echo "$attrs_json" | jq -r '.Attributes.KmsMasterKeyId // empty')"
+  subscriptions_confirmed="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsConfirmed // "0"')"
+  subscriptions_pending="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
+  subscriptions_deleted="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsDeleted // "0"')"
+
+  info "${label} display name: ${display_name:-<none>}"
+
+  if [[ -n "$kms_key_id" ]]; then
+    success "SNS topic for ${label} has KMS encryption configured: $kms_key_id"
+  else
+    warn "SNS topic for ${label} does not show KMS encryption in topic attributes."
+  fi
+
+  subscriptions_json="$(
+    aws sns list-subscriptions-by-topic \
+      "${aws_args[@]}" \
+      --topic-arn "$topic_arn" \
+      --output json
+  )"
+
+  subscription_count="$(echo "$subscription_json" | jq '.Subscriptions | length')"
+
+  if [[ "$subscription_count" -gt 0 ]]; then
+    success "SNS topic for ${label} has subscriptions: $subscription_count"
+  else
+    warn "SNS topic for ${label} has no subscriptions."
+  fi
+
+  pending_count="$(
+    echo "$subscriptions_json" |
+      jq '[.Subscriptions[] | select(.SubscriptionArn == "PendingConfirmation")] | length'
+  )"
+
+  if [[ "$pending_count" -eq 0 ]]; then
+    success "SNS topic for ${label} has no pending subscription confirmations"
+  else
+    echo "$subscriptions_json" |
+      jq '[.Subscriptions[] | select(.SubscriptionArn == "PendingConfirmation") | {
+        Protocol,
+        Endpoint,
+        SubscriptionArn
+      }]'
+    warn "SNS topic for ${label} has pending subscription confirmations: $pending_count"
+  fi
+
+  VALIDATED_TOPIC_COUNT=$((VALIDATED_TOPIC_COUNT + 1))
+
+  if [[ "$required" == "true" ]]; then
+    REQUIRED_TOPIC_COUNT=$((REQUIRED_TOPIC_COUNT + 1))
+  else
+    OPTIONAL_TOPIC_COUNT=$((OPTIONAL_TOPIC_COUNT + 1))
+  fi
+
+  TOTAL_SUBSCRIPTION_COUNT=$((TOTAL_SUBSCRIPTION_COUNT + subscription_count))
+  TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_count))
+
+  SNS_SUMMARY_ROWS+=("${label}|${topic_arn}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|${subscriptions_deleted}|${kms_key_id:-<none>}")
+}
