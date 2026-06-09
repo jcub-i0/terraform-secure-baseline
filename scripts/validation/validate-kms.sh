@@ -285,6 +285,8 @@ echo "$ALIASES_JSON" |
 section "Validating expected KMS aliases and keys"
 
 VALIDATED_KEY_COUNT=0
+REQUIRED_KEY_COUNT=0
+OPTIONAL_KEY_COUNT=0
 KMS_SUMMARY_ROWS=()
 
 # Required workload/environment keys.
