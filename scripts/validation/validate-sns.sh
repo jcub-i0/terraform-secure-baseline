@@ -386,3 +386,7 @@ if [[ "${#SNS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
       }
     '
 fi
+
+section "Validation Result"
+
+success "SNS validation completed successfully for: ${ENV_NAME}"
