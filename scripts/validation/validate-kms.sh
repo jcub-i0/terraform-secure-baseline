@@ -247,4 +247,37 @@ validate_alias_and_key() {
   KMS_SUMMARY_ROWS+=("${label}|${alias_name}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
 }
 
+section "Listing KMS aliases"
 
+ALIASES_JSON="$(
+  aws kms list-aliases \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+MATCHING_ALIAS_COUNT="$(
+  echo "$ALIASES_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '
+      [
+        .Aliases[]
+        | select(.TargetKeyId != null)
+        | select(.AliasName | contains($prefix))
+      ]
+      | length
+    '
+)"
+
+if [[ "$MATCHING_ALIAS_COUNT" -gt 0 ]]; then
+  success "Found KMS aliases matching name prefix: $MATCHING_ALIAS_COUNT"
+else
+  fail "No KMS aliases found containing name prefix: ${NAME_PREFIX}"
+fi
+
+info "Matching aliases:"
+echo "$ALIASES_JSON" |
+  jq -r --arg prefix "$NAME_PREFIX" '
+    .Aliases[]
+    | select(.TargetKeyId != null)
+    | select(.AliasName | contains($prefix))
+    | "- " + .AliasName
+  '
