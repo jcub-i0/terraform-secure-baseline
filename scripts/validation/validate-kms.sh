@@ -244,6 +244,12 @@ validate_alias_and_key() {
 
   VALIDATED_KEY_COUNT=$((VALIDATED_KEY_COUNT + 1))
 
+  if [[ "$required" == "true" ]]; then
+    REQUIRED_KEY_COUNT=$((REQUIRED_KEY_COUNT + 1))
+  else
+    OPTIONAL_KEY_COUNT=$((OPTIONAL_KEY_COUNT + 1))
+  fi
+
   KMS_SUMMARY_ROWS+=("${label}|${alias_name}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
 }
 
