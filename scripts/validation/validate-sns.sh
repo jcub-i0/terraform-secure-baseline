@@ -288,11 +288,8 @@ SNS_SUMMARY_ROWS=()
 # If actual topic names are more specific, adjust the keywords after
 # the first test run.
 
-validate_topic "security alerts" "security" "false"
-validate_topic "secops alerts" "secops" "false"
-validate_topic "compliance alerts" "compliance" "false"
-validate_topic "automation notifications" "automation" "false"
-validate_topic "alerts" "alert" "false"
+validate_topic "security notifications" "security-notifications" "true"
+validate_topic "compliance notifications" "compliance-notifications" "true"
 
 if [[ "$VALIDATED_TOPIC_COUNT" -eq 0 ]]; then
   warn "No expected SNS topic keywords matched. Falling back to validating all environment-matching topics."
