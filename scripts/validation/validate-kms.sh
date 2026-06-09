@@ -318,10 +318,10 @@ AWS region:                   ${AWS_REGION}
 AWS account ID:               ${ACCOUNT_ID}
 Name prefix:                  ${NAME_PREFIX}
 
+Matching environment aliases: ${MATCHING_ALIAS_COUNT}
 Required KMS keys validated: ${REQUIRED_KEY_COUNT}
 Optional KMS keys validated: ${OPTIONAL_KEY_COUNT}
 Total KMS keys validated: ${VALIDATED_KEY_COUNT}
-Matching environment aliases: ${MATCHING_ALIAS_COUNT}
 effective_backup_enabled:     ${EFFECTIVE_BACKUP_ENABLED}
 SUMMARY
 
