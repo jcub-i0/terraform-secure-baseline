@@ -77,13 +77,13 @@ ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
 info "Repository root: $REPO_ROOT"
 info "Environment: $ENV_NAME"
-info "Environmnet dir: $ENV_DIR"
+info "Environment dir: $ENV_DIR"
 info "Name prefix: $NAME_PREFIX"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
-success "Environmnet directory exists"
+success "Environment directory exists"
 
 OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
 
