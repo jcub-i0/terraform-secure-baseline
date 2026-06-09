@@ -181,7 +181,7 @@ validate_topic() {
 
   local topic_arn
   local attrs_json
-  local display_name
+  local topic_name
   local kms_key_id
   local subscriptions_confirmed
   local subscriptions_pending
@@ -210,13 +210,13 @@ validate_topic() {
       --output json
   )"
 
-  display_name="$(echo "$attrs_json" | jq -r '.Attributes.DisplayName // empty')"
+  topic_name="${topic_arn##*:}"
   kms_key_id="$(echo "$attrs_json" | jq -r '.Attributes.KmsMasterKeyId // empty')"
   subscriptions_confirmed="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsConfirmed // "0"')"
   subscriptions_pending="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
   subscriptions_deleted="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsDeleted // "0"')"
 
-  info "${label} display name: ${display_name:-<none>}"
+  info "${label} topic name: ${topic_name:-<none>}"
 
   if [[ -n "$kms_key_id" ]]; then
     success "SNS topic for ${label} has KMS encryption configured: $kms_key_id"
