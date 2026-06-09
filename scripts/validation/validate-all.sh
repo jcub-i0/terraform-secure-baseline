@@ -47,6 +47,7 @@ VALIDATION_SCRIPTS=(
   "validate-vpc-endpoints.sh"
   "validate-logging.sh"
   "validate-security-services.sh"
+  "validate-kms.sh"
   "validate-iam.sh"
 )
 
