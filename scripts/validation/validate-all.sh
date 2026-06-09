@@ -48,6 +48,7 @@ VALIDATION_SCRIPTS=(
   "validate-logging.sh"
   "validate-security-services.sh"
   "validate-kms.sh"
+  "validate-sns.sh"
   "validate-iam.sh"
 )
 
