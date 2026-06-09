@@ -228,7 +228,7 @@ validate_alias_and_key() {
   if key_rotation_enabled="$(
     aws kms get-key-rotation-status \
       "${aws_args[@]}" \
-      --key-id "$alias_name" \
+      --key-id "$key_id" \
       --query 'KeyRotationEnabled' \
       --output text 2>/dev/null
   )"; then
