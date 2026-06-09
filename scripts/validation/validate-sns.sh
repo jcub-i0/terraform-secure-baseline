@@ -126,3 +126,33 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
 else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
+
+section "Listing SNS topics"
+
+TOPICS_JSON="$(
+  aws sns list-topics \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+MATCHING_TOPICS_JSON="$(
+  echo "$TOPICS_JSON" \
+    jq --arg prefix "$NAME_PREFIX" '
+      [
+        .Topics[]
+        | select(.TopicArn | contains($prefix))
+      ]
+    '
+)"
+
+MATCHING_TOPIC_COUNT="$(echo "$MATCHING_TOPICS_JSON" | jq 'length')"
+
+if [[ "$MATCHING_TOPIC_COUNT" -gt 0 ]]; then
+  success "Found SNS topics matching name prefix: $MATCHING_TOPIC_COUNT"
+else
+  fail "No SNS topics found containing name prefix: ${NAME_PREFIX}"
+fi
+
+info "Matching SNS topics:"
+echo "$MATCHING_TOPICS_JSON" |
+  jq -r '.[] | "- " + .TopicArn'
