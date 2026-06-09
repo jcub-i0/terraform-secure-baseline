@@ -121,7 +121,7 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
   if [[ "$ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
     success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
   else
-    fail "AWS account ID mismatch. Espected ${EXPECTED_ACCOUNT_ID}, got ${ACCOUNT_ID}"
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACCOUNT_ID}"
   fi
 else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
