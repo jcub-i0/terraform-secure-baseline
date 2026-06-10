@@ -69,3 +69,25 @@ success "jq found"
 require_command git
 success "git found"
 
+section "Resolving repository paths and Terraform outputs"
+
+REPO_ROOT="$(get_repo_root)"
+ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
+
+info "Repository root: ${REPO_ROOT}"
+info "Environment: ${ENV_NAME}"
+info "Environment dir: ${ENV_DIR}"
+info "Name prefix: ${NAME_PREFIX}"
+info "AWS_PROFILE: ${AWS_PROFILE}"
+info "AWS_REGION: ${AWS_REGION}"
+
+require_directory "$ENV_DIR"
+success "Environment directory exists"
+
+OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
+
+if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
+  fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
+fi
+
+success "Terraform outputs are readable"
