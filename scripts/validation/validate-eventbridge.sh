@@ -126,3 +126,61 @@ else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicity account ID match check."
 fi
 
+# -----------------------------------------------------------------------------
+# EventBridge helper functions
+# -----------------------------------------------------------------------------
+
+list_matching_rules_for_bus() {
+  local event_bus_name="$1"
+
+  aws events list-rules \
+    "${aws_args[@]}" \
+    --event-bus-name "$event_bus_name" \
+    --output json |
+    jq --arg prefix "$NAME_PREFIX" '
+      [
+        .Rules[]
+        | select(.Name | contains($prefix))
+      ]
+    '
+}
+
+validate_rule_targets() {
+  local event_bus_name="$1"
+  local rule_name="$2"
+  local label="$3"
+
+  local targets_json
+  local target_count
+  local target_arns
+
+  targets_json="$(
+    aws events list-targets-by-rule \
+      "${aws_args[@]}" \
+      --event-bus-name "$event_bus_name" \
+      --rule "$rule_name" \
+      --output json
+  )"
+
+  target_count="$(echo $targets_json | jq '.Targets | length')"
+
+  if [[ "$target_count" -gt 0 ]]; then
+    success "EventBridge rule has targets: ${rule_name} (${target_count})"
+  else
+    fail "EventBridge rule has no targets: ${rule_name}"
+  fi
+
+  target_arns="$(
+    echo "$targets_json" |
+      jq -r '
+        [
+          .Targets[]
+          | .Arn
+        ]
+        | join(",")
+      '
+  )"
+
+  RULE_SUMMARY_ROWS+=("${label}|${event_bus_name}|${rule_name}|${target_count}|${target_arns}")
+  TOTAL_TARGET_COUNT=$((TOTAL_TARGET_COUNT + target_count))
+}
