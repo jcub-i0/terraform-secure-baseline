@@ -287,20 +287,6 @@ SECURITY_RULE_COUNT="$(
     '
 )"
 
-COMPLIANCE_RULE_COUNT="$(
-  echo "$DEFAULT_RULES_JSON" |
-    jq '
-      [
-        .[]
-        | select(
-          (.Name | ascii_downcase | contains("compliance"))
-          or (.Name | ascii_downcase | contains("config"))
-        )
-      ]
-      | length
-    '
-)"
-
 SECOPS_ROLLBACK_RULE_COUNT="$(
   echo "$SECOPS_RULES_JSON" |
     jq '
@@ -319,12 +305,6 @@ if [[ "$SECURITY_RULE_COUNT" -gt 0 ]]; then
   success "Found security-related EventBridge rule pattern(s): $SECURITY_RULE_COUNT"
 else
   warn "No security-related EventBridge rule names found on default bus."
-fi
-
-if [[ "$COMPLIANCE_RULE_COUNT" -gt 0 ]]; then
-  success "Found compliance/config-related EventBridge rule pattern(s): $COMPLIANCE_RULE_COUNT"
-else
-  warn "No compliance-related EventBridge rule names found on default bus."
 fi
 
 if [[ "$SECOPS_ROLLBACK_RULE_COUNT" -gt 0 ]]; then
@@ -351,7 +331,6 @@ SecOps bus rules validated:     ${SECOPS_RULE_COUNT}
 Total rules validated:          ${VALIDATED_RULE_COUNT}
 Total targets discovered:       ${TOTAL_TARGET_COUNT}
 Security rule patterns:         ${SECURITY_RULE_COUNT}
-Compliance rule patterns:       ${COMPLIANCE_RULE_COUNT}
 SecOps rollback rule patterns:  ${SECOPS_ROLLBACK_RULE_COUNT}
 SUMMARY
 
