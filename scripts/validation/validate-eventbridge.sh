@@ -184,3 +184,45 @@ validate_rule_targets() {
   RULE_SUMMARY_ROWS+=("${label}|${event_bus_name}|${rule_name}|${target_count}|${target_arns}")
   TOTAL_TARGET_COUNT=$((TOTAL_TARGET_COUNT + target_count))
 }
+
+validate_rules_json() {
+  local event_bus_name="$1"
+  local label="$2"
+  local rules_json="$3"
+  local required="$4"
+
+  local rule_count
+  local disabled_count
+
+  rule_count="$(echo "$rules_json" | jq 'length')"
+
+  if [[ "$rule_count" -eq 0 ]]; then
+    if [[ "$required" == "true" ]]; then
+      fail "No environment EventBridge rules found on required bus: ${event_bus_name}"
+    else
+      warn "No environment EventBridge rules found on optional bus: ${event_bus_name}"
+      return 0
+    fi
+  fi
+
+  success "Found EventBridge rules on ${label}: ${rule_count}"
+
+  disabled_count="$(
+    echo "$rules_json" |
+      jq '[.[] | select(.State != "ENABLED")] | length'
+  )"
+
+  if [[ "$disabled_count" -eq 0 ]]; then
+    success "All EventBridge rules on ${label} are enabled"
+  else
+    echo "$rules_json" |
+      jq -r '.[] | select(.State != "ENABLED") | "- " + .Name + " state=" + .State'
+    fail "One or more EventBridge rules on ${label} are not enabled"
+  fi
+
+  while IFS= read -r rule_name; do
+    [[ -z "$rule_name" ]] && continue
+    validate_rule_targets "$event_bus_name" "$rule_name" "$label"
+    VALIDATED_RULE_COUNT=$((VALIDATED_RULE_COUNT + 1))
+  done < <(echo "$rules_json" | jq -r '.[].Name')    
+}
