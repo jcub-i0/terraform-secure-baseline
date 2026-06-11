@@ -350,7 +350,7 @@ Total rules validated:          ${VALIDATED_RULE_COUNT}
 Total targets discovered:       ${TOTAL_TARGET_COUNT}
 Security rule patterns:         ${SECURITY_RULE_COUNT}
 Compliance rule patterns:       ${COMPLIANCE_RULE_COUNT}
-Rollback rule patterns:         ${ROLLBACK_RULE_COUNT}
+SecOps rollback rule patterns:         ${ROLLBACK_RULE_COUNT}
 SUMMARY
 
 if [[ "${#RULE_SUMMARY_ROWS[@]} -gt 0 "]]; then
