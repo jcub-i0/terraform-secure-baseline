@@ -157,3 +157,142 @@ fi
 info "Matching Lambda functions:"
 echo "$MATCHING_FUNCTIONS_JSON" |
   jq -r '.[] | "- " + .FunctionName'
+
+# -----------------------------------------------------------------------------
+# Lambda helper functions
+# -----------------------------------------------------------------------------
+
+validate_lambda_functions() {
+  local label="$1"
+  local function_name="$2"
+  local expected_role_keyword="$3"
+  local require_vpc="$4"
+
+  local config_json
+  local state
+  local runtime
+  local role_arn
+  local timeout
+  local memory_size
+  local kms_key_arn
+  local subnet_count
+  local security_group_count
+  local env_var_count
+  local policy_json
+  local statement_count
+  local eventbridge_permission_count
+
+  if ! config_json="$(
+    aws lambda get-function-configuration \
+      "${aws_args[@]}" \
+      --function-name "$function_name" \
+      --output json 2>/dev/null
+  )"; then
+    fail "Required Lambda function not found: ${function_name}"
+  fi
+
+  success "Lambda function exists for ${label}: ${function_name}"
+
+  state="$(echo "$config_json" | jq -r '.State // "Unknown"')"
+  runtime="$(echo "$config_json" | jq -r '.Runtime // "Unknown"')"
+  role_arn="$(echo "$config_json" | jq -r '.Role // empty')"
+  timeout="$(echo "$config_json" | jq -r '.Timeout // 0')"
+  memory_size="$(echo "$config_json" | jq -r '.MemorySize // 0')"
+  kms_key_arn="$(echo "$config_json" | jq -r '.KMSKeyArn // empty')"
+  subnet_count="$(echo "$config_json" | jq -r '.VpcConfig.SubnetIds // [] | length')"
+  security_group_count="$(echo "$config_json" | jq -r '.VpcConfig.SecurityGroupIds // [] | length')"
+  env_var_count="$(echo "$config_json" | jq -r '.Environment.Variables // {} | length')"
+
+  if [[ "$state" == "Active" ]]; then
+    success "Lambda function is Active: ${function_name}"
+  else
+    fail "Lambda function is not Active: ${function_name}. State=${state}"
+  fi
+
+  if [[ "$runtime" == "unknown" || "$runtime" == "null" ]]; then
+    fail "Lambda function runtime is missing: ${function_name}"
+  else
+    success "Lambda runtime for ${label}: ${runtime}"
+  fi
+
+  if [[ -n "$role_arn" && "$role_arn" == *"$expected_role_keyword"* ]]; then
+    success "Lambda execution role matches expected keyword '${expected_role_keyword}' for ${label}"
+  elif [[ -n "$role_arn" ]]; then
+    warn "Lambda execution role for ${label} does not contain expected keyword '${expected_role_keyword}': ${role_arn}"
+  else
+    fail "Lambda execution role is missing for ${label}"
+  fi
+
+  if [[ "$memory_size" -ge 128 ]]; then
+    success "Lambda memory size is valid for ${label}: ${memory_size} MB"
+  else
+    fail "Lambda memory size is invalid for ${label}: ${memory_size} MB"
+  fi
+
+  if [[ -n "$kms_key_arn" ]]; then
+    success "Lambda KMS key configured for ${label}: ${kms_key_arn}"
+  else
+    warn "Lambda KMS key is not configured for ${label}"
+  fi
+
+  if [[ "$require_vpc" == "true" ]]; then
+    if [[ "$subnet_count" -gt 0 && "$security_group_count" -gt 0 ]]; then
+      success "Lambda VPC config exists for ${label}: ${subnet_count} subnet(s), ${security_group_count} security group(s)"
+    else
+      fail "Lambda VPC config missing for ${label}. Subnets=${subnet_count}, SecurityGroups=${security_group_count}"
+    fi
+  else
+    if [[ "$subnet_count" -gt 0 || "$security_group_count" -gt 0 ]]; then
+      success "Lambda VPC config exists for ${label}: ${subnet_count} subnet(s), ${security_group_count} security group(s)"
+    else
+      info "Lambda VPC config not present for ${label}; not required by this validation."
+    fi
+  fi
+
+  if [[ "$env_var_count" -gt 0 ]]; then
+    success "Lambda environment variables are configured for ${label}: ${env_var_count}"
+  else
+    warn "Lambda environment variables are not configured for ${label}"
+  fi
+
+  if policy_json="$(
+    aws lambda get-policy \
+      "${aws_args[@]}" \
+      --function-name "$function_name" \
+      --output json 2>/dev/null
+  )"; then
+    statement_count="$(
+      echo "$policy_json" |
+        jq -r '.Policy' |
+        jq '.Statement | length'
+    )"
+
+    eventbridge_permission_count="$(
+      echo "$policy_json" |
+        jq -r '.Policy' |
+        jq '
+          [
+            .Statement[]
+            | select(.Principal.Service? == "events.amazonaws.com")
+          ]
+          | length
+        '
+    )"
+
+    success "Lambda resource policy exists for ${label}: ${statement_count} statement(s)"
+
+    if [[ "$eventbridge_permission_count" -gt 0 ]]; then
+      success "Lambda resource policy allows EventBridge invocation for ${label}"
+    else
+      warn "Lambda resource policy does not show EventBridge invocation permission for ${label}"
+    fi
+  else
+    warn "Lambda resource policy not found for ${label}. This is expected if the function is not directly invoked by EventBridge or another AWS service."
+    statement_count=0
+    eventbridge_permission_count=0
+  fi
+
+  VALIDATED_FUNCTION_COUNT=$((VALIDATED_FUNCTION_COUNT + 1))
+
+  LAMBDA_SUMMARY_ROWS+=("${label}|${function_name}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
+}
