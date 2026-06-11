@@ -239,3 +239,20 @@ find_secops_event_bus_name() {
       | first // empty
     '
 }
+
+section "Listing EventBridge event buses"
+
+EVENT_BUSES_JSON="$(
+  aws events list-event-buses \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+SECOPS_EVENT_BUS_NAME="$(find_secops_event_bus_name)"
+
+if [[ -n "$SECOPS_EVENT_BUS_NAME" ]]; then
+  success "SecOps EventBridge bus exists: $SECOPS_EVENT_BUS_NAME"
+else
+  fail "SecOps EventBridge bus not found. Expected bus name containing prefix '${NAME_PREFIX}' and keyword 'secops'."
+fi
+
