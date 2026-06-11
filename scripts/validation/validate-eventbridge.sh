@@ -272,3 +272,66 @@ SECOPS_RULES_JSON="$(list_matching_rules_for_bus "$SECOPS_EVENT_BUS_NAME")"
 
 validate_rules_json "$SECOPS_EVENT_BUS_NAME" "secops bus" "$SECOPS_RULES_JSON" "false" # why is this false?
 
+section "Checking expected EventBridge rules patterns"
+
+SECURITY_RULE_COUNT="$(
+  echo "$DEFAULT_RULES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+          (.Name | ascii_downcase | contains("security"))
+          or (.Name | ascii_downcase | contains("securityhub"))
+          or (.Name | ascii_downcase | contains("security-hub"))
+        )
+      ]
+      | length
+    '
+)"
+
+COMPLIANCE_RULE_COUNT="$(
+  echo "$DEFAULT_RULES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+          (.Name | ascii_downcase | contains("compliance"))
+          or (.Name | ascii_downcase | contains("config"))
+        )
+      ]
+      | length
+    '
+)"
+
+ROLLBACK_RULE_COUNT="$(
+  echo "$SECOPS_RULES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+          (.Name | ascii_downcase | contains("rollback"))
+          or (.Name | ascii_downcase | contains("restore"))
+        )
+      ]
+      | length
+    '
+)"
+
+if [[ "$SECURITY_RULE_COUNT" -gt 0 ]]; then
+  success "Found security-related EventBridge rule pattern(s): $SECURITY_RULE_COUNT"
+else
+  warn "No security-related EventBridge rule names found on default bus."
+fi
+
+if [[ "$COMPLIANCE_RULE_COUNT" -gt 0 ]]; then
+  success "Found compliance/config-related EventBridge rule pattern(s): $COMPLIANCE_RULE_COUNT"
+else
+  warn "No compliance-related EventBridge rule names found on default bus."
+fi
+
+if [[ "$ROLLBACK_RULE_COUNT" -gt 0 ]]; then
+  success "Found rollback/restore-related EventBridge rule pattern(s) on SecOps bus: $ROLLBACK_RULE_COUNT"
+else
+  warn "No rollback/restore-related EventBridge rule names found on SecOps bus."
+fi
+
