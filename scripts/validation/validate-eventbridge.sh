@@ -256,3 +256,13 @@ else
   fail "SecOps EventBridge bus not found. Expected bus name containing prefix '${NAME_PREFIX}' and keyword 'secops'."
 fi
 
+section "Validating default event bus rules"
+
+DEFAULT_RULES_JSON="$(list_matching_rules_for_bus "default")"
+
+VALIDATED_RULE_COUNT=0
+TOTAL_TARGET_COUNT=0
+RULE_SUMMARY_ROWS=()
+
+validate_rules_json "default" "default bus" "$DEFAULT_RULES_JSON" "true"
+
