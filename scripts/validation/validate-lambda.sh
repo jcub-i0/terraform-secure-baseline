@@ -162,7 +162,7 @@ echo "$MATCHING_FUNCTIONS_JSON" |
 # Lambda helper functions
 # -----------------------------------------------------------------------------
 
-validate_lambda_functions() {
+validate_lambda_function() {
   local label="$1"
   local function_name="$2"
   local expected_role_keyword="$3"
@@ -194,14 +194,14 @@ validate_lambda_functions() {
   success "Lambda function exists for ${label}: ${function_name}"
 
   state="$(echo "$config_json" | jq -r '.State // "Unknown"')"
-  runtime="$(echo "$config_json" | jq -r '.Runtime // "Unknown"')"
+  runtime="$(echo "$config_json" | jq -r '.Runtime // "unknown"')"
   role_arn="$(echo "$config_json" | jq -r '.Role // empty')"
   timeout="$(echo "$config_json" | jq -r '.Timeout // 0')"
   memory_size="$(echo "$config_json" | jq -r '.MemorySize // 0')"
   kms_key_arn="$(echo "$config_json" | jq -r '.KMSKeyArn // empty')"
-  subnet_count="$(echo "$config_json" | jq -r '.VpcConfig.SubnetIds // [] | length')"
-  security_group_count="$(echo "$config_json" | jq -r '.VpcConfig.SecurityGroupIds // [] | length')"
-  env_var_count="$(echo "$config_json" | jq -r '.Environment.Variables // {} | length')"
+  subnet_count="$(echo "$config_json" | jq '.VpcConfig.SubnetIds // [] | length')"
+  security_group_count="$(echo "$config_json" | jq '.VpcConfig.SecurityGroupIds // [] | length')"
+  env_var_count="$(echo "$config_json" | jq '.Environment.Variables // {} | length')"
 
   if [[ "$state" == "Active" ]]; then
     success "Lambda function is Active: ${function_name}"
@@ -221,6 +221,12 @@ validate_lambda_functions() {
     warn "Lambda execution role for ${label} does not contain expected keyword '${expected_role_keyword}': ${role_arn}"
   else
     fail "Lambda execution role is missing for ${label}"
+  fi
+
+  if [[ "$timeout" -gt 0 ]]; then
+    success "Lambda timeout is configured for ${label}: ${timeout}s"
+  else
+    fail "Lambda timeout is invalid for ${label}: ${timeout}"
   fi
 
   if [[ "$memory_size" -ge 128 ]]; then
@@ -296,3 +302,4 @@ validate_lambda_functions() {
 
   LAMBDA_SUMMARY_ROWS+=("${label}|${function_name}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
 }
+
