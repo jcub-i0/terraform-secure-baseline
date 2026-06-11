@@ -361,11 +361,11 @@ if [[ "${#RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${RULE_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-18s %-45s %-70s %-10s %-100s\n", "Bus", "EventBusName", "RuleName", "Targets", "TargetArns"
-        printf "%-18s %-45s %-70s %-10s %-100s\n", "---", "------------", "--------", "-------", "----------"
+        printf "%-14s %-70s %-10s\n", "Bus", "RuleName", "Targets"
+        printf "%-14s %-70s %-10s\n", "---", "--------", "-------"
       }
       {
-        printf "%-18s %-45s %-70s %-10s %-100s\n", $1, $2, $3, $4, $5
+        printf "%-14s %-70s %-10s\n", $1, $3, $4
       }
     '
 fi
