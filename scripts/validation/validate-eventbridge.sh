@@ -274,7 +274,7 @@ SECOPS_RULES_JSON="$(list_matching_rules_for_bus "$SECOPS_EVENT_BUS_NAME")"
 
 validate_rules_json "$SECOPS_EVENT_BUS_NAME" "secops bus" "$SECOPS_RULES_JSON" "true"
 
-section "Checking expected EventBridge rules patterns"
+section "Checking expected EventBridge rule patterns"
 
 SECURITY_RULE_COUNT="$(
   echo "$DEFAULT_RULES_JSON" |
