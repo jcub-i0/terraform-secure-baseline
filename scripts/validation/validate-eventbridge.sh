@@ -355,7 +355,7 @@ Compliance rule patterns:       ${COMPLIANCE_RULE_COUNT}
 SecOps rollback rule patterns:  ${SECOPS_ROLLBACK_RULE_COUNT}
 SUMMARY
 
-if [[ "${#RULE_SUMMARY_ROWS[@]} -gt 0 "]]; then
+if [[ "${#RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   echo
   echo "Validated rules:"
   printf '%s\n' "${RULE_SUMMARY_ROWS[@]}" |
