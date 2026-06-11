@@ -270,7 +270,7 @@ section "Validating SecOps event bus rules"
 
 SECOPS_RULES_JSON="$(list_matching_rules_for_bus "$SECOPS_EVENT_BUS_NAME")"
 
-validate_rules_json "$SECOPS_EVENT_BUS_NAME" "secops bus" "$SECOPS_RULES_JSON" "false" # why is this false?
+validate_rules_json "$SECOPS_EVENT_BUS_NAME" "secops bus" "$SECOPS_RULES_JSON" "true"
 
 section "Checking expected EventBridge rules patterns"
 
