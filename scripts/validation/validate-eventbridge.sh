@@ -368,6 +368,14 @@ if [[ "${#RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
         printf "%-14s %-70s %-10s\n", $1, $3, $4
       }
     '
+
+  echo
+  echo "Rule targets:"
+  printf '%s\n' "${RULE_SUMMARY_ROWS[@]}" |
+    while IFS='|' read -r label event_bus_name rule_name target_count target_arns; do
+      echo "- ${rule_name}"
+      echo "$target_arns" | tr ',' '\n' | sed 's/^/  - /'
+    done
 fi
 
 section "Validation Result"
