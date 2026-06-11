@@ -136,7 +136,7 @@ FUNCTIONS_JSON="$(
     --output json
 )"
 
-MATCHING_FUNCTION_COUNT="$(
+MATCHING_FUNCTIONS_JSON="$(
   echo "$FUNCTIONS_JSON" |
     jq --arg prefix "$NAME_PREFIX" '
       [
@@ -146,10 +146,10 @@ MATCHING_FUNCTION_COUNT="$(
     '
 )"
 
-MATCHING_FUNCTION_COUNT="$(echo "$MATCHING_FUNCTION_COUNT" | jq 'length')"
+MATCHING_FUNCTION_COUNT="$(echo "$MATCHING_FUNCTIONS_JSON" | jq 'length')"
 
 if [[ "$MATCHING_FUNCTION_COUNT" -gt 0 ]]; then
-  success "Found Lambda functions matching name prefix: ${MATCHING_FUNCTION_COUNT}"
+  success "Found Lambda functions matching name prefix: $MATCHING_FUNCTION_COUNT"
 else
   fail "No Lambda functions found containing name prefix: ${NAME_PREFIX}"
 fi
