@@ -367,3 +367,7 @@ if [[ "${#RULE_SUMMARY_ROWS[@]} -gt 0 "]]; then
       }
     '
 fi
+
+section "Validation Result"
+
+success "EventBridge validation completed successfully for: ${ENV_NAME}"
