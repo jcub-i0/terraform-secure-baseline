@@ -226,3 +226,16 @@ validate_rules_json() {
     VALIDATED_RULE_COUNT=$((VALIDATED_RULE_COUNT + 1))
   done < <(echo "$rules_json" | jq -r '.[].Name')    
 }
+
+find_secops_event_bus_name() {
+  echo "$EVENT_BUSES_JSON" |
+    jq -r --arg prefix "$NAME_PREFIX" '
+      [
+        .EventBuses[]
+        | select(.Name | contains($prefix))
+        | select((.Name | ascii_downcase) | contains("secops"))
+        | .Name
+      ]
+      | first // empty
+    '
+}
