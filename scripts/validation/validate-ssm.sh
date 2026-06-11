@@ -144,16 +144,16 @@ ENV_INSTANCE_IDS="$(
   echo "$EC2_INSTANCES_JSON" |
     jq -r '
       [
-         .Reservations[].Instances[]
-         | .InstanceId 
+        .Reservations[].Instances[]
+        | .InstanceId
       ]
       | join(" ")
     '
 )"
 
 ENV_INSTANCE_COUNT="$(
-  echo "$ENV_INSTANCE_IDS" |
-    jq -r '
+  echo "$EC2_INSTANCES_JSON" |
+    jq '
       [
         .Reservations[].Instances[]
       ]
@@ -178,13 +178,13 @@ if [[ "$ENV_INSTANCE_COUNT" -gt 0 ]]; then
           PrivateIpAddress,
           Name: (
             .Tags // []
-            | map(select(.key == "Name"))
+            | map(select(.Key == "Name"))
             | first
             | .Value // ""
           ),
           IamInstanceProfile: (.IamInstanceProfile.Arn // "")
         }
-      | "- " + .InstanceId + " " + .State + " " + .Name " " + (.PrivateIpAddress // "<no-private-ip>")
+      | "- " + .InstanceId + " " + .State + " " + .Name + " " + (.PrivateIpAddress // "<no-private-ip>")
     '
 fi
 
@@ -279,7 +279,7 @@ section "Checking SSM associations"
 ASSOCIATIONS_JSON="$(
   aws ssm list-associations \
     "${aws_args[@]}" \
-    --outputs json
+    --output json
 )"
 
 ASSOCIATION_COUNT="$(echo "$ASSOCIATIONS_JSON" | jq '.Associations | length')"
@@ -311,7 +311,7 @@ MATCHING_MAINTENANCE_WINDOWS_JSON="$(
 MATCHING_MAINTENANCE_WINDOW_COUNT="$(echo "$MATCHING_MAINTENANCE_WINDOWS_JSON" | jq 'length')"
 
 if [[ "$MATCHING_MAINTENANCE_WINDOW_COUNT" -gt 0 ]]; then
-  success "Found environment SSM maintenance windwos: $MATCHING_MAINTENANCE_WINDOW_COUNT"
+  success "Found environment SSM maintenance windows: $MATCHING_MAINTENANCE_WINDOW_COUNT"
 else
   warn "No SSM maintenance windows found matching name prefix: ${NAME_PREFIX}"
 fi
