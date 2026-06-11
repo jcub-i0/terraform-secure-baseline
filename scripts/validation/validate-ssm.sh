@@ -341,3 +341,50 @@ if [[ "$MATCHING_PATCH_BASELINE_COUNT" -gt 0 ]]; then
 else
   warn "No SSM patch baselines found matching name prefix: ${NAME_PREFIX}"
 fi
+
+section "SSM Summary"
+
+cat <<SUMMARY
+Environment:                       ${ENV_NAME}
+AWS profile:                       ${AWS_PROFILE:-<default>}
+AWS region:                        ${AWS_REGION}
+AWS account ID:                    ${ACCOUNT_ID}
+Name prefix:                       ${NAME_PREFIX}
+
+Environment EC2 instances:         ${ENV_INSTANCE_COUNT}
+Matching SSM managed instances:    ${MATCHING_SSM_COUNT}
+Online managed instances:          ${ONLINE_COUNT}
+Offline managed instances:         ${OFFLINE_COUNT}
+SSM associations discovered:       ${ASSOCIATION_COUNT}
+Environment maintenance windows:   ${MATCHING_MAINTENANCE_WINDOW_COUNT}
+Environment patch baselines:       ${MATCHING_PATCH_BASELINE_COUNT}
+SUMMARY
+
+if [[ "${#SSM_SUMMARY_ROWS[@]}" -gt 0 ]]; then
+  echo
+  echo "Managed instances:"
+  printf '%s\n' "${SSM_SUMMARY_ROWS[@]}" |
+    awk -F'|' '
+      BEGIN {
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", "InstanceId", "PingStatus", "Platform", "PlatformName", "PlatformVersion", "AgentVersion", "LastPing"
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", "----------", "----------", "--------", "------------", "---------------", "------------", "--------"
+      }
+      {
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", $1, $2, $3, $4, $5, $6, $7
+      }
+    '
+fi
+
+if [[ "$MATCHING_MAINTENANCE_WINDOW_COUNT" -gt 0 ]]; then
+  echo
+  echo "Environment maintenance windows:"
+  echo "$MATCHING_MAINTENANCE_WINDOWS_JSON" |
+    jq -r '.[] | "- " + .Name + " (" + .WindowId + ") Enabled=" + (.Enabled | tostring)'
+fi
+
+if [[ "$MATCHING_PATCH_BASELINE_COUNT" -gt 0 ]]; then
+  echo
+  echo "Environment patch baselines:"
+  echo "$MATCHING_PATCH_BASELINES_JSON" |
+    jq -r '.[] | "- " + .BaselineName + " (" + .BaselineId + ") OperatingSystem=" + .OperatingSystem'
+fi
