@@ -141,7 +141,7 @@ list_matching_rules_for_bus() {
     --output json |
       jq --arg prefix "$NAME_PREFIX" '
         [
-          .Rules[]
+          .Rules[]?
           | select(.Name | contains($prefix))
         ]
       '
