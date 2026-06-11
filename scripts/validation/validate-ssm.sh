@@ -187,3 +187,49 @@ if [[ "$ENV_INSTANCE_COUNT" -gt 0 ]]; then
       | "- " + .InstanceId + " " + .State + " " + .Name " " + (.PrivateIpAddress // "<no-private-ip>")
     '
 fi
+
+section "Checking SSM managed instance inventory"
+
+SSM_INSTANCE_INFO_JSON="$(
+  aws ssm describe-instance-information \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+SSM_MANAGED_COUNT="$(
+  echo "$SSM_INSTANCE_INFO_JSON" |
+    jq '.InstanceInformationList | length'
+)"
+
+if [[ "$SSM_MANAGED_COUNT" -gt 0 ]]; then
+  success "Found SSM managed instances in account/region: $SSM_MANAGED_COUNT"
+else
+  if [[ "$ENV_INSTANCE_COUNT" -gt 0 ]]; then
+    fail "No SSM managed instances found, but environment EC2 instances exist."
+  else
+    warn "No SSM managed instances found. This may be expected if the environment has no EC2 compute."
+  fi
+fi
+
+MATCHING_SSM_JSON="$(
+  echo "$SSM_INSTANCE_INFO_JSON" |
+    jq --argjson instance_ids "$(printf '%s\n' $ENV_INSTANCE_IDS | jq -R . | jq -s .)" '
+      [
+        .InstanceInformationList[]
+        | select(.InstanceId as $id | $instance_ids | index($id))
+      ]
+    '
+)"
+
+MATCHING_SSM_COUNT="$(echo "$MATCHING_SSM_JSON" | jq 'length')"
+
+if [[ "$ENV_INSTANCE_COUNT" -gt 0 ]]; then
+  if [[ "$MATCHING_SSM_COUNT" -eq "$ENV_INSTANCE_COUNT" ]]; then
+    success "All environment EC2 instances are registered with SSM: ${MATCHING_SSM_COUNT}/${ENV_INSTANCE_COUNT}"
+  else
+    echo "$MATCHING_SSM_JSON" | jq -r '.[] | "- " + .InstanceId + " PingStatus=" + .PingStatus'
+    fail "Not all environment EC2 instances are registered with SSM. Registered=${MATCHING_SSM_COUNT}, Expected=${ENV_INSTANCE_COUNT}"
+  fi
+else
+  info "Skipping EC2-to-SSM registration comparison because no environment EC2 instances were found."
+fi
