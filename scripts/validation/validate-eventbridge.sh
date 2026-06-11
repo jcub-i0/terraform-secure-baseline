@@ -331,3 +331,39 @@ else
   warn "No rollback/restore-related EventBridge rule names found on SecOps bus."
 fi
 
+section "EventBridge Summary"
+
+DEFAULT_RULE_COUNT="$(echo "$DEFAULT_RULES_JSON" | jq 'length')"
+SECOPS_RULE_COUNT="$(echo "$SECOPS_RULES_JSON" | jq 'length')"
+
+cat <<SUMMARY
+Environment: ${ENV_NAME}
+AWS profile: ${AWS_PROFILE:-<default>}
+AWS region: ${AWS_REGION}
+AWS account ID: ${ACCOUNT_ID}
+Name prefix: ${NAME_PREFIX}
+
+SecOps event bus: ${SECOPS_EVENT_BUS_NAME}
+Default bus rules validated: ${DEFAULT_RULE_COUNT}
+SecOps bus rules validated: ${SECOPS_RULE_COUNT}
+Total rules validated: ${VALIDATED_RULE_COUNT}
+Total targets discovered: ${TOTAL_TARGET_COUNT}
+Security rule patterns: ${SECURITY_RULE_COUNT}
+Compliance rule patterns: ${COMPLIANCE_RULE_COUNT}
+Rollback rule patterns: ${ROLLBACK_RULE_COUNT}
+SUMMARY
+
+if [[ "${#RULE_SUMMARY_ROWS[@]} -gt 0 "]]; then
+  echo
+  echo "Validated rules:"
+  printf '%s\n' "${RULE_SUMMARY_ROWS[@]}" |
+    aws -F'|' '
+      BEGIN {
+        printf "%-18s %-45s %-70s %-10s %-100s\n", "Bus", "EventBusName", "RuleName", "Targets", "TargetArns"
+        printf "%-18s %-45s %-70s %-10s %-100s\n", "---", "------------", "--------", "-------", "----------"
+      }
+      {
+        printf "%-18s %-45s %-70s %-10s %-100s\n", $1, $2, $3, $4, $5
+      }
+    '
+fi
