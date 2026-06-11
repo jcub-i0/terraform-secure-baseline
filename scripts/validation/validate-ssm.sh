@@ -273,3 +273,20 @@ while IFS= read -r row; do
 
   SSM_SUMMARY_ROWS+=("${instance_id}|${ping_status}|${platform_type}|${platform_name}|${platform_version}|${agent_version}|${last_ping}")
 done < <(echo "$MATCHING_SSM_JSON" | jq -c '.[]')
+
+section "Checking SSM associations"
+
+ASSOCIATIONS_JSON="$(
+  aws ssm list-associations \
+    "${aws_args[@]}" \
+    --outputs json
+)"
+
+ASSOCIATION_COUNT="$(echo "$ASSOCIATIONS_JSON" | jq '.Associations | length')"
+
+if [[ "$ASSOCIATION_COUNT" -gt 0 ]]; then
+  success "Found SSM associations in account/region: $ASSOCIATION_COUNT"
+else
+  warn "No SSM associations found in account/region."
+fi
+
