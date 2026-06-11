@@ -164,7 +164,7 @@ validate_rule_targets() {
       --output json
   )"
 
-  target_count="$(echo $targets_json | jq '.Targets | length')"
+  target_count="$(echo "$targets_json" | jq '.Targets | length')"
 
   if [[ "$target_count" -gt 0 ]]; then
     success "EventBridge rule has targets: ${rule_name} (${target_count})"
