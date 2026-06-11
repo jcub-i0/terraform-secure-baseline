@@ -328,7 +328,7 @@ else
 fi
 
 if [[ "$SECOPS_ROLLBACK_RULE_COUNT" -gt 0 ]]; then
-  success "Found rollback/restore-related EventBridge rule pattern(s) on SecOps bus: $ROLLBACK_RULE_COUNT"
+  success "Found rollback/restore-related EventBridge rule pattern(s) on SecOps bus: $SECOPS_ROLLBACK_RULE_COUNT"
 else
   warn "No rollback/restore-related EventBridge rule names found on SecOps bus."
 fi
@@ -352,7 +352,7 @@ Total rules validated:          ${VALIDATED_RULE_COUNT}
 Total targets discovered:       ${TOTAL_TARGET_COUNT}
 Security rule patterns:         ${SECURITY_RULE_COUNT}
 Compliance rule patterns:       ${COMPLIANCE_RULE_COUNT}
-SecOps rollback rule patterns:  ${ROLLBACK_RULE_COUNT}
+SecOps rollback rule patterns:  ${SECOPS_ROLLBACK_RULE_COUNT}
 SUMMARY
 
 if [[ "${#RULE_SUMMARY_ROWS[@]} -gt 0 "]]; then
