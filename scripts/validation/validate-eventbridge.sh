@@ -281,8 +281,6 @@ SECURITY_RULE_COUNT="$(
         .[]
         | select(
           (.Name | ascii_downcase | contains("security"))
-          or (.Name | ascii_downcase | contains("securityhub"))
-          or (.Name | ascii_downcase | contains("security-hub"))
         )
       ]
       | length
