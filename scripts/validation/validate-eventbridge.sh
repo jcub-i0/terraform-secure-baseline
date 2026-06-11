@@ -279,9 +279,7 @@ SECURITY_RULE_COUNT="$(
     jq '
       [
         .[]
-        | select(
-          (.Name | ascii_downcase | contains("security"))
-        )
+        | select(.Name | ascii_downcase | contains("security"))
       ]
       | length
     '
