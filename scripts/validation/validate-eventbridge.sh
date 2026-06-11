@@ -337,20 +337,20 @@ DEFAULT_RULE_COUNT="$(echo "$DEFAULT_RULES_JSON" | jq 'length')"
 SECOPS_RULE_COUNT="$(echo "$SECOPS_RULES_JSON" | jq 'length')"
 
 cat <<SUMMARY
-Environment: ${ENV_NAME}
-AWS profile: ${AWS_PROFILE:-<default>}
-AWS region: ${AWS_REGION}
-AWS account ID: ${ACCOUNT_ID}
-Name prefix: ${NAME_PREFIX}
+Environment:                    ${ENV_NAME}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+AWS account ID:                 ${ACCOUNT_ID}
+Name prefix:                    ${NAME_PREFIX}
 
-SecOps event bus: ${SECOPS_EVENT_BUS_NAME}
-Default bus rules validated: ${DEFAULT_RULE_COUNT}
-SecOps bus rules validated: ${SECOPS_RULE_COUNT}
-Total rules validated: ${VALIDATED_RULE_COUNT}
-Total targets discovered: ${TOTAL_TARGET_COUNT}
-Security rule patterns: ${SECURITY_RULE_COUNT}
-Compliance rule patterns: ${COMPLIANCE_RULE_COUNT}
-Rollback rule patterns: ${ROLLBACK_RULE_COUNT}
+SecOps event bus:               ${SECOPS_EVENT_BUS_NAME}
+Default bus rules validated:    ${DEFAULT_RULE_COUNT}
+SecOps bus rules validated:     ${SECOPS_RULE_COUNT}
+Total rules validated:          ${VALIDATED_RULE_COUNT}
+Total targets discovered:       ${TOTAL_TARGET_COUNT}
+Security rule patterns:         ${SECURITY_RULE_COUNT}
+Compliance rule patterns:       ${COMPLIANCE_RULE_COUNT}
+Rollback rule patterns:         ${ROLLBACK_RULE_COUNT}
 SUMMARY
 
 if [[ "${#RULE_SUMMARY_ROWS[@]} -gt 0 "]]; then
