@@ -137,12 +137,12 @@ list_matching_rules_for_bus() {
     "${aws_args[@]}" \
     --event-bus-name "$event_bus_name" \
     --output json |
-    jq --arg prefix "$NAME_PREFIX" '
-      [
-        .Rules[]
-        | select(.Name | contains($prefix))
-      ]
-    '
+      jq --arg prefix "$NAME_PREFIX" '
+        [
+          .Rules[]
+          | select(.Name | contains($prefix))
+        ]
+      '
 }
 
 validate_rule_targets() {
