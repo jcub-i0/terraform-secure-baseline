@@ -233,3 +233,43 @@ if [[ "$ENV_INSTANCE_COUNT" -gt 0 ]]; then
 else
   info "Skipping EC2-to-SSM registration comparison because no environment EC2 instances were found."
 fi
+
+section "Validating SSM managed instance status"
+
+ONLINE_COUNT="$(
+  echo "$MATCHING_SSM_JSON" |
+    jq '[.[] | select(.PingStatus == "Online")] | length'
+)"
+
+OFFLINE_COUNT="$(
+  echo "$MATCHING_SSM_JSON" |
+    jq '[.[] | select(.PingStatus != "Online")] | length'
+)"
+
+if [[ "$MATCHING_SSM_COUNT" -gt 0 ]]; then
+  if [[ "$OFFLINE_COUNT" -eq 0 ]]; then
+    success "All matching SSM managed instances are Online"
+  else
+    echo "$MATCHING_SSM_JSON" |
+      jq -r '.[] | select(.PingStatus != "Online") | "- " + .InstanceId + " PingStatus=" + .PingStatus'
+    fail "One or more matching SSM managed instances are not Online"
+  fi
+else
+  warn "No matching SSM managed instances to validate."
+fi
+
+SSM_SUMMARY_ROWS=()
+
+while IFS= read -r row; do
+  [[ -z "$row" ]] && continue
+
+  instance_id="$(echo "$row" | jq -r '.InstanceId')"
+  ping_status="$(echo "$row" | jq -r '.PingStatus')"
+  platform_type="$(echo "$row" | jq -r '.PlatformType // "unknown"')"
+  platform_name="$(echo "$row" | jq -r '.PlatformName // "unknown"')"
+  platform_version="$(echo "$row" | jq -r '.PlatformVersion // "unknown"')"
+  agent_version="$(echo "$row" | jq -r '.AgentVersion // "unknown"')"
+  last_ping="$(echo "$row" | jq -r '.LastPingDateTime // "unknown"')"
+
+  SSM_SUMMARY_ROWS+=("${instance_id}|${ping_status}|${platform_type}|${platform_name}|${platform_version}|${agent_version}|${last_ping}")
+done < <(echo "$MATCHING_SSM_JSON" | jq -c '.[]')
