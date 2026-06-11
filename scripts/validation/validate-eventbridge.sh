@@ -359,7 +359,7 @@ if [[ "${#RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   echo
   echo "Validated rules:"
   printf '%s\n' "${RULE_SUMMARY_ROWS[@]}" |
-    aws -F'|' '
+    awk -F'|' '
       BEGIN {
         printf "%-18s %-45s %-70s %-10s %-100s\n", "Bus", "EventBusName", "RuleName", "Targets", "TargetArns"
         printf "%-18s %-45s %-70s %-10s %-100s\n", "---", "------------", "--------", "-------", "----------"
