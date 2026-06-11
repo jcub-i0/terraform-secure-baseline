@@ -339,3 +339,7 @@ if [[ "${#LAMBDA_SUMMARY_ROWS[@]}" -gt 0 ]]; then
       }
     '
 fi
+
+section "Validation Result"
+
+success "Lambda validation completed successfully for: ${ENV_NAME}"
