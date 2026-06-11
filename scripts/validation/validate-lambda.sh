@@ -127,3 +127,33 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
 else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
+
+section "Listing Lambda functions"
+
+FUNCTIONS_JSON="$(
+  aws lambda list-functions \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+MATCHING_FUNCTION_COUNT="$(
+  echo "$FUNCTIONS_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '
+      [
+        .Functions[]
+        | select(.FunctionName | contains($prefix))
+      ]
+    '
+)"
+
+MATCHING_FUNCTION_COUNT="$(echo "$MATCHING_FUNCTION_COUNT" | jq 'length')"
+
+if [[ "$MATCHING_FUNCTION_COUNT" -gt 0 ]]; then
+  success "Found Lambda functions matching name prefix: ${MATCHING_FUNCTION_COUNT}"
+else
+  fail "No Lambda functions found containing name prefix: ${NAME_PREFIX}"
+fi
+
+info "Matching Lambda functions:"
+echo "$MATCHING_FUNCTIONS_JSON" |
+  jq -r '.[] | "- " + .FunctionName'
