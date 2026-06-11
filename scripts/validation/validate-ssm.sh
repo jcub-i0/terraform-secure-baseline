@@ -128,3 +128,62 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
 else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
+
+section "Discovering EC2 instances for environment"
+
+EC2_INSTANCES_JSON="$(
+  aws ec2 describe-instances \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=tag:Name,Values=${NAME_PREFIX}*" \
+      "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+    --output json
+)"
+
+ENV_INSTANCE_IDS="$(
+  echo "$EC2_INSTANCES_JSON" |
+    jq -r '
+      [
+         .Reservations[].Instances[]
+         | .InstanceId 
+      ]
+      | join(" ")
+    '
+)"
+
+ENV_INSTANCE_COUNT="$(
+  echo "$ENV_INSTANCE_IDS" |
+    jq -r '
+      [
+        .Reservations[].Instances[]
+      ]
+      | length
+    '
+)"
+
+if [[ "$ENV_INSTANCE_COUNT" -gt 0 ]]; then
+  success "Found EC2 instances matching environment name prefix: $ENV_INSTANCE_COUNT"
+else
+  warn "No EC2 instances found matching environment name prefix: ${NAME_PREFIX}"
+fi
+
+if [[ "$ENV_INSTANCE_COUNT" -gt 0 ]]; then
+  info "Environment EC2 instances:"
+  echo "$EC2_INSTANCES_JSON" |
+    jq -r '
+      .Reservations[].Instances[]
+      | {
+          InstanceId,
+          State: .State.Name,
+          PrivateIpAddress,
+          Name: (
+            .Tags // []
+            | map(select(.key == "Name"))
+            | first
+            | .Value // ""
+          ),
+          IamInstanceProfile: (.IamInstanceProfile.Arn // "")
+        }
+      | "- " + .InstanceId + " " + .State + " " + .Name " " + (.PrivateIpAddress // "<no-private-ip>")
+    '
+fi
