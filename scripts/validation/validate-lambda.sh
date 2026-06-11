@@ -311,3 +311,31 @@ LAMBDA_SUMMARY_ROWS=()
 validate_lambda_function "IP enrichment" "${NAME_PREFIX}-ip-enrichment" "ip-enrichment" "true"
 validate_lambda_function "EC2 rollback" "${NAME_PREFIX}-ec2-rollback" "ec2-rollback" "true"
 validate_lambda_function "EC2 isolation" "${NAME_PREFIX}-ec2-isolation" "ec2-isolation" "true"
+
+section "Lambda Summary"
+
+cat <<SUMMARY
+Environment:                    ${ENV_NAME}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+AWS account ID:                 ${ACCOUNT_ID}
+Name prefix:                    ${NAME_PREFIX}
+
+Matching environment functions: ${MATCHING_FUNCTION_COUNT}
+Expected functions validated:   ${VALIDATED_FUNCTION_COUNT}
+SUMMARY
+
+if [[ "${#LAMBDA_SUMMARY_ROWS[@]}" -gt 0 ]]; then
+  echo
+  echo "Validated functions:"
+  printf '%s\n' "${LAMBDA_SUMMARY_ROWS[@]}" |
+    awk -F'|' '
+      BEGIN {
+        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "Label", "FunctionName", "Runtime", "State", "Timeout", "Memory", "Subnets", "SGs", "EnvVars", "PolicyStmts", "EBPerms"
+        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "-----", "------------", "-------", "-----", "-------", "------", "-------", "---", "-------", "-----------", "-------"
+      }
+      {
+        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+      }
+    '
+fi
