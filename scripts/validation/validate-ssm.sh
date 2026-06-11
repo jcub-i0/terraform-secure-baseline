@@ -388,3 +388,7 @@ if [[ "$MATCHING_PATCH_BASELINE_COUNT" -gt 0 ]]; then
   echo "$MATCHING_PATCH_BASELINES_JSON" |
     jq -r '.[] | "- " + .BaselineName + " (" + .BaselineId + ") OperatingSystem=" + .OperatingSystem'
 fi
+
+section "Validation Result"
+
+success "SSM validation completed successfully for: ${ENV_NAME}"
