@@ -44,6 +44,8 @@ if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
 fi
 
+require_env_name "$ENV_NAME"
+
 aws_args=()
 if [[ -n "$AWS_PROFILE" ]]; then
   aws_args+=(--profile "$AWS_PROFILE")
