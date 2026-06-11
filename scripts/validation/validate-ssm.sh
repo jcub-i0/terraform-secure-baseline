@@ -290,3 +290,28 @@ else
   warn "No SSM associations found in account/region."
 fi
 
+section "Checking SSM maintenance windows"
+
+MAINTENANCE_WINDOWS_JSON="$(
+  aws ssm describe-maintenance-windows \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+MATCHING_MAINTENANCE_WINDOWS_JSON="$(
+  echo "$MAINTENANCE_WINDOWS_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '
+      [
+        .WindowIdentities[]
+        | select((.Name // "") | contains($prefix))
+      ]
+    '
+)"
+
+MATCHING_MAINTENANCE_WINDOW_COUNT="$(echo "$MATCHING_MAINTENANCE_WINDOWS_JSON" | jq 'length')"
+
+if [[ "$MATCHING_MAINTENANCE_WINDOW_COUNT" -gt 0 ]]; then
+  success "Found environment SSM maintenance windwos: $MATCHING_MAINTENANCE_WINDOW_COUNT"
+else
+  warn "No SSM maintenance windows found matching name prefix: ${NAME_PREFIX}"
+fi
