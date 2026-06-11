@@ -303,3 +303,11 @@ validate_lambda_function() {
   LAMBDA_SUMMARY_ROWS+=("${label}|${function_name}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
 }
 
+section "Validating expected Lambda functions"
+
+VALIDATED_FUNCTION_COUNT=0
+LAMBDA_SUMMARY_ROWS=()
+
+validate_lambda_function "IP enrichment" "${NAME_PREFIX}-ip-enrichment" "ip-enrichment" "true"
+validate_lambda_function "EC2 rollback" "${NAME_PREFIX}-ec2-rollback" "ec2-rollback" "true"
+validate_lambda_function "EC2 isolation" "${NAME_PREFIX}-ec2-isolation" "ec2-isolation" "true"
