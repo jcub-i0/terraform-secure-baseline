@@ -49,6 +49,7 @@ VALIDATION_SCRIPTS=(
   "validate-security-services.sh"
   "validate-kms.sh"
   "validate-sns.sh"
+  "validate-eventbridge.sh"
   "validate-iam.sh"
 )
 
