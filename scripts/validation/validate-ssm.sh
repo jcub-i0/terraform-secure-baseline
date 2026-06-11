@@ -315,3 +315,29 @@ if [[ "$MATCHING_MAINTENANCE_WINDOW_COUNT" -gt 0 ]]; then
 else
   warn "No SSM maintenance windows found matching name prefix: ${NAME_PREFIX}"
 fi
+
+section "Checking SSM patch baselines"
+
+PATCH_BASELINES_JSON="$(
+  aws ssm describe-patch-baselines \
+    "${aws_args[@]}" \
+    --output json
+)"
+
+MATCHING_PATCH_BASELINES_JSON="$(
+  echo "$PATCH_BASELINES_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '
+      [
+        .BaselineIdentities[]
+        | select((.BaselineName // "") | contains($prefix))
+      ]
+    '
+)"
+
+MATCHING_PATCH_BASELINE_COUNT="$(echo "$MATCHING_PATCH_BASELINES_JSON" | jq 'length')"
+
+if [[ "$MATCHING_PATCH_BASELINE_COUNT" -gt 0 ]]; then
+  success "Found environment SSM patch baselines: $MATCHING_PATCH_BASELINE_COUNT"
+else
+  warn "No SSM patch baselines found matching name prefix: ${NAME_PREFIX}"
+fi
