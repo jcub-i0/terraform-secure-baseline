@@ -469,7 +469,7 @@ if [[ "${#QUEUE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   echo
   echo "Validated SQS queues:"
   printf '%s\n' "${QUEUE_SUMMARY_ROWS[@]}" |
-    aws -F'|' '
+    awk -F'|' '
       BEGIN {
         printf "%-14s %-10s %-45s %-95s %-32s %-95s %-14s %-10s %-40s %-10s %-8s %-10s %-10s\n", "Queue", "Required", "QueueName", "QueueArn", "Producer", "ProducerArn", "Subscriptions", "Pending", "KmsKeyId", "SQS-SSE", "DLQ", "Visible", "InFlight"
         printf "%-14s %-10s %-45s %-95s %-32s %-95s %-14s %-10s %-40s %-10s %-8s %-10s %-10s\n", "-----", "--------", "---------", "--------", "--------", "-----------", "-------------", "-------", "--------", "-------", "---", "-------", "--------"
