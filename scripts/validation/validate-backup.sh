@@ -218,16 +218,16 @@ if [[ "$EFFECTIVE_BACKUP_ENABLED" != "true" ]]; then
   section "Backup Summary"
 
   cat <<SUMMARY
-Environment: ${ENV_NAME}
-AWS profile: ${AWS_PROFILE:-<default>}
-AWS region: ${AWS_REGION}
-AWS account ID: ${ACCOUNT_ID}
-Name prefix: ${NAME_PREFIX}
+Environment:                ${ENV_NAME}
+AWS profile:                ${AWS_PROFILE:-<default>}
+AWS region:                 ${AWS_REGION}
+AWS account ID:             ${ACCOUNT_ID}
+Name prefix:                ${NAME_PREFIX}
 
-effective_backup_enabled: ${EFFECTIVE_BACKUP_ENABLED}
-Backup validation mode: optional/skipped
+effective_backup_enabled:   ${EFFECTIVE_BACKUP_ENABLED}
+Backup validation mode:     optional/skipped
 Expected backup vault name: ${EXPECTED_BACKUP_VAULT_NAME}
-Expected backup plan name: ${EXPECTED_BACKUP_PLAN_NAME}
+Expected backup plan name:  ${EXPECTED_BACKUP_PLAN_NAME}
 SUMMARY
 
   section "Validation Result"
