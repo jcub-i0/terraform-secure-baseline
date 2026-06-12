@@ -424,3 +424,27 @@ for queue_spec in "${EXPECTED_SQS_QUEUES[@]}"; do
   IFS='|' read -r queue_label queue_suffix requirement producer_ref <<< "$queue_spec"
   validate_sqs_queue "$queue_label" "$queue_suffix" "$requirement" "$producer_ref"
 done
+
+section "Listing environment SQS queues"
+
+QUEUES_JSON="$(
+  aws sqs list-queues \
+    "${aws_args[@]}" \
+    --queue-name-prefix "$NAME_PREFIX" \
+    --output json
+)"
+
+MATCHING_QUEUE_COUNT="$(
+  echo "$QUEUES_JSON" |
+    jq '.QueueUrls // [] | length'
+)"
+
+if [[ "$MATCHING_QUEUE_COUNT" -gt 0 ]]; then
+  success "Found SQS queues matchign name prefix: $MATCHING_QUEUE_COUNT"
+else
+  fail "No SQS queues found matching name prefix: ${NAME_PREFIX}"
+fi
+
+info "Matching SQS queues:"
+echo "$QUEUES_JSON" |
+  jq -r '.QueueUrls // [] | .[] | "- " + .'
