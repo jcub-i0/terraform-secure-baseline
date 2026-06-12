@@ -452,16 +452,16 @@ echo "$QUEUES_JSON" |
 section "SQS Summary"
 
 cat <<SUMMARY
-Environment: ${ENV_NAME}
-AWS profile: ${AWS_PROFILE:-<default>}
-AWS region: ${AWS_REGION}
-AWS account ID: ${ACCOUNT_ID}
-Name prefix: ${NAME_PREFIX}
+Environment:                        ${ENV_NAME}
+AWS profile:                        ${AWS_PROFILE:-<default>}
+AWS region:                         ${AWS_REGION}
+AWS account ID:                     ${ACCOUNT_ID}
+Name prefix:                        ${NAME_PREFIX}
 
-Matching environment queues: ${MATCHING_QUEUE_COUNT}
-Required SQS queues validated: ${TOTAL_REQUIRED_QUEUES}
-Optional SQS queues validated: ${TOTAL_OPTIONAL_QUEUES}
-Total SQS queues validated: ${TOTAL_VALIDATED QUEUES}
+Matching environment queues:        ${MATCHING_QUEUE_COUNT}
+Required SQS queues validated:      ${TOTAL_REQUIRED_QUEUES}
+Optional SQS queues validated:      ${TOTAL_OPTIONAL_QUEUES}
+Total SQS queues validated:         ${TOTAL_VALIDATED QUEUES}
 Pending subscription confirmations: ${TOTAL_PENDING_SUBSCRIPTION_COUNT}
 SUMMARY
 
