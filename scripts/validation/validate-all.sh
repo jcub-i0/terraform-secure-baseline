@@ -48,12 +48,12 @@ VALIDATION_SCRIPTS=(
   "validate-logging.sh"
   "validate-security-services.sh"
   "validate-kms.sh"
+  "validate-backup.sh"
   "validate-sns.sh"
   "validate-sqs.sh"
   "validate-eventbridge.sh"
   "validate-lambda.sh"
   "validate-ssm.sh"
-  "validate-backup.sh"
   "validate-iam.sh"
 )
 
