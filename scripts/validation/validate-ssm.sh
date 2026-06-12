@@ -339,7 +339,7 @@ MATCHING_PATCH_BASELINE_COUNT="$(echo "$MATCHING_PATCH_BASELINES_JSON" | jq 'len
 if [[ "$MATCHING_PATCH_BASELINE_COUNT" -gt 0 ]]; then
   success "Found environment SSM patch baselines: $MATCHING_PATCH_BASELINE_COUNT"
 else
-  warn "No SSM patch baselines found matching name prefix: ${NAME_PREFIX}"
+  info "No custom environment SSM patch baselines found matching name prefix: ${NAME_PREFIX}. AWS-managed default patch baselines are available."
 fi
 
 section "SSM Summary"
