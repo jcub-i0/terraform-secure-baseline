@@ -459,3 +459,20 @@ TAGGED_RDS_COUNT="$(
 
 info "EC2 instances tagged for backup: ${TAGGED_EC2_COUNT}"
 info "RDS instances tagged for backup: ${TAGGED_RDS_COUNT}"
+
+section "Reporting recovery points"
+
+RECOVERY_POINTS_JSON="$(
+  aws backup list-recovery-points-by-backup-vault \
+    "${aws_args[@]}" \
+    --backup-vault-name "$BACKUP_VAULT_NAME" \
+    --output json
+)"
+
+RECOVERY_POINT_COUNT="$(echo "$RECOVERY_POINTS_JSON" | jq '.RecoveryPoints | length')"
+
+if [[ "$RECOVERY_POINT_COUNT" -gt 0 ]]; then
+  success "Recovery points found in backup vault: $RECOVERY_POINT_COUNT"
+else
+  warn "No recovery points found in backup vault yet. This may be expected before the first scheduled backup runs."
+fi
