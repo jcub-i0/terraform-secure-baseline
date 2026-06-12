@@ -131,3 +131,143 @@ else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
 
+section "Resolving expected SQS and SNS resources"
+
+resource_name() {
+  local suffix="$1"
+  echo "{NAME_PREFIX}-${suffix}"
+}
+
+# Format:
+#   label|queue_suffix|required|producer_ref
+#
+# producer_ref formats:
+#   sns:<topic_suffix>       Validate SNS topic -> SQS subscription and queue policy
+#   none                     Validate queue only
+EXPECTED_SQS_QUEUES=(
+  "compliance|compliance-queue|required|sns:compliance-notifications"
+)
+
+QUEUE_SUMMARY_ROWS=()
+TOTAL_VALIDATED_QUEUES=0
+TOTAL_REQUIRED_QUEUES=0
+TOTAL_OPTIONAL_QUEUES=0
+TOTAL_PENDING_SUBSCRIPTION_COUNT=0
+
+validate_sns_producer_for_queue() {
+  local queue_label="$1"
+  local queue_arn="$2"
+  local topic_suffix="$3"
+  local policy_json="$4"
+
+  local topic_name
+  local topic_arn
+  local subscriptions_json
+  local queue_subscription_count
+  local pending_subscription_count
+  local sns_sendmessage_statement_count
+
+  topic_name="$(resource_name "$topic_suffix")"
+  topic_arn="arn:aws:sns:${AWS_REGION}:${ACCOUNT_ID}:${topic_name}"
+
+  section "Validating SNS producer for ${queue_label}"
+
+  info "Expected SNS topic: ${topic_name}"
+
+  if aws sns get-topic-attributes \
+    "${aws_args[@]}" \
+    --topic-arn "$topic_arn" \
+    --output json >/dev/null 2>&1; then
+    success "SNS topic exists for ${queue_label}: ${topic_arn}"
+  else
+    fail "Required SNS topic not found for ${queue_label}: ${topic_arn}"
+  fi
+
+  sns_sendmessage_statement_count="$(
+    echo "$policy_json" |
+      jq --arg topic_arn "$topic_arn" '
+        [
+          .Statement[]
+          | select(
+              (
+                (.Action == "sqs:SendMessage")
+                or
+                ((.Action | type) == "array" and (.Action | index("sqs:SendMessage")))
+                or
+                (.Action == "SQS:SendMessage")
+                or
+                ((.Action | type) == "array" and (.Action | index("SQS:SendMessage")))
+              )
+            )
+          | select(
+              (
+                .Condition.ArnEquals."aws:SourceArn"? == $topic_arn
+              )
+              or
+              (
+                .Condition.ArnLike."aws:SourceArn"? == $topic_arn
+              )
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$sns_sendmessage_statement_count" -gt 0 ]]; then
+    success "${queue_label} queue policy allows SNS topics to send messages"
+  else
+    echo "$policy_json" | jq .
+    fail "${queue_label} queue policy does not clearly allow ${topic_arn} to send sqs:SendMessage"
+  fi
+
+  subscriptions_json="$(
+    aws sns list-subscriptions-by-topic \
+      "${aws_args[@]}" \
+      --topic-arn "$topic_arn" \
+      --output json
+  )"
+
+  queue_subscription_count="$(
+    echo "$subscriptions_json" |
+      jq --arg queue_arn "$queue_arn" '
+        [
+          .Subscriptions[]
+          | select(.Protocol == "sqs")
+          | select(.Endpoint == $queue_arn)
+        ]
+        | length
+      '
+  )"
+
+  pending_subscription_count="$(
+    echo "$subscriptions_json" |
+      jq '
+        [
+          .Subscriptions[]
+          | select(.SubscriptionArn == "PendingConfirmation")
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$queue_subscription_count" -gt 0 ]]; then
+    success "${queue_label} SNS topic is subscribed to expected SQS queue"
+  else
+    echo "$subscriptions_json" | jq '.Subscriptions'
+    fail "${queue_label} SNS topic is not subscribed to expected SQS queue: ${queue_arn}"
+  fi
+
+  if [[ "$pending_subscription_count" -eq 0 ]]; then
+    success "${queue_label} SNS topic has no pending subscription confirmations"
+  else
+    echo "$subscriptions_json" |
+      jq '[.Subscriptions[] | select(.SubscriptionArn == "PendingConfirmation")]'
+    fail "${queue_label} SNS topic has pending subscription confirmations"
+  fi
+
+  TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_subscription_count))
+
+  SNS_TOPIC_ARN_RESULT="$topic_arn"
+  SNS_SUBSCRIPTION_COUNT_RESULT="$queue_subscription_count"
+  SNS_PENDING_COUNT_RESULT="$pending_subscription_count"
+}
