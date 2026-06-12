@@ -111,7 +111,7 @@ fi
 EXPECTED_BACKUP_VAULT_NAME="${NAME_PREFIX}-backup-vault"
 EXPECTED_BACKUP_PLAN_NAME="${NAME_PREFIX}-backup-plan"
 EXPECTED_BACKUP_SELECTION_NAME="${NAME_PREFIX}-backup-selection"
-EXPECTED_BACKUP_TAG_KEY="${Backup}"
+EXPECTED_BACKUP_TAG_KEY="Backup"
 EXPECTED_BACKUP_TAG_VALUE="true"
 
 BACKUP_VAULT_NAME="$EXPECTED_BACKUP_VAULT_NAME"
@@ -146,6 +146,14 @@ CALLER_ARN="$(
     --query Arn \
     --output text
 )"
+
+if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
+  fail "Unable to resolve AWS account ID"
+fi
+
+success "AWS credentials are valid"
+info "AWS account ID: $ACCOUNT_ID"
+info "AWS caller ARN: $CALLER_ARN"
 
 if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
   if [[ "$ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
@@ -188,13 +196,13 @@ resolve_backup_plan_id_by_name() {
 
 section "Handling backup-enabled state"
 
-if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
+if [[ "$EFFECTIVE_BACKUP_ENABLED" != "true" ]]; then
   warn "effective_backup_enabled=false. Backup resources are not required for this environment."
 
   if backup_vault_exists "$BACKUP_VAULT_NAME"; then
     warn "Backup vault exists even though effective_backup_enabled=false: $BACKUP_VAULT_NAME"
   else
-    success "No required backup vault validation needed whil backups are disabled"
+    success "No required backup vault validation needed while backups are disabled"
   fi
 
   if [[ -z "$BACKUP_PLAN_ID" ]]; then
@@ -244,7 +252,7 @@ BACKUP_VAULT_JSON="$(
 )"
 
 BACKUP_VAULT_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.BackupVaultArn // empty')"
-BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.EncryptionArn // empty')"
+BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.EncryptionKeyArn // empty')"
 BACKUP_VAULT_RECOVERY_POINT_COUNT="$(echo "$BACKUP_VAULT_JSON" | jq -r '.NumberOfRecoveryPoints // 0')"
 
 if [[ -n "$BACKUP_VAULT_ARN" ]]; then
@@ -256,7 +264,7 @@ fi
 if [[ -n "$BACKUP_VAULT_KMS_KEY_ARN" ]]; then
   success "Backup vault encryption key configured: $BACKUP_VAULT_KMS_KEY_ARN"
 else
-  warn "Backup vault encryption key not returned. Vault may be using default encryption behavior."
+  warn "Backup vault encryption key was not returned. Vault may be using default encryption behavior."
 fi
 
 info "Backup vault recovery point count: $BACKUP_VAULT_RECOVERY_POINT_COUNT"
@@ -284,7 +292,7 @@ BACKUP_PLAN_NAME="$(echo "$BACKUP_PLAN_JSON" | jq -r '.BackupPlan.BackupPlanName
 BACKUP_RULE_COUNT="$(echo "$BACKUP_PLAN_JSON" | jq '.BackupPlan.Rules | length')"
 
 if [[ "$BACKUP_PLAN_NAME" == "$EXPECTED_BACKUP_PLAN_NAME" ]]; then
-  success "Backup plan name matches expected name: $BACKUPPLAN_NAME"
+  success "Backup plan name matches expected name: $BACKUP_PLAN_NAME"
 else
   warn "Backup plan name does not match expected name. Expected=${EXPECTED_BACKUP_PLAN_NAME}, Actual=${BACKUP_PLAN_NAME}"
 fi
@@ -320,7 +328,7 @@ while IFS= read -r rule; do
 
   rule_name="$(echo "$rule" | jq -r '.RuleName // "unknown"')"
   target_vault="$(echo "$rule" | jq -r '.TargetBackupVaultName // "unknown"')"
-  schedule="$(echo "$rule" | jq '.ScheduleExpression // "unknown"')"
+  schedule="$(echo "$rule" | jq -r '.ScheduleExpression // "unknown"')"
   delete_after="$(echo "$rule" | jq -r '.Lifecycle.DeleteAfterDays // "none"')"
 
   if [[ "$schedule" != "unknown" && "$schedule" != "null" ]]; then
@@ -329,7 +337,7 @@ while IFS= read -r rule; do
     fail "Backup rule is missing schedule expression: ${rule_name}"
   fi
 
-  if [[ "$delete_after" != "none" && "$delte_after" != "null" ]]; then
+  if [[ "$delete_after" != "none" && "$delete_after" != "null" ]]; then
     success "Backup rule has retention policy: ${rule_name} delete_after=${delete_after} days"
   else
     warn "Backup rule does not have DeleteAfterDays configured: ${rule_name}"
@@ -347,7 +355,7 @@ SELECTIONS_JSON="$(
     --output json
 )"
 
-BACKUP_SELECTION_COUTN="$(echo "$SELECTIONS_JSON" | jq '.BackupSelectionsList | length')"
+BACKUP_SELECTION_COUNT="$(echo "$SELECTIONS_JSON" | jq '.BackupSelectionsList | length')"
 
 if [[ "$BACKUP_SELECTION_COUNT" -gt 0 ]]; then
   success "Backup plan has selection(s): $BACKUP_SELECTION_COUNT"
@@ -356,7 +364,7 @@ else
 fi
 
 EXPECTED_SELECTION_ID="$(
-  echo "$SELECTION_JSON" |
+  echo "$SELECTIONS_JSON" |
     jq -r --arg selection_name "$EXPECTED_BACKUP_SELECTION_NAME" '
       [
         .BackupSelectionsList[]
@@ -400,7 +408,7 @@ SELECTION_TAG_MATCH_COUNT="$(
   echo "$BACKUP_SELECTION_JSON" |
     jq --arg key "$EXPECTED_BACKUP_TAG_KEY" --arg value "$EXPECTED_BACKUP_TAG_VALUE" '
       [
-        .BackupSelection.Condition.StringEquals[]?
+        .BackupSelection.Conditions.StringEquals[]?
         | select(.ConditionKey == $key)
         | select(.ConditionValue == $value)
       ]
@@ -420,4 +428,3 @@ else
   echo "$BACKUP_SELECTION_JSON" | jq '.BackupSelection'
   fail "Backup selection does not clearly use expected tag filter: ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE}"
 fi
-
