@@ -131,11 +131,11 @@ else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
 
-section "Resolving expected SQS and SNS resources"
+section "Resolving expected SQS resources"
 
 resource_name() {
   local suffix="$1"
-  echo "{NAME_PREFIX}-${suffix}"
+  echo "${NAME_PREFIX}-${suffix}"
 }
 
 # Format:
@@ -144,6 +144,10 @@ resource_name() {
 # producer_ref formats:
 #   sns:<topic_suffix>       Validate SNS topic -> SQS subscription and queue policy
 #   none                     Validate queue only
+#
+# Potential examples:
+#   "lambda dlq|ip-enrichment-dlq|optional|none"
+#   "eventbridge dlq|eventbridge-dlq|optional|none"
 EXPECTED_SQS_QUEUES=(
   "compliance|compliance-queue|required|sns:compliance-notifications"
 )
@@ -214,7 +218,7 @@ validate_sns_producer_for_queue() {
   )"
 
   if [[ "$sns_sendmessage_statement_count" -gt 0 ]]; then
-    success "${queue_label} queue policy allows SNS topics to send messages"
+    success "${queue_label} queue policy allows SNS topic to send messages"
   else
     echo "$policy_json" | jq .
     fail "${queue_label} queue policy does not clearly allow ${topic_arn} to send sqs:SendMessage"
@@ -278,7 +282,6 @@ validate_sqs_queue() {
   local requirement="$3"
   local producer_ref="$4"
 
-
   local queue_name
   local queue_url
   local queue_attributes_json
@@ -304,7 +307,7 @@ validate_sqs_queue() {
   section "Validating ${queue_label} SQS queue"
 
   info "Expected SQS queue: ${queue_name}"
-  info "Requirement: ${requirement}"
+  info "Requirement:        ${requirement}"
   info "Producer reference: ${producer_ref}"
 
   if ! queue_url="$(
@@ -315,7 +318,7 @@ validate_sqs_queue() {
       --output text 2>/dev/null
   )"; then
     if [[ "$requirement" == "required" ]]; then
-      fail "Required SNS queue not found for ${queue_label}: ${queue_name}"
+      fail "Required SQS queue not found for ${queue_label}: ${queue_name}"
     else
       warn "Optional SQS queue not found for ${queue_label}: ${queue_name}"
       return 0
@@ -329,7 +332,7 @@ validate_sqs_queue() {
     aws sqs get-queue-attributes \
       "${aws_args[@]}" \
       --queue-url "$queue_url" \
-      --attribute-name All \
+      --attribute-names All \
       --output json
   )"
 
@@ -349,7 +352,6 @@ validate_sqs_queue() {
     fail "Unable to resolve queue ARN for ${queue_label}"
   fi
 
-
   if [[ -n "$kms_key_id" ]]; then
     success "${queue_label} queue uses SSE-KMS: ${kms_key_id}"
   elif [[ "$sqs_managed_sse" == "true" ]]; then
@@ -359,7 +361,7 @@ validate_sqs_queue() {
   fi
 
   info "${queue_label} queue visibility timeout: ${visibility_timeout}s"
-  info "${queue_label} queue message retention period: ${message_retention_periods}s"
+  info "${queue_label} queue message retention period: ${message_retention_period}s"
 
   if [[ -n "$redrive_policy_raw" ]]; then
     redrive_policy_configured="true"
@@ -369,19 +371,19 @@ validate_sqs_queue() {
   else
     info "${queue_label} queue does not have a redrive policy configured."
   fi
-  
+
   producer_type="${producer_ref%%:*}"
   producer_suffix="${producer_ref#*:}"
 
   case "$producer_type" in
     sns)
       if [[ -z "$policy_raw" ]]; then
-        fail "$queue_label} queue policy is missing. SNS-to-SQS delivery required a queue policy allowing the SNS topic to send messages."
+        fail "${queue_label} queue policy is missing. SNS-to-SQS delivery requires a queue policy allowing the SNS topic to send messages."
       fi
 
       success "${queue_label} queue policy exists"
 
-      policy_json="$(ehco "$policy_raw" | jq '.')"
+      policy_json="$(echo "$policy_raw" | jq '.')"
 
       SNS_TOPIC_ARN_RESULT="<none>"
       SNS_SUBSCRIPTION_COUNT_RESULT="0"
@@ -407,7 +409,7 @@ validate_sqs_queue() {
       ;;
   esac
 
-  TOTAL_VALIDATED_QUEUES=$((TOTAL_VALIDATED_QUEUES +1))
+  TOTAL_VALIDATED_QUEUES=$((TOTAL_VALIDATED_QUEUES + 1))
 
   if [[ "$requirement" == "required" ]]; then
     TOTAL_REQUIRED_QUEUES=$((TOTAL_REQUIRED_QUEUES + 1))
