@@ -581,3 +581,7 @@ if [[ "$BACKUP_JOB_COUNT" -gt 0 ]]; then
         + " " + (.BackupJobId // "unknown")
     '
 fi
+
+section "Validation Result"
+
+success "Backup validation completed successfully for: ${ENV_NAME}"
