@@ -449,9 +449,9 @@ TAGGED_RDS_COUNT="$(
       [
         .DBInstances[]
         | select(
-          (.TagList // [])
-          | any(.Key == $key and .Value == $value)
-        )
+            (.TagList // [])
+            | any(.Key == $key and .Value == $value)
+          )
       ]
       | length
     ' 2>/dev/null || echo "0"
