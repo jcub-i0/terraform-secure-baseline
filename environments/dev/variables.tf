@@ -106,6 +106,12 @@ variable "backup_schedule" {
   default     = null
 }
 
+variable "delete_backups_after_days" {
+  description = "Number of days to retain backups before deletion"
+  type        = string
+  default     = null
+}
+
 variable "break_glass_trusted_principal_arns" {
   description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
   type        = list(string)
