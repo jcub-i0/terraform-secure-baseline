@@ -227,3 +227,37 @@ SUMMARY
   success "Backup validation completed successfully for: ${ENV_NAME}"
   exit 0
 fi
+
+section "Validating backup vault"
+
+if ! backup_vault_exists "$BACKUP_VAULT_NAME"; then
+  fail "Required backup vault not found: ${BACKUP_VAULT_NAME}"
+fi
+
+success "Backup vault exists: $BACKUP_VAULT_NAME"
+
+BACKUP_VAULT_JSON="$(
+  aws backup describe-backup-vault \
+    "${aws_args[@]}" \
+    --backup-vault-name "$BACKUP_VAULT_NAME" \
+    --output json
+)"
+
+BACKUP_VAULT_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.BackupVaultArn // empty')"
+BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.EncryptionArn // empty')"
+BACKUP_VAULT_RECOVERY_POINT_COUNT="$(echo "$BACKUP_VAULT_JSON" | jq -r '.NumberOfRecoveryPoints // 0')"
+
+if [[ -n "$BACKUP_VAULT_ARN" ]]; then
+  success "Backup vault ARN resolved: $BACKUP_VAULT_ARN"
+else
+  fail "Backup vault ARN could not be resolved"
+fi
+
+if [[ -n "$BACKUP_VAULT_KMS_KEY_ARN" ]]; then
+  success "Backup vault encryption key configured: $BACKUP_VAULT_KMS_KEY_ARN"
+else
+  warn "Backup vault encryption key not returned. Vault may be using default encryption behavior."
+fi
+
+info "Backup vault recovery point count: $BACKUP_VAULT_RECOVERY_POINT_COUNT"
+
