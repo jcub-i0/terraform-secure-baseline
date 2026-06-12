@@ -428,3 +428,34 @@ else
   echo "$BACKUP_SELECTION_JSON" | jq '.BackupSelection'
   fail "Backup selection does not clearly use expected tag filter: ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE}"
 fi
+
+section "Reporting tagged backup resources"
+
+TAGGED_EC2_COUNT="$(
+  aws ec2 describe-instances \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=tag:${EXPECTED_BACKUP_TAG_KEY},Values=${EXPECTED_BACKUP_TAG_VALUE}" \
+      "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+    --query 'length(Reservations[].Instances[])' \
+    --output text 2>/dev/null || echo "0"
+)"
+
+TAGGED_RDS_COUNT="$(
+  aws rds describe-db-instances \
+    "${aws_args[@]}" \
+    --output json 2>/dev/null |
+    jq --arg key "$EXPECTED_BACKUP_TAG_KEY" --arg value "$EXPECTED_BACKUP_TAG_VALUE" '
+      [
+        .DBInstances[]
+        | select(
+          (.TagList // [])
+          | any(.Key == $key and .Value == $value)
+        )
+      ]
+      | length
+    ' 2>/dev/null || echo "0"
+)"
+
+info "EC2 instances tagged for backup: ${TAGGED_EC2_COUNT}"
+info "RDS instances tagged for backup: ${TAGGED_RDS_COUNT}"
