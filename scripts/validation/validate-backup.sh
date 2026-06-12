@@ -476,3 +476,41 @@ if [[ "$RECOVERY_POINT_COUNT" -gt 0 ]]; then
 else
   warn "No recovery points found in backup vault yet. This may be expected before the first scheduled backup runs."
 fi
+
+section "Reporting recent backup jobs"
+
+BACKUP_JOBS_JSON="$(
+  aws backup list-backup-jobs \
+    "${aws_args[@]}" \
+    --by-backup-vault-name "$BACKUP_VAULT_NAME" \
+    --max-results 10 \
+    --output json 2>/dev/null || echo '{"BackupJobs":[]}'
+)"
+
+BACKUP_JOB_COUNT="$(echo "$BACKUP_JOBS_JSON" | jq '.BackupJobs | length')"
+
+if [[ "$BACKUP_JOB_COUNT" -gt 0 ]]; then
+  success "Recent backup jobs found for vault: ${BACKUP_JOB_COUNT}"
+else
+  warn "No recent backup jobs found for vault. This may be expected before the first scheduled backup runs."
+fi
+
+FAILED_BACKUP_JOBS_COUNT="$(
+  echo "$BACKUP_JOBS_JSON" |
+    jq '
+      [
+        .BackupJobs[]
+        | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")
+      ]
+      | length
+    '
+)"
+
+if [[ "$FAILED_BACKUP_JOB_COUNT" -eq 0 ]]; then
+  success "No failed/aborted/expired recent backup jobs found"
+else
+  echo "$BACKUP_JOBS_JSON" |
+    jq '.BackupJobs[] | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")'
+  fail "Recent failed/aborted/expired backup jobs found: ${FAILED_BACKUP_JOB_COUNT}"
+fi
+
