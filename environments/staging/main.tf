@@ -14,8 +14,8 @@ module "baseline" {
   enable_config                      = var.enable_config
   enable_rules                       = var.enable_rules
   backup_enabled                     = var.backup_enabled
-  backup_schedule = var.backup_schedule
-  delete_backups_after_days = var.delete_backups_after_days
+  backup_schedule                    = var.backup_schedule
+  delete_backups_after_days          = var.delete_backups_after_days
   deployment_profile                 = var.deployment_profile
   egress_mode                        = var.egress_mode
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
