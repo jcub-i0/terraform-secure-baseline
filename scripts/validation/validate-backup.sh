@@ -474,7 +474,7 @@ RECOVERY_POINT_COUNT="$(echo "$RECOVERY_POINTS_JSON" | jq '.RecoveryPoints | len
 if [[ "$RECOVERY_POINT_COUNT" -gt 0 ]]; then
   success "Recovery points found in backup vault: $RECOVERY_POINT_COUNT"
 else
-  warn "No recovery points found in backup vault yet. This may be expected before the first scheduled backup runs."
+  warn "No recovery points were returned by list-recovery-points-by-backup-vault. This may be expected before recovery points are indexed, or if recent jobs have not produced visible recovery points yet."
 fi
 
 section "Reporting recent backup jobs"
