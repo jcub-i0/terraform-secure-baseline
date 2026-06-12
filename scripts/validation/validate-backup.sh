@@ -490,12 +490,12 @@ BACKUP_JOBS_JSON="$(
 BACKUP_JOB_COUNT="$(echo "$BACKUP_JOBS_JSON" | jq '.BackupJobs | length')"
 
 if [[ "$BACKUP_JOB_COUNT" -gt 0 ]]; then
-  success "Recent backup jobs found for vault: ${BACKUP_JOB_COUNT}"
+  success "Recent backup jobs found for vault: $BACKUP_JOB_COUNT"
 else
   warn "No recent backup jobs found for vault. This may be expected before the first scheduled backup runs."
 fi
 
-FAILED_BACKUP_JOBS_COUNT="$(
+FAILED_BACKUP_JOB_COUNT="$(
   echo "$BACKUP_JOBS_JSON" |
     jq '
       [
@@ -513,4 +513,3 @@ else
     jq '.BackupJobs[] | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")'
   fail "Recent failed/aborted/expired backup jobs found: ${FAILED_BACKUP_JOB_COUNT}"
 fi
-
