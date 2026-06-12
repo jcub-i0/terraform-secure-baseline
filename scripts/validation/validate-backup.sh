@@ -513,3 +513,71 @@ else
     jq '.BackupJobs[] | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")'
   fail "Recent failed/aborted/expired backup jobs found: ${FAILED_BACKUP_JOB_COUNT}"
 fi
+
+section "Backup Summary"
+
+cat <<SUMMARY
+Environment:                    ${ENV_NAME}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+AWS account ID:                 ${ACCOUNT_ID}
+Name prefix:                    ${NAME_PREFIX}
+
+effective_backup_enabled:       ${EFFECTIVE_BACKUP_ENABLED}
+Backup vault name:              ${BACKUP_VAULT_NAME}
+Backup vault ARN:               ${BACKUP_VAULT_ARN}
+Backup vault KMS key:           ${BACKUP_VAULT_KMS_KEY_ARN:-<none>}
+Backup vault recovery points:   ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
+Backup plan name:               ${BACKUP_PLAN_NAME}
+Backup plan ID:                 ${BACKUP_PLAN_ID}
+Backup plan rules:              ${BACKUP_RULE_COUNT}
+Backup selections:              ${BACKUP_SELECTION_COUNT}
+Expected selection ID:          ${EXPECTED_SELECTION_ID}
+Backup service role ARN:        ${SELECTION_ROLE_ARN}
+Tagged EC2 backup resources:    ${TAGGED_EC2_COUNT}
+Tagged RDS backup resources:    ${TAGGED_RDS_COUNT}
+Recovery points listed:         ${RECOVERY_POINT_COUNT}
+Recent backup jobs listed:      ${BACKUP_JOB_COUNT}
+Recent failed backup jobs:      ${FAILED_BACKUP_JOB_COUNT}
+SUMMARY
+
+if [[ "${#BACKUP_RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
+  echo
+  echo "Backup plan rules:"
+  printf '%s\n' "${BACKUP_RULE_SUMMARY_ROWS[@]}" |
+    awk -F'|' '
+      BEGIN {
+        printf "%-24s %-38s %-24s %-14s\n", "RuleName", "TargetVault", "Schedule", "DeleteAfterDays"
+        printf "%-24s %-38s %-24s %-14s\n", "--------", "-----------", "--------", "---------------"
+      }
+      {
+        printf "%-24s %-38s %-24s %-14s\n", $1, $2, $3, $4
+      }
+    '
+fi
+
+if [[ "$RECOVERY_POINT_COUNT" -gt 0 ]]; then
+  echo
+  echo "Recent recovery points:"
+  echo "$RECOVERY_POINTS_JSON" |
+    jq -r '
+      .RecoveryPoints[0:10][]
+      | "- " + (.ResourceType // "unknown")
+        + " " + (.Status // "unknown")
+        + " " + (.CreationDate // "unknown")
+        + " " + (.RecoveryPointArn // "unknown")
+    '
+fi
+
+if [[ "$BACKUP_JOB_COUNT" -gt 0 ]]; then
+  echo
+  echo "Recent backup jobs:"
+  echo "$BACKUP_JOBS_JSON" |
+    jq -r '
+      .BackupJobs[]
+      | "- " + (.ResourceType // "unknown")
+        + " " + (.State // "unknown")
+        + " " + (.CreationDate // "unknown")
+        + " " + (.BackupJobId // "unknown")
+    '
+fi
