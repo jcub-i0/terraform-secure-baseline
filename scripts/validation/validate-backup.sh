@@ -338,3 +338,86 @@ while IFS= read -r rule; do
   BACKUP_RULE_SUMMARY_ROWS+=("${rule_name}|${target_vault}|${schedule}|${delete_after}")
 done < <(echo "$BACKUP_PLAN_JSON" | jq -c '.BackupPlan.Rules[]')
 
+section "Validating backup selection"
+
+SELECTIONS_JSON="$(
+  aws backup list-backup-selections \
+    "${aws_args[@]}" \
+    --backup-plan-id "$BACKUP_PLAN_ID" \
+    --output json
+)"
+
+BACKUP_SELECTION_COUTN="$(echo "$SELECTIONS_JSON" | jq '.BackupSelectionsList | length')"
+
+if [[ "$BACKUP_SELECTION_COUNT" -gt 0 ]]; then
+  success "Backup plan has selection(s): $BACKUP_SELECTION_COUNT"
+else
+  fail "Backup plan has no backup selections"
+fi
+
+EXPECTED_SELECTION_ID="$(
+  echo "$SELECTION_JSON" |
+    jq -r --arg selection_name "$EXPECTED_BACKUP_SELECTION_NAME" '
+      [
+        .BackupSelectionsList[]
+        | select(.SelectionName == $selection_name)
+        | .SelectionId
+      ]
+      | first // empty
+    '
+)"
+
+if [[ -z "$EXPECTED_SELECTION_ID" ]]; then
+  echo "$SELECTIONS_JSON" | jq '.BackupSelectionsList'
+  fail "Expected backup selection not found: ${EXPECTED_BACKUP_SELECTION_NAME}"
+fi
+
+success "Expected backup selection exists: ${EXPECTED_BACKUP_SELECTION_NAME} (${EXPECTED_SELECTION_ID})"
+
+BACKUP_SELECTION_JSON="$(
+  aws backup get-backup-selection \
+    "${aws_args[@]}" \
+    --backup-plan-id "$BACKUP_PLAN_ID" \
+    --selection-id "$EXPECTED_SELECTION_ID" \
+    --output json
+)"
+
+SELECTION_ROLE_ARN="$(echo "$BACKUP_SELECTION_JSON" | jq -r '.BackupSelection.IamRoleArn // empty')"
+
+if [[ -n "$SELECTION_ROLE_ARN" ]]; then
+  success "Backup selection has IAM role configured: $SELECTION_ROLE_ARN"
+else
+  fail "Backup selection IAM role is missing"
+fi
+
+if [[ "$SELECTION_ROLE_ARN" == *"backup"* || "$SELECTION_ROLE_ARN" == *"Backup"* ]]; then
+  success "Backup selection IAM role appears backup-related"
+else
+  warn "Backup selection IAM role does not contain 'backup' keyword: $SELECTION_ROLE_ARN"
+fi
+
+SELECTION_TAG_MATCH_COUNT="$(
+  echo "$BACKUP_SELECTION_JSON" |
+    jq --arg key "$EXPECTED_BACKUP_TAG_KEY" --arg value "$EXPECTED_BACKUP_TAG_VALUE" '
+      [
+        .BackupSelection.Condition.StringEquals[]?
+        | select(.ConditionKey == $key)
+        | select(.ConditionValue == $value)
+      ]
+      +
+      [
+        .BackupSelection.ListOfTags[]?
+        | select(.ConditionKey == $key)
+        | select(.ConditionValue == $value)
+      ]
+      | length
+    '
+)"
+
+if [[ "$SELECTION_TAG_MATCH_COUNT" -gt 0 ]]; then
+  success "Backup selection uses expected tag filter: ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE}"
+else
+  echo "$BACKUP_SELECTION_JSON" | jq '.BackupSelection'
+  fail "Backup selection does not clearly use expected tag filter: ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE}"
+fi
+
