@@ -157,3 +157,31 @@ else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
 
+# -----------------------------------------------------------------------------
+# Helper functions
+# -----------------------------------------------------------------------------
+
+backup_vault_exists() {
+  local vault_name="$1"
+
+  aws backup describe-backup-vault \
+    "${aws_args[@]}" \
+    --backup-vault-name "$vault_name" \
+    --output json >/dev/null 2>&1
+}
+
+resolve_backup_plan_id_by_name() {
+  local plan_name="$1"
+
+  aws backup list-backup-plans \
+    "${aws_args[@]}" \
+    --output json |
+    jq -r --arg plan_name "$plan_name" '
+      [
+        .BackupPlansList[]
+        | select(.BackupPlanName == $plan_name)
+        | .BackupPlanId
+      ]
+      | first // empty
+    '
+}
