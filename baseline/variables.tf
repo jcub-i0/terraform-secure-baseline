@@ -228,14 +228,14 @@ variable "backup_schedule" {
   description = "CRON expression for when backups are performed"
   type        = string
   default     = "cron(0 5 * * ? *)"
-  nullable = false
+  nullable    = false
 }
 
 variable "delete_backups_after_days" {
   description = "Number of days to retain backups before deletion"
   type        = string
   default     = "30"
-  nullable = false
+  nullable    = false
 }
 
 variable "break_glass_trusted_principal_arns" {

@@ -4,4 +4,5 @@ primary_region = "us-east-1"
 
 deployment_profile = "development"
 
-enable_config = false
+enable_config  = false
+backup_enabled = true
