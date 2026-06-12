@@ -131,3 +131,29 @@ else
   info "backup_plan_id output not found. Will resolve backup plan by name."
 fi
 
+section "Checking AWS caller identity"
+
+ACCOUNT_ID="$(
+  aws sts get-caller-identity \
+    "${aws_args[@]}" \
+    --query Account \
+    --output text
+)"
+
+CALLER_ARN="$(
+  aws sts get-caller-identity \
+    "${aws_args[@]}" \
+    --query Arn \
+    --output text
+)"
+
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  if [[ "$ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
+    success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
+  else
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACCOUNT_ID}"
+  fi
+else
+  warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
+fi
+
