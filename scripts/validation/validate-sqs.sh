@@ -461,7 +461,7 @@ Name prefix:                        ${NAME_PREFIX}
 Matching environment queues:        ${MATCHING_QUEUE_COUNT}
 Required SQS queues validated:      ${TOTAL_REQUIRED_QUEUES}
 Optional SQS queues validated:      ${TOTAL_OPTIONAL_QUEUES}
-Total SQS queues validated:         ${TOTAL_VALIDATED QUEUES}
+Total SQS queues validated:         ${TOTAL_VALIDATED_QUEUES}
 Pending subscription confirmations: ${TOTAL_PENDING_SUBSCRIPTION_COUNT}
 SUMMARY
 
