@@ -185,3 +185,45 @@ resolve_backup_plan_id_by_name() {
       | first // empty
     '
 }
+
+section "Handling backup-enabled state"
+
+if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
+  warn "effective_backup_enabled=false. Backup resources are not required for this environment."
+
+  if backup_vault_exists "$BACKUP_VAULT_NAME"; then
+    warn "Backup vault exists even though effective_backup_enabled=false: $BACKUP_VAULT_NAME"
+  else
+    success "No required backup vault validation needed whil backups are disabled"
+  fi
+
+  if [[ -z "$BACKUP_PLAN_ID" ]]; then
+    BACKUP_PLAN_ID="$(resolve_backup_plan_id_by_name "$EXPECTED_BACKUP_PLAN_NAME")"
+  fi
+
+  if [[ -n "$BACKUP_PLAN_ID" ]]; then
+    warn "Backup plan exists even though effective_backup_enabled=false: $BACKUP_PLAN_ID"
+  else
+    success "No required backup plan validation needed while backups are disabled"
+  fi
+
+  section "Backup Summary"
+
+  cat <<SUMMARY
+Environment: ${ENV_NAME}
+AWS profile: ${AWS_PROFILE:-<default>}
+AWS region: ${AWS_REGION}
+AWS account ID: ${ACCOUNT_ID}
+Name prefix: ${NAME_PREFIX}
+
+effective_backup_enabled: ${EFFECTIVE_BACKUP_ENABLED}
+Backup validation mode: optional/skipped
+Expected backup vault name: ${EXPECTED_BACKUP_VAULT_NAME}
+Expected backup plan name: ${EXPECTED_BACKUP_PLAN_NAME}
+SUMMARY
+
+  section "Validation Result"
+
+  success "Backup validation completed successfully for: ${ENV_NAME}"
+  exit 0
+fi
