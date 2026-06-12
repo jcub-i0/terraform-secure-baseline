@@ -261,3 +261,80 @@ fi
 
 info "Backup vault recovery point count: $BACKUP_VAULT_RECOVERY_POINT_COUNT"
 
+section "Validating backup plan"
+
+if [[ -z "$BACKUP_PLAN_ID" ]]; then
+  BACKUP_PLAN_ID="$(resolve_backup_plan_id_by_name "$EXPECTED_BACKUP_PLAN_NAME")"
+fi
+
+if [[ -z "$BACKUP_PLAN_ID" ]]; then
+  fail "Required backup plan not found by name: ${EXPECTED_BACKUP_PLAN_NAME}"
+fi
+
+success "Backup plan exists: ${EXPECTED_BACKUP_PLAN_NAME} (${BACKUP_PLAN_ID})"
+
+BACKUP_PLAN_JSON="$(
+  aws backup get-backup-plan \
+    "${aws_args[@]}" \
+    --backup-plan-id "$BACKUP_PLAN_ID" \
+    --output json
+)"
+
+BACKUP_PLAN_NAME="$(echo "$BACKUP_PLAN_JSON" | jq -r '.BackupPlan.BackupPlanName // empty')"
+BACKUP_RULE_COUNT="$(echo "$BACKUP_PLAN_JSON" | jq '.BackupPlan.Rules | length')"
+
+if [[ "$BACKUP_PLAN_NAME" == "$EXPECTED_BACKUP_PLAN_NAME" ]]; then
+  success "Backup plan name matches expected name: $BACKUPPLAN_NAME"
+else
+  warn "Backup plan name does not match expected name. Expected=${EXPECTED_BACKUP_PLAN_NAME}, Actual=${BACKUP_PLAN_NAME}"
+fi
+
+if [[ "$BACKUP_RULE_COUNT" -gt 0 ]]; then
+  success "Backup plan has rule(s): $BACKUP_RULE_COUNT"
+else
+  fail "Backup plan has no rules"
+fi
+
+RULES_TARGETING_EXPECTED_VAULT="$(
+  echo "$BACKUP_PLAN_JSON" |
+    jq --arg vault_name "$BACKUP_VAULT_NAME" '
+      [
+        .BackupPlan.Rules[]
+        | select(.TargetBackupVaultName == $vault_name)
+      ]
+      | length
+    '
+)"
+
+if [[ "$RULES_TARGETING_EXPECTED_VAULT" -gt 0 ]]; then
+  success "Backup plan has rule(s) targeting expected vault: $BACKUP_VAULT_NAME"
+else
+  echo "$BACKUP_PLAN_JSON" | jq '.BackupPlan.Rules'
+  fail "Backup plan does not have a rule targeting expected vault: $BACKUP_VAULT_NAME"
+fi
+
+BACKUP_RULE_SUMMARY_ROWS=()
+
+while IFS= read -r rule; do
+  [[ -z "$rule" ]] && continue
+
+  rule_name="$(echo "$rule" | jq -r '.RuleName // "unknown"')"
+  target_vault="$(echo "$rule" | jq -r '.TargetBackupVaultName // "unknown"')"
+  schedule="$(echo "$rule" | jq '.ScheduleExpression // "unknown"')"
+  delete_after="$(echo "$rule" | jq -r '.Lifecycle.DeleteAfterDays // "none"')"
+
+  if [[ "$schedule" != "unknown" && "$schedule" != "null" ]]; then
+    success "Backup rule has schedule: ${rule_name} -> ${schedule}"
+  else
+    fail "Backup rule is missing schedule expression: ${rule_name}"
+  fi
+
+  if [[ "$delete_after" != "none" && "$delte_after" != "null" ]]; then
+    success "Backup rule has retention policy: ${rule_name} delete_after=${delete_after} days"
+  else
+    warn "Backup rule does not have DeleteAfterDays configured: ${rule_name}"
+  fi
+
+  BACKUP_RULE_SUMMARY_ROWS+=("${rule_name}|${target_vault}|${schedule}|${delete_after}")
+done < <(echo "$BACKUP_PLAN_JSON" | jq -c '.BackupPlan.Rules[]')
+
