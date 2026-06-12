@@ -440,7 +440,7 @@ MATCHING_QUEUE_COUNT="$(
 )"
 
 if [[ "$MATCHING_QUEUE_COUNT" -gt 0 ]]; then
-  success "Found SQS queues matchign name prefix: $MATCHING_QUEUE_COUNT"
+  success "Found SQS queues matching name prefix: $MATCHING_QUEUE_COUNT"
 else
   fail "No SQS queues found matching name prefix: ${NAME_PREFIX}"
 fi
