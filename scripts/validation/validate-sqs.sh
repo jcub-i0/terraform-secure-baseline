@@ -419,3 +419,8 @@ validate_sqs_queue() {
 
   QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_name}|${queue_arn}|${producer_ref}|${sns_topic_arn}|${sns_subscription_count}|${sns_pending_count}|${kms_key_id:-<none>}|${sqs_managed_sse}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
 }
+
+for queue_spec in "${EXPECTED_SQS_QUEUES[@]}"; do
+  IFS='|' read -r queue_label queue_suffix requirement producer_ref <<< "$queue_spec"
+  validate_sqs_queue "$queue_label" "$queue_suffix" "$requirement" "$producer_ref"
+done
