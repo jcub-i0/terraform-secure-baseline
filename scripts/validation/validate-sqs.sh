@@ -480,3 +480,6 @@ if [[ "${#QUEUE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
     '
 fi
 
+section "Validation Result"
+
+success "SQS validation comleted successfully for: ${ENV_NAME}"
