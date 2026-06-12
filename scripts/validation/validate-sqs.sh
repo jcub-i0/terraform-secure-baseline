@@ -271,3 +271,149 @@ validate_sns_producer_for_queue() {
   SNS_SUBSCRIPTION_COUNT_RESULT="$queue_subscription_count"
   SNS_PENDING_COUNT_RESULT="$pending_subscription_count"
 }
+
+validate_sqs_queue() {
+  local queue_label="$1"
+  local queue_suffix="$2"
+  local requirement="$3"
+  local producer_ref="$4"
+
+
+  local queue_name
+  local queue_url
+  local queue_attributes_json
+  local queue_arn
+  local kms_key_id
+  local sqs_managed_sse
+  local policy_raw
+  local policy_json
+  local redrive_policy_raw
+  local visibility_timeout
+  local message_retention_period
+  local approximate_number_of_messages
+  local approximate_number_of_messages_not_visible
+  local producer_type
+  local producer_suffix
+  local sns_topic_arn="<none>"
+  local sns_subscription_count="0"
+  local sns_pending_count="0"
+  local redrive_policy_configured="false"
+
+  queue_name="$(resource_name "$queue_suffix")"
+
+  section "Validating ${queue_label} SQS queue"
+
+  info "Expected SQS queue: ${queue_name}"
+  info "Requirement: ${requirement}"
+  info "Producer reference: ${producer_ref}"
+
+  if ! queue_url="$(
+    aws sqs get-queue-url \
+      "${aws_args[@]}" \
+      --queue-name "$queue_name" \
+      --query 'QueueUrl' \
+      --output text 2>/dev/null
+  )"; then
+    if [[ "$requirement" == "required" ]]; then
+      fail "Required SNS queue not found for ${queue_label}: ${queue_name}"
+    else
+      warn "Optional SQS queue not found for ${queue_label}: ${queue_name}"
+      return 0
+    fi
+  fi
+
+  success "SQS queue exists for ${queue_label}: ${queue_name}"
+  info "${queue_label} queue URL: ${queue_url}"
+
+  queue_attributes_json="$(
+    aws sqs get-queue-attributes \
+      "${aws_args[@]}" \
+      --queue-url "$queue_url" \
+      --attribute-name All \
+      --output json
+  )"
+
+  queue_arn="$(echo "$queue_attributes_json" | jq -r '.Attributes.QueueArn // empty')"
+  kms_key_id="$(echo "$queue_attributes_json" | jq -r '.Attributes.KmsMasterKeyId // empty')"
+  sqs_managed_sse="$(echo "$queue_attributes_json" | jq -r '.Attributes.SqsManagedSseEnabled // "false"')"
+  policy_raw="$(echo "$queue_attributes_json" | jq -r '.Attributes.Policy // empty')"
+  redrive_policy_raw="$(echo "$queue_attributes_json" | jq -r '.Attributes.RedrivePolicy // empty')"
+  visibility_timeout="$(echo "$queue_attributes_json" | jq -r '.Attributes.VisibilityTimeout // "unknown"')"
+  message_retention_period="$(echo "$queue_attributes_json" | jq -r '.Attributes.MessageRetentionPeriod // "unknown"')"
+  approximate_number_of_messages="$(echo "$queue_attributes_json" | jq -r '.Attributes.ApproximateNumberOfMessages // "0"')"
+  approximate_number_of_messages_not_visible="$(echo "$queue_attributes_json" | jq -r '.Attributes.ApproximateNumberOfMessagesNotVisible // "0"')"
+
+  if [[ -n "$queue_arn" ]]; then
+    success "${queue_label} queue ARN resolved: ${queue_arn}"
+  else
+    fail "Unable to resolve queue ARN for ${queue_label}"
+  fi
+
+
+  if [[ -n "$kms_key_id" ]]; then
+    success "${queue_label} queue uses SSE-KMS: ${kms_key_id}"
+  elif [[ "$sqs_managed_sse" == "true" ]]; then
+    success "${queue_label} queue uses SQS-managed server-side encryption"
+  else
+    fail "${queue_label} queue encryption is not configured"
+  fi
+
+  info "${queue_label} queue visibility timeout: ${visibility_timeout}s"
+  info "${queue_label} queue message retention period: ${message_retention_periods}s"
+
+  if [[ -n "$redrive_policy_raw" ]]; then
+    redrive_policy_configured="true"
+    success "${queue_label} queue has a redrive policy configured"
+    info "Redrive policy:"
+    echo "$redrive_policy_raw" | jq .
+  else
+    info "${queue_label} queue does not have a redrive policy configured."
+  fi
+  
+  producer_type="${producer_ref%%:*}"
+  producer_suffix="${producer_ref#*:}"
+
+  case "$producer_type" in
+    sns)
+      if [[ -z "$policy_raw" ]]; then
+        fail "$queue_label} queue policy is missing. SNS-to-SQS delivery required a queue policy allowing the SNS topic to send messages."
+      fi
+
+      success "${queue_label} queue policy exists"
+
+      policy_json="$(ehco "$policy_raw" | jq '.')"
+
+      SNS_TOPIC_ARN_RESULT="<none>"
+      SNS_SUBSCRIPTION_COUNT_RESULT="0"
+      SNS_PENDING_COUNT_RESULT="0"
+
+      validate_sns_producer_for_queue "$queue_label" "$queue_arn" "$producer_suffix" "$policy_json"
+
+      sns_topic_arn="$SNS_TOPIC_ARN_RESULT"
+      sns_subscription_count="$SNS_SUBSCRIPTION_COUNT_RESULT"
+      sns_pending_count="$SNS_PENDING_COUNT_RESULT"
+      ;;
+
+    none)
+      if [[ -n "$policy_raw" ]]; then
+        success "${queue_label} queue policy exists"
+      else
+        info "${queue_label} queue policy not configured; no producer-specific policy check required."
+      fi
+      ;;
+
+    *)
+      fail "Unsupported SQS producer reference for ${queue_label}: ${producer_ref}"
+      ;;
+  esac
+
+  TOTAL_VALIDATED_QUEUES=$((TOTAL_VALIDATED_QUEUES +1))
+
+  if [[ "$requirement" == "required" ]]; then
+    TOTAL_REQUIRED_QUEUES=$((TOTAL_REQUIRED_QUEUES + 1))
+  else
+    TOTAL_OPTIONAL_QUEUES=$((TOTAL_OPTIONAL_QUEUES + 1))
+  fi
+
+  QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_name}|${queue_arn}|${producer_ref}|${sns_topic_arn}|${sns_subscription_count}|${sns_pending_count}|${kms_key_id:-<none>}|${sqs_managed_sse}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
+}
