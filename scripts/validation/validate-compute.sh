@@ -201,3 +201,93 @@ else
 
   success "Resolved quarantine security group by name: $QUARANTINE_SG_ID"
 fi
+
+section "Validating compute and quarantine security groups"
+
+SECURITY_GROUPS_JSON="$(
+  aws ec2 describe-security-groups \
+    "${aws_args[@]}" \
+    --group-ids "$COMPUTE_SG_ID" "$QUARANTINE_SG_ID" \
+    --output json
+)"
+
+COMPUTE_SG_COUNT="$(
+  echo "$SECURITY_GROUPS_JSON" |
+    jq --arg sg_id "$COMPUTE_SG_ID" '[.SecurityGroups[] | select(.GroupId == $sg_id)] | length'
+)"
+
+QUARANTINE_SG_COUNT="$(
+  echo "$SECURITY_GROUPS_JSON" |
+    jq --arg sg_id "$QUARANTINE_SG_ID" '[.SecurityGroups[] | select(.GroupId == $sg_id)] | length'
+)"
+
+if [[ "$COMPUTE_SG_COUNT" -eq 1 ]]; then
+  success "Compute security group exists: $COMPUTE_SG_ID"
+else
+  fail "Compute security group not found: $COMPUTE_SG_ID"
+fi
+
+if [[ "$QUARANTINE_SG_COUNT" -eq 1 ]]; then
+  success "Quarantine security group exists: $QUARANTINE_SG_ID"
+else
+  fail "Quarantine security group not found: $QUARANTINE_SG_ID"
+fi
+
+SGS_OUTSIDE_VPC_COUNT="$(
+  echo "$SECURITY_GROUPS_JSON" |
+    jq --arg vpc_id "$VPC_ID" '[.SecurityGroups[] | select(.VpcId != $vpc_id)] | length'
+)"
+
+if [[ "$SGS_OUTSIDE_VPC_COUNT" -eq 0 ]]; then
+  success "Compute and quarantine security groups are in expected VPC"
+else
+  echo "$SECURITY_GROUPS_JSON" | jq '.SecurityGroups[] | {GroupId,GroupName,VpcId}'
+  fail "One or more compute security groups are outside expected VPC"
+fi
+
+QUARANTINE_EGRESS_443_COUNT="$(
+  echo "$SECURITY_GROUPS_JSON" |
+    jq --arg sg_id "$QUARANTINE_SG_ID" '
+      [
+        .SecurityGroups[]
+        | select(.GroupId == $sg_id)
+        | .IpPermissionsEgress[]?
+        | select(.IpProtocol == "tcp")
+        | select(.FromPort == 443 and .ToPort == 443)
+      ]
+      | length
+    '
+)"
+
+if [[ "$QUARANTINE_EGRESS_443_COUNT" -gt 0 ]]; then
+  success "Quarantine security group has HTTPS egress rule"
+else
+  warn "Quarantine security group does not show explicit TCP/443 egress rule"
+fi
+
+section "Discovering compute private subnets"
+
+COMPUTE_PRIVATE_SUBNETS_JSON="$(
+  aws ec2 describe-subnets \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-*" \
+    --output json
+)"
+
+COMPUTE_PRIVATE_SUBNET_COUNT="$(
+  echo "$COMPUTE_PRIVATE_SUBNETS_JSON" |
+    jq '.Subnets | length'
+)"
+
+if [[ "$COMPUTE_PRIVATE_SUBNET_COUNT" -gt 0 ]]; then
+  success "Found compute private subnets: $COMPUTE_PRIVATE_SUBNET_COUNT"
+else
+  fail "No compute private subnets found for name prefix: ${NAME_PREFIX}-Compute-Private-*"
+fi
+
+COMPUTE_PRIVATE_SUBNET_IDS_JSON="$(
+  echo "$COMPUTE_PRIVATE_SUBNETS_JSON" |
+    jq '[.Subnets[].SubnetId]'
+)"
