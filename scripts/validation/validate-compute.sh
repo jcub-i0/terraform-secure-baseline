@@ -719,3 +719,7 @@ echo "$VOLUMES_JSON" |
       + " KmsKeyId=" + (.KmsKeyId // "<none>")
       + " State=" + .State
   '
+
+section "Validation Result"
+
+success "Compute validation completed successfully for: ${ENV_NAME}"
