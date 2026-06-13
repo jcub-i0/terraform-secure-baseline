@@ -54,6 +54,7 @@ VALIDATION_SCRIPTS=(
   "validate-eventbridge.sh"
   "validate-lambda.sh"
   "validate-ssm.sh"
+  "validate-compute.sh"
   "validate-iam.sh"
 )
 
