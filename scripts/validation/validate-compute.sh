@@ -785,7 +785,7 @@ ISOLATION_ALLOWED_UNEXPECTED_COUNT="$(
         .[]
         | select(
             (.Tags // [])
-            | any(.Key -- "IsolationAllowed" and (.Value != "true" and .Value != "false"))
+            | any(.Key == "IsolationAllowed" and (.Value != "true" and .Value != "false"))
           )
       ]
       | length
