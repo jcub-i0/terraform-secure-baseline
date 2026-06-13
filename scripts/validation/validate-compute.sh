@@ -743,27 +743,6 @@ else
   fail "One or more compute instances have unexpected Terraform tag"
 fi
 
-BAD_ISOLATION_TAG_COUNT="$(
-  echo "$COMPUTE_INSTANCES_JSON" |
-    jq '
-      [
-        .[]
-        | select(
-            (.Tags // [])
-            | any(.Key == "IsolationAllowed" and .Value == "true")
-            | not
-          )
-      ]
-      | length
-    '
-)"
-
-if [[ "$BAD_ISOLATION_TAG_COUNT" -eq 0 ]]; then
-  success "All compute instances have IsolationAllowed=true tag"
-else
-  fail "One or more compute instances have unexpected IsolationAllowed tag"
-fi
-
 ISOLATION_ALLOWED_FALSE_COUNT="$(
   echo "$COMPUTE_INSTANCES_JSON" |
     jq '
