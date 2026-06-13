@@ -452,6 +452,214 @@ else
   fail "One or more compute instances are missing the compute security group"
 fi
 
+section "Validating compute security policy rules"
+
+EFFECTIVE_EGRESS_MODE=""
+
+if terraform_output_exists "$OUTPUTS_JSON" effective_egress_mode; then
+  EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
+  success "effective_egress_mode output found: $EFFECTIVE_EGRESS_MODE"
+else
+  warn "effective_egress_mode output not found. Internet HTTPS egress rule validation will be informational."
+fi
+
+DB_PORT="${DB_PORT:-5432}"
+
+if terraform_output_exists "$OUTPUTS_JSON" db_port; then
+  DB_PORT="$(get_terraform_output_value "$OUTPUTS_JSON" db_port)"
+  success "db_port output found: $DB_PORT"
+else
+  info "db_port output not found. Using default DB_PORT: $DB_PORT"
+fi
+
+INTERFACE_ENDPOINTS_SG_ID=""
+
+if terraform_output_exists "$OUTPUTS_JSON" interface_endpoints_sg_id; then
+  INTERFACE_ENDPOINTS_SG_ID="$(get_terraform_output_value "$OUTPUTS_JSON" interface_endpoints_sg_id)"
+  success "interface_endpoints_sg_id output found: $INTERFACE_ENDPOINTS_SG_ID"
+else
+  INTERFACE_ENDPOINTS_SG_ID="$(
+    aws ec2 describe-security-groups \
+      "${aws_args[@]}" \
+      --filters \
+        "Name=vpc-id,Values=${VPC_ID}" \
+        "Name=tag:Name,Values=${NAME_PREFIX}-Interface-Endpoints-SG,${NAME_PREFIX}-Endpoints-SG,${NAME_PREFIX}-VPC-Endpoints-SG" \
+      --query 'SecurityGroups[0].GroupId' \
+      --output text
+  )"
+
+  if [[ -z "$INTERFACE_ENDPOINTS_SG_ID" || "$INTERFACE_ENDPOINTS_SG_ID" == "None" ]]; then
+    warn "Unable to resolve interface endpoints security group. Skipping endpoint SG rule validation."
+  else
+    success "Resolved interface endpoints security group: $INTERFACE_ENDPOINTS_SG_ID"
+  fi
+fi
+
+DATA_SG_ID=""
+
+if terraform_output_exists "$OUTPUTS_JSON" data_sg_id; then
+  DATA_SG_ID="$(get_terraform_output_value "$OUTPUTS_JSON" data_sg_id)"
+  success "data_sg_id output found: $DATA_SG_ID"
+else
+  DATA_SG_ID="$(
+    aws ec2 describe-security-groups \
+      "${aws_args[@]}" \
+      --filters \
+        "Name=vpc-id,Values=${VPC_ID}" \
+        "Name=tag:Name,Values=${NAME_PREFIX}-Data-SG,${NAME_PREFIX}-RDS-SG" \
+      --query 'SecurityGroups[0].GroupId' \
+      --output text
+  )"
+
+  if [[ -z "$DATA_SG_ID" || "$DATA_SG_ID" == "None" ]]; then
+    warn "Unable to resolve data security group. Skipping DB SG rule validation."
+  else
+    success "Resolved data security group: $DATA_SG_ID"
+  fi
+fi
+
+if [[ -n "$INTERFACE_ENDPOINTS_SG_ID" && "$INTERFACE_ENDPOINTS_SG_ID" != "None" ]]; then
+  COMPUTE_EGRESS_TO_ENDPOINTS_COUNT="$(
+    echo "$SECURITY_GROUPS_JSON" |
+      jq --arg compute_sg_id "$COMPUTE_SG_ID" --arg endpoints_sg_id "$INTERFACE_ENDPOINTS_SG_ID" '
+        [
+          .SecurityGroups[]
+          | select(.GroupId == $compute_sg_id)
+          | .IpPermissionsEgress[]?
+          | select(.IpProtocol == "tcp")
+          | select(.FromPort == 443 and .ToPort == 443)
+          | select(
+              [.UserIdGroupPairs[]?.GroupId]
+              | index($endpoints_sg_id)
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$COMPUTE_EGRESS_TO_ENDPOINTS_COUNT" -gt 0 ]]; then
+    success "Compute SG allows HTTPS egress to interface endpoints SG"
+  else
+    fail "Compute SG does not allow HTTPS egress to interface endpoints SG"
+  fi
+
+  ENDPOINTS_INGRESS_FROM_COMPUTE_COUNT="$(
+    aws ec2 describe-security-groups \
+      "${aws_args[@]}" \
+      --group-ids "$INTERFACE_ENDPOINTS_SG_ID" \
+      --output json |
+      jq --arg compute_sg_id "$COMPUTE_SG_ID" '
+        [
+          .SecurityGroups[]
+          | .IpPermissions[]?
+          | select(.IpProtocol == "tcp")
+          | select(.FromPort == 443 and .ToPort == 443)
+          | select(
+              [.UserIdGroupPairs[]?.GroupId]
+              | index($compute_sg_id)
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$ENDPOINTS_INGRESS_FROM_COMPUTE_COUNT" -gt 0 ]]; then
+    success "Interface endpoints SG allows HTTPS ingress from compute SG"
+  else
+    fail "Interface endpoints SG does not allow HTTPS ingress from compute SG"
+  fi
+fi
+
+if [[ -n "$DATA_SG_ID" && "$DATA_SG_ID" != "None" ]]; then
+  COMPUTE_EGRESS_TO_DB_COUNT="$(
+    echo "$SECURITY_GROUPS_JSON" |
+      jq --arg compute_sg_id "$COMPUTE_SG_ID" --arg data_sg_id "$DATA_SG_ID" --argjson db_port "$DB_PORT" '
+        [
+          .SecurityGroups[]
+          | select(.GroupId == $compute_sg_id)
+          | .IpPermissionsEgress[]?
+          | select(.IpProtocol == "tcp")
+          | select(.FromPort == $db_port and .ToPort == $db_port)
+          | select(
+              [.UserIdGroupPairs[]?.GroupId]
+              | index($data_sg_id)
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$COMPUTE_EGRESS_TO_DB_COUNT" -gt 0 ]]; then
+    success "Compute SG allows DB egress to data SG on TCP/${DB_PORT}"
+  else
+    fail "Compute SG does not allow DB egress to data SG on TCP/${DB_PORT}"
+  fi
+
+  DATA_INGRESS_FROM_COMPUTE_COUNT="$(
+    aws ec2 describe-security-groups \
+      "${aws_args[@]}" \
+      --group-ids "$DATA_SG_ID" \
+      --output json |
+      jq --arg compute_sg_id "$COMPUTE_SG_ID" --argjson db_port "$DB_PORT" '
+        [
+          .SecurityGroups[]
+          | .IpPermissions[]?
+          | select(.IpProtocol == "tcp")
+          | select(.FromPort == $db_port and .ToPort == $db_port)
+          | select(
+              [.UserIdGroupPairs[]?.GroupId]
+              | index($compute_sg_id)
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$DATA_INGRESS_FROM_COMPUTE_COUNT" -gt 0 ]]; then
+    success "Data SG allows DB ingress from compute SG on TCP/${DB_PORT}"
+  else
+    fail "Data SG does not allow DB ingress from compute SG on TCP/${DB_PORT}"
+  fi
+fi
+
+COMPUTE_HTTPS_EGRESS_TO_INTERNET_COUNT="$(
+  echo "$SECURITY_GROUPS_JSON" |
+    jq --arg compute_sg_id "$COMPUTE_SG_ID" '
+      [
+        .SecurityGroups[]
+        | select(.GroupId == $compute_sg_id)
+        | .IpPermissionsEgress[]?
+        | select(.IpProtocol == "tcp")
+        | select(.FromPort == 443 and .ToPort == 443)
+        | select(
+            [.IpRanges[]?.CidrIp]
+            | index("0.0.0.0/0")
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$EFFECTIVE_EGRESS_MODE" == "vpc_endpoints_only" ]]; then
+  if [[ "$COMPUTE_HTTPS_EGRESS_TO_INTERNET_COUNT" -eq 0 ]]; then
+    success "Compute SG does not allow internet HTTPS egress in vpc_endpoints_only mode"
+  else
+    fail "Compute SG allows internet HTTPS egress even though effective_egress_mode=vpc_endpoints_only"
+  fi
+elif [[ -n "$EFFECTIVE_EGRESS_MODE" ]]; then
+  if [[ "$COMPUTE_HTTPS_EGRESS_TO_INTERNET_COUNT" -gt 0 ]]; then
+    success "Compute SG allows HTTPS egress through configured egress path for mode: ${EFFECTIVE_EGRESS_MODE}"
+  else
+    fail "Compute SG does not allow HTTPS egress even though effective_egress_mode=${EFFECTIVE_EGRESS_MODE}"
+  fi
+else
+  if [[ "$COMPUTE_HTTPS_EGRESS_TO_INTERNET_COUNT" -gt 0 ]]; then
+    info "Compute SG has HTTPS egress to 0.0.0.0/0"
+  else
+    info "Compute SG does not have HTTPS egress to 0.0.0.0/0"
+  fi
+fi
+
 section "Validating required EC2 instance tags"
 
 REQUIRED_TAGS=(
