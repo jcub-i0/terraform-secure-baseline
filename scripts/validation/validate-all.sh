@@ -54,6 +54,7 @@ VALIDATION_SCRIPTS=(
   "validate-eventbridge.sh"
   "validate-lambda.sh"
   "validate-ssm.sh"
+  "validate-compute.sh"
   "validate-iam.sh"
 )
 
@@ -112,7 +113,8 @@ if [[ "$FAILED_COUNT" -gt 0 ]]; then
   done
 
   section "Validation Result"
-  fail "Full validation suite completed with ${FAILED_COUNT} failed script(s)."
+  echo "[FAIL] Full validation suite completed with ${FAILED_COUNT} failed script(s)."
+  exit 1
 fi
 
 section "Validation Result"
