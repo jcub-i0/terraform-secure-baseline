@@ -898,6 +898,11 @@ Quarantine security group ID:   ${QUARANTINE_SG_ID}
 Compute private subnets:        ${COMPUTE_PRIVATE_SUBNET_COUNT}
 Compute EC2 instances:          ${COMPUTE_INSTANCE_COUNT}
 Compute EBS volumes:            ${VOLUME_COUNT}
+
+Effective egress mode:          ${EFFECTIVE_EGRESS_MODE:-<unknown>}
+Interface endpoints SG ID:      ${INTERFACE_ENDPOINTS_SG_ID:-<unknown>}
+Data security group ID:         ${DATA_SG_ID:-<unknown>}
+DB port:                        ${DB_PORT}
 SUMMARY
 
 if [[ "${#INSTANCE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
