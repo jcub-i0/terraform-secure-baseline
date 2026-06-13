@@ -133,3 +133,71 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
 else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
+
+section "Resolving VPC and expected security groups"
+
+VPC_ID=""
+
+if terraform_output_exists "$OUTPUTS_JSON" vpc_id; then
+  VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
+  success "vpc_id output found: $VPC_ID"
+else
+  VPC_ID="$(
+    aws ec2 describe-vpcs \
+      "${aws_args[@]}" \
+      --filters "Name=tag:Name,Values=${NAME_PREFIX}-Main,${NAME_PREFIX}-VPC" \
+      --query 'Vpcs[0].VpcId' \
+      --output text
+  )"
+
+  if [[ -z "$VPC_ID" || "$VPC_ID" == "None" ]]; then
+    fail "Unable to resolve VPC by Terraform output or expected Name tags"
+  fi
+
+  success "Resolved VPC by tag: $VPC_ID"
+fi
+
+COMPUTE_SG_ID=""
+QUARANTINE_SG_ID=""
+
+if terraform_output_exists "$OUTPUTS_JSON" compute_sg_id; then
+  COMPUTE_SG_ID="$(get_terraform_output_value "$OUTPUTS_JSON" compute_sg_id)"
+  success "compute_sg_id output found: $COMPUTE_SG_ID"
+else
+  COMPUTE_SG_ID="$(
+    aws ec2 describe-security-groups \
+      "${aws_args[@]}" \
+      --filters \
+        "Name=vpc-id,Values=${VPC_ID}" \
+        "Name=group-name,Values=${NAME_PREFIX}-Compute-SG" \
+      --query 'SecurityGroups[0].GroupId' \
+      --output text
+  )"
+
+  if [[ -z "$COMPUTE_SG_ID" || "$COMPUTE_SG_ID" == "None" ]]; then
+    fail "Unable to resolve compute security group"
+  fi
+
+  success "Resolved compute security group by name: $COMPUTE_SG_ID"
+fi
+
+if terraform_output_exists "$OUTPUTS_JSON" quarantine_sg_id; then
+  QUARANTINE_SG_ID="$(get_terraform_output_value "$OUTPUTS_JSON" quarantine_sg_id)"
+  success "quarantine_sg_id output found: $QUARANTINE_SG_ID"
+else
+  QUARANTINE_SG_ID="$(
+    aws ec2 describe-security-groups \
+      "${aws_args[@]}" \
+      --filters \
+        "Name=vpc-id,Values=${VPC_ID}" \
+        "Name=group-name,Values=${NAME_PREFIX}-Quarantine-SG" \
+      --query 'SecurityGroups[0].GroupId' \
+      --output text
+  )"
+
+  if [[ -z "$QUARANTINE_SG_ID" || "$QUARANTINE_SG_ID" == "None" ]]; then
+    fail "Unable to resolve quarantine security group"
+  fi
+
+  success "Resolved quarantine security group by name: $QUARANTINE_SG_ID"
+fi
