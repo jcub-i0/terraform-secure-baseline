@@ -785,6 +785,8 @@ if [[ "$ISOLATION_ALLOWED_UNEXPECTED_COUNT" -gt 0 ]]; then
     '
   fail "One or more compute instances have unexpected IsolationAllowed values"
 elif [[ "$ISOLATION_ALLOWED_FALSE_COUNT" -gt 0 ]]; then
+  warn "One or more compute instances have IsolationAllowed=false. The EC2-Isolation Lambda function will not isolate these instances when triggered."
+  
   echo "$COMPUTE_INSTANCES_JSON" |
     jq -r '
       .[]
@@ -794,7 +796,6 @@ elif [[ "$ISOLATION_ALLOWED_FALSE_COUNT" -gt 0 ]]; then
         )
       | "- " + .InstanceId + " IsolationAllowed=false"
     '
-  warn "One or more compute instances have IsolationAllowed=false. The EC2-Isolation Lambda function will not isolate these instances when triggered."
 else
   success "All compute instances have IsolationAllowed=true tag"
 fi
