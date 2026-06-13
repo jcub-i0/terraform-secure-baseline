@@ -655,3 +655,22 @@ else
     jq -r '.Volumes[] | select(.Size != 20) | "- " + .VolumeId + " Size=" + (.Size | tostring)'
   fail "One or more compute EBS volumes are not 20 GiB"
 fi
+
+section "Building compute summary"
+
+while IFS= read -r instance; do
+  [[ -z "$instance" ]] && continue
+
+  instance_id="$(echo "$instance" | jq -r '.InstanceId')"
+  name_tag="$(echo "$instance" | jq -r '(.Tags // [] | map(select(.Key == "Name")) | first | .Value) // "<none>"')"
+  state="$(echo "$instance" | jq -r '.State.Name')"
+  instance_type="$(echo "$instance" | jq -r '.InstanceType')"
+  subnet_id="$(echo "$instance" | jq -r '.SubnetId')"
+  private_ip="$(echo "$instance" | jq -r '.PrivateIpAddress // "<none>"')"
+  public_ip="$(echo "$instance" | jq -r '.PublicIpAddress // "<none>"')"
+  imds_tokens="$(echo "$instance" | jq -r '.MetadataOptions.HttpTokens // "<none>"')"
+  monitoring="$(echo "$instance" | jq -r '.Monitoring.State // "<none>"')"
+  profile_arn="$(echo "$instance" | jq -r '.IamInstanceProfile.Arn // "<none>"')"
+
+  INSTANCE_SUMMARY_ROWS+=("${instance_id}|${name_tag}|${state}|${instance_type}|${subnet_id}|${private_ip}|${public_ip}|${imds_tokens}|${monitoring}|${profile_arn}")
+done < <(echo "$COMPUTE_INSTANCES_JSON" | jq -c '.[]')
