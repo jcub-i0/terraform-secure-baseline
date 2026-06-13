@@ -794,7 +794,7 @@ elif [[ "$ISOLATION_ALLOWED_FALSE_COUNT" -gt 0 ]]; then
         )
       | "- " + .InstanceId + " IsolationAllowed=false"
     '
-  warn "One or more compute instances have IsolationAllowed=false. The EC2 isolation Lambda will not isolate these instances when triggered."
+  warn "One or more compute instances have IsolationAllowed=false. The EC2-Isolation Lambda function will not isolate these instances when triggered."
 else
   success "All compute instances have IsolationAllowed=true tag"
 fi
