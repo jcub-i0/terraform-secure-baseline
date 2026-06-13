@@ -764,25 +764,60 @@ else
   fail "One or more compute instances have unexpected IsolationAllowed tag"
 fi
 
-BAD_BACKUP_TAG_COUNT="$(
+ISOLATION_ALLOWED_FALSE_COUNT="$(
   echo "$COMPUTE_INSTANCES_JSON" |
     jq '
       [
         .[]
         | select(
             (.Tags // [])
-            | any(.Key == "Backup" and .Value == "true")
-            | not
+            | any(.Key == "IsolationAllowed" and .Value == "false")
           )
       ]
       | length
     '
 )"
 
-if [[ "$BAD_BACKUP_TAG_COUNT" -eq 0 ]]; then
-  success "All compute instances have Backup=true tag"
+ISOLATION_ALLOWED_UNEXPECTED_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+            (.Tags // [])
+            | any(.Key -- "IsolationAllowed" and (.Value != "true" and .Value != "false"))
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$ISOLATION_ALLOWED_UNEXPECTED_COUNT" -gt 0 ]]; then
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r '
+      .[]
+      | select(
+          (.Tags // [])
+          | any(.Key == "IsolationAllowed" and (.Value != "true" and .Value != "false"))
+        )
+      | "- " + .InstanceId
+        + " IsolationAllowed="
+        + ((.Tags // [] | map(select(.Key == "IsolationAllowed")) | first | .Value) // "<missing>")
+    '
+  fail "One or more compute instances have unexpected IsolationAllowed values"
+elif [[ "$ISOLATION_ALLOWED_FALSE_COUNT" -gt 0 ]]; then
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r '
+      .[]
+      | select(
+          (.Tags // [])
+          | any(.Key == "IsolationAllowed" and .Value == "false")
+        )
+      | "- " + .InstanceId + " IsolationAllowed=false"
+    '
+  warn "One or more compute instances have IsolationAllowed=false. Isolation automation will intentionally skip these instances."
 else
-  fail "One or more compute instances have unexpected Backup tag"
+  success "All compute instances have IsolationAllowed=true tag"
 fi
 
 section "Collecting EBS volume IDs"
