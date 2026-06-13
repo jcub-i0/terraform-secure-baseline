@@ -31,3 +31,33 @@
 #
 # Optional override:
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-compute.sh dev
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[@]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SOURCE_DIR}/lib/common.sh"
+
+ENV_NAME="${1:-}"
+AWS_PROFILE="${AWS_PROFILE:-}"
+AWS_REGION="${AWS_REGION:-us-east-1}"
+NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME:-unknown}}"
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
+
+export AWS_PAGER=""
+
+if [[ -z "${ENV_NAME}" ]]; then
+  fail "Usage: $0 <dev|staging|prod>"
+fi
+
+require_env_name "$ENV_NAME"
+
+aws_args=()
+if [[ -n "$AWS_PROFILE" ]]; then
+  aws_args+=(--profile "$AWS_PROFILE")
+fi
+
+if [[ -n "$AWS_REGION" ]]; then
+  aws_args+=(--region "$AWS_REGION")
+fi
+
