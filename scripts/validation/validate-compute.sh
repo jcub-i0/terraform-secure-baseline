@@ -329,3 +329,125 @@ fi
 
 INSTANCE_SUMMARY_ROWS=()
 VOLUME_IDS=()
+
+section "Validating EC2 instance configuration"
+
+INVALID_PUBLIC_IP_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '[.[] | select(.PublicIpAddress != null)] | length'
+)"
+
+if [[ "$INVALID_PUBLIC_IP_COUNT" -eq 0 ]]; then
+  success "No compute instances have public IP addresses"
+else
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r '.[] | select(.PublicIpAddress != null) | "- " + .InstanceId + " PublicIp=" + .PublicIpAddress'
+  fail "One or more compute instances have public IP addresses"
+fi
+
+INVALID_SUBNET_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq --argjson subnet_ids "$COMPUTE_PRIVATE_SUBNET_IDS_JSON" '
+      [
+        .[]
+        | select(.SubnetId as $subnet_id | $subnet_ids | index($subnet_id) | not)
+      ]
+      | length
+    '
+)"
+
+if [[ "$INVALID_SUBNET_COUNT" -eq 0 ]]; then
+  success "All compute instances are in compute private subnets"
+else
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r --argjson subnet_ids "$COMPUTE_PRIVATE_SUBNET_IDS_JSON" '
+      .[]
+      | select(.SubnetId as $subnet_id | $subnet_ids | index($subnet_id) | not)
+      | "- " + .InstanceId + " SubnetId=" + .SubnetId
+    '
+  fail "One or more compute instances are not in compute private subnets"
+fi
+
+INVALID_IMDS_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+            (.MetadataOptions.HttpTokens != "required")
+            or
+            (.MetadataOptions.HttpPutResponseHopLimit != 2)
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$INVALID_IMDS_COUNT" -eq 0 ]]; then
+  success "All compute instances enforce IMDSv2 with hop limit 2"
+else
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r '
+      .[]
+      | select((.MetadataOptions.HttpTokens != "required") or (.MetadataOptions.HttpPutResponseHopLimit != 2))
+      | "- " + .InstanceId
+        + " HttpTokens=" + (.MetadataOptions.HttpTokens // "null")
+        + " HopLimit=" + ((.MetadataOptions.HttpPutResponseHopLimit // 0) | tostring)
+    '
+  fail "One or more compute instances do not enforce expected IMDSv2 settings"
+fi
+
+DISABLED_MONITORING_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '[.[] | select(.Monitoring.State != "enabled")] | length'
+)"
+
+if [[ "$DISABLED_MONITORING_COUNT" -eq 0 ]]; then
+  success "Detailed monitoring is enabled for all compute instances"
+else
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r '.[] | select(.Monitoring.State != "enabled") | "- " + .InstanceId + " Monitoring=" + .Monitoring.State'
+  fail "Detailed monitoring is not enabled for one or more compute instances"
+fi
+
+MISSING_INSTANCE_PROFILE_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '[.[] | select(.IamInstanceProfile.Arn == null)] | length'
+)"
+
+if [[ "$MISSING_INSTANCE_PROFILE_COUNT" -eq 0 ]]; then
+  success "All compute instances have IAM instance profiles"
+else
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r '.[] | select(.IamInstanceProfile.Arn == null) | "- " + .InstanceId'
+  fail "One or more compute instances are missing IAM instance profiles"
+fi
+
+BAD_COMPUTE_SG_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq --arg compute_sg_id "$COMPUTE_SG_ID" '
+      [
+        .[]
+        | select(
+            [
+              .SecurityGroups[]?.GroupId
+            ]
+            | index($compute_sg_id)
+            | not
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$BAD_COMPUTE_SG_COUNT" -eq 0 ]]; then
+  success "All compute instances have the compute security group attached"
+else
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r --arg compute_sg_id "$COMPUTE_SG_ID" '
+      .[]
+      | select(([.SecurityGroups[]?.GroupId] | index($compute_sg_id) | not))
+      | "- " + .InstanceId + " SecurityGroups=" + ([.SecurityGroups[]?.GroupId] | join(","))
+    '
+  fail "One or more compute instances are missing the compute security group"
+fi
