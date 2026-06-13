@@ -451,3 +451,128 @@ else
     '
   fail "One or more compute instances are missing the compute security group"
 fi
+
+section "Validating required EC2 instance tags"
+
+REQUIRED_TAGS=(
+  "Name"
+  "Environment"
+  "Terraform"
+  "Purpose"
+  "IsolationAllowed"
+  "PatchGroup"
+  "Backup"
+)
+
+for tag_key in "${REQUIRED_TAGS[@]}"; do
+  missing_count="$(
+    echo "$COMPUTE_INSTANCES_JSON" |
+      jq --arg tag_key "$tag_key" '
+        [
+          .[]
+          | select(
+              (.Tags // [])
+              | any(.Key == $tag_key)
+              | not
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$missing_count" -eq 0 ]]; then
+    success "All compute instances have required tag: ${tag_key}"
+  else
+    echo "$COMPUTE_INSTANCES_JSON" |
+      jq -r --arg tag_key "$tag_key" '
+        .[]
+        | select((.Tags // []) | any(.Key == $tag_key) | not)
+        | "- " + .InstanceId
+      '
+    fail "One or more compute instances are missing required tag: ${tag_key}"
+  fi
+done
+
+BAD_ENV_TAG_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq --arg env_name "$ENV_NAME" '
+      [
+        .[]
+        | select(
+            (.Tags // [])
+            | any(.Key == "Environment" and .Value == $env_name)
+            | not
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$BAD_ENV_TAG_COUNT" -eq 0 ]]; then
+  success "All compute instances have expected Environment tag: ${ENV_NAME}"
+else
+  fail "One or more compute instances have unexpected Environment tag"
+fi
+
+BAD_TERRAFORM_TAG_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+            (.Tags // [])
+            | any(.Key == "Terraform" and .Value == "true")
+            | not
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$BAD_TERRAFORM_TAG_COUNT" -eq 0 ]]; then
+  success "All compute instances have Terraform=true tag"
+else
+  fail "One or more compute instances have unexpected Terraform tag"
+fi
+
+BAD_ISOLATION_TAG_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+            (.Tags // [])
+            | any(.Key == "IsolationAllowed" and .Value == "true")
+            | not
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$BAD_ISOLATION_TAG_COUNT" -eq 0 ]]; then
+  success "All compute instances have IsolationAllowed=true tag"
+else
+  fail "One or more compute instances have unexpected IsolationAllowed tag"
+fi
+
+BAD_BACKUP_TAG_COUNT="$(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq '
+      [
+        .[]
+        | select(
+            (.Tags // [])
+            | any(.Key == "Backup" and .Value == "true")
+            | not
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$BAD_BACKUP_TAG_COUNT" -eq 0 ]]; then
+  success "All compute instances have Backup=true tag"
+else
+  fail "One or more compute instances have unexpected Backup tag"
+fi
