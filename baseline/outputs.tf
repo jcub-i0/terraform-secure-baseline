@@ -75,5 +75,5 @@ output "effective_inspector_enabled" {
 
 output "db_port" {
   description = "Port used by the database (Postgres=5432, MySQL=3306)"
-  value = var.db_port
+  value       = var.db_port
 }
