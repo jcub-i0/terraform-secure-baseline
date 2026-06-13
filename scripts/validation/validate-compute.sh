@@ -594,3 +594,64 @@ if [[ "$VOLUME_COUNT" -gt 0 ]]; then
 else
   fail "No EBS volume IDs found for compute instances"
 fi
+
+section "Validating EBS volume encryption and root volume settings"
+
+VOLUMES_JSON="$(
+  aws ec2 describe-volumes \
+    "${aws_args[@]}" \
+    --volume-ids "${VOLUME_IDS[@]}" \
+    --output json
+)"
+
+UNENCRYPTED_VOLUME_COUNT="$(
+  echo "$VOLUMES_JSON" |
+    jq '[.Volumes[] | select(.Encrypted != true)] | length'
+)"
+
+if [[ "$UNENCRYPTED_VOLUME_COUNT" -eq 0 ]]; then
+  success "All compute EBS volumes are encrypted"
+else
+  echo "$VOLUMES_JSON" |
+    jq -r '.Volumes[] | select(.Encrypted != true) | "- " + .VolumeId'
+  fail "One or more compute EBS volumes are not encrypted"
+fi
+
+MISSING_KMS_VOLUME_COUNT="$(
+  echo "$VOLUMES_JSON" |
+    jq '[.Volumes[] | select(.KmsKeyId == null)] | length'
+)"
+
+if [[ "$MISSING_KMS_VOLUME_COUNT" -eq 0 ]]; then
+  success "All compute EBS volumes have KMS key IDs"
+else
+  echo "$VOLUMES_JSON" |
+    jq -r '.Volumes[] | select(.KmsKeyId == null) | "- " + .VolumeId'
+  fail "One or more compute EBS volumes are missing KMS key IDs"
+fi
+
+BAD_VOLUME_TYPE_COUNT="$(
+  echo "$VOLUMES_JSON" |
+    jq '[.Volumes[] | select(.VolumeType != "gp3")] | length'
+)"
+
+if [[ "$BAD_VOLUME_TYPE_COUNT" -eq 0 ]]; then
+  success "All compute EBS volumes use gp3"
+else
+  echo "$VOLUMES_JSON" |
+    jq -r '.Volumes[] | select(.VolumeType != "gp3") | "- " + .VolumeId + " Type=" + .VolumeType'
+  fail "One or more compute EBS volumes are not gp3"
+fi
+
+BAD_VOLUME_SIZE_COUNT="$(
+  echo "$VOLUMES_JSON" |
+    jq '[.Volumes[] | select(.Size != 20)] | length'
+)"
+
+if [[ "$BAD_VOLUME_SIZE_COUNT" -eq 0 ]]; then
+  success "All compute EBS volumes are 20 GiB"
+else
+  echo "$VOLUMES_JSON" |
+    jq -r '.Volumes[] | select(.Size != 20) | "- " + .VolumeId + " Size=" + (.Size | tostring)'
+  fail "One or more compute EBS volumes are not 20 GiB"
+fi
