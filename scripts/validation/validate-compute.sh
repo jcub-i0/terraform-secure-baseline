@@ -576,3 +576,21 @@ if [[ "$BAD_BACKUP_TAG_COUNT" -eq 0 ]]; then
 else
   fail "One or more compute instances have unexpected Backup tag"
 fi
+
+section "Collecting EBS volume IDs"
+
+while IFS= read -r volume_id; do
+  [[ -z "$volume_id" ]] && continue
+  VOLUME_IDS+=("$volume_id")
+done < <(
+  echo "$COMPUTE_INSTANCES_JSON" |
+    jq -r '.[] | .BlockDeviceMappings[]?.Ebs.VolumeId // empty'
+)
+
+VOLUME_COUNT="${#VOLUME_IDS[@]}"
+
+if [[ "$VOLUME_COUNT" -gt 0 ]]; then
+  success "Collected EBS volume IDs from compute instances: $VOLUME_COUNT"
+else
+  fail "No EBS volume IDs found for compute instances"
+fi
