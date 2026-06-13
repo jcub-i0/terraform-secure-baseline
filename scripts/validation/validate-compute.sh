@@ -291,3 +291,41 @@ COMPUTE_PRIVATE_SUBNET_IDS_JSON="$(
   echo "$COMPUTE_PRIVATE_SUBNETS_JSON" |
     jq '[.Subnets[].SubnetId]'
 )"
+
+section "Discovering EC2 compute instances"
+
+INSTANCES_JSON="$(
+  aws ec2 describe-instances \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=tag:Environment,Values=${ENV_NAME}" \
+      "Name=tag:Terraform,Values=true" \
+      "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+    --output json
+)"
+
+COMPUTE_INSTANCES_JSON="$(
+  echo "$INSTANCES_JSON" |
+    jq --arg prefix "$NAME_PREFIX" '
+      [
+        .Reservations[].Instances[]
+        | select(
+            (
+              .Tags // []
+              | any(.Key == "Name" and (.Value | contains($prefix) and contains("-EC2-")))
+            )
+          )
+      ]
+    '
+)"
+
+COMPUTE_INSTANCE_COUNT="$(echo "$COMPUTE_INSTANCES_JSON" | jq 'length')"
+
+if [[ "$COMPUTE_INSTANCE_COUNT" -gt 0 ]]; then
+  success "Found compute EC2 instances: $COMPUTE_INSTANCE_COUNT"
+else
+  fail "No compute EC2 instances found matching environment=${ENV_NAME}, Terraform=true, Name contains ${NAME_PREFIX}-EC2-"
+fi
+
+INSTANCE_SUMMARY_ROWS=()
+VOLUME_IDS=()
