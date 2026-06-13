@@ -674,3 +674,48 @@ while IFS= read -r instance; do
 
   INSTANCE_SUMMARY_ROWS+=("${instance_id}|${name_tag}|${state}|${instance_type}|${subnet_id}|${private_ip}|${public_ip}|${imds_tokens}|${monitoring}|${profile_arn}")
 done < <(echo "$COMPUTE_INSTANCES_JSON" | jq -c '.[]')
+
+section "Compute Summary"
+
+cat <<SUMMARY
+Environment:                    ${ENV_NAME}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+AWS account ID:                 ${ACCOUNT_ID}
+Name prefix:                    ${NAME_PREFIX}
+
+VPC ID:                         ${VPC_ID}
+Compute security group ID:      ${COMPUTE_SG_ID}
+Quarantine security group ID:   ${QUARANTINE_SG_ID}
+Compute private subnets:        ${COMPUTE_PRIVATE_SUBNET_COUNT}
+Compute EC2 instances:          ${COMPUTE_INSTANCE_COUNT}
+Compute EBS volumes:            ${VOLUME_COUNT}
+SUMMARY
+
+if [[ "${#INSTANCE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
+  echo
+  echo "Compute instances:"
+  printf '%s\n' "${INSTANCE_SUMMARY_ROWS[@]}" |
+    awk -F'|' '
+      BEGIN {
+        printf "%-22s %-42s %-10s %-12s %-22s %-16s %-16s %-10s %-12s %-80s\n", "InstanceId", "Name", "State", "Type", "SubnetId", "PrivateIp", "PublicIp", "IMDSv2", "Monitoring", "InstanceProfile"
+        printf "%-22s %-42s %-10s %-12s %-22s %-16s %-16s %-10s %-12s %-80s\n", "----------", "----", "-----", "----", "--------", "---------", "--------", "------", "----------", "---------------"
+      }
+      {
+        printf "%-22s %-42s %-10s %-12s %-22s %-16s %-16s %-10s %-12s %-80s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+      }
+    '
+fi
+
+echo
+echo "Compute EBS volumes:"
+echo "$VOLUMES_JSON" |
+  jq -r '
+    .Volumes[]
+    | "- " + .VolumeId
+      + " Type=" + .VolumeType
+      + " SizeGiB=" + (.Size | tostring)
+      + " Encrypted=" + (.Encrypted | tostring)
+      + " KmsKeyId=" + (.KmsKeyId // "<none>")
+      + " State=" + .State
+  '
