@@ -324,7 +324,7 @@ Matching environment aliases:   ${MATCHING_ALIAS_COUNT}
 Required KMS keys validated:    ${REQUIRED_KEY_COUNT}
 Optional KMS keys validated:    ${OPTIONAL_KEY_COUNT}
 Total KMS keys validated:       ${VALIDATED_KEY_COUNT}
-Unvalidated matching aliases:    ${UNVALIDATED_ALIAS_COUNT}
+Unvalidated matching aliases:   ${UNVALIDATED_ALIAS_COUNT}
 effective_backup_enabled:       ${EFFECTIVE_BACKUP_ENABLED}
 SUMMARY
 
