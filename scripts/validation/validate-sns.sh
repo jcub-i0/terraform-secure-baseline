@@ -267,7 +267,7 @@ validate_topic() {
   TOTAL_SUBSCRIPTION_COUNT=$((TOTAL_SUBSCRIPTION_COUNT + subscription_count))
   TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_count))
 
-  SNS_SUMMARY_ROWS+=("${label}|${topic_arn}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|${subscriptions_deleted}|${kms_key_id:-<none>}")
+  SNS_SUMMARY_ROWS+=("${label}|${topic_name}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|$([[ -n "$kms_key_id" ]] && echo "SSE-KMS" || echo "none")")
 }
 
 section "Validating expected SNS topics"
