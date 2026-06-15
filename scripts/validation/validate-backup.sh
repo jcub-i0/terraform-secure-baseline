@@ -536,7 +536,7 @@ Expected selection ID:          ${EXPECTED_SELECTION_ID}
 Backup service role ARN:        ${SELECTION_ROLE_ARN}
 Tagged EC2 backup resources:    ${TAGGED_EC2_COUNT}
 Tagged RDS backup resources:    ${TAGGED_RDS_COUNT}
-Recovery points listed:         ${RECOVERY_POINT_COUNT}
+Recovery points listed by API:  ${RECOVERY_POINT_COUNT}
 Recent backup jobs listed:      ${BACKUP_JOB_COUNT}
 Recent failed backup jobs:      ${FAILED_BACKUP_JOB_COUNT}
 SUMMARY
