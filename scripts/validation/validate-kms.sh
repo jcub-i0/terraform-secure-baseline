@@ -309,6 +309,8 @@ else
   validate_alias_and_key "backup" "backup" "false"
 fi
 
+UNVALIDATED_ALIAS_COUNT=$((MATCHING_ALIAS_COUNT - VALIDATED_KEY_COUNT))
+
 section "KMS Summary"
 
 cat <<SUMMARY
