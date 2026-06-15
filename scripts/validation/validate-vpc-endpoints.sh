@@ -24,8 +24,6 @@
 
 set -euo pipefail
 
-export AWS_PAGER=""
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
@@ -37,6 +35,8 @@ NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME:-unknown}}"
 
 # Space-separated list so callers can override this later if the module becomes configurable.
 EXPECTED_INTERFACE_ENDPOINT_SERVICES="${EXPECTED_INTERFACE_ENDPOINT_SERVICES:-sts logs ssm ssmmessages secretsmanager kms config sns ec2 events securityhub lambda}"
+
+export AWS_PAGER=""
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
