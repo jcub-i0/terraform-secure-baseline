@@ -420,7 +420,7 @@ cat <<SUMMARY
 Environment:                        ${ENV_NAME}
 AWS profile:                        ${AWS_PROFILE:-<default>}
 AWS region:                         ${AWS_REGION}
-Account ID: ${ACCOUNT_ID}
+Account ID:                         ${ACCOUNT_ID}
 Name prefix:                        ${NAME_PREFIX}
 
 Centralized logs bucket:            ${CENTRALIZED_LOGS_BUCKET_NAME}
