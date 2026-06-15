@@ -354,14 +354,6 @@ validate_sqs_queue() {
 
   if [[ -n "$kms_key_id" ]]; then
     encryption_mode="SSE-KMS"
-  elif [[ "$sqs_managed_sse" == "true" ]]; then
-    encryption_mode="SQS-SSE"
-  else
-    encryption_mode="none"
-  fi
-
-  if [[ -n "$kms_key_id" ]]; then
-    encryption_mode="SSE-KMS"
     success "${queue_label} queue uses SSE-KMS: ${kms_key_id}"
   elif [[ "$sqs_managed_sse" == "true" ]]; then
     encryption_mode="SQS-SSE"
@@ -426,14 +418,6 @@ validate_sqs_queue() {
     TOTAL_REQUIRED_QUEUES=$((TOTAL_REQUIRED_QUEUES + 1))
   else
     TOTAL_OPTIONAL_QUEUES=$((TOTAL_OPTIONAL_QUEUES + 1))
-  fi
-
-  if [[ -n "$kms_key_id" ]]; then
-    encryption_mode="SSE-KMS"
-  elif [[ "$sqs_managed_sse" == "true" ]]; then
-    encryption_mode="SQS-SSE"
-  else
-    encryption_mode="none"
   fi
 
   QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_name}|${queue_arn}|${producer_ref}|${sns_topic_arn}|${sns_subscription_count}|${sns_pending_count}|${kms_key_id:-<none>}|${sqs_managed_sse}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
