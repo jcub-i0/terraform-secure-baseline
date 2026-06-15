@@ -357,7 +357,7 @@ Online managed instances:          ${ONLINE_COUNT}
 Offline managed instances:         ${OFFLINE_COUNT}
 SSM associations discovered:       ${ASSOCIATION_COUNT}
 Environment maintenance windows:   ${MATCHING_MAINTENANCE_WINDOW_COUNT}
-Custom env patch baselines:       ${MATCHING_PATCH_BASELINE_COUNT}
+Custom env patch baselines:        ${MATCHING_PATCH_BASELINE_COUNT}
 SUMMARY
 
 if [[ "${#SSM_SUMMARY_ROWS[@]}" -gt 0 ]]; then
