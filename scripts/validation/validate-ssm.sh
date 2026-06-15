@@ -357,7 +357,7 @@ Online managed instances:          ${ONLINE_COUNT}
 Offline managed instances:         ${OFFLINE_COUNT}
 SSM associations discovered:       ${ASSOCIATION_COUNT}
 Environment maintenance windows:   ${MATCHING_MAINTENANCE_WINDOW_COUNT}
-Environment patch baselines:       ${MATCHING_PATCH_BASELINE_COUNT}
+Custom env patch baselines:       ${MATCHING_PATCH_BASELINE_COUNT}
 SUMMARY
 
 if [[ "${#SSM_SUMMARY_ROWS[@]}" -gt 0 ]]; then
@@ -384,7 +384,7 @@ fi
 
 if [[ "$MATCHING_PATCH_BASELINE_COUNT" -gt 0 ]]; then
   echo
-  echo "Environment patch baselines:"
+  echo "Custom env patch baselines:"
   echo "$MATCHING_PATCH_BASELINES_JSON" |
     jq -r '.[] | "- " + .BaselineName + " (" + .BaselineId + ") OperatingSystem=" + .OperatingSystem'
 fi
