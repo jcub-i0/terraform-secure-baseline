@@ -530,7 +530,7 @@ Backup vault KMS key:           ${BACKUP_VAULT_KMS_KEY_ARN:-<none>}
 Backup vault recovery points:   ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
 Backup plan name:               ${BACKUP_PLAN_NAME}
 Backup plan ID:                 ${BACKUP_PLAN_ID}
-Backup plan rules:              ${BACKUP_RULE_COUNT}
+Backup plan rule count          ${BACKUP_RULE_COUNT}
 Backup selections:              ${BACKUP_SELECTION_COUNT}
 Expected selection ID:          ${EXPECTED_SELECTION_ID}
 Backup service role ARN:        ${SELECTION_ROLE_ARN}
