@@ -180,6 +180,8 @@ validate_alias_and_key() {
     fi
   fi
 
+  VALIDATED_ALIASES+=("$alias_name")
+
   success "KMS alias exists for ${label}: ${alias_name}"
 
   key_id="$(
