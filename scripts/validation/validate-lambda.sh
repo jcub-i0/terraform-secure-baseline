@@ -249,8 +249,10 @@ validate_lambda_function() {
     fi
   else
     if [[ "$subnet_count" -gt 0 || "$security_group_count" -gt 0 ]]; then
+      VPC_FUNCTION_COUNT=$((VPC_FUNCTION_COUNT + 1))
       success "Lambda VPC config exists for ${label}: ${subnet_count} subnet(s), ${security_group_count} security group(s)"
     else
+      NON_VPC_FUNCTION_COUNT=$((NON_VPC_FUNCTION_COUNT + 1))
       info "Lambda VPC config not present for ${label}; not required by this validation."
     fi
   fi
@@ -306,6 +308,8 @@ validate_lambda_function() {
 section "Validating expected Lambda functions"
 
 VALIDATED_FUNCTION_COUNT=0
+VPC_FUNCTION_COUNT=0
+NON_VPC_FUNCTION_COUNT=0
 LAMBDA_SUMMARY_ROWS=()
 
 validate_lambda_function "IP enrichment" "${NAME_PREFIX}-ip-enrichment" "ip-enrichment" "false"
@@ -323,6 +327,8 @@ Name prefix:                    ${NAME_PREFIX}
 
 Matching environment functions: ${MATCHING_FUNCTION_COUNT}
 Expected functions validated:   ${VALIDATED_FUNCTION_COUNT}
+Non-VPC Lambda functions:       ${NON_VPC_FUNCTION_COUNT}
+VPC Lambda functions:           ${VPC_FUNCTION_COUNT}
 SUMMARY
 
 if [[ "${#LAMBDA_SUMMARY_ROWS[@]}" -gt 0 ]]; then
