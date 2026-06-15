@@ -295,6 +295,7 @@ section "Validating expected KMS aliases and keys"
 VALIDATED_KEY_COUNT=0
 REQUIRED_KEY_COUNT=0
 OPTIONAL_KEY_COUNT=0
+VALIDATED_ALIASES=()
 KMS_SUMMARY_ROWS=()
 
 # Required workload/environment keys.
