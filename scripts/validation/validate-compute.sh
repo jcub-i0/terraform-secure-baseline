@@ -894,6 +894,7 @@ while IFS= read -r instance; do
   imds_tokens="$(echo "$instance" | jq -r '.MetadataOptions.HttpTokens // "<none>"')"
   monitoring="$(echo "$instance" | jq -r '.Monitoring.State // "<none>"')"
   profile_arn="$(echo "$instance" | jq -r '.IamInstanceProfile.Arn // "<none>"')"
+  profile_name="${profile_arn##*/}"
 
   INSTANCE_SUMMARY_ROWS+=("${instance_id}|${name_tag}|${state}|${instance_type}|${subnet_id}|${private_ip}|${public_ip}|${imds_tokens}|${monitoring}|${profile_arn}")
 done < <(echo "$COMPUTE_INSTANCES_JSON" | jq -c '.[]')
