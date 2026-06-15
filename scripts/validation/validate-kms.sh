@@ -358,6 +358,30 @@ if [[ "${#KMS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
     '
 fi
 
+echo
+echo "Unvalidated matching aliases:"
+echo "$ALIASES_JSON" |
+  jq -r --arg prefix "$NAME_PREFIX" '
+    .Aliases[]
+    | select(.TargetKeyId != null)
+    | select(.AliasName | contains($prefix))
+    | .AliasName
+  ' |
+  while read -r alias_name; do
+    found="false"
+
+    for validated_alias in "${VALIDATED_ALIASES[@]}"; do
+      if [[ "$alias_name" == "$validated_alias" ]]; then
+        found="true"
+        break
+      fi
+    done
+
+    if [[ "$found" == "false" ]]; then
+      echo "- ${alias_name}"
+    fi
+  done
+
 section "Validation Result"
 
 success "KMS validation completed successfully for: ${ENV_NAME}"
