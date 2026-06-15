@@ -312,7 +312,15 @@ else
   validate_alias_and_key "backup" "backup" "false"
 fi
 
-UNVALIDATED_ALIAS_COUNT=$((MATCHING_ALIAS_COUNT - VALIDATED_KEY_COUNT))
+UNIQUE_VALIDATED_ALIAS_COUNT="$(
+  printf '%s\n' "${VALIDATED_ALIASES[@]}" |
+    sort -u |
+    sed '/^$/d' |
+    wc -l |
+    tr -d ' '
+)"
+
+UNVALIDATED_ALIAS_COUNT=$((MATCHING_ALIAS_COUNT - UNIQUE_VALIDATED_ALIAS_COUNT))
 
 section "KMS Summary"
 
