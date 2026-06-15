@@ -482,4 +482,4 @@ fi
 
 section "Validation Result"
 
-success "SQS validation comleted successfully for: ${ENV_NAME}"
+success "SQS validation completed successfully for: ${ENV_NAME}"
