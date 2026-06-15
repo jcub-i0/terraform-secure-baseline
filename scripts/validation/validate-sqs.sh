@@ -473,11 +473,11 @@ if [[ "${#QUEUE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${QUEUE_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-14s %-10s %-45s %-32s %-14s %-10s %-12s %-8s %-10s %-10s\n", "Queue", "Required", "QueueName", "Producer", "Subscriptions", "Pending", "Encryption", "DLQ", "Visible", "InFlight"
-        printf "%-14s %-10s %-45s %-95s %-32s %-95s %-14s %-10s %-40s %-10s %-8s %-10s %-10s\n", "-----", "--------", "---------", "--------", "--------", "-----------", "-------------", "-------", "--------", "-------", "---", "-------", "--------"
+        printf "%-14s %-10s %-55s %-32s %-14s %-10s %-12s %-8s %-10s %-10s\n", "Queue", "Required", "QueueName", "Producer", "Subscriptions", "Pending", "Encryption", "DLQ", "Visible", "InFlight"
+        printf "%-14s %-10s %-55s %-32s %-14s %-10s %-12s %-8s %-10s %-10s\n", "-----", "--------", "---------", "--------", "-------------", "-------", "----------", "---", "-------", "--------"
       }
       {
-        printf "%-14s %-10s %-45s %-95s %-32s %-95s %-14s %-10s %-40s %-10s %-8s %-10s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+        printf "%-14s %-10s %-55s %-32s %-14s %-10s %-12s %-8s %-10s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
       }
     '
 fi
