@@ -421,10 +421,11 @@ Environment:                        ${ENV_NAME}
 AWS profile:                        ${AWS_PROFILE:-<default>}
 AWS region:                         ${AWS_REGION}
 Name prefix:                        ${NAME_PREFIX}
-VPC ID:                             ${VPC_ID}
+
 
 Centralized logs bucket:            ${CENTRALIZED_LOGS_BUCKET_NAME}
 
+VPC ID:                             ${VPC_ID}
 CloudTrail count:                   ${MATCHING_TRAIL_COUNT}
 Primary CloudTrail:                 ${PRIMARY_TRAIL_NAME}
 CloudTrail home region:             ${PRIMARY_TRAIL_HOME_REGION}
