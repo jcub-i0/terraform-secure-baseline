@@ -343,11 +343,11 @@ if [[ "${#LAMBDA_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${LAMBDA_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "Label", "Function", "Runtime", "State", "Timeout", "Memory", "Subnets", "SGs", "EnvVars", "PolicyStmts", "EBPerms"
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "-----", "--------", "-------", "-----", "-------", "------", "-------", "---", "-------", "-----------", "-------"
+        printf "%-15s %-16s %-11s %-8s %-7s %-6s %-7s %-4s %-7s %-11s %-7s\n", "Label", "Function", "Runtime", "State", "Timeout", "Memory", "Subnets", "SGs", "EnvVars", "PolicyStmts", "EBPerms"
+        printf "%-15s %-16s %-11s %-8s %-7s %-6s %-7s %-4s %-7s %-11s %-7s\n", "-----", "--------", "-------", "-----", "-------", "------", "-------", "---", "-------", "-----------", "-------"
       }
       {
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+        printf "%-15s %-16s %-11s %-8s %-7s %-6s %-7s %-4s %-7s %-11s %-7s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
       }
     '
 fi
