@@ -83,11 +83,11 @@ REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
 info "Repository root: $REPO_ROOT"
-info "Environment:     $ENV_NAME"
+info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
-info "Name prefix:     $NAME_PREFIX"
-info "AWS_PROFILE:     ${AWS_PROFILE:-<default>}"
-info "AWS_REGION:      $AWS_REGION"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -886,6 +886,7 @@ while IFS= read -r instance; do
 
   instance_id="$(echo "$instance" | jq -r '.InstanceId')"
   name_tag="$(echo "$instance" | jq -r '(.Tags // [] | map(select(.Key == "Name")) | first | .Value) // "<none>"')"
+  name_short="${name_tag#${NAME_PREFIX}-}"
   state="$(echo "$instance" | jq -r '.State.Name')"
   instance_type="$(echo "$instance" | jq -r '.InstanceType')"
   subnet_id="$(echo "$instance" | jq -r '.SubnetId')"
@@ -894,8 +895,10 @@ while IFS= read -r instance; do
   imds_tokens="$(echo "$instance" | jq -r '.MetadataOptions.HttpTokens // "<none>"')"
   monitoring="$(echo "$instance" | jq -r '.Monitoring.State // "<none>"')"
   profile_arn="$(echo "$instance" | jq -r '.IamInstanceProfile.Arn // "<none>"')"
+  profile_name="${profile_arn##*/}"
+  profile_short="${profile_name#${NAME_PREFIX}-}"
 
-  INSTANCE_SUMMARY_ROWS+=("${instance_id}|${name_tag}|${state}|${instance_type}|${subnet_id}|${private_ip}|${public_ip}|${imds_tokens}|${monitoring}|${profile_arn}")
+  INSTANCE_SUMMARY_ROWS+=("${instance_id}|${name_short}|${state}|${instance_type}|${subnet_id}|${private_ip}|${public_ip}|${imds_tokens}|${monitoring}|${profile_short}")
 done < <(echo "$COMPUTE_INSTANCES_JSON" | jq -c '.[]')
 
 section "Compute Summary"
@@ -926,11 +929,11 @@ if [[ "${#INSTANCE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${INSTANCE_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-22s %-42s %-10s %-12s %-22s %-16s %-16s %-10s %-12s %-80s\n", "InstanceId", "Name", "State", "Type", "SubnetId", "PrivateIp", "PublicIp", "IMDSv2", "Monitoring", "InstanceProfile"
-        printf "%-22s %-42s %-10s %-12s %-22s %-16s %-16s %-10s %-12s %-80s\n", "----------", "----", "-----", "----", "--------", "---------", "--------", "------", "----------", "---------------"
+        printf "%-22s %-16s %-8s %-9s %-24s %-13s %-9s %-9s %-10s %-29s\n", "InstanceId", "Name", "State", "Type", "SubnetId", "PrivateIp", "PublicIp", "IMDSv2", "Monitoring", "InstanceProfile"
+        printf "%-22s %-16s %-8s %-9s %-24s %-13s %-9s %-9s %-10s %-29s\n", "----------", "----", "-----", "----", "--------", "---------", "--------", "------", "----------", "---------------"
       }
       {
-        printf "%-22s %-42s %-10s %-12s %-22s %-16s %-16s %-10s %-12s %-80s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+        printf "%-22s %-16s %-8s %-9s %-24s %-13s %-9s %-9s %-10s %-29s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
       }
     '
 fi
@@ -944,7 +947,7 @@ echo "$VOLUMES_JSON" |
       + " Type=" + .VolumeType
       + " SizeGiB=" + (.Size | tostring)
       + " Encrypted=" + (.Encrypted | tostring)
-      + " KmsKeyId=" + (.KmsKeyId // "<none>")
+      + " KmsKey=" + ((.KmsKeyId // "<none>") | split("/") | last)
       + " State=" + .State
   '
 

@@ -77,11 +77,11 @@ REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
 info "Repository root: $REPO_ROOT"
-info "Environment:     $ENV_NAME"
+info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
-info "Name prefix:     $NAME_PREFIX"
-info "AWS_PROFILE:     ${AWS_PROFILE:-<default>}"
-info "AWS_REGION:      $AWS_REGION"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -241,6 +241,12 @@ validate_lambda_function() {
     warn "Lambda KMS key is not configured for ${label}"
   fi
 
+  if [[ "$subnet_count" -gt 0 || "$security_group_count" -gt 0 ]]; then
+    VPC_FUNCTION_COUNT=$((VPC_FUNCTION_COUNT + 1))
+  else
+    NON_VPC_FUNCTION_COUNT=$((NON_VPC_FUNCTION_COUNT + 1))
+  fi
+
   if [[ "$require_vpc" == "true" ]]; then
     if [[ "$subnet_count" -gt 0 && "$security_group_count" -gt 0 ]]; then
       success "Lambda VPC config exists for ${label}: ${subnet_count} subnet(s), ${security_group_count} security group(s)"
@@ -300,12 +306,16 @@ validate_lambda_function() {
 
   VALIDATED_FUNCTION_COUNT=$((VALIDATED_FUNCTION_COUNT + 1))
 
-  LAMBDA_SUMMARY_ROWS+=("${label}|${function_name}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
+  function_short="${function_name#${NAME_PREFIX}-}"
+
+  LAMBDA_SUMMARY_ROWS+=("${label}|${function_short}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
 }
 
 section "Validating expected Lambda functions"
 
 VALIDATED_FUNCTION_COUNT=0
+VPC_FUNCTION_COUNT=0
+NON_VPC_FUNCTION_COUNT=0
 LAMBDA_SUMMARY_ROWS=()
 
 validate_lambda_function "IP enrichment" "${NAME_PREFIX}-ip-enrichment" "ip-enrichment" "false"
@@ -323,6 +333,8 @@ Name prefix:                    ${NAME_PREFIX}
 
 Matching environment functions: ${MATCHING_FUNCTION_COUNT}
 Expected functions validated:   ${VALIDATED_FUNCTION_COUNT}
+Non-VPC Lambda functions:       ${NON_VPC_FUNCTION_COUNT}
+VPC Lambda functions:           ${VPC_FUNCTION_COUNT}
 SUMMARY
 
 if [[ "${#LAMBDA_SUMMARY_ROWS[@]}" -gt 0 ]]; then
@@ -331,11 +343,11 @@ if [[ "${#LAMBDA_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${LAMBDA_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "Label", "FunctionName", "Runtime", "State", "Timeout", "Memory", "Subnets", "SGs", "EnvVars", "PolicyStmts", "EBPerms"
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "-----", "------------", "-------", "-----", "-------", "------", "-------", "---", "-------", "-----------", "-------"
+        printf "%-15s %-16s %-11s %-8s %-7s %-6s %-7s %-4s %-7s %-11s %-7s\n", "Label", "Function", "Runtime", "State", "Timeout", "Memory", "Subnets", "SGs", "EnvVars", "PolicyStmts", "EBPerms"
+        printf "%-15s %-16s %-11s %-8s %-7s %-6s %-7s %-4s %-7s %-11s %-7s\n", "-----", "--------", "-------", "-----", "-------", "------", "-------", "---", "-------", "-----------", "-------"
       }
       {
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+        printf "%-15s %-16s %-11s %-8s %-7s %-6s %-7s %-4s %-7s %-11s %-7s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
       }
     '
 fi

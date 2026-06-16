@@ -81,11 +81,11 @@ REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
 info "Repository root: $REPO_ROOT"
-info "Environment:     $ENV_NAME"
+info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
-info "Name prefix:     $NAME_PREFIX"
-info "AWS_PROFILE:     ${AWS_PROFILE:-<default>}"
-info "AWS_REGION:      $AWS_REGION"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -252,8 +252,11 @@ BACKUP_VAULT_JSON="$(
 )"
 
 BACKUP_VAULT_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.BackupVaultArn // empty')"
-BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.EncryptionKeyArn // empty')"
 BACKUP_VAULT_RECOVERY_POINT_COUNT="$(echo "$BACKUP_VAULT_JSON" | jq -r '.NumberOfRecoveryPoints // 0')"
+BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.EncryptionKeyArn // empty')"
+
+BACKUP_VAULT_KMS_KEY_ID="${BACKUP_VAULT_KMS_KEY_ARN##*/}"
+[[ -z "$BACKUP_VAULT_KMS_KEY_ARN" ]] && BACKUP_VAULT_KMS_KEY_ID="<none>"
 
 if [[ -n "$BACKUP_VAULT_ARN" ]]; then
   success "Backup vault ARN resolved: $BACKUP_VAULT_ARN"
@@ -267,7 +270,7 @@ else
   warn "Backup vault encryption key was not returned. Vault may be using default encryption behavior."
 fi
 
-info "Backup vault recovery point count: $BACKUP_VAULT_RECOVERY_POINT_COUNT"
+info "Vault recovery points reported: $BACKUP_VAULT_RECOVERY_POINT_COUNT"
 
 section "Validating backup plan"
 
@@ -404,6 +407,9 @@ else
   warn "Backup selection IAM role does not contain 'backup' keyword: $SELECTION_ROLE_ARN"
 fi
 
+SELECTION_ROLE_NAME="${SELECTION_ROLE_ARN##*/}"
+[[ -z "$SELECTION_ROLE_ARN" ]] && SELECTION_ROLE_NAME="<none>"
+
 SELECTION_TAG_MATCH_COUNT="$(
   echo "$BACKUP_SELECTION_JSON" |
     jq --arg key "$EXPECTED_BACKUP_TAG_KEY" --arg value "$EXPECTED_BACKUP_TAG_VALUE" '
@@ -517,28 +523,28 @@ fi
 section "Backup Summary"
 
 cat <<SUMMARY
-Environment:                    ${ENV_NAME}
-AWS profile:                    ${AWS_PROFILE:-<default>}
-AWS region:                     ${AWS_REGION}
-AWS account ID:                 ${ACCOUNT_ID}
-Name prefix:                    ${NAME_PREFIX}
+Environment:                        ${ENV_NAME}
+AWS profile:                        ${AWS_PROFILE:-<default>}
+AWS region:                         ${AWS_REGION}
+AWS account ID:                     ${ACCOUNT_ID}
+Name prefix:                        ${NAME_PREFIX}
 
-effective_backup_enabled:       ${EFFECTIVE_BACKUP_ENABLED}
-Backup vault name:              ${BACKUP_VAULT_NAME}
-Backup vault ARN:               ${BACKUP_VAULT_ARN}
-Backup vault KMS key:           ${BACKUP_VAULT_KMS_KEY_ARN:-<none>}
-Backup vault recovery points:   ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
-Backup plan name:               ${BACKUP_PLAN_NAME}
-Backup plan ID:                 ${BACKUP_PLAN_ID}
-Backup plan rules:              ${BACKUP_RULE_COUNT}
-Backup selections:              ${BACKUP_SELECTION_COUNT}
-Expected selection ID:          ${EXPECTED_SELECTION_ID}
-Backup service role ARN:        ${SELECTION_ROLE_ARN}
-Tagged EC2 backup resources:    ${TAGGED_EC2_COUNT}
-Tagged RDS backup resources:    ${TAGGED_RDS_COUNT}
-Recovery points listed:         ${RECOVERY_POINT_COUNT}
-Recent backup jobs listed:      ${BACKUP_JOB_COUNT}
-Recent failed backup jobs:      ${FAILED_BACKUP_JOB_COUNT}
+effective_backup_enabled:           ${EFFECTIVE_BACKUP_ENABLED}
+Backup vault name:                  ${BACKUP_VAULT_NAME}
+Backup vault ARN resolved:          true
+Backup vault KMS key ID:            ${BACKUP_VAULT_KMS_KEY_ID}
+Vault recovery points reported:     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
+Backup plan name:                   ${BACKUP_PLAN_NAME}
+Backup plan ID:                     ${BACKUP_PLAN_ID}
+Backup plan rule count:             ${BACKUP_RULE_COUNT}
+Backup selections:                  ${BACKUP_SELECTION_COUNT}
+Expected selection ID:              ${EXPECTED_SELECTION_ID}
+Backup service role name:           ${SELECTION_ROLE_NAME}
+Tagged EC2 backup resources:        ${TAGGED_EC2_COUNT}
+Tagged RDS backup resources:        ${TAGGED_RDS_COUNT}
+Recovery points listed:             ${RECOVERY_POINT_COUNT}
+Recent backup jobs listed:          ${BACKUP_JOB_COUNT}
+Recent failed backup jobs:          ${FAILED_BACKUP_JOB_COUNT}
 SUMMARY
 
 if [[ "${#BACKUP_RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then

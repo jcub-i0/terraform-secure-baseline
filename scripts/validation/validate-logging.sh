@@ -28,8 +28,6 @@
 
 set -euo pipefail
 
-export AWS_PAGER=""
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
@@ -38,6 +36,9 @@ ENV_NAME="${1:-}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME:-unknown}}"
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
+
+export AWS_PAGER=""
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
@@ -99,6 +100,40 @@ if terraform_output_exists "$OUTPUTS_JSON" effective_cloudwatch_retention_days; 
 else
   warn "Missing Terraform output: effective_cloudwatch_retention_days"
   EFFECTIVE_CLOUDWATCH_RETENTION_DAYS=""
+fi
+
+section "Checking AWS caller identity"
+
+ACCOUNT_ID="$(
+  aws sts get-caller-identity \
+    "${aws_args[@]}" \
+    --query Account \
+    --output text
+)"
+
+CALLER_ARN="$(
+  aws sts get-caller-identity \
+    "${aws_args[@]}" \
+    --query Arn \
+    --output text
+)"
+
+if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
+  fail "Unable to resolve AWS account ID"
+fi
+
+success "AWS credentials are valid"
+info "AWS account ID: $ACCOUNT_ID"
+info "AWS caller ARN: $CALLER_ARN"
+
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  if [[ "$ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
+    success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
+  else
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACCOUNT_ID}"
+  fi
+else
+  warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
 fi
 
 section "Resolving VPC"
@@ -385,11 +420,12 @@ cat <<SUMMARY
 Environment:                        ${ENV_NAME}
 AWS profile:                        ${AWS_PROFILE:-<default>}
 AWS region:                         ${AWS_REGION}
+Account ID:                         ${ACCOUNT_ID}
 Name prefix:                        ${NAME_PREFIX}
-VPC ID:                             ${VPC_ID}
 
 Centralized logs bucket:            ${CENTRALIZED_LOGS_BUCKET_NAME}
 
+VPC ID:                             ${VPC_ID}
 CloudTrail count:                   ${MATCHING_TRAIL_COUNT}
 Primary CloudTrail:                 ${PRIMARY_TRAIL_NAME}
 CloudTrail home region:             ${PRIMARY_TRAIL_HOME_REGION}

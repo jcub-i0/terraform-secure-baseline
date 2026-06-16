@@ -172,5 +172,9 @@ resource "aws_config_config_rule" "managed" {
     source_identifier = each.value.identifier
   }
 
+  depends_on = [
+    aws_config_configuration_recorder_status.config
+  ]
+
   tags = var.tags
 }

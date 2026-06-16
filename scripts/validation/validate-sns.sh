@@ -76,11 +76,11 @@ REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
 info "Repository root: $REPO_ROOT"
-info "Environment:     $ENV_NAME"
+info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
-info "Name prefix:     $NAME_PREFIX"
-info "AWS_PROFILE:     ${AWS_PROFILE:-<default>}"
-info "AWS_REGION:      $AWS_REGION"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -267,7 +267,9 @@ validate_topic() {
   TOTAL_SUBSCRIPTION_COUNT=$((TOTAL_SUBSCRIPTION_COUNT + subscription_count))
   TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_count))
 
-  SNS_SUMMARY_ROWS+=("${label}|${topic_arn}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|${subscriptions_deleted}|${kms_key_id:-<none>}")
+  topic_short="${topic_name#${NAME_PREFIX}-}"
+
+  SNS_SUMMARY_ROWS+=("${label}|${topic_short}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|$([[ -n "$kms_key_id" ]] && echo "SSE-KMS" || echo "none")")
 }
 
 section "Validating expected SNS topics"
@@ -374,11 +376,11 @@ if [[ "${#SNS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${SNS_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-28s %-95s %-14s %-10s %-10s %-10s %-40s\n", "Label", "TopicArn", "Subscriptions", "Confirmed", "Pending", "Deleted", "KmsKeyId"
-        printf "%-28s %-95s %-14s %-10s %-10s %-10s %-40s\n", "-----", "--------", "-------------", "---------", "-------", "-------", "--------"
+        printf "%-26s %-28s %-13s %-9s %-8s %-10s\n", "Label", "Topic", "Subs", "Confirmed", "Pending", "Encryption"
+        printf "%-26s %-28s %-13s %-9s %-8s %-10s\n", "-----", "-----", "----", "---------", "-------", "----------"
       }
       {
-        printf "%-28s %-95s %-14s %-10s %-10s %-10s %-40s\n", $1, $2, $3, $4, $5, $6, $7
+        printf "%-26s %-28s %-13s %-9s %-8s %-10s\n", $1, $2, $3, $4, $5, $6
       }
     '
 fi

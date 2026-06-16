@@ -243,6 +243,7 @@ validate_alias_and_key() {
   fi
 
   VALIDATED_KEY_COUNT=$((VALIDATED_KEY_COUNT + 1))
+  VALIDATED_ALIASES+=("$alias_name")
 
   if [[ "$required" == "true" ]]; then
     REQUIRED_KEY_COUNT=$((REQUIRED_KEY_COUNT + 1))
@@ -250,7 +251,9 @@ validate_alias_and_key() {
     OPTIONAL_KEY_COUNT=$((OPTIONAL_KEY_COUNT + 1))
   fi
 
-  KMS_SUMMARY_ROWS+=("${label}|${alias_name}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
+  alias_short="${alias_name#alias/${NAME_PREFIX}/}"
+
+  KMS_SUMMARY_ROWS+=("${label}|${alias_short}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
 }
 
 section "Listing KMS aliases"
@@ -293,6 +296,7 @@ section "Validating expected KMS aliases and keys"
 VALIDATED_KEY_COUNT=0
 REQUIRED_KEY_COUNT=0
 OPTIONAL_KEY_COUNT=0
+VALIDATED_ALIASES=()
 KMS_SUMMARY_ROWS=()
 
 # Required workload/environment keys.
@@ -309,20 +313,35 @@ else
   validate_alias_and_key "backup" "backup" "false"
 fi
 
+UNIQUE_VALIDATED_ALIAS_COUNT="$(
+  printf '%s\n' "${VALIDATED_ALIASES[@]}" |
+    sort -u |
+    sed '/^$/d' |
+    wc -l |
+    tr -d ' '
+)"
+
+UNVALIDATED_ALIAS_COUNT=$((MATCHING_ALIAS_COUNT - UNIQUE_VALIDATED_ALIAS_COUNT))
+
+if [[ "$UNVALIDATED_ALIAS_COUNT" -lt 0 ]]; then
+  UNVALIDATED_ALIAS_COUNT=0
+fi
+
 section "KMS Summary"
 
 cat <<SUMMARY
-Environment:                    ${ENV_NAME}
-AWS profile:                    ${AWS_PROFILE:-<default>}
-AWS region:                     ${AWS_REGION}
-AWS account ID:                 ${ACCOUNT_ID}
-Name prefix:                    ${NAME_PREFIX}
+Environment:                                    ${ENV_NAME}
+AWS profile:                                    ${AWS_PROFILE:-<default>}
+AWS region:                                     ${AWS_REGION}
+AWS account ID:                                 ${ACCOUNT_ID}
+Name prefix:                                    ${NAME_PREFIX}
 
-Matching environment aliases:   ${MATCHING_ALIAS_COUNT}
-Required KMS keys validated:    ${REQUIRED_KEY_COUNT}
-Optional KMS keys validated:    ${OPTIONAL_KEY_COUNT}
-Total KMS keys validated:       ${VALIDATED_KEY_COUNT}
-effective_backup_enabled:       ${EFFECTIVE_BACKUP_ENABLED}
+Matching environment aliases:                   ${MATCHING_ALIAS_COUNT}
+Required KMS keys validated:                    ${REQUIRED_KEY_COUNT}
+Optional KMS keys validated:                    ${OPTIONAL_KEY_COUNT}
+Total KMS keys validated:                       ${VALIDATED_KEY_COUNT}
+Matching aliases not validated by this script:  ${UNVALIDATED_ALIAS_COUNT}
+effective_backup_enabled:                       ${EFFECTIVE_BACKUP_ENABLED}
 SUMMARY
 
 if [[ "${#KMS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
@@ -331,14 +350,38 @@ if [[ "${#KMS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${KMS_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", "Label", "Alias", "KeyId", "State", "Manager", "Rotation"
-        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", "-----", "-----", "-----", "-----", "-------", "--------"
+        printf "%-18s %-18s %-38s %-10s %-10s %-10s\n", "Label", "Alias", "KeyId", "State", "Manager", "Rotation"
+        printf "%-18s %-18s %-38s %-10s %-10s %-10s\n", "-----", "-----", "-----", "-----", "-------", "--------"
       }
       {
-        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", $1, $2, $3, $4, $5, $6
+        printf "%-18s %-18s %-38s %-10s %-10s %-10s\n", $1, $2, $3, $4, $5, $6
       }
     '
 fi
+
+echo
+echo "Matching aliases not validated by this script:"
+echo "$ALIASES_JSON" |
+  jq -r --arg prefix "$NAME_PREFIX" '
+    .Aliases[]
+    | select(.TargetKeyId != null)
+    | select(.AliasName | contains($prefix))
+    | .AliasName
+  ' |
+  while read -r alias_name; do
+    found="false"
+
+    for validated_alias in "${VALIDATED_ALIASES[@]}"; do
+      if [[ "$alias_name" == "$validated_alias" ]]; then
+        found="true"
+        break
+      fi
+    done
+
+    if [[ "$found" == "false" ]]; then
+      echo "- ${alias_name}"
+    fi
+  done
 
 section "Validation Result"
 

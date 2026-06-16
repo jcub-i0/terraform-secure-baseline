@@ -24,8 +24,6 @@
 
 set -euo pipefail
 
-export AWS_PAGER=""
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
@@ -37,6 +35,8 @@ NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME:-unknown}}"
 
 # Space-separated list so callers can override this later if the module becomes configurable.
 EXPECTED_INTERFACE_ENDPOINT_SERVICES="${EXPECTED_INTERFACE_ENDPOINT_SERVICES:-sts logs ssm ssmmessages secretsmanager kms config sns ec2 events securityhub lambda}"
+
+export AWS_PAGER=""
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
@@ -74,12 +74,12 @@ section "Resolving repository paths and Terraform outputs"
 REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
-info "Repository root:  $REPO_ROOT"
-info "Environment:      $ENV_NAME"
-info "Environment dir:  $ENV_DIR"
-info "Name prefix:      $NAME_PREFIX"
-info "AWS_PROFILE:      ${AWS_PROFILE:-<default>}"
-info "AWS_REGION:       $AWS_REGION"
+info "Repository root: $REPO_ROOT"
+info "Environment: $ENV_NAME"
+info "Environment dir: $ENV_DIR"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -421,20 +421,20 @@ fi
 section "VPC Endpoints Summary"
 
 cat <<SUMMARY
-Environment: ${ENV_NAME}
-AWS profile: ${AWS_PROFILE:-<default>}
-AWS region: ${AWS_REGION}
-Name prefix: ${NAME_PREFIX}
-VPC ID: ${VPC_ID}
-effective_egress_mode: ${EFFECTIVE_EGRESS_MODE}
+Environment:                          ${ENV_NAME}
+AWS profile:                          ${AWS_PROFILE:-<default>}
+AWS region:                           ${AWS_REGION}
+Name prefix:                          ${NAME_PREFIX}
+VPC ID:                               ${VPC_ID}
+effective_egress_mode:                ${EFFECTIVE_EGRESS_MODE}
 
-Endpoint private subnets: ${ENDPOINT_SUBNET_COUNT}
-Endpoint private route tables: ${ENDPOINT_RT_COUNT}
-Interface VPC Endpoints: ${INTERFACE_ENDPOINT_COUNT}
-S3 Gateway Endpoint count: ${S3_ENDPOINT_COUNT}
-S3 Gateway route table associations: ${S3_ROUTE_TABLE_COUNT}
-Compute private route tables: ${COMPUTE_RT_COUNT}
-Serverless private route tables: ${SERVERLESS_RT_COUNT}
+Endpoint private subnets:             ${ENDPOINT_SUBNET_COUNT}
+Endpoint private route tables:        ${ENDPOINT_RT_COUNT}
+Interface VPC Endpoints:              ${INTERFACE_ENDPOINT_COUNT}
+S3 Gateway Endpoint count:            ${S3_ENDPOINT_COUNT}
+S3 Gateway route table associations:  ${S3_ROUTE_TABLE_COUNT}
+Compute private route tables:         ${COMPUTE_RT_COUNT}
+Serverless private route tables:      ${SERVERLESS_RT_COUNT}
 SUMMARY
 
 section "Validation Result"

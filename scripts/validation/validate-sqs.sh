@@ -31,7 +31,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[@]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
@@ -79,12 +79,12 @@ section "Resolving repository paths and Terraform outputs"
 REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
-info "Repository root:  $REPO_ROOT"
-info "Environment:      $ENV_NAME"
-info "Environment dir:  $ENV_DIR"
-info "Name prefix:      $NAME_PREFIX"
-info "AWS_PROFILE:      ${AWS_PROFILE:-<default>}"
-info "AWS_REGION:       $AWS_REGION"
+info "Repository root: $REPO_ROOT"
+info "Environment: $ENV_NAME"
+info "Environment dir: $ENV_DIR"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -353,10 +353,13 @@ validate_sqs_queue() {
   fi
 
   if [[ -n "$kms_key_id" ]]; then
+    encryption_mode="SSE-KMS"
     success "${queue_label} queue uses SSE-KMS: ${kms_key_id}"
   elif [[ "$sqs_managed_sse" == "true" ]]; then
+    encryption_mode="SQS-SSE"
     success "${queue_label} queue uses SQS-managed server-side encryption"
   else
+    encryption_mode="none"
     fail "${queue_label} queue encryption is not configured"
   fi
 
@@ -417,7 +420,14 @@ validate_sqs_queue() {
     TOTAL_OPTIONAL_QUEUES=$((TOTAL_OPTIONAL_QUEUES + 1))
   fi
 
-  QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_name}|${queue_arn}|${producer_ref}|${sns_topic_arn}|${sns_subscription_count}|${sns_pending_count}|${kms_key_id:-<none>}|${sqs_managed_sse}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
+  queue_short="${queue_name#${NAME_PREFIX}-}"
+  producer_short="$producer_ref"
+
+  if [[ "$producer_short" == sns:* ]]; then
+    producer_short="sns:${producer_short#sns:}"
+  fi
+
+  QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_short}|${producer_short}|${sns_subscription_count}|${sns_pending_count}|${encryption_mode}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
 }
 
 for queue_spec in "${EXPECTED_SQS_QUEUES[@]}"; do
@@ -471,15 +481,15 @@ if [[ "${#QUEUE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${QUEUE_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-14s %-10s %-45s %-95s %-32s %-95s %-14s %-10s %-40s %-10s %-8s %-10s %-10s\n", "Queue", "Required", "QueueName", "QueueArn", "Producer", "ProducerArn", "Subscriptions", "Pending", "KmsKeyId", "SQS-SSE", "DLQ", "Visible", "InFlight"
-        printf "%-14s %-10s %-45s %-95s %-32s %-95s %-14s %-10s %-40s %-10s %-8s %-10s %-10s\n", "-----", "--------", "---------", "--------", "--------", "-----------", "-------------", "-------", "--------", "-------", "---", "-------", "--------"
+        printf "%-12s %-9s %-22s %-31s %-6s %-7s %-10s %-5s %-7s %-8s\n", "Queue", "Required", "QueueName", "Producer", "Subs", "Pending", "Encrypt", "DLQ", "Visible", "NotVisible"
+        printf "%-12s %-9s %-22s %-31s %-6s %-7s %-10s %-5s %-7s %-8s\n", "-----", "--------", "---------", "--------", "----", "-------", "-------", "---", "-------", "----------"
       }
       {
-        printf "%-14s %-10s %-45s %-95s %-32s %-95s %-14s %-10s %-40s %-10s %-8s %-10s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+        printf "%-12s %-9s %-22s %-31s %-6s %-7s %-10s %-5s %-7s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
       }
     '
 fi
 
 section "Validation Result"
 
-success "SQS validation comleted successfully for: ${ENV_NAME}"
+success "SQS validation completed successfully for: ${ENV_NAME}"

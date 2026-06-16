@@ -78,11 +78,11 @@ REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 
 info "Repository root: $REPO_ROOT"
-info "Environment:     $ENV_NAME"
+info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
-info "Name prefix:     $NAME_PREFIX"
-info "AWS_PROFILE:     ${AWS_PROFILE:-<default>}"
-info "AWS_REGION:      $AWS_REGION"
+info "Name prefix: $NAME_PREFIX"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -269,9 +269,8 @@ while IFS= read -r row; do
   platform_name="$(echo "$row" | jq -r '.PlatformName // "unknown"')"
   platform_version="$(echo "$row" | jq -r '.PlatformVersion // "unknown"')"
   agent_version="$(echo "$row" | jq -r '.AgentVersion // "unknown"')"
-  last_ping="$(echo "$row" | jq -r '.LastPingDateTime // "unknown"')"
 
-  SSM_SUMMARY_ROWS+=("${instance_id}|${ping_status}|${platform_type}|${platform_name}|${platform_version}|${agent_version}|${last_ping}")
+  SSM_SUMMARY_ROWS+=("${instance_id}|${ping_status}|${platform_type}|${platform_name}|${platform_version}|${agent_version}")
 done < <(echo "$MATCHING_SSM_JSON" | jq -c '.[]')
 
 section "Checking SSM associations"
@@ -355,9 +354,9 @@ Environment EC2 instances:         ${ENV_INSTANCE_COUNT}
 Matching SSM managed instances:    ${MATCHING_SSM_COUNT}
 Online managed instances:          ${ONLINE_COUNT}
 Offline managed instances:         ${OFFLINE_COUNT}
-SSM associations discovered:       ${ASSOCIATION_COUNT}
+SSM associations in region:        ${ASSOCIATION_COUNT}
 Environment maintenance windows:   ${MATCHING_MAINTENANCE_WINDOW_COUNT}
-Environment patch baselines:       ${MATCHING_PATCH_BASELINE_COUNT}
+Custom env patch baselines:        ${MATCHING_PATCH_BASELINE_COUNT}
 SUMMARY
 
 if [[ "${#SSM_SUMMARY_ROWS[@]}" -gt 0 ]]; then
@@ -366,11 +365,11 @@ if [[ "${#SSM_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${SSM_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", "InstanceId", "PingStatus", "Platform", "PlatformName", "PlatformVersion", "AgentVersion", "LastPing"
-        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", "----------", "----------", "--------", "------------", "---------------", "------------", "--------"
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s\n", "InstanceId", "PingStatus", "Platform", "PlatformName", "PlatformVersion", "AgentVersion"
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s\n", "----------", "----------", "--------", "------------", "---------------", "------------"
       }
       {
-        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", $1, $2, $3, $4, $5, $6, $7
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s\n", $1, $2, $3, $4, $5, $6
       }
     '
 fi
@@ -384,7 +383,7 @@ fi
 
 if [[ "$MATCHING_PATCH_BASELINE_COUNT" -gt 0 ]]; then
   echo
-  echo "Environment patch baselines:"
+  echo "Custom env patch baselines:"
   echo "$MATCHING_PATCH_BASELINES_JSON" |
     jq -r '.[] | "- " + .BaselineName + " (" + .BaselineId + ") OperatingSystem=" + .OperatingSystem'
 fi
