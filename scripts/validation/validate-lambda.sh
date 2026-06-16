@@ -306,7 +306,9 @@ validate_lambda_function() {
 
   VALIDATED_FUNCTION_COUNT=$((VALIDATED_FUNCTION_COUNT + 1))
 
-  LAMBDA_SUMMARY_ROWS+=("${label}|${function_name}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
+  function_short="${function_name#${NAME_PREFIX}-}"
+
+  LAMBDA_SUMMARY_ROWS+=("${label}|${function_short}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
 }
 
 section "Validating expected Lambda functions"
@@ -341,8 +343,8 @@ if [[ "${#LAMBDA_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${LAMBDA_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "Label", "FunctionName", "Runtime", "State", "Timeout", "Memory", "Subnets", "SGs", "EnvVars", "PolicyStmts", "EBPerms"
-        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "-----", "------------", "-------", "-----", "-------", "------", "-------", "---", "-------", "-----------", "-------"
+        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "Label", "Function", "Runtime", "State", "Timeout", "Memory", "Subnets", "SGs", "EnvVars", "PolicyStmts", "EBPerms"
+        printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", "-----", "--------", "-------", "-----", "-------", "------", "-------", "---", "-------", "-----------", "-------"
       }
       {
         printf "%-18s %-55s %-16s %-10s %-8s %-8s %-8s %-8s %-8s %-10s %-10s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
