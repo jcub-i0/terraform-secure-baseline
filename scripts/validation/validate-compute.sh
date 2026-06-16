@@ -929,11 +929,11 @@ if [[ "${#INSTANCE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${INSTANCE_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-22s %-16s %-8s %-9s %-22s %-13s %-9s %-9s %-10s %-28s\n", "InstanceId", "Name", "State", "Type", "SubnetId", "PrivateIp", "PublicIp", "IMDSv2", "Monitoring", "InstanceProfile"
-        printf "%-22s %-16s %-8s %-9s %-22s %-13s %-9s %-9s %-10s %-28s\n", "----------", "----", "-----", "----", "--------", "---------", "--------", "------", "----------", "---------------"
+        printf "%-22s %-16s %-8s %-9s %-24s %-13s %-9s %-9s %-10s %-29s\n", "InstanceId", "Name", "State", "Type", "SubnetId", "PrivateIp", "PublicIp", "IMDSv2", "Monitoring", "InstanceProfile"
+        printf "%-22s %-16s %-8s %-9s %-24s %-13s %-9s %-9s %-10s %-29s\n", "----------", "----", "-----", "----", "--------", "---------", "--------", "------", "----------", "---------------"
       }
       {
-        printf "%-22s %-16s %-8s %-9s %-22s %-13s %-9s %-9s %-10s %-28s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+        printf "%-22s %-16s %-8s %-9s %-24s %-13s %-9s %-9s %-10s %-29s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
       }
     '
 fi
