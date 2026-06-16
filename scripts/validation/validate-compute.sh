@@ -945,7 +945,7 @@ echo "$VOLUMES_JSON" |
       + " Type=" + .VolumeType
       + " SizeGiB=" + (.Size | tostring)
       + " Encrypted=" + (.Encrypted | tostring)
-      + " KmsKeyId=" + (.KmsKeyId // "<none>")
+      + " KmsKey=" + ((.KmsKeyId // "<none>") | split("/") | last)
       + " State=" + .State
   '
 
