@@ -407,6 +407,9 @@ else
   warn "Backup selection IAM role does not contain 'backup' keyword: $SELECTION_ROLE_ARN"
 fi
 
+SELECTION_ROLE_NAME="${SELECTION_ROLE_ARN##*/}"
+[[ -z "$SELECTION_ROLE_ARN" ]] && SELECTION_ROLE_NAME="<none>"
+
 SELECTION_TAG_MATCH_COUNT="$(
   echo "$BACKUP_SELECTION_JSON" |
     jq --arg key "$EXPECTED_BACKUP_TAG_KEY" --arg value "$EXPECTED_BACKUP_TAG_VALUE" '
@@ -536,7 +539,7 @@ Backup plan ID:                 ${BACKUP_PLAN_ID}
 Backup plan rule count:         ${BACKUP_RULE_COUNT}
 Backup selections:              ${BACKUP_SELECTION_COUNT}
 Expected selection ID:          ${EXPECTED_SELECTION_ID}
-Backup service role ARN:        ${SELECTION_ROLE_ARN}
+Backup service role name:       ${SELECTION_ROLE_NAME}
 Tagged EC2 backup resources:    ${TAGGED_EC2_COUNT}
 Tagged RDS backup resources:    ${TAGGED_RDS_COUNT}
 Recovery points listed by API:  ${RECOVERY_POINT_COUNT}
