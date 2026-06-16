@@ -421,6 +421,7 @@ validate_sqs_queue() {
   fi
 
 QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_name}|${producer_ref}|${sns_subscription_count}|${sns_pending_count}|${encryption_mode}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
+}
 
 for queue_spec in "${EXPECTED_SQS_QUEUES[@]}"; do
   IFS='|' read -r queue_label queue_suffix requirement producer_ref <<< "$queue_spec"
