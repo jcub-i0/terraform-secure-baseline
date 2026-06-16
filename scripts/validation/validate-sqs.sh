@@ -481,7 +481,7 @@ if [[ "${#QUEUE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${QUEUE_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-12s %-9s %-22s %-31s %-6s %-7s %-10s %-5s %-7s %-8s\n", "Queue", "Required", "QueueName", "Producer", "Subs", "Pending", "Encrypt", "DLQ", "Visible", "InFlight"
+        printf "%-12s %-9s %-22s %-31s %-6s %-7s %-10s %-5s %-7s %-8s\n", "Queue", "Required", "QueueName", "Producer", "Subs", "Pending", "Encrypt", "DLQ", "Visible", "NotVisible"
         printf "%-12s %-9s %-22s %-31s %-6s %-7s %-10s %-5s %-7s %-8s\n", "-----", "--------", "---------", "--------", "----", "-------", "-------", "---", "-------", "--------"
       }
       {
