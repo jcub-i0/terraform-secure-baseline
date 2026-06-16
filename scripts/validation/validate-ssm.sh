@@ -271,7 +271,7 @@ while IFS= read -r row; do
   agent_version="$(echo "$row" | jq -r '.AgentVersion // "unknown"')"
   last_ping="$(echo "$row" | jq -r '.LastPingDateTime // "unknown"')"
 
-  SSM_SUMMARY_ROWS+=("${instance_id}|${ping_status}|${platform_type}|${platform_name}|${platform_version}|${agent_version}|${last_ping}")
+  SSM_SUMMARY_ROWS+=("${instance_id}|${ping_status}|${platform_type}|${platform_name}|${platform_version}|${agent_version}")
 done < <(echo "$MATCHING_SSM_JSON" | jq -c '.[]')
 
 section "Checking SSM associations"
