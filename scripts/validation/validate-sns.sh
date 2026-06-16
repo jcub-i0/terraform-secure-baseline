@@ -376,11 +376,11 @@ if [[ "${#SNS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${SNS_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", "Label", "Topic", "Subscriptions", "Confirmed", "Pending", "Encryption"
-        printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", "-----", "-----", "-------------", "---------", "-------", "----------"
+        printf "%-26s %-28s %-13s %-9s %-8s %-10s\n", "Label", "Topic", "Subs", "Confirmed", "Pending", "Encryption"
+        printf "%-26s %-28s %-13s %-9s %-8s %-10s\n", "-----", "-----", "----", "---------", "-------", "----------"
       }
       {
-        printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", $1, $2, $3, $4, $5, $6
+        printf "%-26s %-28s %-13s %-9s %-8s %-10s\n", $1, $2, $3, $4, $5, $6
       }
     '
 fi
