@@ -350,11 +350,11 @@ if [[ "${#KMS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${KMS_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", "Label", "Alias", "KeyId", "State", "Manager", "Rotation"
-        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", "-----", "-----", "-----", "-----", "-------", "--------"
+        printf "%-18s %-18s %-38s %-10s %-10s %-10s\n", "Label", "Alias", "KeyId", "State", "Manager", "Rotation"
+        printf "%-18s %-18s %-38s %-10s %-10s %-10s\n", "-----", "-----", "-----", "-----", "-------", "--------"
       }
       {
-        printf "%-18s %-70s %-38s %-12s %-10s %-10s\n", $1, $2, $3, $4, $5, $6
+        printf "%-18s %-18s %-38s %-10s %-10s %-10s\n", $1, $2, $3, $4, $5, $6
       }
     '
 fi
