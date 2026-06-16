@@ -267,7 +267,9 @@ validate_topic() {
   TOTAL_SUBSCRIPTION_COUNT=$((TOTAL_SUBSCRIPTION_COUNT + subscription_count))
   TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_count))
 
-  SNS_SUMMARY_ROWS+=("${label}|${topic_name}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|$([[ -n "$kms_key_id" ]] && echo "SSE-KMS" || echo "none")")
+  topic_short="${topic_name#${NAME_PREFIX}-}"
+
+  SNS_SUMMARY_ROWS+=("${label}|${topic_short}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|$([[ -n "$kms_key_id" ]] && echo "SSE-KMS" || echo "none")")
 }
 
 section "Validating expected SNS topics"
@@ -374,8 +376,8 @@ if [[ "${#SNS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${SNS_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", "Label", "TopicName", "Subscriptions", "Confirmed", "Pending", "Encryption"
-        printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", "-----", "---------", "-------------", "---------", "-------", "----------"
+        printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", "Label", "Topic", "Subscriptions", "Confirmed", "Pending", "Encryption"
+        printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", "-----", "-----", "-------------", "---------", "-------", "----------"
       }
       {
         printf "%-28s %-70s %-14s %-10s %-10s %-12s\n", $1, $2, $3, $4, $5, $6
