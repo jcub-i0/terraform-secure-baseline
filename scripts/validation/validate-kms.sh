@@ -253,7 +253,7 @@ validate_alias_and_key() {
 
   alias_short="${alias_name#alias/${NAME_PREFIX}/}"
 
-  KMS_SUMMARY_ROWS+=("${label}|${alias_name}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
+  KMS_SUMMARY_ROWS+=("${label}|${alias_short}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
 }
 
 section "Listing KMS aliases"
