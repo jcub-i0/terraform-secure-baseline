@@ -531,7 +531,7 @@ Name prefix:                        ${NAME_PREFIX}
 
 effective_backup_enabled:           ${EFFECTIVE_BACKUP_ENABLED}
 Backup vault name:                  ${BACKUP_VAULT_NAME}
-Backup vault ARN:                   ${BACKUP_VAULT_ARN}
+Backup vault ARN resolved:          true
 Backup vault KMS key ID:            ${BACKUP_VAULT_KMS_KEY_ID}
 Vault recovery points reported:     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
 Backup plan name:                   ${BACKUP_PLAN_NAME}
