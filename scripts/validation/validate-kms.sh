@@ -330,18 +330,18 @@ fi
 section "KMS Summary"
 
 cat <<SUMMARY
-Environment:                    ${ENV_NAME}
-AWS profile:                    ${AWS_PROFILE:-<default>}
-AWS region:                     ${AWS_REGION}
-AWS account ID:                 ${ACCOUNT_ID}
-Name prefix:                    ${NAME_PREFIX}
+Environment:                                    ${ENV_NAME}
+AWS profile:                                    ${AWS_PROFILE:-<default>}
+AWS region:                                     ${AWS_REGION}
+AWS account ID:                                 ${ACCOUNT_ID}
+Name prefix:                                    ${NAME_PREFIX}
 
-Matching environment aliases:   ${MATCHING_ALIAS_COUNT}
-Required KMS keys validated:    ${REQUIRED_KEY_COUNT}
-Optional KMS keys validated:    ${OPTIONAL_KEY_COUNT}
-Total KMS keys validated:       ${VALIDATED_KEY_COUNT}
-Unvalidated matching aliases:   ${UNVALIDATED_ALIAS_COUNT}
-effective_backup_enabled:       ${EFFECTIVE_BACKUP_ENABLED}
+Matching environment aliases:                   ${MATCHING_ALIAS_COUNT}
+Required KMS keys validated:                    ${REQUIRED_KEY_COUNT}
+Optional KMS keys validated:                    ${OPTIONAL_KEY_COUNT}
+Total KMS keys validated:                       ${VALIDATED_KEY_COUNT}
+Matching aliases not validated by this script:  ${UNVALIDATED_ALIAS_COUNT}
+effective_backup_enabled:                       ${EFFECTIVE_BACKUP_ENABLED}
 SUMMARY
 
 if [[ "${#KMS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
@@ -360,7 +360,7 @@ if [[ "${#KMS_SUMMARY_ROWS[@]}" -gt 0 ]]; then
 fi
 
 echo
-echo "Unvalidated matching aliases:"
+echo "Matching aliases not validated by this script:"
 echo "$ALIASES_JSON" |
   jq -r --arg prefix "$NAME_PREFIX" '
     .Aliases[]
