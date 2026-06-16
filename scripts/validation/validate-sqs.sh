@@ -420,7 +420,14 @@ validate_sqs_queue() {
     TOTAL_OPTIONAL_QUEUES=$((TOTAL_OPTIONAL_QUEUES + 1))
   fi
 
-QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_name}|${producer_ref}|${sns_subscription_count}|${sns_pending_count}|${encryption_mode}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
+  queue_short="${queue_name#${NAME_PREFIX}-}"
+  producer_short="$producer_ref"
+
+  if [[ "$producer_short" == sns:* ]]; then
+    producer_short="sns:${producer_short#sns:}"
+  fi
+
+  QUEUE_SUMMARY_ROWS+=("${queue_label}|${requirement}|${queue_short}|${producer_short}|${sns_subscription_count}|${sns_pending_count}|${encryption_mode}|${redrive_policy_configured}|${approximate_number_of_messages}|${approximate_number_of_messages_not_visible}")
 }
 
 for queue_spec in "${EXPECTED_SQS_QUEUES[@]}"; do
