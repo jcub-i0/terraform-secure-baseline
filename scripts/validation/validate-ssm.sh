@@ -269,7 +269,6 @@ while IFS= read -r row; do
   platform_name="$(echo "$row" | jq -r '.PlatformName // "unknown"')"
   platform_version="$(echo "$row" | jq -r '.PlatformVersion // "unknown"')"
   agent_version="$(echo "$row" | jq -r '.AgentVersion // "unknown"')"
-  last_ping="$(echo "$row" | jq -r '.LastPingDateTime // "unknown"')"
 
   SSM_SUMMARY_ROWS+=("${instance_id}|${ping_status}|${platform_type}|${platform_name}|${platform_version}|${agent_version}")
 done < <(echo "$MATCHING_SSM_JSON" | jq -c '.[]')
@@ -366,11 +365,11 @@ if [[ "${#SSM_SUMMARY_ROWS[@]}" -gt 0 ]]; then
   printf '%s\n' "${SSM_SUMMARY_ROWS[@]}" |
     awk -F'|' '
       BEGIN {
-        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", "InstanceId", "PingStatus", "Platform", "PlatformName", "PlatformVersion", "AgentVersion", "LastPing"
-        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", "----------", "----------", "--------", "------------", "---------------", "------------", "--------"
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s\n", "InstanceId", "PingStatus", "Platform", "PlatformName", "PlatformVersion", "AgentVersion"
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s\n", "----------", "----------", "--------", "------------", "---------------", "------------"
       }
       {
-        printf "%-22s %-12s %-12s %-22s %-18s %-18s %-28s\n", $1, $2, $3, $4, $5, $6, $7
+        printf "%-22s %-12s %-12s %-22s %-18s %-18s\n", $1, $2, $3, $4, $5, $6
       }
     '
 fi
