@@ -241,6 +241,12 @@ validate_lambda_function() {
     warn "Lambda KMS key is not configured for ${label}"
   fi
 
+  if [[ "$subnet_count" -gt 0 || "$security_group_count" -gt 0 ]]; then
+    VPC_FUNCTION_COUNT=$((VPC_FUNCTION_COUNT + 1))
+  else
+    NON_VPC_FUNCTION_COUNT=$((NON_VPC_FUNCTION_COUNT + 1))
+  fi
+
   if [[ "$require_vpc" == "true" ]]; then
     if [[ "$subnet_count" -gt 0 && "$security_group_count" -gt 0 ]]; then
       success "Lambda VPC config exists for ${label}: ${subnet_count} subnet(s), ${security_group_count} security group(s)"
