@@ -476,6 +476,51 @@ docs/quickstart.md
 
 ---
 
+## Validation
+
+The repository includes a safe, read-only workload validation suite under:
+
+```text
+scripts/validation/
+```
+
+The primary validation entry point is:
+
+```bash
+./scripts/validation/validate-all.sh <dev|staging|prod>
+```
+
+Example:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/validation/validate-all.sh dev
+```
+
+The validation suite checks deploy workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture.
+
+A successful validation run should end with:
+
+```bash
+Validation scripts passed:  14/14
+Validation scripts failed:  0/14
+```
+
+Individual scripts can also be run directly when troubleshooting a specific architecture area.
+
+Detailed validation guidance is provided in:
+
+```text
+docs/validation-checklist.md
+```
+
+The automated validation suite is intentionally read-only. Live workflow tests, tamper tests, break-glass tests, Identity Center assignment checks, GitHub Actions workflow checks, and destroy safety review remain manual validation steps.
+
+---
+
 ## State Management
 
 Terraform state is separated by **stack** and **environment**.
