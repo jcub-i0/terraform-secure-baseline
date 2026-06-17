@@ -638,8 +638,8 @@ Highlights:
 
 Potential future improvements include:
 
-- Add core post-deploy validation scripts
-- Improve dashboarding / evidence outputs
+- Add optional validation report export for audit/evidence packages
+- Improve dashboarding and visual evidence outputs
 - Add configurable VPC endpoint service lists
 - Add additional deployment profile-controlled services
 - Continue refactoring remaining IAM policy JSON outside modules/iam
