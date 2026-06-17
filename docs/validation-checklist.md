@@ -49,20 +49,14 @@ control-plane
 
 Recommended validation order:
 
-1. Account/profile validation
-2. Terraform state validation
-3. GitHub OIDC validation
-4. Control-plane validation
-5. Environment baseline validation
-6. Deployment profile validation
-7. Networking validation
-8. VPC endpoint validation
-9. Logging validation
-10. Security service validation
-11. Identity Center validation
-12. Lambda workflow validation
-13. Alerting validation
-14. Destroy safety validation
+1. Confirm AWS profile/account variables.
+2. Run automated workload validation with `validate-all.sh` for each deployed workload environment.
+3. Validate control-plane resources manually.
+4. Validate IAM Identity Center assignments manually.
+5. Validate GitHub Actions workflows manually.
+6. Run live Lambda workflow tests only in approved environments.
+7. Run tamper and break-glass tests only when explicitly approved.
+8. Review destroy safety before any teardown.
 
 ---
 
