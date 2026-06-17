@@ -56,7 +56,7 @@ Recommended validation order:
 5. Validate GitHub Actions workflows manually.
 6. Run live Lambda workflow tests only in approved environments.
 7. Run tamper and break-glass tests only when explicitly approved.
-8. Review destroy safety before any teardown.
+8. Review destroy safety requirements before running any destroy or teardown workflow.
 
 ---
 
