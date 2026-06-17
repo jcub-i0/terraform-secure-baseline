@@ -58,6 +58,7 @@ Key capabilities include:
 - Break-glass role monitoring
 - Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
+- Safe, read-only post-deployment validation suite
 
 ---
 
