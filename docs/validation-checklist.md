@@ -1837,6 +1837,7 @@ This checklist validates that `tf-secure-baseline` is deployed correctly and tha
 
 A successful validation means:
 
+- Automated workload validation passes for the target environment.
 - AWS accounts and profiles are correct.
 - Terraform state backends exist.
 - GitHub OIDC roles work if enabled.
@@ -1844,11 +1845,10 @@ A successful validation means:
 - Environment baselines exist.
 - Deployment profile outputs resolve correctly.
 - Egress mode behavior matches the selected profile or override.
-- Private networking and endpoint access work.
+- Private networking and endpoint access are configured.
 - Interface Endpoints are deployed into dedicated endpoint private subnets.
 - Logging and security services are active where expected.
+- KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM controls validate successfully.
 - Identity Center access is configured.
-- EC2 isolation and rollback work.
-- IP enrichment works.
-- Tamper and break-glass alerts are configured.
+- Live EC2 isolation, rollback, IP enrichment, tamper detection, and break-glass workflows have been tested manually where appropriate.
 - Destroy procedures are understood before teardown.
