@@ -58,6 +58,7 @@ Key capabilities include:
 - Break-glass role monitoring
 - Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
+- Safe, read-only post-deployment validation suite
 
 ---
 
@@ -475,6 +476,51 @@ docs/quickstart.md
 
 ---
 
+## Validation
+
+The repository includes a safe, read-only workload validation suite under:
+
+```text
+scripts/validation/
+```
+
+The primary validation entry point is:
+
+```bash
+./scripts/validation/validate-all.sh <dev|staging|prod>
+```
+
+Example:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/validation/validate-all.sh dev
+```
+
+The validation suite checks deploy workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture.
+
+A successful validation run should end with:
+
+```bash
+Validation scripts passed:  14/14
+Validation scripts failed:  0/14
+```
+
+Individual scripts can also be run directly when troubleshooting a specific architecture area.
+
+Detailed validation guidance is provided in:
+
+```text
+docs/validation-checklist.md
+```
+
+The automated validation suite is intentionally read-only. Live workflow tests, tamper tests, break-glass tests, Identity Center assignment checks, GitHub Actions workflow checks, and destroy safety review remain manual validation steps.
+
+---
+
 ## State Management
 
 Terraform state is separated by **stack** and **environment**.
@@ -558,31 +604,33 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.1.0
+### v1.2.0
 
-This release adds cost/security profile support, configurable egress behavior, dedicated VPC endpoint subnets, improved validation workflows, and IAM policy maintainability improvements.
+This release adds a safe, read-only post-deployment validation suite for deployed workload environments.
 
 Highlights:
 
-- Added deployment profiles for:
-  - `production`
-  - `development`
-  - `minimal`
-- Added configurable egress modes:
-  - `network_firewall`
-  - `nat_only`
-  - `vpc_endpoints_only`
-- Added dedicated private subnets for Interface VPC Endpoints.
-- Added profile-aware defaults for:
-  - AWS Config
+- Added `validate-all.sh` as the primary workload validation entry point.
+- Added validation scripts for:
+  - Environment outputs and account identity
+  - Networking and controlled egress
+  - VPC endpoints
+  - Logging
+  - Security services
+  - KMS
   - AWS Backup
-  - Inspector
-  - CloudWatch Logs retention
-- Added effective Terraform outputs for deployment profile and resolved feature settings.
-- Improved Terraform Static Analysis workflow coverage.
-- Added Docs Validation workflow.
-- Refactored IAM module policies from inline `jsonencode()` policy JSON to `aws_iam_policy_document` data sources.
-- Updated documentation for deployment profiles, egress modes, and dedicated VPC endpoint subnets.
+  - SNS
+  - SQS
+  - EventBridge
+  - Lambda
+  - SSM
+  - Compute
+  - IAM
+- Added expected account ID validation through `EXPECTED_ACCOUNT_ID`.
+- Added profile-aware validation behavior for Config, Backup, Inspector, and egress mode.
+- Added read-only validation summaries suitable for deployment evidence and troubleshooting.
+- Updated `docs/validation-checklist.md` to make automated workload validation the default validation path.
+- Preserved manual validation for control-plane resources, Identity Center assignments, live Lambda workflow tests, tamper tests, break-glass tests, GitHub Actions workflow review, and destroy safety.
 
 ---
 
@@ -590,8 +638,8 @@ Highlights:
 
 Potential future improvements include:
 
-- Add core post-deploy validation scripts
-- Improve dashboarding / evidence outputs
+- Add optional validation report export for audit/evidence packages
+- Improve dashboarding and visual evidence outputs
 - Add configurable VPC endpoint service lists
 - Add additional deployment profile-controlled services
 - Continue refactoring remaining IAM policy JSON outside modules/iam
