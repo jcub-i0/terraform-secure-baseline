@@ -49,20 +49,14 @@ control-plane
 
 Recommended validation order:
 
-1. Account/profile validation
-2. Terraform state validation
-3. GitHub OIDC validation
-4. Control-plane validation
-5. Environment baseline validation
-6. Deployment profile validation
-7. Networking validation
-8. VPC endpoint validation
-9. Logging validation
-10. Security service validation
-11. Identity Center validation
-12. Lambda workflow validation
-13. Alerting validation
-14. Destroy safety validation
+1. Confirm AWS profile/account variables.
+2. Run automated workload validation with `validate-all.sh` for each deployed workload environment.
+3. Validate control-plane resources manually.
+4. Validate IAM Identity Center assignments manually.
+5. Validate GitHub Actions workflows manually.
+6. Run live Lambda workflow tests only in approved environments.
+7. Run tamper and break-glass tests only when explicitly approved.
+8. Review destroy safety requirements before running any destroy or teardown workflow.
 
 ---
 
@@ -124,9 +118,21 @@ export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 
 ## Automated Workload Validation
 
-For deployed workload environments, the safe, read-only workload-account checks for environment outputs, networking, VPC endpoints, logging, security services, and IAM can be run with the validation scripts in `scripts/validation/`.
+For deployed workload environments, most safe, read-only workload-account validation is automated by the scripts in:
 
-Set the expected account ID when running validation so the scripts can confirm that the selected AWS profile is pointed at the correct workload account.
+```text
+scripts/validation/
+```
+
+The primary command is:
+
+```bash
+./scripts/validation/validate-all.sh <dev|staging|prod>
+```
+
+Set `EXPECTED_ACCOUNT_ID` when running validation so the scripts can confirm that the selected AWS profile is pointed at the correct workload account.
+
+### Dev
 
 ```bash
 AWS_PAGER="" \
@@ -134,13 +140,21 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/validation/validate-all.sh dev
+```
 
+### Staging
+
+```bash
 AWS_PAGER="" \
 AWS_PROFILE=staging \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 ./scripts/validation/validate-all.sh staging
+```
 
+### Prod
+
+```bash
 AWS_PAGER="" \
 AWS_PROFILE=prod \
 AWS_REGION=us-east-1 \
@@ -159,9 +173,89 @@ NAME_PREFIX="tf-secure-baseline-dev" \
 ./scripts/validation/validate-all.sh dev
 ```
 
-These scripts automate the safe, read-only workload-account checks in this checklist.
+### Automated Validation Coverage
 
-Manual validation is still required for control-plane resources, Identity Center assignments, live Lambda workflow tests, tamper tests, break-glass tests, GitHub Actions workflow review, and destroy safety.
+`validate-all.sh` runs the following safe, read-only workload validation scripts all at once:
+
+```text
+validate-env.sh
+validate-networking.sh
+validate-vpc-endpoints.sh
+validate-logging.sh
+validate-security-services.sh
+validate-kms.sh
+validate-backup.sh
+validate-sns.sh
+validate-sqs.sh
+validate-eventbridge.sh
+validate-lambda.sh
+validate-ssm.sh
+validate-compute.sh
+validate-iam.sh
+```
+
+To validate a specific architecture area, you can also run individual validation scripts directly.
+
+Examples:
+
+```bash
+./scripts/validation/validate-networking.sh dev
+./scripts/validation/validate-vpc-endpoints.sh dev
+./scripts/validation/validate-logging.sh dev
+./scripts/validation/validate-security-services.sh dev
+./scripts/validation/validate-kms.sh dev
+./scripts/validation/validate-backup.sh dev
+./scripts/validation/validate-sns.sh dev
+./scripts/validation/validate-sqs.sh dev
+./scripts/validation/validate-eventbridge.sh dev
+./scripts/validation/validate-lambda.sh dev
+./scripts/validation/validate-ssm.sh dev
+./scripts/validation/validate-compute.sh dev
+./scripts/validation/validate-iam.sh dev
+```
+
+These scripts validate:
+
+- AWS account identity and expected account ID
+- Terraform outputs and effective environment settings
+- VPC, subnets, route tables, NAT Gateway, and Network Firewall expectations
+- VPC endpoint placement, state, route table associations, and endpoint security group paths
+- CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, and alarms
+- GuardDuty, Security Hub, AWS Config, Inspector, and AWS Backup enablement based on effective profile settings
+- KMS aliases, CMKs, key state, key manager, and rotation status
+- Backup vaults, plans, selections, schedules, retention, tagged resources, recent jobs, and recovery point reporting
+- SNS topics, subscriptions, pending confirmations, and encryption mode
+- SQS queues, SNS-to-SQS delivery path, queue policies, encryption mode, DLQ status, visible messages, and not-visible messages
+- EventBridge default-bus and SecOps-bus rules, state, targets, and rollback rule coverage
+- Lambda functions, runtime, state, execution role, timeout, memory, KMS config, VPC config, environment variables, resource policies, and EventBridge permissions
+- SSM managed instance registration, online status, associations, maintenance windows, and patch baseline visibility
+- EC2 compute instances, private placement, public IP absence, IMDSv2, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption
+- IAM roles, service trust policies, key service roles, GitHub OIDC roles where present, break-glass MFA conditions, and shared log access policies
+
+A successful run should end with:
+
+```text
+Validation scripts passed:  14/14
+Validation scripts failed:  0/14
+```
+
+### Manual Validation Still Required
+
+The automated validation suite is intentionally read-only. It does not perform live, destructive, or privileged workflow tests.
+
+Manual validation is still required for:
+
+- Control-plane resources
+- IAM Identity Center assignments and group membership
+- GitHub Actions workflow execution
+- Live EC2 isolation testing
+- Live EC2 rollback testing
+- Live IP enrichment testing
+- Tamper detection tests
+- Break-glass role assumption tests
+- Destroy workflow and teardown safety checks
+
+Use the remaining sections in this checklist for manual spot checks, deeper troubleshooting, or tests that intentionally trigger live workflows.
 
 ---
 
@@ -1763,6 +1857,7 @@ This checklist validates that `tf-secure-baseline` is deployed correctly and tha
 
 A successful validation means:
 
+- Automated workload validation passes for the target environment.
 - AWS accounts and profiles are correct.
 - Terraform state backends exist.
 - GitHub OIDC roles work if enabled.
@@ -1770,11 +1865,10 @@ A successful validation means:
 - Environment baselines exist.
 - Deployment profile outputs resolve correctly.
 - Egress mode behavior matches the selected profile or override.
-- Private networking and endpoint access work.
+- Private networking and endpoint access are configured.
 - Interface Endpoints are deployed into dedicated endpoint private subnets.
 - Logging and security services are active where expected.
+- KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM controls validate successfully.
 - Identity Center access is configured.
-- EC2 isolation and rollback work.
-- IP enrichment works.
-- Tamper and break-glass alerts are configured.
+- Live EC2 isolation, rollback, IP enrichment, tamper detection, and break-glass workflows have been tested manually where appropriate.
 - Destroy procedures are understood before teardown.
