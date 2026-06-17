@@ -194,6 +194,26 @@ validate-compute.sh
 validate-iam.sh
 ```
 
+To validate a specific architecture area, you can also run individual validation scripts directly.
+
+Examples:
+
+```bash
+./scripts/validation/validate-networking.sh dev
+./scripts/validation/validate-vpc-endpoints.sh dev
+./scripts/validation/validate-logging.sh dev
+./scripts/validation/validate-security-services.sh dev
+./scripts/validation/validate-kms.sh dev
+./scripts/validation/validate-backup.sh dev
+./scripts/validation/validate-sns.sh dev
+./scripts/validation/validate-sqs.sh dev
+./scripts/validation/validate-eventbridge.sh dev
+./scripts/validation/validate-lambda.sh dev
+./scripts/validation/validate-ssm.sh dev
+./scripts/validation/validate-compute.sh dev
+./scripts/validation/validate-iam.sh dev
+```
+
 These scripts validate:
 
 - AWS account identity and expected account ID
