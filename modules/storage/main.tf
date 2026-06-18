@@ -34,7 +34,7 @@ resource "aws_db_instance" "main" {
   identifier = local.rds_identifier
 
   engine         = "postgres"
-  engine_version = "16.6"
+  engine_version = "17.10"
   instance_class = "db.t4g.micro"
 
   allocated_storage     = 50
