@@ -75,7 +75,7 @@ resource "aws_instance" "ec2" {
     Environment      = var.environment
     Terraform        = "true"
     Purpose          = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
-    IsolationAllowed = "false"
+    IsolationAllowed = "true"
     PatchGroup       = var.patch_tag_value
     Backup           = "true"
   }
