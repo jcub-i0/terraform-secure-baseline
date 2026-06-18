@@ -192,6 +192,26 @@ The **environment** stacks manage:
 │   ├── assurance
 │   └── lambda_tests
 │
+├── scripts
+│   └── validation
+│       ├── lib
+│       │   └── common.sh
+│       ├── validate-all.sh
+│       ├── validate-backup.sh
+│       ├── validate-compute.sh
+│       ├── validate-env.sh
+│       ├── validate-eventbridge.sh
+│       ├── validate-iam.sh
+│       ├── validate-kms.sh
+│       ├── validate-lambda.sh
+│       ├── validate-logging.sh
+│       ├── validate-networking.sh
+│       ├── validate-security-services.sh
+│       ├── validate-sns.sh
+│       ├── validate-sqs.sh
+│       ├── validate-ssm.sh
+│       └── validate-vpc-endpoints.sh
+|
 ├── .github
 │   └── workflows
 │
