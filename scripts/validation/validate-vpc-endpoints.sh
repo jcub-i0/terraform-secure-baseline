@@ -99,6 +99,36 @@ else
   EFFECTIVE_EGRESS_MODE="unknown"
 fi
 
+section "Checking AWS caller identity"
+
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: ${AWS_REGION}"
+
+AWS_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+AWS_CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
+if [[ -z "$AWS_ACCOUNT_ID" || "$AWS_ACCOUNT_ID" == "None" ]]; then
+  fail "Unable to resolve AWS account ID"
+fi
+
+if [[ -z "$AWS_CALLER_ARN" || "$AWS_CALLER_ARN" == "None" ]]; then
+  fail "Unable to resolve AWS caller ARN"
+fi
+
+success "AWS credentials are valid"
+info "AWS account ID: $AWS_ACCOUNT_ID"
+info "AWS caller ARN: $AWS_CALLER_ARN"
+
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  if [[ "$AWS_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
+    success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
+  else
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${AWS_ACCOUNT_ID}"
+  fi
+else
+  warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit account ID match check."
+fi
+
 section "Resolving VPC"
 
 # Prefer Terraform output if present. Fall back to AWS tag lookup.
