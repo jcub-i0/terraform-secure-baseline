@@ -666,8 +666,9 @@ if [[ "$BACKUP_JOB_COUNT" -gt 0 ]]; then
       .BackupJobs[]
       | "- " + (.ResourceType // "unknown")
         + " " + (.State // "unknown")
-        + " " + (.CreationDate // "unknown")
-        + " " + (.BackupJobId // "unknown")
+        + " created=" + (.CreationDate // "unknown")
+        + " start_by=" + (.StartBy // "none")
+        + " job=" + (.BackupJobId // "unknown")
     '
 fi
 
