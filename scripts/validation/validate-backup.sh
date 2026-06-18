@@ -478,7 +478,7 @@ BACKUP_JOBS_JSON="$(
   aws backup list-backup-jobs \
     "${aws_args[@]}" \
     --by-backup-vault-name "$BACKUP_VAULT_NAME" \
-    --max-results 10 \
+    --max-results 25 \
     --output json 2>/dev/null || echo '{"BackupJobs":[]}'
 )"
 
