@@ -13,6 +13,10 @@ resource "aws_config_config_rule" "s3_public_access_block" {
     source_identifier = "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED"
   }
 
+  depends_on = [
+    aws_config_configuration_recorder_status.config
+  ]
+
   tags = {
     Name        = "${var.name_prefix}-S3PublicAccessBlockRemediation"
     Environment = var.environment
