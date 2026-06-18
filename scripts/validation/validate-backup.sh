@@ -478,7 +478,7 @@ BACKUP_JOBS_JSON="$(
   aws backup list-backup-jobs \
     "${aws_args[@]}" \
     --by-backup-vault-name "$BACKUP_VAULT_NAME" \
-    --max-results 10 \
+    --max-results 25 \
     --output json 2>/dev/null || echo '{"BackupJobs":[]}'
 )"
 
@@ -501,12 +501,102 @@ FAILED_BACKUP_JOB_COUNT="$(
     '
 )"
 
-if [[ "$FAILED_BACKUP_JOB_COUNT" -eq 0 ]]; then
-  success "No failed/aborted/expired recent backup jobs found"
-else
+LATEST_BACKUP_JOBS_JSON="$(
   echo "$BACKUP_JOBS_JSON" |
-    jq '.BackupJobs[] | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")'
-  fail "Recent failed/aborted/expired backup jobs found: ${FAILED_BACKUP_JOB_COUNT}"
+    jq '
+      [
+        .BackupJobs[]
+        | select(.ResourceArn != null and .ResourceArn != "")
+      ]
+      | group_by(.ResourceArn)
+      | map(max_by(.CreationDate // ""))
+    '
+)"
+
+LATEST_FAILED_BACKUP_JOB_COUNT="$(
+  echo "$LATEST_BACKUP_JOBS_JSON" |
+    jq '
+      [
+        .[]
+        | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")
+      ]
+      | length
+    '
+)"
+
+LATEST_IN_PROGRESS_BACKUP_JOB_COUNT="$(
+  echo "$LATEST_BACKUP_JOBS_JSON" |
+    jq '
+      [
+        .[]
+        | select(.State == "CREATED" or .State == "PENDING" or .State == "RUNNING" or .State == "ABORTING")
+      ]
+      | length
+    '
+)"
+
+LATEST_COMPLETED_BACKUP_JOB_COUNT="$(
+  echo "$LATEST_BACKUP_JOBS_JSON" |
+    jq '
+      [
+        .[]
+        | select(.State == "COMPLETED")
+      ]
+      | length
+    '
+)"
+
+OLDER_FAILED_BACKUP_JOB_COUNT="$(
+  echo "$BACKUP_JOBS_JSON" |
+    jq --argjson latest_jobs "$LATEST_BACKUP_JOBS_JSON" '
+      [
+        .BackupJobs[]
+        | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")
+        | . as $job
+        | select(
+            [
+              $latest_jobs[]
+              | select(
+                  .BackupJobId == $job.BackupJobId
+                )
+            ]
+            | length == 0
+          )
+      ]
+      | length
+    '
+)"
+
+if [[ "$LATEST_FAILED_BACKUP_JOB_COUNT" -eq 0 ]]; then
+  success "No latest backup jobs are failed/aborted/expired"
+
+  if [[ "$LATEST_IN_PROGRESS_BACKUP_JOB_COUNT" -gt 0 ]]; then
+    warn "Latest backup job(s) still in progress or queued: ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}"
+    echo "$LATEST_BACKUP_JOBS_JSON" |
+      jq '.[] | select(.State == "CREATED" or .State == "PENDING" or .State == "RUNNING" or .State == "ABORTING")'
+  fi
+
+  if [[ "$OLDER_FAILED_BACKUP_JOB_COUNT" -gt 0 ]]; then
+    warn "Older failed/aborted/expired backup job(s) found, but they are not the latest job for their resource: ${OLDER_FAILED_BACKUP_JOB_COUNT}"
+    echo "$BACKUP_JOBS_JSON" |
+      jq --argjson latest_jobs "$LATEST_BACKUP_JOBS_JSON" '
+        .BackupJobs[]
+        | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")
+        | . as $job
+        | select(
+            [
+              $latest_jobs[]
+              | select(.BackupJobId == $job.BackupJobId)
+            ]
+            | length == 0
+          )
+      '
+  fi
+else
+  echo "$LATEST_BACKUP_JOBS_JSON" |
+    jq '.[] | select(.State == "FAILED" or .State == "ABORTED" or .State == "EXPIRED")'
+
+  fail "Latest backup job failed/aborted/expired for one or more resources: ${LATEST_FAILED_BACKUP_JOB_COUNT}"
 fi
 
 section "Backup Summary"
@@ -534,6 +624,10 @@ Tagged RDS backup resources:        ${TAGGED_RDS_COUNT}
 Recovery points listed:             ${RECOVERY_POINT_COUNT}
 Recent backup jobs listed:          ${BACKUP_JOB_COUNT}
 Recent failed backup jobs:          ${FAILED_BACKUP_JOB_COUNT}
+Latest completed backup jobs:       ${LATEST_COMPLETED_BACKUP_JOB_COUNT}
+Latest in-progress backup jobs:     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
+Latest failed backup jobs:          ${LATEST_FAILED_BACKUP_JOB_COUNT}
+Older failed backup jobs:           ${OLDER_FAILED_BACKUP_JOB_COUNT}
 SUMMARY
 
 if [[ "${#BACKUP_RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
@@ -572,8 +666,9 @@ if [[ "$BACKUP_JOB_COUNT" -gt 0 ]]; then
       .BackupJobs[]
       | "- " + (.ResourceType // "unknown")
         + " " + (.State // "unknown")
-        + " " + (.CreationDate // "unknown")
-        + " " + (.BackupJobId // "unknown")
+        + " created=" + (.CreationDate // "unknown")
+        + " start_by=" + (.StartBy // "none")
+        + " job=" + (.BackupJobId // "unknown")
     '
 fi
 
