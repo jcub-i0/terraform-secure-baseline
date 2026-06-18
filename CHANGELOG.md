@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.2.0
+
+### Added
+
+- Added a safe, read-only post-deployment validation suite for workload environments.
+- Added `validate-all.sh` as the primary validation entry point for `dev`, `staging`, and `prod`.
+- Added workload validation scripts for:
+  - Environment outputs and account identity
+  - Networking and controlled egress
+  - VPC endpoints
+  - Logging
+  - Security services
+  - KMS
+  - AWS Backup
+  - SNS
+  - SQS
+  - EventBridge
+  - Lambda
+  - SSM
+  - Compute
+  - IAM
+- Added expected AWS account validation through `EXPECTED_ACCOUNT_ID`.
+- Added profile-aware validation behavior for AWS Config, AWS Backup, Inspector, and effective egress mode.
+- Added validation coverage for SNS-to-SQS delivery paths, queue policies, queue encryption, visible messages, and not-visible messages.
+- Added validation coverage for Lambda runtime, state, execution role, timeout, memory, KMS configuration, VPC configuration, environment variables, resource policies, and EventBridge permissions.
+- Added validation coverage for EC2 compute instance placement, public IP absence, IMDSv2 enforcement, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption.
+- Added validation coverage for Backup vaults, plans, selections, schedules, retention, tagged resources, recent jobs, and recovery point reporting.
+
+### Changed
+
+- Updated `docs/validation-checklist.md` to make automated workload validation the default validation path.
+- Updated validation guidance to distinguish safe read-only checks from live workflow tests, tamper tests, break-glass tests, and destroy safety checks.
+- Improved validation summary output across SNS, SQS, KMS, Backup, Lambda, SSM, Compute, and related scripts.
+- Improved validation output readability by shortening long resource names, ARNs, and table columns where appropriate.
+- Updated root-level documentation to include the validation suite and v1.2.0 release highlights.
+
+### Notes
+
+- The automated validation suite is intentionally read-only and does not perform live isolation, rollback, tamper, break-glass, GitHub Actions, Identity Center, or destroy workflow tests.
+- Live workflow validation remains manual and should only be run in approved environments.
+- A successful full workload validation run should report `14/14` validation scripts passed.
+
 ## v1.1.1
 
 ### Changed
