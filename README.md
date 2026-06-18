@@ -642,7 +642,6 @@ Potential future improvements include:
 - Improve dashboarding and visual evidence outputs
 - Add configurable VPC endpoint service lists
 - Add additional deployment profile-controlled services
-- Continue refactoring remaining IAM policy JSON outside modules/iam
 - Add SCP strategy and Terraform implementation
 - Add cross-account GuardDuty aggregation
 - Add cross-account Security Hub aggregation
