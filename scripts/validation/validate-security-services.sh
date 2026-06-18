@@ -116,19 +116,8 @@ success "effective_inspector_enabled is valid: $EFFECTIVE_INSPECTOR_ENABLED"
 
 section "Checking AWS caller identity"
 
-ACCOUNT_ID="$(
-  aws sts get-caller-identity \
-    "${aws_args[@]}" \
-    --query Account \
-    --output text
-)"
-
-CALLER_ARN="$(
-  aws sts get-caller-identity \
-    "${aws_args[@]}" \
-    --query Arn \
-    --output text
-)"
+ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
 
 if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
   fail "Unable to resolve AWS account ID"
