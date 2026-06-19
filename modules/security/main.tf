@@ -61,7 +61,7 @@ resource "aws_securityhub_standards_subscription" "main" {
 resource "aws_inspector2_enabler" "main" {
   count = var.inspector_enabled ? 1 : 0
 
-  account_ids = [var.account_id]
+  account_ids    = [var.account_id]
   resource_types = var.inspector_resource_types
 }
 
