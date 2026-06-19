@@ -75,7 +75,7 @@ output "effective_inspector_enabled" {
 
 output "effective_inspector_resource_types" {
   description = "Amazon Inspector resource types enabled after profile and override resolution."
-  value       = module.baseline.effective_inspector_resource_types ? var.inspector_resource_types : []
+  value       = module.baseline.effective_inspector_enabled ? var.inspector_resource_types : []
 }
 
 output "db_port" {
