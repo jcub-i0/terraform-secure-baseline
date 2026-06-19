@@ -107,6 +107,10 @@ EFFECTIVE_ENABLE_CONFIG="$(get_terraform_output_value "$OUTPUTS_JSON" effective_
 EFFECTIVE_BACKUP_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled)"
 EFFECTIVE_INSPECTOR_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_inspector_enabled)"
 
+require_value_in_list "$EFFECTIVE_ENABLE_CONFIG" "true false" "effective_enable_config"
+require_value_in_list "$EFFECTIVE_BACKUP_ENABLED" "true false" "effective_backup_enabled"
+require_value_in_list "$EFFECTIVE_INSPECTOR_ENABLED" "true false" "effective_inspector_enabled"
+
 EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON="$(
   echo "$OUTPUTS_JSON" |
     jq -c '.effective_inspector_resource_types.value // []'
@@ -131,10 +135,6 @@ if echo "$EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON" |
 fi
 
 success "effective_inspector_resource_types is valid: ${EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON}"
-
-require_value_in_list "$EFFECTIVE_ENABLE_CONFIG" "true false" "effective_enable_config"
-require_value_in_list "$EFFECTIVE_BACKUP_ENABLED" "true false" "effective_backup_enabled"
-require_value_in_list "$EFFECTIVE_INSPECTOR_ENABLED" "true false" "effective_inspector_enabled"
 
 success "effective_enable_config is valid: $EFFECTIVE_ENABLE_CONFIG"
 success "effective_backup_enabled is valid: $EFFECTIVE_BACKUP_ENABLED"
