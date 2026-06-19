@@ -121,6 +121,7 @@ module "security" {
 
   guardduty_features = var.guardduty_features
   enable_rules       = local.effective_enable_rules
+  inspector_resource_types = var.inspector_resource_types
 
   enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
