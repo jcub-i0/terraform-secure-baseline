@@ -73,6 +73,11 @@ output "effective_inspector_enabled" {
   value       = local.effective_inspector_enabled
 }
 
+output "effective_inspector_resource_types" {
+  description = "Amazon Inspector resource types enabled after profile and override resolution."
+  value       = local.effective_inspector_enabled ? var.inspector_resource_types : []
+}
+
 output "db_port" {
   description = "Port used by the database (Postgres=5432, MySQL=3306)"
   value       = var.db_port
