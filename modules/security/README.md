@@ -1077,7 +1077,7 @@ This module follows:
 - AWS-native security service enablement
 - Purpose-specific encryption keys
 - Centralized security finding aggregation
-- Vulnerability detection for compute and serverless workloads
+- Configurable vulnerability detection for supported workloads
 - Security control evaluation through AWS Config
 - Event-driven tamper detection
 - Least privilege KMS service usage
