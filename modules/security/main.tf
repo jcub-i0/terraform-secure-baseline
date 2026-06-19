@@ -63,6 +63,13 @@ resource "aws_inspector2_enabler" "main" {
 
   account_ids    = [var.account_id]
   resource_types = var.inspector_resource_types
+
+  lifecycle {
+    precondition {
+      condition     = length(var.inspector_resource_types) > 0
+      error_message = "inspector_resource_types must contain at least one resource type when Inspector is enabled."
+    }
+  }
 }
 
 ## SUBSCRIBE SECURITY HUB TO AMAZON INSPECTOR PRODUCT
