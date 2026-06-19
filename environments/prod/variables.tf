@@ -100,6 +100,12 @@ variable "backup_enabled" {
   default     = null
 }
 
+variable "inspector_enabled" {
+  description = "Whether to enable Amazon Inspector. Set to null to use the deployment_profile default."
+  type = bool
+  default = null
+}
+
 variable "break_glass_trusted_principal_arns" {
   description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
   type        = list(string)
@@ -115,5 +121,19 @@ variable "secops_emails" {
   validation {
     condition     = alltrue([for e in var.secops_emails : can(regex("^.+@.+\\..+$", e))])
     error_message = "Each entry in secops_emails must be a valid email address."
+  }
+}
+
+variable "inspector_resource_types" {
+  description = "Amazon Inspector resource types to enable. Lambda scan types are disabled by default because this baseline encrypts Lambda resources with customer-managed KMS keys, which Inspector Lambda scanning does not support."
+  type        = list(string)
+  default     = ["EC2"]
+
+  validation {
+    condition = alltrue([
+      for resource_type in var.inspector_resource_types :
+      contains(["EC2", "ECR", "LAMBDA", "LAMBDA_CODE", "CODE_REPOSITORY"], resource_type)
+    ])
+    error_message = "inspector_resource_types must contain only EC2, ECR, LAMBDA, LAMBDA_CODE, or CODE_REPOSITORY."
   }
 }
