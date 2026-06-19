@@ -467,9 +467,9 @@ RECOVERY_POINTS_JSON="$(
 RECOVERY_POINT_COUNT="$(echo "$RECOVERY_POINTS_JSON" | jq '.RecoveryPoints | length')"
 
 if [[ "$RECOVERY_POINT_COUNT" -gt 0 ]]; then
-  success "Recovery points found in backup vault: $RECOVERY_POINT_COUNT"
+  success "Current restorable recovery point(s) found in backup vault: $RECOVERY_POINT_COUNT"
 else
-  warn "No recovery points were returned by list-recovery-points-by-backup-vault. This may be expected before recovery points are indexed, or if recent jobs have not produced visible recovery points yet."
+  warn "No current restorable recovery points found in backup vault. This is expected immediately after a fresh apply, before the first scheduled backup, or after a destroy/recreate cycle."
 fi
 
 section "Reporting recent backup jobs"
@@ -546,6 +546,33 @@ LATEST_COMPLETED_BACKUP_JOB_COUNT="$(
     '
 )"
 
+MISSING_COMPLETED_RECOVERY_POINT_COUNT=0
+
+LATEST_COMPLETED_RECOVERY_POINT_ARNS="$(
+  echo "$LATEST_BACKUP_JOBS_JSON" |
+    jq -r '
+      .[]
+      | select(.State == "COMPLETED")
+      | select(.RecoveryPointArn != null and .RecoveryPointArn != "")
+      | .RecoveryPointArn
+    '
+)"
+
+while IFS= read -r recovery_point_arn; do
+  [[ -z "$recovery_point_arn" ]] && continue
+
+  if aws backup describe-recovery-point \
+    "${aws_args[@]}" \
+    --backup-vault-name "$BACKUP_VAULT_NAME" \
+    --recovery-point-arn "$recovery_point_arn" \
+    --output json >/dev/null 2>&1; then
+    success "Latest completed backup job recovery point is currently restorable: $recovery_point_arn"
+  else
+    warn "Completed backup job references a recovery point that is not currently found in the vault, likely historical or deleted after destroy/recreate: $recovery_point_arn"
+    MISSING_COMPLETED_RECOVERY_POINT_COUNT=$((MISSING_COMPLETED_RECOVERY_POINT_COUNT + 1))
+  fi
+done <<< "$LATEST_COMPLETED_RECOVERY_POINT_ARNS"
+
 OLDER_FAILED_BACKUP_JOB_COUNT="$(
   echo "$BACKUP_JOBS_JSON" |
     jq --argjson latest_jobs "$LATEST_BACKUP_JOBS_JSON" '
@@ -602,32 +629,32 @@ fi
 section "Backup Summary"
 
 cat <<SUMMARY
-Environment:                        ${ENV_NAME}
-AWS profile:                        ${AWS_PROFILE:-<default>}
-AWS region:                         ${AWS_REGION}
-AWS account ID:                     ${ACCOUNT_ID}
-Name prefix:                        ${NAME_PREFIX}
+Environment:                                        ${ENV_NAME}
+AWS profile:                                        ${AWS_PROFILE:-<default>}
+AWS region:                                         ${AWS_REGION}
+AWS account ID:                                     ${ACCOUNT_ID}
+Name prefix:                                        ${NAME_PREFIX}
 
-effective_backup_enabled:           ${EFFECTIVE_BACKUP_ENABLED}
-Backup vault name:                  ${BACKUP_VAULT_NAME}
-Backup vault ARN resolved:          true
-Backup vault KMS key ID:            ${BACKUP_VAULT_KMS_KEY_ID}
-Vault recovery points reported:     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
-Backup plan name:                   ${BACKUP_PLAN_NAME}
-Backup plan ID:                     ${BACKUP_PLAN_ID}
-Backup plan rule count:             ${BACKUP_RULE_COUNT}
-Backup selections:                  ${BACKUP_SELECTION_COUNT}
-Expected selection ID:              ${EXPECTED_SELECTION_ID}
-Backup service role name:           ${SELECTION_ROLE_NAME}
-Tagged EC2 backup resources:        ${TAGGED_EC2_COUNT}
-Tagged RDS backup resources:        ${TAGGED_RDS_COUNT}
-Recovery points listed:             ${RECOVERY_POINT_COUNT}
-Recent backup jobs listed:          ${BACKUP_JOB_COUNT}
-Recent failed backup jobs:          ${FAILED_BACKUP_JOB_COUNT}
-Latest completed backup jobs:       ${LATEST_COMPLETED_BACKUP_JOB_COUNT}
-Latest in-progress backup jobs:     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
-Latest failed backup jobs:          ${LATEST_FAILED_BACKUP_JOB_COUNT}
-Older failed backup jobs:           ${OLDER_FAILED_BACKUP_JOB_COUNT}
+effective_backup_enabled:                           ${EFFECTIVE_BACKUP_ENABLED}
+Backup vault name:                                  ${BACKUP_VAULT_NAME}
+Backup vault KMS key ID:                            ${BACKUP_VAULT_KMS_KEY_ID}
+Vault recovery points reported:                     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
+Backup plan name:                                   ${BACKUP_PLAN_NAME}
+Backup plan ID:                                     ${BACKUP_PLAN_ID}
+Backup plan rule count:                             ${BACKUP_RULE_COUNT}
+Backup selections:                                  ${BACKUP_SELECTION_COUNT}
+Expected selection ID:                              ${EXPECTED_SELECTION_ID}
+Backup service role name:                           ${SELECTION_ROLE_NAME}
+Tagged EC2 backup resources:                        ${TAGGED_EC2_COUNT}
+Tagged RDS backup resources:                        ${TAGGED_RDS_COUNT}
+Recovery points listed:                             ${RECOVERY_POINT_COUNT}
+Recent backup jobs listed:                          ${BACKUP_JOB_COUNT}
+Historical failed backup jobs:                      ${FAILED_BACKUP_JOB_COUNT}
+Latest completed backup jobs:                       ${LATEST_COMPLETED_BACKUP_JOB_COUNT}
+Historical completed jobs missing recovery points:  ${MISSING_COMPLETED_RECOVERY_POINT_COUNT}
+Latest in-progress backup jobs:                     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
+Latest failed backup jobs:                          ${LATEST_FAILED_BACKUP_JOB_COUNT}
+Older failed backup jobs:                           ${OLDER_FAILED_BACKUP_JOB_COUNT}
 SUMMARY
 
 if [[ "${#BACKUP_RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
