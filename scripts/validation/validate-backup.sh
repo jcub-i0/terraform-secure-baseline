@@ -652,6 +652,7 @@ Recovery points listed:             ${RECOVERY_POINT_COUNT}
 Recent backup jobs listed:          ${BACKUP_JOB_COUNT}
 Recent failed backup jobs:          ${FAILED_BACKUP_JOB_COUNT}
 Latest completed backup jobs:       ${LATEST_COMPLETED_BACKUP_JOB_COUNT}
+Missing completed recovery points:  ${MISSING_COMPLETED_RECOVERY_POINT_COUNT}
 Latest in-progress backup jobs:     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
 Latest failed backup jobs:          ${LATEST_FAILED_BACKUP_JOB_COUNT}
 Older failed backup jobs:           ${OLDER_FAILED_BACKUP_JOB_COUNT}
