@@ -448,8 +448,8 @@ Refer to the child module README for detailed detection coverage.
 | `secops_topic_arn` | SNS topic ARN used for SecOps alerts | Yes |
 | `enable_config` | Whether AWS Config baseline resources are enabled | Yes |
 | `enable_rules` | Object controlling which Config baseline rule groups are enabled | No |
-| `inspector_enabled` | Determines whether Inspector is enabled | Yes |
-| `inspector_resource_types` | Inspector resource types to enable | No |
+| `inspector_enabled` | Whether Amazon Inspector is enabled for the selected resource types | Yes |
+| `inspector_resource_types` | Amazon Inspector resource types to enable. Defaults to `["EC2"]`; Lambda scan types are disabled by default | No |
 
 ---
 
