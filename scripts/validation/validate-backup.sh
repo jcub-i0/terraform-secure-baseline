@@ -629,33 +629,32 @@ fi
 section "Backup Summary"
 
 cat <<SUMMARY
-Environment:                        ${ENV_NAME}
-AWS profile:                        ${AWS_PROFILE:-<default>}
-AWS region:                         ${AWS_REGION}
-AWS account ID:                     ${ACCOUNT_ID}
-Name prefix:                        ${NAME_PREFIX}
+Environment:                                        ${ENV_NAME}
+AWS profile:                                        ${AWS_PROFILE:-<default>}
+AWS region:                                         ${AWS_REGION}
+AWS account ID:                                     ${ACCOUNT_ID}
+Name prefix:                                        ${NAME_PREFIX}
 
-effective_backup_enabled:           ${EFFECTIVE_BACKUP_ENABLED}
-Backup vault name:                  ${BACKUP_VAULT_NAME}
-Backup vault ARN resolved:          true
-Backup vault KMS key ID:            ${BACKUP_VAULT_KMS_KEY_ID}
-Vault recovery points reported:     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
-Backup plan name:                   ${BACKUP_PLAN_NAME}
-Backup plan ID:                     ${BACKUP_PLAN_ID}
-Backup plan rule count:             ${BACKUP_RULE_COUNT}
-Backup selections:                  ${BACKUP_SELECTION_COUNT}
-Expected selection ID:              ${EXPECTED_SELECTION_ID}
-Backup service role name:           ${SELECTION_ROLE_NAME}
-Tagged EC2 backup resources:        ${TAGGED_EC2_COUNT}
-Tagged RDS backup resources:        ${TAGGED_RDS_COUNT}
-Recovery points listed:             ${RECOVERY_POINT_COUNT}
-Recent backup jobs listed:          ${BACKUP_JOB_COUNT}
-Recent failed backup jobs:          ${FAILED_BACKUP_JOB_COUNT}
-Latest completed backup jobs:       ${LATEST_COMPLETED_BACKUP_JOB_COUNT}
+effective_backup_enabled:                           ${EFFECTIVE_BACKUP_ENABLED}
+Backup vault name:                                  ${BACKUP_VAULT_NAME}
+Backup vault KMS key ID:                            ${BACKUP_VAULT_KMS_KEY_ID}
+Vault recovery points reported:                     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
+Backup plan name:                                   ${BACKUP_PLAN_NAME}
+Backup plan ID:                                     ${BACKUP_PLAN_ID}
+Backup plan rule count:                             ${BACKUP_RULE_COUNT}
+Backup selections:                                  ${BACKUP_SELECTION_COUNT}
+Expected selection ID:                              ${EXPECTED_SELECTION_ID}
+Backup service role name:                           ${SELECTION_ROLE_NAME}
+Tagged EC2 backup resources:                        ${TAGGED_EC2_COUNT}
+Tagged RDS backup resources:                        ${TAGGED_RDS_COUNT}
+Recovery points listed:                             ${RECOVERY_POINT_COUNT}
+Recent backup jobs listed:                          ${BACKUP_JOB_COUNT}
+Recent failed backup jobs:                          ${FAILED_BACKUP_JOB_COUNT}
+Latest completed backup jobs:                       ${LATEST_COMPLETED_BACKUP_JOB_COUNT}
 Historical completed jobs missing recovery points:  ${MISSING_COMPLETED_RECOVERY_POINT_COUNT}
-Latest in-progress backup jobs:     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
-Latest failed backup jobs:          ${LATEST_FAILED_BACKUP_JOB_COUNT}
-Older failed backup jobs:           ${OLDER_FAILED_BACKUP_JOB_COUNT}
+Latest in-progress backup jobs:                     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
+Latest failed backup jobs:                          ${LATEST_FAILED_BACKUP_JOB_COUNT}
+Older failed backup jobs:                           ${OLDER_FAILED_BACKUP_JOB_COUNT}
 SUMMARY
 
 if [[ "${#BACKUP_RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
