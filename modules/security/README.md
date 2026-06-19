@@ -668,16 +668,18 @@ aws inspector2 batch-get-account-status \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --account-ids "${ACCOUNT_ID}" \
-  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
+  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,ECR:resourceState.ecr.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
   --output table
 ```
 
 Expected:
 
-- Account status is `ENABLED`
-- EC2 scanning is `ENABLED`
-- Lambda scanning is `ENABLED`
-- Lambda code scanning is `ENABLED`
+- If Inspector is enabled, account status is `ENABLED`.
+- Resource types included in inspector_resource_types should show `ENABLED`.
+- Resource types not included in inspector_resource_types may show `DISABLED`.
+- By default, EC2 scanning is `ENABLED`.
+- By default, Lambda and Lambda code scanning are `DISABLED`.
+- If Inspector is disabled by deployment profile or explicit override, Inspector resource states may be disabled.
 ---
 
 ### Confirm Inspector Security Hub Product Subscription
