@@ -62,11 +62,7 @@ resource "aws_inspector2_enabler" "main" {
   count = var.inspector_enabled ? 1 : 0
 
   account_ids = [var.account_id]
-  resource_types = [
-    "EC2",
-    "LAMBDA",
-    "LAMBDA_CODE"
-  ]
+  resource_types = var.inspector_resource_types
 }
 
 ## SUBSCRIBE SECURITY HUB TO AMAZON INSPECTOR PRODUCT
