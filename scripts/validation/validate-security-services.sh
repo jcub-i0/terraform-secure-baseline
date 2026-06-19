@@ -232,10 +232,15 @@ section "Checking Inspector"
 INSPECTOR_ACCOUNT_STATUS_JSON=""
 INSPECTOR_ACCOUNT_STATUS="unknown"
 INSPECTOR_EC2_STATUS="unknown"
+INSPECTOR_ECR_STATUS="unknown"
 INSPECTOR_LAMBDA_STATUS="unknown"
 INSPECTOR_LAMBDA_CODE_STATUS="unknown"
 
 if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
+  if [[ "$EFFECTIVE_INSPECTOR_RESOURCE_TYPE_COUNT" -eq 0 ]]; then
+    fail "effective_inspector_enabled=true, but effective_inspector_resource_types is empty"
+  fi
+
   INSPECTOR_ACCOUNT_STATUS_JSON="$(
     aws inspector2 batch-get-account-status \
       "${aws_args[@]}" \
@@ -251,6 +256,11 @@ if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
   INSPECTOR_EC2_STATUS="$(
     echo "$INSPECTOR_ACCOUNT_STATUS_JSON" |
       jq -r '.accounts[0].resourceState.ec2.status // "unknown"'
+  )"
+
+  INSPECTOR_ECR_STATUS="$(
+    echo "$INSPECTOR_ACCOUNT_STATUS_JSON" |
+      jq -r '.accounts[0].resourceState.ecr.status // "unknown"'
   )"
 
   INSPECTOR_LAMBDA_STATUS="$(
@@ -270,11 +280,45 @@ if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
     fail "Inspector was expected to be enabled, but account status is: ${INSPECTOR_ACCOUNT_STATUS}"
   fi
 
-  info "Inspector EC2 status: $INSPECTOR_EC2_STATUS"
-  info "Inspector Lambda status: $INSPECTOR_LAMBDA_STATUS"
-  info "Inspector Lambda code status: $INSPECTOR_LAMBDA_CODE_STATUS"
+  inspector_resource_expected() {
+    local resource_type="$1"
+
+    echo "$EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON" |
+      jq -e --arg resource_type "$resource_type" 'index($resource_type) != null' >/dev/null
+  }
+
+  validate_inspector_resource_status() {
+    local resource_type="$1"
+    local actual_status="$2"
+
+    if inspector_resource_expected "$resource_type"; then
+      if [[ "$actual_status" == "ENABLED" ]]; then
+        success "Inspector ${resource_type} scanning is enabled as expected"
+      else
+        echo "$INSPECTOR_ACCOUNT_STATUS_JSON" | jq .
+        fail "Inspector ${resource_type} scanning was expected to be ENABLED, but status is: ${actual_status}"
+      fi
+    else
+      if [[ "$actual_status" == "ENABLED" ]]; then
+        warn "Inspector ${resource_type} scanning is ENABLED but is not listed in effective_inspector_resource_types"
+      else
+        success "Inspector ${resource_type} scanning is not enabled, as expected"
+      fi
+    fi
+  }
+
+  validate_inspector_resource_status "EC2" "$INSPECTOR_EC2_STATUS"
+  validate_inspector_resource_status "ECR" "$INSPECTOR_ECR_STATUS"
+  validate_inspector_resource_status "LAMBDA" "$INSPECTOR_LAMBDA_STATUS"
+  validate_inspector_resource_status "LAMBDA_CODE" "$INSPECTOR_LAMBDA_CODE_STATUS"
+
+  info "Inspector expected resource types: $EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON"
 else
   warn "effective_inspector_enabled=false. Skipping Inspector validation."
+
+  if [[ "$EFFECTIVE_INSPECTOR_RESOURCE_TYPE_COUNT" -gt 0 ]]; then
+    warn "effective_inspector_resource_types is non-empty, but Inspector is disabled: ${EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON}"
+  fi
 fi
 
 section "Checking AWS Config"
