@@ -468,6 +468,7 @@ Security Hub ARN:                   ${SECURITY_HUB_ARN:-<unknown>}
 
 Inspector account status:           ${INSPECTOR_ACCOUNT_STATUS}
 Inspector EC2 status:               ${INSPECTOR_EC2_STATUS}
+Inspector ECR status:               ${INSPECTOR_ECR_STATUS}
 Inspector Lambda status:            ${INSPECTOR_LAMBDA_STATUS}
 Inspector Lambda code status:       ${INSPECTOR_LAMBDA_CODE_STATUS}
 
