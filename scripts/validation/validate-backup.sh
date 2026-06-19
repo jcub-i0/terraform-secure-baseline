@@ -467,9 +467,9 @@ RECOVERY_POINTS_JSON="$(
 RECOVERY_POINT_COUNT="$(echo "$RECOVERY_POINTS_JSON" | jq '.RecoveryPoints | length')"
 
 if [[ "$RECOVERY_POINT_COUNT" -gt 0 ]]; then
-  success "Recovery points found in backup vault: $RECOVERY_POINT_COUNT"
+  success "Current restorable recovery point(s) found in backup vault: $RECOVERY_POINT_COUNT"
 else
-  warn "No recovery points were returned by list-recovery-points-by-backup-vault. This may be expected before recovery points are indexed, or if recent jobs have not produced visible recovery points yet."
+  warn "No current restorable recovery points found in backup vault. This is expected immediately after a fresh apply, before the first scheduled backup, or after a destroy/recreate cycle."
 fi
 
 section "Reporting recent backup jobs"
