@@ -117,6 +117,21 @@ EFFECTIVE_INSPECTOR_RESOURCE_TYPE_COUNT="$(
     jq 'length'
 )"
 
+if ! echo "$EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON" |
+  jq -e '
+    type == "array"
+    and all(.[]; . as $resource_type | ["EC2", "ECR", "LAMBDA", "LAMBDA_CODE", "CODE_REPOSITORY"] | index($resource_type))
+  ' >/dev/null; then
+  fail "effective_inspector_resource_types contains unsupported values: ${EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON}"
+fi
+
+if echo "$EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON" |
+  jq -e 'index("LAMBDA_CODE") != null and index("LAMBDA") == null' >/dev/null; then
+  fail "effective_inspector_resource_types includes LAMBDA_CODE without LAMBDA"
+fi
+
+success "effective_inspector_resource_types is valid: ${EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON}"
+
 require_value_in_list "$EFFECTIVE_ENABLE_CONFIG" "true false" "effective_enable_config"
 require_value_in_list "$EFFECTIVE_BACKUP_ENABLED" "true false" "effective_backup_enabled"
 require_value_in_list "$EFFECTIVE_INSPECTOR_ENABLED" "true false" "effective_inspector_enabled"
