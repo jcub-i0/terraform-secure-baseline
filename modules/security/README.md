@@ -504,14 +504,16 @@ module "security" {
   name_prefix                  = local.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
-  account_id                   = data.aws_caller_identity.current.account_id
+  account_id                   = var.account_id
   primary_region               = var.primary_region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
-  guardduty_features = var.guardduty_features
-  enable_rules       = var.enable_rules
+  guardduty_features       = var.guardduty_features
+  enable_rules             = local.effective_enable_rules
+  inspector_enabled        = local.effective_inspector_enabled
+  inspector_resource_types = var.inspector_resource_types
 
-  enable_config              = var.enable_config
+  enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
   config_remediation_role_arn = module.iam.config_remediation_role_arn
 
