@@ -448,6 +448,7 @@ Refer to the child module README for detailed detection coverage.
 | `secops_topic_arn` | SNS topic ARN used for SecOps alerts | Yes |
 | `enable_config` | Whether AWS Config baseline resources are enabled | Yes |
 | `enable_rules` | Object controlling which Config baseline rule groups are enabled | No |
+| `inspector_enabled` | Determines whether Inspector is enabled | No |
 
 ---
 
