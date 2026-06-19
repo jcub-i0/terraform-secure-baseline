@@ -411,6 +411,7 @@ resource "aws_kms_key" "lambda" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = var.account_id
+            "kms:ViaService" = "lambda.${var.primary_region}.amazonaws.com"
           }
         }
       }
