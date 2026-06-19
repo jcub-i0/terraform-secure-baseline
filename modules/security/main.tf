@@ -59,12 +59,10 @@ resource "aws_securityhub_standards_subscription" "main" {
 # INSPECTOR RESOURCES
 ## ENABLE INSPECTORv2
 resource "aws_inspector2_enabler" "main" {
-  account_ids = [var.account_id]
-  resource_types = [
-    "EC2",
-    "LAMBDA",
-    "LAMBDA_CODE"
-  ]
+  count = var.inspector_enabled ? 1 : 0
+
+  account_ids    = [var.account_id]
+  resource_types = var.inspector_resource_types
 }
 
 ## SUBSCRIBE SECURITY HUB TO AMAZON INSPECTOR PRODUCT
@@ -79,7 +77,6 @@ resource "aws_kms_key" "logs" {
   description             = "CMK for centralized logging (CloudTrail, Config, Flow Logs)"
   enable_key_rotation     = true
   deletion_window_in_days = 30
-
   lifecycle {
     prevent_destroy = false # CHANGE THIS IN PROD
   }

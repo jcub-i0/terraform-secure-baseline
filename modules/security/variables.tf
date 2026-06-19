@@ -73,3 +73,21 @@ variable "enable_rules" {
     kms_baseline        = true
   }
 }
+
+variable "inspector_enabled" {
+  type = bool
+}
+
+variable "inspector_resource_types" {
+  description = "Amazon Inspector resource types to enable. Lambda scan types are disabled by default because this baseline encrypts Lambda resources with customer-managed KMS keys, which Inspector Lambda scanning does not support."
+  type        = list(string)
+  default     = ["EC2"]
+
+  validation {
+    condition = alltrue([
+      for resource_type in var.inspector_resource_types :
+      contains(["EC2", "ECR", "LAMBDA", "LAMBDA_CODE", "CODE_REPOSITORY"], resource_type)
+    ])
+    error_message = "inspector_resource_types must contain only EC2, ECR, LAMBDA, LAMBDA_CODE, or CODE_REPOSITORY."
+  }
+}

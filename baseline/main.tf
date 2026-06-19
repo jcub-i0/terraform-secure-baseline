@@ -119,8 +119,10 @@ module "security" {
   primary_region               = var.primary_region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
-  guardduty_features = var.guardduty_features
-  enable_rules       = local.effective_enable_rules
+  guardduty_features       = var.guardduty_features
+  enable_rules             = local.effective_enable_rules
+  inspector_enabled        = local.effective_inspector_enabled
+  inspector_resource_types = var.inspector_resource_types
 
   enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn

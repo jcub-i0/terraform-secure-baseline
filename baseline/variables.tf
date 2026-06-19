@@ -188,6 +188,42 @@ variable "backup_enabled" {
   default     = null
 }
 
+variable "inspector_enabled" {
+  description = "Whether to enable Amazon Inspector. Set to null to use the deployment_profile default."
+  type        = bool
+  default     = null
+}
+
+variable "inspector_resource_types" {
+  description = "Amazon Inspector resource types to enable. Lambda scan types are disabled by default because this baseline encrypts Lambda resources with customer-managed KMS keys, which Inspector Lambda scanning does not support."
+  type        = list(string)
+  default     = ["EC2"]
+
+  validation {
+    condition = alltrue([
+      for resource_type in var.inspector_resource_types :
+      contains(["EC2", "ECR", "LAMBDA", "LAMBDA_CODE", "CODE_REPOSITORY"], resource_type)
+    ])
+    error_message = "inspector_resource_types must contain only EC2, ECR, LAMBDA, LAMBDA_CODE, or CODE_REPOSITORY."
+  }
+
+  validation {
+    condition = (
+      var.inspector_enabled == false
+      || length(var.inspector_resource_types) > 0
+    )
+    error_message = "inspector_resource_types must contain at least one resource type when inspector_enabled is true or profile-defaulted to enabled."
+  }
+
+  validation {
+    condition = (
+      !contains(var.inspector_resource_types, "LAMBDA_CODE")
+      || contains(var.inspector_resource_types, "LAMBDA")
+    )
+    error_message = "inspector_resource_types cannot include LAMBDA_CODE unless LAMBDA is also included."
+  }
+}
+
 variable "ip_enrichment_write_to_securityhub" {
   description = "Define whether you want the IP Enrichment Lambda function to write its enrichments to SecurityHub findings"
   type        = bool

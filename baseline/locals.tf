@@ -96,5 +96,9 @@ locals {
     : local.is_production_profile
   )
 
-  effective_inspector_enabled = !local.is_minimal_profile
+  effective_inspector_enabled = (
+    var.inspector_enabled != null
+    ? var.inspector_enabled
+    : !local.is_minimal_profile
+  )
 }
