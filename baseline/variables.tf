@@ -206,6 +206,22 @@ variable "inspector_resource_types" {
     ])
     error_message = "inspector_resource_types must contain only EC2, ECR, LAMBDA, LAMBDA_CODE, or CODE_REPOSITORY."
   }
+
+  validation {
+    condition     = (
+      var.inspector_enabled == false
+      || length(var.inspector_resource_types) > 0
+    )
+    error_message = "inspector_resource_types must contain at least one resource type when inspector_enabled is true or profile-defaulted to enabled."
+  }
+
+  validation {
+    condition = (
+      !contains(var.inspector_resource_types, "LAMBDA_CODE")
+      || contains(var.inspector_resource_types, "LAMBDA")
+    )
+    error_message = "inspector_resource_types cannot include LAMBDA_CODE unless LAMBDA is also included."
+  }
 }
 
 variable "ip_enrichment_write_to_securityhub" {
