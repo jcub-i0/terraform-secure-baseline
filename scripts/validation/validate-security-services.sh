@@ -92,6 +92,7 @@ REQUIRED_OUTPUTS=(
   effective_enable_config
   effective_backup_enabled
   effective_inspector_enabled
+  effective_inspector_resource_types
 )
 
 for output_name in "${REQUIRED_OUTPUTS[@]}"; do
