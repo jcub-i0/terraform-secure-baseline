@@ -649,7 +649,7 @@ Tagged EC2 backup resources:                        ${TAGGED_EC2_COUNT}
 Tagged RDS backup resources:                        ${TAGGED_RDS_COUNT}
 Recovery points listed:                             ${RECOVERY_POINT_COUNT}
 Recent backup jobs listed:                          ${BACKUP_JOB_COUNT}
-Recent failed backup jobs:                          ${FAILED_BACKUP_JOB_COUNT}
+Historical failed backup jobs:                          ${FAILED_BACKUP_JOB_COUNT}
 Latest completed backup jobs:                       ${LATEST_COMPLETED_BACKUP_JOB_COUNT}
 Historical completed jobs missing recovery points:  ${MISSING_COMPLETED_RECOVERY_POINT_COUNT}
 Latest in-progress backup jobs:                     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
