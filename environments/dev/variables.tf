@@ -100,6 +100,12 @@ variable "backup_enabled" {
   default     = null
 }
 
+variable "inspector_enabled" {
+  description = "Whether to enable Amazon Inspector. Set to null to use the deployment_profile default."
+  type = bool
+  default = null
+}
+
 variable "break_glass_trusted_principal_arns" {
   description = "ARNs allowed to assume the break-glass admin role. Keep this list extremely small."
   type        = list(string)
