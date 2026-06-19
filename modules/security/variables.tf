@@ -73,3 +73,7 @@ variable "enable_rules" {
     kms_baseline        = true
   }
 }
+
+variable "enable_inspector" {
+  type = bool
+}
