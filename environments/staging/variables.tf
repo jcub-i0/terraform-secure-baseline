@@ -102,8 +102,8 @@ variable "backup_enabled" {
 
 variable "inspector_enabled" {
   description = "Whether to enable Amazon Inspector. Set to null to use the deployment_profile default."
-  type = bool
-  default = null
+  type        = bool
+  default     = null
 }
 
 variable "break_glass_trusted_principal_arns" {
