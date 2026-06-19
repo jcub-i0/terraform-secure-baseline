@@ -74,6 +74,6 @@ variable "enable_rules" {
   }
 }
 
-variable "enable_inspector" {
+variable "inspector_enabled" {
   type = bool
 }
