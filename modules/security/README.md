@@ -160,21 +160,45 @@ Only uncommented standards in `local.securityhub_standards` are subscribed. If y
 
 ### Amazon Inspector v2
 
-Enables Amazon Inspector v2 for the account:
+Conditionally enables Amazon Inspector v2 for the account:
 
 ```hcl
 resource "aws_inspector2_enabler" "main"
 ```
 
-Enabled resource types:
+Enabled Inspector resource types are controlled by:
+
+```text
+var.inspector_resource_types
+```
+
+Default enabled resource types:
 
 ```text
 EC2
-LAMBDA
-LAMBDA_CODE
 ```
 
-Inspector provides vulnerability and code scanning coverage for supported EC2 and Lambda resources.
+Lambda scan types are disabled by default.
+
+This baseline encrypts Lambda environment variables with a customer-managed KMS key. Amazon Inspector Lambda standard scanning and Lambda code scanning do not support Lambda functions encrypted with customer-managed keys. Enabling Lambda scan types in this baseline can also generate expected `kms:Decrypt` `AccessDenied` events from the Inspector service-linked role against the Lambda CMK.
+
+Clients that intentionally want Lambda scanning and accept the KMS/encryption tradeoff can override:
+
+```hcl
+inspector_resource_types = ["EC2", "LAMBDA", "LAMBDA_CODE"]
+```
+
+Supported values:
+
+```text
+EC2
+ECR
+LAMBDA
+LAMBDA_CODE
+CODE_REPOSITORY
+```
+
+`LAMBDA_CODE` requires `LAMBDA` to also be included.
 
 ---
 
