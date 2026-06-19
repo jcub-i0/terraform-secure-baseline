@@ -457,6 +457,7 @@ Name prefix:                        ${NAME_PREFIX}
 effective_enable_config:            ${EFFECTIVE_ENABLE_CONFIG}
 effective_backup_enabled:           ${EFFECTIVE_BACKUP_ENABLED}
 effective_inspector_enabled:        ${EFFECTIVE_INSPECTOR_ENABLED}
+effective_inspector_resource_types: ${EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON}
 
 GuardDuty detector count:           ${GUARDDUTY_DETECTOR_COUNT}
 GuardDuty detector ID:              ${GUARDDUTY_DETECTOR_ID}
