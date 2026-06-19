@@ -66,7 +66,7 @@ resource "aws_inspector2_enabler" "main" {
 
   lifecycle {
     precondition {
-      condition = length(var.inspector_resource_types) > 0
+      condition     = length(var.inspector_resource_types) > 0
       error_message = "inspector_resource_types must contain at least one resource type when Inspector is enabled."
     }
   }
