@@ -568,7 +568,7 @@ while IFS= read -r recovery_point_arn; do
     --output json >/dev/null 2>&1; then
     success "Latest completed backup job recovery point is currently restorable: $recovery_point_arn"
   else
-    warn "Latest completed backup job references a recovery point that is not currently found in the vault: $recovery_point_arn"
+    warn "Completed backup job references a recovery point that is not currently found in the vault, likely historical or deleted after destroy/recreate: $recovery_point_arn"
     MISSING_COMPLETED_RECOVERY_POINT_COUNT=$((MISSING_COMPLETED_RECOVERY_POINT_COUNT + 1))
   fi
 done <<< "$LATEST_COMPLETED_RECOVERY_POINT_ARNS"
