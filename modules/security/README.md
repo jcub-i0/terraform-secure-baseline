@@ -968,6 +968,8 @@ aws inspector2 batch-get-account-status \
   --account-ids "${ACCOUNT_ID}"
 ```
 
+> If Lambda scan types are enabled and Lambda functions use customer-managed KMS keys, Inspector may generate kms:Decrypt AccessDenied events against the Lambda CMK. The baseline disables Lambda scan types by default to avoid unsupported scanner behavior and alert noise.
+
 ---
 
 ### KMS Access Errors
