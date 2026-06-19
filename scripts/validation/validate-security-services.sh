@@ -107,6 +107,16 @@ EFFECTIVE_ENABLE_CONFIG="$(get_terraform_output_value "$OUTPUTS_JSON" effective_
 EFFECTIVE_BACKUP_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled)"
 EFFECTIVE_INSPECTOR_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_inspector_enabled)"
 
+EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.effective_inspector_resource_types.value // []'
+)"
+
+EFFECTIVE_INSPECTOR_RESOURCE_TYPE_COUNT="$(
+  echo "$EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON" |
+    jq 'length'
+)"
+
 require_value_in_list "$EFFECTIVE_ENABLE_CONFIG" "true false" "effective_enable_config"
 require_value_in_list "$EFFECTIVE_BACKUP_ENABLED" "true false" "effective_backup_enabled"
 require_value_in_list "$EFFECTIVE_INSPECTOR_ENABLED" "true false" "effective_inspector_enabled"
