@@ -317,7 +317,7 @@ alias/<name_prefix>/lambda-cmk
 
 This key is intended to encrypt Lambda environment variables.
 
-The key policy allows Lambda service usage and includes Amazon Inspector permissions for Lambda scanning support.
+Lambda CMK is for Lambda environment variable encryption. Inspector Lambda scan types are disabled by default because customer-managed KMS encrypted Lambda functions are not supported by Inspector Lambda scanning.
 
 ---
 
