@@ -546,6 +546,33 @@ LATEST_COMPLETED_BACKUP_JOB_COUNT="$(
     '
 )"
 
+MISSING_COMPLETED_RECOVERY_POINT_COUNT=0
+
+LATEST_COMPLETED_RECOVERY_POINT_ARNS="$(
+  echo "$LATEST_BACKUP_JOBS_JSON" |
+    jq -r '
+      .[]
+      | select(.State == "COMPLETED")
+      | select(.RecoveryPointArn != null and .RecoveryPointArn != "")
+      | .RecoveryPointArn
+    '
+)"
+
+while IFS= read -r recovery_point_arn; do
+  [[ -z "$recovery_point_arn" ]] && continue
+
+  if aws backup describe-recovery-point \
+    "${aws_args[@]}" \
+    --backup-vault-name "$BACKUP_VAULT_NAME" \
+    --recovery-point-arn "$recovery_point_arn" \
+    --output json >/dev/null 2>&1; then
+    success "Latest completed backup job recovery point is currently restorable: $recovery_point_arn"
+  else
+    warn "Latest completed backup job references a recovery point that is not currently found in the vault: $recovery_point_arn"
+    MISSING_COMPLETED_RECOVERY_POINT_COUNT=$((MISSING_COMPLETED_RECOVERY_POINT_COUNT + 1))
+  fi
+done <<< "$LATEST_COMPLETED_RECOVERY_POINT_ARNS"
+
 OLDER_FAILED_BACKUP_JOB_COUNT="$(
   echo "$BACKUP_JOBS_JSON" |
     jq --argjson latest_jobs "$LATEST_BACKUP_JOBS_JSON" '
