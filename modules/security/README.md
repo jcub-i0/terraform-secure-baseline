@@ -1023,7 +1023,7 @@ For detailed troubleshooting, use the `tamper_detection` child module README.
 - GuardDuty is enabled with 15-minute finding publishing.
 - Security Hub is enabled after GuardDuty.
 - AWS Foundational Security Best Practices is enabled by default.
-- Inspector v2 is enabled for EC2, Lambda, and Lambda code scanning.
+- Inspector v2 is enabled conditionally and defaults to EC2 scanning only.
 - Inspector findings are imported into Security Hub.
 - KMS keys are purpose-specific instead of using one shared key for everything.
 - KMS key rotation is enabled.
