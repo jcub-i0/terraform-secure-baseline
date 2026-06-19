@@ -14,6 +14,7 @@ module "baseline" {
   enable_config                      = var.enable_config
   enable_rules                       = var.enable_rules
   backup_enabled                     = var.backup_enabled
+  inspector_enabled = var.inspector_enabled
   deployment_profile                 = var.deployment_profile
   egress_mode                        = var.egress_mode
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
