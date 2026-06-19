@@ -120,7 +120,7 @@ variable "inspector_resource_types" {
   }
 
   validation {
-    condition     = (
+    condition = (
       var.inspector_enabled == false
       || length(var.inspector_resource_types) > 0
     )
