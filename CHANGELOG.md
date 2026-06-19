@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.2.1
+
+### Fixed
+
+- Fixed Amazon Inspector enablement wiring so the security module respects the resolved `effective_inspector_enabled` value.
+- Updated Inspector validation to check the effective Inspector resource types instead of assuming EC2, Lambda, and Lambda code scanning are all enabled.
+- Removed unnecessary Amazon Inspector access from the Lambda KMS key policy.
+
+### Changed
+
+- Added configurable `inspector_resource_types` support.
+- Defaulted Amazon Inspector resource types to EC2 scanning only.
+- Disabled Lambda and Lambda code scanning by default because the baseline uses customer-managed KMS encryption for Lambda resources.
+- Updated security module documentation to reflect configurable Inspector behavior and Lambda CMK policy changes.
+
 ## v1.2.0
 
 ### Added
