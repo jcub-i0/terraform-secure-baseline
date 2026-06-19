@@ -160,21 +160,45 @@ Only uncommented standards in `local.securityhub_standards` are subscribed. If y
 
 ### Amazon Inspector v2
 
-Enables Amazon Inspector v2 for the account:
+Conditionally enables Amazon Inspector v2 for the account:
 
 ```hcl
 resource "aws_inspector2_enabler" "main"
 ```
 
-Enabled resource types:
+Enabled Inspector resource types are controlled by:
+
+```text
+var.inspector_resource_types
+```
+
+Default enabled resource types:
 
 ```text
 EC2
-LAMBDA
-LAMBDA_CODE
 ```
 
-Inspector provides vulnerability and code scanning coverage for supported EC2 and Lambda resources.
+Lambda scan types are disabled by default.
+
+This baseline encrypts Lambda environment variables with a customer-managed KMS key. Amazon Inspector Lambda standard scanning and Lambda code scanning do not support Lambda functions encrypted with customer-managed keys. Enabling Lambda scan types in this baseline can also generate expected `kms:Decrypt` `AccessDenied` events from the Inspector service-linked role against the Lambda CMK.
+
+Clients that intentionally want Lambda scanning and accept the KMS/encryption tradeoff can override:
+
+```hcl
+inspector_resource_types = ["EC2", "LAMBDA", "LAMBDA_CODE"]
+```
+
+Supported values:
+
+```text
+EC2
+ECR
+LAMBDA
+LAMBDA_CODE
+CODE_REPOSITORY
+```
+
+`LAMBDA_CODE` requires `LAMBDA` to also be included.
 
 ---
 
@@ -317,7 +341,9 @@ alias/<name_prefix>/lambda-cmk
 
 This key is intended to encrypt Lambda environment variables.
 
-The key policy allows Lambda service usage and includes Amazon Inspector permissions for Lambda scanning support.
+The key policy allows Lambda service usage for the baseline automation functions.
+
+Amazon Inspector decrypt access is not granted to this key by default. Lambda Inspector scan types are disabled by default because this baseline uses customer-managed KMS encryption for Lambda resources, and Inspector Lambda scanning does not support Lambda functions encrypted with customer-managed keys.
 
 ---
 
@@ -448,6 +474,8 @@ Refer to the child module README for detailed detection coverage.
 | `secops_topic_arn` | SNS topic ARN used for SecOps alerts | Yes |
 | `enable_config` | Whether AWS Config baseline resources are enabled | Yes |
 | `enable_rules` | Object controlling which Config baseline rule groups are enabled | No |
+| `inspector_enabled` | Whether Amazon Inspector is enabled for the selected resource types | Yes |
+| `inspector_resource_types` | Amazon Inspector resource types to enable. Defaults to `["EC2"]`; Lambda scan types are disabled by default | No |
 
 ---
 
@@ -502,14 +530,16 @@ module "security" {
   name_prefix                  = local.name_prefix
   cloud_name                   = var.cloud_name
   environment                  = var.environment
-  account_id                   = data.aws_caller_identity.current.account_id
+  account_id                   = var.account_id
   primary_region               = var.primary_region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
-  guardduty_features = var.guardduty_features
-  enable_rules       = var.enable_rules
+  guardduty_features       = var.guardduty_features
+  enable_rules             = local.effective_enable_rules
+  inspector_enabled        = local.effective_inspector_enabled
+  inspector_resource_types = var.inspector_resource_types
 
-  enable_config              = var.enable_config
+  enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
   config_remediation_role_arn = module.iam.config_remediation_role_arn
 
@@ -664,16 +694,18 @@ aws inspector2 batch-get-account-status \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --account-ids "${ACCOUNT_ID}" \
-  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
+  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,ECR:resourceState.ecr.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
   --output table
 ```
 
 Expected:
 
-- Account status is `ENABLED`
-- EC2 scanning is `ENABLED`
-- Lambda scanning is `ENABLED`
-- Lambda code scanning is `ENABLED`
+- If Inspector is enabled, account status is `ENABLED`.
+- Resource types included in inspector_resource_types should show `ENABLED`.
+- Resource types not included in inspector_resource_types may show `DISABLED`.
+- By default, EC2 scanning is `ENABLED`.
+- By default, Lambda and Lambda code scanning are `DISABLED`.
+- If Inspector is disabled by deployment profile or explicit override, Inspector resource states may be disabled.
 ---
 
 ### Confirm Inspector Security Hub Product Subscription
@@ -937,6 +969,8 @@ aws inspector2 batch-get-account-status \
   --account-ids "${ACCOUNT_ID}"
 ```
 
+> If Lambda scan types are enabled and Lambda functions use customer-managed KMS keys, Inspector may generate kms:Decrypt AccessDenied events against the Lambda CMK. The baseline disables Lambda scan types by default to avoid unsupported scanner behavior and alert noise.
+
 ---
 
 ### KMS Access Errors
@@ -1023,7 +1057,7 @@ For detailed troubleshooting, use the `tamper_detection` child module README.
 - GuardDuty is enabled with 15-minute finding publishing.
 - Security Hub is enabled after GuardDuty.
 - AWS Foundational Security Best Practices is enabled by default.
-- Inspector v2 is enabled for EC2, Lambda, and Lambda code scanning.
+- Inspector v2 is enabled conditionally and defaults to EC2 scanning only.
 - Inspector findings are imported into Security Hub.
 - KMS keys are purpose-specific instead of using one shared key for everything.
 - KMS key rotation is enabled.
@@ -1044,7 +1078,7 @@ This module follows:
 - AWS-native security service enablement
 - Purpose-specific encryption keys
 - Centralized security finding aggregation
-- Vulnerability detection for compute and serverless workloads
+- Configurable vulnerability detection for supported workloads
 - Security control evaluation through AWS Config
 - Event-driven tamper detection
 - Least privilege KMS service usage
