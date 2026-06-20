@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 ENV_NAME="${1:-}"
 
-if [[ -z "ENV_NAME" ]]; then
+if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
 fi
 
