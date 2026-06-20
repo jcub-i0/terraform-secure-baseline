@@ -33,6 +33,7 @@ Example command:
 
 ```bash
 ENV_NAME="dev"
+
 AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<account-id>" \
