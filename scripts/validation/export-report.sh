@@ -18,7 +18,7 @@ require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME}}"
 
-VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%z")"
+VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
 REPO_ROOT="$(get_repo_root)"
