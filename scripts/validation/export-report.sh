@@ -18,6 +18,11 @@ require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME}}"
 
+if [[ "$NAME_PREFIX" != *"-${ENV_NAME}" ]]; then
+  warn "NAME_PREFIX does not end with -${ENV_NAME}: ${NAME_PREFIX}"
+  warn "This may be valid for custom/client deployments, but confirm it matches deployed resource names."
+fi
+
 info "Environment: ${ENV_NAME}"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: ${AWS_REGION}"
