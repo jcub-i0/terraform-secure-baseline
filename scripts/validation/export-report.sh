@@ -215,7 +215,7 @@ section "Generating Markdown summary"
 {
   echo "# tf-secure-baseline Validation Report"
   echo
-  echo "This report summarizes automated read-only validation results for the `$ENV_NAME` workload environment."
+  echo "This report summarizes automated read-only validation results for the \`$ENV_NAME\` workload environment."
   echo
   echo "## Executive Summary"
   echo
