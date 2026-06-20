@@ -33,6 +33,9 @@ REPO_ROOT="$(get_repo_root)"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/${TIMESTAMP}"
 
+RESULTS_JSONL="$(mktemp)"
+trap 'rm -f "$RESULTS_JSONL"' EXIT
+
 mkdir -p "$OUTPUT_DIR"
 
 VALIDATION_SCRIPTS=(
@@ -74,7 +77,6 @@ PASSED_COUNT=0
 TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
 
 section "Exporting validation report"
-info "Environment: ${ENV_NAME}"
 info "Output directory: ${OUTPUT_DIR}"
 
 for script_name in "${VALIDATION_SCRIPTS[@]}"; do
