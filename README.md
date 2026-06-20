@@ -562,8 +562,8 @@ validation-results/<environment>/<timestamp>/
 
 Each report package includes:
 
-- summary.md
-- summary.json
+- `summary.md`
+- `summary.json`
 - Per-script validation logs
 
 Generated validation results are ignored by Git by default.
