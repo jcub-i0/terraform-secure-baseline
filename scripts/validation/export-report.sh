@@ -23,6 +23,7 @@ TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
 REPO_ROOT="$(get_repo_root)"
 OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/${TIMESTAMP}"
+RELATIVE_OUTPUT_DIR="validation-results/${ENV_NAME}/${TIMESTAMP}"
 SUMMARY_JSON="${OUTPUT_DIR}/summary.json"
 SUMMARY_MD="${OUTPUT_DIR}/summary.md"
 
@@ -224,6 +225,7 @@ section "Generating Markdown summary"
   echo "| Overall result | **${OVERALL_RESULT}** |"
   echo "| Validation scripts passed | **${PASSED_COUNT}/${TOTAL_COUNT}** |"
   echo "| Validation scripts failed | **${FAILED_COUNT}/${TOTAL_COUNT}** |"
+  echo "| Report Package Location | \`${RELATIVE_OUTPUT_DIR}/\` |"
   echo
   echo "## Environment"
   echo
