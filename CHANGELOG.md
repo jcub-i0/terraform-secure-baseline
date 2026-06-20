@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.3.0
+
+### Added
+
+- Added validation report export workflow through `scripts/validation/export-report.sh`.
+- Added timestamped validation result directories under `validation-results/<environment>/<timestamp>/`.
+- Added per-script validation log capture.
+- Added generated Markdown validation summaries through `summary.md`.
+- Added generated machine-readable validation summaries through `summary.json`.
+- Added validation report template under `docs/assurance/validation-report-template.md`.
+- Added validation evidence guide under `docs/assurance/validation-evidence-guide.md`.
+
+### Changed
+
+- Updated validation documentation to describe exported validation evidence packages.
+- Updated project documentation to position validation reports for client handoff, troubleshooting, and deployment evidence.
+
+### Notes
+
+- Generated validation output is ignored by Git by default.
+- Validation reporting is intended to support deployment evidence and audit-readiness discussions.
+- Validation reports do not replace formal SOC 2 or ISO 27001 audits, control owner review, policy review, risk assessment, or ISMS activities.
+
 ## v1.2.1
 
 ### Fixed
