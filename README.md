@@ -521,7 +521,7 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/validation/validate-all.sh dev
 ```
 
-The validation suite checks deploy workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture.
+The validation suite checks deployed workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture.
 
 A successful validation run should end with:
 
