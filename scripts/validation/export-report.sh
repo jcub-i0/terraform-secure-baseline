@@ -6,12 +6,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 ENV_NAME="${1:-}"
+AWS_PROFILE="${AWS_PROFILE:-}"
+AWS_REGION="${AWS_REGION:-us-east-1}"
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
 fi
 
 require_env_name "$ENV_NAME"
+
+NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME}}"
+
+info "Environment: ${ENV_NAME}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: ${AWS_REGION}"
+info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
+info "NAME_PREFIX: ${NAME_PREFIX}"
 
 REPO_ROOT="$(get_repo_root)"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
