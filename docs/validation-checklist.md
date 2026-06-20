@@ -239,6 +239,46 @@ Validation scripts passed:  14/14
 Validation scripts failed:  0/14
 ```
 
+### Exporting Validation Evidence
+
+After running the validation suite, export a timestamped validation report package:
+
+```bash
+ENV_NAME="dev"
+
+AWS_PROFILE="dev" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<account-id>" \
+NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
+./scripts/validation/export-report.sh "${ENV_NAME}"
+```
+
+The export creates:
+
+```text
+validation-results/<environment>/<timestamp>/
+├── summary.md
+├── summary.json
+├── validate-env.log
+├── validate-networking.log
+├── validate-vpc-endpoints.log
+├── validate-logging.log
+├── validate-security-services.log
+├── validate-kms.log
+├── validate-backup.log
+├── validate-sns.log
+├── validate-sqs.log
+├── validate-eventbridge.log
+├── validate-lambda.log
+├── validate-ssm.log
+├── validate-compute.log
+└── validate-iam.log
+```
+
+Use `summary.md` for human review and client handoff. Use `summary.json` for automation, indexing, or future reporting workflows.
+
+The report does not replace manual validation for control-plane resources, Identity Center assignments, GitHub Actions workflows, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
+
 ### Manual Validation Still Required
 
 The automated validation suite is intentionally read-only. It does not perform live, destructive, or privileged workflow tests.

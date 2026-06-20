@@ -59,6 +59,7 @@ Key capabilities include:
 - Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
 - Safe, read-only post-deployment validation suite
+- Automated validation evidence export with Markdown and JSON summaries
 
 ---
 
@@ -520,7 +521,7 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/validation/validate-all.sh dev
 ```
 
-The validation suite checks deploy workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture.
+The validation suite checks deployed workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture.
 
 A successful validation run should end with:
 
@@ -538,6 +539,41 @@ docs/validation-checklist.md
 ```
 
 The automated validation suite is intentionally read-only. Live workflow tests, tamper tests, break-glass tests, Identity Center assignment checks, GitHub Actions workflow checks, and destroy safety review remain manual validation steps.
+
+### Validation Reporting
+
+Validation evidence can be exported for client handoff, troubleshooting, or internal deployment records:
+
+```bash
+ENV_NAME="dev"
+
+AWS_PROFILE="dev" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<account-id>" \
+NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
+./scripts/validation/export-report.sh "${ENV_NAME}"
+```
+
+Generated reports are written to:
+
+```text
+validation-results/<environment>/<timestamp>/
+```
+
+Each report package includes:
+
+- `summary.md`
+- `summary.json`
+- Per-script validation logs
+
+Generated validation results are ignored by Git by default.
+
+Additional validation evidence guidance is provided in:
+
+```text
+docs/assurance/validation-report-template.md
+docs/assurance/validation-evidence-guide.md
+```
 
 ---
 
