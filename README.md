@@ -59,6 +59,7 @@ Key capabilities include:
 - Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
 - Safe, read-only post-deployment validation suite
+- Automated validation evidence export with Markdown and JSON summaries
 
 ---
 
