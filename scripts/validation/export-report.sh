@@ -67,3 +67,12 @@ for script_name in "${VALIDATION_SCRIPTS[@]}"; do
 done
 
 section "Validation report export summary"
+info "Output directory: ${OUTPUT_DIR}"
+info "Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}"
+info "Validation scripts failed: ${FAILED_COUNT}/${TOTAL_COUNT}"
+
+if [[ "$FAILED_COUNT" -gt 0 ]]; then
+  fail "One or more validation scripts failed. Review logs in ${OUTPUT_DIR}"
+fi
+
+success "Validation report logs exported successfully"
