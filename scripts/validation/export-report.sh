@@ -263,7 +263,7 @@ echo "Name prefix:                ${NAME_PREFIX}"
 echo
 echo "Output directory:           ${OUTPUT_DIR}"
 echo "Summary JSON:               ${SUMMARY_JSON}"
-echo "Summary Markdown: ${SUMMARY_MD}"
+echo "Summary Markdown:           ${SUMMARY_MD}"
 echo
 echo "Validation scripts passed:  ${PASSED_COUNT}/${TOTAL_COUNT}"
 echo "Validation scripts failed:  ${FAILED_COUNT}/${TOTAL_COUNT}"
