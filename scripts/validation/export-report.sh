@@ -18,23 +18,12 @@ require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME}}"
 
-if [[ "$NAME_PREFIX" != *"-${ENV_NAME}" ]]; then
-  warn "NAME_PREFIX does not end with -${ENV_NAME}: ${NAME_PREFIX}"
-  warn "This may be valid for custom/client deployments, but confirm it matches deployed resource names."
-fi
-
-info "Environment: ${ENV_NAME}"
-info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
-info "AWS_REGION: ${AWS_REGION}"
-info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
-info "NAME_PREFIX: ${NAME_PREFIX}"
+VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%z")"
+TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
 REPO_ROOT="$(get_repo_root)"
-TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/${TIMESTAMP}"
-
-RESULTS_JSONL="$(mktemp)"
-trap 'rm -f "$RESULTS_JSONL"' EXIT
+SUMMARY_JSON="${OUTPUT_DIR}/summary.json"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -72,45 +61,173 @@ declare -A VALIDATION_AREAS=(
   ["validate-iam.sh"]="IAM"
 )
 
-FAILED_COUNT=0
+RESULTS_JSONL="$(mktemp)"
+trap 'rm -f "$RESULTS_JSONL"' EXIT
+
 PASSED_COUNT=0
+FAILED_COUNT=0
 TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
 
-section "Exporting validation report"
-info "Output directory: ${OUTPUT_DIR}"
+section "tf-secure-baseline Validation Report Export"
 
-for script_name in "${VALIDATION_SCRIPTS[@]}"; do
-  script_path="${SCRIPT_DIR}/${script_name}"
-  log_file="${OUTPUT_DIR}/${script_name%.sh}.log"
+section "Checking required local commands"
 
-  section "Running ${script_name}"
+require_command "aws"
+success "aws CLI found"
 
-  if [[ ! -x "$script_path" ]]; then
-    warn "${script_name} is missing or not executable"
-    {
-      echo "[FAIL] Validation script is missing or not executable: ${script_path}"
-    } > "$log_file"
+require_command "terraform"
+success "terraform found"
 
-    FAILED_COUNT=$((FAILED_COUNT + 1))
-    continue
-  fi
+require_command "jq"
+success "jq found"
 
-  if "$script_path" "$ENV_NAME" >"$log_file" 2>&1; then
-    success "${script_name} passed"
-    PASSED_COUNT=$((PASSED_COUNT + 1))
-  else
-    warn "${script_name} failed. See log: ${log_file}"
-    FAILED_COUNT=$((FAILED_COUNT + 1))
-  fi
-done
+require_command "git"
+success "git found"
 
-section "Validation report export summary"
-info "Output directory: ${OUTPUT_DIR}"
-info "Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}"
-info "Validation scripts failed: ${FAILED_COUNT}/${TOTAL_COUNT}"
+section "Resolving repository paths and report settings"
 
-if [[ "$FAILED_COUNT" -gt 0 ]]; then
-  fail "One or more validation scripts failed. Review logs in ${OUTPUT_DIR}"
+info "Repository root: ${REPO_ROOT}"
+info "Environment: ${ENV_NAME}"
+info "Output dir: ${OUTPUT_DIR}"
+info "Name prefix: ${NAME_PREFIX}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: ${AWS_REGION}"
+info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
+info "Validation time: ${VALIDATION_TIME}"
+
+if [[ "$NAME_PREFIX" != *"-${ENV_NAME}" ]]; then
+  warn "NAME_PREFIX does not end with -${ENV_NAME}: ${NAME_PREFIX}"
+  warn "This may be valid for custom/client deployments, but confirm it matches deployed resource names."
 fi
 
-success "Validation report logs exported successfully"
+section "Checking AWS caller identity"
+
+AWS_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+AWS_CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
+success "AWS credentials are valid"
+info "AWS account ID: ${AWS_ACCOUNT_ID}"
+info "AWS caller ARN: ${AWS_CALLER_ARN}"
+
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  if [[ "$AWS_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
+    success "AWS account ID matches expected account: ${EXPECTED_ACCOUNT_ID}"
+  else
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${AWS_ACCOUNT_ID}"
+  fi
+fi
+
+section "Running validation scripts"
+
+for SCRIPT_NAME in "${VALIDATION_SCRIPTS[@]}"; do
+  AREA="${VALIDATION_AREAS[$SCRIPT_NAME]:-$SCRIPT_NAME}"
+  SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_NAME}"
+  LOG_FILE="${OUTPUT_DIR}/${SCRIPT_NAME%.sh}.log"
+  LOG_BASENAME="$(basename "$LOG_FILE")"
+  RESULT="FAIL"
+
+  info "Running ${SCRIPT_NAME}"
+
+  if [[ ! -x "$SCRIPT_PATH" ]]; then
+    warn "${SCRIPT_NAME} is missing or not executable"
+
+    {
+      echo "[FAIL] Validation script is missing or not executable: ${SCRIPT_PATH}"
+    } > "$LOG_FILE"
+
+    FAILED_COUNT=$((FAILED_COUNT + 1))
+    RESULT="FAIL"
+  elif "$SCRIPT_PATH" "$ENV_NAME" >"$LOG_FILE" 2>&1; then
+    success "${SCRIPT_NAME} passed"
+    PASSED_COUNT=$((PASSED_COUNT + 1))
+    RESULT="PASS"
+  else
+    warn "${SCRIPT_NAME} failed. See log: ${LOG_FILE}"
+    FAILED_COUNT=$((FAILED_COUNT + 1))
+    RESULT="FAIL"
+  fi
+
+  jq -n \
+    --arg area "$AREA" \
+    --arg script "$SCRIPT_NAME" \
+    --arg result "$RESULT" \
+    --arg log_file "$LOG_BASENAME" \
+    '{
+      area: $area,
+      script: $script,
+      result: $result,
+      log_file: $log_file
+    }' >> "$RESULTS_JSONL"
+done
+
+if [[ "$FAILED_COUNT" -gt 0 ]]; then
+  OVERALL_RESULT="FAIL"
+else
+  OVERALL_RESULT="PASS"
+fi
+
+section "Generating JSON summary"
+
+jq -n \
+  --arg project "tf-secure-baseline" \
+  --arg environment "$ENV_NAME" \
+  --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_region "$AWS_REGION" \
+  --arg aws_account_id "$AWS_ACCOUNT_ID" \
+  --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
+  --arg name_prefix "$NAME_PREFIX" \
+  --arg validation_time "$VALIDATION_TIME" \
+  --arg overall_result "$OVERALL_RESULT" \
+  --argjson scripts_passed "$PASSED_COUNT" \
+  --argjson scripts_failed "$FAILED_COUNT" \
+  --slurpfile results "$RESULTS_JSONL" \
+  '{
+    project: $project,
+    environment: $environment,
+    aws_profile: $aws_profile,
+    aws_region: $aws_region,
+    aws_account_id: $aws_account_id,
+    expected_account_id: $expected_account_id,
+    name_prefix: $name_prefix,
+    validation_time: $validation_time,
+    overall_result: $overall_result,
+    scripts_passed: $scripts_passed,
+    scripts_failed: $scripts_failed,
+    results: $results,
+    manual_validation_remaining: [
+      "control_plane",
+      "identity_center_assignments",
+      "github_actions_workflows",
+      "live_ec2_isolation",
+      "live_ec2_rollback",
+      "live_ip_enrichment",
+      "tamper_detection",
+      "break_glass",
+      "destroy_safety"
+    ]
+  }' > "$SUMMARY_JSON"
+
+success "JSON summary written: ${SUMMARY_JSON}"
+
+section "Validation Report Export Summary"
+
+echo "Environment:                ${ENV_NAME}"
+echo "AWS profile:                ${AWS_PROFILE:-<default>}"
+echo "AWS region:                 ${AWS_REGION}"
+echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
+echo "Name prefix:                ${NAME_PREFIX}"
+echo
+echo "Output directory:           ${OUTPUT_DIR}"
+echo "Summary JSON:               ${SUMMARY_JSON}"
+echo
+echo "Validation scripts passed:  ${PASSED_COUNT}/${TOTAL_COUNT}"
+echo "Validation scripts failed:  ${FAILED_COUNT}/${TOTAL_COUNT}"
+echo "Overall result:             ${OVERALL_RESULT}"
+
+section "Validation Result"
+
+if [[ "$FAILED_COUNT" -gt 0 ]]; then
+  fail "Validation report export completed with failures for: ${ENV_NAME}"
+fi
+
+success "Validation report export completed successfully for: ${ENV_NAME}"
