@@ -24,6 +24,7 @@ TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 REPO_ROOT="$(get_repo_root)"
 OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/${TIMESTAMP}"
 SUMMARY_JSON="${OUTPUT_DIR}/summary.json"
+SUMMARY_MD="${OUTPUT_DIR}/summary.md"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -208,6 +209,49 @@ jq -n \
   }' > "$SUMMARY_JSON"
 
 success "JSON summary written: ${SUMMARY_JSON}"
+
+section "Generating Markdown summary"
+
+{
+  echo "# tf-secure-baseline Validation Report"
+  echo
+  echo "## Environment"
+  echo
+  echo "| Field | Value |"
+  echo "|---|---|"
+  echo "| Project | tf-secure-baseline |"
+  echo "| Environment | ${ENV_NAME} |"
+  echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
+  echo "| AWS Region | ${AWS_REGION} |"
+  echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
+  echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID} |"
+  echo "| Name Prefix | ${NAME_PREFIX} |"
+  echo "| Validation Time | ${VALIDATION_TIME} |"
+  echo "| Overall Result | ${OVERALL_RESULT} |"
+  echo "| Scripts Passed | ${PASSED_COUNT}/${TOTAL_COUNT} |"
+  echo "| Scripts Failed | ${FAILED_COUNT}/${TOTAL_COUNT} |"
+  echo
+  echo "## Validation Summary"
+  echo
+  echo "| Area | Script | Result | Log |"
+  echo "|---|---|---|---|"
+
+  jq -r '
+    .results[]
+    | "| \(.area) | `\(.script)` | \(.result) | `\(.log_file)` |"
+  ' "$SUMMARY_JSON"
+
+  echo
+  echo "## Notes"
+  echo
+  echo "This report validates deployed AWS control presence and configuration for the selected workload environment."
+  echo
+  echo "The validation suite confirms the presence and configuration of selected AWS security controls in the deployed environment."
+  echo
+  echo "The validation suite does not replace a full SOC 2 or ISO 27001 audit, control owner review, policy review, evidence review, risk assessment, or ISMS."
+} > "$SUMMARY_MD"
+
+success "Markdown summary written: ${SUMMARY_MD}"
 
 section "Validation Report Export Summary"
 
