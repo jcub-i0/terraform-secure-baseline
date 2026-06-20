@@ -52,6 +52,23 @@ VALIDATION_SCRIPTS=(
   "validate-iam.sh"
 )
 
+declare -A VALIDATION_AREAS=(
+  ["validate-env.sh"]="Environment"
+  ["validate-networking.sh"]="Networking"
+  ["validate-vpc-endpoints.sh"]="VPC Endpoints"
+  ["validate-logging.sh"]="Logging"
+  ["validate-security-services.sh"]="Security Services"
+  ["validate-kms.sh"]="KMS"
+  ["validate-backup.sh"]="Backup"
+  ["validate-sns.sh"]="SNS"
+  ["validate-sqs.sh"]="SQS"
+  ["validate-eventbridge.sh"]="EventBridge"
+  ["validate-lambda.sh"]="Lambda"
+  ["validate-ssm.sh"]="SSM"
+  ["validate-compute.sh"]="Compute"
+  ["validate-iam.sh"]="IAM"
+)
+
 FAILED_COUNT=0
 PASSED_COUNT=0
 TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
