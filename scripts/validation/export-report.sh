@@ -224,7 +224,7 @@ section "Generating Markdown summary"
   echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
   echo "| AWS Region | ${AWS_REGION} |"
   echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
-  echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID} |"
+  echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
   echo "| Name Prefix | ${NAME_PREFIX} |"
   echo "| Validation Time | ${VALIDATION_TIME} |"
   echo "| Overall Result | ${OVERALL_RESULT} |"
@@ -239,6 +239,35 @@ section "Generating Markdown summary"
   jq -r '
     .results[]
     | "| \(.area) | `\(.script)` | \(.result) | `\(.log_file)` |"
+  ' "$SUMMARY_JSON"
+
+  echo
+  echo "## Manual Validation Remaining"
+  echo
+  echo "The automated validation suite is intentionally read-only. The following checks remain manual:"
+  echo
+  echo "- Control-plane resource validation"
+  echo "- IAM Identity Center assignment validation"
+  echo "- GitHub Actions workflow validation"
+  echo "- Live EC2 isolation test"
+  echo "- Live EC2 rollback test"
+  echo "- Live IP enrichment test"
+  echo "- Tamper detection test"
+  echo "- Break-glass role assumption test"
+  echo "- Destroy safety review"
+  echo
+  echo "## Evidence Files"
+  echo
+  echo "This report directory contains the generated validation summary files and per-script logs."
+  echo
+  echo "| File | Purpose |"
+  echo "|---|---|"
+  echo "| \`summary.md\` | Human-readable validation report |"
+  echo "| \`summary.json\` | Machine-readable validation summary |"
+
+  jq -r '
+    .results[]
+    | "| `\(.log_file)` | Log output for `\(.script)` |"
   ' "$SUMMARY_JSON"
 
   echo
