@@ -57,7 +57,7 @@ for script_name in "${VALIDATION_SCRIPTS[@]}"; do
     continue
   fi
 
-  if "$script_path" "$ENV_NAME" > "$log_file" 2>&1; then
+  if "$script_path" "$ENV_NAME" >"$log_file" 2>&1; then
     success "${script_name} passed"
     PASSED_COUNT=$((PASSED_COUNT + 1))
   else
