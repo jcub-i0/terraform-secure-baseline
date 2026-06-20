@@ -219,9 +219,11 @@ section "Generating Markdown summary"
   echo
   echo "## Executive Summary"
   echo
-  echo "Overall result: **${OVERALL_RESULT}**"
-  echo "Validation scripts passed: **${PASSED_COUNT}/${TOTAL_COUNT}**"
-  echo "Validation scripts failed: **${FAILED_COUNT}/${TOTAL_COUNT}**"
+  echo "| Field | Value |"
+  echo "|---|---|
+  echo "| Overall result | **${OVERALL_RESULT}** |"
+  echo "| Validation scripts passed | **${PASSED_COUNT}/${TOTAL_COUNT}** |"
+  echo "| Validation scripts failed | **${FAILED_COUNT}/${TOTAL_COUNT}** |"
   echo
   echo "## Environment"
   echo
