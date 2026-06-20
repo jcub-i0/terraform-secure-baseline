@@ -220,7 +220,7 @@ section "Generating Markdown summary"
   echo "## Executive Summary"
   echo
   echo "| Field | Value |"
-  echo "|---|---|
+  echo "|---|---|"
   echo "| Overall result | **${OVERALL_RESULT}** |"
   echo "| Validation scripts passed | **${PASSED_COUNT}/${TOTAL_COUNT}** |"
   echo "| Validation scripts failed | **${FAILED_COUNT}/${TOTAL_COUNT}** |"
