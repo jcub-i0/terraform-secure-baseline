@@ -20,6 +20,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 ENV_NAME="${1:-}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME:-unknown}}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 export AWS_PAGER=""
