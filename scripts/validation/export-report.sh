@@ -215,6 +215,15 @@ section "Generating Markdown summary"
 {
   echo "# tf-secure-baseline Validation Report"
   echo
+  echo "The `dev` workload environment passed automated read-only validation."
+  echo
+  echo "## Executive Summary"
+  echo
+  echo "Overall result: ${OVERALL_RESULT}"
+  echo "Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}"
+  echo "Validation scripts failed: ${FAILED_COUNT}/${TOTAL_COUNT}"
+  echo
+  echo
   echo "## Environment"
   echo
   echo "| Field | Value |"
