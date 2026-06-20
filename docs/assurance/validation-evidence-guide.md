@@ -37,8 +37,8 @@ ENV_NAME="dev"
 AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<account-id>" \
-NAME_PREFIX="tf-secure-baseline-dev"
-./scripts/validation/export-report.sh dev
+NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
+./scripts/validation/export-report.sh "${ENV_NAME}"
 ```
 
 Generated evidence is written to a timestamped directory under:
