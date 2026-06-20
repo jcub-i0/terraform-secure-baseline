@@ -568,6 +568,13 @@ Each report package includes:
 
 Generated validation results are ignored by Git by default.
 
+Additional validation evidence guidance is provided in:
+
+```text
+docs/assurance/validation-report-template.md
+docs/assurance/validation-evidence-guide.md
+```
+
 ---
 
 ## State Management
