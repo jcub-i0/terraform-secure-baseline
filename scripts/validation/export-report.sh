@@ -223,7 +223,6 @@ section "Generating Markdown summary"
   echo "Validation scripts passed: ${PASSED_COUNT}/${TOTAL_COUNT}"
   echo "Validation scripts failed: ${FAILED_COUNT}/${TOTAL_COUNT}"
   echo
-  echo
   echo "## Environment"
   echo
   echo "| Field | Value |"
@@ -280,13 +279,13 @@ section "Generating Markdown summary"
   ' "$SUMMARY_JSON"
 
   echo
-  echo "## Notes"
+  echo "## Limitations"
   echo
-  echo "This report validates deployed AWS control presence and configuration for the selected workload environment."
+  echo "This report validates deployed AWS control presence and selected configuration settings for the target workload environment."
   echo
   echo "The validation suite confirms the presence and configuration of selected AWS security controls in the deployed environment."
   echo
-  echo "The validation suite does not replace a full SOC 2 or ISO 27001 audit, control owner review, policy review, evidence review, risk assessment, or ISMS."
+  echo "This report does not replace a full SOC 2 or ISO 27001 audit, control owner review, policy review, evidence review, risk assessment, or ISMS."
 } > "$SUMMARY_MD"
 
 success "Markdown summary written: ${SUMMARY_MD}"
