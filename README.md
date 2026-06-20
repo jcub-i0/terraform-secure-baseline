@@ -540,6 +540,34 @@ docs/validation-checklist.md
 
 The automated validation suite is intentionally read-only. Live workflow tests, tamper tests, break-glass tests, Identity Center assignment checks, GitHub Actions workflow checks, and destroy safety review remain manual validation steps.
 
+### Validation Reporting
+
+Validation evidence can be exported for client handoff, troubleshooting, or internal deployment records:
+
+```bash
+ENV_NAME="dev"
+
+AWS_PROFILE="dev" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<account-id>" \
+NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
+./scripts/validation/export-report.sh "${ENV_NAME}"
+```
+
+Generated reports are written to:
+
+```text
+validation-results/<environment>/<timestamp>/
+```
+
+Each report package includes:
+
+- summary.md
+- summary.json
+- Per-script validation logs
+
+Generated validation results are ignored by Git by default.
+
 ---
 
 ## State Management
