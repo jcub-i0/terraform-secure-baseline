@@ -16,6 +16,8 @@ REPO_ROOT="$(get_repo_root)"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/${TIMESTAMP}"
 
+mkdir -p "$OUTPUT_DIR"
+
 VALIDATION_SCRIPTS=(
   "validate-env.sh"
   "validate-networking.sh"
