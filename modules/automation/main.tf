@@ -629,3 +629,98 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
     Terraform   = "true"
   }
 }
+
+## IP ENRICHMENT LAMBDA DLQ
+resource "aws_sqs_queue" "ip_enrichment_dlq" {
+  name              = "${var.name_prefix}-ip-enrichment-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-IP-Enrichment-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+data "aws_iam_policy_document" "ip_enrichment_dlq_policy" {
+  statement {
+    sid    = "AllowEventBridgeToSendIPEnrichmentFailures"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ip_enrichment_dlq.arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.securityhub_high_critical.arn
+      ]
+    }
+  }
+
+  statement {
+    sid    = "AllowIPEnrichmentRoleToSendFailures"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        var.lambda_ip_enrichment_role_arn
+      ]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ip_enrichment_dlq.arn
+    ]
+  }
+}
+
+resource "aws_sqs_queue_policy" "ip_enrichment_dlq" {
+  queue_url = aws_sqs_queue.ip_enrichment_dlq.id
+  policy    = data.aws_iam_policy_document.ip_enrichment_dlq_policy.json
+}
+
+### EC2 ROLLBACK DLQ CLOUDWATCH ALARM
+resource "aws_cloudwatch_metric_alarm" "ip_enrichment_dlq_visible_messages" {
+  alarm_name          = "${var.name_prefix}-ip-enrichment-dlq-visible-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.ip_enrichment_dlq.name
+  }
+
+  alarm_actions = [
+    var.secops_topic_arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-IP-Enrichment-DLQ-Visible-Messages"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
