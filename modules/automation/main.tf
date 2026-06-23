@@ -99,7 +99,7 @@ resource "aws_cloudwatch_event_target" "ec2_isolation" {
 
   retry_policy {
     maximum_event_age_in_seconds = 3600
-    maximum_retry_attempts = 3
+    maximum_retry_attempts       = 3
   }
 
   depends_on = [
@@ -121,7 +121,7 @@ resource "aws_lambda_function_event_invoke_config" "ec2_isolation" {
   function_name = aws_lambda_function.ec2_isolation.function_name
 
   maximum_event_age_in_seconds = 3600
-  maximum_retry_attempts = 2
+  maximum_retry_attempts       = 2
 
   destination_config {
     on_failure {
@@ -145,7 +145,7 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
 
 ## EC2 ISOLATION DLQ
 resource "aws_sqs_queue" "ec2_isolation_dlq" {
-  name = "${var.name_prefix}-ec2-isolation-dlq"
+  name              = "${var.name_prefix}-ec2-isolation-dlq"
   kms_master_key_id = var.logs_cmk_arn
 
   # Maximum retention time for troubleshooting (14 days)
@@ -160,11 +160,11 @@ resource "aws_sqs_queue" "ec2_isolation_dlq" {
 
 data "aws_iam_policy_document" "ec2_isolation_dlq_policy" {
   statement {
-    sid = "AllowEventBridgeToSendEC2IsolationFailures"
+    sid    = "AllowEventBridgeToSendEC2IsolationFailures"
     effect = "Allow"
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["events.amazonaws.com"]
     }
 
@@ -177,7 +177,7 @@ data "aws_iam_policy_document" "ec2_isolation_dlq_policy" {
     ]
 
     condition {
-      test = "ArnEquals"
+      test     = "ArnEquals"
       variable = "aws:SourceArn"
       values = [
         aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
@@ -186,7 +186,7 @@ data "aws_iam_policy_document" "ec2_isolation_dlq_policy" {
   }
 
   statement {
-    sid = "AllowEC2IsolationLambdaRoleToSendFailures"
+    sid    = "AllowEC2IsolationLambdaRoleToSendFailures"
     effect = "Allow"
 
     principals {
@@ -208,7 +208,7 @@ data "aws_iam_policy_document" "ec2_isolation_dlq_policy" {
 
 resource "aws_sqs_queue_policy" "ec2_isolation_dlq" {
   queue_url = aws_sqs_queue.ec2_isolation_dlq.id
-  policy = data.aws_iam_policy_document.ec2_isolation_dlq_policy.json
+  policy    = data.aws_iam_policy_document.ec2_isolation_dlq_policy.json
 }
 
 # EC2 ROLLBACK LAMBDA RESOURCES
