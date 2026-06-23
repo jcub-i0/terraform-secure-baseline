@@ -18,6 +18,10 @@ output "lambda_ec2_rollback_sg_id" {
   value = aws_security_group.lambda_ec2_rollback_sg.id
 }
 
+output "lambda_ec2_rollback_dlq_arn" {
+  value = aws_lambda_function.ec2_rollback.arn
+}
+
 output "threat_intel_api_keys_arn" {
   value = aws_secretsmanager_secret.threat_intel_api_keys.arn
 }
