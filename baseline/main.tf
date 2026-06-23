@@ -108,8 +108,8 @@ module "iam" {
   lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
 
-  lambda_ec2_isolation_dlq_arn       = module.automation.lambda_ec2_isolation_dlq_arn
-  lambda_ec2_rollback_dlq_arn = module.automation.lambda_ec2_rollback_dlq_arn
+  lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
+  lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
 }
 
 module "security" {
