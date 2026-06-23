@@ -10,6 +10,10 @@ output "lambda_ec2_isolation_sg_id" {
   value = aws_security_group.lambda_ec2_isolation_sg.id
 }
 
+output "lambda_ec2_isolation_dlq_arn" {
+  value = aws_sqs_queue.ec2_isolation_dlq.arn
+}
+
 output "lambda_ec2_rollback_sg_id" {
   value = aws_security_group.lambda_ec2_rollback_sg.id
 }
