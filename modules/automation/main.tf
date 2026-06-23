@@ -120,6 +120,21 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   }
 }
 
+## EC2 ISOLATION DLQ
+resource "aws_sqs_queue" "ec2_isolation_dlq" {
+  name = "${var.name_prefix}-ec2-isolation-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-Lambda-EC2-Isolation-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
 data "archive_file" "lambda_ec2_rollback" {
