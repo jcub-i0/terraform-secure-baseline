@@ -93,6 +93,15 @@ resource "aws_cloudwatch_event_target" "ec2_isolation" {
   target_id = "Ec2Isolation"
   arn       = aws_lambda_function.ec2_isolation.arn
 
+  dead_letter_config {
+    arn = aws_sqs_queue.ec2_isolation_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts = 3
+  }
+
   depends_on = [
     aws_cloudwatch_event_rule.securityhub_ec2_high_critical
   ]
