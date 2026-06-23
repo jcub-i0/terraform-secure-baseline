@@ -604,6 +604,15 @@ resource "aws_cloudwatch_event_target" "ip_enrichment" {
   target_id = "IpEnrichment"
   arn       = aws_lambda_function.ip_enrichment.arn
 
+  dead_letter_config {
+    arn = aws_sqs_queue.ip_enrichment_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
+
   depends_on = [
     aws_cloudwatch_event_rule.securityhub_high_critical
   ]
