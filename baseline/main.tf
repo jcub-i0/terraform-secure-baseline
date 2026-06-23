@@ -106,8 +106,9 @@ module "iam" {
 
   threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
   lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
-  lambda_ec2_isolation_dlq_arn       = module.automation.lambda_ec2_isolation_dlq_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
+
+  lambda_ec2_isolation_dlq_arn       = module.automation.lambda_ec2_isolation_dlq_arn
 }
 
 module "security" {
