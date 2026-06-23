@@ -143,7 +143,7 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   }
 }
 
-## EC2 ISOLATION DLQ
+## EC2 ISOLATION LAMBDA DLQ
 resource "aws_sqs_queue" "ec2_isolation_dlq" {
   name              = "${var.name_prefix}-ec2-isolation-dlq"
   kms_master_key_id = var.logs_cmk_arn
@@ -211,7 +211,7 @@ resource "aws_sqs_queue_policy" "ec2_isolation_dlq" {
   policy    = data.aws_iam_policy_document.ec2_isolation_dlq_policy.json
 }
 
-### EC2 ISOLATION CLOUDWATCH ALARM
+### EC2 ISOLATION LAMBDA DLQ CLOUDWATCH ALARM
 resource "aws_cloudwatch_metric_alarm" "ec2_isolation_dlq_visible_messages" {
   alarm_name          = "${var.name_prefix}-ec2-isolation-dlq-visible-messages"
   comparison_operator = "GreaterThanThreshold"
@@ -376,6 +376,15 @@ resource "aws_cloudwatch_event_target" "ec2_rollback" {
   target_id      = "Ec2RollbackLambda"
   arn            = aws_lambda_function.ec2_rollback.arn
 
+  dead_letter_config {
+    arn = aws_sqs_queue.ec2_rollback_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
+
   depends_on = [
     aws_cloudwatch_event_rule.ec2_rollback
   ]
@@ -398,6 +407,101 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
 
   tags = {
     Name        = "${var.name_prefix}-Lambda-EC2-Rollback-Logs"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+## EC2 ROLLBACK LAMBDA DLQ
+resource "aws_sqs_queue" "ec2_rollback_dlq" {
+  name              = "${var.name_prefix}-ec2-rollback-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-Lambda-Rollback-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+data "aws_iam_policy_document" "ec2_rollback_dlq_policy" {
+  statement {
+    sid    = "AllowEventBridgeToSendEC2RollbackFailures"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_rollback_dlq.arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.ec2_rollback.arn
+      ]
+    }
+  }
+
+  statement {
+    sid    = "AllowEC2RollbackRoleToSendFailures"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        var.lambda_ec2_rollback_role_arn
+      ]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_rollback_dlq.arn
+    ]
+  }
+}
+
+resource "aws_sqs_queue_policy" "ec2_rollback_dlq" {
+  queue_url = aws_sqs_queue.ec2_rollback_dlq.id
+  policy    = data.aws_iam_policy_document.ec2_rollback_dlq_policy.json
+}
+
+### EC2 ROLLBACK DLQ CLOUDWATCH ALARM
+resource "aws_cloudwatch_metric_alarm" "ec2_rollback_dlq_visible_messages" {
+  alarm_name          = "${var.name_prefix}-ec2-rollback-dlq-visible-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.ec2_rollback_dlq.name
+  }
+
+  alarm_actions = [
+    var.secops_topic_arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-EC2-Rollback-DLQ-Visible-Messages"
     Environment = var.environment
     Terraform   = "true"
   }
