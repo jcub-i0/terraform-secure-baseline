@@ -211,6 +211,33 @@ resource "aws_sqs_queue_policy" "ec2_isolation_dlq" {
   policy    = data.aws_iam_policy_document.ec2_isolation_dlq_policy.json
 }
 
+### EC2 ISOLATION CLOUDWATCH ALARM
+resource "aws_cloudwatch_metric_alarm" "ec2_isolation_dlq_visible_messages" {
+  alarm_name = "${var.name_prefix}-ec2-isolation-dlq-visible-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods = 1
+  metric_name = "ApproximateNumberOfMessagesVisible"
+  namespace = "AWS/SQS"
+  period = 300
+  statistic = "Maximum"
+  threshold = 0
+  treat_missing_data = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.ec2_isolation_dlq.name
+  }
+
+  alarm_actions = [
+    var.secops_topic_arn
+  ]
+
+  tags = {
+    Name = "${var.name_prefix}-EC2-Isolation-DLQ-Visible-Messages"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
+
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
 data "archive_file" "lambda_ec2_rollback" {
