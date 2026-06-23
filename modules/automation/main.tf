@@ -116,6 +116,20 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   source_arn    = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
 }
 
+### ENABLE EC2 ISOLATION LAMBDA PROCESSING FAILURES TO LAND IN ITS DLQ
+resource "aws_lambda_function_event_invoke_config" "ec2_isolation" {
+  function_name = aws_lambda_function.ec2_isolation.function_name
+
+  maximum_event_age_in_seconds = 3600
+  maximum_retry_attempts = 2
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.ec2_isolation_dlq.arn
+    }
+  }
+}
+
 ## CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   name              = "/aws/lambda/${var.name_prefix}-ec2-isolation"
