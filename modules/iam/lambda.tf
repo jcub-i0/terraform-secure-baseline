@@ -78,7 +78,7 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
   }
 
   statement {
-    sid = "SendEC2IsolationFailuresToDLQ"
+    sid    = "SendEC2IsolationFailuresToDLQ"
     effect = "Allow"
 
     actions = [
