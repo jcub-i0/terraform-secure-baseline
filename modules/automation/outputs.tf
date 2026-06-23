@@ -19,7 +19,7 @@ output "lambda_ec2_rollback_sg_id" {
 }
 
 output "lambda_ec2_rollback_dlq_arn" {
-  value = aws_lambda_function.ec2_rollback.arn
+  value = aws_sqs_queue.ec2_rollback_dlq.arn
 }
 
 output "threat_intel_api_keys_arn" {
