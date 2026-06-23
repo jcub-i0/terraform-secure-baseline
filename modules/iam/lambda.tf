@@ -76,6 +76,19 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
 
     resources = [var.logs_cmk_arn]
   }
+
+  statement {
+    sid = "SendEC2IsolationFailuresToDLQ"
+    effect = "Allow"
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      var.lambda_ec2_isolation_dlq_arn
+    ]
+  }
 }
 
 resource "aws_iam_policy" "lambda_ec2_isolation" {
