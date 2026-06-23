@@ -62,8 +62,8 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   }
 }
 
-### EVENTBRIDGE RESOURCES
-#### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
+## EC2 ISOLATION EVENTBRIDGE RESOURCES
+### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   name        = "${var.name_prefix}-securityhub-ec2-high-critical"
   description = "New High/Critical Security Hub EC2 findings"
@@ -87,7 +87,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   })
 }
 
-#### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
+### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_isolation" {
   rule      = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
   target_id = "Ec2Isolation"
@@ -98,7 +98,7 @@ resource "aws_cloudwatch_event_target" "ec2_isolation" {
   ]
 }
 
-#### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
+### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
 resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   statement_id  = "AllowExecutionFromEventBridgeEc2Isolation"
   action        = "lambda:InvokeFunction"
@@ -107,7 +107,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   source_arn    = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
 }
 
-### CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
+## CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   name              = "/aws/lambda/${var.name_prefix}-ec2-isolation"
   retention_in_days = var.cloudwatch_retention_days
