@@ -273,6 +273,19 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
 
     resources = [var.secrets_manager_cmk_arn]
   }
+
+  statement {
+    sid    = "SendIPEnrichmentFailuresToDLQ"
+    effect = "Allow"
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      var.lambda_ip_enrichment_dlq_arn
+    ]
+  }
 }
 
 resource "aws_iam_policy" "lambda_ip_enrichment" {
