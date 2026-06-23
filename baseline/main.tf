@@ -97,6 +97,7 @@ module "iam" {
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   secops_topic_arn         = module.monitoring.secops_topic_arn
   logs_cmk_arn             = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn            = module.security.secrets_manager_cmk_arn
 
   centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
   flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
@@ -105,7 +106,6 @@ module "iam" {
 
   threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
   lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
-  secrets_manager_cmk_arn            = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
 }
 
