@@ -110,6 +110,7 @@ module "iam" {
 
   lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
   lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
+  lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
 }
 
 module "security" {
