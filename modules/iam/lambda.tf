@@ -167,6 +167,19 @@ data "aws_iam_policy_document" "lambda_ec2_rollback" {
 
     resources = [var.logs_cmk_arn]
   }
+
+  statement {
+    sid    = "SendEC2RollbackFailuresToDLQ"
+    effect = "Allow"
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      var.lambda_ec2_rollback_dlq_arn
+    ]
+  }
 }
 
 resource "aws_iam_policy" "lambda_ec2_rollback" {
