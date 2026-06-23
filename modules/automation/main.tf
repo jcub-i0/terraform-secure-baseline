@@ -135,6 +135,59 @@ resource "aws_sqs_queue" "ec2_isolation_dlq" {
   }
 }
 
+data "aws_iam_policy_document" "ec2_isolation_dlq_policy" {
+  statement {
+    sid = "AllowEventBridgeToSendEC2IsolationFailures"
+    effect = "Allow"
+
+    principals {
+      type = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_isolation_dlq.arn
+    ]
+
+    condition {
+      test = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
+      ]
+    }
+  }
+
+  statement {
+    sid = "AllowEC2IsolationLambdaRoleToSendFailures"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        var.lambda_ec2_isolation_role_arn
+      ]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_isolation_dlq.arn
+    ]
+  }
+}
+
+resource "aws_sqs_queue_policy" "ec2_isolation_dlq" {
+  queue_url = aws_sqs_queue.ec2_isolation_dlq.id
+  policy = data.aws_iam_policy_document.ec2_isolation_dlq_policy.json
+}
+
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
 data "archive_file" "lambda_ec2_rollback" {
