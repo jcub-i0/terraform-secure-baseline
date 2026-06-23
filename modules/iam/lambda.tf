@@ -76,6 +76,19 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
 
     resources = [var.logs_cmk_arn]
   }
+
+  statement {
+    sid    = "SendEC2IsolationFailuresToDLQ"
+    effect = "Allow"
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      var.lambda_ec2_isolation_dlq_arn
+    ]
+  }
 }
 
 resource "aws_iam_policy" "lambda_ec2_isolation" {
@@ -153,6 +166,19 @@ data "aws_iam_policy_document" "lambda_ec2_rollback" {
     ]
 
     resources = [var.logs_cmk_arn]
+  }
+
+  statement {
+    sid    = "SendEC2RollbackFailuresToDLQ"
+    effect = "Allow"
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      var.lambda_ec2_rollback_dlq_arn
+    ]
   }
 }
 
@@ -246,6 +272,19 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
     ]
 
     resources = [var.secrets_manager_cmk_arn]
+  }
+
+  statement {
+    sid    = "SendIPEnrichmentFailuresToDLQ"
+    effect = "Allow"
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      var.lambda_ip_enrichment_dlq_arn
+    ]
   }
 }
 

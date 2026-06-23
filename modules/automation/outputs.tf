@@ -10,8 +10,16 @@ output "lambda_ec2_isolation_sg_id" {
   value = aws_security_group.lambda_ec2_isolation_sg.id
 }
 
+output "lambda_ec2_isolation_dlq_arn" {
+  value = aws_sqs_queue.ec2_isolation_dlq.arn
+}
+
 output "lambda_ec2_rollback_sg_id" {
   value = aws_security_group.lambda_ec2_rollback_sg.id
+}
+
+output "lambda_ec2_rollback_dlq_arn" {
+  value = aws_sqs_queue.ec2_rollback_dlq.arn
 }
 
 output "threat_intel_api_keys_arn" {
@@ -20,6 +28,10 @@ output "threat_intel_api_keys_arn" {
 
 output "lambda_ip_enrichment_log_group_arn" {
   value = aws_cloudwatch_log_group.lambda_ip_enrichment.arn
+}
+
+output "lambda_ip_enrichment_dlq_arn" {
+  value = aws_sqs_queue.ip_enrichment_dlq.arn
 }
 
 output "securityhub_high_critical_rule_arn" {

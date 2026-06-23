@@ -62,8 +62,8 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
   }
 }
 
-### EVENTBRIDGE RESOURCES
-#### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
+## EC2 ISOLATION EVENTBRIDGE RESOURCES
+### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   name        = "${var.name_prefix}-securityhub-ec2-high-critical"
   description = "New High/Critical Security Hub EC2 findings"
@@ -87,18 +87,27 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   })
 }
 
-#### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
+### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_isolation" {
   rule      = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
   target_id = "Ec2Isolation"
   arn       = aws_lambda_function.ec2_isolation.arn
+
+  dead_letter_config {
+    arn = aws_sqs_queue.ec2_isolation_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
 
   depends_on = [
     aws_cloudwatch_event_rule.securityhub_ec2_high_critical
   ]
 }
 
-#### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
+### PERMISSION TO ALLOW EVENTBRIDGE TO INVOKE EC2 ISOLATION LAMBDA
 resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   statement_id  = "AllowExecutionFromEventBridgeEc2Isolation"
   action        = "lambda:InvokeFunction"
@@ -107,7 +116,21 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_isolation" {
   source_arn    = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
 }
 
-### CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
+### ENABLE EC2 ISOLATION LAMBDA PROCESSING FAILURES TO LAND IN ITS DLQ
+resource "aws_lambda_function_event_invoke_config" "ec2_isolation" {
+  function_name = aws_lambda_function.ec2_isolation.function_name
+
+  maximum_event_age_in_seconds = 3600
+  maximum_retry_attempts       = 2
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.ec2_isolation_dlq.arn
+    }
+  }
+}
+
+## CLOUDWATCH LOG GROUP FOR EC2 ISOLATION LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
   name              = "/aws/lambda/${var.name_prefix}-ec2-isolation"
   retention_in_days = var.cloudwatch_retention_days
@@ -115,6 +138,101 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_isolation" {
 
   tags = {
     Name        = "${var.name_prefix}-Lambda-EC2-Isolation-Logs"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+## EC2 ISOLATION LAMBDA DLQ
+resource "aws_sqs_queue" "ec2_isolation_dlq" {
+  name              = "${var.name_prefix}-ec2-isolation-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-Lambda-EC2-Isolation-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+data "aws_iam_policy_document" "ec2_isolation_dlq_policy" {
+  statement {
+    sid    = "AllowEventBridgeToSendEC2IsolationFailures"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_isolation_dlq.arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.securityhub_ec2_high_critical.arn
+      ]
+    }
+  }
+
+  statement {
+    sid    = "AllowEC2IsolationLambdaRoleToSendFailures"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        var.lambda_ec2_isolation_role_arn
+      ]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_isolation_dlq.arn
+    ]
+  }
+}
+
+resource "aws_sqs_queue_policy" "ec2_isolation_dlq" {
+  queue_url = aws_sqs_queue.ec2_isolation_dlq.id
+  policy    = data.aws_iam_policy_document.ec2_isolation_dlq_policy.json
+}
+
+### EC2 ISOLATION LAMBDA DLQ CLOUDWATCH ALARM
+resource "aws_cloudwatch_metric_alarm" "ec2_isolation_dlq_visible_messages" {
+  alarm_name          = "${var.name_prefix}-ec2-isolation-dlq-visible-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.ec2_isolation_dlq.name
+  }
+
+  alarm_actions = [
+    var.secops_topic_arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-EC2-Isolation-DLQ-Visible-Messages"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -258,6 +376,15 @@ resource "aws_cloudwatch_event_target" "ec2_rollback" {
   target_id      = "Ec2RollbackLambda"
   arn            = aws_lambda_function.ec2_rollback.arn
 
+  dead_letter_config {
+    arn = aws_sqs_queue.ec2_rollback_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
+
   depends_on = [
     aws_cloudwatch_event_rule.ec2_rollback
   ]
@@ -280,6 +407,101 @@ resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
 
   tags = {
     Name        = "${var.name_prefix}-Lambda-EC2-Rollback-Logs"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+## EC2 ROLLBACK LAMBDA DLQ
+resource "aws_sqs_queue" "ec2_rollback_dlq" {
+  name              = "${var.name_prefix}-ec2-rollback-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-Lambda-Rollback-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+data "aws_iam_policy_document" "ec2_rollback_dlq_policy" {
+  statement {
+    sid    = "AllowEventBridgeToSendEC2RollbackFailures"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_rollback_dlq.arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.ec2_rollback.arn
+      ]
+    }
+  }
+
+  statement {
+    sid    = "AllowEC2RollbackRoleToSendFailures"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        var.lambda_ec2_rollback_role_arn
+      ]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ec2_rollback_dlq.arn
+    ]
+  }
+}
+
+resource "aws_sqs_queue_policy" "ec2_rollback_dlq" {
+  queue_url = aws_sqs_queue.ec2_rollback_dlq.id
+  policy    = data.aws_iam_policy_document.ec2_rollback_dlq_policy.json
+}
+
+### EC2 ROLLBACK DLQ CLOUDWATCH ALARM
+resource "aws_cloudwatch_metric_alarm" "ec2_rollback_dlq_visible_messages" {
+  alarm_name          = "${var.name_prefix}-ec2-rollback-dlq-visible-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.ec2_rollback_dlq.name
+  }
+
+  alarm_actions = [
+    var.secops_topic_arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-EC2-Rollback-DLQ-Visible-Messages"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -382,6 +604,15 @@ resource "aws_cloudwatch_event_target" "ip_enrichment" {
   target_id = "IpEnrichment"
   arn       = aws_lambda_function.ip_enrichment.arn
 
+  dead_letter_config {
+    arn = aws_sqs_queue.ip_enrichment_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
+
   depends_on = [
     aws_cloudwatch_event_rule.securityhub_high_critical
   ]
@@ -403,6 +634,101 @@ resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
 
   tags = {
     Name        = "${var.name_prefix}-Lambda-IP-Enrichment-Logs"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+## IP ENRICHMENT LAMBDA DLQ
+resource "aws_sqs_queue" "ip_enrichment_dlq" {
+  name              = "${var.name_prefix}-ip-enrichment-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-IP-Enrichment-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+data "aws_iam_policy_document" "ip_enrichment_dlq_policy" {
+  statement {
+    sid    = "AllowEventBridgeToSendIPEnrichmentFailures"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ip_enrichment_dlq.arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.securityhub_high_critical.arn
+      ]
+    }
+  }
+
+  statement {
+    sid    = "AllowIPEnrichmentRoleToSendFailures"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        var.lambda_ip_enrichment_role_arn
+      ]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.ip_enrichment_dlq.arn
+    ]
+  }
+}
+
+resource "aws_sqs_queue_policy" "ip_enrichment_dlq" {
+  queue_url = aws_sqs_queue.ip_enrichment_dlq.id
+  policy    = data.aws_iam_policy_document.ip_enrichment_dlq_policy.json
+}
+
+### EC2 ROLLBACK DLQ CLOUDWATCH ALARM
+resource "aws_cloudwatch_metric_alarm" "ip_enrichment_dlq_visible_messages" {
+  alarm_name          = "${var.name_prefix}-ip-enrichment-dlq-visible-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.ip_enrichment_dlq.name
+  }
+
+  alarm_actions = [
+    var.secops_topic_arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-IP-Enrichment-DLQ-Visible-Messages"
     Environment = var.environment
     Terraform   = "true"
   }
