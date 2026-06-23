@@ -61,3 +61,7 @@ variable "lambda_ip_enrichment_log_group_arn" {
 variable "break_glass_trusted_principal_arns" {
   type = list(string)
 }
+
+variable "lambda_ec2_isolation_dlq_arn" {
+  type = string
+}
