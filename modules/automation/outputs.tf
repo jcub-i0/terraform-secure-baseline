@@ -30,6 +30,10 @@ output "lambda_ip_enrichment_log_group_arn" {
   value = aws_cloudwatch_log_group.lambda_ip_enrichment.arn
 }
 
+output "lambda_ip_enrichment_dlq_arn" {
+  value = aws_sqs_queue.ip_enrichment_dlq.arn
+}
+
 output "securityhub_high_critical_rule_arn" {
   value = aws_cloudwatch_event_rule.securityhub_high_critical.arn
 }
