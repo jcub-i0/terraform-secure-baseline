@@ -65,3 +65,7 @@ variable "break_glass_trusted_principal_arns" {
 variable "lambda_ec2_isolation_dlq_arn" {
   type = string
 }
+
+variable "lambda_ec2_rollback_dlq_arn" {
+  type = string
+}
