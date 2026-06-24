@@ -267,8 +267,8 @@ resource "aws_sns_topic_subscription" "secops" {
 
 resource "aws_sns_topic_subscription" "secops_notifications_sqs" {
   topic_arn = aws_sns_topic.secops.arn
-  protocol = "sqs"
-  endpoint = aws_sqs_queue.secops_notifications.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.secops_notifications.arn
 
   raw_message_delivery = true
 
@@ -336,17 +336,17 @@ resource "aws_sqs_queue" "secops_notifications_dlq" {
 
 #### CLOUDWATCH ALARM FOR SECOPS DLQ
 resource "aws_cloudwatch_metric_alarm" "secops_notifications_dlq_visible_messages" {
-  alarm_name = "${var.name_prefix}-security-notifications-dlq-visible-messages"
+  alarm_name        = "${var.name_prefix}-security-notifications-dlq-visible-messages"
   alarm_description = "Security Operations notifications DLQ has visible messages requiring review."
 
-  namespace = "AWS/SQS"
-  metric_name = "ApproximateNumberOfMessagesVisible"
-  statistic = "Maximum"
-  period = 300
-  evaluation_periods = 1
-  threshold = 0
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
   comparison_operator = "GreaterThanThreshold"
-  treat_missing_data = "notBreaching"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     QueueName = aws_sqs_queue.secops_notifications_dlq.name
@@ -357,9 +357,9 @@ resource "aws_cloudwatch_metric_alarm" "secops_notifications_dlq_visible_message
   ]
 
   tags = {
-    Name = "${var.name_prefix}-Security-Notifications-DLQ-Alarm"
+    Name        = "${var.name_prefix}-Security-Notifications-DLQ-Alarm"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
@@ -373,7 +373,7 @@ resource "aws_sqs_queue" "secops_notifications" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.secops_notifications_dlq.arn
-    maxReceiveCount = 5
+    maxReceiveCount     = 5
   })
 
   tags = {
