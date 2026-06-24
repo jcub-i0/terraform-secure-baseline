@@ -309,7 +309,7 @@ EOT
 ## SQS RESOURCES FOR SECURITY
 ### SECOPS NOTIFICATIONS SQS DLQ
 resource "aws_sqs_queue" "secops_notifications_dlq" {
-  name              = "${var.name_prefix}-security-notifications-dlq"
+  name              = "${var.name_prefix}-secops-notifications-dlq"
   kms_master_key_id = var.logs_cmk_arn
 
   # Maximum retention time for troubleshooting (14 days)
