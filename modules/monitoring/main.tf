@@ -358,6 +358,11 @@ data "aws_iam_policy_document" "secops_notifications_sqs_policy" {
   }
 }
 
+resource "aws_sqs_queue_policy" "secops_notifications" {
+  queue_url = aws_sqs_queue.secops_notifications.id
+  policy = data.aws_iam_policy_document.secops_notifications_sqs_policy.json
+}
+
 ### CLOUDWATCH EVENT RULES
 
 ##########################################
