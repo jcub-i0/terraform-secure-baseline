@@ -316,7 +316,7 @@ resource "aws_sqs_queue" "secops_notifications_dlq" {
   message_retention_seconds = 1209600
 
   tags = {
-    Name = "${var.name_prefix}-Security-Notifications-DLQ"
+    Name = "${var.name_prefix}-SecOps-Notifications-DLQ"
     Environment = var.environment
     Terraform = "true"
   }
