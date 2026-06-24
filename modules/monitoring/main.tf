@@ -116,7 +116,7 @@ resource "aws_sns_topic" "secops" {
 }
 
 ### SECOPS SNS TOPIC POLICY
-data "aws_iam_policy_document" "secops" {
+data "aws_iam_policy_document" "secops_notifications_sns" {
   statement {
     sid    = "EnableRootPermissions"
     effect = "Allow"
@@ -253,7 +253,7 @@ data "aws_iam_policy_document" "secops" {
 
 resource "aws_sns_topic_policy" "secops" {
   arn    = aws_sns_topic.secops.arn
-  policy = data.aws_iam_policy_document.secops.json
+  policy = data.aws_iam_policy_document.secops_notifications_sns.json
 }
 
 ### SECOPS SNS SUBSCRIPTION
