@@ -334,6 +334,35 @@ resource "aws_sqs_queue" "secops_notifications_dlq" {
   }
 }
 
+#### CLOUDWATCH ALARM FOR SECOPS DLQ
+resource "aws_cloudwatch_metric_alarm" "secops_notifications_dlq_visible_messages" {
+  alarm_name = "${var.name_prefix}-security-notifications-dlq-visible-messages"
+  alarm_description = "Security Operations notifications DLQ has visible messages requiring review."
+
+  namespace = "AWS/SQS"
+  metric_name = "ApproximateNumberOfMessagesVisible"
+  statistic = "Maximum"
+  period = 300
+  evaluation_periods = 1
+  threshold = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.secops_notifications_dlq.name
+  }
+
+  alarm_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  tags = {
+    Name = "${var.name_prefix}-SecOps-Notifications-DLQ-Alarm"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
+
 ### SECOPS NOTIFICATIONS SQS QUEUE
 resource "aws_sqs_queue" "secops_notifications" {
   name              = "${var.name_prefix}-secops-notifications-queue"
