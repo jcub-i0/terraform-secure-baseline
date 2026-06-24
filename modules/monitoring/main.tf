@@ -324,16 +324,16 @@ resource "aws_sqs_queue" "secops_notifications_dlq" {
 
 ### SECOPS NOTIFICATIONS SQS QUEUE
 resource "aws_sqs_queue" "secops_notifications" {
-  name = "${var.name_prefix}-secops-notifications-queue"
+  name              = "${var.name_prefix}-secops-notifications-queue"
   kms_master_key_id = var.logs_cmk_arn
 
   # Maximum retention time for troubleshooting (14 days)
   message_retention_seconds = 1209600
 
   tags = {
-    Name = "${var.name_prefix}-SecOps-Notifications-Queue"
+    Name        = "${var.name_prefix}-SecOps-Notifications-Queue"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
