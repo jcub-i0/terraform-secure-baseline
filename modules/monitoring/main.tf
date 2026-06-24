@@ -371,6 +371,11 @@ resource "aws_sqs_queue" "secops_notifications" {
   # Maximum retention time for troubleshooting (14 days)
   message_retention_seconds = 1209600
 
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.secops_notifications_dlq.arn
+    maxReceiveCount = 5
+  })
+
   tags = {
     Name        = "${var.name_prefix}-Security-Notifications-Queue"
     Environment = var.environment
