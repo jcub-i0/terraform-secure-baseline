@@ -340,11 +340,11 @@ resource "aws_sqs_queue" "secops_notifications" {
 #### QUEUE POLICY ALLOWING SECOPS SNS TOPIC TO PUBLISH
 data "aws_iam_policy_document" "secops_notifications_queue_policy" {
   statement {
-    sid = "AllowSecurityNotificationsTopicToSendMessages"
+    sid    = "AllowSecurityNotificationsTopicToSendMessages"
     effect = "Allow"
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["sns.amazonaws.com"]
     }
 
