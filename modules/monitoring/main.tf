@@ -256,13 +256,25 @@ resource "aws_sns_topic_policy" "secops" {
   policy = data.aws_iam_policy_document.secops_notifications_sns.json
 }
 
-### SECOPS SNS SUBSCRIPTION
+### SECOPS SNS SUBSCRIPTIONS
 resource "aws_sns_topic_subscription" "secops" {
   for_each = toset(var.secops_emails)
 
   topic_arn = aws_sns_topic.secops.arn
   protocol  = "email"
   endpoint  = each.value
+}
+
+resource "aws_sns_topic_subscription" "secops_notifications_sqs" {
+  topic_arn = aws_sns_topic.secops.arn
+  protocol = "sqs"
+  endpoint = aws_sqs_queue.secops_notifications.arn
+
+  raw_message_delivery = true
+
+  depends_on = [
+    aws_sqs_queue.secops_notifications
+  ]
 }
 
 ### EVENTBRIDGE TARGET FOR SECURITY HUB HIGH + CRITICAL ALERTS (EVENT RULE LOCATED IN 'AUTOMATION' MODULE)
