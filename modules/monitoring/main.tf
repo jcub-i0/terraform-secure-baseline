@@ -401,6 +401,12 @@ data "aws_iam_policy_document" "security_notifications_sqs" {
     resources = [
       aws_sqs_queue.security_notifications.arn
     ]
+
+    condition {
+      test = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [aws_sns_topic.secops.arn]
+    }
   }
 }
 
