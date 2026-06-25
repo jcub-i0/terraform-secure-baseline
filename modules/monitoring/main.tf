@@ -67,6 +67,9 @@ resource "aws_sqs_queue" "compliance" {
   name              = "${var.name_prefix}-compliance-queue"
   kms_master_key_id = var.logs_cmk_arn
 
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
   tags = {
     Name        = "${var.name_prefix}-ComplianceQueue"
     Environment = var.environment
