@@ -273,7 +273,7 @@ resource "aws_sns_topic_subscription" "security_notifications_sqs" {
   raw_message_delivery = true
 
   depends_on = [
-    aws_sqs_queue.security_notifications
+    aws_sqs_queue_policy.security_notifications
   ]
 }
 
