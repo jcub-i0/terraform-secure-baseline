@@ -110,7 +110,7 @@ success "AWS credentials are valid"
 info "AWS account ID: $ACCOUNT_ID"
 info "AWS caller ARN: $CALLER_ARN"
 
-if [[ -n "$ACCOUNT_ID" ]]; then
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
   if [[ "$ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
     success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
   else
