@@ -110,7 +110,7 @@ success "AWS credentials are valid"
 info "AWS account ID: $ACCOUNT_ID"
 info "AWS caller ARN: $CALLER_ARN"
 
-if [[ -n "$ACCOUNT_ID" ]]; then
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
   if [[ "$ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
     success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
   else
@@ -139,6 +139,11 @@ resource_name() {
 #   "eventbridge dlq|eventbridge-dlq|optional|none"
 EXPECTED_SQS_QUEUES=(
   "compliance|compliance-queue|required|sns:compliance-notifications"
+  "ec2-isolation|ec2-isolation-dlq|required|none"
+  "ec2-rollback|ec2-rollback-dlq|required|none"
+  "ip-enrichment|ip-enrichment-dlq|required|none"
+  "security-notifications|security-notifications-queue|required|sns:security-notifications"
+  "security-notifications-dlq|security-notifications-dlq|required|none"
 )
 
 QUEUE_SUMMARY_ROWS=()

@@ -334,7 +334,7 @@ if [[ "$VALIDATED_TOPIC_COUNT" -eq 0 ]]; then
     TOTAL_SUBSCRIPTION_COUNT=$((TOTAL_SUBSCRIPTION_COUNT + subscription_count))
     TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_count))
 
-    SNS_SUMMARY_ROWS+=("${keyword}|${topic_arn}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|${subscriptions_deleted}|${kms_key_id:-<none>}")
+    SNS_SUMMARY_ROWS+=("${keyword}|${topic_arn}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|$([[ -n "$kms_key_id" ]] && echo "SSE-KMS" || echo "none")")
   done < <(echo "$MATCHING_TOPICS_JSON" | jq -r '.[].TopicArn')
 fi
 

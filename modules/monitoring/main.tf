@@ -67,6 +67,9 @@ resource "aws_sqs_queue" "compliance" {
   name              = "${var.name_prefix}-compliance-queue"
   kms_master_key_id = var.logs_cmk_arn
 
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
   tags = {
     Name        = "${var.name_prefix}-ComplianceQueue"
     Environment = var.environment
@@ -116,7 +119,7 @@ resource "aws_sns_topic" "secops" {
 }
 
 ### SECOPS SNS TOPIC POLICY
-data "aws_iam_policy_document" "secops" {
+data "aws_iam_policy_document" "security_notifications_sns" {
   statement {
     sid    = "EnableRootPermissions"
     effect = "Allow"
@@ -253,16 +256,28 @@ data "aws_iam_policy_document" "secops" {
 
 resource "aws_sns_topic_policy" "secops" {
   arn    = aws_sns_topic.secops.arn
-  policy = data.aws_iam_policy_document.secops.json
+  policy = data.aws_iam_policy_document.security_notifications_sns.json
 }
 
-### SECOPS SNS SUBSCRIPTION
+### SECOPS SNS SUBSCRIPTIONS
 resource "aws_sns_topic_subscription" "secops" {
   for_each = toset(var.secops_emails)
 
   topic_arn = aws_sns_topic.secops.arn
   protocol  = "email"
   endpoint  = each.value
+}
+
+resource "aws_sns_topic_subscription" "security_notifications_sqs" {
+  topic_arn = aws_sns_topic.secops.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.security_notifications.arn
+
+  raw_message_delivery = true
+
+  depends_on = [
+    aws_sqs_queue_policy.security_notifications
+  ]
 }
 
 ### EVENTBRIDGE TARGET FOR SECURITY HUB HIGH + CRITICAL ALERTS (EVENT RULE LOCATED IN 'AUTOMATION' MODULE)
@@ -304,6 +319,103 @@ resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
 "Review this finding in Security Hub and validate whether immediate action is required."
 EOT
   }
+}
+
+## SQS RESOURCES FOR SECURITY
+### SECOPS NOTIFICATIONS SQS DLQ
+resource "aws_sqs_queue" "security_notifications_dlq" {
+  name              = "${var.name_prefix}-security-notifications-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-Security-Notifications-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+#### CLOUDWATCH ALARM FOR SECOPS DLQ
+resource "aws_cloudwatch_metric_alarm" "security_notifications_dlq_visible_messages" {
+  alarm_name        = "${var.name_prefix}-security-notifications-dlq-visible-messages"
+  alarm_description = "Security Operations notifications DLQ has visible messages requiring review."
+
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.security_notifications_dlq.name
+  }
+
+  alarm_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-Security-Notifications-DLQ-Alarm"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+### SECOPS NOTIFICATIONS SQS QUEUE
+resource "aws_sqs_queue" "security_notifications" {
+  name              = "${var.name_prefix}-security-notifications-queue"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.security_notifications_dlq.arn
+    maxReceiveCount     = 5
+  })
+
+  tags = {
+    Name        = "${var.name_prefix}-Security-Notifications-Queue"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+#### QUEUE POLICY ALLOWING SECOPS SNS TOPIC TO PUBLISH
+data "aws_iam_policy_document" "security_notifications_sqs" {
+  statement {
+    sid    = "AllowSecurityNotificationsTopicToSendMessages"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.security_notifications.arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_sns_topic.secops.arn]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "security_notifications" {
+  queue_url = aws_sqs_queue.security_notifications.id
+  policy    = data.aws_iam_policy_document.security_notifications_sqs.json
 }
 
 ### CLOUDWATCH EVENT RULES
