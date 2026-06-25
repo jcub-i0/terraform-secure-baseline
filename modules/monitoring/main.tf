@@ -116,7 +116,7 @@ resource "aws_sns_topic" "secops" {
 }
 
 ### SECOPS SNS TOPIC POLICY
-data "aws_iam_policy_document" "secops_notifications_sns" {
+data "aws_iam_policy_document" "security_notifications_sns" {
   statement {
     sid    = "EnableRootPermissions"
     effect = "Allow"
@@ -253,7 +253,7 @@ data "aws_iam_policy_document" "secops_notifications_sns" {
 
 resource "aws_sns_topic_policy" "secops" {
   arn    = aws_sns_topic.secops.arn
-  policy = data.aws_iam_policy_document.secops_notifications_sns.json
+  policy = data.aws_iam_policy_document.security_notifications_sns.json
 }
 
 ### SECOPS SNS SUBSCRIPTIONS
@@ -265,15 +265,15 @@ resource "aws_sns_topic_subscription" "secops" {
   endpoint  = each.value
 }
 
-resource "aws_sns_topic_subscription" "secops_notifications_sqs" {
+resource "aws_sns_topic_subscription" "security_notifications_sqs" {
   topic_arn = aws_sns_topic.secops.arn
   protocol  = "sqs"
-  endpoint  = aws_sqs_queue.secops_notifications.arn
+  endpoint  = aws_sqs_queue.security_notifications.arn
 
   raw_message_delivery = true
 
   depends_on = [
-    aws_sqs_queue.secops_notifications
+    aws_sqs_queue.security_notifications
   ]
 }
 
@@ -320,7 +320,7 @@ EOT
 
 ## SQS RESOURCES FOR SECURITY
 ### SECOPS NOTIFICATIONS SQS DLQ
-resource "aws_sqs_queue" "secops_notifications_dlq" {
+resource "aws_sqs_queue" "security_notifications_dlq" {
   name              = "${var.name_prefix}-security-notifications-dlq"
   kms_master_key_id = var.logs_cmk_arn
 
@@ -335,7 +335,7 @@ resource "aws_sqs_queue" "secops_notifications_dlq" {
 }
 
 #### CLOUDWATCH ALARM FOR SECOPS DLQ
-resource "aws_cloudwatch_metric_alarm" "secops_notifications_dlq_visible_messages" {
+resource "aws_cloudwatch_metric_alarm" "security_notifications_dlq_visible_messages" {
   alarm_name        = "${var.name_prefix}-security-notifications-dlq-visible-messages"
   alarm_description = "Security Operations notifications DLQ has visible messages requiring review."
 
@@ -349,7 +349,7 @@ resource "aws_cloudwatch_metric_alarm" "secops_notifications_dlq_visible_message
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    QueueName = aws_sqs_queue.secops_notifications_dlq.name
+    QueueName = aws_sqs_queue.security_notifications_dlq.name
   }
 
   alarm_actions = [
@@ -364,7 +364,7 @@ resource "aws_cloudwatch_metric_alarm" "secops_notifications_dlq_visible_message
 }
 
 ### SECOPS NOTIFICATIONS SQS QUEUE
-resource "aws_sqs_queue" "secops_notifications" {
+resource "aws_sqs_queue" "security_notifications" {
   name              = "${var.name_prefix}-security-notifications-queue"
   kms_master_key_id = var.logs_cmk_arn
 
@@ -372,7 +372,7 @@ resource "aws_sqs_queue" "secops_notifications" {
   message_retention_seconds = 1209600
 
   redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.secops_notifications_dlq.arn
+    deadLetterTargetArn = aws_sqs_queue.security_notifications_dlq.arn
     maxReceiveCount     = 5
   })
 
@@ -384,7 +384,7 @@ resource "aws_sqs_queue" "secops_notifications" {
 }
 
 #### QUEUE POLICY ALLOWING SECOPS SNS TOPIC TO PUBLISH
-data "aws_iam_policy_document" "secops_notifications_sqs" {
+data "aws_iam_policy_document" "security_notifications_sqs" {
   statement {
     sid    = "AllowSecurityNotificationsTopicToSendMessages"
     effect = "Allow"
@@ -399,14 +399,14 @@ data "aws_iam_policy_document" "secops_notifications_sqs" {
     ]
 
     resources = [
-      aws_sqs_queue.secops_notifications.arn
+      aws_sqs_queue.security_notifications.arn
     ]
   }
 }
 
-resource "aws_sqs_queue_policy" "secops_notifications" {
-  queue_url = aws_sqs_queue.secops_notifications.id
-  policy    = data.aws_iam_policy_document.secops_notifications_sqs.json
+resource "aws_sqs_queue_policy" "security_notifications" {
+  queue_url = aws_sqs_queue.security_notifications.id
+  policy    = data.aws_iam_policy_document.security_notifications_sqs.json
 }
 
 ### CLOUDWATCH EVENT RULES
