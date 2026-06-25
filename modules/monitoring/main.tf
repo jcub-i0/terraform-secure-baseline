@@ -403,9 +403,9 @@ data "aws_iam_policy_document" "security_notifications_sqs" {
     ]
 
     condition {
-      test = "ArnEquals"
+      test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values = [aws_sns_topic.secops.arn]
+      values   = [aws_sns_topic.secops.arn]
     }
   }
 }
