@@ -231,6 +231,87 @@ find_secops_event_bus_name() {
     '
 }
 
+validate_expected_target_dlq() {
+  local label="$1"
+  local event_bus_name="$2"
+  local rule_suffix="$3"
+  local target_id="$4"
+  local lambda_suffix="$5"
+  local dlq_suffix="$6"
+  local expected_max_attempts="$7"
+  local expected_max_event_age="$8"
+
+  local rule_name
+  local expected_lambda_arn
+  local expected_dlq_arn
+  local targets_json
+  local target_count
+  local actual_target_arn
+  local actual_dlq_arn
+  local actual_max_attempts
+  local actual_max_event_age
+
+  rule_name="${NAME_PREFIX}-${rule_suffix}"
+  expected_lambda_arn="arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${NAME_PREFIX}-${lambda_suffix}"
+  expected_dlq_arn="arn:aws:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${dlq_suffix}"
+
+  section "Validating EventBridge DLQ target for ${lable}"
+
+  info "Event bus: ${event_bus_name}"
+  info "Rule: ${rule_name}"
+  info "Target ID: ${target_id}"
+  info "Expected Lambda: ${expected_lambda_arn}"
+  info "Expected DLQ: ${expected_dlq_arn}"
+
+  targets_json="$(
+    aws events list-targets-by-rule \
+      "${aws_args[@]}" \
+      --event-bus-name "$event_bus_name" \
+      --rule "$rule_name" \
+      --output json
+  )"
+
+  target_count="$(
+    echo "$targets_json" |
+      jq --arg target_id "$target_id" '
+        [
+          .Targets[]
+          | select(.Id == $target_id)
+        ]
+        | length
+      '
+  )"
+
+  actual_target_arn="$(echo "$target_json" | jq -r '.Arn // empty')"
+  actual_dlq_arn="$(echo "$target_json" | jq -r '.DeadLetterConfig.Arn // empty')"
+  actual_max_attempts="$(echo "$targets_json" | jq -r '.RetryPolicy.MaximumRetryAttempts // empty')"
+  actual_max_event_age="$(echo "$targets_json" | jq -r '.MaxiumumEventAgeInSeconds // empty')"
+
+  if [[ "$actual_target_arn" == "$expected_lambda_arn" ]]; then
+    success "${label} target points to expected Lambda"
+  else
+    fail "${label} target ARN mismatch. Expected ${expected_lambda_arn}, got ${actual_target_arn:-<none>}"
+  fi
+
+  if [[ "$actual_dlq_arn" == "$expected_dlq_aqrn" ]]; then
+    success "${label} target has expected DLQ: ${actual_dlq_arn}"
+  else
+    fail "${label} target DLQ mismatch. Expected ${expected_dlq_arn}, got ${actual_dlq_arn:-<none>}"
+  fi
+
+  if [[ "$actual_max_attempts" == "$expected_max_attempts" ]]; then
+    success "${label} target retry attempts match expected value: ${actual_max_attempts}"
+  else
+    fail "${label} target retry attempts mismatch. Expected ${expected_max_attempts}, got ${actual_max_attempts}"
+  fi
+
+  if [[ "$actual_max_event_age" == "$expected_max_event_age" ]]; then
+    success "${label} target max event age matches expected value: ${actual_max_event_age}s"
+  else
+    fail "${label} target max event age mismatch. Expected ${expected_max_event_age}, got ${actual_max_event_age:-<none>}"
+  fi
+}
+
 section "Listing EventBridge event buses"
 
 EVENT_BUSES_JSON="$(
