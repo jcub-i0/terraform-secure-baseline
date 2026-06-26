@@ -94,5 +94,5 @@ variable "inspector_resource_types" {
 
 variable "sec_notifs_eventbridge_dlq_arn" {
   description = "ARN of the 'security_notifications_eventbridge_dlq' DLQ"
-  type = string
+  type        = string
 }

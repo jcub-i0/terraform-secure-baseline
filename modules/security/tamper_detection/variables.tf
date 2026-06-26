@@ -14,7 +14,7 @@ variable "secops_topic_arn" {
 
 variable "sec_notifs_eventbridge_dlq_arn" {
   description = "ARN of the 'security_notifications_eventbridge_dlq' DLQ"
-  type = string
+  type        = string
 }
 
 variable "cloud_name" {
