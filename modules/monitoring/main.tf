@@ -286,6 +286,15 @@ resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   target_id = "sec-hub-to-secops-sns"
   arn       = aws_sns_topic.secops.arn
 
+  dead_letter_config {
+    arn = aws_sqs_queue.security_notifications_eventbridge_dlq
+  }
+  
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts = 3
+  }
+
   input_transformer {
     input_paths = {
       time            = "$.time"
