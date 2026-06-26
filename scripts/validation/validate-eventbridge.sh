@@ -474,6 +474,17 @@ validate_expected_target_dlq \
   "3" \
   "3600"
 
+validate_expected_target_dlq \
+  "Tamper Detection SNS Notification" \
+  "default" \
+  "<tamper-rule-suffix>" \
+  "TamperAlertsToSNS" \
+  "sns" \
+  "security-notifications" \
+  "security-notifications-eventbridge-dlq" \
+  "3" \
+  "3600"
+
 section "EventBridge Summary"
 
 DEFAULT_RULE_COUNT="$(echo "$DEFAULT_RULES_JSON" | jq 'length')"
