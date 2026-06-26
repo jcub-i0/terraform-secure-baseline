@@ -299,8 +299,8 @@ validate_expected_target_dlq() {
 
   actual_target_arn="$(echo "$target_json" | jq -r '.Arn // empty')"
   actual_dlq_arn="$(echo "$target_json" | jq -r '.DeadLetterConfig.Arn // empty')"
-  actual_max_attempts="$(echo "$targets_json" | jq -r '.RetryPolicy.MaximumRetryAttempts // empty')"
-  actual_max_event_age="$(echo "$targets_json" | jq -r '.MaxiumumEventAgeInSeconds // empty')"
+  actual_max_attempts="$(echo "$target_json" | jq -r '.RetryPolicy.MaximumRetryAttempts // empty')"
+  actual_max_event_age="$(echo "$target_json" | jq -r '.MaxiumumEventAgeInSeconds // empty')"
 
   if [[ "$actual_target_arn" == "$expected_lambda_arn" ]]; then
     success "${label} target points to expected Lambda"
