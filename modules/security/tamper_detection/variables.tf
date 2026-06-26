@@ -12,6 +12,11 @@ variable "secops_topic_arn" {
   type        = string
 }
 
+variable "sec_notifs_eventbridge_dlq_arn" {
+  description = "ARN of the 'security_notifications_eventbridge_dlq' DLQ"
+  type = string
+}
+
 variable "cloud_name" {
   description = "Prefix used for naming EventBridge rules"
   type        = string
