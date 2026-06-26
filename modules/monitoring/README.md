@@ -375,7 +375,6 @@ module "monitoring" {
 
   secops_emails = var.secops_emails
 }
-
 ```
 
 ---
