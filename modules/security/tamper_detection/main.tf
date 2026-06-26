@@ -74,7 +74,7 @@ resource "aws_cloudwatch_event_target" "tamper_to_sns" {
   arn       = var.secops_topic_arn
 
   dead_letter_config {
-    arn = aws_sqs_queue.security_notifications_eventbridge_dlq.arn
+    arn = var.sec_notifs_eventbridge_dlq_arn
   }
 
   retry_policy {
