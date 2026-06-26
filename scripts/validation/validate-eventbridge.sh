@@ -255,7 +255,7 @@ validate_expected_target_dlq() {
   expected_lambda_arn="arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${NAME_PREFIX}-${lambda_suffix}"
   expected_dlq_arn="arn:aws:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${dlq_suffix}"
 
-  section "Validating EventBridge DLQ target for ${lable}"
+  section "Validating EventBridge DLQ target for ${label}"
 
   info "Event bus: ${event_bus_name}"
   info "Rule: ${rule_name}"
