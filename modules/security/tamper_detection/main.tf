@@ -71,7 +71,7 @@ resource "aws_cloudwatch_event_rule" "tamper_detection" {
 resource "aws_cloudwatch_event_target" "tamper_to_sns" {
   rule      = aws_cloudwatch_event_rule.tamper_detection.name
   target_id = "TamperAlertsToSNS"
-  arn       = var.alert_topic_arn
+  arn       = var.secops_topic_arn
 
   dead_letter_config {
     arn = aws_sqs_queue.security_notifications_eventbridge_dlq.arn

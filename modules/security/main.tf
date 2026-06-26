@@ -558,5 +558,5 @@ module "tamper_detection" {
   name_prefix     = var.name_prefix
   cloud_name      = var.cloud_name
   environment     = var.environment
-  alert_topic_arn = var.secops_topic_arn
+  secops_topic_arn = var.secops_topic_arn
 }
