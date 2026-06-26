@@ -399,6 +399,30 @@ else
   warn "No rollback/restore-related EventBridge rule names found on SecOps bus."
 fi
 
+section "Validating expected EventBridge target DLQs and retry policies"
+
+validate_expected_target_dlq \
+  "EC2 Isolation" \
+  "default" \
+  "securityhub-ec2-high-critical" \
+  "Ec2Isolation" \
+  "ec2-isolation" \
+  "ec2-isolation-dlq" \
+  "3" \
+  "3600"
+
+validate_expected_target_dlq \
+  "IP Enrichment" \
+  "default" \
+  "securityhub-high-critical" \
+  "IpEnrichment" \
+  "ip-enrichment" \
+  "ip-enrichment-dlq" \
+  "3" \
+  "3600"
+
+
+
 section "EventBridge Summary"
 
 DEFAULT_RULE_COUNT="$(echo "$DEFAULT_RULES_JSON" | jq 'length')"
