@@ -386,7 +386,7 @@ resource "aws_sqs_queue" "security_notifications" {
   }
 }
 
-#### QUEUE POLICY ALLOWING SECOPS SNS TOPIC TO PUBLISH
+#### QUEUE POLICY ALLOWING SECOPS SNS TOPIC TO PUBLISH TO SECURITY NOTIFICATIONS SQS QUEUE
 data "aws_iam_policy_document" "security_notifications_sqs" {
   statement {
     sid    = "AllowSecurityNotificationsTopicToSendMessages"
