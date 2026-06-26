@@ -478,6 +478,38 @@ resource "aws_sqs_queue_policy" "security_notifications_eventbridge_dlq" {
   policy    = data.aws_iam_policy_document.security_notifications_eventbridge_dlq.json
 }
 
+### CLOUDWATCH ALARM FOR SECURITY NOTIFICATIONS DLQ
+resource "aws_cloudwatch_metric_alarm" "security_notifications_eventbridge_dlq_messages" {
+  alarm_name = "${var.name_prefix}-Security-Notifications-EventBridge-DLQ-Messages"
+  alarm_description = "Messages are visible in the security notifications EventBridge DLQ. EventBridge failed to deliver one or more security notification events to the SecOps SNS topic."
+  namespace = "AWS/SQS"
+  metric_name = "ApproximateNumberOfMessagesVisible"
+  statistic = "Maximum"
+  period = 300
+  evaluation_periods = 1
+  threshold = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.security_notifications_eventbridge_dlq.name
+  }
+
+  alarm_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  ok_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  tags = {
+    Name = "${var.name_prefix}-Security-Notifications-EventBridge-DLQ-Messages"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
+
 ### CLOUDWATCH EVENT RULES
 
 ##########################################
