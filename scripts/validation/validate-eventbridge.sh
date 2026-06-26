@@ -424,7 +424,7 @@ validate_expected_target_dlq \
 validate_expected_target_dlq \
   "EC2 Rollback" \
   "$SECOPS_EVENT_BUS_NAME" \
-  "ec2-rollback-rule" \
+  "ec2-rollback" \
   "Ec2RollbackLambda" \
   "ec2-rollback" \
   "ec2-rollback-dlq" \
