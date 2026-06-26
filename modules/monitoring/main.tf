@@ -436,11 +436,11 @@ resource "aws_sqs_queue" "security_notifications_eventbridge_dlq" {
 #### SECURITY NOTIFICATIONS EVENTBRIDGE DLQ POLICY
 data "aws_iam_policy_document" "security_notifications_eventbridge_dlq" {
   statement {
-    sid = "AllowEventBridgeToSendSecurityNotificationFailures"
+    sid    = "AllowEventBridgeToSendSecurityNotificationFailures"
     effect = "Allow"
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["events.amazonaws.com"]
     }
 
@@ -453,7 +453,7 @@ data "aws_iam_policy_document" "security_notifications_eventbridge_dlq" {
     ]
 
     condition {
-      test = "ArnEquals"
+      test     = "ArnEquals"
       variable = "aws:SourceArn"
       values = [
         aws_cloudwatch_event_rule.securityhub_high_critical.arn
