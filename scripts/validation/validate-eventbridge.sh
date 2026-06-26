@@ -421,7 +421,15 @@ validate_expected_target_dlq \
   "3" \
   "3600"
 
-
+validate_expected_target_dlq \
+  "EC2 Rollback" \
+  "$SECOPS_EVENT_BUS_NAME" \
+  "ec2-rollback" \
+  "Ec2Rollback" \
+  "ec2-rollback" \
+  "ec2-rollback-dlq" \
+  "3" \
+  "3600"
 
 section "EventBridge Summary"
 
