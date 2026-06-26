@@ -80,7 +80,7 @@ info "Repository root: ${REPO_ROOT}"
 info "Environment: ${ENV_NAME}"
 info "Environment dir: ${ENV_DIR}"
 info "Name prefix: ${NAME_PREFIX}"
-info "AWS_PROFILE: ${AWS_PROFILE}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: ${AWS_REGION}"
 
 require_directory "$ENV_DIR"
