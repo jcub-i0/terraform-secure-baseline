@@ -465,7 +465,7 @@ data "aws_iam_policy_document" "security_notifications_eventbridge_dlq" {
       test     = "ArnEquals"
       variable = "aws:SourceArn"
       values = [
-        aws_cloudwatch_event_rule.securityhub_high_critical.arn
+        var.securityhub_high_critical_rule_arn
       ]
     }
   }
