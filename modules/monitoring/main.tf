@@ -465,7 +465,9 @@ data "aws_iam_policy_document" "security_notifications_eventbridge_dlq" {
       test     = "ArnEquals"
       variable = "aws:SourceArn"
       values = [
-        var.securityhub_high_critical_rule_arn
+        aws_cloudwatch_event_rule.break_glass_assumed.arn,
+        var.securityhub_high_critical_rule_arn,
+        var.tamper_detection_rule_arn
       ]
     }
   }
