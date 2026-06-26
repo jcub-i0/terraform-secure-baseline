@@ -245,6 +245,7 @@ validate_expected_target_dlq() {
   local expected_lambda_arn
   local expected_dlq_arn
   local targets_json
+  local target_json
   local target_count
   local actual_target_arn
   local actual_dlq_arn
