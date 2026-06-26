@@ -302,7 +302,7 @@ validate_expected_target_dlq() {
   if [[ "$actual_max_attempts" == "$expected_max_attempts" ]]; then
     success "${label} target retry attempts match expected value: ${actual_max_attempts}"
   else
-    fail "${label} target retry attempts mismatch. Expected ${expected_max_attempts}, got ${actual_max_attempts}"
+    fail "${label} target retry attempts mismatch. Expected ${expected_max_attempts}, got ${actual_max_attempts-<none>}"
   fi
 
   if [[ "$actual_max_event_age" == "$expected_max_event_age" ]]; then
