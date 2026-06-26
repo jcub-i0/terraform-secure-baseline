@@ -135,6 +135,7 @@ module "security" {
   compliance_topic_arn  = module.monitoring.compliance_topic_arn
   secops_topic_arn      = module.monitoring.secops_topic_arn
   secops_event_bus_name = module.automation.secops_event_bus_name
+  sec_notifs_eventbridge_dlq_arn = module.monitoring.sec_notifs_eventbridge_dlq_arn
 }
 
 module "logging" {
