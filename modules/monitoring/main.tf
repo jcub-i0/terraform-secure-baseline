@@ -420,16 +420,16 @@ resource "aws_sqs_queue_policy" "security_notifications" {
 
 ### SECURITY NOTIFICATIONS EVENTBRIDGE DLQ
 resource "aws_sqs_queue" "security_notifications_eventbridge_dlq" {
-  name = "${var.name_prefix}-security-notifications-eventbridge-dlq"
+  name              = "${var.name_prefix}-security-notifications-eventbridge-dlq"
   kms_master_key_id = var.logs_cmk_arn
 
   # Maximum retention time for troubleshooting (14 days)
   message_retention_seconds = 1209600
 
   tags = {
-    Name = "${var.name_prefix}-Security-Notifications-EventBridge-DLQ"
+    Name        = "${var.name_prefix}-Security-Notifications-EventBridge-DLQ"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
 
