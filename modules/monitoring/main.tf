@@ -322,7 +322,7 @@ EOT
 }
 
 ## SQS RESOURCES FOR SECURITY
-### SECOPS NOTIFICATIONS SQS DLQ
+### SECURITY NOTIFICATIONS DLQ
 resource "aws_sqs_queue" "security_notifications_dlq" {
   name              = "${var.name_prefix}-security-notifications-dlq"
   kms_master_key_id = var.logs_cmk_arn
@@ -337,7 +337,7 @@ resource "aws_sqs_queue" "security_notifications_dlq" {
   }
 }
 
-#### CLOUDWATCH ALARM FOR SECOPS DLQ
+#### CLOUDWATCH ALARM FOR SECURITY NOTIFICATIONS DLQ
 resource "aws_cloudwatch_metric_alarm" "security_notifications_dlq_visible_messages" {
   alarm_name        = "${var.name_prefix}-security-notifications-dlq-visible-messages"
   alarm_description = "Security Operations notifications DLQ has visible messages requiring review."
@@ -366,7 +366,7 @@ resource "aws_cloudwatch_metric_alarm" "security_notifications_dlq_visible_messa
   }
 }
 
-### SECOPS NOTIFICATIONS SQS QUEUE
+### SECURITY NOTIFICATIONS SQS QUEUE
 resource "aws_sqs_queue" "security_notifications" {
   name              = "${var.name_prefix}-security-notifications-queue"
   kms_master_key_id = var.logs_cmk_arn
