@@ -405,7 +405,7 @@ validate_expected_target_dlq \
   "EC2 Isolation" \
   "default" \
   "securityhub-ec2-high-critical" \
-  "Ec2Isolation" \
+  "Ec2IsolationLambda" \
   "ec2-isolation" \
   "ec2-isolation-dlq" \
   "3" \
@@ -415,7 +415,7 @@ validate_expected_target_dlq \
   "IP Enrichment" \
   "default" \
   "securityhub-high-critical" \
-  "IpEnrichment" \
+  "IpEnrichmentLambda" \
   "ip-enrichment" \
   "ip-enrichment-dlq" \
   "3" \
@@ -425,7 +425,7 @@ validate_expected_target_dlq \
   "EC2 Rollback" \
   "$SECOPS_EVENT_BUS_NAME" \
   "ec2-rollback-rule" \
-  "Ec2Rollback" \
+  "Ec2RollbackLambda" \
   "ec2-rollback" \
   "ec2-rollback-dlq" \
   "3" \
