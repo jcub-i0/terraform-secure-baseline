@@ -142,8 +142,9 @@ EXPECTED_SQS_QUEUES=(
   "ec2-isolation|ec2-isolation-dlq|required|none"
   "ec2-rollback|ec2-rollback-dlq|required|none"
   "ip-enrichment|ip-enrichment-dlq|required|none"
-  "security-notifications|security-notifications-queue|required|sns:security-notifications"
-  "security-notifications-dlq|security-notifications-dlq|required|none"
+  "security-notifs|security-notifications-queue|required|sns:security-notifications"
+  "security-notifs-dlq|security-notifications-dlq|required|none"
+  "security-notifs-eventbridge|security-notifications-eventbridge-dlq|required|none"
 )
 
 QUEUE_SUMMARY_ROWS=()
