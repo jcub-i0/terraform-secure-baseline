@@ -282,6 +282,13 @@ validate_expected_target_dlq() {
       '
   )"
 
+  if [[ "$target_count" -eq 1 ]]; then
+    success "${label} EventBridge target exists: ${target_id}"
+  else
+    echo "$targets_json" | jq '.Targets'
+    fail "${label} EventBridge target not found or not unique: ${target_id}"
+  fi
+
   actual_target_arn="$(echo "$target_json" | jq -r '.Arn // empty')"
   actual_dlq_arn="$(echo "$target_json" | jq -r '.DeadLetterConfig.Arn // empty')"
   actual_max_attempts="$(echo "$targets_json" | jq -r '.RetryPolicy.MaximumRetryAttempts // empty')"
