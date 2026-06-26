@@ -452,6 +452,17 @@ validate_expected_target_dlq \
   "3" \
   "3600"
 
+validate_expected_target_dlq \
+  "Security Notifications SNS" \
+  "default" \
+  "securityhub-high-critical" \
+  "sec-hub-to-secops-sns" \
+  "sns" \
+  "security-notifications" \
+  "security-notifications-eventbridge-dlq" \
+  "3" \
+  "3600"
+
 section "EventBridge Summary"
 
 DEFAULT_RULE_COUNT="$(echo "$DEFAULT_RULES_JSON" | jq 'length')"
