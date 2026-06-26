@@ -464,7 +464,7 @@ data "aws_iam_policy_document" "security_notifications_eventbridge_dlq" {
 
 resource "aws_sqs_queue_policy" "security_notifications_eventbridge_dlq" {
   queue_url = aws_sqs_queue.security_notifications_eventbridge_dlq.id
-  policy = data.aws_iam_policy_document.security_notifications_eventbridge_dlq.json
+  policy    = data.aws_iam_policy_document.security_notifications_eventbridge_dlq.json
 }
 
 ### CLOUDWATCH EVENT RULES
