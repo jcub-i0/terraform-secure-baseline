@@ -477,7 +477,7 @@ validate_expected_target_dlq \
 validate_expected_target_dlq \
   "Tamper Detection SNS Notification" \
   "default" \
-  "<tamper-rule-suffix>" \
+  "tamper-detection" \
   "TamperAlertsToSNS" \
   "sns" \
   "security-notifications" \
