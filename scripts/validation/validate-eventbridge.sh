@@ -308,7 +308,7 @@ validate_expected_target_dlq() {
     fail "${label} target ARN mismatch. Expected ${expected_lambda_arn}, got ${actual_target_arn:-<none>}"
   fi
 
-  if [[ "$actual_dlq_arn" == "$expected_dlq_aqrn" ]]; then
+  if [[ "$actual_dlq_arn" == "$expected_dlq_arn" ]]; then
     success "${label} target has expected DLQ: ${actual_dlq_arn}"
   else
     fail "${label} target DLQ mismatch. Expected ${expected_dlq_arn}, got ${actual_dlq_arn:-<none>}"
