@@ -293,7 +293,7 @@ validate_expected_target_dlq() {
     echo "$targets_json" |
       jq --arg target_id "$target_id" '
         .Targets[]
-        | select(.Id) == $target_id)
+        | select(.Id == $target_id)
       '
   )"
 
