@@ -257,11 +257,11 @@ validate_expected_target_dlq() {
 
   section "Validating EventBridge DLQ target for ${label}"
 
-  info "Event bus: ${event_bus_name}"
-  info "Rule: ${rule_name}"
-  info "Target ID: ${target_id}"
-  info "Expected Lambda: ${expected_lambda_arn}"
-  info "Expected DLQ: ${expected_dlq_arn}"
+  info "Event bus:        ${event_bus_name}"
+  info "Rule:             ${rule_name}"
+  info "Target ID:        ${target_id}"
+  info "Expected Lambda:  ${expected_lambda_arn}"
+  info "Expected DLQ:     ${expected_dlq_arn}"
 
   targets_json="$(
     aws events list-targets-by-rule \
