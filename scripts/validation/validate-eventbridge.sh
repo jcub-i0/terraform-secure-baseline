@@ -239,13 +239,14 @@ validate_expected_target_dlq() {
   local event_bus_name="$2"
   local rule_suffix="$3"
   local target_id="$4"
-  local lambda_suffix="$5"
-  local dlq_suffix="$6"
-  local expected_max_attempts="$7"
-  local expected_max_event_age="$8"
+  local target_type="$5"
+  local target_suffix="$6"
+  local dlq_suffix="$7"
+  local expected_max_attempts="$8"
+  local expected_max_event_age="$9"
 
   local rule_name
-  local expected_lambda_arn
+  local expected_target_arn
   local expected_dlq_arn
   local targets_json
   local target_json
@@ -256,15 +257,29 @@ validate_expected_target_dlq() {
   local actual_max_event_age
 
   rule_name="${NAME_PREFIX}-${rule_suffix}"
-  expected_lambda_arn="arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${NAME_PREFIX}-${lambda_suffix}"
   expected_dlq_arn="arn:aws:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${dlq_suffix}"
+
+  case "$target_type" in
+    lambda)
+      expected_target_arn="arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${NAME_PREFIX}-${target_suffix}"
+      ;;
+
+    sns)
+      expected_target_arn="arn:aws:sns:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${target_suffix}"
+      ;;
+
+    *)
+      fail "Unsupported EventBridge target type for ${label}: ${target_type}"
+      ;;
+  esac
 
   section "Validating EventBridge DLQ target for ${label}"
 
   info "Event bus:        ${event_bus_name}"
   info "Rule:             ${rule_name}"
   info "Target ID:        ${target_id}"
-  info "Expected Lambda:  ${expected_lambda_arn}"
+  info "Target type:      ${target_type}"
+  info "Expected target:  ${expected_target_arn}"
   info "Expected DLQ:     ${expected_dlq_arn}"
 
   targets_json="$(
@@ -306,10 +321,10 @@ validate_expected_target_dlq() {
   actual_max_attempts="$(echo "$target_json" | jq -r '.RetryPolicy.MaximumRetryAttempts // empty')"
   actual_max_event_age="$(echo "$target_json" | jq -r '.RetryPolicy.MaximumEventAgeInSeconds // empty')"
 
-  if [[ "$actual_target_arn" == "$expected_lambda_arn" ]]; then
-    success "${label} target points to expected Lambda"
+  if [[ "$actual_target_arn" == "$expected_target_arn" ]]; then
+    success "${label} target points to expected ${target_type} target"
   else
-    fail "${label} target ARN mismatch. Expected ${expected_lambda_arn}, got ${actual_target_arn:-<none>}"
+    fail "${label} target ARN mismatch. Expected ${expected_target_arn}, got ${actual_target_arn:-<none>}"
   fi
 
   if [[ "$actual_dlq_arn" == "$expected_dlq_arn" ]]; then
