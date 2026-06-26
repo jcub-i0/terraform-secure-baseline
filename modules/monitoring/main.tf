@@ -287,7 +287,7 @@ resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   arn       = aws_sns_topic.secops.arn
 
   dead_letter_config {
-    arn = aws_sqs_queue.security_notifications_eventbridge_dlq
+    arn = aws_sqs_queue.security_notifications_eventbridge_dlq.arn
   }
 
   retry_policy {
