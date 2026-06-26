@@ -358,7 +358,7 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
 
 #### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
 resource "aws_cloudwatch_event_rule" "ec2_rollback" {
-  name           = "${var.name_prefix}-ec2-rollback-rule"
+  name           = "${var.name_prefix}-ec2-rollback"
   description    = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
   event_bus_name = aws_cloudwatch_event_bus.secops.name
 
