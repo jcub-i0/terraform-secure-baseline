@@ -13,6 +13,9 @@
 # - Environment EventBridge rules have targets
 # - SecOps event bus exists
 # - SecOps event bus rules are enabled and have targets, when present
+# - EventBridge Lambda targets have configured DLQs
+# - EventBridge Lambda targets have expected retry policies
+# - EventBridge Lambda targets point to expected workflow DLQs
 #
 # Usage:
 #   ./scripts/validation/validate-eventbridge.sh dev
