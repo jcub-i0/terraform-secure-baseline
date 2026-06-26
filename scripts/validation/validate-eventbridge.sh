@@ -289,6 +289,14 @@ validate_expected_target_dlq() {
     fail "${label} EventBridge target not found or not unique: ${target_id}"
   fi
 
+  target_json="$(
+    echo "$targets_json" |
+      jq --arg target-id "$target_id" '
+        .Targets[]
+        | select(.Id) == $target_id)
+      '
+  )"
+
   actual_target_arn="$(echo "$target_json" | jq -r '.Arn // empty')"
   actual_dlq_arn="$(echo "$target_json" | jq -r '.DeadLetterConfig.Arn // empty')"
   actual_max_attempts="$(echo "$targets_json" | jq -r '.RetryPolicy.MaximumRetryAttempts // empty')"
