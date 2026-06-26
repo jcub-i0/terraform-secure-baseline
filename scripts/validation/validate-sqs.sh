@@ -6,6 +6,10 @@
 #
 # Current expected SQS design:
 # - Compliance SNS topic publishes to compliance SQS queue.
+# - Security notifications SNS topic publishes to security notifications SQS queue.
+# - Security notification queue has a DLQ.
+# - EventBridge security notification targets use a shared EventBridge DLQ.
+# - Security automation workflows use dedicated DLQs.
 #
 # Checks:
 # - Terraform outputs are readable
@@ -142,8 +146,9 @@ EXPECTED_SQS_QUEUES=(
   "ec2-isolation|ec2-isolation-dlq|required|none"
   "ec2-rollback|ec2-rollback-dlq|required|none"
   "ip-enrichment|ip-enrichment-dlq|required|none"
-  "security-notifications|security-notifications-queue|required|sns:security-notifications"
-  "security-notifications-dlq|security-notifications-dlq|required|none"
+  "security-notifs|security-notifications-queue|required|sns:security-notifications"
+  "security-notifs-dlq|security-notifications-dlq|required|none"
+  "security-notifs-eventbridge|security-notifications-eventbridge-dlq|required|none"
 )
 
 QUEUE_SUMMARY_ROWS=()

@@ -13,6 +13,9 @@
 # - Environment EventBridge rules have targets
 # - SecOps event bus exists
 # - SecOps event bus rules are enabled and have targets, when present
+# - EventBridge Lambda targets have configured DLQs
+# - EventBridge Lambda targets have expected retry policies
+# - EventBridge Lambda targets point to expected workflow DLQs
 #
 # Usage:
 #   ./scripts/validation/validate-eventbridge.sh dev
@@ -80,7 +83,7 @@ info "Repository root: ${REPO_ROOT}"
 info "Environment: ${ENV_NAME}"
 info "Environment dir: ${ENV_DIR}"
 info "Name prefix: ${NAME_PREFIX}"
-info "AWS_PROFILE: ${AWS_PROFILE}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: ${AWS_REGION}"
 
 require_directory "$ENV_DIR"
@@ -231,6 +234,118 @@ find_secops_event_bus_name() {
     '
 }
 
+validate_expected_target_dlq() {
+  local label="$1"
+  local event_bus_name="$2"
+  local rule_suffix="$3"
+  local target_id="$4"
+  local target_type="$5"
+  local target_suffix="$6"
+  local dlq_suffix="$7"
+  local expected_max_attempts="$8"
+  local expected_max_event_age="$9"
+
+  local rule_name
+  local expected_target_arn
+  local expected_dlq_arn
+  local targets_json
+  local target_json
+  local target_count
+  local actual_target_arn
+  local actual_dlq_arn
+  local actual_max_attempts
+  local actual_max_event_age
+
+  rule_name="${NAME_PREFIX}-${rule_suffix}"
+  expected_dlq_arn="arn:aws:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${dlq_suffix}"
+
+  case "$target_type" in
+    lambda)
+      expected_target_arn="arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${NAME_PREFIX}-${target_suffix}"
+      ;;
+
+    sns)
+      expected_target_arn="arn:aws:sns:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${target_suffix}"
+      ;;
+
+    *)
+      fail "Unsupported EventBridge target type for ${label}: ${target_type}"
+      ;;
+  esac
+
+  section "Validating EventBridge DLQ target for ${label}"
+
+  info "Event bus:        ${event_bus_name}"
+  info "Rule:             ${rule_name}"
+  info "Target ID:        ${target_id}"
+  info "Target type:      ${target_type}"
+  info "Expected target:  ${expected_target_arn}"
+  info "Expected DLQ:     ${expected_dlq_arn}"
+
+  targets_json="$(
+    aws events list-targets-by-rule \
+      "${aws_args[@]}" \
+      --event-bus-name "$event_bus_name" \
+      --rule "$rule_name" \
+      --output json
+  )"
+
+  target_count="$(
+    echo "$targets_json" |
+      jq --arg target_id "$target_id" '
+        [
+          .Targets[]
+          | select(.Id == $target_id)
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$target_count" -eq 1 ]]; then
+    success "${label} EventBridge target exists: ${target_id}"
+  else
+    echo "$targets_json" | jq '.Targets'
+    fail "${label} EventBridge target not found or not unique: ${target_id}"
+  fi
+
+  target_json="$(
+    echo "$targets_json" |
+      jq --arg target_id "$target_id" '
+        .Targets[]
+        | select(.Id == $target_id)
+      '
+  )"
+
+  actual_target_arn="$(echo "$target_json" | jq -r '.Arn // empty')"
+  actual_dlq_arn="$(echo "$target_json" | jq -r '.DeadLetterConfig.Arn // empty')"
+  actual_max_attempts="$(echo "$target_json" | jq -r '.RetryPolicy.MaximumRetryAttempts // empty')"
+  actual_max_event_age="$(echo "$target_json" | jq -r '.RetryPolicy.MaximumEventAgeInSeconds // empty')"
+
+  if [[ "$actual_target_arn" == "$expected_target_arn" ]]; then
+    success "${label} target points to expected ${target_type} target"
+  else
+    fail "${label} target ARN mismatch. Expected ${expected_target_arn}, got ${actual_target_arn:-<none>}"
+  fi
+
+  if [[ "$actual_dlq_arn" == "$expected_dlq_arn" ]]; then
+    success "${label} target has expected DLQ: ${actual_dlq_arn}"
+  else
+    fail "${label} target DLQ mismatch. Expected ${expected_dlq_arn}, got ${actual_dlq_arn:-<none>}"
+  fi
+
+  if [[ "$actual_max_attempts" == "$expected_max_attempts" ]]; then
+    success "${label} target retry attempts match expected value: ${actual_max_attempts}"
+  else
+    fail "${label} target retry attempts mismatch. Expected ${expected_max_attempts}, got ${actual_max_attempts:-<none>}"
+  fi
+
+  if [[ "$actual_max_event_age" == "$expected_max_event_age" ]]; then
+    success "${label} target max event age matches expected value: ${actual_max_event_age}s"
+  else
+    fail "${label} target max event age mismatch. Expected ${expected_max_event_age}, got ${actual_max_event_age:-<none>}"
+  fi
+}
+
 section "Listing EventBridge event buses"
 
 EVENT_BUSES_JSON="$(
@@ -301,6 +416,74 @@ if [[ "$SECOPS_ROLLBACK_RULE_COUNT" -gt 0 ]]; then
 else
   warn "No rollback/restore-related EventBridge rule names found on SecOps bus."
 fi
+
+section "Validating expected EventBridge target DLQs and retry policies"
+
+validate_expected_target_dlq \
+  "EC2 Isolation" \
+  "default" \
+  "securityhub-ec2-high-critical" \
+  "Ec2IsolationLambda" \
+  "lambda" \
+  "ec2-isolation" \
+  "ec2-isolation-dlq" \
+  "3" \
+  "3600"
+
+validate_expected_target_dlq \
+  "IP Enrichment" \
+  "default" \
+  "securityhub-high-critical" \
+  "IpEnrichmentLambda" \
+  "lambda" \
+  "ip-enrichment" \
+  "ip-enrichment-dlq" \
+  "3" \
+  "3600"
+
+validate_expected_target_dlq \
+  "EC2 Rollback" \
+  "$SECOPS_EVENT_BUS_NAME" \
+  "ec2-rollback" \
+  "Ec2RollbackLambda" \
+  "lambda" \
+  "ec2-rollback" \
+  "ec2-rollback-dlq" \
+  "3" \
+  "3600"
+
+validate_expected_target_dlq \
+  "Security Notifications SNS" \
+  "default" \
+  "securityhub-high-critical" \
+  "sec-hub-to-secops-sns" \
+  "sns" \
+  "security-notifications" \
+  "security-notifications-eventbridge-dlq" \
+  "3" \
+  "3600"
+
+validate_expected_target_dlq \
+  "Break Glass SNS Notification" \
+  "default" \
+  "break-glass-admin-assumed" \
+  "break-glass-to-secops-sns" \
+  "sns" \
+  "security-notifications" \
+  "security-notifications-eventbridge-dlq" \
+  "3" \
+  "3600"
+
+validate_expected_target_dlq \
+  "Tamper Detection SNS Notification" \
+  "default" \
+  "tamper-detection" \
+  "TamperAlertsToSNS" \
+  "sns" \
+  "security-notifications" \
+  "security-notifications-eventbridge-dlq" \
+  "3" \
+  "3600"
 
 section "EventBridge Summary"
 

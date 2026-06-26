@@ -91,3 +91,8 @@ variable "inspector_resource_types" {
     error_message = "inspector_resource_types must contain only EC2, ECR, LAMBDA, LAMBDA_CODE, or CODE_REPOSITORY."
   }
 }
+
+variable "sec_notifs_eventbridge_dlq_arn" {
+  description = "ARN of the 'security_notifications_eventbridge_dlq' DLQ"
+  type        = string
+}

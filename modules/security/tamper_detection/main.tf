@@ -71,7 +71,16 @@ resource "aws_cloudwatch_event_rule" "tamper_detection" {
 resource "aws_cloudwatch_event_target" "tamper_to_sns" {
   rule      = aws_cloudwatch_event_rule.tamper_detection.name
   target_id = "TamperAlertsToSNS"
-  arn       = var.alert_topic_arn
+  arn       = var.secops_topic_arn
+
+  dead_letter_config {
+    arn = var.sec_notifs_eventbridge_dlq_arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
 
   input_transformer {
     input_paths = {

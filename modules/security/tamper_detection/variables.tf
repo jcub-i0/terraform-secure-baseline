@@ -7,8 +7,13 @@ variable "name_prefix" {
   type = string
 }
 
-variable "alert_topic_arn" {
+variable "secops_topic_arn" {
   description = "SNS topic ARN to receive tamper alerts"
+  type        = string
+}
+
+variable "sec_notifs_eventbridge_dlq_arn" {
+  description = "ARN of the 'security_notifications_eventbridge_dlq' DLQ"
   type        = string
 }
 

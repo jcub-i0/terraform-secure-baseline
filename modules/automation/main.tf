@@ -90,7 +90,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
 ### EVENT TARGET FOR HIGH/CRITICAL SECURITY HUB EC2 FINDINGS EVENT RULE
 resource "aws_cloudwatch_event_target" "ec2_isolation" {
   rule      = aws_cloudwatch_event_rule.securityhub_ec2_high_critical.name
-  target_id = "Ec2Isolation"
+  target_id = "Ec2IsolationLambda"
   arn       = aws_lambda_function.ec2_isolation.arn
 
   dead_letter_config {
@@ -358,7 +358,7 @@ resource "aws_cloudwatch_event_bus_policy" "secops_bus_policy" {
 
 #### EVENT RULE TO TRIGGER UPON MANUAL TRIGGER
 resource "aws_cloudwatch_event_rule" "ec2_rollback" {
-  name           = "${var.name_prefix}-ec2-rollback-rule"
+  name           = "${var.name_prefix}-ec2-rollback"
   description    = "Trigger Lambda to rollback isolated EC2 instances to their original security groups"
   event_bus_name = aws_cloudwatch_event_bus.secops.name
 
@@ -601,7 +601,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_high_critical" {
 
 resource "aws_cloudwatch_event_target" "ip_enrichment" {
   rule      = aws_cloudwatch_event_rule.securityhub_high_critical.name
-  target_id = "IpEnrichment"
+  target_id = "IpEnrichmentLambda"
   arn       = aws_lambda_function.ip_enrichment.arn
 
   dead_letter_config {

@@ -132,9 +132,10 @@ module "security" {
   config_role_arn             = module.iam.config_role_arn
   config_remediation_role_arn = module.iam.config_remediation_role_arn
 
-  compliance_topic_arn  = module.monitoring.compliance_topic_arn
-  secops_topic_arn      = module.monitoring.secops_topic_arn
-  secops_event_bus_name = module.automation.secops_event_bus_name
+  compliance_topic_arn           = module.monitoring.compliance_topic_arn
+  secops_topic_arn               = module.monitoring.secops_topic_arn
+  secops_event_bus_name          = module.automation.secops_event_bus_name
+  sec_notifs_eventbridge_dlq_arn = module.monitoring.sec_notifs_eventbridge_dlq_arn
 }
 
 module "logging" {

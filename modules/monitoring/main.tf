@@ -286,6 +286,15 @@ resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   target_id = "sec-hub-to-secops-sns"
   arn       = aws_sns_topic.secops.arn
 
+  dead_letter_config {
+    arn = aws_sqs_queue.security_notifications_eventbridge_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
+
   input_transformer {
     input_paths = {
       time            = "$.time"
@@ -322,7 +331,7 @@ EOT
 }
 
 ## SQS RESOURCES FOR SECURITY
-### SECOPS NOTIFICATIONS SQS DLQ
+### SECURITY NOTIFICATIONS DLQ
 resource "aws_sqs_queue" "security_notifications_dlq" {
   name              = "${var.name_prefix}-security-notifications-dlq"
   kms_master_key_id = var.logs_cmk_arn
@@ -337,7 +346,7 @@ resource "aws_sqs_queue" "security_notifications_dlq" {
   }
 }
 
-#### CLOUDWATCH ALARM FOR SECOPS DLQ
+#### CLOUDWATCH ALARM FOR SECURITY NOTIFICATIONS DLQ
 resource "aws_cloudwatch_metric_alarm" "security_notifications_dlq_visible_messages" {
   alarm_name        = "${var.name_prefix}-security-notifications-dlq-visible-messages"
   alarm_description = "Security Operations notifications DLQ has visible messages requiring review."
@@ -366,7 +375,7 @@ resource "aws_cloudwatch_metric_alarm" "security_notifications_dlq_visible_messa
   }
 }
 
-### SECOPS NOTIFICATIONS SQS QUEUE
+### SECURITY NOTIFICATIONS SQS QUEUE
 resource "aws_sqs_queue" "security_notifications" {
   name              = "${var.name_prefix}-security-notifications-queue"
   kms_master_key_id = var.logs_cmk_arn
@@ -386,7 +395,7 @@ resource "aws_sqs_queue" "security_notifications" {
   }
 }
 
-#### QUEUE POLICY ALLOWING SECOPS SNS TOPIC TO PUBLISH
+#### QUEUE POLICY ALLOWING SECOPS SNS TOPIC TO PUBLISH TO SECURITY NOTIFICATIONS SQS QUEUE
 data "aws_iam_policy_document" "security_notifications_sqs" {
   statement {
     sid    = "AllowSecurityNotificationsTopicToSendMessages"
@@ -418,6 +427,57 @@ resource "aws_sqs_queue_policy" "security_notifications" {
   policy    = data.aws_iam_policy_document.security_notifications_sqs.json
 }
 
+### SECURITY NOTIFICATIONS EVENTBRIDGE DLQ
+resource "aws_sqs_queue" "security_notifications_eventbridge_dlq" {
+  name              = "${var.name_prefix}-security-notifications-eventbridge-dlq"
+  kms_master_key_id = var.logs_cmk_arn
+
+  # Maximum retention time for troubleshooting (14 days)
+  message_retention_seconds = 1209600
+
+  tags = {
+    Name        = "${var.name_prefix}-Security-Notifications-EventBridge-DLQ"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+#### SECURITY NOTIFICATIONS EVENTBRIDGE DLQ POLICY
+data "aws_iam_policy_document" "security_notifications_eventbridge_dlq" {
+  statement {
+    sid    = "AllowEventBridgeToSendSecurityNotificationFailures"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions = [
+      "sqs:SendMessage"
+    ]
+
+    resources = [
+      aws_sqs_queue.security_notifications_eventbridge_dlq.arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.break_glass_assumed.arn,
+        var.securityhub_high_critical_rule_arn,
+        var.tamper_detection_rule_arn
+      ]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "security_notifications_eventbridge_dlq" {
+  queue_url = aws_sqs_queue.security_notifications_eventbridge_dlq.id
+  policy    = data.aws_iam_policy_document.security_notifications_eventbridge_dlq.json
+}
+
 ### CLOUDWATCH EVENT RULES
 
 ##########################################
@@ -447,6 +507,15 @@ resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns" {
   rule      = aws_cloudwatch_event_rule.break_glass_assumed.name
   target_id = "break-glass-to-secops-sns"
   arn       = aws_sns_topic.secops.arn
+
+  dead_letter_config {
+    arn = aws_sqs_queue.security_notifications_eventbridge_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
 
   input_transformer {
     input_paths = {

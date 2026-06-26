@@ -101,7 +101,7 @@ module "tamper_detection" {
   cloud_name      = var.cloud_name
   environment     = var.environment
   name_prefix     = local.name_prefix
-  alert_topic_arn = var.alert_topic_arn
+  secops_topic_arn = var.secops_topic_arn
 }
 ```
 
@@ -114,7 +114,7 @@ module "tamper_detection" {
 | `cloud_name` | Name of the cloud environment |
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` |
 | `name_prefix` | Naming prefix used for created resources |
-| `alert_topic_arn` | SNS topic ARN used for tamper alerts |
+| `secops_topic_arn` | SNS topic ARN used for tamper alerts |
 
 ---
 
