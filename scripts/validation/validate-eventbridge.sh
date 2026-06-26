@@ -291,7 +291,7 @@ validate_expected_target_dlq() {
 
   target_json="$(
     echo "$targets_json" |
-      jq --arg target-id "$target_id" '
+      jq --arg target_id "$target_id" '
         .Targets[]
         | select(.Id) == $target_id)
       '
