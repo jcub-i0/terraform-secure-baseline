@@ -559,4 +559,5 @@ module "tamper_detection" {
   cloud_name      = var.cloud_name
   environment     = var.environment
   secops_topic_arn = var.secops_topic_arn
+  sec_notifs_eventbridge_dlq_arn = var.sec_notifs_eventbridge_dlq_arn
 }
