@@ -289,10 +289,10 @@ resource "aws_cloudwatch_event_target" "securityhub_high_critical" {
   dead_letter_config {
     arn = aws_sqs_queue.security_notifications_eventbridge_dlq
   }
-  
+
   retry_policy {
     maximum_event_age_in_seconds = 3600
-    maximum_retry_attempts = 3
+    maximum_retry_attempts       = 3
   }
 
   input_transformer {
