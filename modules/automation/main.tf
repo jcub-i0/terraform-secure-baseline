@@ -399,6 +399,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
 }
 
+### ENABLE EC2 ROLLBACK LAMBDA PROCESSING FAILURES TO LAND IN ITS DLQ
 resource "aws_lambda_function_event_invoke_config" "ec2_rollback" {
   function_name = aws_lambda_function.ec2_rollback.function_name
 
@@ -639,6 +640,7 @@ resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
   source_arn    = aws_cloudwatch_event_rule.securityhub_high_critical.arn
 }
 
+### ENABLE IP ENRICHMENT LAMBDA PROCESSING FAILURES TO LAND IN ITS DLQ
 resource "aws_lambda_function_event_invoke_config" "ip_enrichment" {
   function_name = aws_lambda_function.ip_enrichment.function_name
 
