@@ -22,8 +22,9 @@ It provides a secure, multi-account cloud foundation with:
 - Secure-by-default networking
 - Configurable deployment profiles
 - Configurable egress modes
-- Centralized logging and monitoring
+- Centralized logging, monitoring, and alert routing
 - Automated detection and response
+- Durable SNS/SQS notification paths with DLQs for failed alert delivery
 - GitHub OIDC-based CI/CD
 - Environment isolation across `dev`, `staging`, and `prod`
 - SOC 2 / ISO 27001-aligned security architecture to support audit readiness
@@ -54,9 +55,12 @@ Key capabilities include:
 - GuardDuty, Security Hub, Inspector, and AWS Config
 - Event-driven security automation
 - EC2 isolation and rollback workflows
+- IP threat enrichment
 - Tamper detection
 - Break-glass role monitoring
-- Encrypted S3, KMS, SNS, CloudWatch, and Lambda resources
+- SQS-backed security and compliance notification queues
+- EventBridge target DLQs and workflow-specific automation DLQs
+- Encrypted S3, KMS, SNS, SQS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
 - Safe, read-only post-deployment validation suite
 - Automated validation evidence export with Markdown and JSON summaries
@@ -278,6 +282,8 @@ Security events are routed through EventBridge and trigger automated workflows s
 - Tamper detection alerts
 - Break-glass role usage alerts
 
+Critical EventBridge and Lambda delivery paths use retry policies and DLQs so failed security events are retained for review instead of silently disappearing.
+
 ---
 
 ## Major Components
@@ -331,8 +337,9 @@ Environment stacks include:
 - Security Hub
 - Inspector, when enabled by profile
 - Lambda automation
-- EventBridge rules
+- EventBridge rules and targets
 - SNS topics
+- SQS notification queues and DLQs
 - Backup and patching resources
 - IAM service roles and shared access policies
 
@@ -396,7 +403,8 @@ This baseline integrates several AWS-native security services:
 | CloudWatch | Metrics, logs, and alarms |
 | Inspector | Vulnerability scanning |
 | EventBridge | Security event routing |
-| SNS | Alert delivery |
+| SNS | Alert fanout and human notification |
+| SQS | Durable notification queues and DLQs |
 | KMS | Encryption key management |
 | IAM Identity Center | Centralized human access |
 | AWS Backup | Backup orchestration |
@@ -444,6 +452,20 @@ Detects attempts to disable, delete, or modify critical security services such a
 ### Break-Glass Monitoring
 
 Detects use of the break-glass administrator role and sends a high-priority alert.
+
+### Notification and Failure Retention
+
+Security and compliance notifications use encrypted SNS and SQS resources so alerts can be delivered to humans while also being retained for operational review.
+
+Key paths include:
+
+- Compliance notifications: compliance SNS topic to compliance SQS queue
+- Security notifications: security notifications SNS topic to security notifications SQS queue
+- Security notification queue failures: security notifications SQS queue to security notifications DLQ
+- EventBridge-to-SNS delivery failures: shared security notifications EventBridge DLQ
+- Automation workflow failures: dedicated EC2 Isolation, EC2 Rollback, and IP Enrichment DLQs
+
+The DLQs are terminal failure-retention queues. They are intended for SecOps review, troubleshooting, and manual replay or remediation where appropriate.
 
 ### CI/CD
 
@@ -521,7 +543,7 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/validation/validate-all.sh dev
 ```
 
-The validation suite checks deployed workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture.
+The validation suite checks deployed workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture. It also validates notification and failure-retention paths such as SNS subscriptions, SQS queues, EventBridge target DLQs, retry policies, and Lambda workflow wiring.
 
 A successful validation run should end with:
 
@@ -617,7 +639,7 @@ Recommended usage:
 - Use `deployment_profile = "production"` for production or sensitive workloads.
 - Use `deployment_profile = "development"` for lower-cost development/testing environments.
 - Use `deployment_profile = "minimal"` for private AWS-only testing where general internet access is not required.
-- Review NAT Gateway, Network Firewall, VPC endpoint, CloudWatch, logging, Inspector, AWS Config, and Backup costs regularly.
+- Review NAT Gateway, Network Firewall, VPC endpoint, CloudWatch, logging, SNS/SQS, Inspector, AWS Config, and Backup costs regularly.
 
 Cost-sensitive behavior includes:
 
@@ -660,6 +682,43 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
+### v1.3.1
+
+This release hardens notification and automation failure-retention paths.
+
+Highlights:
+
+- Added a dedicated security notifications SQS queue subscribed to the security notifications SNS topic.
+- Added a security notifications SQS DLQ for repeatedly unprocessed security notification messages.
+- Added a shared security notifications EventBridge DLQ for EventBridge delivery failures to the security notifications SNS topic.
+- Added a CloudWatch alarm for visible messages in the security notifications EventBridge DLQ.
+- Added workflow-specific DLQs for EC2 Isolation, EC2 Rollback, and IP Enrichment automation paths.
+- Added EventBridge target retry policies and DLQ configuration for protected automation and notification targets.
+- Extended validation coverage for SQS queues, SNS subscriptions, EventBridge target DLQs, retry policies, and Lambda automation wiring.
+- Updated module documentation to describe durable notification paths and DLQ response expectations.
+
+### v1.3.0
+
+This release adds validation evidence reporting.
+
+Highlights:
+
+- Added `scripts/validation/export-report.sh`.
+- Added timestamped validation output directories under `validation-results/<environment>/<timestamp>/`.
+- Added Markdown and JSON validation summaries.
+- Added per-script validation logs for deployment records, troubleshooting, and client handoff.
+
+### v1.2.1
+
+This release corrects Amazon Inspector enablement behavior.
+
+Highlights:
+
+- Fixed Inspector validation and enablement wiring to respect the resolved effective Inspector setting.
+- Added configurable Inspector resource type support.
+- Defaulted Inspector scanning to EC2 by default.
+- Disabled Lambda and Lambda code scanning by default because the baseline uses customer-managed KMS encryption for Lambda resources.
+
 ### v1.2.0
 
 This release adds a safe, read-only post-deployment validation suite for deployed workload environments.
@@ -667,26 +726,11 @@ This release adds a safe, read-only post-deployment validation suite for deploye
 Highlights:
 
 - Added `validate-all.sh` as the primary workload validation entry point.
-- Added validation scripts for:
-  - Environment outputs and account identity
-  - Networking and controlled egress
-  - VPC endpoints
-  - Logging
-  - Security services
-  - KMS
-  - AWS Backup
-  - SNS
-  - SQS
-  - EventBridge
-  - Lambda
-  - SSM
-  - Compute
-  - IAM
+- Added validation scripts for environment identity, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM.
 - Added expected account ID validation through `EXPECTED_ACCOUNT_ID`.
 - Added profile-aware validation behavior for Config, Backup, Inspector, and egress mode.
 - Added read-only validation summaries suitable for deployment evidence and troubleshooting.
-- Updated `docs/validation-checklist.md` to make automated workload validation the default validation path.
-- Preserved manual validation for control-plane resources, Identity Center assignments, live Lambda workflow tests, tamper tests, break-glass tests, GitHub Actions workflow review, and destroy safety.
+- Preserved manual validation for control-plane resources, Identity Center assignments, live workflow tests, tamper tests, break-glass tests, GitHub Actions workflow review, and destroy safety.
 
 ---
 
@@ -694,7 +738,6 @@ Highlights:
 
 Potential future improvements include:
 
-- Add optional validation report export for audit/evidence packages
 - Improve dashboarding and visual evidence outputs
 - Add configurable VPC endpoint service lists
 - Add additional deployment profile-controlled services
@@ -723,6 +766,6 @@ This project is intended for:
 
 `tf-secure-baseline` is a deployable AWS security foundation for sensitive workloads.
 
-It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dedicated VPC endpoint subnets, logging, monitoring, automated response, and GitHub OIDC CI/CD into a **reusable Terraform platform**.
+It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dedicated VPC endpoint subnets, logging, monitoring, durable notification paths, automated response, and GitHub OIDC CI/CD into a **reusable Terraform platform**.
 
 The goal is to provide a **secure-by-default foundation** that can be adapted, extended, and used as the starting point for production SaaS environments.
