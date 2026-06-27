@@ -1467,7 +1467,6 @@ For `security-notifications-dlq`, check:
 
 Messages in the primary compliance or security notification queues may accumulate when no downstream consumer is configured. Messages in a DLQ should be treated as a failure signal.
 
-
 # 13. Validate EventBridge Rules
 
 ## Purpose
