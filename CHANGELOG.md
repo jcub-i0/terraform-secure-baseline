@@ -14,8 +14,8 @@
 - Added EventBridge target DLQ configuration and retry policies for protected automation and security notification targets.
 - Added Lambda asynchronous failure handling for the EC2 Isolation workflow.
 - Added CloudWatch DLQ alarms for security automation failure paths.
-- Added notification and DLQ validation guidance to `docs/validation/validation-checklist.md`.
-- Added DLQ triage and safe message inspection guidance to `docs/validation/validation-checklist.md`.
+- Added notification and DLQ validation guidance to `docs/validation-checklist.md`.
+- Added DLQ triage and safe message inspection guidance to `docs/validation-checklist.md`.
 
 ### Changed
 
@@ -25,7 +25,7 @@
 - Updated SQS validation to include compliance, security notification, security notification DLQ, security notification EventBridge DLQ, and security automation DLQ resources.
 - Updated EventBridge validation to verify target DLQs, retry policies, expected target ARNs, and expected DLQ ARNs.
 - Updated monitoring, automation, security, tamper detection, and root-level documentation to reflect the new notification and DLQ architecture.
-- Condensed the monitoring module README and moved detailed notification/DLQ validation and response guidance into `docs/validation/validation-checklist.md`.
+- Condensed the monitoring module README and moved detailed notification/DLQ validation and response guidance into `docs/validation-checklist.md`.
 
 ### Notes
 

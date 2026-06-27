@@ -402,7 +402,7 @@ Detailed manual validation commands belong in the validation runbook rather than
 Recommended companion doc path:
 
 ```text
-docs/validation/monitoring-validation.md
+docs/validationmonitoring-validation.md
 ```
 
 ---

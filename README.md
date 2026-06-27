@@ -695,7 +695,7 @@ Highlights:
 - Added workflow-specific DLQs for EC2 Isolation, EC2 Rollback, and IP Enrichment automation paths.
 - Added EventBridge target retry policies and DLQ configuration for protected automation and notification targets.
 - Extended validation coverage for SQS queues, SNS subscriptions, EventBridge target DLQs, retry policies, and Lambda automation wiring.
-- Updated documentation to describe durable notification paths, DLQ validation, and DLQ response expectations in `docs/validation/validation-checklist.md`.
+- Updated documentation to describe durable notification paths, DLQ validation, and DLQ response expectations in `docs/validation-checklist.md`.
 
 ### v1.3.0
 
