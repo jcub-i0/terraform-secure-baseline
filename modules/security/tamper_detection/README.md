@@ -117,8 +117,6 @@ module "tamper_detection" {
 | `name_prefix` | Naming prefix used for created resources |
 | `secops_topic_arn` | SNS topic ARN used for tamper alerts |
 | `sec_notifs_eventbridge_dlq_arn` | ARN of the 'security_notifications_eventbridge_dlq' DLQ|
-  type        = string
-}
 
 ---
 
