@@ -26,6 +26,7 @@ This checklist validates:
 - IAM Identity Center access
 - Event-driven security automation
 - Lambda workflows
+- SNS, SQS, EventBridge, and DLQ-based alert delivery paths
 - Alerting
 - Destroy/cleanup readiness
 
@@ -225,8 +226,8 @@ These scripts validate:
 - KMS aliases, CMKs, key state, key manager, and rotation status
 - Backup vaults, plans, selections, schedules, retention, tagged resources, recent jobs, and recovery point reporting
 - SNS topics, subscriptions, pending confirmations, and encryption mode
-- SQS queues, SNS-to-SQS delivery path, queue policies, encryption mode, DLQ status, visible messages, and not-visible messages
-- EventBridge default-bus and SecOps-bus rules, state, targets, and rollback rule coverage
+- SQS queues, SNS-to-SQS delivery paths, queue policies, encryption mode, redrive policies, DLQ status, visible messages, and not-visible messages
+- EventBridge default-bus and SecOps-bus rules, state, targets, target DLQs, retry policies, and rollback rule coverage
 - Lambda functions, runtime, state, execution role, timeout, memory, KMS config, VPC config, environment variables, resource policies, and EventBridge permissions
 - SSM managed instance registration, online status, associations, maintenance windows, and patch baseline visibility
 - EC2 compute instances, private placement, public IP absence, IMDSv2, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption
@@ -1223,35 +1224,249 @@ Backup-related KMS aliases may only exist when backup resources are enabled.
 
 ---
 
-# 12. Validate SNS Notifications
+# 12. Validate SNS, SQS, and Notification DLQs
 
 ## Purpose
 
-Confirm that SNS topics exist and subscriptions are confirmed.
+Confirm that security and compliance notification paths are deployed, encrypted, subscribed, and protected with the expected DLQs.
+
+Most of this validation is automated by:
+
+```bash
+./scripts/validation/validate-sns.sh "${ENVIRONMENT}"
+./scripts/validation/validate-sqs.sh "${ENVIRONMENT}"
+./scripts/validation/validate-eventbridge.sh "${ENVIRONMENT}"
+```
+
+These scripts should be the primary validation path. The commands below are useful for spot checks, troubleshooting, or manual release review.
+
+---
+
+## 12.1 Validate SNS Topics and Subscriptions
+
+List expected notification topics:
 
 ```bash
 aws sns list-topics \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --query 'Topics[].TopicArn' \
+  --query 'Topics[?contains(TopicArn, `security-notifications`) || contains(TopicArn, `compliance-notifications`)].TopicArn' \
   --output table
 ```
 
-For each expected topic:
+Expected topics:
+
+```text
+${NAME_PREFIX}-security-notifications
+${NAME_PREFIX}-compliance-notifications
+```
+
+For each expected topic, check attributes and subscriptions:
 
 ```bash
-aws sns list-subscriptions-by-topic \
-  --topic-arn "<SNS_TOPIC_ARN>" \
+aws sns get-topic-attributes \
   --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}"
+  --profile "${AWS_PROFILE}" \
+  --topic-arn "<SNS_TOPIC_ARN>" \
+  --query 'Attributes.{TopicArn:TopicArn,KmsMasterKeyId:KmsMasterKeyId,SubscriptionsConfirmed:SubscriptionsConfirmed,SubscriptionsPending:SubscriptionsPending}' \
+  --output table
+
+aws sns list-subscriptions-by-topic \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --topic-arn "<SNS_TOPIC_ARN>" \
+  --query 'Subscriptions[].[Protocol,Endpoint,SubscriptionArn]' \
+  --output table
 ```
 
 Expected:
 
-- SecOps and compliance topics exist if enabled.
-- Email subscriptions are confirmed.
+- SNS topics are encrypted with the logs CMK.
+- The compliance topic has an SQS subscription to the compliance queue.
+- The security notifications topic has expected email subscriptions and an SQS subscription to the security notifications queue.
+- Confirmed subscriptions show real subscription ARNs.
+- Unconfirmed email subscriptions show `PendingConfirmation`.
 
 ---
+
+## 12.2 Validate SQS Notification Queues and DLQs
+
+List environment queues:
+
+```bash
+aws sqs list-queues \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-name-prefix "${NAME_PREFIX}" \
+  --output table
+```
+
+Expected queues include:
+
+```text
+${NAME_PREFIX}-compliance-queue
+${NAME_PREFIX}-security-notifications-queue
+${NAME_PREFIX}-security-notifications-dlq
+${NAME_PREFIX}-security-notifications-eventbridge-dlq
+${NAME_PREFIX}-ec2-isolation-dlq
+${NAME_PREFIX}-ec2-rollback-dlq
+${NAME_PREFIX}-ip-enrichment-dlq
+```
+
+Meaning:
+
+| Queue | Purpose |
+|---|---|
+| `compliance-queue` | Durable compliance notification subscriber |
+| `security-notifications-queue` | Durable security notification subscriber |
+| `security-notifications-dlq` | Redrive DLQ for repeated processing failures from the security notifications queue |
+| `security-notifications-eventbridge-dlq` | EventBridge target DLQ for failed EventBridge deliveries to the security notifications SNS topic |
+| `ec2-isolation-dlq` | EC2 Isolation automation failure-retention queue |
+| `ec2-rollback-dlq` | EC2 Rollback automation failure-retention queue |
+| `ip-enrichment-dlq` | IP Enrichment automation failure-retention queue |
+
+Check queue attributes:
+
+```bash
+QUEUE_URL="$(aws sqs get-queue-url \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-name "${NAME_PREFIX}-security-notifications-queue" \
+  --query 'QueueUrl' \
+  --output text)"
+
+aws sqs get-queue-attributes \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-url "${QUEUE_URL}" \
+  --attribute-names All \
+  --query 'Attributes.{QueueArn:QueueArn,KmsMasterKeyId:KmsMasterKeyId,RedrivePolicy:RedrivePolicy,Messages:ApproximateNumberOfMessages,NotVisible:ApproximateNumberOfMessagesNotVisible}' \
+  --output json
+```
+
+Expected:
+
+- `KmsMasterKeyId` is configured.
+- Security notifications queue has a redrive policy to `security-notifications-dlq`.
+- Queue policy allows the security notifications SNS topic to send messages.
+- Visible messages may accumulate if no downstream consumer is configured.
+- DLQ visible message counts should normally be `0`.
+
+---
+
+## 12.3 Validate EventBridge Notification DLQ
+
+Check the shared EventBridge DLQ for security notification delivery failures:
+
+```bash
+EVENTBRIDGE_DLQ_URL="$(aws sqs get-queue-url \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-name "${NAME_PREFIX}-security-notifications-eventbridge-dlq" \
+  --query 'QueueUrl' \
+  --output text)"
+
+aws sqs get-queue-attributes \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-url "${EVENTBRIDGE_DLQ_URL}" \
+  --attribute-names All \
+  --query 'Attributes.{QueueArn:QueueArn,KmsMasterKeyId:KmsMasterKeyId,Policy:Policy,Messages:ApproximateNumberOfMessages,NotVisible:ApproximateNumberOfMessagesNotVisible,Oldest:ApproximateAgeOfOldestMessage}' \
+  --output json
+```
+
+Expected:
+
+- `KmsMasterKeyId` is configured.
+- Queue policy allows `events.amazonaws.com` to send messages from expected EventBridge rule ARNs.
+- Visible message count is normally `0`.
+
+---
+
+## 12.4 Validate Notification DLQ Alarms
+
+Check CloudWatch alarms related to notification DLQs:
+
+```bash
+aws cloudwatch describe-alarms \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --alarm-name-prefix "${NAME_PREFIX}" \
+  --query 'MetricAlarms[?contains(AlarmName, `DLQ`) || contains(AlarmName, `dlq`)].[AlarmName,StateValue,MetricName,Namespace]' \
+  --output table
+```
+
+Expected alarms include:
+
+```text
+${NAME_PREFIX}-security-notifications-dlq-visible-messages
+${NAME_PREFIX}-Security-Notifications-EventBridge-DLQ-Messages
+```
+
+Automation workflow DLQ alarms may also appear depending on module configuration.
+
+---
+
+## 12.5 DLQ Operational Follow-Up
+
+DLQs are terminal failure-retention queues. They retain failed events for review and do not automatically replay messages.
+
+If a DLQ alarm fires:
+
+1. Identify which DLQ has visible messages.
+2. Capture approximate visible, not-visible, and oldest-message counts.
+3. Review recent CloudWatch alarm state changes.
+4. Inspect one message without deleting it.
+5. Determine whether the failure is caused by EventBridge delivery, SNS/SQS policy, KMS permissions, Lambda processing, or downstream consumer behavior.
+6. Fix the underlying issue.
+7. Replay, archive, or discard the message only after review.
+
+Inspect queue counts:
+
+```bash
+aws sqs get-queue-attributes \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-url "${QUEUE_URL}" \
+  --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible ApproximateAgeOfOldestMessage \
+  --output table
+```
+
+Inspect one message safely with a short visibility timeout:
+
+```bash
+aws sqs receive-message \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-url "${QUEUE_URL}" \
+  --max-number-of-messages 1 \
+  --visibility-timeout 30 \
+  --attribute-names All \
+  --message-attribute-names All \
+  --output json
+```
+
+Do not delete the message until the failure has been understood and the operator has decided whether to replay, archive, or discard it.
+
+For `security-notifications-eventbridge-dlq`, check:
+
+- EventBridge target exists and points to the security notifications SNS topic.
+- EventBridge target has the expected DLQ and retry policy.
+- Security notifications SNS topic exists.
+- SNS topic policy allows the source EventBridge rule ARN to publish.
+- EventBridge DLQ queue policy allows the source EventBridge rule ARN to send messages.
+- KMS permissions allow encrypted SNS/SQS delivery.
+
+For `security-notifications-dlq`, check:
+
+- Whether a downstream consumer is configured.
+- Consumer logs, permissions, timeouts, and parsing errors.
+- Message schema compatibility.
+- Queue redrive policy and max receive count.
+- KMS permissions for the consumer.
+
+Messages in the primary compliance or security notification queues may accumulate when no downstream consumer is configured. Messages in a DLQ should be treated as a failure signal.
+
 
 # 13. Validate EventBridge Rules
 
@@ -1310,7 +1525,7 @@ Expected rules may include:
 
 - EC2 Rollback
 
-Confirm EventBridge Targets:
+Confirm EventBridge targets and target DLQs:
 
 ```bash
 aws events list-targets-by-rule \
@@ -1318,14 +1533,21 @@ aws events list-targets-by-rule \
   --profile "${AWS_PROFILE}" \
   --rule "${CLOUD_NAME}-${ENVIRONMENT}-securityhub-high-critical" \
   --event-bus-name default \
-  --query 'Targets[].[Id,Arn]' \
+  --query 'Targets[].{Id:Id,Arn:Arn,DLQ:DeadLetterConfig.Arn,MaxAttempts:RetryPolicy.MaximumRetryAttempts,MaxAge:RetryPolicy.MaximumEventAgeInSeconds}' \
   --output table
 ```
 
 Expected targets may include:
 
-- `IpEnrichment`
+- `IpEnrichmentLambda`
 - `sec-hub-to-secops-sns`
+
+Expected:
+
+- Security notification SNS targets use the shared `security-notifications-eventbridge-dlq`.
+- Automation Lambda targets use workflow-specific DLQs.
+- Protected EventBridge targets use retry attempts of `3`.
+- Protected EventBridge targets use max event age of `3600` seconds.
 
 ---
 
@@ -1891,6 +2113,53 @@ Check:
 
 ---
 
+## Notification or Automation DLQ Has Messages
+
+Check:
+
+- Which DLQ has visible messages.
+- Whether the DLQ is an EventBridge target DLQ, SQS redrive DLQ, or workflow automation DLQ.
+- EventBridge target DLQ and retry policy configuration.
+- SNS topic policy and SQS queue policy.
+- KMS key policy permissions for SNS, SQS, EventBridge, Lambda, or the downstream consumer.
+- Lambda function logs and async/EventBridge delivery behavior for workflow-specific DLQs.
+- Whether the message still needs to be replayed, archived, or discarded.
+
+Useful commands:
+
+```bash
+aws sqs list-queues \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-name-prefix "${NAME_PREFIX}" \
+  --output table
+```
+
+```bash
+aws sqs get-queue-attributes \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-url "${QUEUE_URL}" \
+  --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible ApproximateAgeOfOldestMessage \
+  --output table
+```
+
+```bash
+aws sqs receive-message \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --queue-url "${QUEUE_URL}" \
+  --max-number-of-messages 1 \
+  --visibility-timeout 30 \
+  --attribute-names All \
+  --message-attribute-names All \
+  --output json
+```
+
+Do not delete DLQ messages until the root cause has been understood and the operator has decided whether to replay, archive, or discard them.
+
+---
+
 # Summary
 
 This checklist validates that `tf-secure-baseline` is deployed correctly and that the core security workflows function as intended.
@@ -1909,6 +2178,7 @@ A successful validation means:
 - Interface Endpoints are deployed into dedicated endpoint private subnets.
 - Logging and security services are active where expected.
 - KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM controls validate successfully.
+- Notification and automation DLQs exist, are encrypted, and are reviewed when messages appear.
 - Identity Center access is configured.
 - Live EC2 isolation, rollback, IP enrichment, tamper detection, and break-glass workflows have been tested manually where appropriate.
 - Destroy procedures are understood before teardown.
