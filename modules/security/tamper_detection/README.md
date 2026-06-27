@@ -98,10 +98,11 @@ The alert includes:
 module "tamper_detection" {
   source = "./tamper_detection"
 
-  cloud_name      = var.cloud_name
-  environment     = var.environment
-  name_prefix     = local.name_prefix
-  secops_topic_arn = var.secops_topic_arn
+  name_prefix                    = var.name_prefix
+  cloud_name                     = var.cloud_name
+  environment                    = var.environment
+  secops_topic_arn               = var.secops_topic_arn
+  sec_notifs_eventbridge_dlq_arn = var.sec_notifs_eventbridge_dlq_arn
 }
 ```
 
