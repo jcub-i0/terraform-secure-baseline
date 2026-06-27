@@ -98,10 +98,11 @@ The alert includes:
 module "tamper_detection" {
   source = "./tamper_detection"
 
-  cloud_name      = var.cloud_name
-  environment     = var.environment
-  name_prefix     = local.name_prefix
-  secops_topic_arn = var.secops_topic_arn
+  name_prefix                    = var.name_prefix
+  cloud_name                     = var.cloud_name
+  environment                    = var.environment
+  secops_topic_arn               = var.secops_topic_arn
+  sec_notifs_eventbridge_dlq_arn = var.sec_notifs_eventbridge_dlq_arn
 }
 ```
 
@@ -115,6 +116,7 @@ module "tamper_detection" {
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` |
 | `name_prefix` | Naming prefix used for created resources |
 | `secops_topic_arn` | SNS topic ARN used for tamper alerts |
+| `sec_notifs_eventbridge_dlq_arn` | ARN of the 'security_notifications_eventbridge_dlq' DLQ|
 
 ---
 

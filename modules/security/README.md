@@ -476,6 +476,7 @@ Refer to the child module README for detailed detection coverage.
 | `enable_rules` | Object controlling which Config baseline rule groups are enabled | No |
 | `inspector_enabled` | Whether Amazon Inspector is enabled for the selected resource types | Yes |
 | `inspector_resource_types` | Amazon Inspector resource types to enable. Defaults to `["EC2"]`; Lambda scan types are disabled by default | No |
+| `sec_notifs_eventbridge_dlq_arn` | ARN of the `security_notifications_eventbridge_dlq` DLQ | Yes |
 
 ---
 
@@ -543,9 +544,10 @@ module "security" {
   config_role_arn             = module.iam.config_role_arn
   config_remediation_role_arn = module.iam.config_remediation_role_arn
 
-  compliance_topic_arn  = module.monitoring.compliance_topic_arn
-  secops_topic_arn      = module.monitoring.secops_topic_arn
-  secops_event_bus_name = module.automation.secops_event_bus_name
+  compliance_topic_arn           = module.monitoring.compliance_topic_arn
+  secops_topic_arn               = module.monitoring.secops_topic_arn
+  secops_event_bus_name          = module.automation.secops_event_bus_name
+  sec_notifs_eventbridge_dlq_arn = module.monitoring.sec_notifs_eventbridge_dlq_arn
 }
 ```
 

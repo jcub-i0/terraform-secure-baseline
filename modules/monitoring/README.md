@@ -2,491 +2,323 @@
 
 ## Overview
 
-The `monitoring` module provisions security and compliance notification resources for the environment.
+The `monitoring` module provisions the notification and alert-routing layer for a `tf-secure-baseline` workload environment.
 
-This includes:
+It creates encrypted SNS and SQS resources for security and compliance notifications, attaches selected EventBridge targets to the security notification path, and creates CloudWatch metric filters and alarms for CloudTrail-based detections.
 
-- A compliance SNS topic
-- A compliance SQS queue
-- A SecOps SNS topic
-- Email subscriptions for SecOps notifications
-- SNS topic policies for AWS service and Lambda publishing
-- EventBridge targets for Security Hub high/critical findings
-- EventBridge detection for break-glass role usage
-- CloudWatch Log Metric Filters for CloudTrail-based detection
-- CloudWatch Alarms routed to SecOps notifications
-
-This module acts as the alert routing layer for the baseline.
+This module is responsible for routing alerts. It does not own every detection source. Some rules and producers are created by other modules and passed into this module as inputs.
 
 ---
 
-## Purpose
+## What This Module Creates
 
-The purpose of this module is to centralize operational and security notifications.
+| Category | Resources |
+|---|---|
+| Compliance notifications | Compliance SNS topic, compliance SQS queue, SNS-to-SQS subscription, queue policy |
+| Security notifications | Security notifications SNS topic, email subscriptions, security notifications SQS queue, security notifications SQS DLQ |
+| EventBridge failure handling | Shared EventBridge DLQ for EventBridge-to-security-SNS delivery failures |
+| EventBridge targets | Security Hub high/critical SNS target, break-glass SNS target |
+| CloudWatch detections | Metric filters and alarms for root activity, unauthorized API calls, CloudTrail stop/delete activity, and IAM policy changes |
+| DLQ alerting | CloudWatch alarms for security notification DLQ messages and EventBridge security notification DLQ messages |
+
+---
+
+## Design Purpose
+
+The monitoring module centralizes security and compliance notification handling.
 
 It supports:
 
-- Security alert delivery to SecOps email recipients
-- Compliance notification routing through SNS and SQS
-- Alerting on high-risk AWS account activity
-- Alerting on Security Hub high and critical findings
-- Alerting on break-glass role usage
-- Alerting on root account activity
-- Alerting on unauthorized API calls
-- Alerting on CloudTrail tampering
-- Alerting on IAM policy changes
+- SecOps email alerting for high-priority security events
+- Durable SQS-backed notification paths for compliance and security notifications
+- EventBridge delivery failure retention for security notification targets
+- Alarmed DLQ paths for failed or undelivered security notification events
+- CloudTrail-based detection for high-risk account activity
+- Notification routing for Security Hub, tamper detection, break-glass access, CloudWatch alarms, and security automation workflows
 
-This module does not create all detection sources by itself.
-
-Instead, it connects existing detection sources, CloudTrail logs, EventBridge rules, and AWS service events to actionable notification targets.
+The module is intentionally focused on notification routing and operational visibility. Security services, automation workflows, and some EventBridge rules are created by other modules and integrated here through variables.
 
 ---
 
-## Resources Created
+## Notification Resources
 
 ### Compliance SNS Topic
 
-Creates a compliance notification SNS topic:
+Creates an encrypted compliance notification SNS topic.
 
-```hcl
-resource "aws_sns_topic" "compliance"
-```
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_sns_topic.compliance` |
+| Name format | `<name_prefix>-compliance-notifications` |
+| Encryption | `var.logs_cmk_arn` |
+| Primary producer | AWS Config |
 
-Topic name format:
-
-```text
-<name_prefix>-compliance-notifications
-```
-
-The topic is encrypted with the logs CMK:
-
-```hcl
-kms_master_key_id = var.logs_cmk_arn
-```
-
-This topic is intended for AWS Config and compliance-related notifications.
-
----
-
-### Compliance SNS Topic Policy
-
-Creates a topic policy for the compliance SNS topic:
-
-```hcl
-resource "aws_sns_topic_policy" "compliance"
-```
-
-The policy allows:
-
-- Account root administration
-- AWS Config to publish compliance notifications
-
-The AWS Config service principal is:
-
-```text
-config.amazonaws.com
-```
-
----
+The compliance SNS topic is intended for compliance-oriented notifications, such as AWS Config events.
 
 ### Compliance SQS Queue
 
-Creates a compliance SQS queue:
+Creates an encrypted compliance SQS queue subscribed to the compliance SNS topic.
 
-```hcl
-resource "aws_sqs_queue" "compliance"
-```
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_sqs_queue.compliance` |
+| Name format | `<name_prefix>-compliance-queue` |
+| Encryption | `var.logs_cmk_arn` |
+| Message retention | 14 days |
+| Producer | Compliance SNS topic |
 
-Queue name format:
+The compliance queue is a durable notification subscriber. It can be used for inspection, replay, evidence collection, or future downstream integrations.
 
-```text
-<name_prefix>-compliance-queue
-```
+The queue is not required to have an active consumer in the baseline. If no consumer is configured, visible messages may accumulate until retention expires or the queue is manually drained.
 
-The queue is encrypted with the logs CMK:
+### Security Notifications SNS Topic
 
-```hcl
-kms_master_key_id = var.logs_cmk_arn
-```
+Creates the primary security notification SNS topic.
 
-This queue receives messages from the compliance SNS topic.
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_sns_topic.secops` |
+| Name format | `<name_prefix>-security-notifications` |
+| Encryption | `var.logs_cmk_arn` |
+| Main consumers | SecOps email subscriptions, security notifications SQS queue |
 
----
-
-### Compliance SNS Subscription
-
-Subscribes the compliance SQS queue to the compliance SNS topic:
-
-```hcl
-resource "aws_sns_topic_subscription" "compliance"
-```
-
-Subscription protocol:
-
-```text
-sqs
-```
-
-This allows compliance notifications published to SNS to be delivered into the SQS queue.
-
----
-
-### Compliance SQS Queue Policy
-
-Creates an SQS queue policy that allows the compliance SNS topic to send messages to the queue:
-
-```hcl
-data "aws_iam_policy_document" "compliance_queue_policy"
-resource "aws_sqs_queue_policy" "compliance"
-```
-
-The policy allows:
-
-```text
-sqs:SendMessage
-```
-
-Only from the compliance SNS topic ARN.
-
-This prevents unrelated SNS topics or principals from writing to the compliance queue.
-
----
-
-### SecOps SNS Topic
-
-Creates the main SecOps notification SNS topic:
-
-```hcl
-resource "aws_sns_topic" "secops"
-```
-
-Topic name format:
-
-```text
-<name_prefix>-security-notifications
-```
-
-The topic is encrypted with the logs CMK:
-
-```hcl
-kms_master_key_id = var.logs_cmk_arn
-```
-
-This topic receives security notifications from:
+The security notifications topic receives alerts from:
 
 - CloudWatch alarms
 - EventBridge rules
-- Security Hub event routing
-- Tamper detection
-- Break-glass detection
-- EC2 Isolation Lambda
-- EC2 Rollback Lambda
-- IP Enrichment Lambda
-
----
-
-### SecOps SNS Topic Policy
-
-Creates a topic policy for the SecOps SNS topic:
-
-```hcl
-resource "aws_sns_topic_policy" "secops"
-```
-
-The policy allows publishing from:
-
-| Principal | Purpose |
-|---|---|
-| Account root | Topic administration |
-| `cloudwatch.amazonaws.com` | CloudWatch alarm notifications |
-| `events.amazonaws.com` | EventBridge rule notifications |
-| IP Enrichment Lambda role | Threat intel enrichment alerts |
-| EC2 Isolation Lambda role | Instance isolation alerts |
-| EC2 Rollback Lambda role | Instance rollback alerts |
-| Break-glass EventBridge rule | Break-glass role usage alerts |
-| Tamper detection EventBridge rule | Security service tampering alerts |
-| Security Hub high/critical rule | High and critical finding alerts |
-
-EventBridge permissions are scoped with source account and source ARN conditions where applicable.
-
----
+- Security Hub high/critical routing
+- Break-glass role usage detection
+- Tamper detection routing
+- Security automation workflows, where permitted by topic policy
 
 ### SecOps Email Subscriptions
 
-Creates email subscriptions for each address in the `secops_emails` variable:
+Creates email subscriptions for each address in `var.secops_emails`.
 
-```hcl
-resource "aws_sns_topic_subscription" "secops"
-```
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_sns_topic_subscription.secops` |
+| Protocol | `email` |
+| Destination | Each configured SecOps email address |
 
-The module uses:
+Email subscriptions must be confirmed by the recipient before alerts are delivered.
 
-```hcl
-for_each = toset(var.secops_emails)
-```
+### Security Notifications SQS Queue
 
-Each email address receives a subscription to the SecOps SNS topic.
+Creates an encrypted SQS queue subscribed to the security notifications SNS topic.
 
-Important:
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_sqs_queue.security_notifications` |
+| Name format | `<name_prefix>-security-notifications-queue` |
+| Encryption | `var.logs_cmk_arn` |
+| Message retention | 14 days |
+| SNS subscription | Security notifications SNS topic |
+| Redrive target | Security notifications DLQ |
+| Max receive count | 5 |
 
-Email subscriptions require confirmation by the recipient before notifications are delivered.
+This queue provides a durable, machine-readable copy of security notifications for future SIEM ingestion, ticketing, replay, evidence collection, or client-owned consumers.
 
----
+### Security Notifications SQS DLQ
 
-### Security Hub High/Critical EventBridge Target
+Creates a DLQ for the security notifications SQS queue.
 
-Creates an EventBridge target that sends high and critical Security Hub findings to the SecOps SNS topic:
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_sqs_queue.security_notifications_dlq` |
+| Name format | `<name_prefix>-security-notifications-dlq` |
+| Encryption | `var.logs_cmk_arn` |
+| Message retention | 14 days |
+| Failure path covered | Messages that reached the security notifications SQS queue but failed downstream processing repeatedly |
 
-```hcl
-resource "aws_cloudwatch_event_target" "securityhub_high_critical"
-```
+A CloudWatch alarm notifies SecOps when messages are visible in this DLQ.
 
-Important:
+### Security Notifications EventBridge DLQ
 
-The EventBridge rule itself is created outside this module, in the automation layer.
+Creates a shared EventBridge DLQ for failed EventBridge delivery to the security notifications SNS topic.
 
-This module receives the rule name and rule ARN through variables:
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_sqs_queue.security_notifications_eventbridge_dlq` |
+| Name format | `<name_prefix>-security-notifications-eventbridge-dlq` |
+| Encryption | `var.logs_cmk_arn` |
+| Message retention | 14 days |
+| Failure path covered | EventBridge failed to deliver a security notification event to the security notifications SNS topic |
 
-```hcl
-var.securityhub_high_critical_rule_name
-var.securityhub_high_critical_rule_arn
-```
+This DLQ is used by EventBridge targets that send security alerts to the security notifications SNS topic.
 
-The target uses an input transformer to format Security Hub findings into readable alert messages.
+Current protected SNS targets include:
 
-The alert includes:
+- Security Hub high/critical findings to security notifications SNS
+- Break-glass role assumption alerts to security notifications SNS
+- Tamper detection alerts to security notifications SNS
 
-- Severity
-- Product name
-- Finding title
-- Time
-- Account
-- Region
-- Finding ID
-- Workflow status
-- Record state
-- Resource type
-- Resource ID
-
----
-
-### Break-Glass Role Assumption Detection Rule
-
-Creates an EventBridge rule that detects when the break-glass admin role is assumed:
-
-```hcl
-resource "aws_cloudwatch_event_rule" "break_glass_assumed"
-```
-
-The rule matches CloudTrail events for:
-
-```text
-eventSource = sts.amazonaws.com
-eventName   = AssumeRole
-roleArn     = var.break_glass_admin_role_arn
-```
-
-This is intended to alert whenever emergency administrative access is used.
+A CloudWatch alarm notifies SecOps when messages are visible in this EventBridge DLQ.
 
 ---
 
-### Break-Glass EventBridge Target
+## DLQ Model
 
-Creates an EventBridge target that sends break-glass role assumption alerts to the SecOps SNS topic:
+The module uses two different DLQ patterns for security notifications.
 
-```hcl
-resource "aws_cloudwatch_event_target" "break_glass_assumed_to_sns"
+| DLQ | Covers | Example failure |
+|---|---|---|
+| `security-notifications-eventbridge-dlq` | EventBridge could not deliver an event to the security notifications SNS topic | EventBridge target delivery to SNS failed after retries |
+| `security-notifications-dlq` | A message reached the security notifications SQS queue but failed downstream processing repeatedly | A future queue consumer fails to process the same message more than 5 times |
+
+These queues protect different delivery edges and should not be merged.
+
+High-level flow:
+
+```text
+EventBridge Rule
+    |
+    v
+Security Notifications SNS Topic
+    |
+    +--> SecOps Email Subscriptions
+    |
+    +--> Security Notifications SQS Queue
+            |
+            v
+        Security Notifications SQS DLQ
+
+If EventBridge cannot deliver to SNS:
+
+EventBridge Rule
+    |
+    v
+Security Notifications EventBridge DLQ
 ```
-
-The alert includes:
-
-- Time
-- Account
-- Region
-- Caller ARN
-- Role ARN
-- Session name
-- Source IP
-- User agent
-
-Break-glass role usage should be treated as critical and reviewed immediately.
 
 ---
 
-## CloudWatch Log Metric Filters and Alarms
+## EventBridge Targets
 
-The module creates several CloudWatch Log Metric Filters based on the CloudTrail log group.
+### Security Hub High/Critical Findings
 
-The CloudTrail log group name is passed in through:
+Creates an EventBridge target that sends high and critical Security Hub findings to the security notifications SNS topic.
 
-```hcl
-var.cloudtrail_logs_group_name
-```
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_cloudwatch_event_target.securityhub_high_critical` |
+| Rule owner | Automation module |
+| Rule name input | `var.securityhub_high_critical_rule_name` |
+| Rule ARN input | `var.securityhub_high_critical_rule_arn` |
+| Target ID | `sec-hub-to-secops-sns` |
+| Target ARN | `aws_sns_topic.secops.arn` |
+| DLQ | `aws_sqs_queue.security_notifications_eventbridge_dlq.arn` |
+| Retry attempts | 3 |
+| Max event age | 3600 seconds |
 
-Each metric filter creates a custom metric in the namespace:
+The target uses an input transformer to produce a human-readable alert message with finding severity, title, product, account, region, workflow status, record state, and affected resource details.
 
-```hcl
-var.name_prefix
-```
+### Break-Glass Role Usage
 
-Each related alarm sends notifications to the SecOps SNS topic.
+Creates an EventBridge rule and SNS target for break-glass role assumption events.
 
----
+| Attribute | Value |
+|---|---|
+| EventBridge rule | `aws_cloudwatch_event_rule.break_glass_assumed` |
+| Target | `aws_cloudwatch_event_target.break_glass_assumed_to_sns` |
+| Rule name format | `<name_prefix>-break-glass-admin-assumed` |
+| Target ID | `break-glass-to-secops-sns` |
+| Target ARN | `aws_sns_topic.secops.arn` |
+| DLQ | `aws_sqs_queue.security_notifications_eventbridge_dlq.arn` |
+| Retry attempts | 3 |
+| Max event age | 3600 seconds |
 
-### Root Activity Detection
+The rule matches CloudTrail events for `sts.amazonaws.com` `AssumeRole` activity where the requested role ARN matches `var.break_glass_admin_role_arn`.
 
-Creates a metric filter for root user activity:
+Break-glass usage should be treated as critical unless it is tied to an approved emergency.
 
-```hcl
-resource "aws_cloudwatch_log_metric_filter" "root_activity"
-resource "aws_cloudwatch_metric_alarm" "root_activity"
-```
+### Tamper Detection Alerts
 
-Filter pattern:
+The tamper detection EventBridge rule is created outside this module and passed in through `var.tamper_detection_rule_arn`.
 
-```text
-{$.userIdentity.type = "Root"}
-```
-
-Metric name:
-
-```text
-RootActivityCount
-```
-
-Alarm name format:
-
-```text
-<name_prefix>-Root-User-Activity
-```
-
-Expected behavior:
-
-- Any root user activity creates a metric value.
-- The alarm triggers when root activity count is greater than or equal to 1 within a 5-minute period.
-
-Root account usage should be rare and should be reviewed.
+The monitoring module authorizes that rule to publish to the security notifications SNS topic and allows it to use the shared security notifications EventBridge DLQ.
 
 ---
 
-### Unauthorized API Call Detection
+## CloudWatch Metric Filters and Alarms
 
-Creates a metric filter for unauthorized API activity:
+The module creates CloudWatch Log Metric Filters against the CloudTrail CloudWatch Log Group provided through `var.cloudtrail_logs_group_name`.
 
-```hcl
-resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls"
-resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls"
-```
+| Detection | Metric filter | Metric name | Alarm name format |
+|---|---|---|---|
+| Root activity | `RootActivity` | `RootActivityCount` | `<name_prefix>-Root-User-Activity` |
+| Unauthorized API calls | `Unauthorized-API-Calls` | `UnauthorizedAPICallCount` | `<name_prefix>-Unauthorized_API_Calls` |
+| CloudTrail stop/delete activity | `CloudTrail-Disabled` | `CloudTrailDisabled` | `<name_prefix>-CloudTrailDisabled` |
+| IAM policy changes | `IamPolicyChanges` | `IamPolicyChanges` | `<name_prefix>-IamPolicyChanges` |
 
-Filter pattern detects:
+All of these alarms route to the security notifications SNS topic.
 
-```text
-UnauthorizedOperation
-AccessDenied
-```
+### Root Activity
 
-Metric name:
+Detects root user activity.
 
-```text
-UnauthorizedAPICallCount
-```
+Root activity should be rare and reviewed whenever it occurs.
 
-Alarm name format:
+### Unauthorized API Calls
 
-```text
-<name_prefix>-Unauthorized_API_Calls
-```
+Detects `UnauthorizedOperation` and `AccessDenied` API errors.
 
-Expected behavior:
+This can indicate suspicious enumeration, failed privilege attempts, misconfigured roles, or normal least-privilege tuning events.
 
-- Any denied API call creates a metric value.
-- The alarm triggers when unauthorized API call count is greater than or equal to 1 within a 5-minute period.
+### CloudTrail Disabled
 
-This is useful for detecting misconfigured roles, suspicious enumeration, failed privilege attempts, or normal least-privilege tuning events.
+Detects `StopLogging` and `DeleteTrail` events.
 
----
+This is a high-priority alert because CloudTrail tampering can indicate attempted defense evasion.
 
-### CloudTrail Disabled Detection
+### IAM Policy Changes
 
-Creates a metric filter for CloudTrail tampering events:
+Detects selected IAM policy and role trust policy changes, including:
 
-```hcl
-resource "aws_cloudwatch_log_metric_filter" "cloudtrail_disabled"
-resource "aws_cloudwatch_metric_alarm" "cloudtrail_disabled"
-```
+- `CreatePolicy`
+- `PutRolePolicy`
+- `AttachRolePolicy`
+- `DeletePolicy`
+- `DetachRolePolicy`
+- `UpdateAssumeRolePolicy`
 
-Filter pattern detects:
-
-```text
-StopLogging
-DeleteTrail
-```
-
-Metric name:
-
-```text
-CloudTrailDisabled
-```
-
-Alarm name format:
-
-```text
-<name_prefix>-CloudTrailDisabled
-```
-
-Expected behavior:
-
-- Attempts to stop or delete CloudTrail create a metric value.
-- The alarm triggers when the count is greater than or equal to 1 within a 5-minute period.
-
-This is a high-priority security alert.
+These events may indicate privilege creation, privilege expansion, permission removal, cleanup activity, or trust policy changes that affect who can assume a role.
 
 ---
 
-### IAM Policy Change Detection
+## DLQ Alarms
 
-Creates a metric filter for selected IAM policy and role trust policy changes:
+### Security Notifications SQS DLQ Alarm
 
-```hcl
-resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes"
-resource "aws_cloudwatch_metric_alarm" "iam_changes"
-```
+Creates an alarm for messages visible in the security notifications SQS DLQ.
 
-Current filter detects:
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_cloudwatch_metric_alarm.security_notifications_dlq_visible_messages` |
+| Alarm name format | `<name_prefix>-security-notifications-dlq-visible-messages` |
+| Namespace | `AWS/SQS` |
+| Metric | `ApproximateNumberOfMessagesVisible` |
+| Statistic | `Maximum` |
+| Period | 300 seconds |
+| Alarm action | Security notifications SNS topic |
 
-```text
-CreatePolicy
-PutRolePolicy
-AttachRolePolicy
-DeletePolicy
-DetachRolePolicy
-UpdateAssumeRolePolicy
-```
+This alarm indicates that a message reached the security notifications SQS queue but was repeatedly not processed successfully by a consumer.
 
-Metric name:
+### Security Notifications EventBridge DLQ Alarm
 
-```text
-IamPolicyChanges
-```
+Creates an alarm for messages visible in the security notifications EventBridge DLQ.
 
-Alarm name format:
+| Attribute | Value |
+|---|---|
+| Terraform resource | `aws_cloudwatch_metric_alarm.security_notifications_eventbridge_dlq_messages` |
+| Alarm name format | `<name_prefix>-Security-Notifications-EventBridge-DLQ-Messages` |
+| Namespace | `AWS/SQS` |
+| Metric | `ApproximateNumberOfMessagesVisible` |
+| Statistic | `Maximum` |
+| Period | 300 seconds |
+| Alarm action | Security notifications SNS topic |
 
-```text
-<name_prefix>-IamPolicyChanges
-```
-
-Expected behavior:
-
-- Selected IAM policy changes create a metric value.
-- Selected IAM policy detach/delete events create a metric value.
-- Role trust policy updates create a metric value.
-- The alarm triggers when IAM policy change count is greater than or equal to 1 within a 5-minute period.
-
-Security relevance:
-
-- `CreatePolicy`, `PutRolePolicy`, and `AttachRolePolicy` may indicate privilege creation, privilege expansion, or policy attachment activity.
-- `DeletePolicy` and `DetachRolePolicy` may indicate attempted permission removal, cleanup, or defense evasion.
-- `UpdateAssumeRolePolicy` is especially important because it changes who can assume a role, which can create privilege escalation or persistence risk.
+This alarm indicates that EventBridge failed to deliver one or more security notification events to the security notifications SNS topic after retry handling.
 
 ---
 
@@ -494,9 +326,9 @@ Security relevance:
 
 | Name | Description | Required |
 |---|---|---:|
-| `name_prefix` | Prefix used for resource naming and CloudWatch metric namespace | Yes |
+| `name_prefix` | Prefix used for resource names and CloudWatch metric namespace | Yes |
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
-| `logs_cmk_arn` | KMS CMK ARN used to encrypt SNS topics and SQS queue | Yes |
+| `logs_cmk_arn` | KMS CMK ARN used to encrypt SNS topics and SQS queues | Yes |
 | `cloudtrail_logs_group_name` | CloudWatch Log Group name where CloudTrail events are delivered | Yes |
 | `secops_emails` | List of email addresses subscribed to SecOps notifications | Yes |
 | `tamper_detection_rule_arn` | ARN of the tamper detection EventBridge rule | Yes |
@@ -515,7 +347,8 @@ Security relevance:
 | Name | Description |
 |---|---|
 | `compliance_topic_arn` | ARN of the compliance SNS topic |
-| `secops_topic_arn` | ARN of the SecOps SNS topic |
+| `secops_topic_arn` | ARN of the security notifications SNS topic |
+| `sec_notifs_eventbridge_dlq_arn` | ARN of the shared EventBridge DLQ for security notification target failures |
 
 ---
 
@@ -525,9 +358,9 @@ Security relevance:
 module "monitoring" {
   source = "../modules/monitoring"
 
-  name_prefix                         = local.name_prefix
-  environment                         = var.environment
-  account_id                          = data.aws_caller_identity.current.account_id
+  name_prefix = local.name_prefix
+  environment = var.environment
+  account_id  = var.account_id
 
   cloudtrail_logs_group_name          = module.logging.cloudtrail_logs_group_name
   logs_cmk_arn                        = module.security.logs_cmk_arn
@@ -535,12 +368,12 @@ module "monitoring" {
   securityhub_high_critical_rule_arn  = module.automation.securityhub_high_critical_rule_arn
   securityhub_high_critical_rule_name = module.automation.securityhub_high_critical_rule_name
 
-  lambda_ip_enrichment_role_arn       = module.iam.lambda_ip_enrichment_role_arn
-  lambda_ec2_isolation_role_arn       = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn        = module.iam.lambda_ec2_rollback_role_arn
-  break_glass_admin_role_arn          = module.iam.break_glass_admin_role_arn
+  lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
+  lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
+  lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
+  break_glass_admin_role_arn    = module.iam.break_glass_admin_role_arn
 
-  secops_emails                       = var.secops_emails
+  secops_emails = var.secops_emails
 }
 ```
 
@@ -548,233 +381,35 @@ module "monitoring" {
 
 ## Validation
 
-### Confirm SNS Topics Exist
+Use the automated validation scripts for normal validation.
 
 ```bash
-aws sns list-topics \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'Topics[?contains(TopicArn, `security-notifications`) || contains(TopicArn, `compliance-notifications`)].TopicArn' \
-  --output table
+./scripts/validation/validate-sns.sh dev
+./scripts/validation/validate-sqs.sh dev
+./scripts/validation/validate-eventbridge.sh dev
 ```
 
-Expected:
+Expected coverage:
 
-- SecOps SNS topic exists
-- Compliance SNS topic exists
+| Script | Main checks |
+|---|---|
+| `validate-sns.sh` | Security and compliance SNS topics, encryption, subscription counts, pending confirmations |
+| `validate-sqs.sh` | Compliance queue, security notification queue, security notification DLQ, security notification EventBridge DLQ, encryption, SNS-to-SQS wiring |
+| `validate-eventbridge.sh` | EventBridge rules, targets, target DLQs, retry policies, Security Hub/SecOps routing |
+
+Detailed manual validation commands belong in the validation runbook rather than this module README.
+
+Recommended companion doc path:
+
+```text
+docs/validation/monitoring-validation.md
+```
 
 ---
 
-### Confirm SecOps SNS Topic Attributes
-
-```bash
-aws sns get-topic-attributes \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --topic-arn "${SECOPS_TOPIC_ARN}" \
-  --query 'Attributes.{TopicArn:TopicArn,KmsMasterKeyId:KmsMasterKeyId,DisplayName:DisplayName}' \
-  --output table
-```
-
-Expected:
-
-- Topic ARN matches the SecOps topic
-- KMS master key is configured
-
----
-
-### Confirm Compliance SNS Topic Attributes
-
-```bash
-aws sns get-topic-attributes \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --topic-arn "${COMPLIANCE_TOPIC_ARN}" \
-  --query 'Attributes.{TopicArn:TopicArn,KmsMasterKeyId:KmsMasterKeyId,DisplayName:DisplayName}' \
-  --output table
-```
-
-Expected:
-
-- Topic ARN matches the compliance topic
-- KMS master key is configured
-
----
-
-### Confirm SecOps Email Subscriptions
-
-```bash
-aws sns list-subscriptions-by-topic \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --topic-arn "${SECOPS_TOPIC_ARN}" \
-  --query 'Subscriptions[].[Protocol,Endpoint,SubscriptionArn]' \
-  --output table
-```
-
-Expected:
-
-- Each configured SecOps email address appears as an email subscription
-- Confirmed subscriptions show a real subscription ARN
-- Unconfirmed subscriptions show `PendingConfirmation`
-
-Important:
-
-Email recipients must confirm the SNS subscription before alerts are delivered.
-
----
-
-### Confirm Compliance Queue Exists
-
-```bash
-aws sqs list-queues \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --queue-name-prefix "${NAME_PREFIX}-compliance-queue" \
-  --output table
-```
-
-Expected:
-
-- Compliance queue URL is returned
-
----
-
-### Confirm Compliance Queue Encryption
-
-```bash
-aws sqs get-queue-attributes \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --queue-url "${COMPLIANCE_QUEUE_URL}" \
-  --attribute-names KmsMasterKeyId \
-  --query 'Attributes' \
-  --output table
-```
-
-Expected:
-
-- `KmsMasterKeyId` is configured
-- KMS key matches the logs CMK
-
----
-
-### Confirm Compliance SNS to SQS Subscription
-
-```bash
-aws sns list-subscriptions-by-topic \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --topic-arn "${COMPLIANCE_TOPIC_ARN}" \
-  --query 'Subscriptions[].[Protocol,Endpoint,SubscriptionArn]' \
-  --output table
-```
-
-Expected:
-
-- Protocol is `sqs`
-- Endpoint is the compliance queue ARN
-
----
-
-### Confirm Break-Glass EventBridge Rule
-
-```bash
-aws events describe-rule \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --name "${NAME_PREFIX}-break-glass-admin-assumed"
-```
-
-Expected:
-
-- Rule exists
-- Rule state is `ENABLED`
-- Event pattern matches STS `AssumeRole` activity for the break-glass role
-
----
-
-### Confirm Break-Glass EventBridge Target
-
-```bash
-aws events list-targets-by-rule \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --rule "${NAME_PREFIX}-break-glass-admin-assumed" \
-  --query 'Targets[].[Id,Arn]' \
-  --output table
-```
-
-Expected:
-
-- Target ID is `break-glass-to-secops-sns`
-- Target ARN is the SecOps SNS topic ARN
-
----
-
-### Confirm Security Hub High/Critical EventBridge Target
-
-```bash
-aws events list-targets-by-rule \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --rule "${SECURITYHUB_HIGH_CRITICAL_RULE_NAME}" \
-  --query 'Targets[].[Id,Arn]' \
-  --output table
-```
-
-Expected:
-
-- Target ID is `sec-hub-to-secops-sns`
-- Target ARN is the SecOps SNS topic ARN
-
----
-
-### Confirm CloudWatch Metric Filters
-
-```bash
-aws logs describe-metric-filters \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --log-group-name "${CLOUDTRAIL_LOG_GROUP_NAME}" \
-  --query 'metricFilters[].[filterName,filterPattern,metricTransformations[0].metricName]' \
-  --output table
-```
-
-Expected metric filters include:
-
-- `RootActivity`
-- `Unauthorized-API-Calls`
-- `CloudTrail-Disabled`
-- `IamPolicyChanges`
-
----
-
-### Confirm CloudWatch Alarms
-
-```bash
-aws cloudwatch describe-alarms \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --alarm-name-prefix "${NAME_PREFIX}" \
-  --query 'MetricAlarms[].[AlarmName,StateValue,MetricName,Namespace]' \
-  --output table
-```
-
-Expected alarms include:
-
-- `<name_prefix>-Root-User-Activity`
-- `<name_prefix>-Unauthorized_API_Calls`
-- `<name_prefix>-CloudTrailDisabled`
-- `<name_prefix>-IamPolicyChanges`
-
----
-
-## Alert Routing
+## Alert Routing Summary
 
 ### Compliance Notification Path
-
-Compliance notifications follow this path:
 
 ```text
 AWS Config
@@ -786,31 +421,20 @@ Compliance SNS Topic
 Compliance SQS Queue
 ```
 
-This allows compliance events to be queued for later processing, inspection, or integration with another system.
-
----
-
 ### Security Notification Path
 
-Security notifications follow this path:
-
 ```text
-CloudWatch Alarms / EventBridge Rules / Lambda Functions
+CloudWatch Alarms / EventBridge Rules / Lambda Publishers
     |
     v
-SecOps SNS Topic
+Security Notifications SNS Topic
     |
-    v
-SecOps Email Subscriptions
+    +--> SecOps Email Subscriptions
+    |
+    +--> Security Notifications SQS Queue
 ```
 
-This supports direct human notification for high-priority security events.
-
----
-
-### Security Hub Notification Path
-
-Security Hub high and critical findings follow this path:
+### Security Hub High/Critical Path
 
 ```text
 Security Hub Finding
@@ -818,25 +442,12 @@ Security Hub Finding
     v
 EventBridge Rule from automation module
     |
-    v
-EventBridge Target from monitoring module
+    +--> IP Enrichment Lambda target from automation module
     |
-    v
-SecOps SNS Topic
-    |
-    v
-SecOps Email Subscriptions
+    +--> Security Notifications SNS target from monitoring module
 ```
 
-The rule is created in the automation module.
-
-The target is created in this monitoring module.
-
----
-
 ### Break-Glass Notification Path
-
-Break-glass role usage follows this path:
 
 ```text
 STS AssumeRole API Call
@@ -848,94 +459,59 @@ CloudTrail Event
 EventBridge Rule
     |
     v
-SecOps SNS Topic
-    |
-    v
-SecOps Email Subscriptions
+Security Notifications SNS Topic
 ```
 
-Break-glass usage should be investigated immediately unless it is tied to a known approved emergency.
-
----
-
-## Operational Considerations
-
-### Email Subscription Confirmation
-
-SNS email subscriptions do not become active until the recipient confirms the subscription.
-
-After deploying this module, each address in the `secops_emails` variable should receive a confirmation email.
-
-Until confirmed, the subscription remains in:
+### EventBridge Security Notification Failure Path
 
 ```text
-PendingConfirmation
+EventBridge Rule
+    |
+    v
+Security Notifications SNS Target
+    |
+    x delivery failure after retries
+    |
+    v
+Security Notifications EventBridge DLQ
+    |
+    v
+CloudWatch Alarm to Security Notifications SNS
 ```
 
-Alerts will not be delivered to that recipient until confirmation is complete.
-
 ---
 
-### CloudTrail Log Dependency
+## Operational Notes
 
-Several detections depend on CloudTrail events being delivered to CloudWatch Logs.
+### Email Confirmation
 
-The following detections require a working CloudTrail log group:
+SNS email subscriptions remain pending until each recipient confirms the subscription.
 
-- Root activity
-- Unauthorized API calls
-- CloudTrail disabled events
-- IAM policy changes
+A pending email subscription means that recipient will not receive alerts.
 
-If CloudTrail is not delivering to the expected log group, these metric filters and alarms will not receive data.
+### CloudTrail Dependency
 
----
+The CloudWatch metric filters require CloudTrail events to be delivered to the CloudWatch Log Group passed through `var.cloudtrail_logs_group_name`.
 
-### KMS Encryption
+If CloudTrail is not delivering to that log group, root activity, unauthorized API call, CloudTrail disabled, and IAM policy change alarms will not receive matching events.
 
-SNS topics and the SQS queue use the logs CMK.
+### KMS Dependency
 
-The logs CMK policy must allow the relevant AWS services to use the key where required.
+SNS topics and SQS queues are encrypted with the logs CMK.
 
-Services involved may include:
+If notifications are not delivered, check both resource policies and KMS permissions for the services involved, including SNS, SQS, CloudWatch, EventBridge, AWS Config, and authorized Lambda publishers.
 
-- SNS
-- SQS
-- CloudWatch
-- EventBridge
-- AWS Config
-- Lambda publishers
+### DLQ Handling
 
-If alerts are not being delivered, KMS permissions should be checked along with SNS topic policies.
+DLQ messages are not automatically replayed by this module.
 
----
+A visible message in a security notification DLQ should be treated as an operational signal requiring review. Operators should inspect the message, identify the failed delivery or processing path, fix the underlying issue, and then decide whether manual replay or archival is appropriate.
 
-### Security Hub Rule Location
+Recommended companion runbook path:
 
-The Security Hub high/critical EventBridge rule is not created in this module.
-
-It is expected to be created elsewhere and passed into this module through:
-
-```hcl
-securityhub_high_critical_rule_name
-securityhub_high_critical_rule_arn
+```text
+docs/runbooks/notification-dlq-response.md
 ```
-
-This module only attaches the SecOps SNS topic as a target.
-
----
-
-### Tamper Detection Rule Location
-
-The tamper detection EventBridge rule is not created in this module.
-
-It is expected to be created by the security module and passed into this module through:
-
-```hcl
-tamper_detection_rule_arn
-```
-
-The SecOps SNS topic policy allows that rule to publish alerts.
 
 ---
 
@@ -946,147 +522,66 @@ The SecOps SNS topic policy allows that rule to publish alerts.
 Check:
 
 - Email subscriptions are confirmed
-- SecOps SNS topic exists
-- SNS topic policy allows the publishing service
-- The event or alarm actually fired
+- Security notifications SNS topic exists
+- SNS topic policy allows the publishing service or rule
+- The event, alarm, or Lambda publisher actually fired
+- KMS permissions allow the service to use the logs CMK
 - The recipient email did not filter the message as spam
-- KMS permissions allow SNS to use the configured CMK
 
-Validation command:
-
-```bash
-aws sns list-subscriptions-by-topic \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --topic-arn "${SECOPS_TOPIC_ARN}" \
-  --query 'Subscriptions[].[Protocol,Endpoint,SubscriptionArn]' \
-  --output table
-```
-
----
-
-### Subscription Shows PendingConfirmation
-
-This means the email recipient has not confirmed the SNS subscription.
-
-Fix:
-
-- Open the SNS confirmation email
-- Click the confirmation link
-- Re-run `list-subscriptions-by-topic`
-- Confirm the subscription ARN is no longer `PendingConfirmation`
-
----
-
-### CloudWatch Alarm Does Not Fire
+### Security Notifications Queue Is Not Receiving Messages
 
 Check:
 
-- CloudTrail is sending logs to the expected CloudWatch Log Group
-- The metric filter exists on the correct log group
-- The filter pattern matches the event format
-- The matching event actually occurred after the metric filter was created
-- The alarm is using the correct metric namespace and metric name
-- The alarm action points to the SecOps SNS topic
-
----
-
-### Metric Filters Are Missing
-
-Check:
-
-- `cloudtrail_logs_group_name` is correct
-- The CloudTrail log group exists before this module is applied
-- Terraform applied the monitoring module successfully
-- The AWS region is correct
-
-Validation command:
-
-```bash
-aws logs describe-metric-filters \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --log-group-name "${CLOUDTRAIL_LOG_GROUP_NAME}" \
-  --output table
-```
-
----
-
-### Security Hub Findings Are Not Sending SNS Alerts
-
-Check:
-
-- The Security Hub high/critical EventBridge rule exists
-- The EventBridge target exists
-- The target ARN is the SecOps SNS topic
-- The SecOps SNS topic policy allows the rule ARN to publish
-- The finding matches the rule pattern
-- The finding is active and high or critical severity
-
-Validation command:
-
-```bash
-aws events list-targets-by-rule \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --rule "${SECURITYHUB_HIGH_CRITICAL_RULE_NAME}" \
-  --output table
-```
-
----
-
-### Break-Glass Alerts Are Not Firing
-
-Check:
-
-- The break-glass role ARN passed to the module is correct
-- The role assumption event is recorded by CloudTrail
-- The EventBridge rule exists and is enabled
-- The EventBridge target points to the SecOps SNS topic
-- The SecOps SNS topic policy allows EventBridge to publish from the break-glass rule
-
-Validation command:
-
-```bash
-aws events describe-rule \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --name "${NAME_PREFIX}-break-glass-admin-assumed"
-```
-
----
-
-### Compliance Queue Is Not Receiving Messages
-
-Check:
-
-- Compliance SNS topic exists
-- Compliance SQS queue exists
-- SQS queue policy allows the compliance SNS topic to send messages
+- Security notifications SNS topic exists
+- Security notifications SQS queue exists
 - SNS subscription exists from the topic to the queue
-- AWS Config is configured to publish to the compliance topic
+- SQS queue policy allows the security notifications SNS topic to send messages
 - KMS permissions allow SNS and SQS to use the logs CMK
 
-Validation command:
+### EventBridge Security Notification DLQ Has Messages
 
-```bash
-aws sqs get-queue-attributes \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --queue-url "${COMPLIANCE_QUEUE_URL}" \
-  --attribute-names All
-```
+This means EventBridge could not deliver one or more security notification events to the security notifications SNS topic.
+
+Check:
+
+- The affected EventBridge target exists and points to the security notifications SNS topic
+- The target has the expected retry policy and DLQ configuration
+- The SNS topic policy allows the relevant EventBridge rule ARN to publish
+- KMS permissions allow EventBridge/SNS/SQS to use the encrypted resources where required
+- The EventBridge DLQ policy allows the expected rule ARN to send messages
+
+### Security Notifications SQS DLQ Has Messages
+
+This means a message reached the security notifications SQS queue but was repeatedly not processed successfully by a consumer.
+
+Check:
+
+- The downstream consumer, if configured, is healthy
+- The message format is expected by the consumer
+- The queue redrive policy is configured correctly
+- The failure is not caused by permissions, timeout, throttling, or malformed input
+
+### CloudWatch Alarms Do Not Fire
+
+Check:
+
+- CloudTrail is sending logs to the expected log group
+- Metric filters exist on the correct log group
+- Matching events occurred after the filter was created
+- Alarm actions point to the security notifications SNS topic
+- SNS/KMS policies allow delivery
 
 ---
 
 ## Security Notes
 
 - SNS topics are encrypted with the logs CMK.
-- The compliance SQS queue is encrypted with the logs CMK.
-- SecOps email subscriptions require confirmation.
-- SecOps topic publishing is restricted through topic policy statements.
-- EventBridge publish permissions are scoped by source account and source ARN where applicable.
-- Compliance queue writes are restricted to the compliance SNS topic.
+- SQS queues and DLQs are encrypted with the logs CMK.
+- Security notification delivery uses both email and durable SQS fanout.
+- EventBridge security notification targets use retry policies and DLQ handling.
+- DLQ alarms route to the security notifications SNS topic.
+- SNS topic publishing is restricted through topic policy statements.
+- SQS queue writes are restricted to expected SNS topics or EventBridge rules.
 - Break-glass role usage generates a critical alert.
 - Root user activity generates an alert.
 - Unauthorized API calls generate an alert.
@@ -1101,11 +596,12 @@ This module follows:
 
 - Centralized security alerting
 - Encrypted notification paths
+- Durable notification delivery
 - Event-driven monitoring
+- Alarmed failure retention
 - Least privilege publishing
 - Human-readable security notifications
 - Separation of detection and notification routing
-- Compliance event queuing
 - Fast escalation for critical security events
 
 ---
@@ -1117,6 +613,6 @@ This module follows:
 - The logs CMK must allow required AWS services to use encrypted SNS/SQS resources.
 - The Security Hub high/critical EventBridge rule is created outside this module.
 - The tamper detection EventBridge rule is created outside this module.
-- The SecOps SNS topic ARN is consumed by automation and security workflows.
+- The security notifications SNS topic ARN is consumed by automation and security workflows.
 - The compliance SNS topic ARN can be consumed by AWS Config or other compliance routing logic.
 - For production, confirm all SecOps email subscriptions after deployment.
