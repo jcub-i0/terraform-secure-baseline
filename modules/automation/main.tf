@@ -399,6 +399,20 @@ resource "aws_lambda_permission" "allow_eventbridge_ec2_rollback" {
   source_arn    = aws_cloudwatch_event_rule.ec2_rollback.arn
 }
 
+### ENABLE EC2 ROLLBACK LAMBDA PROCESSING FAILURES TO LAND IN ITS DLQ
+resource "aws_lambda_function_event_invoke_config" "ec2_rollback" {
+  function_name = aws_lambda_function.ec2_rollback.function_name
+
+  maximum_retry_attempts       = 2
+  maximum_event_age_in_seconds = 3600
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.ec2_rollback_dlq.arn
+    }
+  }
+}
+
 ### CLOUDWATCH LOG GROUP FOR EC2 ROLLBACK LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ec2_rollback" {
   name              = "/aws/lambda/${var.name_prefix}-ec2-rollback"
@@ -624,6 +638,20 @@ resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
   function_name = aws_lambda_function.ip_enrichment.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.securityhub_high_critical.arn
+}
+
+### ENABLE IP ENRICHMENT LAMBDA PROCESSING FAILURES TO LAND IN ITS DLQ
+resource "aws_lambda_function_event_invoke_config" "ip_enrichment" {
+  function_name = aws_lambda_function.ip_enrichment.function_name
+
+  maximum_retry_attempts       = 2
+  maximum_event_age_in_seconds = 3600
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.ip_enrichment_dlq.arn
+    }
+  }
 }
 
 ### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA

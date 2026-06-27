@@ -123,6 +123,7 @@ source    = custom.rollback
 | `aws_cloudwatch_event_rule.ec2_rollback` | Matches rollback events on the SecOps bus |
 | `aws_cloudwatch_event_target.ec2_rollback` | Sends rollback events to the Lambda |
 | `aws_lambda_permission.allow_eventbridge_ec2_rollback` | Allows EventBridge to invoke the Lambda |
+| `aws_lambda_function_event_invoke_config.ec2_rollback` | Sends asynchronous Lambda processing failures to the workflow DLQ |
 | `aws_cloudwatch_log_group.lambda_ec2_rollback` | Stores encrypted Lambda logs |
 | `aws_sqs_queue.ec2_rollback_dlq` | Retains failed rollback events |
 | `aws_sqs_queue_policy.ec2_rollback_dlq` | Allows EventBridge and the Lambda role to send failure messages |
@@ -166,6 +167,7 @@ The secret is encrypted with the Secrets Manager CMK passed into the module.
 | `aws_cloudwatch_event_rule.securityhub_high_critical` | Matches high/critical Security Hub findings |
 | `aws_cloudwatch_event_target.ip_enrichment` | Sends matching findings to the Lambda |
 | `aws_lambda_permission.allow_eventbridge_ip_enrichment` | Allows EventBridge to invoke the Lambda |
+| `aws_lambda_function_event_invoke_config.ip_enrichment` | Sends asynchronous Lambda processing failures to the workflow DLQ |
 | `aws_cloudwatch_log_group.lambda_ip_enrichment` | Stores encrypted Lambda logs |
 | `aws_sqs_queue.ip_enrichment_dlq` | Retains failed IP enrichment events |
 | `aws_sqs_queue_policy.ip_enrichment_dlq` | Allows EventBridge and the Lambda role to send failure messages |
