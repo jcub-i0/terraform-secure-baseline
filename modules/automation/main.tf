@@ -639,6 +639,19 @@ resource "aws_lambda_permission" "allow_eventbridge_ip_enrichment" {
   source_arn    = aws_cloudwatch_event_rule.securityhub_high_critical.arn
 }
 
+resource "aws_lambda_function_event_invoke_config" "ip_enrichment" {
+  function_name = aws_lambda_function.ip_enrichment.function_name
+
+  maximum_retry_attempts       = 2
+  maximum_event_age_in_seconds = 3600
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.ip_enrichment_dlq.arn
+    }
+  }
+}
+
 ### CLOUDWATCH LOG GROUP FOR IP ENRICHMENT LAMBDA
 resource "aws_cloudwatch_log_group" "lambda_ip_enrichment" {
   name              = "/aws/lambda/${var.name_prefix}-ip-enrichment"
