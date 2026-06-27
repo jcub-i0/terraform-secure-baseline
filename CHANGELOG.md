@@ -12,7 +12,7 @@
 - Added a CloudWatch alarm for visible messages in the security notifications EventBridge DLQ.
 - Added workflow-specific DLQs for EC2 Isolation, EC2 Rollback, and IP Enrichment automation workflows.
 - Added EventBridge target DLQ configuration and retry policies for protected automation and security notification targets.
-- Added Lambda asynchronous failure handling for the EC2 Isolation workflow.
+- Added Lambda asynchronous failure handling for the EC2 Isolation, EC2 Rollback, and IP Enrichment workflows.
 - Added CloudWatch DLQ alarms for security automation failure paths.
 - Added notification and DLQ validation guidance to `docs/validation-checklist.md`.
 - Added DLQ triage and safe message inspection guidance to `docs/validation-checklist.md`.
