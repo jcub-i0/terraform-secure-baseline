@@ -1,6 +1,22 @@
 # Changelog
 
-# Changelog
+## v1.3.2
+
+### Fixed
+
+- Fixed AWS Network Firewall resource naming so the firewall name includes the environment-specific name prefix.
+- Fixed networking validation to match the exact expected Network Firewall name instead of using broad prefix containment.
+- Fixed networking validation for Network Firewall routes where AWS may expose firewall endpoint targets through `GatewayId` instead of `VpcEndpointId`.
+
+### Changed
+
+- Added `create_before_destroy` lifecycle behavior to the Network Firewall resource to support safer forced replacements during firewall renames.
+- Enhanced networking validation to normalize route targets into consistent target types such as VPC endpoint, NAT Gateway, Internet Gateway, local route, transit gateway, and network interface.
+- Expanded networking validation for `network_firewall` mode to validate the full inspected egress path:
+  - compute private route tables route default traffic to firewall VPC endpoints;
+  - firewall private route tables route default traffic to NAT Gateways;
+  - public route tables route default traffic to Internet Gateways;
+  - public route tables return compute private subnet CIDRs through firewall VPC endpoints.
 
 ## v1.3.1
 

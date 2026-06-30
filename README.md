@@ -682,6 +682,24 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
+### v1.3.2
+
+This release fixes Network Firewall naming consistency and strengthens networking validation for inspected egress paths.
+
+Highlights:
+
+- Fixed AWS Network Firewall resource naming so firewall names include the environment-specific name prefix.
+- Added safer Network Firewall replacement behavior to support firewall renames without leaving route tables pointed at stale firewall endpoint IDs.
+- Fixed networking validation to match the exact expected Network Firewall name instead of using broad prefix matching.
+- Fixed networking validation for Network Firewall endpoint routes where AWS may expose `vpce-*` targets through route fields such as `GatewayId`.
+- Added route target normalization in networking validation for VPC endpoints, NAT Gateways, Internet Gateways, local routes, transit gateways, and network interfaces.
+- Expanded `network_firewall` mode validation to verify the full inspected egress path:
+  - compute private route tables send default traffic to Network Firewall VPC endpoints;
+  - firewall private route tables send default traffic to NAT Gateways;
+  - public route tables send default traffic to Internet Gateways;
+  - public route tables return compute private subnet CIDRs through Network Firewall VPC endpoints.
+- Improved validation confidence that production-style egress flows remain symmetric and inspected when AWS Network Firewall is enabled.
+
 ### v1.3.1
 
 This release hardens notification and automation failure-retention paths.
