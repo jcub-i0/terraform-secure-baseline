@@ -282,7 +282,7 @@ case "$EFFECTIVE_EGRESS_MODE" in
 
     NON_NAT_DEFAULT_ROUTES="$(
       echo "$DEFAULT_ROUTES_JSON" |
-        jq '[.[] | .default_routes[]? | select(.NatGatewayId == null)] | length'
+        jq '[.[] | .default_routes[]? | select(.target_type != "nat_gateway")] | length'
     )"
 
     if [[ "$MISSING_DEFAULT_ROUTES" -eq 0 && "$NON_NAT_DEFAULT_ROUTES" -eq 0 ]]; then
