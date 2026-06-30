@@ -250,7 +250,10 @@ case "$EFFECTIVE_EGRESS_MODE" in
 
     NON_FIREWALL_DEFAULT_ROUTES="$(
       echo "$DEFAULT_ROUTES_JSON" |
-        jq '[.[] | .default_routes[]? | select(.VpcEndpointId == null)] | length'
+        jq '[.[] | .default_routes[]? | select(
+          ((.VpcEndpointId // "") | startswith("vpce-") | not) and
+          ((.GatewayId // "") | startswith("vpce-") | not)
+        )] | length'
     )"
 
     if [[ "$MISSING_DEFAULT_ROUTES" -eq 0 && "$NON_FIREWALL_DEFAULT_ROUTES" -eq 0 ]]; then
