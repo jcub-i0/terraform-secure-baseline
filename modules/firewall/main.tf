@@ -46,7 +46,7 @@ resource "aws_networkfirewall_rule_group" "stateful_domains" {
 
 # POLICY FOR NETWORK FIREWALL
 resource "aws_networkfirewall_firewall_policy" "egress" {
-  name = "${var.cloud_name}-egress"
+  name = "${var.name_prefix}-egress"
 
   firewall_policy {
     stateless_default_actions          = ["aws:forward_to_sfe"]
