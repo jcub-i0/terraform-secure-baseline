@@ -99,7 +99,7 @@ resource "aws_networkfirewall_logging_configuration" "egress" {
 }
 
 resource "aws_networkfirewall_firewall" "egress" {
-  name                = "${var.cloud_name}-egress-firewall"
+  name                = "${var.name_prefix}-egress-firewall"
   firewall_policy_arn = aws_networkfirewall_firewall_policy.egress.arn
   vpc_id              = var.vpc_id
 
