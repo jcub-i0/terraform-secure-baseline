@@ -67,9 +67,18 @@ Creates an encrypted compliance SQS queue subscribed to the compliance SNS topic
 | Message retention | 14 days |
 | Producer | Compliance SNS topic |
 
-The compliance queue is a durable notification subscriber. It can be used for inspection, replay, evidence collection, or future downstream integrations.
+The compliance SQS queue provides durable retention for compliance notification events published by AWS Config and related compliance publishers.
 
-The queue is not required to have an active consumer in the baseline. If no consumer is configured, visible messages may accumulate until retention expires or the queue is manually drained.
+The queue is intentionally not consumed by an automated remediation workflow in the current release. It is intended for:
+
+- manual SecOps/compliance review
+- inspection and replay of compliance notifications
+- validation evidence collection
+- future SIEM, ticketing, or Lambda-based downstream integrations
+
+The compliance queue is not treated as a real-time paging path by default because compliance notifications can be noisy. If no consumer is configured, visible messages may accumulate until the retention period expires or the queue is manually drained.
+
+Operators who require backlog monitoring can add an age-based CloudWatch alarm that alerts when the oldest visible message exceeds the organization’s expected compliance review window.
 
 ### Security Notifications SNS Topic
 
