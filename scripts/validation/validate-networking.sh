@@ -42,6 +42,33 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
+normalize_route_tables_json() {
+  local az_name_prefix="${1:-}"
+
+  jq --arg az_name_prefix "$az_name_prefix" '[.RouteTables[] | {
+    route_table_id: .RouteTableId,
+    name: ((.Tags[]? | select(.Key == "Name") | .Value) // ""),
+    az: (((.Tags[]? | select(.Key == "Name") | .Value) // "") | sub("^" + $az_name_prefix; "")),
+    routes: [
+      .Routes[]?
+      | . + {
+          target_id: (.VpcEndpointId // .GatewayId // .NatGatewayId // .TransitGatewayId // .InstanceId // .NetworkInterfaceId // "unknown"),
+          target_type: (
+            if ((.VpcEndpointId // .GatewayId // "") | startswith("vpce-")) then "vpc_endpoint"
+            elif (.NatGatewayId // "") != "" then "nat_gateway"
+            elif ((.GatewayId // "") | startswith("igw-")) then "internet_gateway"
+            elif (.GatewayId // "") == "local" then "local"
+            elif (.TransitGatewayId // "") != "" then "transit_gateway"
+            elif (.NetworkInterfaceId // "") != "" then "network_interface"
+            elif (.GatewayId // "") != "" then "gateway"
+            else "unknown"
+            end
+          )
+        }
+    ]
+  }]'
+}
+
 section "tf-secure-baseline Networking Validation"
 
 section "Checking required local commands"
@@ -108,7 +135,7 @@ success "AWS credentials are valid"
 info "AWS account ID: $AWS_ACCOUNT_ID"
 info "AWS caller ARN: $AWS_CALLER_ARN"
 
-if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+if [[ -n "${EXPECTED_ACCOUNT_ID:-}" ]]; then
   if [[ "$AWS_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
     success "AWS account ID matches expected account: $EXPECTED_ACCOUNT_ID"
   else
@@ -182,9 +209,11 @@ NETWORK_FIREWALLS_JSON="$(
     --output json
 )"
 
+EXPECTED_FIREWALL_NAME="${NAME_PREFIX}-egress-firewall"
+
 MATCHING_FIREWALL_COUNT="$(
   echo "$NETWORK_FIREWALLS_JSON" |
-    jq --arg prefix "$NAME_PREFIX" '[.Firewalls[]? | select(.FirewallName | contains($prefix))] | length'
+    jq --arg name "$EXPECTED_FIREWALL_NAME" '[.Firewalls[]? | select(.FirewallName == $name)] | length'
 )"
 
 info "Matching Network Firewall count: $MATCHING_FIREWALL_COUNT"
@@ -225,12 +254,18 @@ fi
 
 success "Found compute private route tables: $COMPUTE_RT_COUNT"
 
-DEFAULT_ROUTES_JSON="$(
+COMPUTE_ROUTE_TABLES_NORMALIZED_JSON="$(
   echo "$COMPUTE_ROUTE_TABLES_JSON" |
-    jq '[.RouteTables[] | {
-      route_table_id: .RouteTableId,
-      name: (.Tags[]? | select(.Key == "Name") | .Value),
-      default_routes: [.Routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]
+    normalize_route_tables_json "${NAME_PREFIX}-Compute-Private-RT-"
+)"
+
+DEFAULT_ROUTES_JSON="$(
+  echo "$COMPUTE_ROUTE_TABLES_NORMALIZED_JSON" |
+    jq '[.[] | {
+      route_table_id: .route_table_id,
+      name: .name,
+      az: .az,
+      default_routes: [.routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]
     }]'
 )"
 
@@ -250,7 +285,7 @@ case "$EFFECTIVE_EGRESS_MODE" in
 
     NON_FIREWALL_DEFAULT_ROUTES="$(
       echo "$DEFAULT_ROUTES_JSON" |
-        jq '[.[] | .default_routes[]? | select(.VpcEndpointId == null)] | length'
+        jq '[.[] | .default_routes[]? | select(.target_type != "vpc_endpoint")] | length'
     )"
 
     if [[ "$MISSING_DEFAULT_ROUTES" -eq 0 && "$NON_FIREWALL_DEFAULT_ROUTES" -eq 0 ]]; then
@@ -269,7 +304,7 @@ case "$EFFECTIVE_EGRESS_MODE" in
 
     NON_NAT_DEFAULT_ROUTES="$(
       echo "$DEFAULT_ROUTES_JSON" |
-        jq '[.[] | .default_routes[]? | select(.NatGatewayId == null)] | length'
+        jq '[.[] | .default_routes[]? | select(.target_type != "nat_gateway")] | length'
     )"
 
     if [[ "$MISSING_DEFAULT_ROUTES" -eq 0 && "$NON_NAT_DEFAULT_ROUTES" -eq 0 ]]; then
@@ -320,6 +355,198 @@ else
   fail "One or more compute private subnets have MapPublicIpOnLaunch enabled."
 fi
 
+COMPUTE_SUBNET_CIDRS_JSON="$(
+  echo "$COMPUTE_SUBNETS_JSON" |
+    jq '[.Subnets[] | {
+      az: .AvailabilityZone,
+      cidr: .CidrBlock,
+      name: ((.Tags[]? | select(.Key == "Name") | .Value) // "")
+    }]'
+)"
+
+section "Checking firewall private route tables"
+
+FIREWALL_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Firewall-Private-RT-*" \
+    --output json
+)"
+
+FIREWALL_RT_COUNT="$(echo "$FIREWALL_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+
+if [[ "$FIREWALL_RT_COUNT" -eq 0 ]]; then
+  fail "No firewall private route tables found using tag pattern: ${NAME_PREFIX}-Firewall-Private-RT-*"
+fi
+
+success "Found firewall private route tables: $FIREWALL_RT_COUNT"
+
+FIREWALL_ROUTE_TABLES_NORMALIZED_JSON="$(
+  echo "$FIREWALL_ROUTE_TABLES_JSON" |
+    normalize_route_tables_json "${NAME_PREFIX}-Firewall-Private-RT-"
+)"
+
+FIREWALL_DEFAULT_ROUTES_JSON="$(
+  echo "$FIREWALL_ROUTE_TABLES_NORMALIZED_JSON" |
+    jq '[.[] | {
+      route_table_id: .route_table_id,
+      name: .name,
+      az: .az,
+      default_routes: [.routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]
+    }]'
+)"
+
+FIREWALL_DEFAULT_ROUTE_COUNT="$(
+  echo "$FIREWALL_DEFAULT_ROUTES_JSON" |
+    jq '[.[] | .default_routes[]?] | length'
+)"
+
+info "Firewall private default route count: $FIREWALL_DEFAULT_ROUTE_COUNT"
+
+case "$EFFECTIVE_EGRESS_MODE" in
+  network_firewall)
+    FIREWALL_MISSING_DEFAULT_ROUTES="$(
+      echo "$FIREWALL_DEFAULT_ROUTES_JSON" |
+        jq '[.[] | select((.default_routes | length) == 0)] | length'
+    )"
+
+    FIREWALL_NON_NAT_DEFAULT_ROUTES="$(
+      echo "$FIREWALL_DEFAULT_ROUTES_JSON" |
+        jq '[.[] | .default_routes[]? | select(.target_type != "nat_gateway")] | length'
+    )"
+
+    if [[ "$FIREWALL_MISSING_DEFAULT_ROUTES" -eq 0 && "$FIREWALL_NON_NAT_DEFAULT_ROUTES" -eq 0 ]]; then
+      success "Firewall private default routes point to NAT Gateways as expected"
+    else
+      echo "$FIREWALL_DEFAULT_ROUTES_JSON" | jq .
+      fail "Expected all firewall private default routes to point to NAT Gateways."
+    fi
+    ;;
+
+  nat_only|vpc_endpoints_only)
+    if [[ "$FIREWALL_DEFAULT_ROUTE_COUNT" -eq 0 ]]; then
+      success "No firewall private default routes found as expected for ${EFFECTIVE_EGRESS_MODE}"
+    else
+      echo "$FIREWALL_DEFAULT_ROUTES_JSON" | jq .
+      fail "Expected no 0.0.0.0/0 routes in firewall private route tables for ${EFFECTIVE_EGRESS_MODE}."
+    fi
+    ;;
+esac
+
+section "Checking public route tables"
+
+PUBLIC_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Public-Route-Table-*" \
+    --output json
+)"
+
+PUBLIC_RT_COUNT="$(echo "$PUBLIC_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+
+if [[ "$PUBLIC_RT_COUNT" -eq 0 ]]; then
+  fail "No public route tables found using tag pattern: ${NAME_PREFIX}-Public-Route-Table-*"
+fi
+
+success "Found public route tables: $PUBLIC_RT_COUNT"
+
+PUBLIC_ROUTE_TABLES_NORMALIZED_JSON="$(
+  echo "$PUBLIC_ROUTE_TABLES_JSON" |
+    normalize_route_tables_json "${NAME_PREFIX}-Public-Route-Table-"
+)"
+
+PUBLIC_DEFAULT_ROUTES_JSON="$(
+  echo "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" |
+    jq '[.[] | {
+      route_table_id: .route_table_id,
+      name: .name,
+      az: .az,
+      default_routes: [.routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]
+    }]'
+)"
+
+PUBLIC_DEFAULT_ROUTE_COUNT="$(
+  echo "$PUBLIC_DEFAULT_ROUTES_JSON" |
+    jq '[.[] | .default_routes[]?] | length'
+)"
+
+info "Public default route count: $PUBLIC_DEFAULT_ROUTE_COUNT"
+
+PUBLIC_MISSING_DEFAULT_ROUTES="$(
+  echo "$PUBLIC_DEFAULT_ROUTES_JSON" |
+    jq '[.[] | select((.default_routes | length) == 0)] | length'
+)"
+
+PUBLIC_NON_IGW_DEFAULT_ROUTES="$(
+  echo "$PUBLIC_DEFAULT_ROUTES_JSON" |
+    jq '[.[] | .default_routes[]? | select(.target_type != "internet_gateway")] | length'
+)"
+
+if [[ "$PUBLIC_MISSING_DEFAULT_ROUTES" -eq 0 && "$PUBLIC_NON_IGW_DEFAULT_ROUTES" -eq 0 ]]; then
+  success "Public default routes point to Internet Gateways as expected"
+else
+  echo "$PUBLIC_DEFAULT_ROUTES_JSON" | jq .
+  fail "Expected all public default routes to point to Internet Gateways."
+fi
+
+PUBLIC_COMPUTE_RETURN_ROUTE_COUNT="$(
+  jq -n \
+    --argjson route_tables "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+    --argjson compute_subnets "$COMPUTE_SUBNET_CIDRS_JSON" \
+    '[$compute_subnets[].cidr] as $compute_cidrs |
+     [$route_tables[] | .routes[]? | select(.DestinationCidrBlock as $dest | $compute_cidrs | index($dest))] | length'
+)"
+
+info "Public compute return route count: $PUBLIC_COMPUTE_RETURN_ROUTE_COUNT"
+
+case "$EFFECTIVE_EGRESS_MODE" in
+  network_firewall)
+    MISSING_PUBLIC_RETURN_ROUTES="$(
+      jq -n \
+        --argjson route_tables "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+        --argjson compute_subnets "$COMPUTE_SUBNET_CIDRS_JSON" \
+        '[
+          $compute_subnets[] as $subnet |
+          select(([
+            $route_tables[]
+            | select(.az == $subnet.az)
+            | .routes[]?
+            | select(.DestinationCidrBlock == $subnet.cidr and .target_type == "vpc_endpoint")
+          ] | length) == 0)
+        ] | length'
+    )"
+
+    NON_FIREWALL_PUBLIC_RETURN_ROUTES="$(
+      jq -n \
+        --argjson route_tables "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+        --argjson compute_subnets "$COMPUTE_SUBNET_CIDRS_JSON" \
+        '[$compute_subnets[].cidr] as $compute_cidrs |
+         [$route_tables[] | .routes[]? | select((.DestinationCidrBlock as $dest | $compute_cidrs | index($dest)) and .target_type != "vpc_endpoint")] | length'
+    )"
+
+    if [[ "$MISSING_PUBLIC_RETURN_ROUTES" -eq 0 && "$NON_FIREWALL_PUBLIC_RETURN_ROUTES" -eq 0 ]]; then
+      success "Public route tables return compute subnet CIDRs through firewall VPC endpoints as expected"
+    else
+      echo "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" | jq .
+      echo "$COMPUTE_SUBNET_CIDRS_JSON" | jq .
+      fail "Expected public route tables to return compute subnet CIDRs through firewall VPC endpoints."
+    fi
+    ;;
+
+  nat_only|vpc_endpoints_only)
+    if [[ "$PUBLIC_COMPUTE_RETURN_ROUTE_COUNT" -eq 0 ]]; then
+      success "No public compute return routes found as expected for ${EFFECTIVE_EGRESS_MODE}"
+    else
+      echo "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" | jq .
+      fail "Expected no explicit public compute return routes for ${EFFECTIVE_EGRESS_MODE}."
+    fi
+    ;;
+esac
+
 section "Networking Summary"
 
 cat <<SUMMARY
@@ -335,6 +562,11 @@ Matching Network Firewalls: ${MATCHING_FIREWALL_COUNT}
 Compute route tables:       ${COMPUTE_RT_COUNT}
 Compute private subnets:    ${COMPUTE_SUBNET_COUNT}
 Compute default routes:     ${DEFAULT_ROUTE_COUNT}
+Firewall route tables:      ${FIREWALL_RT_COUNT}
+Firewall default routes:    ${FIREWALL_DEFAULT_ROUTE_COUNT}
+Public route tables:        ${PUBLIC_RT_COUNT}
+Public default routes:      ${PUBLIC_DEFAULT_ROUTE_COUNT}
+Public compute returns:     ${PUBLIC_COMPUTE_RETURN_ROUTE_COUNT}
 SUMMARY
 
 section "Validation Result"
