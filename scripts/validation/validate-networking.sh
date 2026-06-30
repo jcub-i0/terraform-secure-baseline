@@ -182,9 +182,11 @@ NETWORK_FIREWALLS_JSON="$(
     --output json
 )"
 
+EXPECTED_FIREWALL_NAME="${NAME_PREFIX}-egress-firewall"
+
 MATCHING_FIREWALL_COUNT="$(
   echo "$NETWORK_FIREWALLS_JSON" |
-    jq --arg prefix "$NAME_PREFIX" '[.Firewalls[]? | select(.FirewallName | contains($prefix))] | length'
+    jq --arg name "$EXPECTED_FIREWALL_NAME" '[.Firewalls[]? | select(.FirewallName == $name)] | length'
 )"
 
 info "Matching Network Firewall count: $MATCHING_FIREWALL_COUNT"
