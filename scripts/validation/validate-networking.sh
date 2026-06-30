@@ -230,7 +230,20 @@ DEFAULT_ROUTES_JSON="$(
     jq '[.RouteTables[] | {
       route_table_id: .RouteTableId,
       name: (.Tags[]? | select(.Key == "Name") | .Value),
-      default_routes: [.Routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]
+      default_routes: [
+        .Routes[]?
+        | select(.DestinationCidrBlock == "0.0.0.0/0")
+        | . + {
+            target_id: (.VpcEndpointId // .GatewayId // .NatGatewayId // .TransitGatewayId // .InstanceId // "unknown"),
+            target_type: (
+              if ((.VpcEndpointId // .GatewayId // "") | startswith("vpce-")) then "vpc_endpoint"
+              elif (.NatGatewayId // "") != "" then "nat_gateway"
+              elif (.GatewayId // "") != "" then "gateway"
+              else "unknown"
+              end
+            )
+          }
+      ]
     }]'
 )"
 
