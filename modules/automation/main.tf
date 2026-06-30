@@ -735,7 +735,7 @@ resource "aws_sqs_queue_policy" "ip_enrichment_dlq" {
   policy    = data.aws_iam_policy_document.ip_enrichment_dlq_policy.json
 }
 
-### EC2 ROLLBACK DLQ CLOUDWATCH ALARM
+### IP ENRICHMENT DLQ CLOUDWATCH ALARM
 resource "aws_cloudwatch_metric_alarm" "ip_enrichment_dlq_visible_messages" {
   alarm_name          = "${var.name_prefix}-ip-enrichment-dlq-visible-messages"
   comparison_operator = "GreaterThanThreshold"
