@@ -705,3 +705,25 @@ require_directory "$ACCOUNT_DIR"
 require_directory "$ORGANIZATIONS_DIR"
 require_directory "$IDENTITY_CENTER_DIR"
 success "Control-plane stack directories exist"
+
+section "Checking AWS caller identity"
+
+AWS_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+AWS_CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
+require_non_empty "$AWS_ACCOUNT_ID" "AWS account ID"
+require_non_empty "$AWS_CALLER_ARN" "AWS caller ARN"
+
+success "AWS credentials are valid"
+info "AWS account ID: ${AWS_ACCOUNT_ID}"
+info "AWS caller ARN: ${AWS_CALLER_ARN}"
+
+if [[ -n "${EXPECTED_ACCOUNT_ID:-}" ]]; then
+  if [[ "$AWS_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
+    success "AWS account ID matches expected control-plane account: ${EXPECTED_ACCOUNT_ID}"
+  else
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${AWS_ACCOUNT_ID}"
+  fi
+else
+  warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit control-plane account ID match check."
+fi
