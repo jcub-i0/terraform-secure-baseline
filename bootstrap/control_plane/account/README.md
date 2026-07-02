@@ -91,7 +91,7 @@ cd /bootstrap/<env>/account
 terraform init
 terraform apply
 ```
-> Note the  following output:
+> Note the following output:
 > `apply_role_github_arn`
 
 2. Add the apply role to bucket admin principals
