@@ -45,6 +45,10 @@ CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
 STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
 
+ACCOUNT_ID_DEV="${ACCOUNT_ID_DEV:-}"
+ACCOUNT_ID_STAGING="${ACCOUNT_ID_STAGING:-}"
+ACCOUNT_ID_PROD="${ACCOUNT_ID_PROD:-}"
+
 export AWS_PAGER=""
 
 aws_args=()
@@ -82,6 +86,12 @@ terraform_output_json_required() {
 }
 
 terraform_output_json_optional() {
+  local stack_dir="$1"
+
+  terraform_output_json "$stack_dir" 2>/dev/null || echo "{}"
+}
+
+require_terraform_output() {
   local outputs_json="$1"
   local output_name="$2"
   local stack_name="$3"
