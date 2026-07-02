@@ -56,3 +56,56 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
+# -----------------------------------------------------------------------------
+# Local helpers
+# -----------------------------------------------------------------------------
+
+get_control_plane_dir() {
+  local repo_root="$1"
+  echo "${repo_root}/bootstrap/control_plane"
+}
+
+terraform_output_json_required() {
+  local stack_dir="$1"
+  local stack_name="$2"
+
+  local outputs_json
+  if ! outputs_json="$(terraform_output_json "$stack_dir")"; then
+    fail "Unable to read Terraform outputs for ${stack_name}: ${stack_dir}"
+  fi
+
+  if [[ -z "$outputs_json" ]]; then
+    fail "No Terraform output JSON returned for ${stack_name}: ${stack_dir}"
+  fi
+
+  echo "$outputs_json"
+}
+
+terraform_output_json_optional() {
+  local outputs_json="$1"
+  local output_name="$2"
+  local stack_name="$3"
+
+  if terraform_output_exists "$outputs_json" "$output_name"; then
+    success "${stack_name} Terraform output exists: ${output_name}"
+  else
+    fail "Missing required Terraform output in ${stack_name}: ${output_name}"
+  fi
+}
+
+get_output_string_values() {
+  local outputs_json="$1"
+  local output_name="$2"
+
+  echo "$outputs_json" |
+    jq -r --arg name "$output_name" '
+      if has($name) then
+        .[$name].value
+        | ..
+        | strings
+        | select(length > 0)
+      else
+        empty
+      end
+    '
+}
