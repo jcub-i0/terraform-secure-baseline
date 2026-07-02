@@ -679,3 +679,29 @@ success "jq found"
 
 require_command git
 success "git found"
+
+section "Resolving repository paths"
+
+REPO_ROOT="$(get_repo_root)"
+CONTROL_PLANE_DIR="$(get_control_plane_dir "$REPO_ROOT")"
+STATE_DIR="${CONTROL_PLANE_DIR}/state"
+ACCOUNT_DIR="${CONTROL_PLANE_DIR}/account"
+ORGANIZATIONS_DIR="${CONTROL_PLANE_DIR}/organizations"
+IDENTITY_CENTER_DIR="${CONTROL_PLANE_DIR}/identity_center"
+
+info "Repository root: ${REPO_ROOT}"
+info "Control-plane dir: ${CONTROL_PLANE_DIR}"
+info "State dir: ${STATE_DIR}"
+info "Account dir: ${ACCOUNT_DIR}"
+info "Organizations dir: ${ORGANIZATIONS_DIR}"
+info "Identity Center dir: ${IDENTITY_CENTER_DIR}"
+info "Name prefix: ${NAME_PREFIX}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: ${AWS_REGION}"
+
+require_directory "$CONTROL_PLANE_DIR"
+require_directory "$STATE_DIR"
+require_directory "$ACCOUNT_DIR"
+require_directory "$ORGANIZATIONS_DIR"
+require_directory "$IDENTITY_CENTER_DIR"
+success "Control-plane stack directories exist"
