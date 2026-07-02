@@ -736,3 +736,35 @@ ORGANIZATIONS_OUTPUTS_JSON="$(terraform_output_json_optional "$ORGANIZATIONS_DIR
 IDENTITY_CENTER_OUTPUTS_JSON="$(terraform_output_json_required "$IDENTITY_CENTER_DIR" "identity_center")"
 
 info "Organizations outputs size: $(echo "$ORGANIZATIONS_OUTPUTS_JSON" | jq 'length')"
+
+section "Checking state stack Terraform outputs"
+
+require_terraform_output "$STATE_OUTPUTS_JSON" control_plane_account_id "state"
+require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_name "state"
+require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_arn "state"
+require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn "state"
+require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_lock_table_name "state"
+require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_lock_table_arn "state"
+
+STATE_ACCOUNT_ID="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" control_plane_account_id)"
+STATE_BUCKET_NAME="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_name)"
+STATE_BUCKET_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_arn)"
+STATE_CMK_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn)"
+STATE_LOCK_TABLE_NAME="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_lock_table_name)"
+STATE_LOCK_TABLE_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_lock_table_arn)"
+
+if [[ "$STATE_ACCOUNT_ID" == "$AWS_ACCOUNT_ID" ]]; then
+  success "State stack account output matches current AWS account"
+else
+  fail "State stack account output mismatch. Terraform output: ${STATE_ACCOUNT_ID}; AWS caller account: ${AWS_ACCOUNT_ID}"
+fi
+
+info "State bucket name: ${STATE_BUCKET_NAME}"
+info "State bucket ARN: ${STATE_BUCKET_ARN}"
+info "State CMK ARN: ${STATE_CMK_ARN}"
+info "State lock table name: ${STATE_LOCK_TABLE_NAME}"
+info "State lock table ARN: ${STATE_LOCK_TABLE_ARN}"
+
+check_s3_state_bucket "$STATE_BUCKET_NAME" "$STATE_CMK_ARN"
+check_kms_key "$STATE_CMK_ARN"
+check_dynamodb_lock_table "$STATE_LOCK_TABLE_NAME"
