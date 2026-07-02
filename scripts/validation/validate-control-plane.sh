@@ -727,3 +727,12 @@ if [[ -n "${EXPECTED_ACCOUNT_ID:-}" ]]; then
 else
   warn "EXPECTED_ACCOUNT_ID not set. Skipping explicit control-plane account ID match check."
 fi
+
+section "Reading Terraform outputs"
+
+STATE_OUTPUTS_JSON="$(terraform_output_json_required "$STATE_DIR" "state")"
+ACCOUNT_OUTPUTS_JSON="$(terraform_output_json_required "$ACCOUNT_DIR" "account")"
+ORGANIZATIONS_OUTPUTS_JSON="$(terraform_output_json_optional "$ORGANIZATIONS_DIR")"
+IDENTITY_CENTER_OUTPUTS_JSON="$(terraform_output_json_required "$IDENTITY_CENTER_DIR" "identity_center")"
+
+info "Organizations outputs size: $(echo "$ORGANIZATIONS_OUTPUTS_JSON" | jq 'length')"
