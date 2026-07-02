@@ -659,3 +659,23 @@ check_identity_center() {
   check_identity_center_assignments_for_env "staging" "$ACCOUNT_ID_STAGING" "${STAGING_PERMISSION_SET_ARNS[@]}"
   check_identity_center_assignments_for_env "prod" "$ACCOUNT_ID_PROD" "${PROD_PERMISSION_SET_ARNS[@]}"
 }
+
+# -----------------------------------------------------------------------------
+# Main
+# -----------------------------------------------------------------------------
+
+section "tf-secure-baseline Control Plane Validation"
+
+section "Checking required local commands"
+
+require_command aws
+success "aws CLI found"
+
+require_command terraform
+success "terraform found"
+
+require_command jq
+success "jq found"
+
+require_command git
+success "git found"
