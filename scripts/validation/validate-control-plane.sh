@@ -768,3 +768,27 @@ info "State lock table ARN: ${STATE_LOCK_TABLE_ARN}"
 check_s3_state_bucket "$STATE_BUCKET_NAME" "$STATE_CMK_ARN"
 check_kms_key "$STATE_CMK_ARN"
 check_dynamodb_lock_table "$STATE_LOCK_TABLE_NAME"
+
+section "Checking account stack GitHub OIDC outputs"
+
+PLAN_ROLE_ARN="$(get_terraform_output_value "$ACCOUNT_OUTPUTS_JSON" plan_role_github_arn 2>/dev/null || echo "null")"
+APPLY_ROLE_ARN="$(get_terraform_output_value "$ACCOUNT_OUTPUTS_JSON" apply_role_github_arn 2>/dev/null || echo "null")"
+
+if [[ "$REQUIRE_CONTROL_PLANE_GITHUB_OIDC" == "true" ]]; then
+  require_non_empty "$PLAN_ROLE_ARN" "control-plane GitHub plan role ARN"
+  require_non_empty "$APPLY_ROLE_ARN" "control-plane GitHub apply role ARN"
+  check_oidc_provider
+  check_github_role "$PLAN_ROLE_ARN" "Control-plane GitHub Plan"
+  check_github_role "$APPLY_ROLE_ARN" "Control-plane GitHub Apply"
+else
+  if [[ -z "$PLAN_ROLE_ARN" || "$PLAN_ROLE_ARN" == "null" || -z "$APPLY_ROLE_ARN" || "$APPLY_ROLE_ARN" == "null" ]]; then
+    warn "Control-plane GitHub OIDC outputs are not fully populated, but REQUIRE_CONTROL_PLANE_GITHUB_OIDC=false."
+  else
+    check_oidc_provider
+    check_github_role "$PLAN_ROLE_ARN" "Control-plane GitHub Plan"
+    check_github_role "$APPLY_ROLE_ARN" "Control-plane GitHub Apply"
+  fi
+fi
+
+check_organizations_ou_structure
+check_identity_center "$IDENTITY_CENTER_OUTPUTS_JSON"
