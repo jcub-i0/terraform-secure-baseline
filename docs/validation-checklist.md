@@ -52,12 +52,13 @@ Recommended validation order:
 
 1. Confirm AWS profile/account variables.
 2. Run automated workload validation with `validate-all.sh` for each deployed workload environment.
-3. Validate control-plane resources manually.
-4. Validate IAM Identity Center assignments manually.
+3. Run automated control-plane validation with `validate-control-plane.sh`.
+4. Review any control-plane warnings, especially AWS Organizations account placement warnings.
 5. Validate GitHub Actions workflows manually.
-6. Run live Lambda workflow tests only in approved environments.
-7. Run tamper and break-glass tests only when explicitly approved.
-8. Review destroy safety requirements before running any destroy or teardown workflow.
+6. Validate IAM Identity Center end-user access manually where required.
+7. Run live Lambda workflow tests only in approved environments.
+8. Run tamper and break-glass tests only when explicitly approved.
+9. Review destroy safety requirements before running any destroy or teardown workflow.
 
 ---
 
