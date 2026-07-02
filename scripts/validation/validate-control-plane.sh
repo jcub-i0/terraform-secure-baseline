@@ -792,3 +792,36 @@ fi
 
 check_organizations_ou_structure
 check_identity_center "$IDENTITY_CENTER_OUTPUTS_JSON"
+
+section "Control Plane Summary"
+
+cat <<SUMMARY
+AWS profile:                       ${AWS_PROFILE:-<default>}
+AWS region:                        ${AWS_REGION}
+Control-plane account ID:          ${AWS_ACCOUNT_ID}
+Name prefix:                       ${NAME_PREFIX}
+
+State bucket:                      ${STATE_BUCKET_NAME}
+State lock table:                  ${STATE_LOCK_TABLE_NAME}
+State CMK:                         ${STATE_CMK_ARN}
+
+GitHub OIDC required:              ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}
+GitHub plan role ARN:              ${PLAN_ROLE_ARN}
+GitHub apply role ARN:             ${APPLY_ROLE_ARN}
+Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
+
+Identity Center instance ARN:      ${IDENTITY_CENTER_INSTANCE_ARN}
+Identity Store ID:                 ${IDENTITY_STORE_ID}
+Dev permission sets:               ${#DEV_PERMISSION_SET_ARNS[@]}
+Staging permission sets:           ${#STAGING_PERMISSION_SET_ARNS[@]}
+Prod permission sets:              ${#PROD_PERMISSION_SET_ARNS[@]}
+
+Account assignment checks:
+  dev account ID:                  ${ACCOUNT_ID_DEV:-<not checked>}
+  staging account ID:              ${ACCOUNT_ID_STAGING:-<not checked>}
+  prod account ID:                 ${ACCOUNT_ID_PROD:-<not checked>}
+SUMMARY
+
+section "Validation Result"
+
+success "Control-plane validation completed successfully"
