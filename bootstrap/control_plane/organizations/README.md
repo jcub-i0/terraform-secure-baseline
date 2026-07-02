@@ -28,7 +28,7 @@ This stack creates and manages Organizational Units (OUs) used to segment accoun
 
 - This stack assumes:
   - AWS Organizations is already enabled
-  - This is the management (bootstrap) account
+  - This is the management (control-plane) account
 
 - The `aws_organizations_organization` resource is intentionally commented out:
   - **Do not enable it if an organization already exists**
