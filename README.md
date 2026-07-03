@@ -682,6 +682,18 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
+### v1.3.3
+
+This release expands validation coverage to the control plane and improves validation evidence readiness.
+
+Highlights:
+
+- Added automated read-only control-plane validation with `validate-control-plane.sh`.
+- Validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations OU structure, and IAM Identity Center basics.
+- Added optional validation for workload account IDs, Identity Center account assignments, and expected GitHub repository trust conditions.
+- Updated validation documentation to distinguish automated workload validation, automated control-plane validation, and manual live workflow testing.
+- Preserved manual-only status for GitHub Actions execution, end-user SSO testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review.
+
 ### v1.3.2
 
 This release fixes Network Firewall naming consistency and strengthens networking validation for inspected egress paths.
