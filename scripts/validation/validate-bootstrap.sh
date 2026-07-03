@@ -631,3 +631,78 @@ check_github_role_policies() {
   check_role_policy_contains "$role_arn" "$role_description" "$tf_state_bucket_cmk_arn" "Terraform state CMK ARN"
   check_role_policy_contains "$role_arn" "$role_description" "$tf_state_lock_table_arn" "Terraform state lock table ARN"
 }
+
+# -----------------------------------------------------------------------------
+# Main
+# -----------------------------------------------------------------------------
+
+section "tf-secure-baseline bootstrap validation: ${ENV_NAME}"
+
+require_command aws
+require_command terraform
+require_command jq
+require_command git
+
+REPO_ROOT="$(get_repo_root)"
+BOOTSTRAP_DIR="$(get_bootstrap_dir "$REPO_ROOT" "$ENV_NAME")"
+STATE_DIR="${BOOTSTRAP_DIR}/state"
+ACCOUNT_DIR="${BOOTSTRAP_DIR}/account"
+
+validate_aws_identity
+ACTIVE_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+
+validate_directories "$REPO_ROOT" "$BOOTSTRAP_DIR" "$STATE_DIR" "$ACCOUNT_DIR"
+
+STATE_OUTPUTS_JSON="$(terraform_output_json_required "$STATE_DIR" "bootstrap/${ENV_NAME}/state")"
+validate_state_outputs "$STATE_OUTPUTS_JSON" "$ACTIVE_ACCOUNT_ID"
+
+TF_STATE_BUCKET_ARN="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_bucket_arn)"
+TF_STATE_BUCKET_NAME="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_bucket_name)"
+TF_STATE_BUCKET_CMK_ARN="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn)"
+TF_STATE_LOCK_TABLE_ARN="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_lock_table_arn)"
+TF_STATE_LOCK_TABLE_NAME="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_lock_table_name)"
+
+require_non_empty "$TF_STATE_BUCKET_ARN" "Terraform state bucket ARN"
+require_non_empty "$TF_STATE_BUCKET_NAME" "Terraform state bucket name"
+require_non_empty "$TF_STATE_BUCKET_CMK_ARN" "Terraform state CMK ARN"
+require_non_empty "$TF_STATE_LOCK_TABLE_ARN" "Terraform state lock table ARN"
+require_non_empty "$TF_STATE_LOCK_TABLE_NAME" "Terraform state lock table name"
+
+check_s3_state_bucket "$TF_STATE_BUCKET_NAME" "$TF_STATE_BUCKET_ARN" "$TF_STATE_BUCKET_CMK_ARN"
+check_kms_key "$TF_STATE_BUCKET_CMK_ARN"
+check_dynamodb_lock_table "$TF_STATE_LOCK_TABLE_NAME" "$TF_STATE_LOCK_TABLE_ARN"
+
+ACCOUNT_OUTPUTS_JSON="$(terraform_output_json_required "$ACCOUNT_DIR" "bootstrap/${ENV_NAME}/account")"
+validate_account_outputs "$ACCOUNT_OUTPUTS_JSON"
+
+PLAN_ROLE_ARN="$(get_output_string "$ACCOUNT_OUTPUTS_JSON" plan_role_github_arn)"
+APPLY_ROLE_ARN="$(get_output_string "$ACCOUNT_OUTPUTS_JSON" apply_role_github_arn)"
+
+if [[ "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" == "true" ]]; then
+  require_non_empty "$PLAN_ROLE_ARN" "bootstrap GitHub plan role ARN"
+  check_oidc_provider
+
+  if [[ -n "$EXPECTED_GITHUB_REPOSITORY" && -z "$EXPECTED_GITHUB_PLAN_SUBJECT" ]]; then
+    EXPECTED_GITHUB_PLAN_SUBJECT="repo:${EXPECTED_GITHUB_REPOSITORY}:environment:${ENV_NAME}-plan"
+  fi
+
+  section "Checking bootstrap GitHub Plan role"
+  check_github_role "$PLAN_ROLE_ARN" "Bootstrap GitHub Plan" "$EXPECTED_GITHUB_PLAN_SUBJECT"
+  check_github_role_policies "$PLAN_ROLE_ARN" "Bootstrap GitHub Plan" "$TF_STATE_BUCKET_ARN" "$TF_STATE_BUCKET_CMK_ARN" "$TF_STATE_LOCK_TABLE_ARN"
+
+  if [[ "$REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE" == "true" ]]; then
+    require_non_empty "$APPLY_ROLE_ARN" "bootstrap GitHub apply role ARN"
+
+    if [[ -n "$EXPECTED_GITHUB_REPOSITORY" && -z "$EXPECTED_GITHUB_APPLY_SUBJECT" ]]; then
+      EXPECTED_GITHUB_APPLY_SUBJECT="repo:${EXPECTED_GITHUB_REPOSITORY}:environment:${ENV_NAME}"
+    fi
+
+    section "Checking bootstrap GitHub Apply role"
+    check_github_role "$APPLY_ROLE_ARN" "Bootstrap GitHub Apply" "$EXPECTED_GITHUB_APPLY_SUBJECT"
+    check_github_role_policies "$APPLY_ROLE_ARN" "Bootstrap GitHub Apply" "$TF_STATE_BUCKET_ARN" "$TF_STATE_BUCKET_CMK_ARN" "$TF_STATE_LOCK_TABLE_ARN"
+  else
+    warn "REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE is false. Skipping apply role validation."
+  fi
+else
+  warn "REQUIRE_BOOTSTRAP_GITHUB_OIDC is false. Skipping GitHub OIDC role validation."
+fi
