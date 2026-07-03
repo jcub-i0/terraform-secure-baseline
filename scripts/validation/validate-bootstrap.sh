@@ -706,3 +706,24 @@ if [[ "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" == "true" ]]; then
 else
   warn "REQUIRE_BOOTSTRAP_GITHUB_OIDC is false. Skipping GitHub OIDC role validation."
 fi
+
+section "Bootstrap validation summary"
+cat <<SUMMARY
+Environment:                       ${ENV_NAME}
+AWS profile:                       ${AWS_PROFILE:-<default>}
+AWS region:                        ${AWS_REGION}
+AWS account ID:                    ${ACTIVE_ACCOUNT_ID}
+Name prefix:                       ${NAME_PREFIX}
+State bucket:                      ${TF_STATE_BUCKET_NAME}
+State bucket ARN:                  ${TF_STATE_BUCKET_ARN}
+State CMK ARN:                     ${TF_STATE_BUCKET_CMK_ARN}
+State lock table:                  ${TF_STATE_LOCK_TABLE_NAME}
+State lock table ARN:              ${TF_STATE_LOCK_TABLE_ARN}
+GitHub plan role ARN:              ${PLAN_ROLE_ARN:-<not validated>}
+GitHub apply role ARN:             ${APPLY_ROLE_ARN:-<not validated>}
+Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
+Expected GitHub plan subject:      ${EXPECTED_GITHUB_PLAN_SUBJECT:-<not checked>}
+Expected GitHub apply subject:     ${EXPECTED_GITHUB_APPLY_SUBJECT:-<not checked>}
+SUMMARY
+
+success "Bootstrap validation completed successfully for ${ENV_NAME}"
