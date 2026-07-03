@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.3.3
+
+### Added
+
+- Added `scripts/validation/validate-control-plane.sh` for safe, read-only control-plane validation.
+- Added validation coverage for control-plane Terraform state backend resources.
+- Added validation coverage for control-plane GitHub OIDC provider and plan/apply roles.
+- Added validation coverage for AWS Organizations OU structure.
+- Added validation coverage for IAM Identity Center instance, SecOps groups, permission sets, and account assignments.
+
+### Changed
+
+- Updated validation checklist to make automated control-plane validation the preferred path.
+- Clarified that manual validation is still required for GitHub Actions execution, end-user SSO testing, live Lambda tests, tamper tests, break-glass tests, and destroy safety review.
+
+### Notes
+
+- AWS Organizations account placement warnings are treated as warnings unless account placement is explicitly managed by Terraform.
+
 ## v1.3.2
 
 ### Fixed

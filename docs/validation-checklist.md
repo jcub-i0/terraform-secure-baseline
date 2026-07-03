@@ -241,9 +241,72 @@ Validation scripts passed:  14/14
 Validation scripts failed:  0/14
 ```
 
-### Exporting Validation Evidence
+## Automated Control-Plane Validation
 
-After running the validation suite, export a timestamped validation report package:
+Control-plane validation is handled separately from workload validation because the control plane manages governance and bootstrap resources rather than workload baseline infrastructure.
+
+Run the control-plane validation script with the control-plane AWS profile:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=control-plane \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+./scripts/validation/validate-control-plane.sh
+```
+
+Example:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=control-plane \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="example-org/terraform-secure-baseline" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+./scripts/validation/validate-control-plane.sh
+```
+
+This script performs safe, read-only validation for:
+
+- AWS caller identity and expected control-plane account ID
+- Control-plane Terraform state stack outputs
+- Terraform state S3 bucket existence, versioning, encryption, and public access block settings
+- Terraform state KMS CMK existence and key state
+- Terraform state DynamoDB lock table existence and status
+- GitHub OIDC provider existence
+- Control-plane GitHub plan/apply role existence
+- GitHub OIDC trust policy conditions for the expected repository
+- AWS Organizations root and expected OU structure
+- IAM Identity Center instance discovery
+- Expected SecOps Identity Center groups
+- Identity Center permission set outputs
+- Identity Center permission set existence
+- Identity Center account assignment presence for dev, staging, and prod
+
+A successful run should end with:
+
+```text
+[PASS] Control-plane validation completed successfully
+```
+
+### Control-Plane Warning Behavior
+
+Some control-plane checks may warn instead of fail.
+
+For example, account OU placement may produce warnings if workload accounts currently remain under the AWS Organizations root instead of under the `NonProd` or `Prod` OUs.
+
+This is expected if the Organizations stack creates OU structure but does not currently manage account placement. Treat these warnings as governance follow-up items unless account placement has been made a strict requirement for the deployment.
+
+## Exporting Workload Validation Evidence
+
+After running the workload validation suite, export a timestamped validation report package:
 
 ```bash
 ENV_NAME="dev"
@@ -279,23 +342,25 @@ validation-results/<environment>/<timestamp>/
 
 Use `summary.md` for human review and client handoff. Use `summary.json` for automation, indexing, or future reporting workflows.
 
-The report does not replace manual validation for control-plane resources, Identity Center assignments, GitHub Actions workflows, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
+The report does not replace manual validation for GitHub Actions workflow execution, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
 
-### Manual Validation Still Required
+## Manual Validation Still Required
 
-The automated validation suite is intentionally read-only. It does not perform live, destructive, or privileged workflow tests.
+The automated validation scripts are intentionally read-only. They do not perform live, destructive, or privileged workflow tests.
 
 Manual validation is still required for:
 
-- Control-plane resources
-- IAM Identity Center assignments and group membership
 - GitHub Actions workflow execution
+- IAM Identity Center end-user login and effective access testing
+- Identity Center group membership review
 - Live EC2 isolation testing
 - Live EC2 rollback testing
 - Live IP enrichment testing
 - Tamper detection tests
 - Break-glass role assumption tests
 - Destroy workflow and teardown safety checks
+
+The automated control-plane validation script confirms control-plane resource presence and selected configuration, but it does not execute GitHub workflows, modify Identity Center assignments, test end-user SSO login, assume privileged roles, move AWS accounts between OUs, or perform destructive operations.
 
 Use the remaining sections in this checklist for manual spot checks, deeper troubleshooting, or tests that intentionally trigger live workflows.
 
@@ -438,7 +503,25 @@ Expected:
 
 Confirm that control-plane resources were deployed correctly.
 
-Run these checks using the control-plane profile.
+The preferred validation path is the automated read-only control-plane validation script:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=control-plane \
+AWS_REGION="${AWS_REGION}" \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+./scripts/validation/validate-control-plane.sh
+```
+
+This validates the control-plane state backend, GitHub OIDC execution plane, AWS Organizations OU structure, and IAM Identity Center basics.
+
+The manual commands below can be used for spot checks, troubleshooting, or deeper review.
+
+Run manual spot checks using the control-plane profile:
 
 ```bash
 export AWS_PROFILE="control-plane"
@@ -561,6 +644,46 @@ SecOps-Engineer-Staging
 SecOps-Analyst-Prod
 SecOps-Engineer-Prod
 ```
+
+---
+
+## 4.4 Validate Identity Center Permission Sets and Assignments
+
+The automated control-plane validation script checks for permission set outputs, permission set existence, and account assignment presence.
+
+For manual troubleshooting, list permission sets:
+
+```bash
+INSTANCE_ARN="$(aws sso-admin list-instances \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'Instances[0].InstanceArn' \
+  --output text)"
+
+aws sso-admin list-permission-sets \
+  --instance-arn "${INSTANCE_ARN}" \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --output table
+```
+
+To inspect assignments for a target account and permission set:
+
+```bash
+aws sso-admin list-account-assignments \
+  --instance-arn "${INSTANCE_ARN}" \
+  --account-id "<TARGET-ACCOUNT-ID>" \
+  --permission-set-arn "<PERMISSION-SET-ARN>" \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --output table
+```
+
+Expected:
+
+- Expected permission sets exist.
+- Expected account assignments exist for enabled SecOps roles.
+- Customer-managed policy attachments are present only when the required workload-account policy names have been provided and the policies exist in the target account.
 
 ---
 
@@ -2076,6 +2199,23 @@ Expected:
 
 ---
 
+## Control-Plane Validation Fails
+
+Check:
+
+- `AWS_PROFILE` is set to the control-plane profile.
+- `EXPECTED_ACCOUNT_ID` matches the control-plane account ID.
+- `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the GitHub OIDC role, using the exact owner/repo spelling.
+- `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and `ACCOUNT_ID_PROD` are set when validating Identity Center assignments or account placement.
+- `bootstrap/control_plane/state` has been applied and has current Terraform outputs.
+- `bootstrap/control_plane/account` has been applied with GitHub OIDC enabled.
+- `bootstrap/control_plane/organizations` has been applied.
+- `bootstrap/control_plane/identity_center` has been applied after workload baseline policy names were available, if optional policy-backed roles are enabled.
+
+If the script warns that workload accounts are under the AWS Organizations root instead of the expected OUs, confirm whether account placement is currently managed by Terraform. If account placement is not managed, treat this as a governance warning rather than a deployment failure.
+
+---
+
 ## Identity Center Assignment Fails
 
 Check:
@@ -2170,7 +2310,7 @@ A successful validation means:
 - AWS accounts and profiles are correct.
 - Terraform state backends exist.
 - GitHub OIDC roles work if enabled.
-- Control-plane resources are deployed.
+- Automated control-plane validation passes for state backend resources, GitHub OIDC, Organizations OU structure, and IAM Identity Center basics.
 - Environment baselines exist.
 - Deployment profile outputs resolve correctly.
 - Egress mode behavior matches the selected profile or override.
@@ -2179,6 +2319,6 @@ A successful validation means:
 - Logging and security services are active where expected.
 - KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM controls validate successfully.
 - Notification and automation DLQs exist, are encrypted, and are reviewed when messages appear.
-- Identity Center access is configured.
+- Identity Center permission sets and account assignments are present, with end-user login and group membership reviewed manually where required.
 - Live EC2 isolation, rollback, IP enrichment, tamper detection, and break-glass workflows have been tested manually where appropriate.
 - Destroy procedures are understood before teardown.

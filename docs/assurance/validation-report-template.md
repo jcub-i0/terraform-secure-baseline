@@ -2,18 +2,19 @@
 
 ## Purpose
 
-This template provides a client-facing or internal handoff format for documenting validation results from a deployed `tf-secure-baseline` workload environment.
+This template provides a client-facing or internal handoff format for documenting validation results from a deployed `tf-secure-baseline` workload environment and, where applicable, the supporting control plane.
 
 It is intended to summarize:
 
-- Which environment was validated
+- Which environment or validation scope was validated
 - When validation was performed
-- Which automated validation checks passed or failed
+- Which automated workload validation checks passed or failed
+- Which automated control-plane validation checks passed, warned, or failed
 - Which evidence files were generated
 - Which manual validation activities remain
 - Any warnings, exceptions, or limitations
 
-This template can be completed manually, or used as a reference for generated validation reports produced by `scripts/validation/export-report.sh`.
+This template can be completed manually, used as a reference for generated workload validation reports produced by `scripts/validation/export-report.sh`, or used to summarize a separate control-plane validation run from `scripts/validation/validate-control-plane.sh`.
 
 ---
 
@@ -29,18 +30,24 @@ This template can be completed manually, or used as a reference for generated va
 
 ---
 
-## Environment
+## Validation Scope
 
 | Field | Value |
 |---|---|
-| Environment | `<dev/staging/prod>` |
+| Scope | `<workload/control-plane/combined>` |
+| Environment | `<dev/staging/prod/control-plane>` |
 | AWS Account ID | `<account-id>` |
 | AWS Region | `<region>` |
 | Name Prefix | `<name-prefix>` |
-| Deployment Profile | `<production/development/minimal>` |
-| Egress Mode | `<network_firewall/nat_only/vpc_endpoints_only/auto>` |
-| Effective Egress Mode | `<resolved-egress-mode>` |
+| Deployment Profile | `<production/development/minimal/not-applicable>` |
+| Egress Mode | `<network_firewall/nat_only/vpc_endpoints_only/auto/not-applicable>` |
+| Effective Egress Mode | `<resolved-egress-mode/not-applicable>` |
 | Validation Time | `<timestamp>` |
+| Report Package Location | `<path-or-reference>` |
+
+For workload validation, complete the deployment profile and egress-mode fields.
+
+For control-plane validation, use `not-applicable` for workload-only fields such as deployment profile and effective egress mode.
 
 ---
 
@@ -48,53 +55,114 @@ This template can be completed manually, or used as a reference for generated va
 
 | Field | Value |
 |---|---|
-| Overall Result | `<PASS/FAIL>` |
-| Validation Scripts Passed | `<passed>/<total>` |
-| Validation Scripts Failed | `<failed>/<total>` |
-| Report Package Location | `<path-or-reference>` |
+| Overall Result | `<PASS/WARN/FAIL>` |
+| Workload Validation Scripts Passed | `<passed>/<total>` |
+| Workload Validation Scripts Failed | `<failed>/<total>` |
+| Control-Plane Validation Result | `<PASS/WARN/FAIL/Not Run/Not Applicable>` |
+| Manual Validation Remaining | `<yes/no>` |
 
 Summary:
 
-`<Briefly summarize the result of the validation run. Example: The dev workload environment completed automated read-only validation with 14 of 14 validation scripts passing. Manual validation activities remain for live workflow tests, control-plane checks, and operational sign-off.>`
+`<Briefly summarize the validation outcome. Example: The dev workload environment completed automated read-only validation with 14 of 14 validation scripts passing. The control plane also passed automated read-only validation for state backend resources, GitHub OIDC, AWS Organizations OU structure, and IAM Identity Center basics. Manual validation remains for GitHub Actions execution, end-user SSO access, live Lambda workflow tests, tamper testing, break-glass testing, and destroy safety review.>`
 
 ---
 
-## Automated Validation Results
+## Automated Workload Validation Results
+
+Use this section for workload environments such as `dev`, `staging`, and `prod`.
 
 | Area | Script | Result | Evidence Log | Notes |
 |---|---|---|---|---|
-| Environment | `validate-env.sh` | `<PASS/FAIL>` | `validate-env.log` | `<notes>` |
-| Networking | `validate-networking.sh` | `<PASS/FAIL>` | `validate-networking.log` | `<notes>` |
-| VPC Endpoints | `validate-vpc-endpoints.sh` | `<PASS/FAIL>` | `validate-vpc-endpoints.log` | `<notes>` |
-| Logging | `validate-logging.sh` | `<PASS/FAIL>` | `validate-logging.log` | `<notes>` |
-| Security Services | `validate-security-services.sh` | `<PASS/FAIL>` | `validate-security-services.log` | `<notes>` |
-| KMS | `validate-kms.sh` | `<PASS/FAIL>` | `validate-kms.log` | `<notes>` |
-| Backup | `validate-backup.sh` | `<PASS/FAIL>` | `validate-backup.log` | `<notes>` |
-| SNS | `validate-sns.sh` | `<PASS/FAIL>` | `validate-sns.log` | `<notes>` |
-| SQS | `validate-sqs.sh` | `<PASS/FAIL>` | `validate-sqs.log` | `<notes>` |
-| EventBridge | `validate-eventbridge.sh` | `<PASS/FAIL>` | `validate-eventbridge.log` | `<notes>` |
-| Lambda | `validate-lambda.sh` | `<PASS/FAIL>` | `validate-lambda.log` | `<notes>` |
-| SSM | `validate-ssm.sh` | `<PASS/FAIL>` | `validate-ssm.log` | `<notes>` |
-| Compute | `validate-compute.sh` | `<PASS/FAIL>` | `validate-compute.log` | `<notes>` |
-| IAM | `validate-iam.sh` | `<PASS/FAIL>` | `validate-iam.log` | `<notes>` |
+| Environment | `validate-env.sh` | `<PASS/FAIL/Not Run>` | `validate-env.log` | `<notes>` |
+| Networking | `validate-networking.sh` | `<PASS/FAIL/Not Run>` | `validate-networking.log` | `<notes>` |
+| VPC Endpoints | `validate-vpc-endpoints.sh` | `<PASS/FAIL/Not Run>` | `validate-vpc-endpoints.log` | `<notes>` |
+| Logging | `validate-logging.sh` | `<PASS/FAIL/Not Run>` | `validate-logging.log` | `<notes>` |
+| Security Services | `validate-security-services.sh` | `<PASS/FAIL/Not Run>` | `validate-security-services.log` | `<notes>` |
+| KMS | `validate-kms.sh` | `<PASS/FAIL/Not Run>` | `validate-kms.log` | `<notes>` |
+| Backup | `validate-backup.sh` | `<PASS/FAIL/Not Run>` | `validate-backup.log` | `<notes>` |
+| SNS | `validate-sns.sh` | `<PASS/FAIL/Not Run>` | `validate-sns.log` | `<notes>` |
+| SQS | `validate-sqs.sh` | `<PASS/FAIL/Not Run>` | `validate-sqs.log` | `<notes>` |
+| EventBridge | `validate-eventbridge.sh` | `<PASS/FAIL/Not Run>` | `validate-eventbridge.log` | `<notes>` |
+| Lambda | `validate-lambda.sh` | `<PASS/FAIL/Not Run>` | `validate-lambda.log` | `<notes>` |
+| SSM | `validate-ssm.sh` | `<PASS/FAIL/Not Run>` | `validate-ssm.log` | `<notes>` |
+| Compute | `validate-compute.sh` | `<PASS/FAIL/Not Run>` | `validate-compute.log` | `<notes>` |
+| IAM | `validate-iam.sh` | `<PASS/FAIL/Not Run>` | `validate-iam.log` | `<notes>` |
+
+Expected successful workload validation summary:
+
+```text
+Validation scripts passed:  14/14
+Validation scripts failed:  0/14
+```
+
+---
+
+## Automated Control-Plane Validation Results
+
+Use this section for the `control-plane` account.
+
+Run the control-plane validation script separately from workload validation:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=control-plane \
+AWS_REGION="<region>" \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+./scripts/validation/validate-control-plane.sh
+```
+
+| Area | Result | Evidence Log | Notes |
+|---|---|---|---|
+| AWS caller identity and expected account ID | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Control-plane Terraform state stack outputs | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Terraform state S3 bucket existence, versioning, encryption, and public access block | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Terraform state KMS CMK existence and key state | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Terraform state DynamoDB lock table existence and status | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| GitHub OIDC provider existence | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Control-plane GitHub plan/apply role existence | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| GitHub OIDC trust policy conditions for expected repository | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| AWS Organizations root and OU structure | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Workload account OU placement | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| IAM Identity Center instance discovery | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| SecOps Identity Center group existence | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Identity Center permission set outputs and existence | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+| Identity Center account assignment presence | `<PASS/WARN/FAIL/Not Run>` | `validate-control-plane.log` | `<notes>` |
+
+Expected successful control-plane validation summary:
+
+```text
+[PASS] Control-plane validation completed successfully
+```
+
+### Control-Plane Warning Notes
+
+Document any warnings from the control-plane validation script.
+
+Common expected warnings may include workload accounts being located under the AWS Organizations root rather than under the expected `NonProd` or `Prod` OUs. This should be treated as a governance follow-up item unless account placement is explicitly managed by Terraform or required by the engagement scope.
 
 ---
 
 ## Manual Validation Results
 
-The automated validation suite is intentionally read-only. The following items should be reviewed manually where applicable.
+The automated validation scripts are intentionally read-only. The following items should be reviewed manually where applicable.
 
 | Manual Check | Status | Evidence / Notes |
 |---|---|---|
-| Control-plane resource validation | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
-| IAM Identity Center assignment validation | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
 | GitHub Actions workflow validation | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
+| IAM Identity Center end-user login and effective access testing | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
+| Identity Center group membership review | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
 | Live EC2 isolation test | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
 | Live EC2 rollback test | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
 | Live IP enrichment test | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
 | Tamper detection test | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
 | Break-glass role assumption test | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
 | Destroy safety review | `<Not Started/In Progress/Complete/Not Applicable>` | `<notes>` |
+
+The automated control-plane validation script confirms selected control-plane resource presence and configuration. It does not execute GitHub workflows, test end-user SSO login, change Identity Center assignments, move AWS accounts between OUs, assume privileged roles, or perform destructive operations.
 
 ---
 
@@ -113,15 +181,18 @@ Examples of acceptable environment-specific exceptions may include:
 - Network Firewall and NAT Gateway not required when `effective_egress_mode = vpc_endpoints_only`
 - AWS Config rules not required when Config is intentionally disabled by deployment profile
 - Pending SNS email confirmation where subscriber approval is still required
+- AWS Organizations account placement warnings where OU placement is not currently managed by Terraform
 
 ---
 
 ## Evidence Files
 
+### Workload Evidence Files
+
 | File | Purpose |
 |---|---|
-| `summary.md` | Human-readable validation report |
-| `summary.json` | Machine-readable validation summary |
+| `summary.md` | Human-readable workload validation report |
+| `summary.json` | Machine-readable workload validation summary |
 | `validate-env.log` | Environment and Terraform output validation |
 | `validate-networking.log` | VPC, subnet, NAT, firewall, and route validation |
 | `validate-vpc-endpoints.log` | VPC endpoint placement and route validation |
@@ -137,13 +208,21 @@ Examples of acceptable environment-specific exceptions may include:
 | `validate-compute.log` | EC2 placement, tags, IMDSv2, EBS encryption, and instance profile validation |
 | `validate-iam.log` | IAM role, trust policy, OIDC role, break-glass, and shared policy validation |
 
+### Control-Plane Evidence Files
+
+| File | Purpose |
+|---|---|
+| `validate-control-plane.log` | Control-plane state backend, GitHub OIDC, AWS Organizations, and IAM Identity Center validation |
+| `control-plane-validation-summary.md` | Optional human-readable summary of the control-plane validation run |
+| `control-plane-validation-summary.json` | Optional machine-readable summary if control-plane export support is added |
+
 ---
 
 ## Limitations
 
-This report validates deployed AWS control presence and selected configuration settings for the target workload environment.
+This report validates deployed AWS control presence and selected configuration settings for the target workload environment and, where applicable, the supporting control plane.
 
-The validation suite confirms the presence and configuration of selected AWS security controls in the deployed environment.
+The validation scripts confirm the presence and configuration of selected AWS security controls, governance resources, and supporting infrastructure at the time validation was run.
 
 This report does not replace:
 

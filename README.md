@@ -682,73 +682,19 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.3.2
+### v1.3.3
 
-This release fixes Network Firewall naming consistency and strengthens networking validation for inspected egress paths.
-
-Highlights:
-
-- Fixed AWS Network Firewall resource naming so firewall names include the environment-specific name prefix.
-- Added safer Network Firewall replacement behavior to support firewall renames without leaving route tables pointed at stale firewall endpoint IDs.
-- Fixed networking validation to match the exact expected Network Firewall name instead of using broad prefix matching.
-- Fixed networking validation for Network Firewall endpoint routes where AWS may expose `vpce-*` targets through route fields such as `GatewayId`.
-- Added route target normalization in networking validation for VPC endpoints, NAT Gateways, Internet Gateways, local routes, transit gateways, and network interfaces.
-- Expanded `network_firewall` mode validation to verify the full inspected egress path:
-  - compute private route tables send default traffic to Network Firewall VPC endpoints;
-  - firewall private route tables send default traffic to NAT Gateways;
-  - public route tables send default traffic to Internet Gateways;
-  - public route tables return compute private subnet CIDRs through Network Firewall VPC endpoints.
-- Improved validation confidence that production-style egress flows remain symmetric and inspected when AWS Network Firewall is enabled.
-
-### v1.3.1
-
-This release hardens notification and automation failure-retention paths.
+This release expands validation coverage to the control plane and improves validation evidence readiness.
 
 Highlights:
 
-- Added a dedicated security notifications SQS queue subscribed to the security notifications SNS topic.
-- Added a security notifications SQS DLQ for repeatedly unprocessed security notification messages.
-- Added a shared security notifications EventBridge DLQ for EventBridge delivery failures to the security notifications SNS topic.
-- Added a CloudWatch alarm for visible messages in the security notifications EventBridge DLQ.
-- Added workflow-specific DLQs for EC2 Isolation, EC2 Rollback, and IP Enrichment automation paths.
-- Added EventBridge target retry policies and DLQ configuration for protected automation and notification targets.
-- Extended validation coverage for SQS queues, SNS subscriptions, EventBridge target DLQs, retry policies, and Lambda automation wiring.
-- Updated documentation to describe durable notification paths, DLQ validation, and DLQ response expectations in `docs/validation-checklist.md`.
+- Added automated read-only control-plane validation with `validate-control-plane.sh`.
+- Validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations OU structure, and IAM Identity Center basics.
+- Added optional validation for workload account IDs, Identity Center account assignments, and expected GitHub repository trust conditions.
+- Updated validation documentation to distinguish automated workload validation, automated control-plane validation, and manual live workflow testing.
+- Preserved manual-only status for GitHub Actions execution, end-user SSO testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review.
 
-### v1.3.0
-
-This release adds validation evidence reporting.
-
-Highlights:
-
-- Added `scripts/validation/export-report.sh`.
-- Added timestamped validation output directories under `validation-results/<environment>/<timestamp>/`.
-- Added Markdown and JSON validation summaries.
-- Added per-script validation logs for deployment records, troubleshooting, and client handoff.
-
-### v1.2.1
-
-This release corrects Amazon Inspector enablement behavior.
-
-Highlights:
-
-- Fixed Inspector validation and enablement wiring to respect the resolved effective Inspector setting.
-- Added configurable Inspector resource type support.
-- Defaulted Inspector scanning to EC2 by default.
-- Disabled Lambda and Lambda code scanning by default because the baseline uses customer-managed KMS encryption for Lambda resources.
-
-### v1.2.0
-
-This release adds a safe, read-only post-deployment validation suite for deployed workload environments.
-
-Highlights:
-
-- Added `validate-all.sh` as the primary workload validation entry point.
-- Added validation scripts for environment identity, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM.
-- Added expected account ID validation through `EXPECTED_ACCOUNT_ID`.
-- Added profile-aware validation behavior for Config, Backup, Inspector, and egress mode.
-- Added read-only validation summaries suitable for deployment evidence and troubleshooting.
-- Preserved manual validation for control-plane resources, Identity Center assignments, live workflow tests, tamper tests, break-glass tests, GitHub Actions workflow review, and destroy safety.
+For previous release highlights and detailed change history, see `CHANGELOG.md`.
 
 ---
 
