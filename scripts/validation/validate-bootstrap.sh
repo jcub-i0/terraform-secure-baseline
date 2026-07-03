@@ -47,3 +47,85 @@ fi
 if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
+
+# -----------------------------------------------------------------------------
+# Local helpers
+# -----------------------------------------------------------------------------
+
+get_bootstrap_dir() {
+  local repo_root="$1"
+  local env_name="$2"
+
+  echo "${repo_root}/bootstrap/${env_name}"
+}
+
+terraform_output_json_required() {
+  local stack_dir="$1"
+  local stack_name="$2"
+
+  local outputs_json
+  if ! outputs_json="$(terraform_output_json "$stack_dir")"; then
+    fail "Unable to read Terraform outputs for ${stack_name}: ${stack_dir}"
+  fi
+
+  if [[ -z "$outputs-json" ]]; then
+    fail "No Terraform output JSON returned for ${stack_name}: ${stack_dir}"
+  fi
+
+  echo "$outputs_json"
+}
+
+require_terraform_output() {
+  local outputs_json="$1"
+  local output_name="$2"
+  local stack_name="$3"
+
+  if terraform_output_exists "$outputs_json" "$output_name"; then
+    success "${stack_name} Terraform output exists: ${output_name}"
+  else
+    fail "Missing required Terraform output in ${stack_name}: ${output_name}"
+  fi
+}
+
+get_output_string() {
+  local outputs_json="$1"
+  local output_name="$2"
+
+  echo "$outputs_json" | jq -r --arg name "$output_name" '.[$name].value // empty'
+}
+
+require_non_empty() {
+  local value="$1"
+  local description="$2"
+
+  if [[ -z "$value" || "$value" == "null" || "$value" == "None" ]]; then
+    fail "Unable to resolve ${descriptions}"
+  fi
+}
+
+get_role_name_from_arn() {
+  local role_arn="$1"
+  echo "${role_arn##*/}"
+}
+
+bucket_name_from_arn() {
+  local bucket_arn="$1"
+  echo "${bucket_arn#arn:aws:s3:::}"
+}
+
+resolve_kms_key_id() {
+  local key_ref="$1"
+
+  aws kms describe-key \
+    "${aws_args[@]}" \
+    --key-id "$key_ref" \
+    --query 'KeyMetadata.KeyId' \
+    --output text 2>/dev/null || true
+}
+
+json_contains_string() {
+  local json="$1"
+  local value="$2"
+
+  echo "$json" | jq -e --arg value "$value" '[.. | strings | select(. == $value or contains($value))] | length > 0' >/dev/null
+}
