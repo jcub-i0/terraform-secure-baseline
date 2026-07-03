@@ -68,7 +68,7 @@ terraform_output_json_required() {
     fail "Unable to read Terraform outputs for ${stack_name}: ${stack_dir}"
   fi
 
-  if [[ -z "$outputs-json" ]]; then
+  if [[ -z "$outputs_json" ]]; then
     fail "No Terraform output JSON returned for ${stack_name}: ${stack_dir}"
   fi
 
@@ -99,7 +99,7 @@ require_non_empty() {
   local description="$2"
 
   if [[ -z "$value" || "$value" == "null" || "$value" == "None" ]]; then
-    fail "Unable to resolve ${descriptions}"
+    fail "Unable to resolve ${description}"
   fi
 }
 
