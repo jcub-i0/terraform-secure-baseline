@@ -727,3 +727,7 @@ Expected GitHub apply subject:     ${EXPECTED_GITHUB_APPLY_SUBJECT:-<not checked
 SUMMARY
 
 success "Bootstrap validation completed successfully for ${ENV_NAME}"
+
+section "Validation Result"
+
+success "Bootstrap validation completed successfully for: ${ENV_NAME}"
