@@ -14,6 +14,7 @@ locals {
     "kms",
     "config",
     "sns",
+    "sqs",
     "ec2",
     "events",
     "securityhub",
