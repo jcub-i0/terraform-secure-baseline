@@ -19,7 +19,6 @@ module "github_oidc" {
 
   tf_state_bucket_arn     = var.tf_state_bucket_arn
   tf_state_bucket_cmk_arn = var.tf_state_bucket_cmk_arn
-  tf_state_lock_table_arn = var.tf_state_lock_table_arn
 
   primary_region           = var.primary_region
   account_id               = data.aws_caller_identity.current.account_id
