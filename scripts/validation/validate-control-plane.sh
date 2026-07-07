@@ -256,40 +256,6 @@ check_kms_key() {
   fi
 }
 
-check_dynamodb_lock_table() {
-  local table_name="$1"
-
-  section "Checking Terraform state DynamoDB lock table"
-
-  local table_json
-  table_json="$(
-    aws dynamodb describe-table \
-      "${aws_args[@]}" \
-      --table-name "$table_name" \
-      --output json
-  )"
-
-  local table_status
-  table_status="$(echo "$table_json" | jq -r '.Table.TableStatus')"
-
-  if [[ "$table_status" == "ACTIVE" ]]; then
-    success "State lock table is ACTIVE: ${table_name}"
-  else
-    echo "$table_json" | jq .
-    fail "State lock table is not ACTIVE. Current status: ${table_status}"
-  fi
-
-  local key_count
-  key_count="$(echo "$table_json" | jq '.Table.KeySchema | length')"
-
-  if [[ "$key_count" -ge 1 ]]; then
-    success "State lock table has key schema configured"
-  else
-    echo "$table_json" | jq .
-    fail "State lock table key schema is missing"
-  fi
-}
-
 check_oidc_provider() {
   section "Checking GitHub OIDC provider"
 
@@ -753,15 +719,11 @@ require_terraform_output "$STATE_OUTPUTS_JSON" control_plane_account_id "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_name "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_arn "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn "state"
-require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_lock_table_name "state"
-require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_lock_table_arn "state"
 
 STATE_ACCOUNT_ID="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" control_plane_account_id)"
 STATE_BUCKET_NAME="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_name)"
 STATE_BUCKET_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_arn)"
 STATE_CMK_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn)"
-STATE_LOCK_TABLE_NAME="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_lock_table_name)"
-STATE_LOCK_TABLE_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_lock_table_arn)"
 
 if [[ "$STATE_ACCOUNT_ID" == "$AWS_ACCOUNT_ID" ]]; then
   success "State stack account output matches current AWS account"
@@ -772,12 +734,9 @@ fi
 info "State bucket name: ${STATE_BUCKET_NAME}"
 info "State bucket ARN: ${STATE_BUCKET_ARN}"
 info "State CMK ARN: ${STATE_CMK_ARN}"
-info "State lock table name: ${STATE_LOCK_TABLE_NAME}"
-info "State lock table ARN: ${STATE_LOCK_TABLE_ARN}"
 
 check_s3_state_bucket "$STATE_BUCKET_NAME" "$STATE_CMK_ARN"
 check_kms_key "$STATE_CMK_ARN"
-check_dynamodb_lock_table "$STATE_LOCK_TABLE_NAME"
 
 section "Checking account stack GitHub OIDC outputs"
 
@@ -812,7 +771,6 @@ Control-plane account ID:          ${AWS_ACCOUNT_ID}
 Name prefix:                       ${NAME_PREFIX}
 
 State bucket:                      ${STATE_BUCKET_NAME}
-State lock table:                  ${STATE_LOCK_TABLE_NAME}
 State CMK:                         ${STATE_CMK_ARN}
 
 GitHub OIDC required:              ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}
