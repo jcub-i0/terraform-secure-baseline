@@ -168,6 +168,7 @@ Use this mode before the workload stack has produced `lambda_cmk_arn` and `secre
 REQUIRE_WORKLOAD_CMK_PERMS=false \
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
+ENV_NAME="<ENV-NAME>" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ./scripts/validation/validate-bootstrap.sh dev
