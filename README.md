@@ -201,7 +201,7 @@ The **environment** stacks manage:
 │   └── validation
 │       ├── lib
 │       │   └── common.sh
-│       ├── validate-all.sh
+│       ├── validate-baseline.sh
 │       ├── validate-backup.sh
 │       ├── validate-compute.sh
 │       ├── validate-env.sh
@@ -530,7 +530,7 @@ scripts/validation/
 The primary validation entry point is:
 
 ```bash
-./scripts/validation/validate-all.sh <dev|staging|prod>
+./scripts/validation/validate-baseline.sh <dev|staging|prod>
 ```
 
 Example:
@@ -540,7 +540,7 @@ AWS_PAGER="" \
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/validation/validate-all.sh dev
+./scripts/validation/validate-baseline.sh dev
 ```
 
 The validation suite checks deployed workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture. It also validates notification and failure-retention paths such as SNS subscriptions, SQS queues, EventBridge target DLQs, retry policies, and Lambda workflow wiring.
