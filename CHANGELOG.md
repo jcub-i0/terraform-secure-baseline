@@ -2,25 +2,27 @@
 
 ## v1.3.4
 
-This release cleans up validation architecture, adds CI-safe workload bootstrap validation, and standardizes Terraform state-locking validation around S3 native lockfiles.
+This release completes the validation architecture cleanup by organizing validation into workload bootstrap, workload baseline, and control-plane validation layers while standardizing Terraform state-locking validation around S3 native lockfiles.
 
 ### Added
 
 - Added automated workload bootstrap validation with `scripts/validation/validate-bootstrap.sh`.
+- Added automated read-only control-plane validation with `scripts/validation/validate-control-plane.sh`.
 - Added validation coverage for workload bootstrap directory structure, backend lockfile configuration, state bucket security, state CMK configuration, GitHub OIDC roles, and GitHub role access to Terraform state resources.
+- Added control-plane validation coverage for state backend resources, GitHub OIDC roles, AWS Organizations OU structure, IAM Identity Center basics, optional account assignments, and expected GitHub repository trust conditions.
 - Added CI-safe bootstrap validation behavior that does not require local `terraform.tfstate` from `bootstrap/<env>/state`.
 - Added backend-file-based state bucket resolution for workload bootstrap validation.
 - Added live S3 and KMS validation for Terraform state bucket versioning, public access block, SSE-KMS encryption, and customer-managed state CMK status.
-- Added validation that workload remote backends use Terraform S3 native locking with `use_lockfile = true`.
+- Added validation that workload and control-plane remote backends use Terraform S3 native locking with `use_lockfile = true`.
 - Added `scripts/validation/README.md` to document validation layers, usage, safety boundaries, troubleshooting, and recommended validation order.
 
 ### Changed
 
 - Renamed `scripts/validation/validate-all.sh` to `scripts/validation/validate-baseline.sh`.
 - Preserved `scripts/validation/validate-all.sh` as a deprecated compatibility wrapper for `validate-baseline.sh`.
-- Updated validation documentation to distinguish workload bootstrap validation, workload baseline validation, and control-plane validation.
+- Updated validation documentation to distinguish workload bootstrap validation, workload baseline validation, control-plane validation, and manual live workflow testing.
 - Updated root-level README validation guidance to describe all three validation layers.
-- Updated `docs/validation-checklist.md` to reflect CI-safe bootstrap validation and S3 native lockfile behavior.
+- Updated `docs/validation-checklist.md` to reflect CI-safe bootstrap validation, control-plane validation, and S3 native lockfile behavior.
 - Changed bootstrap validation to treat remote backend files as the source of truth for state bucket location, backend region, state object keys, and `use_lockfile = true`.
 - Changed bootstrap validation to resolve the state CMK from the live S3 bucket encryption configuration instead of relying on local bootstrap state outputs.
 - Standardized validation language around Terraform S3 native locking with `use_lockfile = true`.
@@ -28,7 +30,7 @@ This release cleans up validation architecture, adds CI-safe workload bootstrap 
 ### Removed
 
 - Removed stale DynamoDB state-locking expectations from validation guidance.
-- Removed the bootstrap validator’s dependency on local Terraform outputs from `bootstrap/<env>/state`.
+- Removed the bootstrap validator's dependency on local Terraform outputs from `bootstrap/<env>/state`.
 - Removed local `terraform.tfstate` presence checks from workload bootstrap validation.
 
 ### Notes
@@ -36,6 +38,8 @@ This release cleans up validation architecture, adds CI-safe workload bootstrap 
 DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
 
 `validate-bootstrap.sh` remains read-only. It does not run `terraform init`, `terraform apply`, `terraform destroy`, backend migration, role assumption, or live workflow execution. For fresh checkouts or manual GitHub workflow runs, initialize the remote-backed account and workload stacks before running bootstrap validation so Terraform outputs can be read from the S3 backend.
+
+`validate-control-plane.sh` remains read-only. It validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations structure, IAM Identity Center basics, and optional account assignment evidence, but it does not execute GitHub workflows, move accounts between OUs, modify Identity Center assignments, assume privileged roles, or perform destructive operations.
 
 ## v1.3.3
 
