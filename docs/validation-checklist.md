@@ -14,6 +14,7 @@ This checklist validates:
 
 - AWS account and profile correctness
 - Terraform state backend resources
+- Workload bootstrap resources
 - GitHub OIDC roles
 - Control-plane resources
 - Environment baseline infrastructure
@@ -51,14 +52,15 @@ control-plane
 Recommended validation order:
 
 1. Confirm AWS profile/account variables.
-2. Run automated workload validation with `validate-baseline.sh` for each deployed workload environment.
-3. Run automated control-plane validation with `validate-control-plane.sh`.
-4. Review any control-plane warnings, especially AWS Organizations account placement warnings.
-5. Validate GitHub Actions workflows manually.
-6. Validate IAM Identity Center end-user access manually where required.
-7. Run live Lambda workflow tests only in approved environments.
-8. Run tamper and break-glass tests only when explicitly approved.
-9. Review destroy safety requirements before running any destroy or teardown workflow.
+2. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
+3. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
+4. Run automated control-plane validation with `validate-control-plane.sh`.
+5. Review any control-plane warnings, especially AWS Organizations account placement warnings.
+6. Validate GitHub Actions workflows manually.
+7. Validate IAM Identity Center end-user access manually where required.
+8. Run live Lambda workflow tests only in approved environments.
+9. Run tamper and break-glass tests only when explicitly approved.
+10. Review destroy safety requirements before running any destroy or teardown workflow.
 
 ---
 
@@ -118,9 +120,88 @@ export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 
 ---
 
-## Automated Workload Validation
+## Automated Workload Bootstrap Validation
 
-For deployed workload environments, most safe, read-only workload-account validation is automated by the scripts in:
+For deployed workload environments, bootstrap validation checks the foundational state and CI/CD execution-plane resources in:
+
+```text
+bootstrap/<env>/state
+bootstrap/<env>/account
+```
+
+The primary command is:
+
+```bash
+./scripts/validation/validate-bootstrap.sh <dev|staging|prod>
+```
+
+This script validates the workload bootstrap layer separately from the workload baseline because the bootstrap stacks manage Terraform state storage, state encryption, backend locking configuration, and GitHub OIDC roles.
+
+### Dev
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+./scripts/validation/validate-bootstrap.sh dev
+```
+
+### Staging
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=staging \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+./scripts/validation/validate-bootstrap.sh staging
+```
+
+### Prod
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=prod \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+./scripts/validation/validate-bootstrap.sh prod
+```
+
+### Workload Bootstrap Validation Coverage
+
+`validate-bootstrap.sh` performs safe, read-only validation for:
+
+- AWS caller identity and expected workload account ID
+- `bootstrap/<env>/state` and `bootstrap/<env>/account` directory structure
+- required bootstrap state Terraform outputs
+- Terraform state S3 bucket existence, versioning, encryption, and public access block settings
+- Terraform state KMS CMK existence, key state, and customer-managed status
+- S3 native backend locking via `use_lockfile = true` in remote-backed workload stacks
+- GitHub OIDC provider existence
+- workload GitHub plan/apply role existence
+- GitHub OIDC trust policy conditions for the expected repository and GitHub environments
+- GitHub role policy access to the Terraform state bucket and state CMK
+- GitHub Apply role access to workload-created Lambda and Secrets Manager CMKs, where required
+
+The workload bootstrap architecture uses S3 native state locking. DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
+
+For early bootstrap-only validation before the workload stack has produced `lambda_cmk_arn` and `secrets_manager_cmk_arn`, disable workload CMK permission checks:
+
+```bash
+REQUIRE_WORKLOAD_CMK_PERMS=false \
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+./scripts/validation/validate-bootstrap.sh dev
+```
+
+## Automated Workload Baseline Validation
+
+For deployed workload environments, most safe, read-only workload baseline validation is automated by the scripts in:
 
 ```text
 scripts/validation/
@@ -279,7 +360,7 @@ This script performs safe, read-only validation for:
 - Control-plane Terraform state stack outputs
 - Terraform state S3 bucket existence, versioning, encryption, and public access block settings
 - Terraform state KMS CMK existence and key state
-- Terraform state DynamoDB lock table existence and status
+- S3 native backend locking configuration where applicable
 - GitHub OIDC provider existence
 - Control-plane GitHub plan/apply role existence
 - GitHub OIDC trust policy conditions for the expected repository
@@ -342,7 +423,7 @@ validation-results/<environment>/<timestamp>/
 
 Use `summary.md` for human review and client handoff. Use `summary.json` for automation, indexing, or future reporting workflows.
 
-The report does not replace manual validation for GitHub Actions workflow execution, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
+The report does not replace bootstrap validation, control-plane validation, GitHub Actions workflow execution, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
 
 ## Manual Validation Still Required
 
@@ -396,7 +477,10 @@ The `state` substacks create backend resources such as:
 
 - S3 bucket for Terraform state
 - KMS key for state encryption
-- DynamoDB table or S3 lockfile support for state locking
+
+Remote-backed stacks should use Terraform S3 native locking with `use_lockfile = true`.
+
+DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
 
 ## Check State Bucket
 
@@ -417,14 +501,34 @@ aws s3api get-bucket-encryption \
 
 If your state bucket uses a different name, replace the bucket name accordingly.
 
-## Check State Lock Table
+## Check S3 Native State Locking
+
+For remote-backed stacks, confirm that the backend configuration uses S3 native locking:
 
 ```bash
-aws dynamodb describe-table \
-  --table-name "${CLOUD_NAME}-${ENVIRONMENT}-lock" \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'Table.TableStatus'
+grep -R "use_lockfile" \
+  "bootstrap/${ENVIRONMENT}/account/backend.tf" \
+  "environments/${ENVIRONMENT}/backend.tf"
+```
+
+Expected:
+
+```text
+use_lockfile = true
+```
+
+Confirm that `dynamodb_table` is not configured in remote backend files:
+
+```bash
+grep -R "dynamodb_table" \
+  "bootstrap/${ENVIRONMENT}/account/backend.tf" \
+  "environments/${ENVIRONMENT}/backend.tf"
+```
+
+Expected:
+
+```text
+no output
 ```
 
 ## Terraform Init Check
@@ -444,7 +548,8 @@ Expected:
 
 - S3 state bucket exists.
 - KMS encryption is configured.
-- Locking resource exists if configured.
+- Remote-backed stacks use `use_lockfile = true`.
+- Remote-backed stacks do not use `dynamodb_table`.
 - Terraform can initialize successfully in stacks that use the backend.
 
 ---
@@ -2199,6 +2304,25 @@ Expected:
 
 ---
 
+## Workload Bootstrap Validation Fails
+
+Check:
+
+- `AWS_PROFILE` is set to the target workload account profile.
+- `EXPECTED_ACCOUNT_ID` matches the target workload account ID.
+- `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the workload GitHub OIDC roles.
+- `bootstrap/<env>/state` has been applied and has current Terraform outputs.
+- `bootstrap/<env>/account` has been applied with GitHub OIDC enabled.
+- `bootstrap/<env>/account/backend.tf` includes `use_lockfile = true`.
+- `environments/<env>/backend.tf` includes `use_lockfile = true`.
+- The state S3 bucket exists, has versioning enabled, has public access block enabled, and uses SSE-KMS.
+- The state CMK exists, is enabled, and is customer-managed.
+- The GitHub Apply role has been re-applied after workload deployment with `lambda_cmk_arn` and `secrets_manager_cmk_arn` set.
+
+If Terraform suddenly wants to create existing bootstrap/account resources, stop and confirm the S3 backend bucket and key point to the intended state object before applying.
+
+---
+
 ## Control-Plane Validation Fails
 
 Check:
@@ -2249,6 +2373,8 @@ Check:
 - No other Terraform job is currently running for the same backend key.
 - GitHub Actions did not cancel a job while a lock was held.
 - Backend key is unique per stack.
+- Remote-backed stacks include `use_lockfile = true`.
+- The AWS principal running Terraform has S3 permissions for both the state object and the `.tflock` lock object.
 - Use `terraform force-unlock` only after confirming no active operation is running.
 
 ---
@@ -2306,9 +2432,10 @@ This checklist validates that `tf-secure-baseline` is deployed correctly and tha
 
 A successful validation means:
 
-- Automated workload validation passes for the target environment.
+- Automated workload bootstrap validation passes for the target environment.
+- Automated workload baseline validation passes for the target environment.
 - AWS accounts and profiles are correct.
-- Terraform state backends exist.
+- Terraform state backends exist and remote-backed stacks use S3 native locking with `use_lockfile = true`.
 - GitHub OIDC roles work if enabled.
 - Automated control-plane validation passes for state backend resources, GitHub OIDC, Organizations OU structure, and IAM Identity Center basics.
 - Environment baselines exist.
