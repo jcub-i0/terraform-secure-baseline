@@ -131,6 +131,7 @@ DynamoDB state locking is not expected for the current architecture. This projec
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+ENV_NAME="dev" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
@@ -140,6 +141,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ```bash
 AWS_PROFILE=staging \
 AWS_REGION=us-east-1 \
+ENV_NAME="staging" \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ./scripts/validation/validate-bootstrap.sh staging
@@ -150,6 +152,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ```bash
 AWS_PROFILE=prod \
 AWS_REGION=us-east-1 \
+ENV_NAME="prod" \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ./scripts/validation/validate-bootstrap.sh prod
