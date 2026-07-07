@@ -697,6 +697,10 @@ require_directory "$ORGANIZATIONS_DIR"
 require_directory "$IDENTITY_CENTER_DIR"
 success "Control-plane stack directories exist"
 
+validate_backend_locking "${ACCOUNT_DIR}/backend.tf" "bootstrap/control_plane/account"
+validate_backend_locking "${ORGANIZATIONS_DIR}/backend.tf" "bootstrap/control_plane/organizations"
+validate_backend_locking "${IDENTITY_CENTER_DIR}/backend.tf" "bootstrap/control_plane/identity_center"
+
 section "Checking AWS caller identity"
 
 AWS_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
