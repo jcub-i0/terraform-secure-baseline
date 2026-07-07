@@ -26,7 +26,10 @@
 #     bucket and state CMK.
 #   - bootstrap/<env>/account uses an S3 backend with use_lockfile = true.
 #   - environments/<env> uses an S3 backend with use_lockfile = true.
-#   - The backend files are the source of truth for state locking behavior.
+#   - The backend files are the source of truth for state bucket location and
+#     state locking behavior.
+#   - Validation does not depend on local terraform.tfstate from
+#     bootstrap/<env>/state, so the script can run from a fresh checkout.
 
 set -euo pipefail
 
@@ -49,7 +52,6 @@ REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true
 REQUIRE_WORKLOAD_CMK_PERMS="${REQUIRE_WORKLOAD_CMK_PERMS:-true}"
 REQUIRE_STATE_STACK_LOCAL="${REQUIRE_STATE_STACK_LOCAL:-true}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
-STRICT_STATE_BUCKET_KMS_MATCH="${STRICT_STATE_BUCKET_KMS_MATCH:-false}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
 EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
@@ -138,20 +140,6 @@ get_role_name_from_arn() {
   echo "${role_arn##*/}"
 }
 
-bucket_name_from_arn() {
-  local bucket_arn="$1"
-  echo "${bucket_arn#arn:aws:s3:::}"
-}
-
-resolve_kms_key_id() {
-  local key_ref="$1"
-
-  aws kms describe-key \
-    "${aws_args[@]}" \
-    --key-id "$key_ref" \
-    --query 'KeyMetadata.KeyId' \
-    --output text 2>/dev/null || true
-}
 
 # -----------------------------------------------------------------------------
 # AWS / Terraform validation helpers
@@ -239,6 +227,71 @@ validate_backend_locking() {
   fi
 }
 
+get_backend_string_value() {
+  local backend_file="$1"
+  local attribute_name="$2"
+
+  sed -nE "s/^[[:space:]]*${attribute_name}[[:space:]]*=[[:space:]]*\"([^\"]+)\".*/\1/p" "$backend_file" |
+    head -n 1
+}
+
+validate_backend_state_config() {
+  local account_backend_file="$1"
+  local env_backend_file="$2"
+
+  section "Resolving state backend configuration from backend files"
+
+  local account_backend_bucket
+  local account_backend_region
+  local account_backend_key
+  local env_backend_bucket
+  local env_backend_region
+  local env_backend_key
+
+  account_backend_bucket="$(get_backend_string_value "$account_backend_file" bucket)"
+  account_backend_region="$(get_backend_string_value "$account_backend_file" region)"
+  account_backend_key="$(get_backend_string_value "$account_backend_file" key)"
+
+  env_backend_bucket="$(get_backend_string_value "$env_backend_file" bucket)"
+  env_backend_region="$(get_backend_string_value "$env_backend_file" region)"
+  env_backend_key="$(get_backend_string_value "$env_backend_file" key)"
+
+  require_non_empty "$account_backend_bucket" "bootstrap/${ENV_NAME}/account backend bucket"
+  require_non_empty "$account_backend_region" "bootstrap/${ENV_NAME}/account backend region"
+  require_non_empty "$account_backend_key" "bootstrap/${ENV_NAME}/account backend key"
+
+  require_non_empty "$env_backend_bucket" "environments/${ENV_NAME} backend bucket"
+  require_non_empty "$env_backend_region" "environments/${ENV_NAME} backend region"
+  require_non_empty "$env_backend_key" "environments/${ENV_NAME} backend key"
+
+  if [[ "$account_backend_bucket" == "$env_backend_bucket" ]]; then
+    success "Account and workload backends use the same state bucket: ${account_backend_bucket}"
+  else
+    fail "Account and workload backend bucket mismatch. Account: ${account_backend_bucket}; workload: ${env_backend_bucket}"
+  fi
+
+  if [[ "$account_backend_region" == "$env_backend_region" ]]; then
+    success "Account and workload backends use the same state region: ${account_backend_region}"
+  else
+    fail "Account and workload backend region mismatch. Account: ${account_backend_region}; workload: ${env_backend_region}"
+  fi
+
+  if [[ "$account_backend_key" != "$env_backend_key" ]]; then
+    success "Account and workload backends use distinct state keys"
+  else
+    fail "Account and workload backends use the same state key: ${account_backend_key}"
+  fi
+
+  if [[ "$account_backend_region" == "$AWS_REGION" ]]; then
+    success "Backend region matches AWS_REGION: ${AWS_REGION}"
+  else
+    warn "Backend region (${account_backend_region}) differs from AWS_REGION (${AWS_REGION}). AWS API validation will still use AWS_REGION."
+  fi
+
+  TF_STATE_BUCKET_NAME="$account_backend_bucket"
+  TF_STATE_BUCKET_ARN="arn:aws:s3:::${TF_STATE_BUCKET_NAME}"
+}
+
 validate_state_stack_local_backend() {
   local state_dir="$1"
 
@@ -254,47 +307,10 @@ validate_state_stack_local_backend() {
   else
     success "bootstrap/${ENV_NAME}/state does not define a remote backend; local state bootstrap pattern is preserved"
   fi
-
-  if [[ -f "${state_dir}/terraform.tfstate" ]]; then
-    success "Local Terraform state file is present for bootstrap/${ENV_NAME}/state"
-  else
-    warn "Local Terraform state file not found in bootstrap/${ENV_NAME}/state. This may be expected if validation is running from a fresh checkout."
-  fi
 }
 
-validate_state_outputs() {
-  local state_outputs_json="$1"
-  local active_account_id="$2"
-
-  section "Checking bootstrap state Terraform outputs"
-
-  local required_outputs=(
-    tf_state_bucket_arn
-    tf_state_bucket_name
-    tf_state_bucket_cmk_arn
-  )
-
-  for output_name in "${required_outputs[@]}"; do
-    require_terraform_output "$state_outputs_json" "$output_name" "bootstrap/${ENV_NAME}/state"
-  done
-
-  if terraform_output_exists "$state_outputs_json" account_id; then
-    local output_account_id
-    output_account_id="$(get_output_string "$state_outputs_json" account_id)"
-
-    if [[ "$output_account_id" == "$active_account_id" ]]; then
-      success "State stack account_id output matches active AWS account"
-    else
-      fail "State stack account_id output mismatch. Output: ${output_account_id}; active AWS account: ${active_account_id}"
-    fi
-  else
-    warn "State stack account_id output not found. STS caller identity is being used as the authoritative account check."
-  fi
-}
 check_s3_state_bucket() {
   local bucket_name="$1"
-  local expected_bucket_arn="$2"
-  local expected_kms_key_arn="$3"
 
   section "Checking bootstrap state S3 bucket"
 
@@ -303,14 +319,8 @@ check_s3_state_bucket() {
     --bucket "$bucket_name" >/dev/null
   success "State bucket exists: ${bucket_name}"
 
-  local resolved_bucket_name
-  resolved_bucket_name="$(bucket_name_from_arn "$expected_bucket_arn")"
-
-  if [[ "$resolved_bucket_name" == "$bucket_name" ]]; then
-    success "State bucket name matches Terraform bucket ARN"
-  else
-    fail "State bucket name/ARN mismatch. Name output: ${bucket_name}; ARN output: ${expected_bucket_arn}"
-  fi
+  TF_STATE_BUCKET_ARN="arn:aws:s3:::${bucket_name}"
+  success "Derived state bucket ARN from backend bucket: ${TF_STATE_BUCKET_ARN}"
 
   local versioning_status
   versioning_status="$(
@@ -382,21 +392,16 @@ check_s3_state_bucket() {
 
   require_non_empty "$bucket_kms_key_id" "state bucket KMS key ID"
 
-  local expected_key_id
-  local actual_key_id
-  expected_key_id="$(resolve_kms_key_id "$expected_kms_key_arn")"
-  actual_key_id="$(resolve_kms_key_id "$bucket_kms_key_id")"
+  TF_STATE_BUCKET_CMK_ARN="$(
+    aws kms describe-key \
+      "${aws_args[@]}" \
+      --key-id "$bucket_kms_key_id" \
+      --query 'KeyMetadata.Arn' \
+      --output text 2>/dev/null || true
+  )"
 
-  if [[ -n "$expected_key_id" && -n "$actual_key_id" && "$expected_key_id" == "$actual_key_id" ]]; then
-    success "State bucket encryption uses expected CMK"
-  else
-    local message="State bucket KMS key does not resolve to expected CMK. Bucket: ${bucket_kms_key_id}; Terraform output: ${expected_kms_key_arn}"
-    if [[ "$STRICT_STATE_BUCKET_KMS_MATCH" == "true" ]]; then
-      fail "$message"
-    else
-      warn "$message"
-    fi
-  fi
+  require_non_empty "$TF_STATE_BUCKET_CMK_ARN" "state bucket CMK ARN from bucket encryption configuration"
+  success "Resolved state bucket encryption CMK from bucket configuration: ${TF_STATE_BUCKET_CMK_ARN}"
 }
 
 check_kms_key() {
@@ -757,18 +762,13 @@ validate_state_stack_local_backend "$STATE_DIR"
 validate_backend_locking "${ACCOUNT_DIR}/backend.tf" "bootstrap/${ENV_NAME}/account"
 validate_backend_locking "${ENV_DIR}/backend.tf" "environments/${ENV_NAME}"
 
-STATE_OUTPUTS_JSON="$(terraform_output_json_required "$STATE_DIR" "bootstrap/${ENV_NAME}/state")"
-validate_state_outputs "$STATE_OUTPUTS_JSON" "$ACTIVE_ACCOUNT_ID"
+validate_backend_state_config "${ACCOUNT_DIR}/backend.tf" "${ENV_DIR}/backend.tf"
 
-TF_STATE_BUCKET_ARN="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_bucket_arn)"
-TF_STATE_BUCKET_NAME="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_bucket_name)"
-TF_STATE_BUCKET_CMK_ARN="$(get_output_string "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn)"
+require_non_empty "$TF_STATE_BUCKET_NAME" "Terraform state bucket name resolved from backend files"
+require_non_empty "$TF_STATE_BUCKET_ARN" "Terraform state bucket ARN resolved from backend files"
 
-require_non_empty "$TF_STATE_BUCKET_ARN" "Terraform state bucket ARN"
-require_non_empty "$TF_STATE_BUCKET_NAME" "Terraform state bucket name"
-require_non_empty "$TF_STATE_BUCKET_CMK_ARN" "Terraform state CMK ARN"
-
-check_s3_state_bucket "$TF_STATE_BUCKET_NAME" "$TF_STATE_BUCKET_ARN" "$TF_STATE_BUCKET_CMK_ARN"
+check_s3_state_bucket "$TF_STATE_BUCKET_NAME"
+require_non_empty "$TF_STATE_BUCKET_CMK_ARN" "Terraform state CMK ARN resolved from bucket encryption"
 check_kms_key "$TF_STATE_BUCKET_CMK_ARN"
 
 ACCOUNT_OUTPUTS_JSON="$(terraform_output_json_required "$ACCOUNT_DIR" "bootstrap/${ENV_NAME}/account")"
@@ -817,7 +817,6 @@ Name prefix:                       ${NAME_PREFIX}
 State bucket:                      ${TF_STATE_BUCKET_NAME}
 State bucket ARN:                  ${TF_STATE_BUCKET_ARN}
 State CMK ARN:                     ${TF_STATE_BUCKET_CMK_ARN}
-State locking mode:                S3 native lockfile (use_lockfile = true)
 GitHub plan role ARN:              ${PLAN_ROLE_ARN:-<not validated>}
 GitHub apply role ARN:             ${APPLY_ROLE_ARN:-<not validated>}
 Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
