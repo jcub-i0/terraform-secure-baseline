@@ -729,16 +729,21 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.3.3
+### v1.3.4
 
-This release expands validation coverage to the control plane and improves validation evidence readiness.
+This release completes the validation architecture cleanup by organizing validation into workload bootstrap, workload baseline, and control-plane validation layers while standardizing Terraform state-locking validation around S3 native lockfiles.
 
 Highlights:
 
-- Added automated read-only control-plane validation with `validate-control-plane.sh`.
-- Validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations OU structure, and IAM Identity Center basics.
-- Added optional validation for workload account IDs, Identity Center account assignments, and expected GitHub repository trust conditions.
-- Updated validation documentation to distinguish automated workload validation, automated control-plane validation, and manual live workflow testing.
+- Added automated workload bootstrap validation with `validate-bootstrap.sh`.
+- Added CI-safe bootstrap validation that does not require local `terraform.tfstate` from `bootstrap/<env>/state`.
+- Updated bootstrap validation to derive the Terraform state bucket from remote backend files and validate live S3/KMS configuration through AWS APIs.
+- Added/standardized automated read-only control-plane validation with `validate-control-plane.sh`.
+- Validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations OU structure, IAM Identity Center basics, optional account assignments, and expected GitHub repository trust conditions.
+- Standardized backend locking validation around Terraform S3 native locking with `use_lockfile = true`.
+- Renamed workload baseline validation from `validate-all.sh` to `validate-baseline.sh`, with `validate-all.sh` retained as a deprecated compatibility wrapper.
+- Added validation script documentation under `scripts/validation/README.md`.
+- Updated validation documentation to distinguish workload bootstrap validation, workload baseline validation, control-plane validation, and manual live workflow testing.
 - Preserved manual-only status for GitHub Actions execution, end-user SSO testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
