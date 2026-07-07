@@ -203,6 +203,8 @@ The **environment** stacks manage:
 │       │   └── common.sh
 │       ├── validate-baseline.sh
 │       ├── validate-backup.sh
+│       ├── validate-bootstrap.sh
+│       ├── validate-control-plane.sh
 │       ├── validate-compute.sh
 │       ├── validate-env.sh
 │       ├── validate-eventbridge.sh
