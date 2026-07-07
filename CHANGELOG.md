@@ -2,11 +2,40 @@
 
 ## v1.3.4
 
+This release cleans up validation architecture, adds CI-safe workload bootstrap validation, and standardizes Terraform state-locking validation around S3 native lockfiles.
+
 ### Added
+
+- Added automated workload bootstrap validation with `scripts/validation/validate-bootstrap.sh`.
+- Added validation coverage for workload bootstrap directory structure, backend lockfile configuration, state bucket security, state CMK configuration, GitHub OIDC roles, and GitHub role access to Terraform state resources.
+- Added CI-safe bootstrap validation behavior that does not require local `terraform.tfstate` from `bootstrap/<env>/state`.
+- Added backend-file-based state bucket resolution for workload bootstrap validation.
+- Added live S3 and KMS validation for Terraform state bucket versioning, public access block, SSE-KMS encryption, and customer-managed state CMK status.
+- Added validation that workload remote backends use Terraform S3 native locking with `use_lockfile = true`.
+- Added `scripts/validation/README.md` to document validation layers, usage, safety boundaries, troubleshooting, and recommended validation order.
 
 ### Changed
 
-- Changed the name of `scripts/validation/validate-all.sh` to `scripts/validation/validate-baseline.sh`
+- Renamed `scripts/validation/validate-all.sh` to `scripts/validation/validate-baseline.sh`.
+- Preserved `scripts/validation/validate-all.sh` as a deprecated compatibility wrapper for `validate-baseline.sh`.
+- Updated validation documentation to distinguish workload bootstrap validation, workload baseline validation, and control-plane validation.
+- Updated root-level README validation guidance to describe all three validation layers.
+- Updated `docs/validation-checklist.md` to reflect CI-safe bootstrap validation and S3 native lockfile behavior.
+- Changed bootstrap validation to treat remote backend files as the source of truth for state bucket location, backend region, state object keys, and `use_lockfile = true`.
+- Changed bootstrap validation to resolve the state CMK from the live S3 bucket encryption configuration instead of relying on local bootstrap state outputs.
+- Standardized validation language around Terraform S3 native locking with `use_lockfile = true`.
+
+### Removed
+
+- Removed stale DynamoDB state-locking expectations from validation guidance.
+- Removed the bootstrap validator’s dependency on local Terraform outputs from `bootstrap/<env>/state`.
+- Removed local `terraform.tfstate` presence checks from workload bootstrap validation.
+
+### Notes
+
+DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
+
+`validate-bootstrap.sh` remains read-only. It does not run `terraform init`, `terraform apply`, `terraform destroy`, backend migration, role assumption, or live workflow execution. For fresh checkouts or manual GitHub workflow runs, initialize the remote-backed account and workload stacks before running bootstrap validation so Terraform outputs can be read from the S3 backend.
 
 ## v1.3.3
 
