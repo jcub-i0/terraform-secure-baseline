@@ -51,7 +51,7 @@ control-plane
 Recommended validation order:
 
 1. Confirm AWS profile/account variables.
-2. Run automated workload validation with `validate-all.sh` for each deployed workload environment.
+2. Run automated workload validation with `validate-baseline.sh` for each deployed workload environment.
 3. Run automated control-plane validation with `validate-control-plane.sh`.
 4. Review any control-plane warnings, especially AWS Organizations account placement warnings.
 5. Validate GitHub Actions workflows manually.
@@ -129,7 +129,7 @@ scripts/validation/
 The primary command is:
 
 ```bash
-./scripts/validation/validate-all.sh <dev|staging|prod>
+./scripts/validation/validate-baseline.sh <dev|staging|prod>
 ```
 
 Set `EXPECTED_ACCOUNT_ID` when running validation so the scripts can confirm that the selected AWS profile is pointed at the correct workload account.
@@ -141,7 +141,7 @@ AWS_PAGER="" \
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/validation/validate-all.sh dev
+./scripts/validation/validate-baseline.sh dev
 ```
 
 ### Staging
@@ -151,7 +151,7 @@ AWS_PAGER="" \
 AWS_PROFILE=staging \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
-./scripts/validation/validate-all.sh staging
+./scripts/validation/validate-baseline.sh staging
 ```
 
 ### Prod
@@ -161,7 +161,7 @@ AWS_PAGER="" \
 AWS_PROFILE=prod \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
-./scripts/validation/validate-all.sh prod
+./scripts/validation/validate-baseline.sh prod
 ```
 
 If a non-default naming convention is used, pass `NAME_PREFIX` explicitly:
@@ -172,12 +172,12 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 NAME_PREFIX="tf-secure-baseline-dev" \
-./scripts/validation/validate-all.sh dev
+./scripts/validation/validate-baseline.sh dev
 ```
 
 ### Automated Validation Coverage
 
-`validate-all.sh` runs the following safe, read-only workload validation scripts all at once:
+`validate-baseline.sh` runs the following safe, read-only workload validation scripts all at once:
 
 ```text
 validate-env.sh
