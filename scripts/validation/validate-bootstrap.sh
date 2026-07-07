@@ -426,7 +426,7 @@ check_kms_key() {
   key_manager="$(echo "$key_json" | jq -r '.KeyMetadata.KeyManager')"
 
   if [[ "$key_arn" == "$kms_key_arn" ]]; then
-    success "State CMK ARN matches Terraform output"
+    success "State CMK ARN is valid"
   else
     fail "State CMK ARN mismatch. Expected ${kms_key_arn}, got ${key_arn}"
   fi
