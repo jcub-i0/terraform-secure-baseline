@@ -222,6 +222,21 @@ check_s3_state_bucket() {
   fi
 }
 
+validate_backend_locking() {
+  local backend_file="$1"
+  local description="$2"
+
+  section "Checking ${description} backend locking"
+
+  require_file "$backend_file"
+
+  if grep -Eq '^[[:space:]]*use_lockfile[[:space:]]*=[[:space:]]*true' "$backend_file"; then
+    success "${description} backend uses S3 native lockfile: use_lockfile = true"
+  else
+    fail "${description} backend does not set use_lockfile = true"
+  fi
+}
+
 check_kms_key() {
   local kms_key_arn="$1"
 
