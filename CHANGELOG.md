@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.4
+
+### Added
+
+### Changed
+
+- Changed the name of `scripts/validation/validate-all.sh` to `scripts/validation/validate-baseline.sh`
+
 ## v1.3.3
 
 ### Added
