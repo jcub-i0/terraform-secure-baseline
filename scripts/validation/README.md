@@ -123,7 +123,7 @@ environments/<env>
   - use_lockfile = true
 ```
 
-DynamoDB state locking is not expected for the current architecture.
+DynamoDB state locking is not expected for the current architecture. This project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
 
 ### Dev
 
