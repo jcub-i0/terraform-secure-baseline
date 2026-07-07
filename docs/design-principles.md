@@ -337,6 +337,7 @@ Examples of services commonly accessed through VPC endpoints include:
 - Lambda
 - EventBridge
 - SNS
+- SQS
 - STS
 
 Interface VPC Endpoints are deployed into dedicated private endpoint subnets.

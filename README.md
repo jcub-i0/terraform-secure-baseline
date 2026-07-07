@@ -201,8 +201,10 @@ The **environment** stacks manage:
 │   └── validation
 │       ├── lib
 │       │   └── common.sh
-│       ├── validate-all.sh
+│       ├── validate-baseline.sh
 │       ├── validate-backup.sh
+│       ├── validate-bootstrap.sh
+│       ├── validate-control-plane.sh
 │       ├── validate-compute.sh
 │       ├── validate-env.sh
 │       ├── validate-eventbridge.sh
@@ -521,46 +523,91 @@ docs/quickstart.md
 
 ## Validation
 
-The repository includes a safe, read-only workload validation suite under:
+The repository includes safe, read-only validation scripts under:
 
 ```text
 scripts/validation/
 ```
 
-The primary validation entry point is:
+Validation is split into three layers:
 
-```bash
-./scripts/validation/validate-all.sh <dev|staging|prod>
+```text
+Workload bootstrap validation  -> validate-bootstrap.sh <dev|staging|prod>
+Workload baseline validation   -> validate-baseline.sh <dev|staging|prod>
+Control-plane validation       -> validate-control-plane.sh
 ```
 
-Example:
+### Workload Bootstrap Validation
+
+Use `validate-bootstrap.sh` to validate workload bootstrap resources such as Terraform state backend configuration, state bucket security, state CMK configuration, GitHub OIDC roles, and GitHub role access to state and workload-created CMKs.
 
 ```bash
 AWS_PAGER="" \
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/validation/validate-all.sh dev
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+./scripts/validation/validate-bootstrap.sh dev
 ```
 
-The validation suite checks deployed workload environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture. It also validates notification and failure-retention paths such as SNS subscriptions, SQS queues, EventBridge target DLQs, retry policies, and Lambda workflow wiring.
+`validate-bootstrap.sh` does not require local `terraform.tfstate` from `bootstrap/<env>/state`. It treats the remote backend files as the source of truth for state bucket location and S3 native locking with `use_lockfile = true`, then validates the live S3 state bucket and KMS encryption configuration through AWS APIs.
 
-A successful validation run should end with:
+When running from a fresh checkout or a manual GitHub workflow, initialize the remote-backed stacks first so Terraform outputs can be read from the S3 backend:
 
 ```bash
+terraform -chdir=bootstrap/dev/account init -input=false
+terraform -chdir=environments/dev init -input=false
+```
+
+### Workload Baseline Validation
+
+Use `validate-baseline.sh` to validate deployed workload baseline resources.
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/validation/validate-baseline.sh dev
+```
+
+The workload baseline validation suite checks deployed environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture. It also validates notification and failure-retention paths such as SNS subscriptions, SQS queues, EventBridge target DLQs, retry policies, and Lambda workflow wiring.
+
+A successful workload baseline validation run should end with:
+
+```text
 Validation scripts passed:  14/14
 Validation scripts failed:  0/14
 ```
 
 Individual scripts can also be run directly when troubleshooting a specific architecture area.
 
+### Control-Plane Validation
+
+Use `validate-control-plane.sh` to validate control-plane bootstrap and governance resources.
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=control-plane \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+./scripts/validation/validate-control-plane.sh
+```
+
+Control-plane validation checks state backend resources, GitHub OIDC roles, AWS Organizations OU structure, IAM Identity Center instance discovery, permission sets, groups, and optional account assignment presence.
+
 Detailed validation guidance is provided in:
 
 ```text
+scripts/validation/README.md
 docs/validation-checklist.md
 ```
 
-The automated validation suite is intentionally read-only. Live workflow tests, tamper tests, break-glass tests, Identity Center assignment checks, GitHub Actions workflow checks, and destroy safety review remain manual validation steps.
+The automated validation scripts are intentionally read-only. GitHub Actions workflow execution, end-user Identity Center login testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review remain manual validation steps.
 
 ### Validation Reporting
 
@@ -682,16 +729,21 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.3.3
+### v1.3.4
 
-This release expands validation coverage to the control plane and improves validation evidence readiness.
+This release completes the validation architecture cleanup by organizing validation into workload bootstrap, workload baseline, and control-plane validation layers while standardizing Terraform state-locking validation around S3 native lockfiles.
 
 Highlights:
 
-- Added automated read-only control-plane validation with `validate-control-plane.sh`.
-- Validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations OU structure, and IAM Identity Center basics.
-- Added optional validation for workload account IDs, Identity Center account assignments, and expected GitHub repository trust conditions.
-- Updated validation documentation to distinguish automated workload validation, automated control-plane validation, and manual live workflow testing.
+- Added automated workload bootstrap validation with `validate-bootstrap.sh`.
+- Added CI-safe bootstrap validation that does not require local `terraform.tfstate` from `bootstrap/<env>/state`.
+- Updated bootstrap validation to derive the Terraform state bucket from remote backend files and validate live S3/KMS configuration through AWS APIs.
+- Added/standardized automated read-only control-plane validation with `validate-control-plane.sh`.
+- Validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations OU structure, IAM Identity Center basics, optional account assignments, and expected GitHub repository trust conditions.
+- Standardized backend locking validation around Terraform S3 native locking with `use_lockfile = true`.
+- Renamed workload baseline validation from `validate-all.sh` to `validate-baseline.sh`, with `validate-all.sh` retained as a deprecated compatibility wrapper.
+- Added validation script documentation under `scripts/validation/README.md`.
+- Updated validation documentation to distinguish workload bootstrap validation, workload baseline validation, control-plane validation, and manual live workflow testing.
 - Preserved manual-only status for GitHub Actions execution, end-user SSO testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.

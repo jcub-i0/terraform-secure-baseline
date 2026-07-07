@@ -110,22 +110,6 @@ data "aws_iam_policy_document" "github_plan" {
   }
 
   dynamic "statement" {
-    for_each = var.tf_state_lock_table_arn != null ? [var.tf_state_lock_table_arn] : []
-
-    content {
-      sid    = "TerraformStateLockAccess"
-      effect = "Allow"
-      actions = [
-        "dynamodb:GetItem",
-        "dynamodb:PutItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:UpdateItem"
-      ]
-      resources = [statement.value]
-    }
-  }
-
-  dynamic "statement" {
     for_each = var.tf_state_bucket_cmk_arn != null ? [var.tf_state_bucket_cmk_arn] : []
 
     content {
@@ -256,22 +240,6 @@ data "aws_iam_policy_document" "github_apply" {
     effect    = "Allow"
     actions   = ["secretsmanager:GetRandomPassword"]
     resources = ["*"]
-  }
-
-  dynamic "statement" {
-    for_each = var.tf_state_lock_table_arn != null ? [var.tf_state_lock_table_arn] : []
-
-    content {
-      sid    = "TerraformStateLockAccess"
-      effect = "Allow"
-      actions = [
-        "dynamodb:GetItem",
-        "dynamodb:PutItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:UpdateItem"
-      ]
-      resources = [statement.value]
-    }
   }
 
   dynamic "statement" {

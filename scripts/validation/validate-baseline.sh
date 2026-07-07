@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-# validate-all.sh
+# validate-baseline.sh
 #
 # Runs the full tf-secure-baseline post-deployment validation suite for a single
 # environment.
 #
 # Usage:
-#   ./scripts/validation/validate-all.sh dev
+#   ./scripts/validation/validate-baseline.sh dev
 #
 # Optional:
-#   AWS_PROFILE=dev AWS_REGION=us-east-1 ./scripts/validation/validate-all.sh dev
+#   AWS_PROFILE=dev AWS_REGION=us-east-1 ./scripts/validation/validate-baseline.sh dev
 #
 # Optional override:
-#   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-all.sh dev
+#   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-baseline.sh dev
 
 set -euo pipefail
 

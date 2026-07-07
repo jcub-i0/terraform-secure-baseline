@@ -22,7 +22,7 @@ The validation evidence can support:
 The recommended validation evidence workflow is:
 
 1. Deploy or update the target workload environment.
-2. Run automated workload validation using `scripts/validation/validate-all.sh`.
+2. Run automated workload validation using `scripts/validation/validate-baseline.sh`.
 3. Export workload validation evidence using `scripts/validation/export-report.sh`.
 4. Run automated control-plane validation using `scripts/validation/validate-control-plane.sh`.
 5. Review the generated workload `summary.md`.
