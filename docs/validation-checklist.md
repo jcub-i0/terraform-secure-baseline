@@ -176,15 +176,31 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 
 - AWS caller identity and expected workload account ID
 - `bootstrap/<env>/state` and `bootstrap/<env>/account` directory structure
-- required bootstrap state Terraform outputs
+- `bootstrap/<env>/state` preserving the local-state bootstrap pattern by not defining `backend.tf`
+- `bootstrap/<env>/account/backend.tf` using `use_lockfile = true`
+- `environments/<env>/backend.tf` using `use_lockfile = true`
+- backend files resolving a shared Terraform state bucket, backend region, and distinct state keys
 - Terraform state S3 bucket existence, versioning, encryption, and public access block settings
+- Terraform state KMS CMK resolution from the live bucket encryption configuration
 - Terraform state KMS CMK existence, key state, and customer-managed status
-- S3 native backend locking via `use_lockfile = true` in remote-backed workload stacks
 - GitHub OIDC provider existence
 - workload GitHub plan/apply role existence
 - GitHub OIDC trust policy conditions for the expected repository and GitHub environments
-- GitHub role policy access to the Terraform state bucket and state CMK
+- GitHub role policy access to the Terraform state bucket, state objects including `.tflock` objects, and state CMK
 - GitHub Apply role access to workload-created Lambda and Secrets Manager CMKs, where required
+
+`validate-bootstrap.sh` does not require local `terraform.tfstate` from `bootstrap/<env>/state`. This keeps the script compatible with fresh checkouts and manual GitHub workflow runs.
+
+For bootstrap validation, the remote backend files are the source of truth for:
+
+```text
+state bucket name
+state backend region
+state object keys
+use_lockfile = true
+```
+
+The script derives the state bucket from the backend files, then validates the live S3 bucket and KMS encryption configuration through AWS APIs.
 
 The workload bootstrap architecture uses S3 native state locking. DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
 
@@ -198,6 +214,23 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
+
+### GitHub Workflow Usage
+
+`validate-bootstrap.sh` is read-only and does not run `terraform init`. For manual GitHub workflow usage, initialize the remote-backed stacks first so Terraform outputs can be read from the S3 backend:
+
+```bash
+terraform -chdir=bootstrap/dev/account init -input=false
+terraform -chdir=environments/dev init -input=false
+
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+./scripts/validation/validate-bootstrap.sh dev
+```
+
+Repeat with the matching profile, account ID, and environment name for `staging` and `prod`.
 
 ## Automated Workload Baseline Validation
 
@@ -517,20 +550,6 @@ Expected:
 use_lockfile = true
 ```
 
-Confirm that `dynamodb_table` is not configured in remote backend files:
-
-```bash
-grep -R "dynamodb_table" \
-  "bootstrap/${ENVIRONMENT}/account/backend.tf" \
-  "environments/${ENVIRONMENT}/backend.tf"
-```
-
-Expected:
-
-```text
-no output
-```
-
 ## Terraform Init Check
 
 From the target stack directory:
@@ -549,7 +568,6 @@ Expected:
 - S3 state bucket exists.
 - KMS encryption is configured.
 - Remote-backed stacks use `use_lockfile = true`.
-- Remote-backed stacks do not use `dynamodb_table`.
 - Terraform can initialize successfully in stacks that use the backend.
 
 ---
@@ -2311,15 +2329,33 @@ Check:
 - `AWS_PROFILE` is set to the target workload account profile.
 - `EXPECTED_ACCOUNT_ID` matches the target workload account ID.
 - `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the workload GitHub OIDC roles.
-- `bootstrap/<env>/state` has been applied and has current Terraform outputs.
+- `bootstrap/<env>/state` has been applied at least once to create the state bucket and state CMK.
+- `bootstrap/<env>/state` does not define `backend.tf`.
 - `bootstrap/<env>/account` has been applied with GitHub OIDC enabled.
 - `bootstrap/<env>/account/backend.tf` includes `use_lockfile = true`.
 - `environments/<env>/backend.tf` includes `use_lockfile = true`.
+- The backend files resolve the intended state bucket, backend region, and distinct state keys.
 - The state S3 bucket exists, has versioning enabled, has public access block enabled, and uses SSE-KMS.
-- The state CMK exists, is enabled, and is customer-managed.
+- The state CMK can be resolved from the bucket encryption configuration, is enabled, and is customer-managed.
+- Remote-backed stacks have been initialized before running validation from a fresh checkout or GitHub workflow.
 - The GitHub Apply role has been re-applied after workload deployment with `lambda_cmk_arn` and `secrets_manager_cmk_arn` set.
 
 If Terraform suddenly wants to create existing bootstrap/account resources, stop and confirm the S3 backend bucket and key point to the intended state object before applying.
+
+---
+
+## Bootstrap Validation Cannot Read Terraform Outputs
+
+`validate-bootstrap.sh` does not read Terraform outputs from `bootstrap/<env>/state`, but it does read outputs from the remote-backed account and workload stacks.
+
+Before running bootstrap validation from a fresh checkout or GitHub workflow, initialize the remote-backed stacks:
+
+```bash
+terraform -chdir=bootstrap/<env>/account init -input=false
+terraform -chdir=environments/<env> init -input=false
+```
+
+If output reads still fail, confirm that the selected AWS principal has access to the configured S3 backend bucket, state object key, `.tflock` object, and state CMK.
 
 ---
 
