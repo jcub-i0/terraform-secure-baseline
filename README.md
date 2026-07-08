@@ -172,8 +172,10 @@ The **environment** stacks manage:
 │
 ├── modules
 │   ├── automation
+|   |   └── lambda
 │   ├── backup
 │   ├── compute
+|   |   └── user_data
 │   ├── firewall
 │   ├── github_oidc
 │   ├── iam
@@ -181,8 +183,11 @@ The **environment** stacks manage:
 │   ├── logging
 │   ├── monitoring
 │   ├── networking
+|   │   └── security_policy
 │   ├── patch_management
 │   ├── security
+|   |   ├── config_baseline
+|   |   └── tamper_detection
 │   ├── security_dashboard
 │   ├── state
 │   ├── storage
@@ -201,8 +206,9 @@ The **environment** stacks manage:
 │   └── validation
 │       ├── lib
 │       │   └── common.sh
-│       ├── validate-baseline.sh
+|       ├── export-report.sh
 │       ├── validate-backup.sh
+│       ├── validate-baseline.sh
 │       ├── validate-bootstrap.sh
 │       ├── validate-control-plane.sh
 │       ├── validate-compute.sh
