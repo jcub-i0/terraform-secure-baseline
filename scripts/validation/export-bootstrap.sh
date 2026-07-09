@@ -41,3 +41,18 @@ PASSED_COUNT=0
 FAILED_COUNT=0
 TOTAL_COUNT=1
 
+section "tf-secure-baseline Workload Bootstrap Validation Report Export"
+
+section "Checking required local commands"
+
+require_command "aws"
+success "aws CLI found"
+
+require_command "terraform"
+success "terraform found"
+
+require_command "jq"
+success "jq found"
+
+require_command "git"
+success "git found"
