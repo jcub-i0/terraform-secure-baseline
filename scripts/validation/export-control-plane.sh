@@ -164,3 +164,94 @@ else
   OVERALL_RESULT="PASS"
 fi
 
+section "Generating JSON summary"
+
+jq -n \
+  --arg project "$CLOUD_NAME" \
+  --arg report_type "validation_report" \
+  --arg validation_layer "$VALIDATION_LAYER" \
+  --arg validation_layer_display "Control Plane" \
+  --arg control_plane_environment "$CONTROL_PLANE_ENV_NAME" \
+  --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_region "$AWS_REGION" \
+  --arg aws_account_id "$AWS_ACCOUNT_ID" \
+  --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
+  --arg name_prefix "$NAME_PREFIX" \
+  --arg validation_time "$VALIDATION_TIME" \
+  --arg overall_result "$OVERALL_RESULT" \
+  --arg expected_github_repository "$EXPECTED_GITHUB_REPOSITORY" \
+  --arg require_control_plane_github_oidc "$REQUIRE_CONTROL_PLANE_GITHUB_OIDC" \
+  --arg check_optional_secops_groups "$CHECK_OPTIONAL_SECOPS_GROUPS" \
+  --arg strict_identity_center_assignments "$STRICT_IDENTITY_CENTER_ASSIGNMENTS" \
+  --arg strict_account_ou_checks "$STRICT_ACCOUNT_OU_CHECKS" \
+  --arg account_id_dev "$ACCOUNT_ID_DEV" \
+  --arg account_id_staging "$ACCOUNT_ID_STAGING" \
+  --arg account_id_prod "$ACCOUNT_ID_PROD" \
+  --argjson scripts_passed "$PASSED_COUNT" \
+  --argjson scripts_failed "$FAILED_COUNT" \
+  --argjson scripts_total "$TOTAL_COUNT" \
+  --slurpfile results "$RESULTS_JSONL" \
+  '{
+    project: $project,
+    report_type: $report_type,
+    validation_layer: $validation_layer,
+    validation_layer_display: $validation_layer_display,
+    control_plane_environment: $control_plane_environment,
+    aws_profile: $aws_profile,
+    aws_region: $aws_region,
+    aws_account_id: $aws_account_id,
+    expected_account_id: $expected_account_id,
+    name_prefix: $name_prefix,
+    validation_time: $validation_time,
+    overall_result: $overall_result,
+    scripts_passed: $scripts_passed,
+    scripts_failed: $scripts_failed,
+    scripts_total: $scripts_total,
+    settings: {
+      expected_github_repository: $expected_github_repository,
+      require_control_plane_github_oidc: $require_control_plane_github_oidc,
+      check_optional_secops_groups: $check_optional_secops_groups,
+      strict_identity_center_assignments: $strict_identity_center_assignments,
+      strict_account_ou_checks: $strict_account_ou_checks,
+      account_id_dev: $account_id_dev,
+      account_id_staging: $account_id_staging,
+      account_id_prod: $account_id_prod
+    },
+    results: $results,
+    validation_scope: [
+      "control_plane_aws_identity",
+      "control_plane_stack_directories",
+      "control_plane_backend_locking",
+      "control_plane_state_outputs",
+      "control_plane_state_bucket_security",
+      "control_plane_state_bucket_versioning",
+      "control_plane_state_bucket_public_access_block",
+      "control_plane_state_bucket_sse_kms_encryption",
+      "control_plane_state_cmk_status",
+      "control_plane_github_oidc_provider",
+      "control_plane_github_plan_role",
+      "control_plane_github_apply_role",
+      "github_repository_trust_conditions",
+      "aws_organizations_root",
+      "aws_organizations_ou_structure",
+      "optional_workload_account_ou_placement",
+      "identity_center_instance",
+      "identity_center_groups",
+      "identity_center_permission_sets",
+      "optional_identity_center_account_assignments"
+    ],
+    manual_validation_remaining: [
+      "workload_bootstrap_validation",
+      "workload_baseline_validation",
+      "github_actions_workflows",
+      "end_user_sso_login",
+      "live_ec2_isolation",
+      "live_ec2_rollback",
+      "live_ip_enrichment",
+      "tamper_detection",
+      "break_glass",
+      "destroy_safety"
+    ]
+  }' > "$SUMMARY_JSON"
+
+success "JSON summary written: ${SUMMARY_JSON}"
