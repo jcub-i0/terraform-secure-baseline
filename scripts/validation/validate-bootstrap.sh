@@ -61,34 +61,6 @@ EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
 # they indicate the bootstrap account stack may not be reconciled with the current
 # workload-created Lambda and Secrets Manager CMK ARNs.
 # Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=false to make those findings advisory.
-#
-# Backward compatibility:
-# - REQUIRE_WORKLOAD_CMK_PERMS=true maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=true.
-# - REQUIRE_WORKLOAD_CMK_PERMS=false maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=false.
-# - WORKLOAD_CMK_POLICY_CHECK_MODE=strict maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=true.
-# - WORKLOAD_CMK_POLICY_CHECK_MODE=advisory maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=false.
-if [[ -z "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" ]]; then
-  if [[ "${REQUIRE_WORKLOAD_CMK_PERMS+x}" == "x" ]]; then
-    if [[ "$REQUIRE_WORKLOAD_CMK_PERMS" == "true" ]]; then
-      STRICT_WORKLOAD_CMK_POLICY_CHECKS="true"
-    elif [[ "$REQUIRE_WORKLOAD_CMK_PERMS" == "false" ]]; then
-      STRICT_WORKLOAD_CMK_POLICY_CHECKS="false"
-    else
-      fail "Invalid REQUIRE_WORKLOAD_CMK_PERMS: ${REQUIRE_WORKLOAD_CMK_PERMS}. Expected true or false."
-    fi
-  elif [[ "${WORKLOAD_CMK_POLICY_CHECK_MODE+x}" == "x" ]]; then
-    if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
-      STRICT_WORKLOAD_CMK_POLICY_CHECKS="true"
-    elif [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "advisory" ]]; then
-      STRICT_WORKLOAD_CMK_POLICY_CHECKS="false"
-    else
-      fail "Invalid WORKLOAD_CMK_POLICY_CHECK_MODE: ${WORKLOAD_CMK_POLICY_CHECK_MODE}. Expected advisory or strict."
-    fi
-  else
-    STRICT_WORKLOAD_CMK_POLICY_CHECKS="false"
-  fi
-fi
-
 case "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" in
   true|false)
     ;;
