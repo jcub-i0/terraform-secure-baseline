@@ -207,3 +207,119 @@ jq -n \
   }' > "$SUMMARY_JSON"
 
 success "JSON summary written: ${SUMMARY_JSON}"
+
+section "Generating Markdown summary"
+
+{
+  echo "# tf-secure-baseline Workload Bootstrap Validation Report"
+  echo
+  echo "This report summarizes automated read-only workload bootstrap validation results for the \`$ENV_NAME\` environment."
+  echo
+  echo "## Executive Summary"
+  echo
+  echo "| Field | Value |"
+  echo "|---|---|"
+  echo "| Overall result | **${OVERALL_RESULT}** |"
+  echo "| Validation layer | Workload Bootstrap |"
+  echo "| Validation scripts passed | **${PASSED_COUNT}/${TOTAL_COUNT}** |"
+  echo "| Validation scripts failed | **${FAILED_COUNT}/${TOTAL_COUNT}** |"
+  echo "| Report Package Location | \`${RELATIVE_OUTPUT_DIR}/\` |"
+  echo
+  echo "## Environment"
+  echo
+  echo "| Field | Value |"
+  echo "|---|---|"
+  echo "| Project | tf-secure-baseline |"
+  echo "| Environment | ${ENV_NAME} |"
+  echo "| Validation Layer | Workload Bootstrap |"
+  echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
+  echo "| AWS Region | ${AWS_REGION} |"
+  echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
+  echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
+  echo "| Name Prefix | ${NAME_PREFIX} |"
+  echo "| Validation Time | ${VALIDATION_TIME} |"
+  echo "| Overall Result | ${OVERALL_RESULT} |"
+  echo "| Scripts Passed | ${PASSED_COUNT}/${TOTAL_COUNT} |"
+  echo "| Scripts Failed | ${FAILED_COUNT}/${TOTAL_COUNT} |"
+  echo
+  echo "## Validation Summary"
+  echo
+  echo "| Area | Script | Result | Log |"
+  echo "|---|---|---|---|"
+
+  jq -r '
+    .results[]
+    | "| \(.area) | `\(.script)` | \(.result) | `\(.log_file)` |"
+  ' "$SUMMARY_JSON"
+
+  echo
+  echo "## Automated Validation Scope"
+  echo
+  echo "This workload bootstrap validation report covers:"
+  echo
+  echo "- Workload bootstrap directory structure"
+  echo "- Local-state bootstrap pattern for the state bootstrap stack"
+  echo "- Remote backend file presence and parsing"
+  echo "- Terraform S3 native locking configuration with \`use_lockfile = true\`"
+  echo "- Distinct account and workload state object keys"
+  echo "- State bucket existence and security configuration"
+  echo "- State bucket versioning"
+  echo "- State bucket public access block"
+  echo "- State bucket SSE-KMS encryption"
+  echo "- Customer-managed state CMK status"
+  echo "- GitHub OIDC provider presence"
+  echo "- Workload GitHub Plan and Apply roles"
+  echo "- GitHub repository trust conditions"
+  echo "- GitHub environment subject conditions"
+  echo "- GitHub role access to state bucket resources"
+  echo "- GitHub role access to \`.tflock\` objects"
+  echo "- GitHub role access to the state CMK"
+  echo "- GitHub Apply role access to workload-created Lambda and Secrets Manager CMKs when required"
+  echo
+  echo "## Manual Validation Remaining"
+  echo
+  echo "The automated workload bootstrap validation export is intentionally read-only. The following checks remain outside this report:"
+  echo
+  echo "- Workload baseline validation"
+  echo "- Control-plane validation"
+  echo "- GitHub Actions workflow execution validation"
+  echo "- IAM Identity Center assignment validation"
+  echo "- Live EC2 isolation test"
+  echo "- Live EC2 rollback test"
+  echo "- Live IP enrichment test"
+  echo "- Tamper detection test"
+  echo "- Break-glass role assumption test"
+  echo "- Destroy safety review"
+  echo
+  echo "## Evidence Files"
+  echo
+  echo "This report directory contains the generated workload bootstrap validation summary files and per-script log."
+  echo
+  echo "| File | Purpose |"
+  echo "|---|---|"
+  echo "| \`summary.md\` | Human-readable workload bootstrap validation report |"
+  echo "| \`summary.json\` | Machine-readable workload bootstrap validation summary |"
+
+  jq -r '
+    .results[]
+    | "| `\(.log_file)` | Log output for `\(.script)` |"
+  ' "$SUMMARY_JSON"
+
+  echo
+  echo "## Limitations"
+  echo
+  echo "This report validates selected workload bootstrap, backend locking, state backend, and GitHub OIDC readiness controls for the target environment."
+  echo
+  echo "The validation script is read-only and does not run \`terraform init\`, \`terraform apply\`, \`terraform destroy\`, backend migration, role assumption, or live GitHub workflow execution."
+  echo
+  echo "For fresh checkouts or manual GitHub workflow runs, initialize the remote-backed account and workload stacks before running bootstrap validation:"
+  echo
+  echo "\`\`\`bash"
+  echo "terraform -chdir=bootstrap/${ENV_NAME}/account init -input=false"
+  echo "terraform -chdir=environments/${ENV_NAME} init -input=false"
+  echo "\`\`\`"
+  echo
+  echo "This report does not replace a full SOC 2 or ISO 27001 audit, control owner review, policy review, evidence review, risk assessment, or ISMS."
+} > "$SUMMARY_MD"
+
+success "Markdown summary written: ${SUMMARY_MD}"
