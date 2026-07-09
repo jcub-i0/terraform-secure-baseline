@@ -115,7 +115,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 
 ### Added
 
-- Added validation report export workflow through `scripts/validation/export-report.sh`.
+- Added validation report export workflow through `scripts/validation/export-baseline.sh`.
 - Added timestamped validation result directories under `validation-results/<environment>/<timestamp>/`.
 - Added per-script validation log capture.
 - Added generated Markdown validation summaries through `summary.md`.
