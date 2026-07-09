@@ -112,7 +112,7 @@ if [[ ! -x "$SCRIPT_PATH" ]]; then
 elif "$SCRIPT_PATH" "$ENV_NAME" >"$LOG_FILE" 2>&1; then
   success "${VALIDATION_SCRIPT} passed"
   PASSED_COUNT=$((PASSED_COUNT + 1))
-  RESULT="PATH"
+  RESULT="PASS"
 else
   warn "${VALIDATION_SCRIPT} failed. See log: ${LOG_FILE}"
   FAILED_COUNT=$((FAILED_COUNT + 1))
