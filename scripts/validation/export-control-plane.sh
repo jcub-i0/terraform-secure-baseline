@@ -376,3 +376,20 @@ section "Generating Markdown summary"
   echo
   echo "This report does not replace a full SOC 2 or ISO 27001 audit, control owner review, policy review, evidence review, risk assessment, or ISMS."
 } > "$SUMMARY_MD"
+
+section "Control-Plane Validation Report Export Summary"
+
+echo "Validation layer:           Control Plane"
+echo "Control-plane env name:     ${CONTROL_PLANE_ENV_NAME}"
+echo "AWS profile:                ${AWS_PROFILE:-<default>}"
+echo "AWS region:                 ${AWS_REGION}"
+echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
+echo "Name prefix:                ${NAME_PREFIX}"
+echo
+echo "Output directory:           ${OUTPUT_DIR}"
+echo "Summary JSON:               ${SUMMARY_JSON}"
+echo "Summary Markdown:           ${SUMMARY_MD}"
+echo
+echo "Validation scripts passed:  ${PASSED_COUNT}/${TOTAL_COUNT}"
+echo "Validation scripts failed:  ${FAILED_COUNT}/${TOTAL_COUNT}"
+echo "Overall result:             ${OVERALL_RESULT}"
