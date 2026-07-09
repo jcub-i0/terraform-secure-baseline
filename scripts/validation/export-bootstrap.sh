@@ -55,3 +55,21 @@ success "jq found"
 
 require_command "git"
 success "git found"
+
+section "Resolving repository paths and report settings"
+
+info "Repository root: ${REPO_ROOT}"
+info "Environment: ${ENV_NAME}"
+info "Validation layer: ${VALIDATION_LAYER}"
+info "Output dir: ${OUTPUT_DIR}"
+info "Name prefix: ${NAME_PREFIX}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: ${AWS_REGION}"
+info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not-set>}"
+info "Validation time: ${VALIDATION_TIME}"
+
+if [[ "$NAME_PREFIX" != *"-${ENV_NAME}" ]]; then
+  warn "NAME_PREFIX does not end with -${ENV_NAME}: ${NAME_PREFIX}"
+  warn "This may be valid for custom/client deployments, but confirm it matches deployed resource names."
+fi
+
