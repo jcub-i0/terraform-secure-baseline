@@ -13,7 +13,7 @@
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-bootstrap.sh dev
 #   REQUIRE_BOOTSTRAP_GITHUB_OIDC=false ./scripts/validation/validate-bootstrap.sh dev
 #   STRICT_GITHUB_SUBJECT_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
-#   STRICT_WORKLOAD_CMK_POLICY_CHECKS=true ./scripts/validation/validate-bootstrap.sh dev
+#   STRICT_WORKLOAD_CMK_POLICY_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
 #   REQUIRE_STATE_STACK_LOCAL=false ./scripts/validation/validate-bootstrap.sh dev
 #
 # Notes:
@@ -57,8 +57,10 @@ EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
 EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
 
 # Workload-created CMK policy checks always run when workload outputs are readable.
-# By default, stale/missing workload CMK policy references are warning-level.
-# Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=true to make those findings fail validation.
+# By default, stale/missing workload CMK policy references fail validation because
+# they indicate the bootstrap account stack may not be reconciled with the current
+# workload-created Lambda and Secrets Manager CMK ARNs.
+# Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=false to make those findings advisory.
 #
 # Backward compatibility:
 # - REQUIRE_WORKLOAD_CMK_PERMS=true maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=true.
