@@ -65,7 +65,7 @@ info "Output dir: ${OUTPUT_DIR}"
 info "Name prefix: ${NAME_PREFIX}"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: ${AWS_REGION}"
-info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not-set>}"
+info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "Validation time: ${VALIDATION_TIME}"
 
 if [[ "$NAME_PREFIX" != *"-${ENV_NAME}" ]]; then
