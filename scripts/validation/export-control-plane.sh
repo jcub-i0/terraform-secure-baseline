@@ -85,3 +85,20 @@ if [[ "$NAME_PREFIX" != *"-${CONTROL_PLANE_ENV_NAME}" ]]; then
   warn "NAME_PREFIX does not end with -${CONTROL_PLANE_ENV_NAME}: ${NAME_PREFIX}"
   warn "This may be valid for custom/client deployments, but confirm it matches deployed resource names."
 fi
+
+section "Checking AWS caller identity"
+
+AWS_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+AWS_CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
+success "AWS credentials are valid"
+info "AWS account ID: ${AWS_ACCOUNT_ID}"
+info "AWS caller ARN: ${AWS_CALLER_ARN}"
+
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  if [[ "$AWS_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
+    success "AWS account ID matches expected control-plane account: ${EXPECTED_ACCOUNT_ID}"
+  else
+    fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${AWS_ACCOUNT_ID}"
+  fi
+fi
