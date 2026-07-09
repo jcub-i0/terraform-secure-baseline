@@ -7,9 +7,19 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
-AWS_PROFILE="${AWS_PROFILE:-}"
+AWS_PROFILE="${AWS_PROFILE:-$ENV_NAME}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
+EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
+
+REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
+REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
+REQUIRE_WORKLOAD_CMK_PERMS="${REQUIRE_WORKLOAD_CMK_PERMS:-true}"
+REQUIRE_STATE_STACK_LOCAL="${REQUIRE_STATE_STACK_LOCAL:-true}"
+STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
+
+EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
+EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
@@ -18,6 +28,21 @@ fi
 require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
+
+# Keep report metadata and the child validator aligned.
+export AWS_PROFILE
+export AWS_REGION
+export CLOUD_NAME
+export NAME_PREFIX
+export EXPECTED_ACCOUNT_ID
+export EXPECTED_GITHUB_REPOSITORY
+export REQUIRE_BOOTSTRAP_GITHUB_OIDC
+export REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE
+export REQUIRE_WORKLOAD_CMK_PERMS
+export REQUIRE_STATE_STACK_LOCAL
+export STRICT_GITHUB_SUBJECT_CHECKS
+export EXPECTED_GITHUB_PLAN_SUBJECT
+export EXPECTED_GITHUB_APPLY_SUBJECT
 
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
@@ -63,10 +88,19 @@ info "Repository root: ${REPO_ROOT}"
 info "Environment: ${ENV_NAME}"
 info "Validation layer: ${VALIDATION_LAYER}"
 info "Output dir: ${OUTPUT_DIR}"
+info "Cloud name: ${CLOUD_NAME}"
 info "Name prefix: ${NAME_PREFIX}"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: ${AWS_REGION}"
 info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
+info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
+info "REQUIRE_BOOTSTRAP_GITHUB_OIDC: ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
+info "REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE: ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
+info "REQUIRE_WORKLOAD_CMK_PERMS: ${REQUIRE_WORKLOAD_CMK_PERMS}"
+info "REQUIRE_STATE_STACK_LOCAL: ${REQUIRE_STATE_STACK_LOCAL}"
+info "STRICT_GITHUB_SUBJECT_CHECKS: ${STRICT_GITHUB_SUBJECT_CHECKS}"
+info "EXPECTED_GITHUB_PLAN_SUBJECT: ${EXPECTED_GITHUB_PLAN_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>}"
+info "EXPECTED_GITHUB_APPLY_SUBJECT: ${EXPECTED_GITHUB_APPLY_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>}"
 info "Validation time: ${VALIDATION_TIME}"
 
 if [[ "$NAME_PREFIX" != *"-${ENV_NAME}" ]]; then
@@ -149,6 +183,14 @@ jq -n \
   --arg aws_region "$AWS_REGION" \
   --arg aws_account_id "$AWS_ACCOUNT_ID" \
   --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
+  --arg expected_github_repository "$EXPECTED_GITHUB_REPOSITORY" \
+  --arg expected_github_plan_subject "$EXPECTED_GITHUB_PLAN_SUBJECT" \
+  --arg expected_github_apply_subject "$EXPECTED_GITHUB_APPLY_SUBJECT" \
+  --arg require_bootstrap_github_oidc "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" \
+  --arg require_bootstrap_github_apply_role "$REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE" \
+  --arg require_workload_cmk_perms "$REQUIRE_WORKLOAD_CMK_PERMS" \
+  --arg require_state_stack_local "$REQUIRE_STATE_STACK_LOCAL" \
+  --arg strict_github_subject_checks "$STRICT_GITHUB_SUBJECT_CHECKS" \
   --arg name_prefix "$NAME_PREFIX" \
   --arg validation_time "$VALIDATION_TIME" \
   --arg overall_result "$OVERALL_RESULT" \
@@ -166,6 +208,14 @@ jq -n \
     aws_region: $aws_region,
     aws_account_id: $aws_account_id,
     expected_account_id: $expected_account_id,
+    expected_github_repository: $expected_github_repository,
+    expected_github_plan_subject: $expected_github_plan_subject,
+    expected_github_apply_subject: $expected_github_apply_subject,
+    require_bootstrap_github_oidc: $require_bootstrap_github_oidc,
+    require_bootstrap_github_apply_role: $require_bootstrap_github_apply_role,
+    require_workload_cmk_perms: $require_workload_cmk_perms,
+    require_state_stack_local: $require_state_stack_local,
+    strict_github_subject_checks: $strict_github_subject_checks,
     name_prefix: $name_prefix,
     validation_time: $validation_time,
     overall_result: $overall_result,
@@ -237,6 +287,14 @@ section "Generating Markdown summary"
   echo "| AWS Region | ${AWS_REGION} |"
   echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
   echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
+  echo "| Expected GitHub Repository | ${EXPECTED_GITHUB_REPOSITORY:-<not set>} |"
+  echo "| Expected GitHub Plan Subject | ${EXPECTED_GITHUB_PLAN_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>} |"
+  echo "| Expected GitHub Apply Subject | ${EXPECTED_GITHUB_APPLY_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>} |"
+  echo "| Require Bootstrap GitHub OIDC | ${REQUIRE_BOOTSTRAP_GITHUB_OIDC} |"
+  echo "| Require Bootstrap GitHub Apply Role | ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE} |"
+  echo "| Require Workload CMK Permissions | ${REQUIRE_WORKLOAD_CMK_PERMS} |"
+  echo "| Require State Stack Local | ${REQUIRE_STATE_STACK_LOCAL} |"
+  echo "| Strict GitHub Subject Checks | ${STRICT_GITHUB_SUBJECT_CHECKS} |"
   echo "| Name Prefix | ${NAME_PREFIX} |"
   echo "| Validation Time | ${VALIDATION_TIME} |"
   echo "| Overall Result | ${OVERALL_RESULT} |"
@@ -332,7 +390,14 @@ echo "Validation layer:           Workload Bootstrap"
 echo "AWS profile:                ${AWS_PROFILE:-<default>}"
 echo "AWS region:                 ${AWS_REGION}"
 echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
+echo "Cloud name:                 ${CLOUD_NAME}"
 echo "Name prefix:                ${NAME_PREFIX}"
+echo "Expected GitHub repository: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
+echo "Require GitHub OIDC:        ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
+echo "Require GitHub apply role:  ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
+echo "Require workload CMK perms: ${REQUIRE_WORKLOAD_CMK_PERMS}"
+echo "Require local state stack:  ${REQUIRE_STATE_STACK_LOCAL}"
+echo "Strict subject checks:      ${STRICT_GITHUB_SUBJECT_CHECKS}"
 echo
 echo "Output directory:           ${OUTPUT_DIR}"
 echo "Summary JSON:               ${SUMMARY_JSON}"
