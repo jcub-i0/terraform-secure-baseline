@@ -44,3 +44,44 @@ trap 'rm -f "$RESULTS_JSONL"' EXIT
 PASSED_COUNT=0
 FAILED_COUNT=0
 TOTAL_COUNT=1
+
+section "${CLOUD_NAME} Control-Plane Validation Report Export"
+
+section "Checking required local commands"
+
+require_command "aws"
+success "aws CLI found"
+
+require_command "terraform"
+success "terraform found"
+
+require_command "jq"
+success "jq found"
+
+require_command "git"
+success "git found"
+
+section "Resolving repository paths and report settings"
+
+info "Repository root: ${REPO_ROOT}"
+info "Control-plane environment name: ${CONTROL_PLANE_ENV_NAME}"
+info "Validation layer: ${VALIDATION_LAYER}"
+info "Output dir: ${OUTPUT_DIR}"
+info "Name prefix: ${NAME_PREFIX}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_REGION: ${AWS_REGION}"
+info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
+info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
+info "REQUIRE_CONTROL_PLANE_GITHUB_OIDC: ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}"
+info "CHECK_OPTIONAL_SECOPS_GROUPS: ${CHECK_OPTIONAL_SECOPS_GROUPS}"
+info "STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${STRICT_IDENTITY_CENTER_ASSIGNMENTS}"
+info "STRICT_ACCOUNT_OU_CHECKS: ${STRICT_ACCOUNT_OU_CHECKS}"
+info "ACCOUNT_ID_DEV: ${ACCOUNT_ID_DEV:-<not set>}"
+info "ACCOUNT_ID_STAGING: ${ACCOUNT_ID_STAGING:-<not set>}"
+info "ACCOUNT_ID_PROD: ${ACCOUNT_ID_PROD:-<not set>}"
+info "Validation time: ${VALIDATION_TIME}"
+
+if [[ "$NAME_PREFIX" != *"-${CONTROL_PLANE_ENV_NAME}" ]]; then
+  warn "NAME_PREFIX does not end with -${CONTROL_PLANE_ENV_NAME}: ${NAME_PREFIX}"
+  warn "This may be valid for custom/client deployments, but confirm it matches deployed resource names."
+fi
