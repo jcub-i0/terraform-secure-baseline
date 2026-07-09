@@ -23,7 +23,7 @@ The recommended validation evidence workflow is:
 
 1. Deploy or update the target workload environment.
 2. Run automated workload validation using `scripts/validation/validate-baseline.sh`.
-3. Export workload validation evidence using `scripts/validation/export-report.sh`.
+3. Export workload validation evidence using `scripts/validation/export-baseline.sh`.
 4. Run automated control-plane validation using `scripts/validation/validate-control-plane.sh`.
 5. Review the generated workload `summary.md`.
 6. Retain the generated workload `summary.json` and per-script logs.
@@ -40,7 +40,7 @@ AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<account-id>" \
 NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
-./scripts/validation/export-report.sh "${ENV_NAME}"
+./scripts/validation/export-baseline.sh "${ENV_NAME}"
 ```
 
 Generated workload evidence is written to a timestamped directory under:

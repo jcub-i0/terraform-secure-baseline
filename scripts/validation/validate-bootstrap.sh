@@ -13,7 +13,7 @@
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-bootstrap.sh dev
 #   REQUIRE_BOOTSTRAP_GITHUB_OIDC=false ./scripts/validation/validate-bootstrap.sh dev
 #   STRICT_GITHUB_SUBJECT_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
-#   REQUIRE_WORKLOAD_CMK_PERMS=false ./scripts/validation/validate-bootstrap.sh dev
+#   STRICT_WORKLOAD_CMK_POLICY_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
 #   REQUIRE_STATE_STACK_LOCAL=false ./scripts/validation/validate-bootstrap.sh dev
 #
 # Notes:
@@ -30,6 +30,12 @@
 #     state locking behavior.
 #   - Validation does not depend on local terraform.tfstate from
 #     bootstrap/<env>/state, so the script can run from a fresh checkout.
+#
+#   Workload-created CMK policy validation:
+#   - By default, stale/missing workload Lambda or Secrets Manager CMK policy
+#     references fail validation.
+#   - Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=false to report stale/missing
+#     workload CMK policy references as warnings instead of failures.
 
 set -euo pipefail
 
@@ -40,7 +46,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 ENV_NAME="${1:-}"
 require_env_name "$ENV_NAME"
 
-AWS_PROFILE="${AWS_PROFILE:-$ENV_NAME}"
+AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
@@ -49,12 +55,25 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
 
 REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
 REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
-REQUIRE_WORKLOAD_CMK_PERMS="${REQUIRE_WORKLOAD_CMK_PERMS:-true}"
+STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-true}"
 REQUIRE_STATE_STACK_LOCAL="${REQUIRE_STATE_STACK_LOCAL:-true}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
 EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
+
+# Workload-created CMK policy checks always run when workload outputs are readable.
+# By default, stale/missing workload CMK policy references fail validation because
+# they indicate the bootstrap account stack may not be reconciled with the current
+# workload-created Lambda and Secrets Manager CMK ARNs.
+# Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=false to make those findings advisory.
+case "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}. Expected true or false."
+    ;;
+esac
 
 export AWS_PAGER=""
 
@@ -690,6 +709,69 @@ check_role_policy_contains() {
   fi
 }
 
+role_policy_contains_value() {
+  local role_arn="$1"
+  local expected_value="$2"
+
+  if [[ -z "$expected_value" || "$expected_value" == "null" ]]; then
+    return 1
+  fi
+
+  local role_name
+  role_name="$(get_role_name_from_arn "$role_arn")"
+
+  local policy_documents
+  policy_documents="$(get_all_policy_documents_for_role "$role_name")"
+
+  local match_count
+  match_count="$(
+    echo "$policy_documents" |
+      jq -s --arg value "$expected_value" '[.. | strings | select(. == $value or contains($value))] | length'
+  )"
+
+  [[ "$match_count" -gt 0 ]]
+}
+
+check_role_policy_contains_workload_cmk() {
+  local role_arn="$1"
+  local role_description="$2"
+  local expected_value="$3"
+  local expected_description="$4"
+
+  if [[ -z "$expected_value" || "$expected_value" == "null" ]]; then
+    local message="${expected_description} not set. Unable to check policy reference for ${role_description}."
+
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
+      fail "$message"
+    fi
+
+    warn "$message"
+    return 0
+  fi
+
+  if role_policy_contains_value "$role_arn" "$expected_value"; then
+    success "${role_description} attached/inline policy references ${expected_description}"
+    return 0
+  fi
+
+  local message="${role_description} attached/inline policies do not reference current ${expected_description}: ${expected_value}"
+
+  if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
+    local role_name
+    role_name="$(get_role_name_from_arn "$role_arn")"
+
+    local policy_documents
+    policy_documents="$(get_all_policy_documents_for_role "$role_name")"
+
+    echo "$policy_documents" | jq -s .
+    fail "$message"
+  fi
+
+  warn "$message"
+  warn "Re-apply bootstrap/${ENV_NAME}/account with the latest workload CMK outputs if strict least-privilege evidence is required."
+  return 0
+}
+
 check_github_role_policies() {
   local role_arn="$1"
   local role_description="$2"
@@ -707,10 +789,7 @@ check_workload_cmk_permissions() {
 
   section "Checking workload-created CMK permissions on GitHub Apply role"
 
-  if [[ "$REQUIRE_WORKLOAD_CMK_PERMS" != "true" ]]; then
-    warn "REQUIRE_WORKLOAD_CMK_PERMS is false. Skipping workload Lambda/Secrets Manager CMK policy checks."
-    return 0
-  fi
+  info "Strict workload CMK policy checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
 
   require_directory "$env_dir"
 
@@ -718,11 +797,42 @@ check_workload_cmk_permissions() {
   env_outputs_json="$(terraform_output_json_optional "$env_dir")"
 
   if [[ -z "$env_outputs_json" ]]; then
-    fail "Unable to read Terraform outputs for environments/${ENV_NAME}. Run workload apply before requiring workload CMK permission checks."
+    local message="Unable to read Terraform outputs for environments/${ENV_NAME}. Run workload apply before checking workload CMK permissions."
+
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
+      fail "$message"
+    fi
+
+    warn "$message"
+    return 0
   fi
 
-  require_terraform_output "$env_outputs_json" lambda_cmk_arn "environments/${ENV_NAME}"
-  require_terraform_output "$env_outputs_json" secrets_manager_cmk_arn "environments/${ENV_NAME}"
+  local missing_outputs=0
+
+  if terraform_output_exists "$env_outputs_json" lambda_cmk_arn; then
+    success "environments/${ENV_NAME} Terraform output exists: lambda_cmk_arn"
+  else
+    warn "Missing Terraform output in environments/${ENV_NAME}: lambda_cmk_arn"
+    missing_outputs=1
+  fi
+
+  if terraform_output_exists "$env_outputs_json" secrets_manager_cmk_arn; then
+    success "environments/${ENV_NAME} Terraform output exists: secrets_manager_cmk_arn"
+  else
+    warn "Missing Terraform output in environments/${ENV_NAME}: secrets_manager_cmk_arn"
+    missing_outputs=1
+  fi
+
+  if [[ "$missing_outputs" -ne 0 ]]; then
+    local message="One or more workload CMK outputs are missing from environments/${ENV_NAME}."
+
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
+      fail "$message"
+    fi
+
+    warn "$message"
+    return 0
+  fi
 
   local lambda_cmk_arn
   local secrets_manager_cmk_arn
@@ -730,12 +840,31 @@ check_workload_cmk_permissions() {
   lambda_cmk_arn="$(get_output_string "$env_outputs_json" lambda_cmk_arn)"
   secrets_manager_cmk_arn="$(get_output_string "$env_outputs_json" secrets_manager_cmk_arn)"
 
-  require_non_empty "$lambda_cmk_arn" "workload Lambda CMK ARN"
-  require_non_empty "$secrets_manager_cmk_arn" "workload Secrets Manager CMK ARN"
+  if [[ -z "$lambda_cmk_arn" || "$lambda_cmk_arn" == "null" || "$lambda_cmk_arn" == "None" ]]; then
+    local message="Unable to resolve workload Lambda CMK ARN"
 
-  check_role_policy_contains "$apply_role_arn" "Bootstrap GitHub Apply" "$lambda_cmk_arn" "workload Lambda CMK ARN"
-  check_role_policy_contains "$apply_role_arn" "Bootstrap GitHub Apply" "$secrets_manager_cmk_arn" "workload Secrets Manager CMK ARN"
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
+      fail "$message"
+    fi
+
+    warn "$message"
+  else
+    check_role_policy_contains_workload_cmk "$apply_role_arn" "Bootstrap GitHub Apply" "$lambda_cmk_arn" "workload Lambda CMK ARN"
+  fi
+
+  if [[ -z "$secrets_manager_cmk_arn" || "$secrets_manager_cmk_arn" == "null" || "$secrets_manager_cmk_arn" == "None" ]]; then
+    local message="Unable to resolve workload Secrets Manager CMK ARN"
+
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
+      fail "$message"
+    fi
+
+    warn "$message"
+  else
+    check_role_policy_contains_workload_cmk "$apply_role_arn" "Bootstrap GitHub Apply" "$secrets_manager_cmk_arn" "workload Secrets Manager CMK ARN"
+  fi
 }
+
 
 # -----------------------------------------------------------------------------
 # Main
@@ -822,7 +951,7 @@ GitHub apply role ARN:             ${APPLY_ROLE_ARN:-<not validated>}
 Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
 Expected GitHub plan subject:      ${EXPECTED_GITHUB_PLAN_SUBJECT:-<not checked>}
 Expected GitHub apply subject:     ${EXPECTED_GITHUB_APPLY_SUBJECT:-<not checked>}
-Workload CMK permission checks:    ${REQUIRE_WORKLOAD_CMK_PERMS}
+Strict workload CMK policy checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}
 SUMMARY
 
 section "Validation Result"

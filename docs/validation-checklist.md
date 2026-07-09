@@ -429,7 +429,7 @@ AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<account-id>" \
 NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
-./scripts/validation/export-report.sh "${ENV_NAME}"
+./scripts/validation/export-baseline.sh "${ENV_NAME}"
 ```
 
 The export creates:

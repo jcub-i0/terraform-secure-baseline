@@ -14,7 +14,7 @@ It is intended to summarize:
 - Which manual validation activities remain
 - Any warnings, exceptions, or limitations
 
-This template can be completed manually, used as a reference for generated workload validation reports produced by `scripts/validation/export-report.sh`, or used to summarize a separate control-plane validation run from `scripts/validation/validate-control-plane.sh`.
+This template can be completed manually, used as a reference for generated workload validation reports produced by `scripts/validation/export-baseline.sh`, or used to summarize a separate control-plane validation run from `scripts/validation/validate-control-plane.sh`.
 
 ---
 
