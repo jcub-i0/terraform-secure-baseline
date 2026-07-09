@@ -89,3 +89,46 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
     fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${AWS_ACCOUNT_ID}"
   fi
 fi
+
+section "Running workload bootstrap validation"
+
+SCRIPT_PATH="${SCRIPT_DIR}/${VALIDATION_SCRIPT}"
+LOG_FILE="${OUTPUT_DIR}/${VALIDATION_SCRIPT%.sh}.log"
+LOG_BASENAME="$(basename "$LOG_FILE")"
+RESULT="FAIL"
+
+info "Running ${VALIDATION_SCRIPT}"
+
+if [[ ! -x "$SCRIPT_PATH" ]]; then
+  warn "${VALIDATION_SCRIPT} is missing or not executable"
+
+  {
+    echo "[FAIL] Validation script is missing or not executable: ${SCRIPT_PATH}"
+  } > "$LOG_FILE"
+
+  FAILED_COUNT=$((FAILED_COUNT + 1))
+  RESULT="FAIL"
+elif "$SCRIPT_PATH" "$ENV_NAME" >"$LOG_FILE" 2>&1; then
+  success "${VALIDATION_SCRIPT} passed"
+  PASSED_COUNT=$((PASSED_COUNT + 1))
+  RESULT="FAIL"
+fi
+
+jq -n \
+  --arg area "$VALIDATION_AREA" \
+  --arg script "$VALIDATION_SCRIPT" \
+  --arg result "$RESULT" \
+  --arg log_file "$LOG_BASENAME" \
+  '{
+    area: $area,
+    script: $script,
+    result: $result,
+    log_file: $log_file
+  }' >> "$RESULTS_JSONL"
+
+if [[ "$FAILED_COUNT" -gt 0 ]]; then
+  OVERALL_RESULT="FAIL"
+else
+  OVERALL_RESULT="PASS"
+fi
+
