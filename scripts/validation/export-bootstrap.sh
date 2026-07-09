@@ -136,3 +136,74 @@ else
   OVERALL_RESULT="PASS"
 fi
 
+section "Generating JSON summary"
+
+jq -n \
+  --arg project "tf-secure-baseline" \
+  --arg report_type "validation_report" \
+  --arg validation_layer "$VALIDATION_LAYER" \
+  --arg validation_layer_display "Workload Bootstrap" \
+  --arg environment "$ENV_NAME" \
+  --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_region "$AWS_REGION" \
+  --arg aws_account_id "$AWS_ACCOUNT_ID" \
+  --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
+  --arg name_prefix "$NAME_PREFIX" \
+  --arg validation_time "$VALIDATION_TIME" \
+  --arg overall_result "$OVERALL_RESULT" \
+  --argjson scripts_passed "$PASSED_COUNT" \
+  --argjson scripts_failed "$FAILED_COUNT" \
+  --argjson scripts_total "$TOTAL_COUNT" \
+  --slurpfile results "$RESULTS_JSONL" \
+  '{
+    project: $project,
+    report_type: $report_type,
+    validation_layer: $validation_layer,
+    validation_layer_display: $validation_layer_display,
+    environment: $environment,
+    aws_profile: $aws_profile,
+    aws_region: $aws_region,
+    aws_account_id: $aws_account_id,
+    expected_account_id: $expected_account_id,
+    name_prefix: $name_prefix,
+    validation_time: $validation_time,
+    overall_result: $overall_result,
+    scripts_passed: $scripts_passed,
+    scripts_failed: $scripts_failed,
+    scripts_total: $scripts_total,
+    results: $results,
+    validation_scope: [
+      "workload_bootstrap_directory_structure",
+      "local_state_bootstrap_pattern",
+      "remote_backend_files",
+      "s3_native_lockfile_configuration",
+      "state_bucket_security",
+      "state_bucket_versioning",
+      "state_bucket_public_access_block",
+      "state_bucket_sse_kms_encryption",
+      "state_cmk_status",
+      "workload_github_oidc_provider",
+      "workload_github_plan_role",
+      "workload_github_apply_role",
+      "github_repository_trust_conditions",
+      "github_environment_subject_conditions",
+      "github_state_bucket_access",
+      "github_tflock_object_access",
+      "github_state_cmk_access",
+      "github_workload_cmk_access_when_required"
+    ],
+    manual_validation_remaining: [
+      "workload_baseline_validation",
+      "control_plane_validation",
+      "github_actions_workflows",
+      "identity_center_assignments",
+      "live_ec2_isolation",
+      "live_ec2_rollback",
+      "live_ip_enrichment",
+      "tamper_detection",
+      "break_glass",
+      "destroy_safety"
+    ]
+  }' > "$SUMMARY_JSON"
+
+success "JSON summary written: ${SUMMARY_JSON}"
