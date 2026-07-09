@@ -255,3 +255,124 @@ jq -n \
   }' > "$SUMMARY_JSON"
 
 success "JSON summary written: ${SUMMARY_JSON}"
+
+section "Generating Markdown summary"
+
+{
+  echo "# ${CLOUD_NAME} Control-Plane Validation Report"
+  echo
+  echo "This report summarizes automated read-only control-plane validation results."
+  echo
+  echo "## Executive Summary"
+  echo
+  echo "| Field | Value |"
+  echo "|---|---|"
+  echo "| Overall result | **${OVERALL_RESULT}** |"
+  echo "| Validation layer | Control Plane |"
+  echo "| Validation scripts passed | **${PASSED_COUNT}/${TOTAL_COUNT}** |"
+  echo "| Validation scripts failed | **${FAILED_COUNT}/${TOTAL_COUNT}** |"
+  echo "| Report Package Location | \`${RELATIVE_OUTPUT_DIR}/\` |"
+  echo
+  echo "## Control-Plane Environment"
+  echo
+  echo "| Field | Value |"
+  echo "|---|---|"
+  echo "| Project | ${CLOUD_NAME} |"
+  echo "| Control-plane Environment | ${CONTROL_PLANE_ENV_NAME} |"
+  echo "| Validation Layer | Control Plane |"
+  echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
+  echo "| AWS Region | ${AWS_REGION} |"
+  echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
+  echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
+  echo "| Name Prefix | ${NAME_PREFIX} |"
+  echo "| Validation Time | ${VALIDATION_TIME} |"
+  echo "| Overall Result | ${OVERALL_RESULT} |"
+  echo "| Scripts Passed | ${PASSED_COUNT}/${TOTAL_COUNT} |"
+  echo "| Scripts Failed | ${FAILED_COUNT}/${TOTAL_COUNT} |"
+  echo
+  echo "## Validation Settings"
+  echo
+  echo "| Setting | Value |"
+  echo "|---|---|"
+  echo "| Expected GitHub Repository | ${EXPECTED_GITHUB_REPOSITORY:-<not set>} |"
+  echo "| Require Control-Plane GitHub OIDC | ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC} |"
+  echo "| Check Optional SecOps Groups | ${CHECK_OPTIONAL_SECOPS_GROUPS} |"
+  echo "| Strict Identity Center Assignments | ${STRICT_IDENTITY_CENTER_ASSIGNMENTS} |"
+  echo "| Strict Account OU Checks | ${STRICT_ACCOUNT_OU_CHECKS} |"
+  echo "| Dev Account ID | ${ACCOUNT_ID_DEV:-<not set>} |"
+  echo "| Staging Account ID | ${ACCOUNT_ID_STAGING:-<not set>} |"
+  echo "| Prod Account ID | ${ACCOUNT_ID_PROD:-<not set>} |"
+  echo
+  echo "## Validation Summary"
+  echo
+  echo "| Area | Script | Result | Log |"
+  echo "|---|---|---|---|"
+
+  jq -r '
+    .results[]
+    | "| \(.area) | `\(.script)` | \(.result) | `\(.log_file)` |"
+  ' "$SUMMARY_JSON"
+
+  echo
+  echo "## Automated Validation Scope"
+  echo
+  echo "This control-plane validation report covers:"
+  echo
+  echo "- Control-plane AWS caller identity"
+  echo "- Control-plane stack directory structure"
+  echo "- Control-plane backend locking with \`use_lockfile = true\`"
+  echo "- Control-plane state Terraform outputs"
+  echo "- Control-plane state bucket existence and security configuration"
+  echo "- State bucket versioning"
+  echo "- State bucket public access block"
+  echo "- State bucket SSE-KMS encryption"
+  echo "- Customer-managed state CMK status"
+  echo "- Control-plane GitHub OIDC provider"
+  echo "- Control-plane GitHub Plan and Apply roles"
+  echo "- Expected GitHub repository trust conditions when configured"
+  echo "- AWS Organizations root and OU structure"
+  echo "- Optional workload account OU placement checks"
+  echo "- IAM Identity Center instance"
+  echo "- Required SecOps Identity Center groups"
+  echo "- Optional SecOps Identity Center groups when enabled"
+  echo "- Identity Center permission sets"
+  echo "- Optional Identity Center account assignment evidence"
+  echo
+  echo "## Manual Validation Remaining"
+  echo
+  echo "The automated control-plane validation export is intentionally read-only. The following checks remain outside this report:"
+  echo
+  echo "- Workload bootstrap validation"
+  echo "- Workload baseline validation"
+  echo "- GitHub Actions workflow execution validation"
+  echo "- End-user SSO login validation"
+  echo "- Live EC2 isolation test"
+  echo "- Live EC2 rollback test"
+  echo "- Live IP enrichment test"
+  echo "- Tamper detection test"
+  echo "- Break-glass role assumption test"
+  echo "- Destroy safety review"
+  echo
+  echo "## Evidence Files"
+  echo
+  echo "This report directory contains the generated control-plane validation summary files and per-script log."
+  echo
+  echo "| File | Purpose |"
+  echo "|---|---|"
+  echo "| \`summary.md\` | Human-readable control-plane validation report |"
+  echo "| \`summary.json\` | Machine-readable control-plane validation summary |"
+
+  jq -r '
+    .results[]
+    | "| `\(.log_file)` | Log output for `\(.script)` |"
+  ' "$SUMMARY_JSON"
+
+  echo
+  echo "## Limitations"
+  echo
+  echo "This report validates selected control-plane, backend locking, state backend, GitHub OIDC, AWS Organizations, and IAM Identity Center readiness controls."
+  echo
+  echo "The validation script is read-only and does not run GitHub workflows, assume roles, modify Identity Center assignments, move accounts, modify IAM policies, or perform destroy/cleanup operations."
+  echo
+  echo "This report does not replace a full SOC 2 or ISO 27001 audit, control owner review, policy review, evidence review, risk assessment, or ISMS."
+} > "$SUMMARY_MD"
