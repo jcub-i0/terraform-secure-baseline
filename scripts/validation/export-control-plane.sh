@@ -105,7 +105,7 @@ fi
 
 section "Running control-plane validation"
 
-SCRIPT_PATH="${SCRIPT_PATH}/${VALIDATION_SCRIPT}"
+SCRIPT_PATH="${SCRIPT_DIR}/${VALIDATION_SCRIPT}"
 LOG_FILE="${OUTPUT_DIR}/${VALIDATION_SCRIPT%.sh}.log"
 LOG_BASENAME="$(basename "$LOG_FILE")"
 RESULT="FAIL"
@@ -376,6 +376,8 @@ section "Generating Markdown summary"
   echo
   echo "This report does not replace a full SOC 2 or ISO 27001 audit, control owner review, policy review, evidence review, risk assessment, or ISMS."
 } > "$SUMMARY_MD"
+
+success "Markdown summary written: ${SUMMARY_MD}"
 
 section "Control-Plane Validation Report Export Summary"
 
