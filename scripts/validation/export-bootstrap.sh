@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/lib/common.sh"
 
+CLOUD_NAME="${1:-tf-secure-baseline}"
 ENV_NAME="${1:-}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
@@ -16,7 +17,7 @@ fi
 
 require_env_name "$ENV_NAME"
 
-NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME}}"
+NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
