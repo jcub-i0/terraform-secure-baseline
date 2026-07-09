@@ -112,6 +112,10 @@ elif "$SCRIPT_PATH" "$ENV_NAME" >"$LOG_FILE" 2>&1; then
   success "${VALIDATION_SCRIPT} passed"
   PASSED_COUNT=$((PASSED_COUNT + 1))
   RESULT="FAIL"
+else
+  warn "${VALIDATION_SCRIPT} failed. See log: ${LOG_FILE}"
+  FAILED_COUNT=$((FAILED_COUNT + 1))
+  RESULT="FAIL"
 fi
 
 jq -n \
