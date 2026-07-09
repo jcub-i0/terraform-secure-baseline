@@ -14,12 +14,20 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
 
 REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
 REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
-REQUIRE_WORKLOAD_CMK_PERMS="${REQUIRE_WORKLOAD_CMK_PERMS:-true}"
+STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-false}"
 REQUIRE_STATE_STACK_LOCAL="${REQUIRE_STATE_STACK_LOCAL:-true}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
 EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
+
+case "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}. Expected true or false."
+    ;;
+esac
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
@@ -38,7 +46,7 @@ export EXPECTED_ACCOUNT_ID
 export EXPECTED_GITHUB_REPOSITORY
 export REQUIRE_BOOTSTRAP_GITHUB_OIDC
 export REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE
-export REQUIRE_WORKLOAD_CMK_PERMS
+export STRICT_WORKLOAD_CMK_POLICY_CHECKS
 export REQUIRE_STATE_STACK_LOCAL
 export STRICT_GITHUB_SUBJECT_CHECKS
 export EXPECTED_GITHUB_PLAN_SUBJECT
@@ -96,7 +104,7 @@ info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
 info "REQUIRE_BOOTSTRAP_GITHUB_OIDC: ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
 info "REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE: ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
-info "REQUIRE_WORKLOAD_CMK_PERMS: ${REQUIRE_WORKLOAD_CMK_PERMS}"
+info "STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
 info "REQUIRE_STATE_STACK_LOCAL: ${REQUIRE_STATE_STACK_LOCAL}"
 info "STRICT_GITHUB_SUBJECT_CHECKS: ${STRICT_GITHUB_SUBJECT_CHECKS}"
 info "EXPECTED_GITHUB_PLAN_SUBJECT: ${EXPECTED_GITHUB_PLAN_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>}"
@@ -188,7 +196,7 @@ jq -n \
   --arg expected_github_apply_subject "$EXPECTED_GITHUB_APPLY_SUBJECT" \
   --arg require_bootstrap_github_oidc "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" \
   --arg require_bootstrap_github_apply_role "$REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE" \
-  --arg require_workload_cmk_perms "$REQUIRE_WORKLOAD_CMK_PERMS" \
+  --arg strict_workload_cmk_policy_checks "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" \
   --arg require_state_stack_local "$REQUIRE_STATE_STACK_LOCAL" \
   --arg strict_github_subject_checks "$STRICT_GITHUB_SUBJECT_CHECKS" \
   --arg name_prefix "$NAME_PREFIX" \
@@ -213,7 +221,7 @@ jq -n \
     expected_github_apply_subject: $expected_github_apply_subject,
     require_bootstrap_github_oidc: $require_bootstrap_github_oidc,
     require_bootstrap_github_apply_role: $require_bootstrap_github_apply_role,
-    require_workload_cmk_perms: $require_workload_cmk_perms,
+    strict_workload_cmk_policy_checks: $strict_workload_cmk_policy_checks,
     require_state_stack_local: $require_state_stack_local,
     strict_github_subject_checks: $strict_github_subject_checks,
     name_prefix: $name_prefix,
@@ -241,7 +249,7 @@ jq -n \
       "github_state_bucket_access",
       "github_tflock_object_access",
       "github_state_cmk_access",
-      "github_workload_cmk_access_when_required"
+      "github_workload_cmk_access_advisory_unless_strict"
     ],
     manual_validation_remaining: [
       "workload_baseline_validation",
@@ -292,7 +300,7 @@ section "Generating Markdown summary"
   echo "| Expected GitHub Apply Subject | ${EXPECTED_GITHUB_APPLY_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>} |"
   echo "| Require Bootstrap GitHub OIDC | ${REQUIRE_BOOTSTRAP_GITHUB_OIDC} |"
   echo "| Require Bootstrap GitHub Apply Role | ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE} |"
-  echo "| Require Workload CMK Permissions | ${REQUIRE_WORKLOAD_CMK_PERMS} |"
+  echo "| Strict Workload CMK Policy Checks | ${STRICT_WORKLOAD_CMK_POLICY_CHECKS} |"
   echo "| Require State Stack Local | ${REQUIRE_STATE_STACK_LOCAL} |"
   echo "| Strict GitHub Subject Checks | ${STRICT_GITHUB_SUBJECT_CHECKS} |"
   echo "| Name Prefix | ${NAME_PREFIX} |"
@@ -333,7 +341,7 @@ section "Generating Markdown summary"
   echo "- GitHub role access to state bucket resources"
   echo "- GitHub role access to \`.tflock\` objects"
   echo "- GitHub role access to the state CMK"
-  echo "- GitHub Apply role access to workload-created Lambda and Secrets Manager CMKs when required"
+  echo "- GitHub Apply role access to current workload-created Lambda and Secrets Manager CMKs, with stale references treated as advisory unless strict checks are enabled"
   echo
   echo "## Manual Validation Remaining"
   echo
@@ -395,7 +403,7 @@ echo "Name prefix:                ${NAME_PREFIX}"
 echo "Expected GitHub repository: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
 echo "Require GitHub OIDC:        ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
 echo "Require GitHub apply role:  ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
-echo "Require workload CMK perms: ${REQUIRE_WORKLOAD_CMK_PERMS}"
+echo "Strict workload CMK checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
 echo "Require local state stack:  ${REQUIRE_STATE_STACK_LOCAL}"
 echo "Strict subject checks:      ${STRICT_GITHUB_SUBJECT_CHECKS}"
 echo
