@@ -249,7 +249,7 @@ jq -n \
       "github_state_bucket_access",
       "github_tflock_object_access",
       "github_state_cmk_access",
-      "github_workload_cmk_access_advisory_unless_strict"
+      "github_workload_cmk_access_strict_by_default"
     ],
     manual_validation_remaining: [
       "workload_baseline_validation",
