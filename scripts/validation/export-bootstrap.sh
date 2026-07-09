@@ -84,7 +84,7 @@ info "AWS account ID: ${AWS_ACCOUNT_ID}"
 info "AWS caller ARN: ${AWS_CALLER_ARN}"
 
 if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
-  if [[ "$AWS_ACCOUNT_ID" == "$AWS_ACCOUNT_ID" ]]; then
+  if [[ "$AWS_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]]; then
     success "AWS account ID matches expected account: ${EXPECTED_ACCOUNT_ID}"
   else
     fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${AWS_ACCOUNT_ID}"
