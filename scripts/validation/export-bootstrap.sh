@@ -323,3 +323,20 @@ section "Generating Markdown summary"
 } > "$SUMMARY_MD"
 
 success "Markdown summary written: ${SUMMARY_MD}"
+
+section "Workload Bootstrap Validation Report Export Summary"
+
+echo "Environment:                ${ENV_NAME}"
+echo "Validation layer:           Workload Bootstrap"
+echo "AWS profile:                ${AWS_PROFILE:-<default>}"
+echo "AWS region:                 ${AWS_REGION}"
+echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
+echo "Name prefix:                ${NAME_PREFIX}"
+echo
+echo "Output directory:           ${OUTPUT_DIR}"
+echo "Summary JSON:               ${SUMMARY_JSON}"
+echo "Summary Markdown:           ${SUMMARY_MD}"
+echo
+echo "Validation scripts passed:  ${PASSED_COUNT}/${TOTAL_COUNT}"
+echo "Validation scripts failed:  ${FAILED_COUNT}/${TOTAL_COUNT}"
+echo "Overall result:             ${OVERALL_RESULT}"
