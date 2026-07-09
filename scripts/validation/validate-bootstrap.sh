@@ -13,8 +13,7 @@
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-bootstrap.sh dev
 #   REQUIRE_BOOTSTRAP_GITHUB_OIDC=false ./scripts/validation/validate-bootstrap.sh dev
 #   STRICT_GITHUB_SUBJECT_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
-#   WORKLOAD_CMK_POLICY_CHECK_MODE=advisory ./scripts/validation/validate-bootstrap.sh dev
-#   WORKLOAD_CMK_POLICY_CHECK_MODE=strict ./scripts/validation/validate-bootstrap.sh dev
+#   STRICT_WORKLOAD_CMK_POLICY_CHECKS=true ./scripts/validation/validate-bootstrap.sh dev
 #   REQUIRE_STATE_STACK_LOCAL=false ./scripts/validation/validate-bootstrap.sh dev
 #
 # Notes:
@@ -50,40 +49,49 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
 
 REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
 REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
-WORKLOAD_CMK_POLICY_CHECK_MODE="${WORKLOAD_CMK_POLICY_CHECK_MODE:-}"
+STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-}"
 REQUIRE_STATE_STACK_LOCAL="${REQUIRE_STATE_STACK_LOCAL:-true}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
 EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
 
-# Workload-created CMK policy checks support two modes:
-# - advisory: run checks, warn on missing/stale workload CMK policy references, and continue.
-# - strict: run checks and fail on missing/stale workload CMK policy references.
+# Workload-created CMK policy checks always run when workload outputs are readable.
+# By default, stale/missing workload CMK policy references are warning-level.
+# Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=true to make those findings fail validation.
 #
 # Backward compatibility:
-# - Explicit REQUIRE_WORKLOAD_CMK_PERMS=true maps to strict.
-# - Explicit REQUIRE_WORKLOAD_CMK_PERMS=false maps to advisory.
-# - Otherwise, workload-created CMK policy checks default to advisory.
-if [[ -z "$WORKLOAD_CMK_POLICY_CHECK_MODE" ]]; then
+# - REQUIRE_WORKLOAD_CMK_PERMS=true maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=true.
+# - REQUIRE_WORKLOAD_CMK_PERMS=false maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=false.
+# - WORKLOAD_CMK_POLICY_CHECK_MODE=strict maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=true.
+# - WORKLOAD_CMK_POLICY_CHECK_MODE=advisory maps to STRICT_WORKLOAD_CMK_POLICY_CHECKS=false.
+if [[ -z "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" ]]; then
   if [[ "${REQUIRE_WORKLOAD_CMK_PERMS+x}" == "x" ]]; then
     if [[ "$REQUIRE_WORKLOAD_CMK_PERMS" == "true" ]]; then
-      WORKLOAD_CMK_POLICY_CHECK_MODE="strict"
+      STRICT_WORKLOAD_CMK_POLICY_CHECKS="true"
     elif [[ "$REQUIRE_WORKLOAD_CMK_PERMS" == "false" ]]; then
-      WORKLOAD_CMK_POLICY_CHECK_MODE="advisory"
+      STRICT_WORKLOAD_CMK_POLICY_CHECKS="false"
     else
       fail "Invalid REQUIRE_WORKLOAD_CMK_PERMS: ${REQUIRE_WORKLOAD_CMK_PERMS}. Expected true or false."
     fi
+  elif [[ "${WORKLOAD_CMK_POLICY_CHECK_MODE+x}" == "x" ]]; then
+    if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
+      STRICT_WORKLOAD_CMK_POLICY_CHECKS="true"
+    elif [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "advisory" ]]; then
+      STRICT_WORKLOAD_CMK_POLICY_CHECKS="false"
+    else
+      fail "Invalid WORKLOAD_CMK_POLICY_CHECK_MODE: ${WORKLOAD_CMK_POLICY_CHECK_MODE}. Expected advisory or strict."
+    fi
   else
-    WORKLOAD_CMK_POLICY_CHECK_MODE="advisory"
+    STRICT_WORKLOAD_CMK_POLICY_CHECKS="false"
   fi
 fi
 
-case "$WORKLOAD_CMK_POLICY_CHECK_MODE" in
-  advisory|strict)
+case "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" in
+  true|false)
     ;;
   *)
-    fail "Invalid WORKLOAD_CMK_POLICY_CHECK_MODE: ${WORKLOAD_CMK_POLICY_CHECK_MODE}. Expected one of: advisory, strict."
+    fail "Invalid STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}. Expected true or false."
     ;;
 esac
 
@@ -753,7 +761,7 @@ check_role_policy_contains_workload_cmk() {
   if [[ -z "$expected_value" || "$expected_value" == "null" ]]; then
     local message="${expected_description} not set. Unable to check policy reference for ${role_description}."
 
-    if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
       fail "$message"
     fi
 
@@ -768,7 +776,7 @@ check_role_policy_contains_workload_cmk() {
 
   local message="${role_description} attached/inline policies do not reference current ${expected_description}: ${expected_value}"
 
-  if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
+  if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
     local role_name
     role_name="$(get_role_name_from_arn "$role_arn")"
 
@@ -801,7 +809,7 @@ check_workload_cmk_permissions() {
 
   section "Checking workload-created CMK permissions on GitHub Apply role"
 
-  info "Workload CMK policy check mode: ${WORKLOAD_CMK_POLICY_CHECK_MODE}"
+  info "Strict workload CMK policy checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
 
   require_directory "$env_dir"
 
@@ -811,7 +819,7 @@ check_workload_cmk_permissions() {
   if [[ -z "$env_outputs_json" ]]; then
     local message="Unable to read Terraform outputs for environments/${ENV_NAME}. Run workload apply before checking workload CMK permissions."
 
-    if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
       fail "$message"
     fi
 
@@ -838,7 +846,7 @@ check_workload_cmk_permissions() {
   if [[ "$missing_outputs" -ne 0 ]]; then
     local message="One or more workload CMK outputs are missing from environments/${ENV_NAME}."
 
-    if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
       fail "$message"
     fi
 
@@ -855,7 +863,7 @@ check_workload_cmk_permissions() {
   if [[ -z "$lambda_cmk_arn" || "$lambda_cmk_arn" == "null" || "$lambda_cmk_arn" == "None" ]]; then
     local message="Unable to resolve workload Lambda CMK ARN"
 
-    if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
       fail "$message"
     fi
 
@@ -867,7 +875,7 @@ check_workload_cmk_permissions() {
   if [[ -z "$secrets_manager_cmk_arn" || "$secrets_manager_cmk_arn" == "null" || "$secrets_manager_cmk_arn" == "None" ]]; then
     local message="Unable to resolve workload Secrets Manager CMK ARN"
 
-    if [[ "$WORKLOAD_CMK_POLICY_CHECK_MODE" == "strict" ]]; then
+    if [[ "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" == "true" ]]; then
       fail "$message"
     fi
 
@@ -963,7 +971,7 @@ GitHub apply role ARN:             ${APPLY_ROLE_ARN:-<not validated>}
 Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
 Expected GitHub plan subject:      ${EXPECTED_GITHUB_PLAN_SUBJECT:-<not checked>}
 Expected GitHub apply subject:     ${EXPECTED_GITHUB_APPLY_SUBJECT:-<not checked>}
-Workload CMK policy check mode:    ${WORKLOAD_CMK_POLICY_CHECK_MODE}
+Strict workload CMK policy checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}
 SUMMARY
 
 section "Validation Result"
