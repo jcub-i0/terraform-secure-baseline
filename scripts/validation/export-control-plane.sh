@@ -5,34 +5,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/lib/common.sh"
 
-ENV_NAME="${1:-}"
-CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
-if [[ -z "$ENV_NAME" ]]; then
-  fail "Usage: $0 <dev|staging|prod>"
-fi
+CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
+CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
+NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"
 
-require_env_name "$ENV_NAME"
+REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
+EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
+CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
+STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
+STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
 
-NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
+ACCOUNT_ID_DEV="${ACCOUNT_ID_DEV:-}"
+ACCOUNT_ID_STAGING="${ACCOUNT_ID_STAGING:-}"
+ACCOUNT_ID_PROD="${ACCOUNT_ID_PROD:-}"
 
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
 REPO_ROOT="$(get_repo_root)"
-OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/bootstrap/${TIMESTAMP}"
-RELATIVE_OUTPUT_DIR="validation-results/${ENV_NAME}/bootstrap/${TIMESTAMP}"
+OUTPUT_DIR="${REPO_ROOT}/validation-results/control-plane/${TIMESTAMP}"
+RELATIVE_OUTPUT_DIR="validation-results/control-plane/${TIMESTAMP}"
 SUMMARY_JSON="${OUTPUT_DIR}/summary.json"
 SUMMARY_MD="${OUTPUT_DIR}/summary.md"
 
 mkdir -p "$OUTPUT_DIR"
 
-VALIDATION_SCRIPT="validate-bootstrap.sh"
-VALIDATION_AREA="Workload Bootstrap"
-VALIDATION_LAYER="workload_bootstrap"
+VALIDATION_SCRIPT="validate-control-plane.sh"
+VALIDATION_AREA="Control Plane"
+VALIDATION_LAYER="control_plane"
 
 RESULTS_JSONL="$(mktemp)"
 trap 'rm -f "$RESULTS_JSONL"' EXIT
