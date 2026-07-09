@@ -22,8 +22,8 @@ VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
 REPO_ROOT="$(get_repo_root)"
-OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/${TIMESTAMP}"
-RELATIVE_OUTPUT_DIR="validation-results/${ENV_NAME}/${TIMESTAMP}"
+OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/baseline/${TIMESTAMP}"
+RELATIVE_OUTPUT_DIR="validation-results/${ENV_NAME}/baseline/${TIMESTAMP}"
 SUMMARY_JSON="${OUTPUT_DIR}/summary.json"
 SUMMARY_MD="${OUTPUT_DIR}/summary.md"
 
