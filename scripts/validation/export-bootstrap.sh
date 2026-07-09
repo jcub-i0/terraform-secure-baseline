@@ -41,7 +41,7 @@ PASSED_COUNT=0
 FAILED_COUNT=0
 TOTAL_COUNT=1
 
-section "tf-secure-baseline Workload Bootstrap Validation Report Export"
+section "${CLOUD_NAME} Workload Bootstrap Validation Report Export"
 
 section "Checking required local commands"
 
@@ -140,7 +140,7 @@ fi
 section "Generating JSON summary"
 
 jq -n \
-  --arg project "tf-secure-baseline" \
+  --arg project "${CLOUD_NAME}" \
   --arg report_type "validation_report" \
   --arg validation_layer "$VALIDATION_LAYER" \
   --arg validation_layer_display "Workload Bootstrap" \
@@ -212,7 +212,7 @@ success "JSON summary written: ${SUMMARY_JSON}"
 section "Generating Markdown summary"
 
 {
-  echo "# tf-secure-baseline Workload Bootstrap Validation Report"
+  echo "# ${CLOUD_NAME} Workload Bootstrap Validation Report"
   echo
   echo "This report summarizes automated read-only workload bootstrap validation results for the \`$ENV_NAME\` environment."
   echo
@@ -230,7 +230,7 @@ section "Generating Markdown summary"
   echo
   echo "| Field | Value |"
   echo "|---|---|"
-  echo "| Project | tf-secure-baseline |"
+  echo "| Project | ${CLOUD_NAME} |"
   echo "| Environment | ${ENV_NAME} |"
   echo "| Validation Layer | Workload Bootstrap |"
   echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
