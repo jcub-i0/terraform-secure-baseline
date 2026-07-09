@@ -30,6 +30,12 @@
 #     state locking behavior.
 #   - Validation does not depend on local terraform.tfstate from
 #     bootstrap/<env>/state, so the script can run from a fresh checkout.
+#
+#   Workload-created CMK policy validation:
+#   - By default, stale/missing workload Lambda or Secrets Manager CMK policy
+#     references fail validation.
+#   - Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=false to report stale/missing
+#     workload CMK policy references as warnings instead of failures.
 
 set -euo pipefail
 
