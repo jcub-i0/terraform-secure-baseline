@@ -393,3 +393,11 @@ echo
 echo "Validation scripts passed:  ${PASSED_COUNT}/${TOTAL_COUNT}"
 echo "Validation scripts failed:  ${FAILED_COUNT}/${TOTAL_COUNT}"
 echo "Overall result:             ${OVERALL_RESULT}"
+
+section "Validation Result"
+
+if [[ "$FAILED_COUNT" -gt 0 ]]; then
+  fail "Control-plane validation report export completed with failures"
+fi
+
+success "Control-plane validation report export completed successfully"
