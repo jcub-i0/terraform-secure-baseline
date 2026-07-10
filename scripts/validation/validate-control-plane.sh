@@ -36,8 +36,9 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
-NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${CONTROL_PLANE_ENV_NAME}}"
+NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"
 
 REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
@@ -655,7 +656,7 @@ check_identity_center() {
 # Main
 # -----------------------------------------------------------------------------
 
-section "tf-secure-baseline Control Plane Validation"
+section "${CLOUD_NAME} Control Plane Validation"
 
 section "Checking required local commands"
 

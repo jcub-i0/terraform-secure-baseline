@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 ENV_NAME="${1:-}"
+CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
@@ -16,7 +17,7 @@ fi
 
 require_env_name "$ENV_NAME"
 
-NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME}}"
+NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
@@ -70,7 +71,7 @@ PASSED_COUNT=0
 FAILED_COUNT=0
 TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
 
-section "tf-secure-baseline Validation Report Export"
+section "${CLOUD_NAME} Validation Report Export"
 
 section "Checking required local commands"
 
@@ -171,7 +172,7 @@ fi
 section "Generating JSON summary"
 
 jq -n \
-  --arg project "tf-secure-baseline" \
+  --arg project "$CLOUD_NAME" \
   --arg environment "$ENV_NAME" \
   --arg aws_profile "$AWS_PROFILE" \
   --arg aws_region "$AWS_REGION" \
@@ -214,7 +215,7 @@ success "JSON summary written: ${SUMMARY_JSON}"
 section "Generating Markdown summary"
 
 {
-  echo "# tf-secure-baseline Validation Report"
+  echo "# ${CLOUD_NAME} Validation Report"
   echo
   echo "This report summarizes automated read-only validation results for the \`$ENV_NAME\` workload environment."
   echo
@@ -231,7 +232,7 @@ section "Generating Markdown summary"
   echo
   echo "| Field | Value |"
   echo "|---|---|"
-  echo "| Project | tf-secure-baseline |"
+  echo "| Project | ${CLOUD_NAME} |"
   echo "| Environment | ${ENV_NAME} |"
   echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
   echo "| AWS Region | ${AWS_REGION} |"

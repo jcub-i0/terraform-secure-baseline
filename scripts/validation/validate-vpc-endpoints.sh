@@ -29,12 +29,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 ENV_NAME="${1:-}"
+CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
+NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME:-unknown}}"
 
 # Space-separated list so callers can override this later if the module becomes configurable.
-EXPECTED_INTERFACE_ENDPOINT_SERVICES="${EXPECTED_INTERFACE_ENDPOINT_SERVICES:-sts logs ssm ssmmessages secretsmanager kms config sns ec2 events securityhub lambda}"
+EXPECTED_INTERFACE_ENDPOINT_SERVICES="${EXPECTED_INTERFACE_ENDPOINT_SERVICES:-sts sqs logs ssm ssmmessages secretsmanager kms config sns ec2 events securityhub lambda}"
 
 export AWS_PAGER=""
 
@@ -53,7 +54,7 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
-section "tf-secure-baseline VPC Endpoints Validation"
+section "${CLOUD_NAME} VPC Endpoints Validation"
 
 section "Checking required local commands"
 

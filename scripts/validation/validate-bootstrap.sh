@@ -44,6 +44,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 ENV_NAME="${1:-}"
+
+if [[ -z "$ENV_NAME" ]]; then
+  fail "Usage: $0 <dev|staging|prod>"
+fi
+
 require_env_name "$ENV_NAME"
 
 AWS_PROFILE="${AWS_PROFILE:-}"
@@ -870,7 +875,7 @@ check_workload_cmk_permissions() {
 # Main
 # -----------------------------------------------------------------------------
 
-section "tf-secure-baseline bootstrap validation: ${ENV_NAME}"
+section "${CLOUD_NAME} bootstrap validation: ${ENV_NAME}"
 
 require_command aws
 require_command terraform
