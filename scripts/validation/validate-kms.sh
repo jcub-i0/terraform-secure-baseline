@@ -32,6 +32,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 ENV_NAME="${1:-}"
+require_env_name "$ENV_NAME"
+
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
