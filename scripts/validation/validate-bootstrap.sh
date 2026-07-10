@@ -870,7 +870,7 @@ check_workload_cmk_permissions() {
 # Main
 # -----------------------------------------------------------------------------
 
-section "tf-secure-baseline bootstrap validation: ${ENV_NAME}"
+section "${CLOUD_NAME} bootstrap validation: ${ENV_NAME}"
 
 require_command aws
 require_command terraform
