@@ -53,14 +53,17 @@ Recommended validation order:
 
 1. Confirm AWS profile/account variables.
 2. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
-3. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
-4. Run automated control-plane validation with `validate-control-plane.sh`.
-5. Review any control-plane warnings, especially AWS Organizations account placement warnings.
-6. Validate GitHub Actions workflows manually.
-7. Validate IAM Identity Center end-user access manually where required.
-8. Run live Lambda workflow tests only in approved environments.
-9. Run tamper and break-glass tests only when explicitly approved.
-10. Review destroy safety requirements before running any destroy or teardown workflow.
+3. Export workload bootstrap evidence with `export-bootstrap.sh` for each deployed workload environment.
+4. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
+5. Export workload baseline evidence with `export-baseline.sh` for each deployed workload environment.
+6. Run automated control-plane validation with `validate-control-plane.sh`.
+7. Export control-plane evidence with `export-control-plane.sh`.
+8. Review any control-plane warnings, especially AWS Organizations account placement warnings.
+9. Validate GitHub Actions workflows manually.
+10. Validate IAM Identity Center end-user access manually where required.
+11. Run live Lambda workflow tests only in approved environments.
+12. Run tamper and break-glass tests only when explicitly approved.
+13. Review destroy safety requirements before running any destroy or teardown workflow.
 
 ---
 
@@ -117,6 +120,20 @@ export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>"
 export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
+
+### Naming Convention
+
+Validation scripts now use `CLOUD_NAME` to derive `NAME_PREFIX` when a direct `NAME_PREFIX` override is not supplied.
+
+Environment-specific scripts use this pattern:
+
+```bash
+ENV_NAME="${1:-}"
+CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
+NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
+```
+
+Use `CLOUD_NAME` for normal project/client naming customization. Use `NAME_PREFIX` only when validating a deployment that intentionally does not follow the default `${CLOUD_NAME}-${ENV_NAME}` naming convention.
 
 ---
 
@@ -187,7 +204,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 - workload GitHub plan/apply role existence
 - GitHub OIDC trust policy conditions for the expected repository and GitHub environments
 - GitHub role policy access to the Terraform state bucket, state objects including `.tflock` objects, and state CMK
-- GitHub Apply role access to workload-created Lambda and Secrets Manager CMKs, where required
+- GitHub Apply role access to current workload-created Lambda and Secrets Manager CMKs
 
 `validate-bootstrap.sh` does not require local `terraform.tfstate` from `bootstrap/<env>/state`. This keeps the script compatible with fresh checkouts and manual GitHub workflow runs.
 
@@ -204,15 +221,37 @@ The script derives the state bucket from the backend files, then validates the l
 
 The workload bootstrap architecture uses S3 native state locking. DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
 
-For early bootstrap-only validation before the workload stack has produced `lambda_cmk_arn` and `secrets_manager_cmk_arn`, disable workload CMK permission checks:
+### Workload CMK Policy Validation
+
+`validate-bootstrap.sh` checks whether the workload GitHub Apply role policy references the current workload-created CMK outputs from `environments/<env>`:
+
+```text
+lambda_cmk_arn
+secrets_manager_cmk_arn
+```
+
+This behavior is controlled by:
 
 ```bash
-REQUIRE_WORKLOAD_CMK_PERMS=false \
-AWS_PROFILE=dev \
-AWS_REGION=us-east-1 \
-EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-./scripts/validation/validate-bootstrap.sh dev
+STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-true}"
+```
+
+| Value | Behavior |
+|---|---|
+| `true` | Stale or missing workload Lambda / Secrets Manager CMK policy references fail validation. This is the default and is recommended for client-readiness evidence. |
+| `false` | Stale or missing workload CMK policy references are reported as warnings. The checks still run; they become advisory rather than skipped. |
+
+Use `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/manual GitHub workflow testing, or environments where the workload stack has not yet been reconciled back into `bootstrap/<env>/account`.
+
+For strict workload CMK evidence, the expected deployment sequence is:
+
+```text
+1. Apply bootstrap/<env>/state.
+2. Apply bootstrap/<env>/account.
+3. Apply environments/<env>.
+4. Capture current workload outputs for lambda_cmk_arn and secrets_manager_cmk_arn.
+5. Re-apply bootstrap/<env>/account with those current CMK ARNs.
+6. Run validate-bootstrap.sh or export-bootstrap.sh with the default strict behavior.
 ```
 
 ### GitHub Workflow Usage
@@ -231,6 +270,16 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ```
 
 Repeat with the matching profile, account ID, and environment name for `staging` and `prod`.
+
+To generate workload bootstrap evidence, run `export-bootstrap.sh` after the same remote-backed stack initialization:
+
+```bash
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+./scripts/validation/export-bootstrap.sh dev
+```
 
 ## Automated Workload Baseline Validation
 
@@ -278,16 +327,18 @@ EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 ./scripts/validation/validate-baseline.sh prod
 ```
 
-If a non-default naming convention is used, pass `NAME_PREFIX` explicitly:
+If a custom client/project prefix is used, pass `CLOUD_NAME`:
 
 ```bash
 AWS_PAGER="" \
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-NAME_PREFIX="tf-secure-baseline-dev" \
+CLOUD_NAME="<CLIENT-OR-PROJECT-NAME>" \
 ./scripts/validation/validate-baseline.sh dev
 ```
+
+Pass `NAME_PREFIX` explicitly only when the deployed resource prefix does not follow `${CLOUD_NAME}-${ENV_NAME}`.
 
 ### Automated Validation Coverage
 
@@ -410,6 +461,20 @@ A successful run should end with:
 [PASS] Control-plane validation completed successfully
 ```
 
+To generate control-plane evidence, run:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=control-plane \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+./scripts/validation/export-control-plane.sh
+```
+
 ### Control-Plane Warning Behavior
 
 Some control-plane checks may warn instead of fail.
@@ -418,18 +483,46 @@ For example, account OU placement may produce warnings if workload accounts curr
 
 This is expected if the Organizations stack creates OU structure but does not currently manage account placement. Treat these warnings as governance follow-up items unless account placement has been made a strict requirement for the deployment.
 
-## Exporting Workload Validation Evidence
+## Exporting Validation Evidence
 
-After running the workload validation suite, export a timestamped validation report package:
+Evidence exporters create timestamped report packages with `summary.md`, `summary.json`, and per-script logs.
+
+Use `summary.md` for human review and client handoff. Use `summary.json` for automation, indexing, or future reporting workflows.
+
+Generated evidence is environment-specific and should generally not be committed to the repository.
+
+### Workload Bootstrap Evidence
+
+After running workload bootstrap validation, export a timestamped bootstrap evidence package:
 
 ```bash
-ENV_NAME="dev"
-
 AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
-EXPECTED_ACCOUNT_ID="<account-id>" \
-NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
-./scripts/validation/export-baseline.sh "${ENV_NAME}"
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+CLOUD_NAME="tf-secure-baseline" \
+./scripts/validation/export-bootstrap.sh dev
+```
+
+The export creates:
+
+```text
+validation-results/<environment>/bootstrap/<timestamp>/
+├── summary.md
+├── summary.json
+└── validate-bootstrap.log
+```
+
+### Workload Baseline Evidence
+
+After running the workload baseline validation suite, export a timestamped workload baseline report package:
+
+```bash
+AWS_PROFILE="dev" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+CLOUD_NAME="tf-secure-baseline" \
+./scripts/validation/export-baseline.sh dev
 ```
 
 The export creates:
@@ -454,9 +547,32 @@ validation-results/<environment>/<timestamp>/
 └── validate-iam.log
 ```
 
-Use `summary.md` for human review and client handoff. Use `summary.json` for automation, indexing, or future reporting workflows.
+### Control-Plane Evidence
 
-The report does not replace bootstrap validation, control-plane validation, GitHub Actions workflow execution, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
+After running control-plane validation, export a timestamped control-plane report package:
+
+```bash
+AWS_PROFILE="control-plane" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+CLOUD_NAME="tf-secure-baseline" \
+./scripts/validation/export-control-plane.sh
+```
+
+The export creates:
+
+```text
+validation-results/control-plane/<timestamp>/
+├── summary.md
+├── summary.json
+└── validate-control-plane.log
+```
+
+The exported reports do not replace GitHub Actions workflow execution, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
 
 ## Manual Validation Still Required
 
@@ -2130,7 +2246,7 @@ Run the following workflows:
 - Terraform Plan
 - Terraform Apply
 - Terraform Destroy in a non-production environment only
-  > Ensure that the `bootstrap/<env>/account` stack has been reapplied with the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables set before running the Terraform Destroy workflow
+  > Ensure that the `bootstrap/<env>/account` stack has been re-applied with the current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values before relying on strict workload bootstrap validation evidence or running workflows that need those KMS permissions
 
 Expected:
 
@@ -2338,7 +2454,15 @@ Check:
 - The state S3 bucket exists, has versioning enabled, has public access block enabled, and uses SSE-KMS.
 - The state CMK can be resolved from the bucket encryption configuration, is enabled, and is customer-managed.
 - Remote-backed stacks have been initialized before running validation from a fresh checkout or GitHub workflow.
-- The GitHub Apply role has been re-applied after workload deployment with `lambda_cmk_arn` and `secrets_manager_cmk_arn` set.
+- The GitHub Apply role has been re-applied after workload deployment with current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values.
+
+If strict workload CMK policy checks fail during transitional testing, either reconcile `bootstrap/<env>/account` with the current workload CMK outputs or temporarily run with:
+
+```bash
+STRICT_WORKLOAD_CMK_POLICY_CHECKS=false
+```
+
+This keeps the checks enabled but reports stale/missing workload CMK policy references as warnings instead of failures.
 
 If Terraform suddenly wants to create existing bootstrap/account resources, stop and confirm the S3 backend bucket and key point to the intended state object before applying.
 
@@ -2469,11 +2593,14 @@ This checklist validates that `tf-secure-baseline` is deployed correctly and tha
 A successful validation means:
 
 - Automated workload bootstrap validation passes for the target environment.
+- Workload bootstrap evidence exports successfully through `export-bootstrap.sh`.
 - Automated workload baseline validation passes for the target environment.
+- Workload baseline evidence exports successfully through `export-baseline.sh`.
+- Automated control-plane validation passes for state backend resources, GitHub OIDC, Organizations OU structure, and IAM Identity Center basics.
+- Control-plane evidence exports successfully through `export-control-plane.sh`.
 - AWS accounts and profiles are correct.
 - Terraform state backends exist and remote-backed stacks use S3 native locking with `use_lockfile = true`.
 - GitHub OIDC roles work if enabled.
-- Automated control-plane validation passes for state backend resources, GitHub OIDC, Organizations OU structure, and IAM Identity Center basics.
 - Environment baselines exist.
 - Deployment profile outputs resolve correctly.
 - Egress mode behavior matches the selected profile or override.
