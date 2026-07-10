@@ -59,7 +59,7 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
-section "tf-secure-baseline EventBridge Validation"
+section "${COUD_NAME} EventBridge Validation"
 
 section "Checking required local commands"
 
