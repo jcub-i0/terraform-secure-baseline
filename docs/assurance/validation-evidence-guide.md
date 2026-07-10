@@ -75,7 +75,7 @@ CLOUD_NAME="tf-secure-baseline" \
 Generated workload baseline evidence is written to:
 
 ```text
-validation-results/<environment>/<timestamp>/
+validation-results/<environment>/baseline/<timestamp>/
 ```
 
 ### Example Control-Plane Evidence Export
@@ -183,9 +183,9 @@ secrets_manager_cmk_arn
 
 Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/manual GitHub workflow testing, or environments where the workload stack has not yet been reconciled back into `bootstrap/<env>/account`.
 
-## What Automated Workload Validation Covers
+## What Automated Workload Baseline Validation Covers
 
-The automated workload validation suite checks deployed workload environments across the following areas.
+The automated workload baseline validation suite checks deployed workload environments across the following areas.
 
 | Area | Coverage Summary |
 |---|---|
@@ -430,7 +430,9 @@ Treat validation evidence as internal or client-confidential unless explicitly a
 
 ## Recommended Client Handoff Process
 
-For a client-facing handoff, provide:
+For a client-facing handoff, provide the applicable generated evidence packages and supporting review notes.
+
+Recommended evidence items may include:
 
 1. Workload bootstrap `summary.md`
 2. Workload bootstrap `summary.json`
@@ -448,7 +450,7 @@ For a client-facing handoff, provide:
 
 Recommended handoff message:
 
-> The attached validation package summarizes automated read-only validation results for the deployed workload bootstrap resources, workload baseline environment, and supporting control-plane resources. The package includes human-readable summaries, machine-readable summaries, and supporting validation logs. Bootstrap evidence includes Terraform state backend, GitHub OIDC, state access, and strict workload CMK policy validation. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, and automation resources. Control-plane evidence covers state backend resources, GitHub OIDC, AWS Organizations OU structure, and IAM Identity Center basics. Manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
+> The attached evidence includes applicable automated read-only validation results for the deployed workload bootstrap resources, workload baseline environment, and supporting control-plane resources. Bootstrap evidence includes Terraform state backend, GitHub OIDC, state access, and strict workload CMK policy validation. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, and automation resources. Control-plane evidence covers state backend resources, GitHub OIDC, AWS Organizations OU structure, and IAM Identity Center basics. Manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
 
 ---
 
@@ -460,9 +462,9 @@ Before using validation evidence for client delivery or internal sign-off:
 2. Confirm the correct workload environment was validated.
 3. Confirm `EXPECTED_ACCOUNT_ID` matched the active AWS caller identity.
 4. Confirm `CLOUD_NAME` and the derived `NAME_PREFIX` match deployed workload resource names.
-5. Confirm workload bootstrap evidence was exported with `export-bootstrap.sh`.
-6. Confirm workload baseline evidence was exported with `export-baseline.sh`.
-7. Confirm control-plane validation/evidence export was run with the control-plane profile.
+5. Confirm workload bootstrap evidence was exported with `export-bootstrap.sh`, when applicable.
+6. Confirm workload baseline evidence was exported with `export-baseline.sh`, when applicable.
+7. Confirm control-plane validation/evidence export was run with the control-plane profile, when applicable.
 8. Confirm `EXPECTED_GITHUB_REPOSITORY` matched the repository trusted by the GitHub OIDC roles.
 9. Confirm `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true` unless advisory behavior was intentionally documented.
 10. Review all failed checks.
