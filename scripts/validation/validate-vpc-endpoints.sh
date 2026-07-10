@@ -35,7 +35,7 @@ AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 # Space-separated list so callers can override this later if the module becomes configurable.
-EXPECTED_INTERFACE_ENDPOINT_SERVICES="${EXPECTED_INTERFACE_ENDPOINT_SERVICES:-sts logs ssm ssmmessages secretsmanager kms config sns ec2 events securityhub lambda}"
+EXPECTED_INTERFACE_ENDPOINT_SERVICES="${EXPECTED_INTERFACE_ENDPOINT_SERVICES:-sts sqs logs ssm ssmmessages secretsmanager kms config sns ec2 events securityhub lambda}"
 
 export AWS_PAGER=""
 
