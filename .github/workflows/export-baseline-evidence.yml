@@ -1,0 +1,209 @@
+name: Export Baseline Evidence
+
+run-name: Baseline evidence - ${{ inputs.environment }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Workload environment to validate"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: export-baseline-evidence-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  export-baseline-evidence:
+    name: Export ${{ inputs.environment }} baseline evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ format('{0}-plan', inputs.environment) }}
+
+    env:
+      AWS_PAGER: ""
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve and validate workflow settings
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+          PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
+          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
+          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PRIMARY_REGION}" ]]; then
+            echo "::error::PRIMARY_REGION is not configured in the selected GitHub Environment."
+            exit 1
+          fi
+
+          if [[ -z "${PLAN_ROLE_GITHUB_ARN}" ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not configured in the selected GitHub Environment."
+            exit 1
+          fi
+
+          case "${TARGET_ENVIRONMENT}" in
+            dev)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
+              ;;
+            staging)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
+              ;;
+            prod)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
+              ;;
+            *)
+              echo "::error::Unsupported environment: ${TARGET_ENVIRONMENT}"
+              exit 1
+              ;;
+          esac
+
+          if [[ -z "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::The expected AWS account ID is not configured for ${TARGET_ENVIRONMENT}."
+            exit 1
+          fi
+
+          if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::Expected AWS account ID must contain exactly 12 digits."
+            exit 1
+          fi
+
+          {
+            echo "AWS_REGION=${PRIMARY_REGION}"
+            echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+            echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+          aws-region: ${{ vars.PRIMARY_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.13.0"
+          terraform_wrapper: false
+
+      - name: Initialize workload backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="environments/${{ inputs.environment }}" init \
+            -input=false \
+            -no-color
+
+      - name: Export workload baseline evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/validation/export-baseline.sh "${{ inputs.environment }}"
+
+      - name: Locate generated evidence
+        id: evidence
+        if: always()
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          EVIDENCE_ROOT="validation-results/${TARGET_ENVIRONMENT}/baseline"
+
+          if [[ ! -d "${EVIDENCE_ROOT}" ]]; then
+            echo "::warning::No baseline evidence directory was generated."
+            exit 0
+          fi
+
+          LATEST_TIMESTAMP="$(
+            find "${EVIDENCE_ROOT}" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -printf '%f\n' \
+            | sort \
+            | tail -n 1
+          )"
+
+          if [[ -z "${LATEST_TIMESTAMP}" ]]; then
+            echo "::warning::No timestamped baseline evidence package was found."
+            exit 0
+          fi
+
+          EVIDENCE_DIR="${EVIDENCE_ROOT}/${LATEST_TIMESTAMP}"
+          SUMMARY_MD="${EVIDENCE_DIR}/summary.md"
+          SUMMARY_JSON="${EVIDENCE_DIR}/summary.json"
+
+          {
+            echo "evidence_dir=${EVIDENCE_DIR}"
+            echo "summary_md=${SUMMARY_MD}"
+            echo "summary_json=${SUMMARY_JSON}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Evidence directory: ${EVIDENCE_DIR}"
+
+      - name: Publish validation report to workflow summary
+        if: always()
+        shell: bash
+        env:
+          EVIDENCE_DIR: ${{ steps.evidence.outputs.evidence_dir }}
+          SUMMARY_MD: ${{ steps.evidence.outputs.summary_md }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Workload Baseline Evidence"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
+            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Evidence directory: \`${EVIDENCE_DIR:-<not generated>}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -n "${SUMMARY_MD}" && -f "${SUMMARY_MD}" ]]; then
+            cat "${SUMMARY_MD}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            {
+              echo "## Validation Report"
+              echo
+              echo "No generated \`summary.md\` file was available. Review the workflow logs for the failure that occurred before or during evidence export."
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload baseline evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: baseline-validation-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: validation-results/${{ inputs.environment }}/baseline/
+          if-no-files-found: warn
+          retention-days: 30
