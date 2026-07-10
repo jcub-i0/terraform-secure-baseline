@@ -60,7 +60,7 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
-section "tf-secure-baseline Backup Validation"
+section "${CLOUD_NAME} Backup Validation"
 
 section "Checking required local commands"
 
