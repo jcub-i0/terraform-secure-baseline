@@ -636,8 +636,8 @@ Each validation layer has its own exporter and output directory:
 
 | Validation layer | Export script | Output directory |
 |---|---|---|
-| Workload bootstrap | `export-bootstrap.sh <dev|staging|prod>` | `validation-results/<environment>/bootstrap/<timestamp>/` |
-| Workload baseline | `export-baseline.sh <dev|staging|prod>` | `validation-results/<environment>/baseline/<timestamp>/` |
+| Workload bootstrap | `export-bootstrap.sh <dev/staging/prod>` | `validation-results/<environment>/bootstrap/<timestamp>/` |
+| Workload baseline | `export-baseline.sh <dev/staging/prod>` | `validation-results/<environment>/baseline/<timestamp>/` |
 | Control plane | `export-control-plane.sh` | `validation-results/control-plane/<timestamp>/` |
 
 Example workload bootstrap evidence export:
