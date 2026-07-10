@@ -47,7 +47,7 @@ EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 export AWS_PAGER=""
 
-if [[ -z "${ENV_NAME}" ]]; then
+if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
 fi
 
