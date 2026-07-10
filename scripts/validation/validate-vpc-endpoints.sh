@@ -54,7 +54,7 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
-section "tf-secure-baseline VPC Endpoints Validation"
+section "${CLOUD_NAME} VPC Endpoints Validation"
 
 section "Checking required local commands"
 
