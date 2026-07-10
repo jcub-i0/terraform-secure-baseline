@@ -35,7 +35,7 @@ fi
 
 require_env_name "$ENV_NAME"
 
-section "tf-secure-baseline Full Validation Suite"
+section "${CLOUD_NAME} Full Validation Suite"
 
 info "Environment: $ENV_NAME"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
