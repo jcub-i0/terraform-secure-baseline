@@ -70,7 +70,7 @@ normalize_route_tables_json() {
   }]'
 }
 
-section "tf-secure-baseline Networking Validation"
+section "${CLOUD_NAME} Networking Validation"
 
 section "Checking required local commands"
 
