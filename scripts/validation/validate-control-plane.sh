@@ -656,7 +656,7 @@ check_identity_center() {
 # Main
 # -----------------------------------------------------------------------------
 
-section "tf-secure-baseline Control Plane Validation"
+section "${CLOUD_NAME} Control Plane Validation"
 
 section "Checking required local commands"
 
