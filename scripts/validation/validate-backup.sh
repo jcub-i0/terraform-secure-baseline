@@ -40,7 +40,7 @@ ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${ENV_NAME:-unknown}}"
+NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME:-unknown}}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 export AWS_PAGER=""
