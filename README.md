@@ -63,7 +63,7 @@ Key capabilities include:
 - Encrypted S3, KMS, SNS, SQS, CloudWatch, and Lambda resources
 - AWS Backup and SSM patching support
 - Safe, read-only post-deployment validation suite
-- Automated validation evidence export with Markdown and JSON summaries
+- Layer-specific validation evidence export with Markdown and JSON summaries
 
 ---
 
@@ -518,8 +518,10 @@ At a high level, deployment follows this order:
 2. Deploy **account / GitHub OIDC** resources
 3. Deploy **AWS Organizations** structure
 4. Deploy **environment baseline**
-5. Deploy or re-apply **IAM Identity Center** assignments
-6. Validate **security automation workflows**
+5. Re-apply workload **account / GitHub OIDC** resources with current workload-created CMK ARNs where strict workload bootstrap evidence is required
+6. Deploy or re-apply **IAM Identity Center** assignments
+7. Validate **security automation workflows**
+8. Export validation evidence for the applicable validation layers
 
 Detailed instructions are provided in:
 
@@ -537,12 +539,16 @@ The repository includes safe, read-only validation scripts under:
 scripts/validation/
 ```
 
-Validation is split into three layers:
+Validation is split into three layers, with matching evidence exporters:
 
 ```text
 Workload bootstrap validation  -> validate-bootstrap.sh <dev|staging|prod>
 Workload baseline validation   -> validate-baseline.sh <dev|staging|prod>
 Control-plane validation       -> validate-control-plane.sh
+
+Workload bootstrap evidence    -> export-bootstrap.sh <dev|staging|prod>
+Workload baseline evidence     -> export-baseline.sh <dev|staging|prod>
+Control-plane evidence         -> export-control-plane.sh
 ```
 
 ### Workload Bootstrap Validation
@@ -555,6 +561,7 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
@@ -567,6 +574,8 @@ terraform -chdir=bootstrap/dev/account init -input=false
 terraform -chdir=environments/dev init -input=false
 ```
 
+Bootstrap validation is strict by default for workload-created CMK policy evidence. `STRICT_WORKLOAD_CMK_POLICY_CHECKS` defaults to `true`, which means stale or missing GitHub Apply role policy references to the current workload Lambda and Secrets Manager CMKs fail validation. Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional validation where those checks should be warnings instead of failures.
+
 ### Workload Baseline Validation
 
 Use `validate-baseline.sh` to validate deployed workload baseline resources.
@@ -576,6 +585,7 @@ AWS_PAGER="" \
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/validate-baseline.sh dev
 ```
 
@@ -603,6 +613,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -619,29 +630,56 @@ The automated validation scripts are intentionally read-only. GitHub Actions wor
 
 ### Validation Reporting
 
-Validation evidence can be exported for client handoff, troubleshooting, or internal deployment records:
+Validation evidence can be exported for client handoff, troubleshooting, or internal deployment records.
+
+Each validation layer has its own exporter and output directory:
+
+| Validation layer | Export script | Output directory |
+|---|---|---|
+| Workload bootstrap | `export-bootstrap.sh <dev|staging|prod>` | `validation-results/<environment>/bootstrap/<timestamp>/` |
+| Workload baseline | `export-baseline.sh <dev|staging|prod>` | `validation-results/<environment>/baseline/<timestamp>/` |
+| Control plane | `export-control-plane.sh` | `validation-results/control-plane/<timestamp>/` |
+
+Example workload bootstrap evidence export:
 
 ```bash
-ENV_NAME="dev"
-
 AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
-EXPECTED_ACCOUNT_ID="<account-id>" \
-NAME_PREFIX="tf-secure-baseline-${ENV_NAME}" \
-./scripts/validation/export-baseline.sh "${ENV_NAME}"
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+CLOUD_NAME="tf-secure-baseline" \
+./scripts/validation/export-bootstrap.sh dev
 ```
 
-Generated reports are written to:
+Example workload baseline evidence export:
 
-```text
-validation-results/<environment>/<timestamp>/
+```bash
+AWS_PROFILE="dev" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+CLOUD_NAME="tf-secure-baseline" \
+./scripts/validation/export-baseline.sh dev
+```
+
+Example control-plane evidence export:
+
+```bash
+AWS_PROFILE="control-plane" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
+ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
+ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+CLOUD_NAME="tf-secure-baseline" \
+./scripts/validation/export-control-plane.sh
 ```
 
 Each report package includes:
 
 - `summary.md`
 - `summary.json`
-- Per-script validation logs
+- one or more validation logs
 
 Generated validation results are ignored by Git by default.
 
@@ -728,7 +766,7 @@ Important docs include:
 | docs/design-principles.md | Design principles and rationale |
 | docs/adoption-guide.md | Guidance for adapting the baseline |
 | docs/validation-checklist.md | Post-deployment validation checklist |
-| docs/assurance/ | Compliance-oriented documentation |
+| docs/assurance/ | Validation evidence, report templates, and compliance-oriented documentation |
 | docs/lambda_tests/ | Automation testing documentation |
 
 Each module also includes its own local README.md.
@@ -737,21 +775,21 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.3.4
+### v1.3.5
 
-This release completes the validation architecture cleanup by organizing validation into workload bootstrap, workload baseline, and control-plane validation layers while standardizing Terraform state-locking validation around S3 native lockfiles.
+This release improves client-readiness validation evidence by adding layer-specific evidence exporters, standardizing naming behavior across validation scripts, and strengthening workload bootstrap validation around current workload-created CMK policy access.
 
 Highlights:
 
-- Added automated workload bootstrap validation with `validate-bootstrap.sh`.
-- Added CI-safe bootstrap validation that does not require local `terraform.tfstate` from `bootstrap/<env>/state`.
-- Updated bootstrap validation to derive the Terraform state bucket from remote backend files and validate live S3/KMS configuration through AWS APIs.
-- Added/standardized automated read-only control-plane validation with `validate-control-plane.sh`.
-- Validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations OU structure, IAM Identity Center basics, optional account assignments, and expected GitHub repository trust conditions.
-- Standardized backend locking validation around Terraform S3 native locking with `use_lockfile = true`.
-- Renamed workload baseline validation from `validate-all.sh` to `validate-baseline.sh`, with `validate-all.sh` retained as a deprecated compatibility wrapper.
-- Added validation script documentation under `scripts/validation/README.md`.
-- Updated validation documentation to distinguish workload bootstrap validation, workload baseline validation, control-plane validation, and manual live workflow testing.
+- Added workload bootstrap evidence export with `export-bootstrap.sh`.
+- Added control-plane evidence export with `export-control-plane.sh`.
+- Standardized workload baseline evidence export through `export-baseline.sh`.
+- Updated evidence output paths to separate workload bootstrap, workload baseline, and control-plane report packages.
+- Added strict-by-default workload CMK policy validation with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true`.
+- Validates that the workload GitHub Apply role references the current workload-created Lambda and Secrets Manager CMK ARNs.
+- Supports transitional workload CMK validation with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false`, where stale or missing workload CMK references are warnings instead of failures.
+- Standardized validation script naming behavior around `CLOUD_NAME` and derived `NAME_PREFIX` values.
+- Preserved the three-layer validation model: workload bootstrap, workload baseline, and control plane.
 - Preserved manual-only status for GitHub Actions execution, end-user SSO testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
