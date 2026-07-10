@@ -207,6 +207,8 @@ The **environment** stacks manage:
 │       ├── lib
 │       │   └── common.sh
 |       ├── export-baseline.sh
+|       ├── export-bootstrap.sh
+|       ├── export-control-plane.sh
 │       ├── validate-backup.sh
 │       ├── validate-baseline.sh
 │       ├── validate-bootstrap.sh
