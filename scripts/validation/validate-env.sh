@@ -30,7 +30,7 @@ if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
 fi
 
-section "tf-secure-baseline Environment Validation"
+section "${CLOUD_NAME} Environment Validation"
 
 require_env_name "$ENV_NAME"
 
