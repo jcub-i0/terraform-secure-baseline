@@ -36,6 +36,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
 NAME_PREFIX="${NAME_PREFIX:-tf-secure-baseline-${CONTROL_PLANE_ENV_NAME}}"
 
