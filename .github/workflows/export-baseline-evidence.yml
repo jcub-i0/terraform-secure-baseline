@@ -8,6 +8,7 @@ on:
       environment:
         description: "Workload environment to validate"
         required: true
+        default: "dev"
         type: choice
         options:
           - dev
@@ -99,7 +100,7 @@ jobs:
           role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
           aws-region: ${{ vars.PRIMARY_REGION }}
 
-      - name: Verify AWS Identity
+      - name: Verify AWS identity
         shell: bash
         run: |
           set -euo pipefail
@@ -123,7 +124,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/validation/export-baseline "${{ inputs.environment }}"
+          ./scripts/validation/export-baseline.sh "${{ inputs.environment }}"
 
       - name: Locate generated evidence
         id: evidence
@@ -181,12 +182,12 @@ jobs:
             echo "# Workload Baseline Evidence"
             echo
             echo "- Environment: \`${{ inputs.environment }}\`"
-            echo "- GitHub Environment: \'${{ format('{0}-plan', inputs.environment) }}\`"
-            echo "- AWS Region: \`$AWS_REGION:-<not-resolved>}\`"
+            echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
+            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
             echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
             echo "- Evidence directory: \`${EVIDENCE_DIR:-<not generated>}\`"
             echo
-          }  >> "${GITHUB_STEP_SUMMARY}"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           if [[ -n "${SUMMARY_MD}" && -f "${SUMMARY_MD}" ]]; then
             cat "${SUMMARY_MD}" >> "${GITHUB_STEP_SUMMARY}"
