@@ -13,11 +13,28 @@ CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"
 
+if [[ -n "${AWS_PROFILE}" ]]; then
+  AWS_CREDENTIAL_SOURCE="AWS CLI profile: ${AWS_PROFILE}"
+elif [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  AWS_CREDENTIAL_SOURCE="GitHub OIDC environment credentials"
+else
+  AWS_CREDENTIAL_SOURCE="AWS default credential chain"
+fi
+
 REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
-EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
+EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
 CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
 STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+
+case "$REQUIRE_STATE_STACK_REMOTE" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
+    ;;
+esac
 
 ACCOUNT_ID_DEV="${ACCOUNT_ID_DEV:-}"
 ACCOUNT_ID_STAGING="${ACCOUNT_ID_STAGING:-}"
@@ -68,7 +85,8 @@ info "Control-plane environment name: ${CONTROL_PLANE_ENV_NAME}"
 info "Validation layer: ${VALIDATION_LAYER}"
 info "Output dir: ${OUTPUT_DIR}"
 info "Name prefix: ${NAME_PREFIX}"
-info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<not set>}"
+info "AWS credential source: ${AWS_CREDENTIAL_SOURCE}"
 info "AWS_REGION: ${AWS_REGION}"
 info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
@@ -76,6 +94,7 @@ info "REQUIRE_CONTROL_PLANE_GITHUB_OIDC: ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}"
 info "CHECK_OPTIONAL_SECOPS_GROUPS: ${CHECK_OPTIONAL_SECOPS_GROUPS}"
 info "STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${STRICT_IDENTITY_CENTER_ASSIGNMENTS}"
 info "STRICT_ACCOUNT_OU_CHECKS: ${STRICT_ACCOUNT_OU_CHECKS}"
+info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
 info "ACCOUNT_ID_DEV: ${ACCOUNT_ID_DEV:-<not set>}"
 info "ACCOUNT_ID_STAGING: ${ACCOUNT_ID_STAGING:-<not set>}"
 info "ACCOUNT_ID_PROD: ${ACCOUNT_ID_PROD:-<not set>}"
@@ -122,6 +141,7 @@ export EXPECTED_GITHUB_REPOSITORY
 export CHECK_OPTIONAL_SECOPS_GROUPS
 export STRICT_IDENTITY_CENTER_ASSIGNMENTS
 export STRICT_ACCOUNT_OU_CHECKS
+export REQUIRE_STATE_STACK_REMOTE
 export ACCOUNT_ID_DEV
 export ACCOUNT_ID_STAGING
 export ACCOUNT_ID_PROD
@@ -172,6 +192,7 @@ jq -n \
   --arg validation_layer_display "Control Plane" \
   --arg control_plane_environment "$CONTROL_PLANE_ENV_NAME" \
   --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_credential_source "$AWS_CREDENTIAL_SOURCE" \
   --arg aws_region "$AWS_REGION" \
   --arg aws_account_id "$AWS_ACCOUNT_ID" \
   --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
@@ -183,6 +204,7 @@ jq -n \
   --arg check_optional_secops_groups "$CHECK_OPTIONAL_SECOPS_GROUPS" \
   --arg strict_identity_center_assignments "$STRICT_IDENTITY_CENTER_ASSIGNMENTS" \
   --arg strict_account_ou_checks "$STRICT_ACCOUNT_OU_CHECKS" \
+  --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
   --arg account_id_dev "$ACCOUNT_ID_DEV" \
   --arg account_id_staging "$ACCOUNT_ID_STAGING" \
   --arg account_id_prod "$ACCOUNT_ID_PROD" \
@@ -197,6 +219,7 @@ jq -n \
     validation_layer_display: $validation_layer_display,
     control_plane_environment: $control_plane_environment,
     aws_profile: $aws_profile,
+    aws_credential_source: $aws_credential_source,
     aws_region: $aws_region,
     aws_account_id: $aws_account_id,
     expected_account_id: $expected_account_id,
@@ -212,6 +235,7 @@ jq -n \
       check_optional_secops_groups: $check_optional_secops_groups,
       strict_identity_center_assignments: $strict_identity_center_assignments,
       strict_account_ou_checks: $strict_account_ou_checks,
+      require_state_stack_remote: $require_state_stack_remote,
       account_id_dev: $account_id_dev,
       account_id_staging: $account_id_staging,
       account_id_prod: $account_id_prod
@@ -221,6 +245,7 @@ jq -n \
       "control_plane_aws_identity",
       "control_plane_stack_directories",
       "control_plane_backend_locking",
+      "optional_state_remote_backend_migration",
       "control_plane_state_outputs",
       "control_plane_state_bucket_security",
       "control_plane_state_bucket_versioning",
@@ -279,10 +304,11 @@ section "Generating Markdown summary"
   echo "| Project | ${CLOUD_NAME} |"
   echo "| Control-plane Environment | ${CONTROL_PLANE_ENV_NAME} |"
   echo "| Validation Layer | Control Plane |"
-  echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
+  echo "| AWS Profile | \`${AWS_PROFILE:-not set}\` |"
+  echo "| AWS Credential Source | \`${AWS_CREDENTIAL_SOURCE}\` |"
   echo "| AWS Region | ${AWS_REGION} |"
   echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
-  echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
+  echo "| Expected Account ID | \`${EXPECTED_ACCOUNT_ID:-not configured}\` |"
   echo "| Name Prefix | ${NAME_PREFIX} |"
   echo "| Validation Time | ${VALIDATION_TIME} |"
   echo "| Overall Result | ${OVERALL_RESULT} |"
@@ -293,14 +319,15 @@ section "Generating Markdown summary"
   echo
   echo "| Setting | Value |"
   echo "|---|---|"
-  echo "| Expected GitHub Repository | ${EXPECTED_GITHUB_REPOSITORY:-<not set>} |"
+  echo "| Expected GitHub Repository | \`${EXPECTED_GITHUB_REPOSITORY:-not configured}\` |"
   echo "| Require Control-Plane GitHub OIDC | ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC} |"
   echo "| Check Optional SecOps Groups | ${CHECK_OPTIONAL_SECOPS_GROUPS} |"
   echo "| Strict Identity Center Assignments | ${STRICT_IDENTITY_CENTER_ASSIGNMENTS} |"
   echo "| Strict Account OU Checks | ${STRICT_ACCOUNT_OU_CHECKS} |"
-  echo "| Dev Account ID | ${ACCOUNT_ID_DEV:-<not set>} |"
-  echo "| Staging Account ID | ${ACCOUNT_ID_STAGING:-<not set>} |"
-  echo "| Prod Account ID | ${ACCOUNT_ID_PROD:-<not set>} |"
+  echo "| Require State Stack Remote | ${REQUIRE_STATE_STACK_REMOTE} |"
+  echo "| Dev Account ID | \`${ACCOUNT_ID_DEV:-not configured}\` |"
+  echo "| Staging Account ID | \`${ACCOUNT_ID_STAGING:-not configured}\` |"
+  echo "| Prod Account ID | \`${ACCOUNT_ID_PROD:-not configured}\` |"
   echo
   echo "## Validation Summary"
   echo
@@ -320,6 +347,7 @@ section "Generating Markdown summary"
   echo "- Control-plane AWS caller identity"
   echo "- Control-plane stack directory structure"
   echo "- Control-plane backend locking with \`use_lockfile = true\`"
+  echo "- Optional validation that the control-plane state stack uses and can read its remote S3 backend"
   echo "- Control-plane state Terraform outputs"
   echo "- Control-plane state bucket existence and security configuration"
   echo "- State bucket versioning"
@@ -382,10 +410,12 @@ section "Control-Plane Validation Report Export Summary"
 
 echo "Validation layer:           Control Plane"
 echo "Control-plane env name:     ${CONTROL_PLANE_ENV_NAME}"
-echo "AWS profile:                ${AWS_PROFILE:-<default>}"
+echo "AWS profile:                ${AWS_PROFILE:-not set}"
+echo "AWS credential source:      ${AWS_CREDENTIAL_SOURCE}"
 echo "AWS region:                 ${AWS_REGION}"
 echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
 echo "Name prefix:                ${NAME_PREFIX}"
+echo "Require remote state stack: ${REQUIRE_STATE_STACK_REMOTE}"
 echo
 echo "Output directory:           ${OUTPUT_DIR}"
 echo "Summary JSON:               ${SUMMARY_JSON}"
