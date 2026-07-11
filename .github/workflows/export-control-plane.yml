@@ -242,7 +242,7 @@ jobs:
             echo "- Optional SecOps group checks: \`${CHECK_OPTIONAL_SECOPS_GROUPS}\`"
             echo "- Strict Identity Center assignments: \`${STRICT_IDENTITY_CENTER_ASSIGNMENTS}\`"
             echo "- Strict account OU checks: \`${STRICT_ACCOUNT_OU_CHECKS}\`"
-            echo "- Require remote control-plane state: \`${REQUIRE_STATE_STACK_REMOTE}\`"
+            echo "- Require state stack remote: \`${REQUIRE_STATE_STACK_REMOTE}\`"
             echo "- Evidence directory: \`${EVIDENCE_DIR:-not generated}\`"
             echo
           } >> "${GITHUB_STEP_SUMMARY}"
