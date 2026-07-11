@@ -178,7 +178,7 @@ jobs:
             echo "# Workload Bootstrap Evidence"
             echo
             echo "- Environment: \`${{ inputs.environment }}\`"
-            echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}`"
+            echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
             echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
             echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
             echo "- Evidence directory: \`${EVIDENCE_DIR:-<not generated>}\`"
