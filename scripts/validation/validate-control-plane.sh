@@ -6,7 +6,7 @@
 #
 # Scope:
 #   - Control-plane AWS caller identity
-#   - bootstrap/control_plane/state backend resources
+#   - bootstrap/control_plane/state backend resources and optional remote-state proof
 #   - bootstrap/control_plane/account GitHub OIDC roles
 #   - bootstrap/control_plane/organizations OU structure
 #   - bootstrap/control_plane/identity_center instance, groups, permission sets,
@@ -19,9 +19,12 @@
 #   ./scripts/validation/validate-control-plane.sh
 #
 # Optional:
-#   NAME_PREFIX=tf-secure-baseline-control-plane ./scripts/validation/validate-control-plane.sh
-#   EXPECTED_GITHUB_REPOSITORY=owner/repo ./scripts/validation/validate-control-plane.sh
-#   ACCOUNT_ID_DEV=<dev-account-id> ACCOUNT_ID_STAGING=<staging-account-id> ACCOUNT_ID_PROD=<prod-account-id> ./scripts/validation/validate-control-plane.sh
+#   REQUIRE_STATE_STACK_REMOTE=true
+#   NAME_PREFIX=tf-secure-baseline-control-plane
+#   EXPECTED_GITHUB_REPOSITORY=owner/repo
+#   ACCOUNT_ID_DEV=<dev-account-id>
+#   ACCOUNT_ID_STAGING=<staging-account-id>
+#   ACCOUNT_ID_PROD=<prod-account-id>
 #
 # Notes:
 #   This script is intentionally read-only. It does not run GitHub workflows,
@@ -36,15 +39,24 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
+CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"
 
 REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
-EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
+EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
 CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
 STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+
+case "$REQUIRE_STATE_STACK_REMOTE" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
+    ;;
+esac
 
 ACCOUNT_ID_DEV="${ACCOUNT_ID_DEV:-}"
 ACCOUNT_ID_STAGING="${ACCOUNT_ID_STAGING:-}"
@@ -88,7 +100,6 @@ terraform_output_json_required() {
 
 terraform_output_json_optional() {
   local stack_dir="$1"
-
   terraform_output_json "$stack_dir" 2>/dev/null || echo "{}"
 }
 
@@ -132,6 +143,130 @@ require_non_empty() {
 
   if [[ -z "$value" || "$value" == "null" || "$value" == "None" ]]; then
     fail "Unable to resolve ${description}"
+  fi
+}
+
+validate_backend_locking() {
+  local backend_file="$1"
+  local description="$2"
+
+  section "Checking ${description} backend locking"
+
+  require_file "$backend_file"
+
+  if grep -Eq '^[[:space:]]*use_lockfile[[:space:]]*=[[:space:]]*true' "$backend_file"; then
+    success "${description} backend uses S3 native lockfile: use_lockfile = true"
+  else
+    fail "${description} backend does not set use_lockfile = true"
+  fi
+}
+
+get_backend_string_value() {
+  local backend_file="$1"
+  local attribute_name="$2"
+
+  sed -nE "s/^[[:space:]]*${attribute_name}[[:space:]]*=[[:space:]]*\"([^\"]+)\".*/\1/p" "$backend_file" |
+    head -n 1
+}
+
+handle_state_stack_remote_issue() {
+  local message="$1"
+
+  if [[ "$REQUIRE_STATE_STACK_REMOTE" == "true" ]]; then
+    fail "$message"
+  else
+    warn "${message} REQUIRE_STATE_STACK_REMOTE=false, so this finding is advisory."
+  fi
+}
+
+validate_state_stack_remote_backend() {
+  local state_dir="$1"
+  local expected_bucket_name="$2"
+  local backend_file="${state_dir}/backend.tf"
+
+  section "Checking control-plane state stack remote backend"
+
+  if [[ ! -f "$backend_file" ]]; then
+    handle_state_stack_remote_issue \
+      "Control-plane state backend file was not found: ${backend_file}"
+    return 0
+  fi
+
+  if grep -Eq 'backend[[:space:]]+"s3"' "$backend_file"; then
+    success "Control-plane state stack declares an S3 backend"
+  else
+    handle_state_stack_remote_issue \
+      "Control-plane state stack does not declare an S3 backend: ${backend_file}"
+    return 0
+  fi
+
+  if grep -Eq '^[[:space:]]*use_lockfile[[:space:]]*=[[:space:]]*true' "$backend_file"; then
+    success "Control-plane state stack uses S3 native locking: use_lockfile = true"
+  else
+    handle_state_stack_remote_issue \
+      "Control-plane state stack does not set use_lockfile = true"
+  fi
+
+  local backend_bucket
+  local backend_key
+  local backend_region
+
+  backend_bucket="$(get_backend_string_value "$backend_file" bucket)"
+  backend_key="$(get_backend_string_value "$backend_file" key)"
+  backend_region="$(get_backend_string_value "$backend_file" region)"
+
+  if [[ -z "$backend_bucket" ]]; then
+    handle_state_stack_remote_issue \
+      "Unable to resolve the control-plane state backend bucket from ${backend_file}"
+    return 0
+  fi
+
+  if [[ -z "$backend_key" ]]; then
+    handle_state_stack_remote_issue \
+      "Unable to resolve the control-plane state backend key from ${backend_file}"
+    return 0
+  fi
+
+  if [[ -z "$backend_region" ]]; then
+    handle_state_stack_remote_issue \
+      "Unable to resolve the control-plane state backend region from ${backend_file}"
+    return 0
+  fi
+
+  info "Control-plane state backend bucket: ${backend_bucket}"
+  info "Control-plane state backend key: ${backend_key}"
+  info "Control-plane state backend region: ${backend_region}"
+
+  if [[ "$backend_bucket" == "$expected_bucket_name" ]]; then
+    success "Control-plane state backend bucket matches the state stack output"
+  else
+    handle_state_stack_remote_issue \
+      "Control-plane state backend bucket mismatch. Backend: ${backend_bucket}; state output: ${expected_bucket_name}"
+  fi
+
+  if [[ "$backend_region" == "$AWS_REGION" ]]; then
+    success "Control-plane state backend region matches AWS_REGION: ${AWS_REGION}"
+  else
+    handle_state_stack_remote_issue \
+      "Control-plane state backend region mismatch. Backend: ${backend_region}; AWS_REGION: ${AWS_REGION}"
+  fi
+
+  if aws s3api head-object \
+    "${aws_args[@]}" \
+    --bucket "$backend_bucket" \
+    --key "$backend_key" >/dev/null 2>&1; then
+    success "Control-plane state object exists and is readable: s3://${backend_bucket}/${backend_key}"
+  else
+    handle_state_stack_remote_issue \
+      "Control-plane state object was not found or is not readable: s3://${backend_bucket}/${backend_key}"
+    return 0
+  fi
+
+  if terraform -chdir="$state_dir" state pull >/dev/null 2>&1; then
+    success "Control-plane state is readable through the configured remote backend"
+  else
+    handle_state_stack_remote_issue \
+      "Unable to read control-plane state through the configured backend"
   fi
 }
 
@@ -223,21 +358,6 @@ check_s3_state_bucket() {
   fi
 }
 
-validate_backend_locking() {
-  local backend_file="$1"
-  local description="$2"
-
-  section "Checking ${description} backend locking"
-
-  require_file "$backend_file"
-
-  if grep -Eq '^[[:space:]]*use_lockfile[[:space:]]*=[[:space:]]*true' "$backend_file"; then
-    success "${description} backend uses S3 native lockfile: use_lockfile = true"
-  else
-    fail "${description} backend does not set use_lockfile = true"
-  fi
-}
-
 check_kms_key() {
   local kms_key_arn="$1"
 
@@ -296,7 +416,6 @@ check_github_role() {
 
   local role_name
   role_name="$(get_role_name_from_arn "$role_arn")"
-
   require_non_empty "$role_name" "${role_description} role name"
 
   local role_json
@@ -343,7 +462,8 @@ check_github_role() {
     local repo_condition_count
     repo_condition_count="$(
       echo "$trust_json" |
-        jq --arg repo "$EXPECTED_GITHUB_REPOSITORY" '[.. | strings | select(contains("repo:" + $repo + ":"))] | length'
+        jq --arg repo "$EXPECTED_GITHUB_REPOSITORY" \
+          '[.. | strings | select(contains("repo:" + $repo + ":"))] | length'
     )"
 
     if [[ "$repo_condition_count" -gt 0 ]]; then
@@ -354,6 +474,38 @@ check_github_role() {
     fi
   else
     warn "EXPECTED_GITHUB_REPOSITORY not set. Skipping GitHub repository condition check for ${role_description}."
+  fi
+}
+
+check_account_parent_if_requested() {
+  local env_name="$1"
+  local account_id="$2"
+  local expected_parent_id="$3"
+  local expected_parent_name="$4"
+
+  if [[ -z "$account_id" ]]; then
+    warn "ACCOUNT_ID_${env_name^^} not set. Skipping optional ${env_name} account OU placement check."
+    return 0
+  fi
+
+  local parent_id
+  parent_id="$(
+    aws organizations list-parents \
+      "${aws_args[@]}" \
+      --child-id "$account_id" \
+      --query 'Parents[0].Id' \
+      --output text
+  )"
+
+  if [[ "$parent_id" == "$expected_parent_id" ]]; then
+    success "${env_name} account is attached to expected ${expected_parent_name} OU"
+  else
+    local message="${env_name} account parent mismatch. Expected ${expected_parent_name} (${expected_parent_id}), got ${parent_id}"
+    if [[ "$STRICT_ACCOUNT_OU_CHECKS" == "true" ]]; then
+      fail "$message"
+    else
+      warn "$message"
+    fi
   fi
 }
 
@@ -439,38 +591,6 @@ check_organizations_ou_structure() {
   check_account_parent_if_requested "prod" "$ACCOUNT_ID_PROD" "$prod_ou_id" "Prod"
 }
 
-check_account_parent_if_requested() {
-  local env_name="$1"
-  local account_id="$2"
-  local expected_parent_id="$3"
-  local expected_parent_name="$4"
-
-  if [[ -z "$account_id" ]]; then
-    warn "ACCOUNT_ID_${env_name^^} not set. Skipping optional ${env_name} account OU placement check."
-    return 0
-  fi
-
-  local parent_id
-  parent_id="$(
-    aws organizations list-parents \
-      "${aws_args[@]}" \
-      --child-id "$account_id" \
-      --query 'Parents[0].Id' \
-      --output text
-  )"
-
-  if [[ "$parent_id" == "$expected_parent_id" ]]; then
-    success "${env_name} account is attached to expected ${expected_parent_name} OU"
-  else
-    local message="${env_name} account parent mismatch. Expected ${expected_parent_name} (${expected_parent_id}), got ${parent_id}"
-    if [[ "$STRICT_ACCOUNT_OU_CHECKS" == "true" ]]; then
-      fail "$message"
-    else
-      warn "$message"
-    fi
-  fi
-}
-
 resolve_identity_center_instance() {
   local instances_json
   instances_json="$(
@@ -522,13 +642,11 @@ check_identity_center_group() {
 
   if [[ "$group_count" -gt 0 ]]; then
     success "Identity Center group exists: ${group_name}"
+  elif [[ "$required" == "true" ]]; then
+    echo "$groups_json" | jq .
+    fail "Required Identity Center group not found: ${group_name}"
   else
-    if [[ "$required" == "true" ]]; then
-      echo "$groups_json" | jq .
-      fail "Required Identity Center group not found: ${group_name}"
-    else
-      warn "Optional Identity Center group not found or not enabled: ${group_name}"
-    fi
+    warn "Optional Identity Center group not found or not enabled: ${group_name}"
   fi
 }
 
@@ -594,7 +712,6 @@ check_identity_center() {
   local identity_center_outputs_json="$1"
 
   section "Checking IAM Identity Center instance"
-
   resolve_identity_center_instance
 
   section "Checking IAM Identity Center groups"
@@ -627,9 +744,11 @@ check_identity_center() {
   if [[ "${#DEV_PERMISSION_SET_ARNS[@]}" -eq 0 ]]; then
     fail "No dev permission set ARNs found in identity_center output"
   fi
+
   if [[ "${#STAGING_PERMISSION_SET_ARNS[@]}" -eq 0 ]]; then
     fail "No staging permission set ARNs found in identity_center output"
   fi
+
   if [[ "${#PROD_PERMISSION_SET_ARNS[@]}" -eq 0 ]]; then
     fail "No prod permission set ARNs found in identity_center output"
   fi
@@ -638,9 +757,11 @@ check_identity_center() {
   for arn in "${DEV_PERMISSION_SET_ARNS[@]}"; do
     check_permission_set_arn "$arn" "dev"
   done
+
   for arn in "${STAGING_PERMISSION_SET_ARNS[@]}"; do
     check_permission_set_arn "$arn" "staging"
   done
+
   for arn in "${PROD_PERMISSION_SET_ARNS[@]}"; do
     check_permission_set_arn "$arn" "prod"
   done
@@ -690,6 +811,7 @@ info "Identity Center dir: ${IDENTITY_CENTER_DIR}"
 info "Name prefix: ${NAME_PREFIX}"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: ${AWS_REGION}"
+info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
 
 require_directory "$CONTROL_PLANE_DIR"
 require_directory "$STATE_DIR"
@@ -755,6 +877,7 @@ info "State bucket name: ${STATE_BUCKET_NAME}"
 info "State bucket ARN: ${STATE_BUCKET_ARN}"
 info "State CMK ARN: ${STATE_CMK_ARN}"
 
+validate_state_stack_remote_backend "$STATE_DIR" "$STATE_BUCKET_NAME"
 check_s3_state_bucket "$STATE_BUCKET_NAME" "$STATE_CMK_ARN"
 check_kms_key "$STATE_CMK_ARN"
 
@@ -792,6 +915,7 @@ Name prefix:                       ${NAME_PREFIX}
 
 State bucket:                      ${STATE_BUCKET_NAME}
 State CMK:                         ${STATE_CMK_ARN}
+State stack remote required:       ${REQUIRE_STATE_STACK_REMOTE}
 
 GitHub OIDC required:              ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}
 GitHub plan role ARN:              ${PLAN_ROLE_ARN}
