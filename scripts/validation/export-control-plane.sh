@@ -26,6 +26,15 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}
 CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
 STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+
+case "$REQUIRE_STATE_STACK_REMOTE" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
+    ;;
+esac
 
 ACCOUNT_ID_DEV="${ACCOUNT_ID_DEV:-}"
 ACCOUNT_ID_STAGING="${ACCOUNT_ID_STAGING:-}"
@@ -85,6 +94,7 @@ info "REQUIRE_CONTROL_PLANE_GITHUB_OIDC: ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}"
 info "CHECK_OPTIONAL_SECOPS_GROUPS: ${CHECK_OPTIONAL_SECOPS_GROUPS}"
 info "STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${STRICT_IDENTITY_CENTER_ASSIGNMENTS}"
 info "STRICT_ACCOUNT_OU_CHECKS: ${STRICT_ACCOUNT_OU_CHECKS}"
+info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
 info "ACCOUNT_ID_DEV: ${ACCOUNT_ID_DEV:-<not set>}"
 info "ACCOUNT_ID_STAGING: ${ACCOUNT_ID_STAGING:-<not set>}"
 info "ACCOUNT_ID_PROD: ${ACCOUNT_ID_PROD:-<not set>}"
@@ -131,6 +141,7 @@ export EXPECTED_GITHUB_REPOSITORY
 export CHECK_OPTIONAL_SECOPS_GROUPS
 export STRICT_IDENTITY_CENTER_ASSIGNMENTS
 export STRICT_ACCOUNT_OU_CHECKS
+export REQUIRE_STATE_STACK_REMOTE
 export ACCOUNT_ID_DEV
 export ACCOUNT_ID_STAGING
 export ACCOUNT_ID_PROD
@@ -193,6 +204,7 @@ jq -n \
   --arg check_optional_secops_groups "$CHECK_OPTIONAL_SECOPS_GROUPS" \
   --arg strict_identity_center_assignments "$STRICT_IDENTITY_CENTER_ASSIGNMENTS" \
   --arg strict_account_ou_checks "$STRICT_ACCOUNT_OU_CHECKS" \
+  --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
   --arg account_id_dev "$ACCOUNT_ID_DEV" \
   --arg account_id_staging "$ACCOUNT_ID_STAGING" \
   --arg account_id_prod "$ACCOUNT_ID_PROD" \
@@ -223,6 +235,7 @@ jq -n \
       check_optional_secops_groups: $check_optional_secops_groups,
       strict_identity_center_assignments: $strict_identity_center_assignments,
       strict_account_ou_checks: $strict_account_ou_checks,
+      require_state_stack_remote: $require_state_stack_remote,
       account_id_dev: $account_id_dev,
       account_id_staging: $account_id_staging,
       account_id_prod: $account_id_prod
@@ -232,6 +245,7 @@ jq -n \
       "control_plane_aws_identity",
       "control_plane_stack_directories",
       "control_plane_backend_locking",
+      "optional_state_remote_backend_migration",
       "control_plane_state_outputs",
       "control_plane_state_bucket_security",
       "control_plane_state_bucket_versioning",
@@ -310,6 +324,7 @@ section "Generating Markdown summary"
   echo "| Check Optional SecOps Groups | ${CHECK_OPTIONAL_SECOPS_GROUPS} |"
   echo "| Strict Identity Center Assignments | ${STRICT_IDENTITY_CENTER_ASSIGNMENTS} |"
   echo "| Strict Account OU Checks | ${STRICT_ACCOUNT_OU_CHECKS} |"
+  echo "| Require State Stack Remote | ${REQUIRE_STATE_STACK_REMOTE} |"
   echo "| Dev Account ID | \`${ACCOUNT_ID_DEV:-not configured}\` |"
   echo "| Staging Account ID | \`${ACCOUNT_ID_STAGING:-not configured}\` |"
   echo "| Prod Account ID | \`${ACCOUNT_ID_PROD:-not configured}\` |"
@@ -332,6 +347,7 @@ section "Generating Markdown summary"
   echo "- Control-plane AWS caller identity"
   echo "- Control-plane stack directory structure"
   echo "- Control-plane backend locking with \`use_lockfile = true\`"
+  echo "- Optional validation that the control-plane state stack uses and can read its remote S3 backend"
   echo "- Control-plane state Terraform outputs"
   echo "- Control-plane state bucket existence and security configuration"
   echo "- State bucket versioning"
@@ -399,6 +415,7 @@ echo "AWS credential source:      ${AWS_CREDENTIAL_SOURCE}"
 echo "AWS region:                 ${AWS_REGION}"
 echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
 echo "Name prefix:                ${NAME_PREFIX}"
+echo "Require remote state stack: ${REQUIRE_STATE_STACK_REMOTE}"
 echo
 echo "Output directory:           ${OUTPUT_DIR}"
 echo "Summary JSON:               ${SUMMARY_JSON}"
