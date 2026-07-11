@@ -38,7 +38,6 @@ require_env_name "$ENV_NAME"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
 # Keep report metadata and the child validator aligned.
-export AWS_PROFILE
 export AWS_REGION
 export CLOUD_NAME
 export NAME_PREFIX
