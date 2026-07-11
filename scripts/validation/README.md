@@ -74,6 +74,7 @@ Most scripts use the following environment variables:
 | `EXPECTED_ACCOUNT_ID` | Expected AWS account ID for safety checks | Recommended |
 | `CLOUD_NAME` | Cloud/project prefix, defaults to `tf-secure-baseline` | Optional |
 | `NAME_PREFIX` | Resource name prefix override. Defaults to `${CLOUD_NAME}-${ENV_NAME}` for environment-specific scripts. | Optional |
+| `REQUIRE_STATE_STACK_REMOTE` | Makes migrated state-stack backend findings fail instead of warn. Defaults to `false` in direct script/exporter runs; GitHub evidence workflows default it to `true`. | Optional |
 
 Recommended defaults:
 
@@ -104,10 +105,12 @@ This script validates:
 - `bootstrap/<env>/state` exists
 - `bootstrap/<env>/account` exists
 - the active AWS account matches `EXPECTED_ACCOUNT_ID`
-- `bootstrap/<env>/state` preserves the local-state bootstrap pattern by not defining `backend.tf`
-- `bootstrap/<env>/account/backend.tf` uses `use_lockfile = true`
-- `environments/<env>/backend.tf` uses `use_lockfile = true`
-- backend files resolve a shared Terraform state bucket, region, and distinct state keys
+- `bootstrap/<env>/state/backend.tf` declares the migrated S3 backend when remote-state validation is enabled
+- the state, account, and workload backends use `use_lockfile = true`
+- backend files resolve a shared Terraform state bucket and region with distinct state object keys
+- the state-stack S3 object exists and is readable
+- `terraform state pull` succeeds through the state stack backend
+- the backend bucket matches the state stack `tf_state_bucket_name` output
 - the state S3 bucket exists
 - the state S3 bucket has versioning enabled
 - the state S3 bucket has public access block enabled
@@ -126,20 +129,23 @@ The workload bootstrap architecture uses:
 
 ```text
 bootstrap/<env>/state
-  - local Terraform state
-  - creates the S3 state bucket
-  - creates the KMS CMK for state encryption
+  - creates the S3 state bucket and KMS CMK
+  - uses that bucket as an S3 backend after migration
+  - uses a state-stack-specific object key
+  - use_lockfile = true
 
 bootstrap/<env>/account
   - S3 backend
+  - uses an account-stack-specific object key
   - use_lockfile = true
 
 environments/<env>
   - S3 backend
+  - uses a workload-stack-specific object key
   - use_lockfile = true
 ```
 
-`validate-bootstrap.sh` does not require local `terraform.tfstate` from `bootstrap/<env>/state`. This keeps the script compatible with fresh checkouts and manual GitHub workflow runs.
+The state, account, and workload Terraform roots share the environment's state bucket but must never share the same object key. `validate-bootstrap.sh` does not rely on local `terraform.tfstate`; after initialization it reads the migrated state stack from S3.
 
 For bootstrap validation, the remote backend files are the source of truth for:
 
@@ -153,6 +159,33 @@ use_lockfile = true
 The script derives the state bucket from the backend files, then validates the live S3 bucket and KMS encryption configuration through AWS APIs.
 
 DynamoDB state locking is not expected for the current architecture. This project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
+
+### v1.4.0 Migration Note
+
+Existing deployments that previously kept `bootstrap/<env>/state` or `bootstrap/control_plane/state` locally must migrate each state stack deliberately:
+
+1. Back up the current state with `terraform state pull`.
+2. Configure a unique S3 backend key for that Terraform root.
+3. Run `terraform init -migrate-state` from the state-stack directory.
+4. Reinitialize from a clean checkout and confirm `terraform state pull` succeeds.
+5. Run validation with `REQUIRE_STATE_STACK_REMOTE=true`.
+
+The validation scripts and evidence workflows never migrate state automatically.
+
+### Remote State Stack Validation
+
+Remote-state migration evidence is controlled by:
+
+```bash
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+```
+
+| Value | Behavior |
+|---|---|
+| `true` | Missing, mismatched, colliding, or unreadable state-stack backend evidence fails validation. Use this for v1.4.0 release validation and client-facing evidence. |
+| `false` | The same checks run as warnings. Use only during migration or troubleshooting. |
+
+The workload bootstrap and control-plane GitHub evidence workflows default this setting to `true`.
 
 ### Workload CMK Policy Validation
 
@@ -186,6 +219,7 @@ AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ENV_NAME="dev" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
@@ -197,6 +231,7 @@ AWS_REGION=us-east-1 \
 ENV_NAME="staging" \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh staging
 ```
 
@@ -208,6 +243,7 @@ AWS_REGION=us-east-1 \
 ENV_NAME="prod" \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh prod
 ```
 
@@ -224,6 +260,7 @@ AWS_REGION=us-east-1 \
 ENV_NAME="<ENV-NAME>" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
@@ -234,6 +271,7 @@ For validated client handoff evidence, leave `STRICT_WORKLOAD_CMK_POLICY_CHECKS`
 `validate-bootstrap.sh` is read-only and does not run `terraform init`. For manual GitHub workflow usage, initialize the remote-backed stacks first so Terraform outputs can be read from the S3 backend:
 
 ```bash
+terraform -chdir=bootstrap/dev/state init -input=false
 terraform -chdir=bootstrap/dev/account init -input=false
 terraform -chdir=environments/dev init -input=false
 
@@ -241,10 +279,15 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
 Repeat with the matching profile, account ID, and environment name for `staging` and `prod`.
+
+The manual **Export Bootstrap Evidence** workflow uses the `<env>-plan` GitHub Environment and initializes all three roots before exporting evidence. It defaults `REQUIRE_STATE_STACK_REMOTE` to `true`, renders the report in the Actions run summary, and uploads the evidence directory as an artifact.
+
+Under GitHub OIDC, `AWS_PROFILE` is intentionally not set. The report should identify the credential source as `GitHub OIDC environment credentials`.
 
 For strict workload CMK evidence, the expected deployment sequence is:
 
@@ -340,6 +383,7 @@ This script validates:
 
 - control-plane AWS caller identity
 - control-plane Terraform state backend resources
+- optional strict proof that the control-plane state stack uses a readable S3 backend
 - control-plane state bucket, CMK, and lock configuration
 - GitHub OIDC provider
 - control-plane GitHub Plan and Apply roles
@@ -360,12 +404,25 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
+### Control-Plane Remote State Evidence
+
+For strict release or client-facing evidence, run with:
+
+```bash
+REQUIRE_STATE_STACK_REMOTE=true
+```
+
+The validator confirms that `bootstrap/control_plane/state/backend.tf` declares S3 with `use_lockfile = true`, that the configured state object exists and is readable, that the bucket matches the state stack output, and that `terraform state pull` succeeds.
+
+The **Export Control-Plane Evidence** workflow uses the `control-plane-plan` GitHub Environment, initializes all four control-plane Terraform roots, and defaults this setting to `true`.
+
 ### Optional SecOps Groups
 
-To require optional SecOps groups:
+To check optional SecOps groups:
 
 ```bash
 CHECK_OPTIONAL_SECOPS_GROUPS=true \
@@ -376,6 +433,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -418,6 +476,7 @@ AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-bootstrap.sh dev
 ```
@@ -453,7 +512,7 @@ CLOUD_NAME="tf-secure-baseline" \
 The report package is written to:
 
 ```text
-validation-results/<environment>/<timestamp>/
+validation-results/<environment>/baseline/<timestamp>/
 ```
 
 Expected files include:
@@ -491,6 +550,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-control-plane.sh
 ```
@@ -517,26 +577,26 @@ For a full post-deployment validation run:
 
 ```bash
 # Dev
-AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ./scripts/validation/validate-bootstrap.sh dev
+AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh dev
 AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" ./scripts/validation/validate-baseline.sh dev
-AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ./scripts/validation/export-bootstrap.sh dev
+AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-bootstrap.sh dev
 AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" ./scripts/validation/export-baseline.sh dev
 
 # Staging
-AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ./scripts/validation/validate-bootstrap.sh staging
+AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh staging
 AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" ./scripts/validation/validate-baseline.sh staging
-AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ./scripts/validation/export-bootstrap.sh staging
+AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-bootstrap.sh staging
 AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" ./scripts/validation/export-baseline.sh staging
 
 # Prod
-AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ./scripts/validation/validate-bootstrap.sh prod
+AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh prod
 AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" ./scripts/validation/validate-baseline.sh prod
-AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ./scripts/validation/export-bootstrap.sh prod
+AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-bootstrap.sh prod
 AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" ./scripts/validation/export-baseline.sh prod
 
 # Control plane
-AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" ./scripts/validation/validate-control-plane.sh
-AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" ./scripts/validation/export-control-plane.sh
+AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-control-plane.sh
+AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-control-plane.sh
 ```
 
 ---
@@ -547,7 +607,7 @@ The validation scripts are intentionally read-only.
 
 They do not perform:
 
-- GitHub Actions workflow execution
+- Terraform `plan`, `apply`, and `destroy` workflow execution
 - end-user SSO login testing
 - live EC2 isolation testing
 - live EC2 rollback testing
@@ -590,6 +650,7 @@ Examples:
 - missing AWS resource
 - missing GitHub OIDC role
 - backend missing `use_lockfile = true`
+- state stack S3 object missing, unreadable, or sharing another root's backend key while `REQUIRE_STATE_STACK_REMOTE=true`
 - state bucket encryption missing
 - current workload Lambda or Secrets Manager CMK policy reference missing from the GitHub Apply role when strict workload CMK policy checks are enabled
 
@@ -652,11 +713,12 @@ Point the backend at the correct state key before applying.
 
 ### Bootstrap Validation Cannot Read Terraform Outputs
 
-`validate-bootstrap.sh` does not read Terraform outputs from `bootstrap/<env>/state`, but it does read outputs from the remote-backed account and workload stacks.
+`validate-bootstrap.sh` reads the migrated state stack to validate backend readability and compare `tf_state_bucket_name`; it also reads outputs from the account and workload stacks.
 
 Before running bootstrap validation from a fresh checkout or GitHub workflow, initialize the remote-backed stacks:
 
 ```bash
+terraform -chdir=bootstrap/<env>/state init -input=false
 terraform -chdir=bootstrap/<env>/account init -input=false
 terraform -chdir=environments/<env> init -input=false
 ```
