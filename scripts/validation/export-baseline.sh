@@ -19,6 +19,14 @@ require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
+if [[ -n "${AWS_PROFILE}" ]]; then
+  AWS_CREDENTIAL_SOURCE="AWS CLI profile: ${AWS_PROFILE}"
+elif [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  AWS_CREDENTIAL_SOURCE="GitHub OIDC environment credentials"
+else
+  AWS_CREDENTIAL_SOURCE="AWS default credential chain"
+fi
+
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
