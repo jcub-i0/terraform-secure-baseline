@@ -699,13 +699,13 @@ Terraform state is separated by **stack** and **environment**.
 Example layout:
 
 ```text
-bootstrap/dev.tfstate
+bootstrap/account/dev.tfstate
 baseline/dev.tfstate
 
-bootstrap/staging.tfstate
+bootstrap/account/staging.tfstate
 baseline/staging.tfstate
 
-bootstrap/prod.tfstate
+bootstrap/account/prod.tfstate
 baseline/prod.tfstate
 ```
 

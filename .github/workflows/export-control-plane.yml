@@ -1,0 +1,271 @@
+name: Export Control-Plane Evidence
+
+run-name: Control-plane evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      check_optional_secops_groups:
+        description: "Check optional SecOps Analyst and Engineer groups"
+        required: true
+        default: false
+        type: boolean
+      strict_identity_center_assignments:
+        description: "Fail when expected Identity Center account assignments are missing"
+        required: true
+        default: true
+        type: boolean
+      strict_account_ou_checks:
+        description: "Fail when workload accounts are not in their expected OUs"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: export-control-plane-evidence
+  cancel-in-progress: false
+
+jobs:
+  export-control-plane-evidence:
+    name: Export control-plane evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: control-plane-plan
+
+    env:
+      AWS_PAGER: ""
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+      CONTROL_PLANE_ENV_NAME: "control-plane"
+      CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+      EXPECTED_GITHUB_REPOSITORY: ${{ github.repository }}
+
+      REQUIRE_CONTROL_PLANE_GITHUB_OIDC: "true"
+      CHECK_OPTIONAL_SECOPS_GROUPS: ${{ inputs.check_optional_secops_groups }}
+      STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${{ inputs.strict_identity_center_assignments }}
+      STRICT_ACCOUNT_OU_CHECKS: ${{ inputs.strict_account_ou_checks }}
+
+      ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
+      ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
+      ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve and validate workflow settings
+        shell: bash
+        env:
+          PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+          PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PRIMARY_REGION}" ]]; then
+            echo "::error::PRIMARY_REGION is not configured in the control-plane-plan GitHub Environment."
+            exit 1
+          fi
+
+          if [[ -z "${PLAN_ROLE_GITHUB_ARN}" ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not configured in the control-plane-plan GitHub Environment."
+            exit 1
+          fi
+
+          if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:aws:iam::([0-9]{12}):role/.+ ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+
+          EXPECTED_ACCOUNT_ID="${BASH_REMATCH[1]}"
+
+          for account_setting in \
+            "ACCOUNT_ID_DEV=${ACCOUNT_ID_DEV}" \
+            "ACCOUNT_ID_STAGING=${ACCOUNT_ID_STAGING}" \
+            "ACCOUNT_ID_PROD=${ACCOUNT_ID_PROD}"
+          do
+            setting_name="${account_setting%%=*}"
+            setting_value="${account_setting#*=}"
+
+            if [[ -z "${setting_value}" ]]; then
+              echo "::error::${setting_name} is not configured in the control-plane-plan GitHub Environment."
+              exit 1
+            fi
+
+            if [[ ! "${setting_value}" =~ ^[0-9]{12}$ ]]; then
+              echo "::error::${setting_name} must contain exactly 12 digits."
+              exit 1
+            fi
+          done
+
+          {
+            echo "AWS_REGION=${PRIMARY_REGION}"
+            echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+            echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+          aws-region: ${{ vars.PRIMARY_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CALLER_ACCOUNT_ID="$(
+            aws sts get-caller-identity \
+              --query 'Account' \
+              --output text
+          )"
+
+          if [[ "${CALLER_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${CALLER_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      - name: Confirm control-plane state stack is CI-readable
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f "bootstrap/control_plane/state/backend.tf" ]]; then
+            echo "::error::bootstrap/control_plane/state still uses local state. A clean GitHub runner cannot read its Terraform outputs."
+            echo "::error::Migrate the control-plane state stack to its remote S3 backend before running this workflow."
+            exit 1
+          fi
+
+      - name: Initialize control-plane state backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/control_plane/state" init \
+            -input=false \
+            -no-color
+
+      - name: Initialize control-plane account backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/control_plane/account" init \
+            -input=false \
+            -no-color
+
+      - name: Initialize control-plane Organizations backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/control_plane/organizations" init \
+            -input=false \
+            -no-color
+
+      - name: Initialize control-plane Identity Center backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/control_plane/identity_center" init \
+            -input=false \
+            -no-color
+
+      - name: Export control-plane evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/validation/export-control-plane.sh
+
+      - name: Locate generated evidence
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EVIDENCE_ROOT="validation-results/control-plane"
+
+          if [[ ! -d "${EVIDENCE_ROOT}" ]]; then
+            echo "::warning::No control-plane evidence directory was generated."
+            exit 0
+          fi
+
+          LATEST_TIMESTAMP="$(
+            find "${EVIDENCE_ROOT}" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -printf '%f\n' \
+            | sort \
+            | tail -n 1
+          )"
+
+          if [[ -z "${LATEST_TIMESTAMP}" ]]; then
+            echo "::warning::No timestamped control-plane evidence package was found."
+            exit 0
+          fi
+
+          EVIDENCE_DIR="${EVIDENCE_ROOT}/${LATEST_TIMESTAMP}"
+          SUMMARY_MD="${EVIDENCE_DIR}/summary.md"
+          SUMMARY_JSON="${EVIDENCE_DIR}/summary.json"
+
+          {
+            echo "evidence_dir=${EVIDENCE_DIR}"
+            echo "summary_md=${SUMMARY_MD}"
+            echo "summary_json=${SUMMARY_JSON}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Evidence directory: ${EVIDENCE_DIR}"
+
+      - name: Publish validation report to workflow summary
+        if: always()
+        shell: bash
+        env:
+          EVIDENCE_DIR: ${{ steps.evidence.outputs.evidence_dir }}
+          SUMMARY_MD: ${{ steps.evidence.outputs.summary_md }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Control-Plane Evidence"
+            echo
+            echo "- GitHub Environment: \`control-plane-plan\`"
+            echo "- AWS Region: \`${AWS_REGION:-not resolved}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-not resolved}\`"
+            echo "- Expected GitHub Repository: \`${EXPECTED_GITHUB_REPOSITORY}\`"
+            echo "- Optional SecOps group checks: \`${CHECK_OPTIONAL_SECOPS_GROUPS}\`"
+            echo "- Strict Identity Center assignments: \`${STRICT_IDENTITY_CENTER_ASSIGNMENTS}\`"
+            echo "- Strict account OU checks: \`${STRICT_ACCOUNT_OU_CHECKS}\`"
+            echo "- Evidence directory: \`${EVIDENCE_DIR:-not generated}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -n "${SUMMARY_MD}" && -f "${SUMMARY_MD}" ]]; then
+            cat "${SUMMARY_MD}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            {
+              echo "## Validation Report"
+              echo
+              echo "No generated \`summary.md\` file was available. Review the workflow logs for the failure that occurred before or during evidence export."
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload control-plane evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: control-plane-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: validation-results/control-plane/
+          if-no-files-found: warn
+          retention-days: 30
