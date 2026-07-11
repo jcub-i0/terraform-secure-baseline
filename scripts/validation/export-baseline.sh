@@ -19,6 +19,14 @@ require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
+if [[ -n "${AWS_PROFILE}" ]]; then
+  AWS_CREDENTIAL_SOURCE="AWS CLI profile: ${AWS_PROFILE}"
+elif [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  AWS_CREDENTIAL_SOURCE="GitHub OIDC environment credentials"
+else
+  AWS_CREDENTIAL_SOURCE="AWS default credential chain"
+fi
+
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
@@ -93,7 +101,8 @@ info "Repository root: ${REPO_ROOT}"
 info "Environment: ${ENV_NAME}"
 info "Output dir: ${OUTPUT_DIR}"
 info "Name prefix: ${NAME_PREFIX}"
-info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<not set>}"
+info "AWS credential source: ${AWS_CREDENTIAL_SOURCE}"
 info "AWS_REGION: ${AWS_REGION}"
 info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "Validation time: ${VALIDATION_TIME}"
@@ -175,6 +184,7 @@ jq -n \
   --arg project "$CLOUD_NAME" \
   --arg environment "$ENV_NAME" \
   --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_credential_source "$AWS_CREDENTIAL_SOURCE" \
   --arg aws_region "$AWS_REGION" \
   --arg aws_account_id "$AWS_ACCOUNT_ID" \
   --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
@@ -188,6 +198,7 @@ jq -n \
     project: $project,
     environment: $environment,
     aws_profile: $aws_profile,
+    aws_credential_source: $aws_credential_source,
     aws_region: $aws_region,
     aws_account_id: $aws_account_id,
     expected_account_id: $expected_account_id,
@@ -234,7 +245,8 @@ section "Generating Markdown summary"
   echo "|---|---|"
   echo "| Project | ${CLOUD_NAME} |"
   echo "| Environment | ${ENV_NAME} |"
-  echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
+  echo "| AWS Profile | \`${AWS_PROFILE:-not set}\` |"
+  echo "| AWS Credential Source | \`${AWS_CREDENTIAL_SOURCE}\` |"
   echo "| AWS Region | ${AWS_REGION} |"
   echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
   echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
@@ -298,7 +310,8 @@ success "Markdown summary written: ${SUMMARY_MD}"
 section "Validation Report Export Summary"
 
 echo "Environment:                ${ENV_NAME}"
-echo "AWS profile:                ${AWS_PROFILE:-<default>}"
+echo "AWS profile:                ${AWS_PROFILE:-not set}"
+echo "AWS credential source:      ${AWS_CREDENTIAL_SOURCE}"
 echo "AWS region:                 ${AWS_REGION}"
 echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
 echo "Name prefix:                ${NAME_PREFIX}"
