@@ -27,7 +27,7 @@ jobs:
   export-baseline-evidence:
     name: Export ${{ inputs.environment }} baseline evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     environment: ${{ format('{0}-plan', inputs.environment) }}
 
     env:
