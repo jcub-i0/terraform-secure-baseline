@@ -19,6 +19,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: export-baseline-evidence-${{ inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   export-bootstrap-evidence:
     name: Export ${{ inputs.environment }} bootstrap evidence
