@@ -15,7 +15,7 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}
 REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
 REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
 STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-true}"
-REQUIRE_STATE_STACK_LOCAL="${REQUIRE_STATE_STACK_LOCAL:-true}"
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
@@ -26,6 +26,14 @@ case "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" in
     ;;
   *)
     fail "Invalid STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}. Expected true or false."
+    ;;
+esac
+
+case "$REQUIRE_STATE_STACK_REMOTE" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
     ;;
 esac
 
@@ -60,7 +68,7 @@ export EXPECTED_GITHUB_REPOSITORY
 export REQUIRE_BOOTSTRAP_GITHUB_OIDC
 export REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE
 export STRICT_WORKLOAD_CMK_POLICY_CHECKS
-export REQUIRE_STATE_STACK_LOCAL
+export REQUIRE_STATE_STACK_REMOTE
 export STRICT_GITHUB_SUBJECT_CHECKS
 export EXPECTED_GITHUB_PLAN_SUBJECT
 export EXPECTED_GITHUB_APPLY_SUBJECT
@@ -119,7 +127,7 @@ info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
 info "REQUIRE_BOOTSTRAP_GITHUB_OIDC: ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
 info "REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE: ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
 info "STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
-info "REQUIRE_STATE_STACK_LOCAL: ${REQUIRE_STATE_STACK_LOCAL}"
+info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
 info "STRICT_GITHUB_SUBJECT_CHECKS: ${STRICT_GITHUB_SUBJECT_CHECKS}"
 info "EXPECTED_GITHUB_PLAN_SUBJECT: ${EXPECTED_GITHUB_PLAN_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>}"
 info "EXPECTED_GITHUB_APPLY_SUBJECT: ${EXPECTED_GITHUB_APPLY_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>}"
@@ -212,7 +220,7 @@ jq -n \
   --arg require_bootstrap_github_oidc "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" \
   --arg require_bootstrap_github_apply_role "$REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE" \
   --arg strict_workload_cmk_policy_checks "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" \
-  --arg require_state_stack_local "$REQUIRE_STATE_STACK_LOCAL" \
+  --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
   --arg strict_github_subject_checks "$STRICT_GITHUB_SUBJECT_CHECKS" \
   --arg name_prefix "$NAME_PREFIX" \
   --arg validation_time "$VALIDATION_TIME" \
@@ -238,7 +246,7 @@ jq -n \
     require_bootstrap_github_oidc: $require_bootstrap_github_oidc,
     require_bootstrap_github_apply_role: $require_bootstrap_github_apply_role,
     strict_workload_cmk_policy_checks: $strict_workload_cmk_policy_checks,
-    require_state_stack_local: $require_state_stack_local,
+    require_state_stack_remote: $require_state_stack_remote,
     strict_github_subject_checks: $strict_github_subject_checks,
     name_prefix: $name_prefix,
     validation_time: $validation_time,
@@ -249,7 +257,7 @@ jq -n \
     results: $results,
     validation_scope: [
       "workload_bootstrap_directory_structure",
-      "local_state_bootstrap_pattern",
+      "optional_state_remote_backend_migration",
       "remote_backend_files",
       "s3_native_lockfile_configuration",
       "state_bucket_security",
@@ -318,7 +326,7 @@ section "Generating Markdown summary"
   echo "| Require Bootstrap GitHub OIDC | ${REQUIRE_BOOTSTRAP_GITHUB_OIDC} |"
   echo "| Require Bootstrap GitHub Apply Role | ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE} |"
   echo "| Strict Workload CMK Policy Checks | ${STRICT_WORKLOAD_CMK_POLICY_CHECKS} |"
-  echo "| Require State Stack Local | ${REQUIRE_STATE_STACK_LOCAL} |"
+  echo "| Require State Stack Remote | ${REQUIRE_STATE_STACK_REMOTE} |"
   echo "| Strict GitHub Subject Checks | ${STRICT_GITHUB_SUBJECT_CHECKS} |"
   echo "| Name Prefix | ${NAME_PREFIX} |"
   echo "| Validation Time | ${VALIDATION_TIME} |"
@@ -342,8 +350,8 @@ section "Generating Markdown summary"
   echo "This workload bootstrap validation report covers:"
   echo
   echo "- Workload bootstrap directory structure"
-  echo "- Local-state bootstrap pattern for the state bootstrap stack"
-  echo "- Remote backend file presence and parsing"
+  echo "- Optional validation that the state bootstrap stack uses and can read its remote S3 backend"
+  echo "- Remote backend file presence and parsing for state, account, and workload stacks"
   echo "- Terraform S3 native locking configuration with \`use_lockfile = true\`"
   echo "- Distinct account and workload state object keys"
   echo "- State bucket existence and security configuration"
@@ -399,6 +407,7 @@ section "Generating Markdown summary"
   echo "For fresh checkouts or manual GitHub workflow runs, initialize the remote-backed account and workload stacks before running bootstrap validation:"
   echo
   echo "\`\`\`bash"
+  echo "terraform -chdir=bootstrap/${ENV_NAME}/state init -input=false"
   echo "terraform -chdir=bootstrap/${ENV_NAME}/account init -input=false"
   echo "terraform -chdir=environments/${ENV_NAME} init -input=false"
   echo "\`\`\`"
@@ -422,7 +431,7 @@ echo "Expected GitHub repository: ${EXPECTED_GITHUB_REPOSITORY:-not configured}"
 echo "Require GitHub OIDC:        ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
 echo "Require GitHub apply role:  ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
 echo "Strict workload CMK checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
-echo "Require local state stack:  ${REQUIRE_STATE_STACK_LOCAL}"
+echo "Require remote state stack:  ${REQUIRE_STATE_STACK_REMOTE}"
 echo "Strict subject checks:      ${STRICT_GITHUB_SUBJECT_CHECKS}"
 echo
 echo "Output directory:           ${OUTPUT_DIR}"
