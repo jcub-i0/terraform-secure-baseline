@@ -184,6 +184,7 @@ jq -n \
   --arg project "$CLOUD_NAME" \
   --arg environment "$ENV_NAME" \
   --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_credential_source "$AWS_CREDENTIAL_SOURCE" \
   --arg aws_region "$AWS_REGION" \
   --arg aws_account_id "$AWS_ACCOUNT_ID" \
   --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
