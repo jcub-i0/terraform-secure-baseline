@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Workload environmnet to validate"
+        description: "Workload environment to validate"
         required: true
         default: "dev"
         type: choice
