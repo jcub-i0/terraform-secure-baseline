@@ -198,6 +198,7 @@ jq -n \
     project: $project,
     environment: $environment,
     aws_profile: $aws_profile,
+    aws_credential_source: $aws_credential_source,
     aws_region: $aws_region,
     aws_account_id: $aws_account_id,
     expected_account_id: $expected_account_id,
