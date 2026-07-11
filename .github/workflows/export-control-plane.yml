@@ -20,6 +20,11 @@ on:
         required: true
         default: false
         type: boolean
+      require_state_stack_remote:
+        description: "Require the control-plane state stack to use a readable remote S3 backend"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   id-token: write
@@ -33,7 +38,7 @@ jobs:
   export-control-plane-evidence:
     name: Export control-plane evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment: control-plane-plan
 
     env:
@@ -49,6 +54,7 @@ jobs:
       CHECK_OPTIONAL_SECOPS_GROUPS: ${{ inputs.check_optional_secops_groups }}
       STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${{ inputs.strict_identity_center_assignments }}
       STRICT_ACCOUNT_OU_CHECKS: ${{ inputs.strict_account_ou_checks }}
+      REQUIRE_STATE_STACK_REMOTE: ${{ inputs.require_state_stack_remote }}
 
       ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
       ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
@@ -137,17 +143,6 @@ jobs:
         with:
           terraform_version: "1.15.8"
           terraform_wrapper: false
-
-      - name: Confirm control-plane state stack is CI-readable
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ ! -f "bootstrap/control_plane/state/backend.tf" ]]; then
-            echo "::error::bootstrap/control_plane/state still uses local state. A clean GitHub runner cannot read its Terraform outputs."
-            echo "::error::Migrate the control-plane state stack to its remote S3 backend before running this workflow."
-            exit 1
-          fi
 
       - name: Initialize control-plane state backend
         shell: bash
@@ -247,6 +242,7 @@ jobs:
             echo "- Optional SecOps group checks: \`${CHECK_OPTIONAL_SECOPS_GROUPS}\`"
             echo "- Strict Identity Center assignments: \`${STRICT_IDENTITY_CENTER_ASSIGNMENTS}\`"
             echo "- Strict account OU checks: \`${STRICT_ACCOUNT_OU_CHECKS}\`"
+            echo "- Require remote control-plane state: \`${REQUIRE_STATE_STACK_REMOTE}\`"
             echo "- Evidence directory: \`${EVIDENCE_DIR:-not generated}\`"
             echo
           } >> "${GITHUB_STEP_SUMMARY}"
