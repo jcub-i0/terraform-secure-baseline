@@ -37,6 +37,11 @@ require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
+if [[ -n "$EXPECTED_GITHUB_REPOSITORY" ]]; then
+  EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-repo:${EXPECTED_GITHUB_REPOSITORY}:environment:${ENV_NAME}-plan}"
+  EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-repo:${EXPECTED_GITHUB_REPOSITORY}:environment:${ENV_NAME}}"
+fi
+
 # Keep report metadata and the child validator aligned.
 export AWS_REGION
 export CLOUD_NAME
