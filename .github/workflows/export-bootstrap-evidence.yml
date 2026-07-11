@@ -14,6 +14,11 @@ on:
           - dev
           - staging
           - prod
+      require_state_stack_remote:
+        description: "Fail unless the workload state stack uses a readable remote S3 backend"
+        required: true
+        default: true
+        type: boolean
       strict_workload_cmk_policy_checks:
         description: "Fail when the GitHub Apply role policy is missing current workload CMK references"
         required: true
@@ -40,6 +45,7 @@ jobs:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
       CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+      REQUIRE_STATE_STACK_REMOTE: ${{ inputs.require_state_stack_remote }}
       STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${{ inputs.strict_workload_cmk_policy_checks }}
 
     steps:
@@ -117,6 +123,14 @@ jobs:
         with:
           terraform_version: "1.15.8"
           terraform_wrapper: false
+
+      - name: Initialize workload bootstrap state backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/${{ inputs.environment }}/state" init \
+            -input=false \
+            -no-color
 
       - name: Initialize workload bootstrap account backend
         shell: bash
@@ -199,6 +213,7 @@ jobs:
             echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
             echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
             echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Require state stack remote: \`${REQUIRE_STATE_STACK_REMOTE}\`"
             echo "- Strict workload CMK policy checks: \`${STRICT_WORKLOAD_CMK_POLICY_CHECKS}\`"
             echo "- Evidence directory: \`${EVIDENCE_DIR:-<not generated>}\`"
             echo
