@@ -14,13 +14,18 @@ on:
           - dev
           - staging
           - prod
+      strict_workload_cmk_policy_checks:
+        description: "Fail when the GitHub Apply role policy is missing current workload CMK references"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: export-baseline-evidence-${{ inputs.environment }}
+  group: export-bootstrap-evidence-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
@@ -35,6 +40,7 @@ jobs:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
       CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+      STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${{ inputs.strict_workload_cmk_policy_checks }}
 
     steps:
       - name: Checkout
@@ -112,11 +118,19 @@ jobs:
           terraform_version: "1.15.8"
           terraform_wrapper: false
 
-      - name: Initialize workload bootstrap backend
+      - name: Initialize workload bootstrap account backend
         shell: bash
         run: |
           set -euo pipefail
           terraform -chdir="bootstrap/${{ inputs.environment }}/account" init \
+            -input=false \
+            -no-color
+
+      - name: Initialize workload environment backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="environments/${{ inputs.environment }}" init \
             -input=false \
             -no-color
 
@@ -134,7 +148,7 @@ jobs:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
-          
+
           EVIDENCE_ROOT="validation-results/${TARGET_ENVIRONMENT}/bootstrap"
 
           if [[ ! -d "${EVIDENCE_ROOT}" ]]; then
@@ -185,7 +199,9 @@ jobs:
             echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
             echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
             echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Strict workload CMK policy checks: \`${STRICT_WORKLOAD_CMK_POLICY_CHECKS}\`"
             echo "- Evidence directory: \`${EVIDENCE_DIR:-<not generated>}\`"
+            echo
           } >> "${GITHUB_STEP_SUMMARY}"
 
           if [[ -n "${SUMMARY_MD}" && -f "${SUMMARY_MD}" ]]; then
