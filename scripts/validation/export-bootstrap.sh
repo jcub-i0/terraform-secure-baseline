@@ -37,6 +37,14 @@ require_env_name "$ENV_NAME"
 
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
+if [[ -n "${AWS_PROFILE}" ]]; then
+  AWS_CREDENTIAL_SOURCE="AWS CLI profile: ${AWS_PROFILE}"
+elif [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  AWS_CREDENTIAL_SOURCE="GitHub OIDC environment credentials"
+else
+  AWS_CREDENTIAL_SOURCE="AWS default credential chain"
+fi
+
 # Derive GitHub OIDC trust subjects when the repository is known.
 if [[ -n "$EXPECTED_GITHUB_REPOSITORY" ]]; then
   EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-repo:${EXPECTED_GITHUB_REPOSITORY}:environment:${ENV_NAME}-plan}"
@@ -103,7 +111,8 @@ info "Validation layer: ${VALIDATION_LAYER}"
 info "Output dir: ${OUTPUT_DIR}"
 info "Cloud name: ${CLOUD_NAME}"
 info "Name prefix: ${NAME_PREFIX}"
-info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<not set>}"
+info "AWS credential source: ${AWS_CREDENTIAL_SOURCE}"
 info "AWS_REGION: ${AWS_REGION}"
 info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
@@ -193,6 +202,7 @@ jq -n \
   --arg validation_layer_display "Workload Bootstrap" \
   --arg environment "$ENV_NAME" \
   --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_credential_source "$AWS_CREDENTIAL_SOURCE" \
   --arg aws_region "$AWS_REGION" \
   --arg aws_account_id "$AWS_ACCOUNT_ID" \
   --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
@@ -218,6 +228,7 @@ jq -n \
     validation_layer_display: $validation_layer_display,
     environment: $environment,
     aws_profile: $aws_profile,
+    aws_credential_source: $aws_credential_source,
     aws_region: $aws_region,
     aws_account_id: $aws_account_id,
     expected_account_id: $expected_account_id,
@@ -296,13 +307,14 @@ section "Generating Markdown summary"
   echo "| Project | ${CLOUD_NAME} |"
   echo "| Environment | ${ENV_NAME} |"
   echo "| Validation Layer | Workload Bootstrap |"
-  echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
+  echo "| AWS Profile | \`${AWS_PROFILE:-not set}\` |"
+  echo "| AWS Credential Source | \`${AWS_CREDENTIAL_SOURCE}\` |"
   echo "| AWS Region | ${AWS_REGION} |"
   echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
-  echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
-  echo "| Expected GitHub Repository | ${EXPECTED_GITHUB_REPOSITORY:-<not set>} |"
-  echo "| Expected GitHub Plan Subject | ${EXPECTED_GITHUB_PLAN_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>} |"
-  echo "| Expected GitHub Apply Subject | ${EXPECTED_GITHUB_APPLY_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>} |"
+  echo "| Expected Account ID | \`${EXPECTED_ACCOUNT_ID:-not configured}\` |"
+  echo "| Expected GitHub Repository | \`${EXPECTED_GITHUB_REPOSITORY:-not configured}\` |"
+  echo "| Expected GitHub Plan Subject | \`${EXPECTED_GITHUB_PLAN_SUBJECT:-not configured}\` |"
+  echo "| Expected GitHub Apply Subject | \`${EXPECTED_GITHUB_APPLY_SUBJECT:-not configured}\` |"
   echo "| Require Bootstrap GitHub OIDC | ${REQUIRE_BOOTSTRAP_GITHUB_OIDC} |"
   echo "| Require Bootstrap GitHub Apply Role | ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE} |"
   echo "| Strict Workload CMK Policy Checks | ${STRICT_WORKLOAD_CMK_POLICY_CHECKS} |"
@@ -400,12 +412,13 @@ section "Workload Bootstrap Validation Report Export Summary"
 
 echo "Environment:                ${ENV_NAME}"
 echo "Validation layer:           Workload Bootstrap"
-echo "AWS profile:                ${AWS_PROFILE:-<default>}"
+echo "AWS profile:                ${AWS_PROFILE:-not set}"
+echo "AWS credential source:      ${AWS_CREDENTIAL_SOURCE}"
 echo "AWS region:                 ${AWS_REGION}"
 echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
 echo "Cloud name:                 ${CLOUD_NAME}"
 echo "Name prefix:                ${NAME_PREFIX}"
-echo "Expected GitHub repository: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
+echo "Expected GitHub repository: ${EXPECTED_GITHUB_REPOSITORY:-not configured}"
 echo "Require GitHub OIDC:        ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
 echo "Require GitHub apply role:  ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
 echo "Strict workload CMK checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
