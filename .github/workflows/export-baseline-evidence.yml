@@ -112,7 +112,7 @@ jobs:
           terraform_version: "1.15.8"
           terraform_wrapper: false
 
-      - name: Initialize workload backend
+      - name: Initialize workload baseline backend
         shell: bash
         run: |
           set -euo pipefail
