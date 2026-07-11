@@ -121,6 +121,15 @@ export ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>"
 export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
+### GitHub Actions Credential Context
+
+The manual evidence workflows authenticate with GitHub OIDC and do not set `AWS_PROFILE`. In generated reports, the expected metadata is:
+
+```text
+AWS Profile: not set
+AWS Credential Source: GitHub OIDC environment credentials
+```
+
 ### Naming Convention
 
 Validation scripts now use `CLOUD_NAME` to derive `NAME_PREFIX` when a direct `NAME_PREFIX` override is not supplied.
@@ -162,6 +171,7 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
@@ -173,6 +183,7 @@ AWS_PROFILE=staging \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh staging
 ```
 
@@ -184,6 +195,7 @@ AWS_PROFILE=prod \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh prod
 ```
 
@@ -193,10 +205,12 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 
 - AWS caller identity and expected workload account ID
 - `bootstrap/<env>/state` and `bootstrap/<env>/account` directory structure
-- `bootstrap/<env>/state` preserving the local-state bootstrap pattern by not defining `backend.tf`
-- `bootstrap/<env>/account/backend.tf` using `use_lockfile = true`
-- `environments/<env>/backend.tf` using `use_lockfile = true`
-- backend files resolving a shared Terraform state bucket, backend region, and distinct state keys
+- `bootstrap/<env>/state/backend.tf` declaring the migrated S3 backend when remote-state validation is enabled
+- `bootstrap/<env>/state/backend.tf`, `bootstrap/<env>/account/backend.tf`, and `environments/<env>/backend.tf` using `use_lockfile = true`
+- backend files resolving a shared Terraform state bucket and region with distinct state object keys
+- the state-stack S3 object existing and being readable
+- `terraform state pull` succeeding through the state stack's configured backend
+- the state backend bucket matching the state stack `tf_state_bucket_name` output
 - Terraform state S3 bucket existence, versioning, encryption, and public access block settings
 - Terraform state KMS CMK resolution from the live bucket encryption configuration
 - Terraform state KMS CMK existence, key state, and customer-managed status
@@ -206,7 +220,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 - GitHub role policy access to the Terraform state bucket, state objects including `.tflock` objects, and state CMK
 - GitHub Apply role access to current workload-created Lambda and Secrets Manager CMKs
 
-`validate-bootstrap.sh` does not require local `terraform.tfstate` from `bootstrap/<env>/state`. This keeps the script compatible with fresh checkouts and manual GitHub workflow runs.
+`validate-bootstrap.sh` does not rely on a local `terraform.tfstate`. After backend initialization, it can read the migrated state stack from S3 in fresh checkouts and GitHub Actions.
 
 For bootstrap validation, the remote backend files are the source of truth for:
 
@@ -220,6 +234,21 @@ use_lockfile = true
 The script derives the state bucket from the backend files, then validates the live S3 bucket and KMS encryption configuration through AWS APIs.
 
 The workload bootstrap architecture uses S3 native state locking. DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
+
+### Remote State Stack Validation
+
+Remote-state migration evidence is controlled by:
+
+```bash
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+```
+
+| Value | Behavior |
+|---|---|
+| `true` | Missing, mismatched, colliding, or unreadable state-stack backend evidence fails validation. Recommended for v1.4.0 release and client-facing evidence. |
+| `false` | The same checks run as advisory warnings. Use only during migration or troubleshooting. |
+
+The manual GitHub bootstrap and control-plane evidence workflows default this input to `true`.
 
 ### Workload CMK Policy Validation
 
@@ -259,6 +288,7 @@ For strict workload CMK evidence, the expected deployment sequence is:
 `validate-bootstrap.sh` is read-only and does not run `terraform init`. For manual GitHub workflow usage, initialize the remote-backed stacks first so Terraform outputs can be read from the S3 backend:
 
 ```bash
+terraform -chdir=bootstrap/dev/state init -input=false
 terraform -chdir=bootstrap/dev/account init -input=false
 terraform -chdir=environments/dev init -input=false
 
@@ -266,6 +296,7 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
@@ -278,6 +309,7 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/export-bootstrap.sh dev
 ```
 
@@ -421,6 +453,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -435,6 +468,7 @@ EXPECTED_GITHUB_REPOSITORY="example-org/terraform-secure-baseline" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -442,9 +476,10 @@ This script performs safe, read-only validation for:
 
 - AWS caller identity and expected control-plane account ID
 - Control-plane Terraform state stack outputs
+- Control-plane state stack S3 backend declaration, object readability, and successful `terraform state pull`
 - Terraform state S3 bucket existence, versioning, encryption, and public access block settings
 - Terraform state KMS CMK existence and key state
-- S3 native backend locking configuration where applicable
+- S3 native backend locking for the control-plane state, account, Organizations, and Identity Center stacks
 - GitHub OIDC provider existence
 - Control-plane GitHub plan/apply role existence
 - GitHub OIDC trust policy conditions for the expected repository
@@ -472,6 +507,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/export-control-plane.sh
 ```
 
@@ -500,6 +536,7 @@ AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-bootstrap.sh dev
 ```
@@ -528,7 +565,7 @@ CLOUD_NAME="tf-secure-baseline" \
 The export creates:
 
 ```text
-validation-results/<environment>/<timestamp>/
+validation-results/<environment>/baseline/<timestamp>/
 ├── summary.md
 ├── summary.json
 ├── validate-env.log
@@ -559,6 +596,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-control-plane.sh
 ```
@@ -572,7 +610,7 @@ validation-results/control-plane/<timestamp>/
 └── validate-control-plane.log
 ```
 
-The exported reports do not replace GitHub Actions workflow execution, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
+The exported reports do not replace Terraform plan/apply/destroy workflow validation, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
 
 ## Manual Validation Still Required
 
@@ -580,7 +618,7 @@ The automated validation scripts are intentionally read-only. They do not perfor
 
 Manual validation is still required for:
 
-- GitHub Actions workflow execution
+- Terraform plan, apply, and destroy workflow execution
 - IAM Identity Center end-user login and effective access testing
 - Identity Center group membership review
 - Live EC2 isolation testing
@@ -590,7 +628,7 @@ Manual validation is still required for:
 - Break-glass role assumption tests
 - Destroy workflow and teardown safety checks
 
-The automated control-plane validation script confirms control-plane resource presence and selected configuration, but it does not execute GitHub workflows, modify Identity Center assignments, test end-user SSO login, assume privileged roles, move AWS accounts between OUs, or perform destructive operations.
+The automated control-plane validation script confirms control-plane resource presence and selected configuration. The evidence workflow executes that validator, but it does not run Terraform plan/apply/destroy workflows, modify Identity Center assignments, test end-user SSO login, assume privileged roles, move AWS accounts between OUs, or perform destructive operations.
 
 Use the remaining sections in this checklist for manual spot checks, deeper troubleshooting, or tests that intentionally trigger live workflows.
 
@@ -627,7 +665,7 @@ The `state` substacks create backend resources such as:
 - S3 bucket for Terraform state
 - KMS key for state encryption
 
-Remote-backed stacks should use Terraform S3 native locking with `use_lockfile = true`.
+All workload and control-plane Terraform roots, including the migrated `state` stacks, should use Terraform S3 native locking with `use_lockfile = true`.
 
 DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
 
@@ -656,6 +694,7 @@ For remote-backed stacks, confirm that the backend configuration uses S3 native 
 
 ```bash
 grep -R "use_lockfile" \
+  "bootstrap/${ENVIRONMENT}/state/backend.tf" \
   "bootstrap/${ENVIRONMENT}/account/backend.tf" \
   "environments/${ENVIRONMENT}/backend.tf"
 ```
@@ -666,12 +705,28 @@ Expected:
 use_lockfile = true
 ```
 
-## Terraform Init Check
-
-From the target stack directory:
+## Check Distinct State Object Keys
 
 ```bash
-terraform init
+grep -R '^[[:space:]]*key[[:space:]]*=' \
+  "bootstrap/${ENVIRONMENT}/state/backend.tf" \
+  "bootstrap/${ENVIRONMENT}/account/backend.tf" \
+  "environments/${ENVIRONMENT}/backend.tf"
+```
+
+Expected:
+
+- The state, account, and workload roots use different S3 object keys.
+- No Terraform root points at another root's state object.
+
+## Terraform Init Check
+
+Initialize each root from a fresh checkout:
+
+```bash
+terraform -chdir="bootstrap/${ENVIRONMENT}/state" init -input=false
+terraform -chdir="bootstrap/${ENVIRONMENT}/account" init -input=false
+terraform -chdir="environments/${ENVIRONMENT}" init -input=false
 ```
 
 Expected:
@@ -679,12 +734,32 @@ Expected:
 - Backend initializes successfully.
 - No state lock or access errors occur.
 
+### Control-Plane Backend Check
+
+The control-plane directories use `bootstrap/control_plane` rather than `bootstrap/control-plane`:
+
+```bash
+grep -R "use_lockfile" \
+  bootstrap/control_plane/state/backend.tf \
+  bootstrap/control_plane/account/backend.tf \
+  bootstrap/control_plane/organizations/backend.tf \
+  bootstrap/control_plane/identity_center/backend.tf
+
+terraform -chdir=bootstrap/control_plane/state init -input=false
+terraform -chdir=bootstrap/control_plane/account init -input=false
+terraform -chdir=bootstrap/control_plane/organizations init -input=false
+terraform -chdir=bootstrap/control_plane/identity_center init -input=false
+```
+
+Confirm that the four control-plane roots use distinct S3 object keys.
+
 ## Expected Outcome
 
 - S3 state bucket exists.
 - KMS encryption is configured.
-- Remote-backed stacks use `use_lockfile = true`.
-- Terraform can initialize successfully in stacks that use the backend.
+- All three workload roots use `use_lockfile = true`.
+- State object keys are distinct.
+- Terraform can initialize and read each configured backend successfully.
 
 ---
 
@@ -753,6 +828,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -2246,6 +2322,9 @@ Run the following workflows:
 - Terraform Plan
 - Terraform Apply
 - Terraform Destroy in a non-production environment only
+- Export Bootstrap Evidence
+- Export Baseline Evidence
+- Export Control-Plane Evidence
   > Ensure that the `bootstrap/<env>/account` stack has been re-applied with the current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values before relying on strict workload bootstrap validation evidence or running workflows that need those KMS permissions
 
 Expected:
@@ -2257,6 +2336,8 @@ Expected:
 - Destroy workflow first cleans up Identity Center attachments and then destroys selected environment baseline.
 - No OIDC role assumption errors occur.
 - No Terraform state lock conflicts occur.
+- Bootstrap and control-plane evidence workflows initialize their state stacks, run with `REQUIRE_STATE_STACK_REMOTE=true`, render `summary.md`, and upload the generated evidence directory as an artifact.
+- Workflow-generated reports identify `GitHub OIDC environment credentials`; a blank/not-set AWS profile is expected under OIDC.
 
 ---
 
@@ -2446,14 +2527,14 @@ Check:
 - `EXPECTED_ACCOUNT_ID` matches the target workload account ID.
 - `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the workload GitHub OIDC roles.
 - `bootstrap/<env>/state` has been applied at least once to create the state bucket and state CMK.
-- `bootstrap/<env>/state` does not define `backend.tf`.
+- `bootstrap/<env>/state/backend.tf` declares the intended S3 bucket, region, unique key, encryption, and `use_lockfile = true`.
 - `bootstrap/<env>/account` has been applied with GitHub OIDC enabled.
 - `bootstrap/<env>/account/backend.tf` includes `use_lockfile = true`.
 - `environments/<env>/backend.tf` includes `use_lockfile = true`.
 - The backend files resolve the intended state bucket, backend region, and distinct state keys.
 - The state S3 bucket exists, has versioning enabled, has public access block enabled, and uses SSE-KMS.
 - The state CMK can be resolved from the bucket encryption configuration, is enabled, and is customer-managed.
-- Remote-backed stacks have been initialized before running validation from a fresh checkout or GitHub workflow.
+- The state, account, and workload roots have been initialized before running validation from a fresh checkout or GitHub workflow.
 - The GitHub Apply role has been re-applied after workload deployment with current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values.
 
 If strict workload CMK policy checks fail during transitional testing, either reconcile `bootstrap/<env>/account` with the current workload CMK outputs or temporarily run with:
@@ -2470,11 +2551,12 @@ If Terraform suddenly wants to create existing bootstrap/account resources, stop
 
 ## Bootstrap Validation Cannot Read Terraform Outputs
 
-`validate-bootstrap.sh` does not read Terraform outputs from `bootstrap/<env>/state`, but it does read outputs from the remote-backed account and workload stacks.
+`validate-bootstrap.sh` reads the migrated state stack to confirm backend readability and compare `tf_state_bucket_name`; it also reads outputs from the account and workload stacks.
 
 Before running bootstrap validation from a fresh checkout or GitHub workflow, initialize the remote-backed stacks:
 
 ```bash
+terraform -chdir=bootstrap/<env>/state init -input=false
 terraform -chdir=bootstrap/<env>/account init -input=false
 terraform -chdir=environments/<env> init -input=false
 ```
@@ -2491,7 +2573,8 @@ Check:
 - `EXPECTED_ACCOUNT_ID` matches the control-plane account ID.
 - `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the GitHub OIDC role, using the exact owner/repo spelling.
 - `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and `ACCOUNT_ID_PROD` are set when validating Identity Center assignments or account placement.
-- `bootstrap/control_plane/state` has been applied and has current Terraform outputs.
+- `bootstrap/control_plane/state` has been applied, migrated to its intended S3 backend, initialized, and has current Terraform outputs.
+- The control-plane state object exists at the backend key and the selected principal can read it and decrypt the state CMK.
 - `bootstrap/control_plane/account` has been applied with GitHub OIDC enabled.
 - `bootstrap/control_plane/organizations` has been applied.
 - `bootstrap/control_plane/identity_center` has been applied after workload baseline policy names were available, if optional policy-backed roles are enabled.
@@ -2533,7 +2616,7 @@ Check:
 - No other Terraform job is currently running for the same backend key.
 - GitHub Actions did not cancel a job while a lock was held.
 - Backend key is unique per stack.
-- Remote-backed stacks include `use_lockfile = true`.
+- Every affected Terraform root, including the migrated state stack, includes `use_lockfile = true`.
 - The AWS principal running Terraform has S3 permissions for both the state object and the `.tflock` lock object.
 - Use `terraform force-unlock` only after confirming no active operation is running.
 
@@ -2599,7 +2682,7 @@ A successful validation means:
 - Automated control-plane validation passes for state backend resources, GitHub OIDC, Organizations OU structure, and IAM Identity Center basics.
 - Control-plane evidence exports successfully through `export-control-plane.sh`.
 - AWS accounts and profiles are correct.
-- Terraform state backends exist and remote-backed stacks use S3 native locking with `use_lockfile = true`.
+- Terraform state backends exist, all state stacks have been migrated to S3, object keys are distinct, and all roots use S3 native locking with `use_lockfile = true`.
 - GitHub OIDC roles work if enabled.
 - Environment baselines exist.
 - Deployment profile outputs resolve correctly.
