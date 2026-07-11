@@ -13,6 +13,14 @@ CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"
 
+if [[ -n "${AWS_PROFILE}" ]]; then
+  AWS_CREDENTIAL_SOURCE="AWS CLI profile: ${AWS_PROFILE}"
+elif [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  AWS_CREDENTIAL_SOURCE="GitHub OIDC environment credentials"
+else
+  AWS_CREDENTIAL_SOURCE="AWS default credential chain"
+fi
+
 REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
 CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
@@ -68,7 +76,8 @@ info "Control-plane environment name: ${CONTROL_PLANE_ENV_NAME}"
 info "Validation layer: ${VALIDATION_LAYER}"
 info "Output dir: ${OUTPUT_DIR}"
 info "Name prefix: ${NAME_PREFIX}"
-info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "AWS_PROFILE: ${AWS_PROFILE:-<not set>}"
+info "AWS credential source: ${AWS_CREDENTIAL_SOURCE}"
 info "AWS_REGION: ${AWS_REGION}"
 info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
@@ -172,6 +181,7 @@ jq -n \
   --arg validation_layer_display "Control Plane" \
   --arg control_plane_environment "$CONTROL_PLANE_ENV_NAME" \
   --arg aws_profile "$AWS_PROFILE" \
+  --arg aws_credential_source "$AWS_CREDENTIAL_SOURCE" \
   --arg aws_region "$AWS_REGION" \
   --arg aws_account_id "$AWS_ACCOUNT_ID" \
   --arg expected_account_id "$EXPECTED_ACCOUNT_ID" \
@@ -197,6 +207,7 @@ jq -n \
     validation_layer_display: $validation_layer_display,
     control_plane_environment: $control_plane_environment,
     aws_profile: $aws_profile,
+    aws_credential_source: $aws_credential_source,
     aws_region: $aws_region,
     aws_account_id: $aws_account_id,
     expected_account_id: $expected_account_id,
@@ -279,7 +290,8 @@ section "Generating Markdown summary"
   echo "| Project | ${CLOUD_NAME} |"
   echo "| Control-plane Environment | ${CONTROL_PLANE_ENV_NAME} |"
   echo "| Validation Layer | Control Plane |"
-  echo "| AWS Profile | ${AWS_PROFILE:-<default>} |"
+  echo "| AWS Profile | \`${AWS_PROFILE:-not set}\` |"
+  echo "| AWS Credential Source | \`${AWS_CREDENTIAL_SOURCE}\` |"
   echo "| AWS Region | ${AWS_REGION} |"
   echo "| AWS Account ID | ${AWS_ACCOUNT_ID} |"
   echo "| Expected Account ID | ${EXPECTED_ACCOUNT_ID:-<not set>} |"
@@ -382,7 +394,8 @@ section "Control-Plane Validation Report Export Summary"
 
 echo "Validation layer:           Control Plane"
 echo "Control-plane env name:     ${CONTROL_PLANE_ENV_NAME}"
-echo "AWS profile:                ${AWS_PROFILE:-<default>}"
+echo "AWS profile:                ${AWS_PROFILE:-not set}"
+echo "AWS credential source:      ${AWS_CREDENTIAL_SOURCE}"
 echo "AWS region:                 ${AWS_REGION}"
 echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
 echo "Name prefix:                ${NAME_PREFIX}"
