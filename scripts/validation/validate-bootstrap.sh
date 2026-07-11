@@ -14,7 +14,7 @@
 #   REQUIRE_BOOTSTRAP_GITHUB_OIDC=false ./scripts/validation/validate-bootstrap.sh dev
 #   STRICT_GITHUB_SUBJECT_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
 #   STRICT_WORKLOAD_CMK_POLICY_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
-#   REQUIRE_STATE_STACK_LOCAL=false ./scripts/validation/validate-bootstrap.sh dev
+#   REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh dev
 #
 # Notes:
 #   This script is intentionally read-only. It does not initialize Terraform
@@ -22,14 +22,13 @@
 #   policies, or perform destroy/cleanup operations.
 #
 #   Expected architecture:
-#   - bootstrap/<env>/state uses local Terraform state and creates the S3 state
-#     bucket and state CMK.
+#   - bootstrap/<env>/state creates the S3 state bucket and state CMK, then uses
+#     that bucket as an S3 backend with use_lockfile = true after migration.
 #   - bootstrap/<env>/account uses an S3 backend with use_lockfile = true.
 #   - environments/<env> uses an S3 backend with use_lockfile = true.
-#   - The backend files are the source of truth for state bucket location and
-#     state locking behavior.
-#   - Validation does not depend on local terraform.tfstate from
-#     bootstrap/<env>/state, so the script can run from a fresh checkout.
+#   - Each Terraform root uses a distinct state object key.
+#   - Set REQUIRE_STATE_STACK_REMOTE=true to require explicit proof that the
+#     state stack backend has been migrated and is readable from S3.
 #
 #   Workload-created CMK policy validation:
 #   - By default, stale/missing workload Lambda or Secrets Manager CMK policy
@@ -61,7 +60,7 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
 REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
 REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
 STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-true}"
-REQUIRE_STATE_STACK_LOCAL="${REQUIRE_STATE_STACK_LOCAL:-true}"
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
@@ -77,6 +76,14 @@ case "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" in
     ;;
   *)
     fail "Invalid STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}. Expected true or false."
+    ;;
+esac
+
+case "$REQUIRE_STATE_STACK_REMOTE" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
     ;;
 esac
 
@@ -316,20 +323,161 @@ validate_backend_state_config() {
   TF_STATE_BUCKET_ARN="arn:aws:s3:::${TF_STATE_BUCKET_NAME}"
 }
 
-validate_state_stack_local_backend() {
+handle_state_stack_remote_issue() {
+  local message="$1"
+
+  if [[ "$REQUIRE_STATE_STACK_REMOTE" == "true" ]]; then
+    fail "$message"
+  else
+    warn "${message} REQUIRE_STATE_STACK_REMOTE=false, so this finding is advisory."
+  fi
+}
+
+validate_state_stack_remote_backend() {
   local state_dir="$1"
+  local account_backend_file="$2"
+  local env_backend_file="$3"
+  local state_backend_file="${state_dir}/backend.tf"
 
-  section "Checking bootstrap state stack backend mode"
+  section "Checking bootstrap state stack remote backend"
 
-  if [[ -f "${state_dir}/backend.tf" ]]; then
-    local message="bootstrap/${ENV_NAME}/state has backend.tf. Expected local state for the root bootstrap state stack."
-    if [[ "$REQUIRE_STATE_STACK_LOCAL" == "true" ]]; then
-      fail "$message"
+  if [[ ! -f "$state_backend_file" ]]; then
+    handle_state_stack_remote_issue \
+      "bootstrap/${ENV_NAME}/state/backend.tf was not found"
+    return 0
+  fi
+
+  if grep -Eq 'backend[[:space:]]+"s3"' "$state_backend_file"; then
+    success "bootstrap/${ENV_NAME}/state declares an S3 backend"
+  else
+    handle_state_stack_remote_issue \
+      "bootstrap/${ENV_NAME}/state does not declare an S3 backend"
+    return 0
+  fi
+
+  if grep -Eq '^[[:space:]]*use_lockfile[[:space:]]*=[[:space:]]*true' "$state_backend_file"; then
+    success "bootstrap/${ENV_NAME}/state uses S3 native locking: use_lockfile = true"
+  else
+    handle_state_stack_remote_issue \
+      "bootstrap/${ENV_NAME}/state does not set use_lockfile = true"
+  fi
+
+  local state_backend_bucket
+  local state_backend_region
+  local state_backend_key
+  local account_backend_bucket
+  local account_backend_region
+  local account_backend_key
+  local env_backend_bucket
+  local env_backend_region
+  local env_backend_key
+
+  state_backend_bucket="$(get_backend_string_value "$state_backend_file" bucket)"
+  state_backend_region="$(get_backend_string_value "$state_backend_file" region)"
+  state_backend_key="$(get_backend_string_value "$state_backend_file" key)"
+
+  account_backend_bucket="$(get_backend_string_value "$account_backend_file" bucket)"
+  account_backend_region="$(get_backend_string_value "$account_backend_file" region)"
+  account_backend_key="$(get_backend_string_value "$account_backend_file" key)"
+
+  env_backend_bucket="$(get_backend_string_value "$env_backend_file" bucket)"
+  env_backend_region="$(get_backend_string_value "$env_backend_file" region)"
+  env_backend_key="$(get_backend_string_value "$env_backend_file" key)"
+
+  if [[ -z "$state_backend_bucket" ]]; then
+    handle_state_stack_remote_issue \
+      "Unable to resolve bootstrap/${ENV_NAME}/state backend bucket from ${state_backend_file}"
+    return 0
+  fi
+
+  if [[ -z "$state_backend_region" ]]; then
+    handle_state_stack_remote_issue \
+      "Unable to resolve bootstrap/${ENV_NAME}/state backend region from ${state_backend_file}"
+    return 0
+  fi
+
+  if [[ -z "$state_backend_key" ]]; then
+    handle_state_stack_remote_issue \
+      "Unable to resolve bootstrap/${ENV_NAME}/state backend key from ${state_backend_file}"
+    return 0
+  fi
+
+  info "State stack backend bucket: ${state_backend_bucket}"
+  info "State stack backend region: ${state_backend_region}"
+  info "State stack backend key: ${state_backend_key}"
+
+  if [[ "$state_backend_bucket" == "$account_backend_bucket" &&
+        "$state_backend_bucket" == "$env_backend_bucket" ]]; then
+    success "State, account, and workload stacks use the same state bucket"
+  else
+    handle_state_stack_remote_issue \
+      "State stack backend bucket mismatch. State: ${state_backend_bucket}; account: ${account_backend_bucket}; workload: ${env_backend_bucket}"
+  fi
+
+  if [[ "$state_backend_region" == "$account_backend_region" &&
+        "$state_backend_region" == "$env_backend_region" ]]; then
+    success "State, account, and workload stacks use the same backend region"
+  else
+    handle_state_stack_remote_issue \
+      "State stack backend region mismatch. State: ${state_backend_region}; account: ${account_backend_region}; workload: ${env_backend_region}"
+  fi
+
+  if [[ "$state_backend_region" == "$AWS_REGION" ]]; then
+    success "State stack backend region matches AWS_REGION: ${AWS_REGION}"
+  else
+    handle_state_stack_remote_issue \
+      "State stack backend region (${state_backend_region}) differs from AWS_REGION (${AWS_REGION})"
+  fi
+
+  if [[ "$state_backend_key" != "$account_backend_key" &&
+        "$state_backend_key" != "$env_backend_key" ]]; then
+    success "State stack uses a distinct state object key"
+  else
+    handle_state_stack_remote_issue \
+      "State stack backend key must differ from the account and workload state keys. State: ${state_backend_key}; account: ${account_backend_key}; workload: ${env_backend_key}"
+  fi
+
+  if aws s3api head-object \
+    "${aws_args[@]}" \
+    --bucket "$state_backend_bucket" \
+    --key "$state_backend_key" >/dev/null 2>&1; then
+    success "State stack object exists and is readable: s3://${state_backend_bucket}/${state_backend_key}"
+  else
+    handle_state_stack_remote_issue \
+      "State stack object was not found or is not readable: s3://${state_backend_bucket}/${state_backend_key}"
+    return 0
+  fi
+
+  if terraform -chdir="$state_dir" state pull >/dev/null 2>&1; then
+    success "State stack state is readable through the configured remote backend"
+  else
+    handle_state_stack_remote_issue \
+      "Unable to read bootstrap/${ENV_NAME}/state through the configured backend"
+    return 0
+  fi
+
+  local state_outputs_json
+  state_outputs_json="$(terraform_output_json_optional "$state_dir")"
+
+  if [[ -z "$state_outputs_json" ]]; then
+    handle_state_stack_remote_issue \
+      "Unable to read Terraform outputs for bootstrap/${ENV_NAME}/state"
+    return 0
+  fi
+
+  if terraform_output_exists "$state_outputs_json" tf_state_bucket_name; then
+    local state_output_bucket
+    state_output_bucket="$(get_output_string "$state_outputs_json" tf_state_bucket_name)"
+
+    if [[ "$state_output_bucket" == "$state_backend_bucket" ]]; then
+      success "State backend bucket matches the state stack tf_state_bucket_name output"
     else
-      warn "$message"
+      handle_state_stack_remote_issue \
+        "State backend bucket mismatch. Backend: ${state_backend_bucket}; state output: ${state_output_bucket}"
     fi
   else
-    success "bootstrap/${ENV_NAME}/state does not define a remote backend; local state bootstrap pattern is preserved"
+    handle_state_stack_remote_issue \
+      "Missing tf_state_bucket_name output in bootstrap/${ENV_NAME}/state"
   fi
 }
 
@@ -892,11 +1040,15 @@ validate_aws_identity
 ACTIVE_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
 
 validate_directories "$REPO_ROOT" "$BOOTSTRAP_DIR" "$STATE_DIR" "$ACCOUNT_DIR" "$ENV_DIR"
-validate_state_stack_local_backend "$STATE_DIR"
 validate_backend_locking "${ACCOUNT_DIR}/backend.tf" "bootstrap/${ENV_NAME}/account"
 validate_backend_locking "${ENV_DIR}/backend.tf" "environments/${ENV_NAME}"
 
 validate_backend_state_config "${ACCOUNT_DIR}/backend.tf" "${ENV_DIR}/backend.tf"
+
+validate_state_stack_remote_backend \
+  "$STATE_DIR" \
+  "${ACCOUNT_DIR}/backend.tf" \
+  "${ENV_DIR}/backend.tf"
 
 require_non_empty "$TF_STATE_BUCKET_NAME" "Terraform state bucket name resolved from backend files"
 require_non_empty "$TF_STATE_BUCKET_ARN" "Terraform state bucket ARN resolved from backend files"
@@ -957,6 +1109,7 @@ Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
 Expected GitHub plan subject:      ${EXPECTED_GITHUB_PLAN_SUBJECT:-<not checked>}
 Expected GitHub apply subject:     ${EXPECTED_GITHUB_APPLY_SUBJECT:-<not checked>}
 Strict workload CMK policy checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}
+State stack remote required:       ${REQUIRE_STATE_STACK_REMOTE}
 SUMMARY
 
 section "Validation Result"
