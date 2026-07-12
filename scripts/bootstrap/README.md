@@ -4,16 +4,16 @@ This directory contains helper scripts for one-time or infrequent Terraform boot
 
 ## State-Stack Migration
 
-Use `migrate-state-stack.sh` after a new `bootstrap/<target>/state` stack has been initialized and applied locally.
+Use `migrate-state-stack.sh` after a new state stack has been initialized and applied locally.
 
-Supported targets:
+Supported command targets and directories:
 
-```text
-dev
-staging
-prod
-control-plane
-```
+| Command target | State-stack directory |
+|---|---|
+| `dev` | `bootstrap/dev/state` |
+| `staging` | `bootstrap/staging/state` |
+| `prod` | `bootstrap/prod/state` |
+| `control-plane` | `bootstrap/control_plane/state` |
 
 Example:
 
@@ -26,10 +26,11 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/bootstrap/migrate-state-stack.sh dev
 ```
 
-The script reads the tracked:
+The script reads the tracked `backend.tf.migrated.example` from the selected state-stack directory. For example:
 
 ```text
-bootstrap/<target>/state/backend.tf.migrated.example
+bootstrap/dev/state/backend.tf.migrated.example
+bootstrap/control_plane/state/backend.tf.migrated.example
 ```
 
 It then:
