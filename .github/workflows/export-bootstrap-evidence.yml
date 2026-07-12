@@ -124,6 +124,15 @@ jobs:
           terraform_version: "1.15.8"
           terraform_wrapper: false
 
+      - name: Materialize workload state backend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cp \
+            "bootstrap/${{ inputs.environment }}/state/backend.tf.migrated.example" \
+            "bootstrap/${{ inputs.environment }}/state/backend.tf"
+        
       - name: Initialize workload bootstrap state backend
         shell: bash
         run: |
