@@ -15,6 +15,22 @@ It focuses on system relationships, trust boundaries, and operational flow rathe
 The platform is organized around a **multi-account AWS architecture** with a centralized control plane and isolated workload environments.
 
 ```text
+Manual-First State Bootstrap
+    |
+    v
+Create S3 State Bucket and State CMK
+    |
+    v
+migrate-state-stack.sh
+    |
+    v
+Remote S3 State with Native Lockfiles
+    |
+    +--> bootstrap/control_plane/state
+    +--> bootstrap/dev/state
+    +--> bootstrap/staging/state
+    +--> bootstrap/prod/state
+
 GitHub Actions
     |
     | OIDC
@@ -25,45 +41,30 @@ GitHub Plan / Apply IAM Roles
 Terraform Stacks
     |
     +--> bootstrap/control_plane
-    |       +--> state
     |       +--> account
     |       +--> organizations
     |       +--> identity_center
     |
-    +--> bootstrap/dev
-    |       +--> state
-    |       +--> account
-    |
-    +--> bootstrap/staging
-    |       +--> state
-    |       +--> account
-    |
-    +--> bootstrap/prod
-    |       +--> state
-    |       +--> account
+    +--> bootstrap/dev/account
+    +--> bootstrap/staging/account
+    +--> bootstrap/prod/account
     |
     +--> environments/dev
-    |       +--> baseline
-    |
     +--> environments/staging
-    |       +--> baseline
-    |
     +--> environments/prod
-    |       +--> baseline
 ```
 
 At a high level:
 
 - The **control plane** manages organization-wide structure, centralized identity, and control-plane CI/CD access.
-- Each **environment bootstrap stack** prepares that environment for Terraform automation.
-- Each **state substack** is applied locally first and creates the remote backend resources for that account/environment.
+- Each **state substack** is initialized and applied locally first so it can create its S3 state bucket and KMS key.
+- The state-stack migration helper then materializes the ignored active backend configuration from `backend.tf.migrated.example`, migrates the state into S3, and verifies the remote state.
 - Each **account substack** creates the GitHub OIDC roles used by CI/CD for that account/environment.
 - Each **environment stack** deploys the actual security baseline into its dedicated AWS account.
 - GitHub Actions uses OIDC to assume environment-specific roles.
+- Read-only evidence workflows use the applicable `*-plan` role and materialize the state-stack backend at runtime.
 - IAM Identity Center provides centralized human access.
 - EventBridge, Security Hub, Lambda, and SNS provide event-driven detection and response.
-
----
 
 ## Account Model
 
@@ -118,7 +119,7 @@ The control plane consists of four substacks:
 
 | Substack | Purpose |
 |---------|---------|
-| `state` | Creates Terraform backend resources for control-plane state |
+| `state` | Creates the control-plane state bucket and CMK, then stores its own state in that remote backend after migration |
 | `account` | Creates GitHub OIDC roles used by CI/CD |
 | `organizations` | Defines AWS Organizations OU structure |
 | `identity_center` | Manages IAM Identity Center groups, permission sets, and account assignments |
@@ -459,42 +460,74 @@ The GitHub OIDC roles are created by account substacks and are intentionally sep
 
 This prevents Terraform workflows from destroying the IAM roles they are actively using.
 
----
+Layer-specific evidence workflows use the Plan roles and their corresponding `*-plan` GitHub environments. Because active state-stack `backend.tf` files are ignored, these workflows copy `backend.tf.migrated.example` to `backend.tf` before initializing and validating the migrated state stacks.
 
 ## Terraform State Architecture
 
 Terraform state is separated by account, environment, and substack.
 
-The `state` substacks are special bootstrap stacks. They are applied locally and use local Terraform state because their purpose is to create the remote backend resources that other stacks depend on. While initially stored locally, the `state` stacks can use a remote backend following initial deployment.
+The `state` substacks are special bootstrap stacks because they create the S3 bucket and KMS key that will ultimately store their own state. They therefore use a two-phase lifecycle.
 
-State substacks create resources such as:
+### Phase 1: Initial local bootstrap
 
-- S3 bucket for Terraform state
-- KMS key for state encryption
-- DynamoDB table or S3 lockfile support for state locking
+A new state stack has no active `backend.tf`. Terraform is initialized and applied locally so the stack can create:
 
-After the state resources exist, other stacks use remote state backends.
+- the S3 state bucket
+- the customer-managed KMS key for state encryption
+- the bucket security, versioning, encryption, and access controls
+
+The repository tracks the post-migration backend configuration as:
+
+```text
+backend.tf.migrated.example
+```
+
+Terraform ignores that filename during the initial local bootstrap.
+
+### Phase 2: Remote-state migration
+
+After the state resources exist, the operator runs:
+
+```bash
+AWS_PROFILE="<profile>" \
+EXPECTED_ACCOUNT_ID="<account-id>" \
+./scripts/bootstrap/migrate-state-stack.sh <dev|staging|prod|control-plane>
+```
+
+The helper:
+
+- validates the AWS identity and optional expected account ID
+- confirms the backend template bucket matches `tf_state_bucket_name`
+- saves pre-migration state backups outside the repository
+- refuses to overwrite an existing destination state object
+- copies `backend.tf.migrated.example` to the ignored active `backend.tf`
+- runs interactive `terraform init -migrate-state`
+- verifies the S3 object, `terraform state pull`, outputs, and resource addresses
+
+The active `backend.tf` remains local and ignored by Git. GitHub evidence workflows materialize the same file from the tracked template at runtime.
+
+### Remote state layout
 
 Example environment state layout:
 
 ```text
 bootstrap/dev/state
-    -> local Terraform state
-    -> creates remote backend resources for dev
+    -> remote backend key: bootstrap/state/dev.tfstate
 
 bootstrap/dev/account
-    -> remote backend key: bootstrap/account/dev.tfstate
+    -> remote backend key: bootstrap/dev.tfstate
 
 environments/dev
     -> remote backend key: baseline/dev.tfstate
 ```
 
+The staging and production accounts follow the same key structure.
+
 Control-plane layout:
 
 ```text
 bootstrap/control_plane/state
-    -> local Terraform state
-    -> creates remote backend resources for control-plane stacks
+    -> remote backend key: control-plane/state.tfstate
 
 bootstrap/control_plane/account
     -> remote backend key: control-plane/account.tfstate
@@ -506,11 +539,13 @@ bootstrap/control_plane/organizations
     -> remote backend key: control-plane/organizations.tfstate
 ```
 
-This separation reduces blast radius and prevents unrelated Terraform operations from affecting each other.
+All remote-backed stacks use S3 native locking with:
 
-It also avoids the bootstrapping problem where Terraform would need a remote backend before the backend resources exist.
+```hcl
+use_lockfile = true
+```
 
----
+Each Terraform root uses a distinct state object key. This separation reduces blast radius and prevents unrelated Terraform operations from affecting each other while still solving the initial backend bootstrapping dependency.
 
 ## Centralized Logging
 
