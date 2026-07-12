@@ -52,18 +52,20 @@ control-plane
 Recommended validation order:
 
 1. Confirm AWS profile/account variables.
-2. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
-3. Export workload bootstrap evidence with `export-bootstrap.sh` for each deployed workload environment.
-4. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
-5. Export workload baseline evidence with `export-baseline.sh` for each deployed workload environment.
-6. Run automated control-plane validation with `validate-control-plane.sh`.
-7. Export control-plane evidence with `export-control-plane.sh`.
-8. Review any control-plane warnings, especially AWS Organizations account placement warnings.
-9. Validate GitHub Actions workflows manually.
-10. Validate IAM Identity Center end-user access manually where required.
-11. Run live Lambda workflow tests only in approved environments.
-12. Run tamper and break-glass tests only when explicitly approved.
-13. Review destroy safety requirements before running any destroy or teardown workflow.
+2. Verify each migrated state stack with `scripts/bootstrap/migrate-state-stack.sh <target> --verify-only`.
+3. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
+4. Export workload bootstrap evidence with `export-bootstrap.sh` for each deployed workload environment.
+5. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
+6. Export workload baseline evidence with `export-baseline.sh` for each deployed workload environment.
+7. Run automated control-plane validation with `validate-control-plane.sh`.
+8. Export control-plane evidence with `export-control-plane.sh`.
+9. Review any control-plane warnings, especially AWS Organizations account placement warnings.
+10. Validate GitHub Actions plan/apply/destroy workflows manually.
+11. Review the layer-specific GitHub evidence-export workflow results.
+12. Validate IAM Identity Center end-user access manually where required.
+13. Run live Lambda workflow tests only in approved environments.
+14. Run tamper and break-glass tests only when explicitly approved.
+15. Review destroy safety requirements before running any destroy or teardown workflow.
 
 ---
 
@@ -162,6 +164,7 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
@@ -173,6 +176,7 @@ AWS_PROFILE=staging \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh staging
 ```
 
@@ -184,6 +188,7 @@ AWS_PROFILE=prod \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh prod
 ```
 
@@ -192,11 +197,14 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 `validate-bootstrap.sh` performs safe, read-only validation for:
 
 - AWS caller identity and expected workload account ID
-- `bootstrap/<env>/state` and `bootstrap/<env>/account` directory structure
-- `bootstrap/<env>/state` preserving the local-state bootstrap pattern by not defining `backend.tf`
-- `bootstrap/<env>/account/backend.tf` using `use_lockfile = true`
-- `environments/<env>/backend.tf` using `use_lockfile = true`
-- backend files resolving a shared Terraform state bucket, backend region, and distinct state keys
+- `bootstrap/<env>/state`, `bootstrap/<env>/account`, and `environments/<env>` directory structure
+- active post-migration `bootstrap/<env>/state/backend.tf` configuration
+- S3 backend declarations and `use_lockfile = true` for state, account, and workload stacks
+- state, account, and workload backend files resolving the same state bucket and region
+- distinct Terraform state object keys for all three Terraform roots
+- migrated state object existence and readability in S3
+- successful `terraform state pull` through the state stack's configured backend
+- state backend bucket matching the state stack's `tf_state_bucket_name` output
 - Terraform state S3 bucket existence, versioning, encryption, and public access block settings
 - Terraform state KMS CMK resolution from the live bucket encryption configuration
 - Terraform state KMS CMK existence, key state, and customer-managed status
@@ -206,20 +214,48 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 - GitHub role policy access to the Terraform state bucket, state objects including `.tflock` objects, and state CMK
 - GitHub Apply role access to current workload-created Lambda and Secrets Manager CMKs
 
-`validate-bootstrap.sh` does not require local `terraform.tfstate` from `bootstrap/<env>/state`. This keeps the script compatible with fresh checkouts and manual GitHub workflow runs.
+The state stack is applied with local state only during initial bootstrap. After the backend resources exist, `scripts/bootstrap/migrate-state-stack.sh` creates the ignored active `backend.tf`, migrates the state to S3, and verifies the result.
 
-For bootstrap validation, the remote backend files are the source of truth for:
+The tracked file:
 
 ```text
-state bucket name
-state backend region
-state object keys
-use_lockfile = true
+bootstrap/<env>/state/backend.tf.migrated.example
 ```
 
-The script derives the state bucket from the backend files, then validates the live S3 bucket and KMS encryption configuration through AWS APIs.
+describes the intended post-migration backend. The active file:
 
-The workload bootstrap architecture uses S3 native state locking. DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
+```text
+bootstrap/<env>/state/backend.tf
+```
+
+is generated locally or materialized by a GitHub evidence workflow and is ignored by Git.
+
+The workload bootstrap architecture uses S3 native state locking with `use_lockfile = true`. DynamoDB locking is not part of the current architecture.
+
+### State Stack Remote-Backend Validation
+
+State-stack migration validation is controlled by:
+
+```bash
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+```
+
+| Value | Behavior |
+|---|---|
+| `true` | Missing, mismatched, or unreadable state-stack remote backend findings fail validation. This is recommended for post-migration and client-readiness evidence. |
+| `false` | The remote-state checks still run, but their findings are advisory warnings. This is the direct-script default for transitional use. |
+
+The GitHub workload bootstrap evidence workflow defaults its `require_state_stack_remote` input to `true`.
+
+Verify an already-migrated workload state stack directly with:
+
+```bash
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
+```
+
+A tracked `backend.tf.migrated.example` file alone is not proof of migration. The active backend configuration, readable S3 state object, successful `terraform state pull`, and matching bucket output provide the migration evidence.
 
 ### Workload CMK Policy Validation
 
@@ -243,22 +279,40 @@ STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-true}"
 
 Use `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/manual GitHub workflow testing, or environments where the workload stack has not yet been reconciled back into `bootstrap/<env>/account`.
 
-For strict workload CMK evidence, the expected deployment sequence is:
+For strict workload CMK and remote-state evidence, the expected deployment sequence is:
 
 ```text
-1. Apply bootstrap/<env>/state.
-2. Apply bootstrap/<env>/account.
-3. Apply environments/<env>.
-4. Capture current workload outputs for lambda_cmk_arn and secrets_manager_cmk_arn.
-5. Re-apply bootstrap/<env>/account with those current CMK ARNs.
-6. Run validate-bootstrap.sh or export-bootstrap.sh with the default strict behavior.
+1. Initialize and apply bootstrap/<env>/state locally.
+2. Run scripts/bootstrap/migrate-state-stack.sh <env>.
+3. Apply bootstrap/<env>/account.
+4. Apply environments/<env>.
+5. Capture current workload outputs for lambda_cmk_arn and secrets_manager_cmk_arn.
+6. Re-apply bootstrap/<env>/account with those current CMK ARNs.
+7. Run validate-bootstrap.sh or export-bootstrap.sh with REQUIRE_STATE_STACK_REMOTE=true and the default strict CMK behavior.
 ```
 
 ### GitHub Workflow Usage
 
-`validate-bootstrap.sh` is read-only and does not run `terraform init`. For manual GitHub workflow usage, initialize the remote-backed stacks first so Terraform outputs can be read from the S3 backend:
+`validate-bootstrap.sh` is read-only and does not run `terraform init` or create backend files.
+
+The workload bootstrap evidence workflow:
+
+1. copies `backend.tf.migrated.example` to the ignored runtime `backend.tf`;
+2. initializes the state, account, and workload Terraform roots;
+3. runs the exporter with `REQUIRE_STATE_STACK_REMOTE=true` by default;
+4. uploads the generated validation package as a GitHub Actions artifact.
+
+For a manual run from a fresh checkout of an already-migrated environment, materialize and verify the state backend before initializing the other roots:
 
 ```bash
+cp \
+  bootstrap/dev/state/backend.tf.migrated.example \
+  bootstrap/dev/state/backend.tf
+
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
+
 terraform -chdir=bootstrap/dev/account init -input=false
 terraform -chdir=environments/dev init -input=false
 
@@ -266,18 +320,20 @@ AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
 Repeat with the matching profile, account ID, and environment name for `staging` and `prod`.
 
-To generate workload bootstrap evidence, run `export-bootstrap.sh` after the same remote-backed stack initialization:
+To generate workload bootstrap evidence, run `export-bootstrap.sh` after the same initialization:
 
 ```bash
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/export-bootstrap.sh dev
 ```
 
@@ -421,6 +477,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -435,6 +492,7 @@ EXPECTED_GITHUB_REPOSITORY="example-org/terraform-secure-baseline" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -442,9 +500,12 @@ This script performs safe, read-only validation for:
 
 - AWS caller identity and expected control-plane account ID
 - Control-plane Terraform state stack outputs
+- active post-migration control-plane state backend configuration
+- migrated control-plane state object existence and readability
+- successful `terraform state pull` for the control-plane state stack
 - Terraform state S3 bucket existence, versioning, encryption, and public access block settings
 - Terraform state KMS CMK existence and key state
-- S3 native backend locking configuration where applicable
+- S3 native backend locking configuration with `use_lockfile = true`
 - GitHub OIDC provider existence
 - Control-plane GitHub plan/apply role existence
 - GitHub OIDC trust policy conditions for the expected repository
@@ -472,6 +533,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/export-control-plane.sh
 ```
 
@@ -528,7 +590,7 @@ CLOUD_NAME="tf-secure-baseline" \
 The export creates:
 
 ```text
-validation-results/<environment>/<timestamp>/
+validation-results/<environment>/baseline/<timestamp>/
 ├── summary.md
 ├── summary.json
 ├── validate-env.log
@@ -620,16 +682,66 @@ aws sts get-caller-identity --profile "${AWS_PROFILE}"
 
 ## Purpose
 
-Confirm that the Terraform backend resources exist for each account/environment.
+Confirm that each state stack created its backend resources, was migrated to its intended S3 backend, and can read its remote state safely.
 
-The `state` substacks create backend resources such as:
+The state stacks create:
 
-- S3 bucket for Terraform state
-- KMS key for state encryption
+- an S3 bucket for Terraform state;
+- a customer-managed KMS key for state encryption.
 
-Remote-backed stacks should use Terraform S3 native locking with `use_lockfile = true`.
+They are initialized and applied locally once, then migrated with:
 
-DynamoDB state locking is not expected because this project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
+```bash
+./scripts/bootstrap/migrate-state-stack.sh <dev|staging|prod|control-plane>
+```
+
+The repository tracks the post-migration template:
+
+```text
+backend.tf.migrated.example
+```
+
+The active runtime file:
+
+```text
+backend.tf
+```
+
+is created after migration and ignored by Git.
+
+All remote-backed stacks use Terraform S3 native locking with:
+
+```hcl
+use_lockfile = true
+```
+
+DynamoDB state locking is not part of the current architecture.
+
+## Verify a Migrated State Stack
+
+For a workload environment:
+
+```bash
+AWS_PROFILE="${ENVIRONMENT}" \
+EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}" \
+./scripts/bootstrap/migrate-state-stack.sh "${ENVIRONMENT}" --verify-only
+```
+
+For the control plane:
+
+```bash
+AWS_PROFILE="control-plane" \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only
+```
+
+Expected:
+
+- AWS identity resolves to the intended account.
+- Active `backend.tf` matches `backend.tf.migrated.example`.
+- The configured S3 state object exists and is readable.
+- `terraform state pull` succeeds.
+- The configured bucket matches the `tf_state_bucket_name` Terraform output.
 
 ## Check State Bucket
 
@@ -648,43 +760,76 @@ aws s3api get-bucket-encryption \
   --query 'ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault'
 ```
 
-If your state bucket uses a different name, replace the bucket name accordingly.
+If the deployment uses a custom bucket name, use the value declared in the applicable backend template or returned by `tf_state_bucket_name`.
 
 ## Check S3 Native State Locking
 
-For remote-backed stacks, confirm that the backend configuration uses S3 native locking:
+For a workload environment, confirm all three active backend configurations use S3 native locking:
 
 ```bash
-grep -R "use_lockfile" \
+grep -H "use_lockfile" \
+  "bootstrap/${ENVIRONMENT}/state/backend.tf" \
+  "bootstrap/${ENVIRONMENT}/account/backend.tf" \
+  "environments/${ENVIRONMENT}/backend.tf"
+```
+
+Expected for each file:
+
+```text
+use_lockfile = true
+```
+
+For the control plane:
+
+```bash
+grep -H "use_lockfile" \
+  bootstrap/control_plane/state/backend.tf \
+  bootstrap/control_plane/account/backend.tf \
+  bootstrap/control_plane/organizations/backend.tf \
+  bootstrap/control_plane/identity_center/backend.tf
+```
+
+## Check State Object Separation
+
+Review the configured backend keys:
+
+```bash
+grep -H -E '^[[:space:]]*key[[:space:]]*=' \
+  "bootstrap/${ENVIRONMENT}/state/backend.tf" \
   "bootstrap/${ENVIRONMENT}/account/backend.tf" \
   "environments/${ENVIRONMENT}/backend.tf"
 ```
 
 Expected:
 
-```text
-use_lockfile = true
-```
+- every Terraform root uses a distinct object key;
+- state, account, and workload roots do not share a state object;
+- the keys match the intended environment.
 
-## Terraform Init Check
+## Terraform Read Check
 
-From the target stack directory:
+From each initialized workload Terraform root:
 
 ```bash
-terraform init
+terraform -chdir="bootstrap/${ENVIRONMENT}/state" state pull >/dev/null
+terraform -chdir="bootstrap/${ENVIRONMENT}/account" state pull >/dev/null
+terraform -chdir="environments/${ENVIRONMENT}" state pull >/dev/null
 ```
 
 Expected:
 
-- Backend initializes successfully.
-- No state lock or access errors occur.
+- each backend initializes successfully;
+- each state is readable;
+- no state lock or access errors occur.
 
 ## Expected Outcome
 
-- S3 state bucket exists.
+- State bucket exists.
 - KMS encryption is configured.
-- Remote-backed stacks use `use_lockfile = true`.
-- Terraform can initialize successfully in stacks that use the backend.
+- The state stack has been migrated to the intended S3 object.
+- State, account, and workload stacks use distinct state keys.
+- All remote-backed stacks use `use_lockfile = true`.
+- `terraform state pull` succeeds for each initialized root.
 
 ---
 
@@ -2239,22 +2384,31 @@ Expected:
 
 Confirm that CI/CD workflows operate successfully.
 
-Run the following workflows:
+Run or review the following workflows:
 
 - Terraform Static Analysis
 - Docs Validation
 - Terraform Plan
 - Terraform Apply
+- Workload Bootstrap Evidence Export
+- Workload Baseline Evidence Export
+- Control-Plane Evidence Export
 - Terraform Destroy in a non-production environment only
-  > Ensure that the `bootstrap/<env>/account` stack has been re-applied with the current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values before relying on strict workload bootstrap validation evidence or running workflows that need those KMS permissions
+
+> Ensure that `bootstrap/<env>/account` has been re-applied with the current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values before relying on strict workload bootstrap evidence or running workflows that need those KMS permissions.
 
 Expected:
 
 - Static analysis workflow succeeds.
 - Docs validation workflow succeeds.
 - Plan workflow succeeds for expected stacks.
-- Apply workflow can deploy selected environment.
-- Destroy workflow first cleans up Identity Center attachments and then destroys selected environment baseline.
+- Apply workflow can deploy the selected environment.
+- Evidence workflows assume the intended GitHub Plan role through OIDC.
+- Evidence workflows materialize the ignored state-stack `backend.tf` from `backend.tf.migrated.example`.
+- Workload and control-plane evidence workflows complete with `REQUIRE_STATE_STACK_REMOTE=true` when strict migration evidence is requested.
+- Evidence packages are uploaded as GitHub Actions artifacts.
+- A blank `AWS_PROFILE` in GitHub-generated evidence is expected; the credential source should identify GitHub OIDC environment credentials.
+- Destroy workflow first cleans up Identity Center attachments and then destroys the selected environment baseline.
 - No OIDC role assumption errors occur.
 - No Terraform state lock conflicts occur.
 
@@ -2445,16 +2599,18 @@ Check:
 - `AWS_PROFILE` is set to the target workload account profile.
 - `EXPECTED_ACCOUNT_ID` matches the target workload account ID.
 - `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the workload GitHub OIDC roles.
-- `bootstrap/<env>/state` has been applied at least once to create the state bucket and state CMK.
-- `bootstrap/<env>/state` does not define `backend.tf`.
-- `bootstrap/<env>/account` has been applied with GitHub OIDC enabled.
-- `bootstrap/<env>/account/backend.tf` includes `use_lockfile = true`.
-- `environments/<env>/backend.tf` includes `use_lockfile = true`.
-- The backend files resolve the intended state bucket, backend region, and distinct state keys.
-- The state S3 bucket exists, has versioning enabled, has public access block enabled, and uses SSE-KMS.
-- The state CMK can be resolved from the bucket encryption configuration, is enabled, and is customer-managed.
-- Remote-backed stacks have been initialized before running validation from a fresh checkout or GitHub workflow.
-- The GitHub Apply role has been re-applied after workload deployment with current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values.
+- `bootstrap/<env>/state` was applied locally at least once to create the state bucket and state CMK.
+- `scripts/bootstrap/migrate-state-stack.sh <env>` completed successfully.
+- `bootstrap/<env>/state/backend.tf.migrated.example` contains the intended bucket, key, region, and `use_lockfile = true`.
+- the ignored active `bootstrap/<env>/state/backend.tf` exists for local validation and matches the tracked template.
+- `scripts/bootstrap/migrate-state-stack.sh <env> --verify-only` succeeds.
+- state, account, and workload backend files use the intended shared bucket and region with distinct state keys.
+- all three backend files include `use_lockfile = true`.
+- the state S3 bucket exists, has versioning enabled, has public access block enabled, and uses SSE-KMS.
+- the state CMK can be resolved from the bucket encryption configuration, is enabled, and is customer-managed.
+- all remote-backed roots have been initialized before running validation from a fresh checkout.
+- `REQUIRE_STATE_STACK_REMOTE=true` is set when missing or unreadable migrated state should fail validation.
+- the GitHub Apply role has been re-applied after workload deployment with current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values.
 
 If strict workload CMK policy checks fail during transitional testing, either reconcile `bootstrap/<env>/account` with the current workload CMK outputs or temporarily run with:
 
@@ -2470,16 +2626,33 @@ If Terraform suddenly wants to create existing bootstrap/account resources, stop
 
 ## Bootstrap Validation Cannot Read Terraform Outputs
 
-`validate-bootstrap.sh` does not read Terraform outputs from `bootstrap/<env>/state`, but it does read outputs from the remote-backed account and workload stacks.
+`validate-bootstrap.sh` reads outputs from the account and workload roots. Its state-stack remote validation also reads `tf_state_bucket_name` from the migrated state stack.
 
-Before running bootstrap validation from a fresh checkout or GitHub workflow, initialize the remote-backed stacks:
+For a manual run from a fresh checkout of an already-migrated environment:
 
 ```bash
+cp \
+  bootstrap/<env>/state/backend.tf.migrated.example \
+  bootstrap/<env>/state/backend.tf
+
+AWS_PROFILE=<env> \
+EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh <env> --verify-only
+
 terraform -chdir=bootstrap/<env>/account init -input=false
 terraform -chdir=environments/<env> init -input=false
 ```
 
-If output reads still fail, confirm that the selected AWS principal has access to the configured S3 backend bucket, state object key, `.tflock` object, and state CMK.
+The GitHub workload bootstrap evidence workflow performs the backend materialization and Terraform initialization steps automatically.
+
+If output reads still fail, confirm that the selected AWS principal has access to:
+
+- the configured state bucket;
+- each required state object key;
+- the corresponding `.tflock` objects;
+- the state CMK.
+
+Also confirm that the active `backend.tf` matches `backend.tf.migrated.example` and points to the intended environment.
 
 ---
 
@@ -2491,7 +2664,11 @@ Check:
 - `EXPECTED_ACCOUNT_ID` matches the control-plane account ID.
 - `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the GitHub OIDC role, using the exact owner/repo spelling.
 - `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and `ACCOUNT_ID_PROD` are set when validating Identity Center assignments or account placement.
-- `bootstrap/control_plane/state` has been applied and has current Terraform outputs.
+- `bootstrap/control_plane/state` was applied locally and migrated with `scripts/bootstrap/migrate-state-stack.sh control-plane`.
+- `bootstrap/control_plane/state/backend.tf` exists locally, matches `backend.tf.migrated.example`, and uses `use_lockfile = true`.
+- `scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only` succeeds.
+- the state, account, Organizations, and Identity Center roots have been initialized before manual validation from a fresh checkout.
+- `REQUIRE_STATE_STACK_REMOTE=true` is set when strict control-plane migration evidence is required.
 - `bootstrap/control_plane/account` has been applied with GitHub OIDC enabled.
 - `bootstrap/control_plane/organizations` has been applied.
 - `bootstrap/control_plane/identity_center` has been applied after workload baseline policy names were available, if optional policy-backed roles are enabled.
@@ -2532,7 +2709,8 @@ Check:
 
 - No other Terraform job is currently running for the same backend key.
 - GitHub Actions did not cancel a job while a lock was held.
-- Backend key is unique per stack.
+- Backend key is unique per stack, including the migrated state stack.
+- The active state-stack `backend.tf` points to the intended bucket and key.
 - Remote-backed stacks include `use_lockfile = true`.
 - The AWS principal running Terraform has S3 permissions for both the state object and the `.tflock` lock object.
 - Use `terraform force-unlock` only after confirming no active operation is running.
