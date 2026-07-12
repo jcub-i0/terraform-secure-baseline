@@ -147,6 +147,7 @@ This baseline helps address common AWS security and operational problems, includ
 - No controlled rollback workflow
 - Poor visibility into break-glass access
 - Unclear Terraform state ownership
+- Long-lived bootstrap state stored only on an operator workstation
 - Terraform stacks destroying their own execution roles
 - IAM policy delete conflicts caused by unmanaged dependencies
 - Unrestricted outbound access through NAT Gateway
@@ -161,7 +162,7 @@ Deploying this baseline provides a production-aligned AWS security foundation wi
 
 - Multi-account architecture
 - Control-plane separation
-- Environment-specific Terraform state
+- Environment-specific, encrypted remote Terraform state with S3 native locking
 - GitHub OIDC CI/CD roles
 - IAM Identity Center groups and permission sets
 - Private VPC networking
@@ -423,15 +424,17 @@ docs/quickstart.md
 Recommended deployment order:
 
 ```text
-1. bootstrap/control_plane/state
-2. bootstrap/control_plane/account
-3. bootstrap/control_plane/organizations
-4. bootstrap/<env>/state
-5. bootstrap/<env>/account
-6. environments/<env>
-7. bootstrap/<env>/account re-apply, if using GitHub OIDC and CMK outputs are needed
-8. bootstrap/control_plane/identity_center
-9. validation tests
+1. Apply bootstrap/control_plane/state locally
+2. Migrate bootstrap/control_plane/state with scripts/bootstrap/migrate-state-stack.sh
+3. Deploy bootstrap/control_plane/account
+4. Deploy bootstrap/control_plane/organizations
+5. Apply bootstrap/<env>/state locally
+6. Migrate bootstrap/<env>/state with scripts/bootstrap/migrate-state-stack.sh
+7. Deploy bootstrap/<env>/account
+8. Deploy environments/<env>
+9. Re-apply bootstrap/<env>/account, if using GitHub OIDC and current workload CMK outputs are required
+10. Deploy or re-apply bootstrap/control_plane/identity_center
+11. Run validation and export evidence
 ```
 
 Deploy `dev` first before deploying `staging` or `prod`.
@@ -456,6 +459,16 @@ docs/lambda_tests/ip_enrichment.md
 
 Do not consider the environment production-ready until validation completes successfully.
 
+Verify each migrated state stack before relying on downstream validation:
+
+```bash
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
+```
+
+For client-readiness or release evidence, use `REQUIRE_STATE_STACK_REMOTE=true` for direct bootstrap and control-plane validation. The GitHub evidence workflows enforce this by default.
+
 Also confirm:
 
 - Effective deployment profile outputs are correct.
@@ -475,6 +488,7 @@ After a successful deployment, customize the baseline for your environment.
 Common customization areas include:
 
 - Naming conventions
+- State backend bucket names, object keys, regions, and `backend.tf.migrated.example` templates
 - AWS regions
 - CIDR ranges
 - Number of Availability Zones
@@ -500,7 +514,7 @@ Common customization areas include:
 
 Before using the baseline for production workloads, review:
 
-- Terraform state protection
+- Terraform state protection and successful state-stack migration
 - GitHub environment protections
 - Required reviewers for prod apply workflows
 - IAM Identity Center assignments
@@ -529,6 +543,18 @@ Before adopting this baseline, answer the following questions:
 - Which account is the AWS Organizations management account?
 - Will the control-plane account be separate from workload accounts?
 - Who owns each account?
+
+---
+
+### Terraform State Strategy
+
+- What bucket name will each workload and control-plane state stack use?
+- What distinct object key will each Terraform root use?
+- Who is authorized through `bucket_admin_principals`?
+- Where will migration backups be retained?
+- Who is responsible for running and approving state-stack migration?
+- Are the tracked `backend.tf.migrated.example` files customized before deployment?
+- Is `REQUIRE_STATE_STACK_REMOTE=true` required for release and client evidence?
 
 ---
 
@@ -630,15 +656,30 @@ Before adopting this baseline, answer the following questions:
 
 Terraform state is sensitive and must be protected.
 
-State buckets are automatically deployed with:
+State buckets are deployed with:
 
-- Encryption
+- KMS encryption
 - Versioning
 - Restricted access
-- Locking
+- S3 native lockfiles
 - Controlled bucket administration
 
-The `state` substacks are applied locally first and should be handled carefully. After initial deployment, the local states can and should be moved to a more secure remote location.
+Each state stack uses a two-phase lifecycle:
+
+1. Apply it locally without an active `backend.tf`.
+2. Migrate it into the S3 backend it created with `scripts/bootstrap/migrate-state-stack.sh`.
+
+The repository tracks `backend.tf.migrated.example`, while the active runtime `backend.tf` is ignored by Git and is only created after the backend exists.
+
+Before adopting the baseline for a client or another organization:
+
+- Customize every state-stack backend template for the intended bucket, key, and region.
+- Set `EXPECTED_ACCOUNT_ID` during migration.
+- Retain the external pre- and post-migration backups.
+- Verify the migration with `--verify-only`.
+- Require remote-state validation for release evidence.
+
+The existence of `backend.tf` alone is not proof of migration. The remote S3 object and `terraform state pull` must also succeed.
 
 ---
 
@@ -716,6 +757,8 @@ Before teardown, follow the destruction procedure in:
 docs/quickstart.md
 ```
 
+A state stack must be migrated away from the S3 bucket it manages before that bucket is destroyed. Preserve an external state backup and do not run a self-destructive teardown while the active backend still points to the same bucket.
+
 ---
 
 ## Cost Considerations
@@ -771,6 +814,8 @@ Before using this baseline for production workloads, confirm:
 
 - Required AWS accounts exist and are controlled.
 - Terraform state resources are protected.
+- Every state stack has been migrated and passes `migrate-state-stack.sh --verify-only`.
+- Release evidence requires remotely readable state stacks.
 - GitHub OIDC roles are working.
 - GitHub environments have appropriate protections.
 - IAM Identity Center groups are assigned correctly.

@@ -121,17 +121,40 @@ It also prevents Terraform from destroying the roles or state resources it depen
 
 Some resources must exist before automation can safely manage the rest of the platform.
 
-The `state` substacks are applied locally first because they create the remote backend resources used by later Terraform stacks.
+Each `state` substack follows a two-phase lifecycle:
 
-Examples include:
+1. It is initialized and applied locally without an active `backend.tf`.
+2. After it creates the S3 state bucket and state CMK, its local state is migrated into the new S3 backend.
 
-- S3 bucket for Terraform state
-- KMS key for state encryption
-- DynamoDB table or S3 lockfile support for state locking
+The repository tracks the intended post-migration configuration as:
 
-After backend resources exist, GitHub Actions can safely manage the remaining stacks through OIDC roles.
+```text
+backend.tf.migrated.example
+```
 
-This avoids the bootstrapping problem where Terraform would need a remote backend before the backend exists.
+The active runtime file is:
+
+```text
+backend.tf
+```
+
+The active file is generated only after the backend resources exist and is ignored by Git. The guarded migration helper:
+
+```text
+scripts/bootstrap/migrate-state-stack.sh
+```
+
+checks the AWS account, validates the backend template against the state-stack output, backs up local state, refuses to overwrite an existing remote state object, runs `terraform init -migrate-state`, and verifies the resulting remote state.
+
+State locking uses Terraform S3 native lockfiles with:
+
+```hcl
+use_lockfile = true
+```
+
+After the state stack has been migrated and the account stack has created GitHub OIDC roles, GitHub Actions can safely initialize the remote backends and manage supported stacks.
+
+This preserves the required bootstrap sequence without leaving long-lived Terraform state only on an operator workstation.
 
 ---
 
@@ -508,11 +531,21 @@ State resources use:
 
 - S3 storage
 - KMS encryption
-- Locking
+- S3 native lockfiles
+- Versioning
 - Restricted administrative access
-- Separate state files per stack
+- Separate state object keys per Terraform root
 
-The `state` backend is intentionally separated from the infrastructure it manages.
+The state stacks are a controlled bootstrap exception: they initially use local state only long enough to create their backend resources, then migrate their own state into those protected S3 backends.
+
+A tracked `backend.tf.migrated.example` documents the intended remote configuration, while the active `backend.tf` is created only after the backend exists and is ignored by Git.
+
+Migration is not considered complete merely because `backend.tf` exists. Validation also confirms that:
+
+- The remote S3 state object exists and is readable.
+- `terraform state pull` succeeds through the configured backend.
+- The backend bucket matches the state stack's `tf_state_bucket_name` output.
+- State, account, and workload roots use distinct state object keys.
 
 ---
 

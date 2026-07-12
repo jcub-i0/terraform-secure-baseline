@@ -83,22 +83,30 @@ This baseline is designed for:
 ## High-Level Architecture
 
 ```text
-Manual / Local Bootstrap
+Manual-First State Bootstrap
     |
     v
-Bootstrap Stacks
+Create S3 State Bucket and State CMK
+    |
+    v
+scripts/bootstrap/migrate-state-stack.sh
+    |
+    v
+Remote S3 State with Native Lockfiles
     |
     +--> bootstrap/control_plane/state
+    +--> bootstrap/dev/state
+    +--> bootstrap/staging/state
+    +--> bootstrap/prod/state
+
+Bootstrap and Governance Stacks
+    |
     +--> bootstrap/control_plane/account
     +--> bootstrap/control_plane/organizations
+    +--> bootstrap/control_plane/identity_center
     |
-    +--> bootstrap/dev/state
     +--> bootstrap/dev/account
-    |
-    +--> bootstrap/staging/state
     +--> bootstrap/staging/account
-    |
-    +--> bootstrap/prod/state
     +--> bootstrap/prod/account
 
 GitHub Actions
@@ -107,19 +115,18 @@ GitHub Actions
     v
 Environment Plan / Apply Roles
     |
-    v
-Workload Environment Stacks
+    +--> environments/dev
+    +--> environments/staging
+    +--> environments/prod
     |
-    +--> environments/dev/baseline
-    +--> environments/staging/baseline
-    +--> environments/prod/baseline
-
-Control Plane Governance
-    |
-    +--> bootstrap/control_plane/identity_center
+    +--> layer-specific validation evidence workflows
 ```
 
-Initial `state`, `account`, and `organizations` bootstrap stacks are applied locally/manual-first. After the environment GitHub OIDC roles exist, GitHub Actions can plan/apply supported workload baseline stacks. The Terraform Destroy workflow uses the control-plane apply role first to clean up Identity Center policy attachments, then uses the selected workload environment apply role to destroy that environment.
+Each `state` stack is initialized and applied locally first because it creates the S3 bucket and KMS key that will store its own Terraform state. After those resources exist, `scripts/bootstrap/migrate-state-stack.sh` materializes the ignored active `backend.tf` from the tracked `backend.tf.migrated.example`, migrates the existing local state into S3, and verifies that the remote state is readable.
+
+The active `backend.tf` files for state stacks are intentionally ignored by Git. The tracked `backend.tf.migrated.example` files represent the post-migration backend configuration used by operators and GitHub evidence workflows.
+
+Initial account and governance stacks remain manual-first. After the GitHub OIDC roles exist, GitHub Actions can plan and apply supported workload environment stacks. The Terraform Destroy workflow uses the control-plane apply role first to clean up Identity Center policy attachments, then uses the selected workload environment apply role to destroy that environment.
 
 The platform separates the control plane from the workload environments.
 
@@ -142,8 +149,6 @@ The **environment** stacks manage:
 - Storage
 - Backup
 - Patch management
-
----
 
 ## Repository Structure
 
@@ -172,10 +177,10 @@ The **environment** stacks manage:
 │
 ├── modules
 │   ├── automation
-|   |   └── lambda
+│   │   └── lambda
 │   ├── backup
 │   ├── compute
-|   |   └── user_data
+│   │   └── user_data
 │   ├── firewall
 │   ├── github_oidc
 │   ├── iam
@@ -183,11 +188,11 @@ The **environment** stacks manage:
 │   ├── logging
 │   ├── monitoring
 │   ├── networking
-|   │   └── security_policy
+│   │   └── security_policy
 │   ├── patch_management
 │   ├── security
-|   |   ├── config_baseline
-|   |   └── tamper_detection
+│   │   ├── config_baseline
+│   │   └── tamper_detection
 │   ├── security_dashboard
 │   ├── state
 │   ├── storage
@@ -203,12 +208,15 @@ The **environment** stacks manage:
 │   └── lambda_tests
 │
 ├── scripts
+│   ├── bootstrap
+│   │   ├── migrate-state-stack.sh
+│   │   └── README.md
 │   └── validation
 │       ├── lib
 │       │   └── common.sh
-|       ├── export-baseline.sh
-|       ├── export-bootstrap.sh
-|       ├── export-control-plane.sh
+│       ├── export-baseline.sh
+│       ├── export-bootstrap.sh
+│       ├── export-control-plane.sh
 │       ├── validate-backup.sh
 │       ├── validate-baseline.sh
 │       ├── validate-bootstrap.sh
@@ -226,7 +234,7 @@ The **environment** stacks manage:
 │       ├── validate-sqs.sh
 │       ├── validate-ssm.sh
 │       └── validate-vpc-endpoints.sh
-|
+│
 ├── .github
 │   └── workflows
 │
@@ -234,8 +242,6 @@ The **environment** stacks manage:
 ├── README.md
 └── SECURITY.md
 ```
-
----
 
 ## Core Design Principles
 
@@ -312,7 +318,7 @@ Substacks include:
 
 | Substack | Purpose |
 |----------|---------|
-| `state` | Creates Terraform backend resources |
+| `state` | Creates the S3 state bucket and state CMK, then stores its own state in that remote backend after migration |
 | `account` | Creates GitHub OIDC execution roles |
 | `organizations` | Defines AWS Organizations OU structure |
 | `identity_center` | Manages centralized IAM Identity Center access |
@@ -489,8 +495,11 @@ Typical workflows include:
 - `Terraform Static Analysis`
 - `Docs Validation`
 - `Lint PR`
+- `Workload Bootstrap Evidence Export`
+- `Workload Baseline Evidence Export`
+- `Control-Plane Evidence Export`
 
-Each environment uses its own GitHub environment and AWS role for `Terraform Plan`, `Terraform Apply`, and `Terraform Destroy` workflows.
+Each environment uses its own GitHub environment and AWS role for Terraform operations and read-only evidence workflows.
 
 Example mapping:
 
@@ -508,28 +517,37 @@ control-plane-plan -> control-plane GitHub-Plan role
 control-plane      -> control-plane GitHub-Apply role
 ```
 
----
+The layer-specific evidence workflows use the applicable `*-plan` GitHub environment and Plan role. For migrated state stacks, those workflows copy the tracked `backend.tf.migrated.example` to the ignored runtime `backend.tf` before running `terraform init` and read-only validation.
 
 ## Deployment Order
 
 At a high level, deployment follows this order:
 
-1. Deploy **state** resources
-2. Deploy **account / GitHub OIDC** resources
-3. Deploy **AWS Organizations** structure
-4. Deploy **environment baseline**
-5. Re-apply workload **account / GitHub OIDC** resources with current workload-created CMK ARNs where strict workload bootstrap evidence is required
-6. Deploy or re-apply **IAM Identity Center** assignments
-7. Validate **security automation workflows**
-8. Export validation evidence for the applicable validation layers
+1. Initialize and apply each **state** stack locally so it can create its S3 state bucket and state CMK.
+2. Run `scripts/bootstrap/migrate-state-stack.sh <target>` to materialize `backend.tf`, migrate the state stack into S3, and verify the remote state.
+3. Deploy **account / GitHub OIDC** resources.
+4. Deploy the **AWS Organizations** structure.
+5. Deploy the **environment baseline**.
+6. Re-apply workload **account / GitHub OIDC** resources with current workload-created CMK ARNs where strict workload bootstrap evidence is required.
+7. Deploy or re-apply **IAM Identity Center** assignments.
+8. Validate **security automation workflows**.
+9. Export validation evidence for the applicable validation layers.
+
+Supported migration targets are:
+
+```text
+dev
+staging
+prod
+control-plane
+```
 
 Detailed instructions are provided in:
 
 ```text
 docs/quickstart.md
+scripts/bootstrap/README.md
 ```
-
----
 
 ## Validation
 
@@ -562,17 +580,34 @@ AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 CLOUD_NAME="tf-secure-baseline" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
-`validate-bootstrap.sh` does not require local `terraform.tfstate` from `bootstrap/<env>/state`. It treats the remote backend files as the source of truth for state bucket location and S3 native locking with `use_lockfile = true`, then validates the live S3 state bucket and KMS encryption configuration through AWS APIs.
+When `REQUIRE_STATE_STACK_REMOTE=true`, validation confirms that the state stack:
 
-When running from a fresh checkout or a manual GitHub workflow, initialize the remote-backed stacks first so Terraform outputs can be read from the S3 backend:
+- has an active S3 backend
+- uses `use_lockfile = true`
+- uses the expected shared bucket and region
+- uses a state key distinct from the account and workload stacks
+- has a readable state object in S3
+- supports `terraform state pull`
+- reports a `tf_state_bucket_name` output matching the configured backend bucket
+
+Direct script execution defaults `REQUIRE_STATE_STACK_REMOTE` to `false`, making migration findings advisory. The GitHub evidence workflow defaults it to `true`.
+
+For a fresh checkout of an already-migrated deployment, materialize the ignored runtime backend file from the tracked template before initialization:
 
 ```bash
+cp bootstrap/dev/state/backend.tf.migrated.example \
+  bootstrap/dev/state/backend.tf
+
+terraform -chdir=bootstrap/dev/state init -input=false
 terraform -chdir=bootstrap/dev/account init -input=false
 terraform -chdir=environments/dev init -input=false
 ```
+
+The workload bootstrap evidence workflow performs the state-stack backend materialization and initialization automatically.
 
 Bootstrap validation is strict by default for workload-created CMK policy evidence. `STRICT_WORKLOAD_CMK_POLICY_CHECKS` defaults to `true`, which means stale or missing GitHub Apply role policy references to the current workload Lambda and Secrets Manager CMKs fail validation. Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional validation where those checks should be warnings instead of failures.
 
@@ -614,10 +649,25 @@ ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
 CLOUD_NAME="tf-secure-baseline" \
+REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
-Control-plane validation checks state backend resources, GitHub OIDC roles, AWS Organizations OU structure, IAM Identity Center instance discovery, permission sets, groups, and optional account assignment presence.
+Control-plane validation checks the state backend resources, optional strict proof that the control-plane state stack is remotely readable, GitHub OIDC roles, AWS Organizations OU structure, IAM Identity Center instance discovery, permission sets, groups, and optional account assignment presence.
+
+For a fresh checkout of an already-migrated deployment, materialize the control-plane state backend and initialize all four control-plane Terraform roots:
+
+```bash
+cp bootstrap/control_plane/state/backend.tf.migrated.example \
+  bootstrap/control_plane/state/backend.tf
+
+terraform -chdir=bootstrap/control_plane/state init -input=false
+terraform -chdir=bootstrap/control_plane/account init -input=false
+terraform -chdir=bootstrap/control_plane/organizations init -input=false
+terraform -chdir=bootstrap/control_plane/identity_center init -input=false
+```
+
+The control-plane evidence workflow performs this materialization and initialization automatically and defaults `REQUIRE_STATE_STACK_REMOTE` to `true`.
 
 Detailed validation guidance is provided in:
 
@@ -626,7 +676,7 @@ scripts/validation/README.md
 docs/validation-checklist.md
 ```
 
-The automated validation scripts are intentionally read-only. GitHub Actions workflow execution, end-user Identity Center login testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review remain manual validation steps.
+The validation scripts and evidence workflows are read-only. Terraform plan/apply/destroy workflow validation, end-user Identity Center login testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review remain manual validation activities.
 
 ### Validation Reporting
 
@@ -696,30 +746,48 @@ docs/assurance/validation-evidence-guide.md
 
 Terraform state is separated by **stack** and **environment**.
 
-Example layout:
+The state stacks follow a two-phase lifecycle:
 
 ```text
-bootstrap/account/dev.tfstate
+1. No active backend.tf:
+   initialize and apply locally to create the S3 bucket and state CMK
+
+2. Post-deployment migration:
+   materialize backend.tf from backend.tf.migrated.example
+   run scripts/bootstrap/migrate-state-stack.sh <target>
+   verify the remote S3 object and terraform state pull
+```
+
+The tracked `backend.tf.migrated.example` files document the post-migration configuration. Active state-stack `backend.tf` files are generated locally or by GitHub evidence workflows and are ignored by Git.
+
+Example workload state layout:
+
+```text
+bootstrap/state/dev.tfstate
+bootstrap/dev.tfstate
 baseline/dev.tfstate
 
-bootstrap/account/staging.tfstate
+bootstrap/state/staging.tfstate
+bootstrap/staging.tfstate
 baseline/staging.tfstate
 
-bootstrap/account/prod.tfstate
+bootstrap/state/prod.tfstate
+bootstrap/prod.tfstate
 baseline/prod.tfstate
 ```
 
 Control-plane substacks use separate state files:
 
 ```text
+control-plane/state.tfstate
 control-plane/account.tfstate
 control-plane/identity-center.tfstate
 control-plane/organizations.tfstate
 ```
 
-This separation prevents accidental cross-stack changes and reduces the blast radius of Terraform operations.
+All remote-backed stacks use S3 native state locking with `use_lockfile = true`. The state-stack migration helper refuses to overwrite an existing destination object, creates external pre-migration backups, and verifies the remote state after migration.
 
----
+This separation prevents accidental cross-stack changes and reduces the blast radius of Terraform operations.
 
 ## Cost Considerations
 
@@ -775,26 +843,28 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.3.5
+### v1.4.0
 
-This release improves client-readiness validation evidence by adding layer-specific evidence exporters, standardizing naming behavior across validation scripts, and strengthening workload bootstrap validation around current workload-created CMK policy access.
+This release completes the remote bootstrap-state architecture and GitHub validation evidence workflow model.
 
 Highlights:
 
-- Added workload bootstrap evidence export with `export-bootstrap.sh`.
-- Added control-plane evidence export with `export-control-plane.sh`.
-- Standardized workload baseline evidence export through `export-baseline.sh`.
-- Updated evidence output paths to separate workload bootstrap, workload baseline, and control-plane report packages.
+- Migrated the workload and control-plane `state` stacks from local-only state to dedicated remote S3 state objects.
+- Added tracked `backend.tf.migrated.example` files while keeping active state-stack `backend.tf` files ignored until migration or workflow runtime.
+- Added `scripts/bootstrap/migrate-state-stack.sh` for guarded, one-command state-stack migration and post-migration verification.
+- Standardized S3 native state locking with `use_lockfile = true` across state, account, governance, and workload Terraform roots.
+- Added optional strict state-stack migration validation with `REQUIRE_STATE_STACK_REMOTE`.
+- Validates remote state object readability, unique backend keys, bucket/output alignment, and successful `terraform state pull`.
+- Added manual GitHub evidence workflows for workload bootstrap, workload baseline, and control-plane validation.
+- Uses `dev-plan`, `staging-plan`, `prod-plan`, and `control-plane-plan` GitHub environments with read-only Plan roles for evidence collection.
+- Added workload bootstrap, workload baseline, and control-plane evidence exporters with Markdown summaries, JSON summaries, and supporting logs.
 - Added strict-by-default workload CMK policy validation with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true`.
-- Validates that the workload GitHub Apply role references the current workload-created Lambda and Secrets Manager CMK ARNs.
-- Supports transitional workload CMK validation with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false`, where stale or missing workload CMK references are warnings instead of failures.
-- Standardized validation script naming behavior around `CLOUD_NAME` and derived `NAME_PREFIX` values.
-- Preserved the three-layer validation model: workload bootstrap, workload baseline, and control plane.
-- Preserved manual-only status for GitHub Actions execution, end-user SSO testing, live Lambda workflow tests, tamper tests, break-glass tests, and destroy safety review.
+- Reports the AWS credential source so local profile runs and GitHub OIDC runs are clearly distinguished.
+- Preserves the three-layer validation model: workload bootstrap, workload baseline, and control plane.
+
+Terraform plan/apply/destroy workflow validation, end-user SSO testing, live security automation tests, tamper tests, break-glass tests, and destroy safety review remain manual validation activities.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
-
----
 
 ## Future Roadmap
 
