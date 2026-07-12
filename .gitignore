@@ -126,3 +126,9 @@ validation-results/
 # Keep examples/templates
 !**/*.tfvars.example
 !**/*.tfvars.json.example
+
+##################################################################
+# Post `state` stack state migration
+##################################################################
+# Generated after initial state-stack deployment
+bootstrap/*/state/backend.tf
