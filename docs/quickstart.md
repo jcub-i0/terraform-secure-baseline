@@ -317,12 +317,11 @@ Before applying this stack, ensure:
 - The `control-plane` account is the management account
 - `dev`, `staging`, and `prod` accounts have been invited and accepted into the organization
 
-Then apply from `bootstrap/control_plane/account`:
+From the repository root:
 
 ```bash
-cd ../organizations
-terraform init
-terraform apply
+terraform -chdir=bootstrap/control_plane/organizations init
+terraform -chdir=bootstrap/control_plane/organizations apply
 ```
 
 ---
@@ -396,7 +395,7 @@ The generated active `bootstrap/<env>/state/backend.tf` files are ignored by Git
 
 ---
 
-# Phase 5 - Deploy Environment Account Stacks (Skip if not using `GitHub-OIDC`)
+# Phase 5 - Deploy Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
 Each environment `account` stack creates the `GitHub OIDC` roles used by GitHub Actions for that environment.
 
@@ -404,14 +403,15 @@ By default, the `account` stack's `enable_github_oidc` variable is set to `false
 
 For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
 
+Run these commands from the repository root.
+
 ## Dev
 
 ```bash
 export AWS_PROFILE=dev
 
-cd ../../dev/account
-terraform init
-terraform apply
+terraform -chdir=bootstrap/dev/account init
+terraform -chdir=bootstrap/dev/account apply
 ```
 
 ## Staging
@@ -419,9 +419,8 @@ terraform apply
 ```bash
 export AWS_PROFILE=staging
 
-cd ../../staging/account
-terraform init
-terraform apply
+terraform -chdir=bootstrap/staging/account init
+terraform -chdir=bootstrap/staging/account apply
 ```
 
 ## Prod
@@ -429,9 +428,8 @@ terraform apply
 ```bash
 export AWS_PROFILE=prod
 
-cd ../../prod/account
-terraform init
-terraform apply
+terraform -chdir=bootstrap/prod/account init
+terraform -chdir=bootstrap/prod/account apply
 ```
 
 Record the outputs from each account stack:
@@ -509,15 +507,16 @@ egress_mode        = "auto"
 
 The effective settings are exposed as Terraform outputs after deployment.
 
+Run these commands from the repository root.
+
 ## Dev
 
 ```bash
 export AWS_PROFILE=dev
 
-cd ../../../environments/dev
-terraform init
-terraform plan
-terraform apply
+terraform -chdir=environments/dev init
+terraform -chdir=environments/dev plan
+terraform -chdir=environments/dev apply
 ```
 
 ## Staging
@@ -525,10 +524,9 @@ terraform apply
 ```bash
 export AWS_PROFILE=staging
 
-cd ../staging
-terraform init
-terraform plan
-terraform apply
+terraform -chdir=environments/staging init
+terraform -chdir=environments/staging plan
+terraform -chdir=environments/staging apply
 ```
 
 ## Prod
@@ -536,13 +534,12 @@ terraform apply
 ```bash
 export AWS_PROFILE=prod
 
-cd ../prod
-terraform init
-terraform plan
-terraform apply
+terraform -chdir=environments/prod init
+terraform -chdir=environments/prod plan
+terraform -chdir=environments/prod apply
 ```
 
-Record environment outputs needed by the `bootstrap/control-plane/identity_center` and, if using `GitHub OIDC`, `bootstrap/<env>/account` stacks, such as:
+Record environment outputs needed by the `bootstrap/control_plane/identity_center` and, if using `GitHub OIDC`, `bootstrap/<env>/account` stacks, such as:
 
 ```text
 logs_s3_readonly_policy_name
@@ -573,6 +570,8 @@ These outputs confirm how profile defaults and explicit overrides resolved for t
 
 After successfully applying each environment's `baseline` stack, set the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables and reapply the `bootstrap/<env>/account` stacks for each environment.
 
+Run these commands from the repository root.
+
 ## Dev
 
 ```bash
@@ -580,8 +579,7 @@ export AWS_PROFILE=dev
 
 export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-cd ../../bootstrap/dev/account
-terraform apply
+terraform -chdir=bootstrap/dev/account apply
 ```
 
 ## Staging
@@ -591,8 +589,7 @@ export AWS_PROFILE=staging
 
 export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-cd ../../bootstrap/staging/account
-terraform apply
+terraform -chdir=bootstrap/staging/account apply
 ```
 
 ## Prod
@@ -602,8 +599,7 @@ export AWS_PROFILE=prod
 
 export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
 export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-cd ../../bootstrap/prod/account
-terraform apply
+terraform -chdir=bootstrap/prod/account apply
 ```
 
 Be sure to also set these variables, `LAMBDA_CMK_ARN` and `SECRETS_MANAGER_CMK_ARN`, in the following GitHub environments:
@@ -627,12 +623,13 @@ The Identity Center stack is deployed from the control plane.
 
 It creates environment-specific groups, permission sets, and account assignments.
 
+Run these commands from the repository root:
+
 ```bash
 export AWS_PROFILE=control-plane
 
-cd ../../bootstrap/control_plane/identity_center
-terraform init
-terraform apply
+terraform -chdir=bootstrap/control_plane/identity_center init
+terraform -chdir=bootstrap/control_plane/identity_center apply
 ```
 
 At minimum, this creates the SecOps Operator access model used for the rollback workflow.
@@ -655,7 +652,7 @@ export TF_VAR_logs_cmk_decrypt_policy_name_dev="<dev-logs-cmk-decrypt-policy-nam
 export TF_VAR_enable_secops_analyst_dev=true
 export TF_VAR_enable_secops_engineer_dev=true
 
-terraform apply
+terraform -chdir=bootstrap/control_plane/identity_center apply
 ```
 
 This avoids circular dependencies by allowing environment stacks to create environment-specific IAM policies first, then allowing Identity Center to attach those policies by name/path.
@@ -894,68 +891,62 @@ Instead, first update the Identity Center stack to remove that environment’s o
 
 Example for `dev`:
 
-```bash
-cd bootstrap/control_plane/identity_center
+From the repository root:
 
+```bash
 export TF_VAR_enable_secops_analyst_dev=false
 export TF_VAR_enable_secops_engineer_dev=false
 export TF_VAR_logs_s3_readonly_policy_name_dev=""
 export TF_VAR_logs_cmk_decrypt_policy_name_dev=""
 
-terraform apply
+terraform -chdir=bootstrap/control_plane/identity_center apply
 ```
 
 Then destroy the selected environment in this order:
 
 ### Dev
 
+Run from the repository root:
+
 ```bash
-cd environments/dev
-terraform destroy
+terraform -chdir=environments/dev destroy
+terraform -chdir=bootstrap/dev/account destroy
 
-cd ../../bootstrap/dev/account
-terraform destroy
-
-cd ../state
-
-terraform state pull > "${HOME}/tf-secure-baseline-dev-state-pre-destroy.json"
-mv backend.tf backend.tf.pre-destroy
-terraform init -migrate-state
-terraform destroy
+STATE_DIR="bootstrap/dev/state"
+terraform -chdir="${STATE_DIR}" state pull   > "${HOME}/tf-secure-baseline-dev-state-pre-destroy.json"
+mv "${STATE_DIR}/backend.tf" "${STATE_DIR}/backend.tf.pre-destroy"
+terraform -chdir="${STATE_DIR}" init -migrate-state
+terraform -chdir="${STATE_DIR}" destroy
 ```
 
 ### Staging
 
+Run from the repository root:
+
 ```bash
-cd environments/staging
-terraform destroy
+terraform -chdir=environments/staging destroy
+terraform -chdir=bootstrap/staging/account destroy
 
-cd ../../bootstrap/staging/account
-terraform destroy
-
-cd ../state
-
-terraform state pull > "${HOME}/tf-secure-baseline-staging-state-pre-destroy.json"
-mv backend.tf backend.tf.pre-destroy
-terraform init -migrate-state
-terraform destroy
+STATE_DIR="bootstrap/staging/state"
+terraform -chdir="${STATE_DIR}" state pull   > "${HOME}/tf-secure-baseline-staging-state-pre-destroy.json"
+mv "${STATE_DIR}/backend.tf" "${STATE_DIR}/backend.tf.pre-destroy"
+terraform -chdir="${STATE_DIR}" init -migrate-state
+terraform -chdir="${STATE_DIR}" destroy
 ```
 
 ### Prod
 
+Run from the repository root:
+
 ```bash
-cd environments/prod
-terraform destroy
+terraform -chdir=environments/prod destroy
+terraform -chdir=bootstrap/prod/account destroy
 
-cd ../../bootstrap/prod/account
-terraform destroy
-
-cd ../state
-
-terraform state pull > "${HOME}/tf-secure-baseline-prod-state-pre-destroy.json"
-mv backend.tf backend.tf.pre-destroy
-terraform init -migrate-state
-terraform destroy
+STATE_DIR="bootstrap/prod/state"
+terraform -chdir="${STATE_DIR}" state pull   > "${HOME}/tf-secure-baseline-prod-state-pre-destroy.json"
+mv "${STATE_DIR}/backend.tf" "${STATE_DIR}/backend.tf.pre-destroy"
+terraform -chdir="${STATE_DIR}" init -migrate-state
+terraform -chdir="${STATE_DIR}" destroy
 ```
 
 ---
@@ -966,9 +957,10 @@ If you are destroying the entire platform, use this order:
 
 ### 0. Identity Center
 
+From the repository root:
+
 ```bash
-cd bootstrap/control_plane/identity_center
-terraform destroy
+terraform -chdir=bootstrap/control_plane/identity_center destroy
 ```
 
 ### Dev
