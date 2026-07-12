@@ -52,6 +52,7 @@ AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-bootstrap.sh dev
 ```
@@ -89,6 +90,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-control-plane.sh
 ```
@@ -100,6 +102,27 @@ validation-results/control-plane/<timestamp>/
 ```
 
 Generated validation results are ignored by Git by default and should be handled as environment-specific evidence artifacts.
+
+### GitHub Evidence Workflows
+
+The manual GitHub evidence workflows run with GitHub OIDC credentials and the read-only Plan role for the selected GitHub Environment:
+
+| Evidence Scope | GitHub Environment | Terraform roots initialized before export |
+|---|---|---|
+| Workload bootstrap | `<env>-plan` | `bootstrap/<env>/state`, `bootstrap/<env>/account`, and `environments/<env>` |
+| Workload baseline | `<env>-plan` | `environments/<env>` |
+| Control plane | `control-plane-plan` | `bootstrap/control_plane/state`, `account`, `organizations`, and `identity_center` |
+
+The bootstrap and control-plane workflows default `REQUIRE_STATE_STACK_REMOTE=true`. They render the generated `summary.md` in the GitHub Actions run summary and upload the timestamped evidence directory as an artifact.
+
+GitHub OIDC does not use a named AWS CLI profile. A workflow-generated report may therefore show:
+
+```text
+AWS Profile: not set
+AWS Credential Source: GitHub OIDC environment credentials
+```
+
+This is expected and does not indicate missing AWS credentials.
 
 ---
 
@@ -147,10 +170,11 @@ Workload bootstrap validation is handled separately from workload baseline valid
 |---|---|
 | AWS Identity | Confirms the active AWS caller identity and optional expected workload account ID |
 | Bootstrap Directories | Confirms `bootstrap/<env>/state`, `bootstrap/<env>/account`, and `environments/<env>` paths exist |
-| Local-State Bootstrap Pattern | Confirms `bootstrap/<env>/state` preserves the local-state bootstrap pattern by not defining a remote backend |
-| Backend Files | Confirms remote-backed account and workload stacks define backend files |
-| S3 Native Locking | Confirms `bootstrap/<env>/account/backend.tf` and `environments/<env>/backend.tf` use `use_lockfile = true` |
-| Backend State Configuration | Confirms account and workload stacks use the same state bucket/region but distinct state object keys |
+| State Stack Remote Backend | Optionally requires `bootstrap/<env>/state` to declare a readable S3 backend and confirms `terraform state pull` succeeds |
+| Backend Files | Confirms state, account, and workload stacks define backend files after migration |
+| S3 Native Locking | Confirms all three workload Terraform roots use `use_lockfile = true` |
+| Backend State Configuration | Confirms state, account, and workload stacks use the same state bucket/region with distinct state object keys |
+| Remote State Object | Confirms the state stack object exists in S3 and the backend bucket matches `tf_state_bucket_name` |
 | State S3 Bucket | Confirms the state bucket exists, has versioning, public access block settings, and SSE-KMS encryption |
 | State KMS CMK | Resolves the state CMK from live bucket encryption and confirms it is enabled and customer-managed |
 | GitHub OIDC | Confirms the workload account GitHub OIDC provider exists |
@@ -158,6 +182,25 @@ Workload bootstrap validation is handled separately from workload baseline valid
 | GitHub Trust Conditions | Confirms role trust policies reference the expected GitHub repository and environment subjects |
 | State Access Policies | Confirms GitHub roles reference the state bucket, state objects including `.tflock` objects, and the state CMK |
 | Workload CMK Policy Access | Confirms the GitHub Apply role references current workload-created Lambda and Secrets Manager CMK ARNs |
+
+### Remote State Stack Evidence
+
+`validate-bootstrap.sh`, `validate-control-plane.sh`, and their exporters use:
+
+```bash
+REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+```
+
+| Value | Evidence Meaning |
+|---|---|
+| `true` | A missing, mismatched, or unreadable state-stack S3 backend fails validation. Use this for v1.4.0 release validation and client-facing evidence. |
+| `false` | The remote-state checks still run, but migration findings are warnings. This is useful only during transition or troubleshooting. |
+
+The GitHub bootstrap and control-plane evidence workflows default this input to `true`. On clean runners, the workflows also initialize the state-stack backend before running the exporter.
+
+The checks provide evidence that the configured state backend is not merely declared: the expected S3 object must be readable, the key must not collide with another Terraform root, and `terraform state pull` must succeed.
+
+The validators do not perform migration. Existing deployments must complete `terraform init -migrate-state` separately before strict evidence is collected.
 
 ### Strict Workload CMK Policy Evidence
 
@@ -214,9 +257,10 @@ Control-plane validation is handled separately from workload validation because 
 |---|---|
 | AWS Identity | Confirms the active AWS caller identity and optional expected control-plane account ID |
 | Control-Plane State Outputs | Confirms required Terraform state stack outputs are present where applicable |
+| State Stack Remote Backend | Optionally requires the control-plane state stack to declare a readable S3 backend, verifies the object exists, and confirms `terraform state pull` succeeds |
 | State S3 Bucket | Confirms the Terraform state bucket exists, has versioning, public access block settings, and SSE-KMS encryption |
 | State KMS CMK | Confirms the Terraform state KMS key exists, is enabled, and is customer-managed |
-| Backend Locking | Confirms remote-backed control-plane stacks use Terraform S3 native locking with `use_lockfile = true` where applicable |
+| Backend Locking | Confirms the control-plane state, account, Organizations, and Identity Center stacks use Terraform S3 native locking with `use_lockfile = true` |
 | GitHub OIDC | Confirms the GitHub OIDC provider exists |
 | GitHub Plan/Apply Roles | Confirms control-plane GitHub plan/apply roles exist |
 | GitHub Trust Conditions | Confirms role trust policies reference the expected GitHub repository where `EXPECTED_GITHUB_REPOSITORY` is provided |
@@ -256,7 +300,7 @@ The validation suite does not perform:
 - End-user IAM Identity Center login testing
 - Identity Center group membership approval or access review
 - Identity Center assignment changes
-- GitHub Actions workflow execution
+- Terraform `plan`, `apply`, and `destroy` workflow execution
 - Destroy workflow execution
 - AWS account movement between Organizations OUs
 - Manual console review
@@ -276,7 +320,7 @@ The following validation areas remain manual by design.
 
 | Manual Test | Purpose |
 |---|---|
-| GitHub Actions workflow validation | Confirms CI/CD workflows run successfully with the intended OIDC roles and environment protections |
+| Terraform plan/apply/destroy workflow validation | Confirms deployment workflows run successfully with the intended OIDC roles and environment protections |
 | IAM Identity Center end-user login and effective access testing | Confirms users can sign in through IAM Identity Center and receive the intended effective access |
 | Identity Center group membership review | Confirms users, groups, permission sets, and account assignments match the intended access model |
 | Live EC2 isolation test | Confirms the isolation Lambda can quarantine an instance during a controlled test |
@@ -315,6 +359,7 @@ Examples include:
 - Network Firewall absent because the environment uses `nat_only`
 - NAT Gateway absent because the environment uses `vpc_endpoints_only`
 - Workload accounts located under the AWS Organizations root when Terraform currently creates OU structure but does not manage account placement
+- State-stack migration findings when `REQUIRE_STATE_STACK_REMOTE=false` was intentionally selected
 
 Warnings should be reviewed before client handoff or sign-off.
 
@@ -331,6 +376,7 @@ A failed validation script may indicate:
 - Incorrect account or region
 - Incorrect `CLOUD_NAME` or `NAME_PREFIX`
 - Missing current workload CMK policy references in the GitHub Apply role when strict workload CMK checks are enabled
+- Missing, colliding, or unreadable state-stack S3 backend when `REQUIRE_STATE_STACK_REMOTE=true`
 - Incorrect deployment profile assumptions
 - Incorrect control-plane account profile
 - Incorrect expected GitHub repository value
@@ -450,7 +496,7 @@ Recommended evidence items may include:
 
 Recommended handoff message:
 
-> The attached evidence includes applicable automated read-only validation results for the deployed workload bootstrap resources, workload baseline environment, and supporting control-plane resources. Bootstrap evidence includes Terraform state backend, GitHub OIDC, state access, and strict workload CMK policy validation. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, and automation resources. Control-plane evidence covers state backend resources, GitHub OIDC, AWS Organizations OU structure, and IAM Identity Center basics. Manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
+> The attached evidence includes applicable automated read-only validation results for the deployed workload bootstrap resources, workload baseline environment, and supporting control-plane resources. Bootstrap evidence includes remote state-stack readability, Terraform backend locking, GitHub OIDC, state access, and strict workload CMK policy validation. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, and automation resources. Control-plane evidence covers state backend resources, GitHub OIDC, AWS Organizations OU structure, and IAM Identity Center basics. Manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
 
 ---
 
@@ -467,12 +513,14 @@ Before using validation evidence for client delivery or internal sign-off:
 7. Confirm control-plane validation/evidence export was run with the control-plane profile, when applicable.
 8. Confirm `EXPECTED_GITHUB_REPOSITORY` matched the repository trusted by the GitHub OIDC roles.
 9. Confirm `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true` unless advisory behavior was intentionally documented.
-10. Review all failed checks.
-11. Review all warnings.
-12. Confirm manual validation items are tracked.
-13. Confirm exceptions are documented.
-14. Confirm evidence files are stored in the appropriate location.
-15. Confirm generated evidence is not committed to the source repository.
+10. Confirm `REQUIRE_STATE_STACK_REMOTE=true` for bootstrap and control-plane release or client-facing evidence.
+11. Confirm workflow-generated reports identify `GitHub OIDC environment credentials` when `AWS_PROFILE` is not set.
+12. Review all failed checks.
+13. Review all warnings.
+14. Confirm manual validation items are tracked.
+15. Confirm exceptions are documented.
+16. Confirm evidence files are stored in the appropriate location.
+17. Confirm generated evidence is not committed to the source repository.
 
 ---
 

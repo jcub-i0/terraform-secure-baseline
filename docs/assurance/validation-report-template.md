@@ -60,7 +60,8 @@ Complete the fields that apply to the selected validation scope.
 | Name Prefix | `<name-prefix>` |
 | Workload Environment | `<dev/staging/prod/not-applicable>` |
 | Control-Plane Environment | `<control-plane/not-applicable>` |
-| AWS Profile | `<profile-or-default>` |
+| AWS Profile | `<profile-or-not-set>` |
+| AWS Credential Source | `<AWS CLI profile/GitHub OIDC environment credentials/AWS default credential chain>` |
 | AWS Account ID | `<account-id>` |
 | Expected Account ID | `<expected-account-id/not-set>` |
 | AWS Region | `<region>` |
@@ -81,7 +82,7 @@ CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"
 ```
 
-Use `not-applicable` for fields that do not apply to the selected validation scope.
+Use `not-applicable` for fields that do not apply to the selected validation scope. In GitHub Actions evidence, `AWS Profile` may be `not set`; confirm that `AWS Credential Source` is `GitHub OIDC environment credentials`.
 
 ---
 
@@ -96,7 +97,7 @@ Use `not-applicable` for fields that do not apply to the selected validation sco
 
 Summary:
 
-`<Briefly summarize the validation outcome for the selected evidence package. Example: The dev workload bootstrap evidence package passed automated read-only validation with 1 of 1 validation scripts passing. Strict workload CMK policy checks were enabled, and no workload bootstrap validation failures were reported. Manual validation remains for GitHub Actions workflow execution, end-user access, live Lambda workflow tests, tamper testing, break-glass testing, and destroy safety review.>`
+`<Briefly summarize the validation outcome for the selected evidence package. Example: The dev workload bootstrap evidence package passed automated read-only validation with 1 of 1 validation scripts passing. Strict workload CMK policy checks were enabled, and no workload bootstrap validation failures were reported. Manual validation remains for Terraform plan/apply/destroy workflow execution, end-user access, live Lambda workflow tests, tamper testing, break-glass testing, and destroy safety review.>`
 
 ---
 
@@ -111,6 +112,7 @@ AWS_PROFILE="<env>" \
 AWS_REGION="<region>" \
 EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="<cloud-name>" \
 ./scripts/validation/export-bootstrap.sh <dev|staging|prod>
 ```
@@ -144,7 +146,7 @@ Validation scripts failed:  0/1
 | `REQUIRE_BOOTSTRAP_GITHUB_OIDC` | `<true/false>` |
 | `REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE` | `<true/false>` |
 | `STRICT_WORKLOAD_CMK_POLICY_CHECKS` | `<true/false>` |
-| `REQUIRE_STATE_STACK_LOCAL` | `<true/false>` |
+| `REQUIRE_STATE_STACK_REMOTE` | `<true/false>` |
 | `STRICT_GITHUB_SUBJECT_CHECKS` | `<true/false>` |
 | `EXPECTED_GITHUB_PLAN_SUBJECT` | `<value/derived/not-set>` |
 | `EXPECTED_GITHUB_APPLY_SUBJECT` | `<value/derived/not-set>` |
@@ -163,13 +165,27 @@ When `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true`, stale or missing workload Lambda 
 
 When `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false`, stale or missing workload CMK policy references are advisory warnings. This setting should be documented as an exception when used for client-facing evidence.
 
+### Remote State Stack Validation
+
+| Field | Value |
+|---|---|
+| `REQUIRE_STATE_STACK_REMOTE` | `<true/false>` |
+| State stack declares an S3 backend | `<PASS/WARN/FAIL/Not Reviewed>` |
+| State stack uses `use_lockfile = true` | `<PASS/WARN/FAIL/Not Reviewed>` |
+| State object key is distinct from account and workload keys | `<PASS/WARN/FAIL/Not Reviewed>` |
+| Remote S3 state object exists and is readable | `<PASS/WARN/FAIL/Not Reviewed>` |
+| `terraform state pull` succeeds through the configured backend | `<PASS/WARN/FAIL/Not Reviewed>` |
+| Backend bucket matches the state stack output | `<PASS/WARN/FAIL/Not Reviewed>` |
+
+Direct script and exporter runs default `REQUIRE_STATE_STACK_REMOTE` to `false`, which makes remote-state findings advisory. The GitHub evidence workflows default the setting to `true`. Use `true` for v1.4.0 release validation and client-facing evidence after state migration is complete.
+
 ### Workload Bootstrap Coverage
 
 | Area | Result | Evidence Log | Notes |
 |---|---|---|---|
 | Workload bootstrap directory structure | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
-| Local-state bootstrap pattern | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
-| Remote backend files | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
+| State stack remote S3 backend migration and readability | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
+| State, account, and workload backend files with distinct object keys | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | S3 native lockfile configuration with `use_lockfile = true` | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | State bucket security | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | State bucket versioning | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
@@ -264,6 +280,7 @@ EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
 ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
 ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
+REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="<cloud-name>" \
 ./scripts/validation/export-control-plane.sh
 ```
@@ -300,6 +317,7 @@ Validation scripts failed:  0/1
 | `CHECK_OPTIONAL_SECOPS_GROUPS` | `<true/false>` |
 | `STRICT_IDENTITY_CENTER_ASSIGNMENTS` | `<true/false>` |
 | `STRICT_ACCOUNT_OU_CHECKS` | `<true/false>` |
+| `REQUIRE_STATE_STACK_REMOTE` | `<true/false>` |
 | `ACCOUNT_ID_DEV` | `<account-id/not-set>` |
 | `ACCOUNT_ID_STAGING` | `<account-id/not-set>` |
 | `ACCOUNT_ID_PROD` | `<account-id/not-set>` |
@@ -311,6 +329,7 @@ Validation scripts failed:  0/1
 | Control-plane AWS identity | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-control-plane.log` | `<notes>` |
 | Control-plane stack directories | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-control-plane.log` | `<notes>` |
 | Control-plane backend locking | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-control-plane.log` | `<notes>` |
+| Control-plane state stack remote S3 backend migration and readability | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-control-plane.log` | `<notes>` |
 | Control-plane state outputs | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-control-plane.log` | `<notes>` |
 | Control-plane state bucket security | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-control-plane.log` | `<notes>` |
 | Control-plane state bucket versioning | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-control-plane.log` | `<notes>` |
@@ -371,6 +390,7 @@ Examples of acceptable environment-specific exceptions may include:
 - Pending SNS email confirmation where subscriber approval is still required
 - AWS Organizations account placement warnings where OU placement is not currently managed by Terraform
 - Workload CMK policy checks intentionally run with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` during transitional validation
+- State stack remote validation intentionally run with `REQUIRE_STATE_STACK_REMOTE=false`, producing advisory findings instead of strict migration evidence
 
 ---
 
