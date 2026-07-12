@@ -51,11 +51,11 @@ At a high level:
 | Area | Purpose |
 |------|---------|
 | `bootstrap/control_plane` | Centralized control plane resources |
-| `bootstrap/<env>/state` | Local bootstrap stack that creates remote state resources for an environment |
+| `bootstrap/<env>/state` | Two-phase bootstrap stack that creates its state bucket and CMK locally, then migrates its own state to S3 |
 | `bootstrap/<env>/account` | Creates GitHub OIDC roles for an environment |
 | `environments/<env>` | Deploys the full workload security baseline |
 
-The `state` stacks are applied locally first because they create the remote backend resources that later Terraform stacks depend on.
+The `state` stacks are applied locally first because they create the remote backend resources that later Terraform stacks depend on. After each initial apply, its state is migrated to S3 with `scripts/bootstrap/migrate-state-stack.sh`.
 
 ---
 
@@ -212,42 +212,59 @@ Confirm each command returns the expected AWS account ID.
 
 ---
 
-# Phase 1 - Deploy Control Plane State
+# Phase 1 - Deploy and Migrate Control Plane State
 
-The control-plane `state` stack creates backend resources for the control-plane substacks.
+The control-plane `state` stack creates the S3 bucket and KMS CMK used by the control-plane Terraform roots.
 
-This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can and should be migrated to a remote backend following initial deployment.
+The initial apply must run without an active `bootstrap/control_plane/state/backend.tf`, because the backend does not exist yet. The repository instead tracks the intended post-migration configuration as:
+
+```text
+bootstrap/control_plane/state/backend.tf.migrated.example
+```
+
+Review that template before deployment and confirm its bucket, key, and region match the intended control-plane backend.
 
 It is strongly recommended to include both the administrative Terraform IAM principal and the account root principal in `bucket_admin_principals`.
 
 This variable defines which principals are allowed to modify protected state bucket controls, including the bucket policy, versioning configuration, and encryption configuration. If this list is empty or does not include the correct administrative principal, Terraform or account administrators may lose the ability to modify these settings.
 
-This behavior is intentional and supports the module’s security-by-default design.
-
-```bash
-export TF_VAR_bucket_admin_principals='["arn:aws:iam::<account-id>:user/baseline-admin","arn:aws:iam::<account-id>:root"]'
-```
-
-Deploy `control-plane`'s `state` stack:
+From the repository root:
 
 ```bash
 export AWS_PROFILE=control-plane
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<control-plane-account-id>:user/baseline-admin","arn:aws:iam::<control-plane-account-id>:root"]'
 
-cd bootstrap/control_plane/state
-terraform init
-terraform apply
+terraform -chdir=bootstrap/control_plane/state init
+terraform -chdir=bootstrap/control_plane/state apply
 ```
 
 Record the outputs, especially:
 
 ```text
+tf_state_bucket_name
 tf_state_bucket_arn
 tf_state_bucket_cmk_arn
-tf_state_lock_table_arn
 ```
 
-These values are used by the other control-plane substacks.
+Then migrate the state stack itself into the newly created backend:
+
+```bash
+AWS_PROFILE=control-plane \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh control-plane
+```
+
+The helper validates the AWS identity and template, creates external backups, refuses to overwrite an existing remote state object, runs interactive `terraform init -migrate-state`, and verifies the remote state.
+
+Verify an already-migrated stack at any time with:
+
+```bash
+AWS_PROFILE=control-plane \
+EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only
+```
+
+Keep the migration backups until control-plane validation and the evidence workflow both succeed.
 
 ---
 
@@ -259,12 +276,11 @@ By default, the `account` stack's `enable_github_oidc` variable is set to `false
 
 For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents, located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
 
-From `bootstrap/control_plane/state`:
+From the repository root:
 
 ```bash
-cd ../account
-terraform init
-terraform apply
+terraform -chdir=bootstrap/control_plane/account init
+terraform -chdir=bootstrap/control_plane/account apply
 ```
 
 Record the outputs:
@@ -311,15 +327,23 @@ terraform apply
 
 ---
 
-# Phase 4 - Deploy Environment State Stacks
+# Phase 4 - Deploy and Migrate Environment State Stacks
 
 Each workload account needs its own Terraform backend resources.
 
-Apply each environment `state` stack locally.
+Each state stack is applied locally first, without an active `backend.tf`, and then migrated into the S3 backend it created.
 
-This stack uses local Terraform state because it creates the remote backend resources. This local Terraform state can and should be migrated to a remote backend following initial deployment.
+Before applying, review the tracked template for each environment:
 
-It's highly recommended to add the ARNs of the administrative Terraform IAM user/role and the `root` user of the respective account to this variable. Otherwise, **the ability to modify S3 bucket policies may be lost**.
+```text
+bootstrap/<env>/state/backend.tf.migrated.example
+```
+
+Confirm its bucket, key, and region match the intended environment. The migration helper refuses to continue if the template bucket does not match the state stack's `tf_state_bucket_name` output.
+
+It is highly recommended to add the ARNs of the administrative Terraform IAM user or role and the account root principal to `bucket_admin_principals`. Otherwise, **the ability to modify protected S3 bucket controls may be lost**.
+
+Run these commands from the repository root.
 
 ## Dev
 
@@ -327,9 +351,11 @@ It's highly recommended to add the ARNs of the administrative Terraform IAM user
 export AWS_PROFILE=dev
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<dev-account-id>:user/baseline-admin","arn:aws:iam::<dev-account-id>:root"]'
 
-cd ../../../bootstrap/dev/state
-terraform init
-terraform apply
+terraform -chdir=bootstrap/dev/state init
+terraform -chdir=bootstrap/dev/state apply
+
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh dev
 ```
 
 ## Staging
@@ -338,9 +364,11 @@ terraform apply
 export AWS_PROFILE=staging
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<staging-account-id>:user/baseline-admin","arn:aws:iam::<staging-account-id>:root"]'
 
-cd ../../staging/state
-terraform init
-terraform apply
+terraform -chdir=bootstrap/staging/state init
+terraform -chdir=bootstrap/staging/state apply
+
+EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh staging
 ```
 
 ## Prod
@@ -349,20 +377,22 @@ terraform apply
 export AWS_PROFILE=prod
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<prod-account-id>:user/baseline-admin","arn:aws:iam::<prod-account-id>:root"]'
 
-cd ../../prod/state
-terraform init
-terraform apply
+terraform -chdir=bootstrap/prod/state init
+terraform -chdir=bootstrap/prod/state apply
+
+EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh prod
 ```
 
-Record each environment's `state` outputs:
+Record each environment's state outputs:
 
 ```text
+tf_state_bucket_name
 tf_state_bucket_arn
 tf_state_bucket_cmk_arn
-tf_state_lock_table_arn
 ```
 
-These values are used by the corresponding `bootstrap/<env>/account` and `environments/<env>` stacks.
+The generated active `bootstrap/<env>/state/backend.tf` files are ignored by Git. The tracked `backend.tf.migrated.example` files remain the source templates for new deployments and clean GitHub runners.
 
 ---
 
@@ -432,7 +462,6 @@ Variables in each GitHub environment may include:
 PRIMARY_REGION
 TF_STATE_BUCKET_ARN
 TF_STATE_BUCKET_CMK_ARN
-TF_STATE_LOCK_TABLE_ARN
 BUCKET_ADMIN_PRINCIPALS
 ACCOUNT_ID_DEV
 ACCOUNT_ID_STAGING
@@ -641,22 +670,32 @@ After deployment completes, run the validation checklist:
 docs/validation-checklist.md
 ```
 
+For release or client-readiness evidence, use `REQUIRE_STATE_STACK_REMOTE=true` for direct bootstrap and control-plane validation. The GitHub evidence workflows set this requirement to `true` by default.
+
 Recommended validation order:
 
-1. Confirm Terraform state backends exist in each AWS account, including `control-plane`.
-2. Confirm GitHub OIDC roles can be assumed by running a GitHub Actions workflow, if using `GitHub OIDC`.
-3. Confirm baseline infrastructure exists in each environment.
-4. Confirm deployment profile outputs resolved correctly.
-5. Confirm egress mode behavior:
+1. Verify every migrated state stack:
+   ```bash
+   AWS_PROFILE=control-plane ./scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only
+   AWS_PROFILE=dev ./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
+   AWS_PROFILE=staging ./scripts/bootstrap/migrate-state-stack.sh staging --verify-only
+   AWS_PROFILE=prod ./scripts/bootstrap/migrate-state-stack.sh prod --verify-only
+   ```
+2. Run workload and control-plane bootstrap validation with `REQUIRE_STATE_STACK_REMOTE=true`.
+3. Run the workload bootstrap, workload baseline, and control-plane evidence workflows.
+4. Confirm GitHub OIDC roles can be assumed by running the applicable GitHub Actions workflows.
+5. Confirm baseline infrastructure exists in each environment.
+6. Confirm deployment profile outputs resolved correctly.
+7. Confirm egress mode behavior:
    - `network_firewall`: Network Firewall and NAT Gateway are deployed, compute private default route points to firewall endpoints.
    - `nat_only`: Network Firewall is not deployed, NAT Gateway is deployed, compute private default route points to NAT.
    - `vpc_endpoints_only`: Network Firewall and NAT Gateway are not deployed, compute private subnets have no default route.
-6. Confirm dedicated endpoint private subnets exist.
-7. Confirm Interface VPC Endpoints are deployed into endpoint private subnets.
-8. Confirm S3 Gateway Endpoint is associated with the expected private route tables.
-9. Confirm Security Hub, GuardDuty, AWS Config, and CloudTrail are active where expected by profile.
-10. Confirm SNS subscriptions are confirmed.
-11. Run Lambda tests:
+8. Confirm dedicated endpoint private subnets exist.
+9. Confirm Interface VPC Endpoints are deployed into endpoint private subnets.
+10. Confirm the S3 Gateway Endpoint is associated with the expected private route tables.
+11. Confirm Security Hub, GuardDuty, AWS Config, and CloudTrail are active where expected by profile.
+12. Confirm SNS subscriptions are confirmed.
+13. Run Lambda tests:
     - `docs/lambda_tests/ec2_isolation.md`
     - `docs/lambda_tests/ec2_rollback.md`
     - `docs/lambda_tests/ip_enrichment.md`
@@ -666,15 +705,17 @@ Recommended validation order:
 ## Deployment Order Summary
 
 ```text
-1. bootstrap/control_plane/state
-2. bootstrap/control_plane/account
-3. bootstrap/control_plane/organizations
-4. bootstrap/<env>/state
-5. bootstrap/<env>/account
-6. environments/<env>
-7. bootstrap/<env>/account re-apply with defined CMK variables (if using GitHub OIDC)
-8. bootstrap/control_plane/identity_center
-9. validation tests
+1. Apply bootstrap/control_plane/state locally
+2. Migrate bootstrap/control_plane/state with migrate-state-stack.sh
+3. Deploy bootstrap/control_plane/account
+4. Deploy bootstrap/control_plane/organizations
+5. Apply each bootstrap/<env>/state locally
+6. Migrate each bootstrap/<env>/state with migrate-state-stack.sh
+7. Deploy bootstrap/<env>/account
+8. Deploy environments/<env>
+9. Re-apply bootstrap/<env>/account with current workload CMK values, if using GitHub OIDC
+10. Deploy or re-apply bootstrap/control_plane/identity_center
+11. Run validation and export evidence
 ```
 
 ---
@@ -691,23 +732,36 @@ Expected workflows:
 | Docs Validation | Runs documentation linting and link checks |
 | Terraform Plan | Runs plans for environment and control-plane stacks |
 | Terraform Apply | Applies selected environment baseline |
-| Terraform Destroy | Cleans up Identity Center attachments, then destroys selected environment `baseline` |
+| Terraform Destroy | Cleans up Identity Center attachments, then destroys the selected workload environment |
+| Workload Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
+| Workload Baseline Evidence | Exports the 14-script workload baseline evidence package |
+| Control-Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
 
-The destroy workflow first updates the Identity Center stack to remove environment-specific policy attachments before destroying the baseline stack.
+The destroy workflow first updates the Identity Center stack to remove environment-specific policy attachments before destroying the workload environment.
 
 This prevents IAM delete conflicts caused by Identity Center-managed roles still attaching baseline-created IAM policies.
+
+Evidence workflows use the read-only GitHub Plan roles. On clean runners, they copy the tracked `backend.tf.migrated.example` into the ignored runtime `backend.tf` path before initializing the state stack. The evidence workflows require remote state by default.
 
 ---
 
 ## Important Notes
 
-### State Stacks Are Local Bootstrap Stacks
+### State Stacks Use a Two-Phase Bootstrap Lifecycle
 
-The `state` substacks should be applied locally.
+The first state-stack apply is local because the S3 backend does not exist yet.
 
-They create the remote backend resources used by the other stacks.
+After that initial apply, run:
 
-Do not treat them like normal GitHub-managed stacks.
+```bash
+./scripts/bootstrap/migrate-state-stack.sh <dev|staging|prod|control-plane>
+```
+
+The helper creates the ignored runtime `backend.tf`, migrates the local state, and verifies the remote object.
+
+The tracked `backend.tf.migrated.example` files are templates, not proof that migration occurred. Use `--verify-only` or validation with `REQUIRE_STATE_STACK_REMOTE=true` to prove that the state is remotely readable.
+
+State stacks are not normal GitHub apply targets. GitHub evidence workflows may initialize and read them, but the guarded initial migration remains a local administrative action.
 
 ---
 
@@ -826,6 +880,10 @@ Destroying stacks out of order can cause failures such as:
 - GitHub Actions losing access because OIDC roles were destroyed too early
 - Terraform state backend resources being destroyed before dependent stacks are removed
 
+A migrated state stack must not destroy the S3 bucket that currently stores its own active state. Before destroying any `bootstrap/<env>/state` or `bootstrap/control_plane/state` stack, first migrate that stack's state back to local state or to another independent backend and retain an external backup.
+
+Do not run `terraform destroy` against a state stack while its active backend still points to the bucket it manages.
+
 ---
 
 ## Single Environment Teardown
@@ -859,6 +917,10 @@ cd ../../bootstrap/dev/account
 terraform destroy
 
 cd ../state
+
+terraform state pull > "${HOME}/tf-secure-baseline-dev-state-pre-destroy.json"
+mv backend.tf backend.tf.pre-destroy
+terraform init -migrate-state
 terraform destroy
 ```
 
@@ -872,6 +934,10 @@ cd ../../bootstrap/staging/account
 terraform destroy
 
 cd ../state
+
+terraform state pull > "${HOME}/tf-secure-baseline-staging-state-pre-destroy.json"
+mv backend.tf backend.tf.pre-destroy
+terraform init -migrate-state
 terraform destroy
 ```
 
@@ -885,6 +951,10 @@ cd ../../bootstrap/prod/account
 terraform destroy
 
 cd ../state
+
+terraform state pull > "${HOME}/tf-secure-baseline-prod-state-pre-destroy.json"
+mv backend.tf backend.tf.pre-destroy
+terraform init -migrate-state
 terraform destroy
 ```
 
@@ -905,25 +975,29 @@ terraform destroy
 
 1. `environments/dev`
 2. `bootstrap/dev/account`
-3. `bootstrap/dev/state`
+3. Migrate `bootstrap/dev/state` away from its self-managed S3 backend
+4. Destroy `bootstrap/dev/state`
 
 ### Staging
 
-4. `environments/staging`
-5. `bootstrap/staging/account`
-6. `bootstrap/staging/state`
+5. `environments/staging`
+6. `bootstrap/staging/account`
+7. Migrate `bootstrap/staging/state` away from its self-managed S3 backend
+8. Destroy `bootstrap/staging/state`
 
 ### Prod
 
-7. `environments/prod`
-8. `bootstrap/prod/account`
-9. `bootstrap/prod/state`
+9. `environments/prod`
+10. `bootstrap/prod/account`
+11. Migrate `bootstrap/prod/state` away from its self-managed S3 backend
+12. Destroy `bootstrap/prod/state`
 
 ### Control Plane
 
-10. `bootstrap/control_plane/organizations`
-11. `bootstrap/control_plane/account`
-12. `bootstrap/control_plane/state`
+13. `bootstrap/control_plane/organizations`
+14. `bootstrap/control_plane/account`
+15. Migrate `bootstrap/control_plane/state` away from its self-managed S3 backend
+16. Destroy `bootstrap/control_plane/state`
 
 ---
 
@@ -940,3 +1014,7 @@ terraform destroy
 
 - Destroying `bootstrap/control_plane/state` should always be last.
   - It contains the backend resources for the control-plane stacks.
+  - Migrate its state to local state or another independent backend before destroying the bucket it manages.
+
+- Versioned state buckets may retain noncurrent state and lockfile object versions.
+  - Preserve an external state backup and follow approved bucket-retention or cleanup controls before final deletion.
