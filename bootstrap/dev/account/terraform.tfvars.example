@@ -2,8 +2,10 @@ cloud_name     = "tf-secure-baseline"
 environment    = "dev"
 primary_region = "us-east-1"
 
-# GitHub-Plan Role-related variables
+################################################################
+# GitHub-related variables
+################################################################
+enable_github_oidc = true
+enable_apply_role_github = true
 branches_plan_github = ["main"]
-
-# GitHub-Apply Role-related variables
 branches_apply_github = ["main"]
