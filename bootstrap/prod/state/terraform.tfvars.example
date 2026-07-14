@@ -1,3 +1,8 @@
 cloud_name     = "tf-secure-baseline"
 environment    = "prod"
 primary_region = "us-east-1"
+
+bucket_admin_principals = [
+  "arn:aws:iam::123456789012:root",
+  "arn:aws:iam::123456789012:role/tf-secure-baseline-prod-github-apply-role"
+]
