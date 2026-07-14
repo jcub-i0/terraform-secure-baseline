@@ -118,12 +118,13 @@ validation-results/
 ##################################################################
 # Terraform variable files with deployment/client-specific values
 ##################################################################
+# Local Terraform variable values
 **/terraform.tfvars
 **/*.auto.tfvars
 *.tfvars
 *.tfvars.json
 
-# Keep examples/templates
+# Preserve tracked examples
 !**/*.tfvars.example
 !**/*.tfvars.json.example
 

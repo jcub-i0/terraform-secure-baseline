@@ -30,6 +30,9 @@ jobs:
       environment: control-plane
 
       env:
+        TF_VAR_cloud_name: ${{vars.CLOUD_NAME}}
+        TF_VAR_environment: ${{vars.ENVIRONMENT}}
+        TF_VAR_primary_region: ${{vars.PRIMARY_REGION}}
         TF_VAR_apply_role_github_arn: ${{vars.APPLY_ROLE_GITHUB_ARN}}
         TF_VAR_plan_role_github_arn: ${{vars.PLAN_ROLE_GITHUB_ARN}}
         TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
