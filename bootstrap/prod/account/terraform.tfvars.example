@@ -13,3 +13,5 @@ branches_plan_github            = ["main"]
 branches_apply_github           = ["main"]
 allow_pull_requests_plan_github = true
 environment_apply_github        = "prod"
+tf_state_bucket_arn             = "arn:aws:s3:::tf-secure-baseline-prod-state"
+tf_state_bucket_cmk_arn         = arn:aws:kms:us-east-1:123456789012:key/lgd3gzd6-a0l0-04oa-1exu-aj4lj9272d0d
