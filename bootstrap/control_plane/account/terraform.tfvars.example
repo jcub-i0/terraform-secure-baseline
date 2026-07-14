@@ -2,9 +2,16 @@ cloud_name     = "tf-secure-baseline"
 environment    = "control-plane"
 primary_region = "us-east-1"
 
-# GitHub-Plan Role-related variables
-branches_plan_github = ["main"]
-
-# GitHub-Apply Role-related variables
-branches_apply_github    = ["main"]
-environment_apply_github = "control-plane"
+################################################################
+# GitHub-related variables
+################################################################
+owner_github                    = "jeffrey-williams"
+repo_github                     = "terraform-secure-baseline"
+enable_github_oidc              = true
+enable_apply_role_github        = true
+branches_plan_github            = ["main"]
+branches_apply_github           = ["main"]
+allow_pull_requests_plan_github = true
+environment_apply_github        = "control-plane"
+tf_state_bucket_arn             = "arn:aws:s3:::tf-secure-baseline-control-plane-state"
+tf_state_bucket_cmk_arn         = arn:aws:kms:us-east-1:123456789012:key/lgd3gzd6-a0l0-04oa-1exu-aj4lj9272d0d
