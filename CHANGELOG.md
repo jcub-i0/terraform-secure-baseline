@@ -1,5 +1,59 @@
 # Changelog
 
+## v1.4.0
+
+This release improves client-readiness and operational safety by adding layer-specific validation evidence exports, migrating bootstrap state stacks to protected remote S3 backends, and adding GitHub Actions workflows for repeatable validation evidence collection.
+
+### Added
+
+- Added workload bootstrap evidence export through `scripts/validation/export-bootstrap.sh`.
+- Added control-plane evidence export through `scripts/validation/export-control-plane.sh`.
+- Added timestamped workload bootstrap evidence packages under `validation-results/<environment>/bootstrap/<timestamp>/`.
+- Added timestamped control-plane evidence packages under `validation-results/control-plane/<timestamp>/`.
+- Added `scripts/bootstrap/migrate-state-stack.sh` for guarded migration of workload and control-plane state stacks from initial local state to their own S3 backends.
+- Added `scripts/bootstrap/README.md` documenting state-stack migration, verification, repository behavior, and safety expectations.
+- Added tracked post-migration backend templates named `backend.tf.migrated.example` for workload and control-plane state stacks.
+- Added strict remote state-stack validation through `REQUIRE_STATE_STACK_REMOTE`.
+- Added validation coverage for active state-stack S3 backends, shared backend bucket and region consistency, distinct state object keys, migrated state object readability, successful `terraform state pull`, and state bucket output consistency.
+- Added manual GitHub Actions evidence workflows for workload bootstrap, workload baseline, and control-plane validation.
+- Added GitHub Actions artifact upload behavior for generated validation evidence packages.
+- Added runtime materialization of ignored state-stack `backend.tf` files from tracked `backend.tf.migrated.example` templates during evidence workflows.
+
+### Changed
+
+- Renamed `scripts/validation/export-all.sh` to `scripts/validation/export-baseline.sh`.
+- Standardized validation evidence around three layers:
+  - workload bootstrap;
+  - workload baseline;
+  - control plane.
+- Changed state stacks from long-lived local state to a two-phase lifecycle:
+  - initial local initialization and apply;
+  - guarded migration into encrypted remote S3 state with native lockfiles.
+- Changed state-stack backend handling so active `bootstrap/*/state/backend.tf` files are ignored by Git while post-migration templates remain tracked.
+- Updated workload bootstrap and control-plane validators to support strict or advisory remote state-stack checks.
+- Updated evidence workflows to initialize state, account, workload, organizations, and Identity Center Terraform roots before validation where applicable.
+- Updated validation documentation, architecture documentation, design principles, quickstart guidance, adoption guidance, root README, and validation checklist to describe the remote state-stack lifecycle and evidence workflows.
+- Updated workload baseline evidence output paths to `validation-results/<environment>/baseline/<timestamp>/`.
+- Updated deployment and validation guidance to use `scripts/bootstrap/migrate-state-stack.sh <target>` after the initial state-stack apply.
+- Updated teardown guidance to account for state stacks whose Terraform state is stored in the S3 bucket they manage.
+
+### Removed
+
+- Removed the long-lived local-state expectation for workload and control-plane state stacks.
+- Removed obsolete guidance that treated the absence of `bootstrap/<target>/state/backend.tf` as the expected post-deployment state.
+- Removed stale DynamoDB state-locking references from current deployment and validation guidance.
+- Removed obsolete lock-table output and GitHub environment variable references from the quickstart.
+
+### Notes
+
+State stacks still require an initial local apply because they create their own backend resources. After that apply, `scripts/bootstrap/migrate-state-stack.sh` validates the selected AWS account and backend template, creates external backups, refuses to overwrite an existing remote state object, runs interactive `terraform init -migrate-state`, and verifies the resulting S3 state object with `terraform state pull`.
+
+The active state-stack `backend.tf` files are intentionally ignored by Git. The tracked `backend.tf.migrated.example` files define the intended post-migration configuration and are also used by GitHub evidence workflows to materialize the runtime backend before initialization.
+
+Direct validation script runs default `REQUIRE_STATE_STACK_REMOTE` to `false` so transitional findings can remain advisory. The GitHub workload bootstrap and control-plane evidence workflows default remote state-stack validation to strict behavior.
+
+Generated validation evidence remains ignored by Git and does not replace live GitHub Actions execution testing, IAM Identity Center end-user access testing, Lambda workflow tests, tamper tests, break-glass tests, or destroy safety review.
+
 ## v1.3.4
 
 This release completes the validation architecture cleanup by organizing validation into workload bootstrap, workload baseline, and control-plane validation layers while standardizing Terraform state-locking validation around S3 native lockfiles.
