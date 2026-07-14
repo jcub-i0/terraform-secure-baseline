@@ -5,7 +5,11 @@ primary_region = "us-east-1"
 ################################################################
 # GitHub-related variables
 ################################################################
-enable_github_oidc = true
-enable_apply_role_github = true
-branches_plan_github = ["main"]
-branches_apply_github = ["main"]
+owner_github                    = "john-smith"
+repo_github                     = "terraform-secure-baseline"
+enable_github_oidc              = true
+enable_apply_role_github        = true
+branches_plan_github            = ["main"]
+branches_apply_github           = ["main"]
+allow_pull_requests_plan_github = true
+environment_apply_github        = "dev"
