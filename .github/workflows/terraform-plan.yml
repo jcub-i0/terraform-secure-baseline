@@ -53,7 +53,9 @@ jobs:
 
     env:
         TF_VAR_cloud_name: ${{vars.CLOUD_NAME}}
-        TF_VAR_branches_plan_github: ${{vars.BRANCHES_PLAN_GITHUB}}
+        TF_VAR_primary_region_dev: ${{vars.PRIMARY_REGION_DEV}}
+        TF_VAR_primary_region_staging: ${{vars.PRIMARY_REGION_STAGING}}
+        TF_VAR_primary_region_prod: ${{vars.PRIMARY_REGION_PROD}}
         TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
         TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
         TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
