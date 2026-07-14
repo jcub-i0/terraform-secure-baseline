@@ -5,7 +5,7 @@ primary_region = "us-east-1"
 ################################################################
 # GitHub-related variables
 ################################################################
-owner_github                    = "john-smith"
+owner_github                    = "jeffrey-williams"
 repo_github                     = "terraform-secure-baseline"
 enable_github_oidc              = true
 enable_apply_role_github        = true
