@@ -854,24 +854,15 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.4.0
+### v1.4.1
 
-This release completes the remote bootstrap-state architecture and GitHub validation evidence workflow model.
-
-Highlights:
-
-- Migrated the workload and control-plane `state` stacks from local-only state to dedicated remote S3 state objects.
-- Added tracked `backend.tf.migrated.example` files while keeping active state-stack `backend.tf` files ignored until migration or workflow runtime.
-- Added `scripts/bootstrap/migrate-state-stack.sh` for guarded, one-command state-stack migration and post-migration verification.
-- Standardized S3 native state locking with `use_lockfile = true` across state, account, governance, and workload Terraform roots.
-- Added optional strict state-stack migration validation with `REQUIRE_STATE_STACK_REMOTE`.
-- Validates remote state object readability, unique backend keys, bucket/output alignment, and successful `terraform state pull`.
-- Added manual GitHub evidence workflows for workload bootstrap, workload baseline, and control-plane validation.
-- Uses `dev-plan`, `staging-plan`, `prod-plan`, and `control-plane-plan` GitHub environments with read-only Plan roles for evidence collection.
-- Added workload bootstrap, workload baseline, and control-plane evidence exporters with Markdown summaries, JSON summaries, and supporting logs.
-- Added strict-by-default workload CMK policy validation with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true`.
-- Reports the AWS credential source so local profile runs and GitHub OIDC runs are clearly distinguished.
-- Preserves the three-layer validation model: workload bootstrap, workload baseline, and control plane.
+- Replaced tracked runtime `terraform.tfvars` files with
+  `terraform.tfvars.example` templates.
+- Updated GitHub Actions to provide required Terraform values through workflow
+  matrices, GitHub variables, and secrets.
+- Updated onboarding instructions for creating ignored local variable files.
+- Added Git ignore coverage for runtime Terraform variable files to reduce the
+  risk of committing client-specific or sensitive configuration.
 
 Terraform plan/apply/destroy workflow validation, end-user SSO testing, live security automation tests, tamper tests, break-glass tests, and destroy safety review remain manual validation activities.
 
