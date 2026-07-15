@@ -143,6 +143,19 @@ cd terraform-secure-baseline
 
 ---
 
+## Create Local Terraform Variable Files
+
+The repository tracks `terraform.tfvars.example` templates instead of runtime `terraform.tfvars` files. Before running Terraform locally in a root that provides a template, copy it to `terraform.tfvars` and replace the example values with the correct deployment-specific configuration:
+
+```bash
+cp environments/dev/terraform.tfvars.example \
+  environments/dev/terraform.tfvars
+```
+
+Repeat this for each Terraform root you plan to deploy. The resulting `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its values separately through workflow matrices, GitHub variables, and GitHub secrets.
+
+---
+
 ## Configure AWS CLI Profiles
 
 Create or configure AWS CLI profiles for each AWS account.
