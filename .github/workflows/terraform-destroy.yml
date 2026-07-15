@@ -99,6 +99,9 @@ jobs:
         environment: ${{inputs.environment}}
 
         env:
+            TF_VAR_cloud_name: ${{vars.CLOUD_NAME}}
+            TF_VAR_environment: ${{vars.ENVIRONMENT}}
+            TF_VAR_primary_region: ${{vars.PRIMARY_REGION}}
             TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
             TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
             TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
