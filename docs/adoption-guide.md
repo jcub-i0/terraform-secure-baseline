@@ -358,6 +358,10 @@ Key decisions:
 - Which deployment profile should each environment use?
 - Which egress mode should each environment use?
 
+### Terraform Variable Templates
+
+The repository provides tracked `terraform.tfvars.example` files as configuration templates. Copy the applicable template to `terraform.tfvars`, replace the example values with client- or environment-specific configuration, and keep the runtime file local. Runtime `.tfvars` files are ignored by Git and should never be committed; CI/CD values should be managed through protected GitHub variables and secrets.
+
 ---
 
 ## Phase 2 - Prepare AWS Accounts
