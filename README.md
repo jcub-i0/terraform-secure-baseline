@@ -243,6 +243,17 @@ The **environment** stacks manage:
 └── SECURITY.md
 ```
 
+## Terraform Variable Templates
+
+Terraform roots that require local configuration include a tracked `terraform.tfvars.example` template. Terraform does not automatically load files ending in `.example`, so copy the applicable template before running Terraform locally:
+
+```bash
+cp environments/dev/terraform.tfvars.example \
+  environments/dev/terraform.tfvars
+```
+
+Review the copied file and replace example values with the correct deployment-specific configuration. Runtime `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its deployment values separately through workflow matrices, GitHub variables, and GitHub secrets rather than loading the example files.
+
 ## Core Design Principles
 
 ### Private-First Infrastructure
