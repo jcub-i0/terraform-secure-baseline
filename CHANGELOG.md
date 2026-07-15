@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.4.1
+
+### Changed
+
+- Replaced tracked runtime `terraform.tfvars` files with
+  `terraform.tfvars.example` templates.
+- Updated GitHub Actions to provide required Terraform values through workflow
+  matrices, GitHub variables, and secrets.
+- Updated onboarding instructions for creating ignored local variable files.
+
+### Security
+
+- Added Git ignore coverage for runtime Terraform variable files to reduce the
+  risk of committing client-specific or sensitive configuration.
+
 ## v1.4.0
 
 This release improves client-readiness and operational safety by adding layer-specific validation evidence exports, migrating bootstrap state stacks to protected remote S3 backends, and adding GitHub Actions workflows for repeatable validation evidence collection.
