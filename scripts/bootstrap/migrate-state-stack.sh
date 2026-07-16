@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -18,25 +23,6 @@ Examples:
   AWS_PROFILE=dev \
   ./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
 USAGE
-}
-
-info()    { printf '[INFO] %s\n' "$*"; }
-success() { printf '[PASS] %s\n' "$*"; }
-warn()    { printf '[WARN] %s\n' "$*" >&2; }
-fail()    { printf '[FAIL] %s\n' "$*" >&2; exit 1; }
-
-require_command() {
-  command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
-}
-
-get_backend_string_value() {
-  local backend_file="$1"
-  local attribute_name="$2"
-
-  sed -nE \
-    "s/^[[:space:]]*${attribute_name}[[:space:]]*=[[:space:]]*\"([^\"]+)\".*/\1/p" \
-    "$backend_file" |
-    head -n 1
 }
 
 TARGET="${1:-}"
@@ -64,12 +50,15 @@ case "$TARGET" in
     ;;
 esac
 
-for cmd in terraform aws git sed sort diff cp mkdir date cmp mktemp; do
+section "State stack migration: ${DISPLAY_TARGET}"
+
+section "Checking prerequisites and backend configuration"
+
+for cmd in terraform aws git sed head sort diff cp mkdir date cmp mktemp rm; do
   require_command "$cmd"
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" ||
+REPO_ROOT="$(get_repo_root "$SCRIPT_DIR")" ||
   fail "Unable to resolve repository root"
 
 STATE_DIR="${REPO_ROOT}/bootstrap/${STACK_PATH_COMPONENT}/state"
@@ -77,8 +66,8 @@ BACKEND_TEMPLATE="${STATE_DIR}/backend.tf.migrated.example"
 ACTIVE_BACKEND="${STATE_DIR}/backend.tf"
 LOCAL_STATE_FILE="${STATE_DIR}/terraform.tfstate"
 
-[[ -d "$STATE_DIR" ]] || fail "State stack directory not found: ${STATE_DIR}"
-[[ -f "$BACKEND_TEMPLATE" ]] || fail "Backend template not found: ${BACKEND_TEMPLATE}"
+require_directory "$STATE_DIR"
+require_file "$BACKEND_TEMPLATE"
 
 BACKEND_BUCKET="$(get_backend_string_value "$BACKEND_TEMPLATE" bucket)"
 BACKEND_KEY="$(get_backend_string_value "$BACKEND_TEMPLATE" key)"
@@ -90,9 +79,9 @@ USE_LOCKFILE="$(
     head -n 1
 )"
 
-[[ -n "$BACKEND_BUCKET" ]] || fail "Unable to resolve backend bucket"
-[[ -n "$BACKEND_KEY" ]] || fail "Unable to resolve backend key"
-[[ -n "$BACKEND_REGION" ]] || fail "Unable to resolve backend region"
+require_non_empty "$BACKEND_BUCKET" "backend bucket"
+require_non_empty "$BACKEND_KEY" "backend key"
+require_non_empty "$BACKEND_REGION" "backend region"
 [[ "$USE_LOCKFILE" == "true" ]] || fail "Backend template must set use_lockfile = true"
 
 AWS_REGION="${AWS_REGION:-$BACKEND_REGION}"
@@ -118,18 +107,13 @@ info "Backend key: ${BACKEND_KEY}"
 info "Backend region: ${BACKEND_REGION}"
 info "AWS profile: ${AWS_PROFILE:-default credential chain}"
 
-active_account_id="$(
-  aws sts get-caller-identity \
-    "${aws_args[@]}" \
-    --query Account \
-    --output text
-)"
-caller_arn="$(
-  aws sts get-caller-identity \
-    "${aws_args[@]}" \
-    --query Arn \
-    --output text
-)"
+section "Checking AWS caller identity"
+
+active_account_id="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+caller_arn="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
+require_non_empty "$active_account_id" "AWS account ID"
+require_non_empty "$caller_arn" "AWS caller ARN"
 
 success "AWS credentials are valid"
 info "AWS account ID: ${active_account_id}"
@@ -144,7 +128,7 @@ verify_remote_state() {
   local remote_state_file
   local remote_addresses_file
 
-  [[ -f "$ACTIVE_BACKEND" ]] || fail "Active backend file not found: ${ACTIVE_BACKEND}"
+  require_file "$ACTIVE_BACKEND"
   cmp -s "$BACKEND_TEMPLATE" "$ACTIVE_BACKEND" ||
     fail "backend.tf differs from backend.tf.migrated.example"
 
@@ -189,6 +173,8 @@ if [[ "$MODE" == "--verify-only" ]]; then
   exit 0
 fi
 
+section "Preparing local state and migration backups"
+
 [[ ! -e "$ACTIVE_BACKEND" ]] ||
   fail "backend.tf already exists. Use --verify-only for an already-migrated stack."
 
@@ -209,6 +195,8 @@ terraform -chdir="$STATE_DIR" state list | sort > "$LOCAL_ADDRESS_LIST"
 
 [[ -s "$LOCAL_STATE_PULL" ]] || fail "Unable to create pre-migration state backup"
 info "Pre-migration backups written to: ${stack_backup_dir}"
+
+section "Validating migration destination"
 
 state_output_bucket="$(
   terraform -chdir="$STATE_DIR" output -raw tf_state_bucket_name 2>/dev/null || true
@@ -233,6 +221,8 @@ fi
 
 success "Target remote state key is unused"
 
+section "Migrating state to the remote backend"
+
 cp "$BACKEND_TEMPLATE" "$ACTIVE_BACKEND"
 success "Created active backend file: ${ACTIVE_BACKEND}"
 
@@ -252,6 +242,8 @@ if ! terraform -chdir="$STATE_DIR" init -migrate-state -no-color; then
   warn "Pre-migration backups remain at: ${stack_backup_dir}"
   fail "Resolve the error before retrying."
 fi
+
+section "Verifying migrated remote state"
 
 verify_remote_state "$LOCAL_ADDRESS_LIST"
 
