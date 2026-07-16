@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  reconsile-workload-account.sh <dev|staging|prod> [options]
+  reconcile-workload-account.sh <dev|staging|prod> [options]
 
 Options:
   --apply               Apply the generated Terraform plan.
@@ -17,7 +17,7 @@ Options:
 Examples:
   AWS_PROFILE=dev \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-  ./scripts/bootstrap/reconsile-workload-account.sh dev
+  ./scripts/bootstrap/reconcile-workload-account.sh dev
 
   AWS_PROFILE=dev \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
@@ -63,8 +63,8 @@ get_required_terraform_output() {
   )"
 
   if [[ -z "$output_value" ||
-      "$output_value" == "null" ||
-      "$output_value" == "None" ]]; then
+        "$output_value" == "null" ||
+        "$output_value" == "None" ]]; then
     fail "Unable to read required Terraform output '${output_name}' from ${stack_dir}"
   fi
 
@@ -155,7 +155,7 @@ while [[ "$#" -gt 0 ]]; do
     --skip-validation)
       SKIP_VALIDATION=true
       ;;
-    --h|--help)
+    -h|--help)
       usage
       exit 0
       ;;
@@ -164,9 +164,11 @@ while [[ "$#" -gt 0 ]]; do
       fail "Unknown option: $1"
       ;;
   esac
+
+  shift
 done
 
-if [[ "$AUTO_APPROVE" "true" && "$APPLY" != "true" ]]; then
+if [[ "$AUTO_APPROVE" == "true" && "$APPLY" != "true" ]]; then
   fail "--auto-approve requires --apply"
 fi
 
@@ -180,7 +182,7 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" ||
 
 ENV_DIR="${REPO_ROOT}/environments/${TARGET}"
 ACCOUNT_DIR="${REPO_ROOT}/bootstrap/${TARGET}/account"
-VALIDATION_SCRIPT="${REPO_ROOT}/scripts/bootstrap/validate-bootstrap.sh"
+VALIDATION_SCRIPT="${REPO_ROOT}/scripts/validation/validate-bootstrap.sh"
 
 ENV_BACKEND="${ENV_DIR}/backend.tf"
 ACCOUNT_BACKEND="${ACCOUNT_DIR}/backend.tf"
@@ -203,10 +205,10 @@ ACCOUNT_BACKEND="${ACCOUNT_DIR}/backend.tf"
 ENV_BACKEND_REGION="$(get_backend_string_value "$ENV_BACKEND" region)"
 ACCOUNT_BACKEND_REGION="$(get_backend_string_value "$ACCOUNT_BACKEND" region)"
 
-[[ -n "${ENV_BACKEND_REGION}" ]] ||
+[[ -n "$ENV_BACKEND_REGION" ]] ||
   fail "Unable to resolve workload backend region"
 
-[[ -n "${ACCOUNT_BACKEND_REGION}" ]] ||
+[[ -n "$ACCOUNT_BACKEND_REGION" ]] ||
   fail "Unable to resolve bootstrap account backend region"
 
 [[ "$ENV_BACKEND_REGION" == "$ACCOUNT_BACKEND_REGION" ]] ||
