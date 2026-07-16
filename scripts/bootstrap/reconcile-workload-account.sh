@@ -235,15 +235,23 @@ fi
 section "Initializing Terraform roots"
 
 info "Initializing workload Terraform root"
-terraform -chdir="$ENV_DIR" init \
+
+if ! terraform -chdir="$ENV_DIR" init \
   -input=false \
-  -no-color >/dev/null
+  -no-color; then
+  fail "Unable to initialize workload Terraform root: ${ENV_DIR}"
+fi
+
 success "Workload Terraform root initialized"
 
 info "Initializing bootstrap account Terraform root"
-terraform -chdir="$ACCOUNT_DIR" init \
+
+if ! terraform -chdir="$ACCOUNT_DIR" init \
   -input=false \
-  -no-color >/dev/null
+  -no-color; then
+  fail "Unable to initialize bootstrap account Terraform root: ${ACCOUNT_DIR}"
+fi
+
 success "Bootstrap account Terraform root initialized"
 
 section "Resolving workload-created CMK outputs"
@@ -302,7 +310,9 @@ Terraform reconciliation plan:
 
 PLAN_NOTICE
 
-terraform show -no-color "$PLAN_FILE"
+terraform -chdir="$ACCOUNT_DIR" show \
+  -no-color \
+  "$PLAN_FILE"
 
 if [[ "$APPLY" != "true" ]]; then
   section "Reconciliation summary"
