@@ -69,6 +69,22 @@ Examples:
 USAGE
 }
 
+require_tf_var() {
+  local variable_name="$1"
+  local value="${!variable_name:-}"
+
+  require_non_empty "$value" "$variable_name"
+}
+
+require_tf_var_true() {
+  local variable_name="$1"
+  local value="${!variable_name:-}"
+
+  if [[ "$value" != "true" ]]; then
+    fail "${variable_name} must be exported as true"
+  fi
+}
+
 validate_kms_arn() {
   local kms_arn="$1"
   local description="$2"
