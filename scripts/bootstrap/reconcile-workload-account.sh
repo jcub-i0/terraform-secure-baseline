@@ -152,16 +152,6 @@ case "$TARGET" in
     ;;
 esac
 
-if [[ "$TF_VAR_environment" != "$TARGET" ]]; then
-  fail \
-    "TF_VAR_environment (${TF_VAR_environment}) must match target (${TARGET})"
-fi
-
-if [[ "$TF_VAR_environment_apply_github" != "$TARGET" ]]; then
-  fail \
-    "TF_VAR_environment_apply_github (${TF_VAR_environment_apply_github}) must match target (${TARGET})"
-fi
-
 require_env_name "$TARGET"
 shift
 
@@ -212,7 +202,17 @@ require_tf_var TF_VAR_tf_state_bucket_cmk_arn
 require_tf_var_true TF_VAR_enable_apply_role_github
 require_tf_var TF_VAR_environment_apply_github
 
-section "Workload account reconciliation: ${TARGET}"
+if [[ "$TF_VAR_environment" != "$TARGET" ]]; then
+  fail \
+    "TF_VAR_environment (${TF_VAR_environment}) must match target (${TARGET})"
+fi
+
+if [[ "$TF_VAR_environment_apply_github" != "$TARGET" ]]; then
+  fail \
+    "TF_VAR_environment_apply_github (${TF_VAR_environment_apply_github}) must match target (${TARGET})"
+fi
+
+success "Required account-stack Terraform inputs are configured"
 
 section "Checking prerequisites and Terraform roots"
 
