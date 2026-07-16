@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export AWS_PAGER=""
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -30,45 +37,6 @@ Examples:
     --apply \
     --auto-approve
 USAGE
-}
-
-info()      { printf '[INFO] %s\n' "$*"; }
-success()   { printf '[PASS] %s\n' "$*"; }
-warn()      { printf '[WARN] %s\n' "$*" >&2; }
-fail()      { printf '[FAIL] %s\n' "$*" >&2; exit 1; }
-
-require_command() {
-  command -v "$1" >/dev/null 2>&1 ||
-    fail "Required command not found: $1"
-}
-
-get_backend_string_value() {
-  local backend_file="$1"
-  local attribute_name="$2"
-
-  sed -nE \
-    "s/^[[:space:]]*${attribute_name}[[:space:]]*=[[:space:]]*\"([^\"]+)\".*/\1/p" \
-    "$backend_file" |
-    head -n 1
-}
-
-get_required_terraform_output() {
-  local stack_dir="$1"
-  local output_name="$2"
-  local output_value
-
-  output_value="$(
-    terraform -chdir="$stack_dir" output -raw "$output_name" 2>/dev/null ||
-      true
-  )"
-
-  if [[ -z "$output_value" ||
-        "$output_value" == "null" ||
-        "$output_value" == "None" ]]; then
-    fail "Unable to read required Terraform output '${output_name}' from ${stack_dir}"
-  fi
-
-  printf '%s\n' "$output_value"
 }
 
 validate_kms_arn() {
@@ -109,35 +77,32 @@ validate_kms_arn() {
       --output text
   )"
 
-  [[ "$key_state" == "Enabled" ]] ||
+  if [[ "$key_state" != "Enabled" ]]; then
     fail "${description} is not enabled. Current state: ${key_state}"
+  fi
 
-  [[ "$key_manager" == "CUSTOMER" ]] ||
+  if [[ "$key_manager" != "CUSTOMER" ]]; then
     fail "${description} is not customer-managed. Key manager: ${key_manager}"
+  fi
 
   success "${description} is a valid, enabled customer-managed KMS key"
 }
 
 TARGET="${1:-}"
 
-[[ -n "$TARGET" ]] || {
+if [[ -z "$TARGET" ]]; then
   usage
   exit 1
-}
+fi
 
 case "$TARGET" in
-  dev|staging|prod)
-    ;;
   -h|--help)
     usage
     exit 0
     ;;
-  *)
-    usage
-    fail "Unsupported target: ${TARGET}"
-    ;;
 esac
 
+require_env_name "$TARGET"
 shift
 
 APPLY=false
@@ -172,57 +137,59 @@ if [[ "$AUTO_APPROVE" == "true" && "$APPLY" != "true" ]]; then
   fail "--auto-approve requires --apply"
 fi
 
-for cmd in terraform aws git sed mktemp rm; do
-  require_command "$cmd"
+section "Workload account reconciliation: ${TARGET}"
+
+section "Checking prerequisites and Terraform roots"
+
+for command_name in terraform aws git sed mktemp rm; do
+  require_command "$command_name"
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" ||
+REPO_ROOT="$(get_repo_root "$SCRIPT_DIR")" ||
   fail "Unable to resolve repository root"
 
-ENV_DIR="${REPO_ROOT}/environments/${TARGET}"
-ACCOUNT_DIR="${REPO_ROOT}/bootstrap/${TARGET}/account"
+ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$TARGET")"
+ACCOUNT_DIR="$(get_bootstrap_account_dir "$REPO_ROOT" "$TARGET")"
 VALIDATION_SCRIPT="${REPO_ROOT}/scripts/validation/validate-bootstrap.sh"
 
 ENV_BACKEND="${ENV_DIR}/backend.tf"
 ACCOUNT_BACKEND="${ACCOUNT_DIR}/backend.tf"
 
-[[ -d "$ENV_DIR" ]] ||
-  fail "Workload environment directory not found: ${ENV_DIR}"
+require_directory "$ENV_DIR"
+success "Workload environment directory exists: ${ENV_DIR}"
 
-[[ -d "$ACCOUNT_DIR" ]] ||
-  fail "Bootstrap account directory not found: ${ACCOUNT_DIR}"
+require_directory "$ACCOUNT_DIR"
+success "Bootstrap account directory exists: ${ACCOUNT_DIR}"
 
-[[ -f "$ENV_BACKEND" ]] ||
-  fail "Workload backend file not found: ${ENV_BACKEND}"
+require_file "$ENV_BACKEND"
+success "Workload backend file exists: ${ENV_BACKEND}"
 
-[[ -f "$ACCOUNT_BACKEND" ]] ||
-  fail "Bootstrap account backend file not found: ${ACCOUNT_BACKEND}"
+require_file "$ACCOUNT_BACKEND"
+success "Bootstrap account backend file exists: ${ACCOUNT_BACKEND}"
 
-[[ -x "$VALIDATION_SCRIPT" ]] ||
-  fail "Bootstrap validation script is missing or not executable: ${VALIDATION_SCRIPT}"
+require_executable_file "$VALIDATION_SCRIPT"
+success "Bootstrap validation script is available: ${VALIDATION_SCRIPT}"
 
 ENV_BACKEND_REGION="$(get_backend_string_value "$ENV_BACKEND" region)"
 ACCOUNT_BACKEND_REGION="$(get_backend_string_value "$ACCOUNT_BACKEND" region)"
 
-[[ -n "$ENV_BACKEND_REGION" ]] ||
-  fail "Unable to resolve workload backend region"
+require_non_empty "$ENV_BACKEND_REGION" "workload backend region"
+require_non_empty "$ACCOUNT_BACKEND_REGION" "bootstrap account backend region"
 
-[[ -n "$ACCOUNT_BACKEND_REGION" ]] ||
-  fail "Unable to resolve bootstrap account backend region"
-
-[[ "$ENV_BACKEND_REGION" == "$ACCOUNT_BACKEND_REGION" ]] ||
+if [[ "$ENV_BACKEND_REGION" != "$ACCOUNT_BACKEND_REGION" ]]; then
   fail "Backend region mismatch. Workload: ${ENV_BACKEND_REGION}; account: ${ACCOUNT_BACKEND_REGION}"
+fi
+
+success "Workload and account backends use the same region: ${ENV_BACKEND_REGION}"
 
 AWS_REGION="${AWS_REGION:-$ENV_BACKEND_REGION}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
 
-[[ "$AWS_REGION" == "$ENV_BACKEND_REGION" ]] ||
+if [[ "$AWS_REGION" != "$ENV_BACKEND_REGION" ]]; then
   fail "AWS_REGION (${AWS_REGION}) does not match backend region (${ENV_BACKEND_REGION})"
-
-export AWS_PAGER=""
+fi
 
 AWS_ARGS=(--region "$AWS_REGION")
 
@@ -230,39 +197,42 @@ if [[ -n "$AWS_PROFILE" ]]; then
   AWS_ARGS+=(--profile "$AWS_PROFILE")
 fi
 
+EXECUTION_MODE="plan-only"
+if [[ "$APPLY" == "true" ]]; then
+  EXECUTION_MODE="apply"
+fi
+
+info "Repository root: ${REPO_ROOT}"
 info "Target environment: ${TARGET}"
 info "Workload stack: ${ENV_DIR}"
 info "Bootstrap account stack: ${ACCOUNT_DIR}"
 info "AWS region: ${AWS_REGION}"
 info "AWS profile: ${AWS_PROFILE:-default credential chain}"
-info "Mode: $([[ "$APPLY" == "true" ]] && printf 'apply' || printf 'plan-only')"
+info "Execution mode: ${EXECUTION_MODE}"
 
-ACTIVE_ACCOUNT_ID="$(
-  aws sts get-caller-identity \
-    "${AWS_ARGS[@]}" \
-    --query Account \
-    --output text
-)"
+section "Checking AWS caller identity"
 
-CALLER_ARN="$(
-  aws sts get-caller-identity \
-    "${AWS_ARGS[@]}" \
-    --query Arn \
-    --output text
-)"
+ACTIVE_ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
+require_non_empty "$ACTIVE_ACCOUNT_ID" "AWS account ID"
+require_non_empty "$CALLER_ARN" "AWS caller ARN"
 
 success "AWS credentials are valid"
 info "AWS account ID: ${ACTIVE_ACCOUNT_ID}"
 info "AWS caller ARN: ${CALLER_ARN}"
 
 if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
-  [[ "$ACTIVE_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]] ||
+  if [[ "$ACTIVE_ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]]; then
     fail "AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}"
+  fi
 
-  success "AWS account matches EXPECTED_ACCOUNT_ID"
+  success "AWS account matches EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID}"
 else
   warn "EXPECTED_ACCOUNT_ID is not set. The active account will still be checked against both CMK ARNs."
 fi
+
+section "Initializing Terraform roots"
 
 info "Initializing workload Terraform root"
 terraform -chdir="$ENV_DIR" init \
@@ -275,6 +245,8 @@ terraform -chdir="$ACCOUNT_DIR" init \
   -input=false \
   -no-color >/dev/null
 success "Bootstrap account Terraform root initialized"
+
+section "Resolving workload-created CMK outputs"
 
 LAMBDA_CMK_ARN="$(
   get_required_terraform_output \
@@ -292,6 +264,8 @@ success "Resolved workload-created CMK outputs"
 info "Lambda CMK ARN: ${LAMBDA_CMK_ARN}"
 info "Secrets Manager CMK ARN: ${SECRETS_MANAGER_CMK_ARN}"
 
+section "Validating workload-created CMKs"
+
 validate_kms_arn "$LAMBDA_CMK_ARN" "Lambda CMK"
 validate_kms_arn "$SECRETS_MANAGER_CMK_ARN" "Secrets Manager CMK"
 
@@ -304,7 +278,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-info "Generating bootstrap account reconciliation plan"
+section "Generating bootstrap account reconciliation plan"
 
 TF_VAR_lambda_cmk_arn="$LAMBDA_CMK_ARN" \
 TF_VAR_secrets_manager_cmk_arn="$SECRETS_MANAGER_CMK_ARN" \
@@ -331,6 +305,20 @@ PLAN_NOTICE
 terraform show -no-color "$PLAN_FILE"
 
 if [[ "$APPLY" != "true" ]]; then
+  section "Reconciliation summary"
+
+  cat <<SUMMARY
+Environment:                        ${TARGET}
+AWS profile:                        ${AWS_PROFILE:-<default>}
+AWS region:                         ${AWS_REGION}
+AWS account ID:                     ${ACTIVE_ACCOUNT_ID}
+Execution mode:                     plan-only
+Lambda CMK ARN:                     ${LAMBDA_CMK_ARN}
+Secrets Manager CMK ARN:            ${SECRETS_MANAGER_CMK_ARN}
+Plan applied:                       false
+Post-apply validation performed:    false
+SUMMARY
+
   cat <<NEXT_STEPS
 
 Plan-only reconciliation completed successfully.
@@ -350,11 +338,12 @@ if [[ "$AUTO_APPROVE" != "true" ]]; then
   printf '\nType "apply" to apply this reconciliation plan: '
   read -r confirmation
 
-  [[ "$confirmation" == "apply" ]] ||
+  if [[ "$confirmation" != "apply" ]]; then
     fail "Reconciliation cancelled"
+  fi
 fi
 
-info "Applying the saved reconciliation plan"
+section "Applying bootstrap account reconciliation plan"
 
 terraform -chdir="$ACCOUNT_DIR" apply \
   -input=false \
@@ -363,10 +352,13 @@ terraform -chdir="$ACCOUNT_DIR" apply \
 
 success "Bootstrap account stack reconciliation applied"
 
+VALIDATION_PERFORMED=true
+
 if [[ "$SKIP_VALIDATION" == "true" ]]; then
+  VALIDATION_PERFORMED=false
   warn "Post-apply bootstrap validation was skipped"
 else
-  info "Running strict workload bootstrap validation"
+  section "Running strict workload bootstrap validation"
 
   AWS_PROFILE="$AWS_PROFILE" \
   AWS_REGION="$AWS_REGION" \
@@ -378,5 +370,21 @@ else
 
   success "Strict workload bootstrap validation passed"
 fi
+
+section "Reconciliation summary"
+
+cat <<SUMMARY
+Environment:                    ${TARGET}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+AWS account ID:                 ${ACTIVE_ACCOUNT_ID}
+Execution mode:                 apply
+Lambda CMK ARN:                 ${LAMBDA_CMK_ARN}
+Secrets Manager CMK ARN:        ${SECRETS_MANAGER_CMK_ARN}
+Plan applied:                   true
+Post-apply validation performed: ${VALIDATION_PERFORMED}
+SUMMARY
+
+section "Reconciliation result"
 
 success "Workload account reconciliation completed: ${TARGET}"
