@@ -13,6 +13,35 @@ usage() {
 Usage:
   reconcile-workload-account.sh <dev|staging|prod> [options]
 
+Terraform input requirements:
+  This script inherits the normal Terraform inputs for
+  bootstrap/<env>/account from the calling shell or another supported
+  Terraform variable source.
+
+  At minimum, the account stack requires:
+    TF_VAR_cloud_name
+    TF_VAR_environment
+    TF_VAR_primary_region
+
+  TF_VAR_environment must match the target passed to this script.
+
+  If GitHub OIDC is enabled, also configure the applicable OIDC and
+  Apply-role inputs, such as:
+    TF_VAR_enable_github_oidc
+    TF_VAR_owner_github
+    TF_VAR_repo_github
+    TF_VAR_tf_state_bucket_arn
+    TF_VAR_tf_state_bucket_cmk_arn
+    TF_VAR_enable_apply_role_github
+    TF_VAR_environment_apply_github
+
+  See bootstrap/<env>/account/terraform.tfvars.example for the complete
+  account-stack configuration.
+
+  The script automatically resolves and supplies:
+    TF_VAR_lambda_cmk_arn
+    TF_VAR_secrets_manager_cmk_arn
+
 Options:
   --apply               Apply the generated Terraform plan.
                         Without this option, the script is plan-only.
@@ -22,20 +51,21 @@ Options:
   -h, --help            Show this help message.
 
 Examples:
+  # First export the normal bootstrap/<env>/account Terraform inputs.
+  export TF_VAR_cloud_name="tf-secure-baseline"
+  export TF_VAR_environment="dev"
+  export TF_VAR_primary_region="us-east-1"
+
+  # Generate and review the reconciliation plan.
   AWS_PROFILE=dev \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev
 
+  # Apply the reconciliation plan and run strict bootstrap validation.
   AWS_PROFILE=dev \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   EXPECTED_GITHUB_REPOSITORY="<OWNER>/<REPOSITORY>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev --apply
-
-  AWS_PROFILE=dev \
-  EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-  ./scripts/bootstrap/reconcile-workload-account.sh dev \
-    --apply \
-    --auto-approve
 USAGE
 }
 
