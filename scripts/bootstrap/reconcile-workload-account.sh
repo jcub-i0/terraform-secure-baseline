@@ -183,6 +183,21 @@ if [[ "$AUTO_APPROVE" == "true" && "$APPLY" != "true" ]]; then
   fail "--auto-approve requires --apply"
 fi
 
+section "Checking required account-stack Terraform inputs"
+
+require_tf_var TF_VAR_cloud_name
+require_tf_var TF_VAR_environment
+require_tf_var TF_VAR_primary_region
+
+require_tf_var_true TF_VAR_enable_github_oidc
+require_tf_var TF_VAR_owner_github
+require_tf_var TF_VAR_repo_github
+require_tf_var TF_VAR_tf_state_bucket_arn
+require_tf_var TF_VAR_tf_state_bucket_cmk_arn
+
+require_tf_var_true TF_VAR_enable_apply_role_github
+require_tf_var TF_VAR_environment_apply_github
+
 section "Workload account reconciliation: ${TARGET}"
 
 section "Checking prerequisites and Terraform roots"
