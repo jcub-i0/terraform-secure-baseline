@@ -436,10 +436,14 @@ Recommended deployment order:
 6. Migrate bootstrap/<env>/state with scripts/bootstrap/migrate-state-stack.sh
 7. Deploy bootstrap/<env>/account
 8. Deploy environments/<env>
-9. Re-apply bootstrap/<env>/account, if using GitHub OIDC and current workload CMK outputs are required
+9. Run scripts/bootstrap/reconcile-workload-account.sh <env> and apply the reviewed plan, if using GitHub OIDC
 10. Deploy or re-apply bootstrap/control_plane/identity_center
 11. Run validation and export evidence
 ```
+
+The reconciliation helper reads the current workload-created Lambda and
+Secrets Manager CMK outputs, applies them through a saved account-stack plan,
+and runs strict workload bootstrap validation after apply.
 
 Deploy `dev` first before deploying `staging` or `prod`.
 

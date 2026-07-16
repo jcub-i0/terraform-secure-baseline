@@ -62,6 +62,56 @@ Verification confirms that:
 - `terraform state pull` succeeds
 - the backend bucket matches the state stack output
 
+## Workload Account Reconciliation
+
+Use `reconcile-workload-account.sh` after applying `environments/<env>` when
+GitHub OIDC and the workload GitHub Apply role are enabled. The helper reads
+the current workload-created Lambda and Secrets Manager CMK outputs and
+reconciles those permissions into `bootstrap/<env>/account`.
+
+Supported targets:
+
+```text
+dev
+staging
+prod
+```
+
+The script uses Terraform's normal variable-loading behavior for the account
+stack, including `terraform.tfvars`, `*.auto.tfvars`, exported `TF_VAR_*`
+variables, defaults, and optional `--var` or `--var-file` arguments. It
+automatically supplies the current `lambda_cmk_arn` and
+`secrets_manager_cmk_arn` values from `environments/<env>`.
+
+Generate and review a plan:
+
+```bash
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh dev
+```
+
+Apply the saved plan and run strict workload bootstrap validation:
+
+```bash
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh dev --apply
+```
+
+The reconciliation helper:
+
+- validates the active AWS identity and backend regions
+- initializes the workload and account Terraform roots
+- resolves and validates the workload-created CMKs
+- validates the account stack's resolved Terraform inputs from the saved plan
+- requires GitHub OIDC and the GitHub Apply role to remain enabled
+- applies the exact reviewed saved plan when `--apply` is used
+- runs strict bootstrap validation after apply unless `--skip-validation` is used
+
+The script requires `jq` in addition to Terraform, the AWS CLI, Git, and the
+standard shell utilities checked at runtime.
+
 ## Repository Behavior
 
 The post-migration template is tracked:

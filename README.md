@@ -209,7 +209,10 @@ The **environment** stacks manage:
 │
 ├── scripts
 │   ├── bootstrap
+│   │   ├── lib
+│   │   │   └── common.sh
 │   │   ├── migrate-state-stack.sh
+│   │   ├── reconcile-workload-account.sh
 │   │   └── README.md
 │   └── validation
 │       ├── lib
@@ -539,7 +542,7 @@ At a high level, deployment follows this order:
 3. Deploy **account / GitHub OIDC** resources.
 4. Deploy the **AWS Organizations** structure.
 5. Deploy the **environment baseline**.
-6. Re-apply workload **account / GitHub OIDC** resources with current workload-created CMK ARNs where strict workload bootstrap evidence is required.
+6. Run `scripts/bootstrap/reconcile-workload-account.sh <env>` and apply the reviewed saved plan to reconcile current workload-created CMK permissions into the GitHub Apply role.
 7. Deploy or re-apply **IAM Identity Center** assignments.
 8. Validate **security automation workflows**.
 9. Export validation evidence for the applicable validation layers.
@@ -620,7 +623,7 @@ terraform -chdir=environments/dev init -input=false
 
 The workload bootstrap evidence workflow performs the state-stack backend materialization and initialization automatically.
 
-Bootstrap validation is strict by default for workload-created CMK policy evidence. `STRICT_WORKLOAD_CMK_POLICY_CHECKS` defaults to `true`, which means stale or missing GitHub Apply role policy references to the current workload Lambda and Secrets Manager CMKs fail validation. Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional validation where those checks should be warnings instead of failures.
+Bootstrap validation is strict by default for workload-created CMK policy evidence. `STRICT_WORKLOAD_CMK_POLICY_CHECKS` defaults to `true`, which means stale or missing GitHub Apply role policy references to the current workload Lambda and Secrets Manager CMKs fail validation. After applying a workload baseline, use `scripts/bootstrap/reconcile-workload-account.sh <env> --apply` to resolve the current CMKs, update the GitHub Apply role through a saved account-stack plan, and run strict bootstrap validation. Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional validation where those checks should be warnings instead of failures.
 
 ### Workload Baseline Validation
 
@@ -854,17 +857,17 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.4.1
+## v1.4.2
 
-- Replaced tracked runtime `terraform.tfvars` files with
-  `terraform.tfvars.example` templates.
-- Updated GitHub Actions to provide required Terraform values through workflow
-  matrices, GitHub variables, and secrets.
-- Updated onboarding instructions for creating ignored local variable files.
-- Added Git ignore coverage for runtime Terraform variable files to reduce the
-  risk of committing client-specific or sensitive configuration.
+### Added
 
-Terraform plan/apply/destroy workflow validation, end-user SSO testing, live security automation tests, tamper tests, break-glass tests, and destroy safety review remain manual validation activities.
+- Added `scripts/bootstrap/reconcile-workload-account.sh` to resolve current
+  workload Lambda and Secrets Manager CMK outputs, safely reconcile them into
+  the workload GitHub Apply role, and run strict post-apply bootstrap
+  validation.
+- Updated deployment and validation guidance to use
+  `scripts/bootstrap/reconcile-workload-account.sh <env>` instead of manually
+  copying workload CMK outputs and re-applying `bootstrap/<env>/account`.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
 

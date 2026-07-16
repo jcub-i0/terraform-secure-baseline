@@ -120,6 +120,7 @@ Install and configure:
 
 - Terraform
 - Git CLI
+- `jq`
 - A GitHub account with the following environments, if using `GitHub OIDC`:
   - control-plane
   - control-plane-plan
@@ -552,15 +553,18 @@ terraform -chdir=environments/prod plan
 terraform -chdir=environments/prod apply
 ```
 
-Record environment outputs needed by the `bootstrap/control_plane/identity_center` and, if using `GitHub OIDC`, `bootstrap/<env>/account` stacks, such as:
+Record environment outputs needed by the
+`bootstrap/control_plane/identity_center` stack, such as:
 
 ```text
 logs_s3_readonly_policy_name
 logs_cmk_decrypt_policy_name
 secops_event_bus_arn
-lambda_cmk_arn
-secrets_manager_cmk_arn
 ```
+
+If using GitHub OIDC, the account reconciliation helper later reads
+`lambda_cmk_arn` and `secrets_manager_cmk_arn` directly from the workload
+Terraform state. Those CMK values do not need to be copied manually.
 
 Also confirm the effective profile outputs:
 
@@ -579,54 +583,63 @@ These outputs confirm how profile defaults and explicit overrides resolved for t
 
 ---
 
-# Phase 8 - Reapply `Account` Stacks (Skip if not using `GitHub OIDC`)
+# Phase 8 - Reconcile Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
-After successfully applying each environment's `baseline` stack, set the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables and reapply the `bootstrap/<env>/account` stacks for each environment.
+After successfully applying each environment baseline, run
+`reconcile-workload-account.sh` for that environment. The helper reads the
+current workload-created Lambda and Secrets Manager CMK outputs, validates the
+resolved `bootstrap/<env>/account` configuration, and generates a saved
+Terraform plan.
 
-Run these commands from the repository root.
+The account stack may receive its normal inputs through Terraform-supported
+variable sources such as `terraform.tfvars`, `*.auto.tfvars`, exported
+`TF_VAR_*` variables, defaults, or the helper's `--var` and `--var-file`
+options. The helper overrides only `lambda_cmk_arn` and
+`secrets_manager_cmk_arn` with the current workload outputs.
+
+Run these commands from the repository root. Without `--apply`, the helper is
+plan-only. Review the plan, then rerun with `--apply`; the apply path uses the
+exact saved plan and runs strict bootstrap validation afterward.
 
 ## Dev
 
 ```bash
-export AWS_PROFILE=dev
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh dev
 
-export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
-export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-terraform -chdir=bootstrap/dev/account apply
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh dev --apply
 ```
 
 ## Staging
 
 ```bash
-export AWS_PROFILE=staging
+AWS_PROFILE=staging \
+EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh staging
 
-export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
-export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-terraform -chdir=bootstrap/staging/account apply
+AWS_PROFILE=staging \
+EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh staging --apply
 ```
 
 ## Prod
 
 ```bash
-export AWS_PROFILE=prod
+AWS_PROFILE=prod \
+EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh prod
 
-export TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
-export TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn>"
-terraform -chdir=bootstrap/prod/account apply
+AWS_PROFILE=prod \
+EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh prod --apply
 ```
 
-Be sure to also set these variables, `LAMBDA_CMK_ARN` and `SECRETS_MANAGER_CMK_ARN`, in the following GitHub environments:
-
-```text
-dev
-dev-plan
-prod
-prod-plan
-staging
-staging-plan
-```
-
-Setting these variables in each GitHub environment grants GitHub roles required access, enabling CI/CD workflows to run error-free.
+Use `--var-file <path>` when the account inputs are stored in a custom variable
+file that Terraform would not auto-load. Relative paths are resolved from the
+selected `bootstrap/<env>/account` directory.
 
 ---
 
@@ -723,7 +736,7 @@ Recommended validation order:
 6. Migrate each bootstrap/<env>/state with migrate-state-stack.sh
 7. Deploy bootstrap/<env>/account
 8. Deploy environments/<env>
-9. Re-apply bootstrap/<env>/account with current workload CMK values, if using GitHub OIDC
+9. Run reconcile-workload-account.sh <env> and apply the reviewed plan, if using GitHub OIDC
 10. Deploy or re-apply bootstrap/control_plane/identity_center
 11. Run validation and export evidence
 ```

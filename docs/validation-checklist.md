@@ -53,19 +53,20 @@ Recommended validation order:
 
 1. Confirm AWS profile/account variables.
 2. Verify each migrated state stack with `scripts/bootstrap/migrate-state-stack.sh <target> --verify-only`.
-3. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
-4. Export workload bootstrap evidence with `export-bootstrap.sh` for each deployed workload environment.
-5. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
-6. Export workload baseline evidence with `export-baseline.sh` for each deployed workload environment.
-7. Run automated control-plane validation with `validate-control-plane.sh`.
-8. Export control-plane evidence with `export-control-plane.sh`.
-9. Review any control-plane warnings, especially AWS Organizations account placement warnings.
-10. Validate GitHub Actions plan/apply/destroy workflows manually.
-11. Review the layer-specific GitHub evidence-export workflow results.
-12. Validate IAM Identity Center end-user access manually where required.
-13. Run live Lambda workflow tests only in approved environments.
-14. Run tamper and break-glass tests only when explicitly approved.
-15. Review destroy safety requirements before running any destroy or teardown workflow.
+3. After each workload baseline is deployed, run `scripts/bootstrap/reconcile-workload-account.sh <env>` and apply the reviewed reconciliation plan.
+4. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
+5. Export workload bootstrap evidence with `export-bootstrap.sh` for each deployed workload environment.
+6. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
+7. Export workload baseline evidence with `export-baseline.sh` for each deployed workload environment.
+8. Run automated control-plane validation with `validate-control-plane.sh`.
+9. Export control-plane evidence with `export-control-plane.sh`.
+10. Review any control-plane warnings, especially AWS Organizations account placement warnings.
+11. Validate GitHub Actions plan/apply/destroy workflows manually.
+12. Review the layer-specific GitHub evidence-export workflow results.
+13. Validate IAM Identity Center end-user access manually where required.
+14. Run live Lambda workflow tests only in approved environments.
+15. Run tamper and break-glass tests only when explicitly approved.
+16. Review destroy safety requirements before running any destroy or teardown workflow.
 
 ---
 
@@ -286,10 +287,16 @@ For strict workload CMK and remote-state evidence, the expected deployment seque
 2. Run scripts/bootstrap/migrate-state-stack.sh <env>.
 3. Apply bootstrap/<env>/account.
 4. Apply environments/<env>.
-5. Capture current workload outputs for lambda_cmk_arn and secrets_manager_cmk_arn.
-6. Re-apply bootstrap/<env>/account with those current CMK ARNs.
+5. Run scripts/bootstrap/reconcile-workload-account.sh <env> and review the plan.
+6. Rerun the reconciliation helper with --apply.
 7. Run validate-bootstrap.sh or export-bootstrap.sh with REQUIRE_STATE_STACK_REMOTE=true and the default strict CMK behavior.
 ```
+
+The reconciliation helper reads `lambda_cmk_arn` and
+`secrets_manager_cmk_arn` directly from the workload Terraform state,
+validates the resolved account-stack inputs from the saved plan, applies that
+exact plan, and runs strict bootstrap validation after apply unless
+`--skip-validation` is used.
 
 ### GitHub Workflow Usage
 
@@ -2395,7 +2402,7 @@ Run or review the following workflows:
 - Control-Plane Evidence Export
 - Terraform Destroy in a non-production environment only
 
-> Ensure that `bootstrap/<env>/account` has been re-applied with the current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values before relying on strict workload bootstrap evidence or running workflows that need those KMS permissions.
+> Ensure that `scripts/bootstrap/reconcile-workload-account.sh <env> --apply` has completed successfully before relying on strict workload bootstrap evidence or running workflows that need the workload CMK permissions.
 
 Expected:
 
@@ -2610,9 +2617,17 @@ Check:
 - the state CMK can be resolved from the bucket encryption configuration, is enabled, and is customer-managed.
 - all remote-backed roots have been initialized before running validation from a fresh checkout.
 - `REQUIRE_STATE_STACK_REMOTE=true` is set when missing or unreadable migrated state should fail validation.
-- the GitHub Apply role has been re-applied after workload deployment with current `lambda_cmk_arn` and `secrets_manager_cmk_arn` values.
+- `scripts/bootstrap/reconcile-workload-account.sh <env> --apply` completed successfully after workload deployment.
 
-If strict workload CMK policy checks fail during transitional testing, either reconcile `bootstrap/<env>/account` with the current workload CMK outputs or temporarily run with:
+If strict workload CMK policy checks fail during transitional testing, first run the reconciliation helper with the current account-stack inputs:
+
+```bash
+AWS_PROFILE=<env> \
+EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh <env> --apply
+```
+
+If reconciliation cannot be completed yet, run validation temporarily with:
 
 ```bash
 STRICT_WORKLOAD_CMK_POLICY_CHECKS=false

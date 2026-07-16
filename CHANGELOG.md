@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.4.2
+
+### Added
+
+- Added `scripts/bootstrap/reconcile-workload-account.sh` to resolve current
+  workload Lambda and Secrets Manager CMK outputs, safely reconcile them into
+  the workload GitHub Apply role, and run strict post-apply bootstrap
+  validation.
+
+### Changed
+
+- Updated deployment and validation guidance to use
+  `scripts/bootstrap/reconcile-workload-account.sh <env>` instead of manually
+  copying workload CMK outputs and re-applying `bootstrap/<env>/account`.
+
 ## v1.4.1
 
 ### Changed
