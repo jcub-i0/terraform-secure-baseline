@@ -29,14 +29,13 @@ Terraform input requirements:
 
   TF_VAR_environment must match the target passed to this script.
 
-  If GitHub OIDC is enabled, also configure the applicable OIDC and
-  Apply-role inputs, such as:
-    TF_VAR_enable_github_oidc
+  The following GitHub OIDC and Apply-role inputs are also required:
+    TF_VAR_enable_github_oidc=true
     TF_VAR_owner_github
     TF_VAR_repo_github
     TF_VAR_tf_state_bucket_arn
     TF_VAR_tf_state_bucket_cmk_arn
-    TF_VAR_enable_apply_role_github
+    TF_VAR_enable_apply_role_github=true
     TF_VAR_environment_apply_github
 
   See bootstrap/<env>/account/terraform.tfvars.example for the complete
