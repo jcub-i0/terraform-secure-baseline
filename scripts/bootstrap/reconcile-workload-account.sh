@@ -315,3 +315,68 @@ terraform -chdir="$ACCOUNT_DIR" plan \
   -out="$PLAN_FILE"
 
 success "Terraform reconciliation plan generated"
+
+cat <<PLAN_NOTICE
+
+Terraform reconciliation plan:
+
+  Target:               ${TARGET}
+  AWS account:          ${ACTIVE_ACCOUNT_ID}
+  AWS region:           ${AWS_REGION}
+  Lambda CMK:           ${LAMBDA_CMK_ARN}
+  Secrets Manager CMK:  ${SECRETS_MANAGER_CMK_ARN}
+
+PLAN_NOTICE
+
+terraform show -no-color "$PLAN_FILE"
+
+if [[ "$APPLY" != "true" ]]; then
+  cat <<NEXT_STEPS
+
+Plan-only reconciliation completed successfully.
+
+Review the plan above, then rerun with --apply:
+
+  AWS_PROFILE=${AWS_PROFILE:-<profile>} \\
+  EXPECTED_ACCOUNT_ID=${ACTIVE_ACCOUNT_ID} \\
+  ./scripts/bootstrap/reconcile-workload-account.sh ${TARGET} --apply
+
+NEXT_STEPS
+
+  exit 0
+fi
+
+if [[ "$AUTO_APPROVE" != "true" ]]; then
+  printf '\nType "apply" to apply this reconciliation plan: '
+  read -r confirmation
+
+  [[ "$confirmation" == "apply" ]] ||
+    fail "Reconciliation cancelled"
+fi
+
+info "Applying the saved reconciliation plan"
+
+terraform -chdir="$ACCOUNT_DIR" apply \
+  -input=false \
+  -no-color \
+  "$PLAN_FILE"
+
+success "Bootstrap account stack reconciliation applied"
+
+if [[ "$SKIP_VALIDATION" == "true" ]]; then
+  warn "Post-apply bootstrap validation was skipped"
+else
+  info "Running strict workload bootstrap validation"
+
+  AWS_PROFILE="$AWS_PROFILE" \
+  AWS_REGION="$AWS_REGION" \
+  EXPECTED_ACCOUNT_ID="$EXPECTED_ACCOUNT_ID" \
+  EXPECTED_GITHUB_REPOSITORY="$EXPECTED_GITHUB_REPOSITORY" \
+  REQUIRE_STATE_STACK_REMOTE=true \
+  STRICT_WORKLOAD_CMK_POLICY_CHECKS=true \
+  "$VALIDATION_SCRIPT" "$TARGET"
+
+  success "Strict workload bootstrap validation passed"
+fi
+
+success "Workload account reconciliation completed: ${TARGET}"
