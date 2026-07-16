@@ -857,17 +857,17 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-### v1.4.1
+## v1.4.2
 
-- Replaced tracked runtime `terraform.tfvars` files with
-  `terraform.tfvars.example` templates.
-- Updated GitHub Actions to provide required Terraform values through workflow
-  matrices, GitHub variables, and secrets.
-- Updated onboarding instructions for creating ignored local variable files.
-- Added Git ignore coverage for runtime Terraform variable files to reduce the
-  risk of committing client-specific or sensitive configuration.
+### Added
 
-Terraform plan/apply/destroy workflow validation, end-user SSO testing, live security automation tests, tamper tests, break-glass tests, and destroy safety review remain manual validation activities.
+- Added `scripts/bootstrap/reconcile-workload-account.sh` to resolve current
+  workload Lambda and Secrets Manager CMK outputs, safely reconcile them into
+  the workload GitHub Apply role, and run strict post-apply bootstrap
+  validation.
+- Updated deployment and validation guidance to use
+  `scripts/bootstrap/reconcile-workload-account.sh <env>` instead of manually
+  copying workload CMK outputs and re-applying `bootstrap/<env>/account`.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
 
