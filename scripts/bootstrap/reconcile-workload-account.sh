@@ -214,3 +214,52 @@ ACCOUNT_BACKEND_REGION="$(get_backend_string_value "$ACCOUNT_BACKEND" region)"
 [[ "$ENV_BACKEND_REGION" == "$ACCOUNT_BACKEND_REGION" ]] ||
   fail "Backend region mismatch. Workload: ${ENV_BACKEND_REGION}; account: ${ACCOUNT_BACKEND_REGION}"
 
+AWS_REGION="${AWS_REGION:-$ENV_BACKEND_REGION}"
+AWS_PROFILE="${AWS_PROFILE:-}"
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
+EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
+
+[[ "$AWS_REGION" == "$ENV_BACKEND_REGION" ]] ||
+  fail "AWS_REGION (${AWS_REGION}) does not match backend region (${ENV_BACKEND_REGION})"
+
+export AWS_PAGER=""
+
+AWS_ARGS=(--region "$AWS_REGION")
+
+if [[ -n "$AWS_PROFILE" ]]; then
+  AWS_ARGS+=(--profile "$AWS_PROFILE")
+fi
+
+info "Target environment: ${TARGET}"
+info "Workload stack: ${ENV_DIR}"
+info "Bootstrap account stack: ${ACCOUNT_DIR}"
+info "AWS region: ${AWS_REGION}"
+info "AWS profile: ${AWS_PROFILE:-default credential chain}"
+info "Mode: $([[ "$APPLY" == "true" ]] && printf 'apply' || printf 'plan-only')"
+
+ACTIVE_ACCOUNT_ID="$(
+  aws sts get-caller-identity \
+    "${AWS_ARGS[@]}" \
+    --query Account \
+    --output text
+)"
+
+CALLER_ARN="$(
+  aws sts get-caller-identity \
+    "${AWS_ARGS[@]}" \
+    --query Arn \
+    --output text
+)"
+
+success "AWS credentials are valid"
+info "AWS account ID: ${ACTIVE_ACCOUNT_ID}"
+info "AWS caller ARN: ${CALLER_ARN}"
+
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  [[ "$ACTIVE_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]] ||
+    fail "AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}"
+
+  success "AWS account matches EXPECTED_ACCOUNT_ID"
+else
+  warn "EXPECTED_ACCOUNT_ID is not set. The active account will still be checked against both CMK ARNs."
+fi
