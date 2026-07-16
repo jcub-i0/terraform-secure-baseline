@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export AWS_PAGER=""
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
 usage() {
   cat <<'USAGE'
 Usage:
   migrate-state-stack.sh <dev|staging|prod|control-plane> [--verify-only]
+
+Options:
+  --verify-only    Verify an already-migrated state stack.
+  -h, --help       Show this help message.
 
 Examples:
   AWS_PROFILE=dev \
@@ -20,33 +31,55 @@ Examples:
 USAGE
 }
 
-info()    { printf '[INFO] %s\n' "$*"; }
-success() { printf '[PASS] %s\n' "$*"; }
-warn()    { printf '[WARN] %s\n' "$*" >&2; }
-fail()    { printf '[FAIL] %s\n' "$*" >&2; exit 1; }
+require_default_workspace() {
+  local state_dir="$1"
+  local current_workspace
 
-require_command() {
-  command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+  current_workspace="$(
+    terraform -chdir="$state_dir" workspace show
+  )"
+
+  require_non_empty "$current_workspace" "Terraform workspace"
+
+  if [[ "$current_workspace" != "default" ]]; then
+    fail \
+      "State-stack migration requires the default Terraform workspace. Current workspace: ${current_workspace}"
+  fi
+
+  success "Terraform workspace is default"
 }
 
-get_backend_string_value() {
-  local backend_file="$1"
-  local attribute_name="$2"
-
-  sed -nE \
-    "s/^[[:space:]]*${attribute_name}[[:space:]]*=[[:space:]]*\"([^\"]+)\".*/\1/p" \
-    "$backend_file" |
-    head -n 1
-}
+if [[ "$#" -gt 2 ]]; then
+  usage
+  fail "Too many arguments"
+fi
 
 TARGET="${1:-}"
 MODE="${2:-}"
 
-[[ -n "$TARGET" ]] || { usage; exit 1; }
+case "$TARGET" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+if [[ -z "$TARGET" ]]; then
+  usage
+  exit 1
+fi
 
 case "$MODE" in
-  ""|--verify-only) ;;
-  *) usage; fail "Unknown option: ${MODE}" ;;
+  ""|--verify-only)
+    ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage
+    fail "Unknown option: ${MODE}"
+    ;;
 esac
 
 case "$TARGET" in
@@ -64,12 +97,15 @@ case "$TARGET" in
     ;;
 esac
 
-for cmd in terraform aws git sed sort diff cp mkdir date cmp mktemp; do
+section "State stack migration: ${DISPLAY_TARGET}"
+
+section "Checking prerequisites and backend configuration"
+
+for cmd in terraform aws git sed head sort diff cp mkdir date cmp mktemp rm; do
   require_command "$cmd"
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" ||
+REPO_ROOT="$(get_repo_root "$SCRIPT_DIR")" ||
   fail "Unable to resolve repository root"
 
 STATE_DIR="${REPO_ROOT}/bootstrap/${STACK_PATH_COMPONENT}/state"
@@ -77,8 +113,8 @@ BACKEND_TEMPLATE="${STATE_DIR}/backend.tf.migrated.example"
 ACTIVE_BACKEND="${STATE_DIR}/backend.tf"
 LOCAL_STATE_FILE="${STATE_DIR}/terraform.tfstate"
 
-[[ -d "$STATE_DIR" ]] || fail "State stack directory not found: ${STATE_DIR}"
-[[ -f "$BACKEND_TEMPLATE" ]] || fail "Backend template not found: ${BACKEND_TEMPLATE}"
+require_directory "$STATE_DIR"
+require_file "$BACKEND_TEMPLATE"
 
 BACKEND_BUCKET="$(get_backend_string_value "$BACKEND_TEMPLATE" bucket)"
 BACKEND_KEY="$(get_backend_string_value "$BACKEND_TEMPLATE" key)"
@@ -90,20 +126,26 @@ USE_LOCKFILE="$(
     head -n 1
 )"
 
-[[ -n "$BACKEND_BUCKET" ]] || fail "Unable to resolve backend bucket"
-[[ -n "$BACKEND_KEY" ]] || fail "Unable to resolve backend key"
-[[ -n "$BACKEND_REGION" ]] || fail "Unable to resolve backend region"
-[[ "$USE_LOCKFILE" == "true" ]] || fail "Backend template must set use_lockfile = true"
+require_non_empty "$BACKEND_BUCKET" "backend bucket"
+require_non_empty "$BACKEND_KEY" "backend key"
+require_non_empty "$BACKEND_REGION" "backend region"
+
+if [[ "$USE_LOCKFILE" != "true" ]]; then
+  fail "Backend template must set use_lockfile = true"
+fi
 
 AWS_REGION="${AWS_REGION:-$BACKEND_REGION}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 BACKUP_DIR="${BACKUP_DIR:-${HOME}/.tf-secure-baseline/state-backups}"
 
-[[ "$AWS_REGION" == "$BACKEND_REGION" ]] ||
-  fail "AWS_REGION (${AWS_REGION}) does not match backend region (${BACKEND_REGION})"
+if [[ "$AWS_REGION" != "$BACKEND_REGION" ]]; then
+  fail \
+    "AWS_REGION (${AWS_REGION}) does not match backend region (${BACKEND_REGION})"
+fi
 
 aws_args=(--region "$AWS_REGION")
+
 if [[ -n "$AWS_PROFILE" ]]; then
   aws_args+=(--profile "$AWS_PROFILE")
 fi
@@ -118,37 +160,46 @@ info "Backend key: ${BACKEND_KEY}"
 info "Backend region: ${BACKEND_REGION}"
 info "AWS profile: ${AWS_PROFILE:-default credential chain}"
 
-active_account_id="$(
-  aws sts get-caller-identity \
-    "${aws_args[@]}" \
-    --query Account \
-    --output text
-)"
-caller_arn="$(
-  aws sts get-caller-identity \
-    "${aws_args[@]}" \
-    --query Arn \
-    --output text
-)"
+section "Checking AWS caller identity"
+
+active_account_id="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
+caller_arn="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
+require_non_empty "$active_account_id" "AWS account ID"
+require_non_empty "$caller_arn" "AWS caller ARN"
 
 success "AWS credentials are valid"
 info "AWS account ID: ${active_account_id}"
 info "AWS caller ARN: ${caller_arn}"
 
-if [[ -n "$EXPECTED_ACCOUNT_ID" && "$active_account_id" != "$EXPECTED_ACCOUNT_ID" ]]; then
-  fail "AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${active_account_id}"
+if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
+  if [[ "$active_account_id" != "$EXPECTED_ACCOUNT_ID" ]]; then
+    fail \
+      "AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${active_account_id}"
+  fi
+
+  success "AWS account matches EXPECTED_ACCOUNT_ID"
+else
+  warn "EXPECTED_ACCOUNT_ID is not set. Skipping explicit expected-account validation."
 fi
 
 verify_remote_state() {
   local expected_addresses_file="${1:-}"
   local remote_state_file
   local remote_addresses_file
+  local state_output_bucket
 
-  [[ -f "$ACTIVE_BACKEND" ]] || fail "Active backend file not found: ${ACTIVE_BACKEND}"
-  cmp -s "$BACKEND_TEMPLATE" "$ACTIVE_BACKEND" ||
+  require_file "$ACTIVE_BACKEND"
+
+  if ! cmp -s "$BACKEND_TEMPLATE" "$ACTIVE_BACKEND"; then
     fail "backend.tf differs from backend.tf.migrated.example"
+  fi
 
-  terraform -chdir="$STATE_DIR" init -input=false -no-color >/dev/null
+  terraform -chdir="$STATE_DIR" init \
+    -input=false \
+    -no-color >/dev/null
+
+  require_default_workspace "$STATE_DIR"
 
   aws s3api head-object \
     "${aws_args[@]}" \
@@ -157,22 +208,44 @@ verify_remote_state() {
 
   remote_state_file="$(mktemp)"
   remote_addresses_file="$(mktemp)"
+
   terraform -chdir="$STATE_DIR" state pull > "$remote_state_file"
-  [[ -s "$remote_state_file" ]] || fail "terraform state pull returned empty state"
+
+  if [[ ! -s "$remote_state_file" ]]; then
+    fail "terraform state pull returned empty state"
+  fi
 
   state_output_bucket="$(
-    terraform -chdir="$STATE_DIR" output -raw tf_state_bucket_name 2>/dev/null || true
+    terraform -chdir="$STATE_DIR" output \
+      -raw \
+      tf_state_bucket_name \
+      2>/dev/null ||
+      true
   )"
-  [[ -n "$state_output_bucket" ]] ||
-    fail "Unable to read tf_state_bucket_name from remote state"
-  [[ "$state_output_bucket" == "$BACKEND_BUCKET" ]] ||
-    fail "Backend bucket mismatch. Template: ${BACKEND_BUCKET}; output: ${state_output_bucket}"
 
-  terraform -chdir="$STATE_DIR" state list | sort > "$remote_addresses_file"
+  require_non_empty \
+    "$state_output_bucket" \
+    "tf_state_bucket_name from remote state"
+
+  if [[ "$state_output_bucket" != "$BACKEND_BUCKET" ]]; then
+    fail \
+      "Backend bucket mismatch. Template: ${BACKEND_BUCKET}; output: ${state_output_bucket}"
+  fi
+
+  terraform -chdir="$STATE_DIR" state list |
+    sort > "$remote_addresses_file"
+
+  if [[ ! -s "$remote_addresses_file" ]]; then
+    fail "Remote Terraform state contains no resource addresses"
+  fi
 
   if [[ -n "$expected_addresses_file" ]]; then
-    diff -u "$expected_addresses_file" "$remote_addresses_file" ||
+    require_file "$expected_addresses_file"
+
+    if ! diff -u "$expected_addresses_file" "$remote_addresses_file"; then
       fail "Resource addresses changed during migration"
+    fi
+
     success "Remote state resource addresses match pre-migration state"
   fi
 
@@ -184,18 +257,32 @@ verify_remote_state() {
 }
 
 if [[ "$MODE" == "--verify-only" ]]; then
+  section "Verifying migrated remote state"
+
   verify_remote_state
+
+  section "Verification result"
   success "Remote state verification completed: ${DISPLAY_TARGET}"
   exit 0
 fi
 
-[[ ! -e "$ACTIVE_BACKEND" ]] ||
-  fail "backend.tf already exists. Use --verify-only for an already-migrated stack."
+section "Preparing local state and migration backups"
 
-[[ -s "$LOCAL_STATE_FILE" ]] ||
-  fail "Local state not found or empty: ${LOCAL_STATE_FILE}. Apply the state stack locally first."
+if [[ -e "$ACTIVE_BACKEND" ]]; then
+  fail \
+    "backend.tf already exists. Use --verify-only for an already-migrated stack."
+fi
 
-terraform -chdir="$STATE_DIR" init -input=false -no-color >/dev/null
+if [[ ! -s "$LOCAL_STATE_FILE" ]]; then
+  fail \
+    "Local state not found or empty: ${LOCAL_STATE_FILE}. Apply the state stack locally first."
+fi
+
+terraform -chdir="$STATE_DIR" init \
+  -input=false \
+  -no-color >/dev/null
+
+require_default_workspace "$STATE_DIR"
 
 mkdir -p "$stack_backup_dir"
 
@@ -204,34 +291,58 @@ LOCAL_STATE_PULL="${stack_backup_dir}/terraform-state-pull.pre-migration.json"
 LOCAL_ADDRESS_LIST="${stack_backup_dir}/terraform-state-addresses.pre-migration.txt"
 
 cp "$LOCAL_STATE_FILE" "$LOCAL_STATE_BACKUP"
-terraform -chdir="$STATE_DIR" state pull > "$LOCAL_STATE_PULL"
-terraform -chdir="$STATE_DIR" state list | sort > "$LOCAL_ADDRESS_LIST"
 
-[[ -s "$LOCAL_STATE_PULL" ]] || fail "Unable to create pre-migration state backup"
+terraform -chdir="$STATE_DIR" state pull > "$LOCAL_STATE_PULL"
+
+if [[ ! -s "$LOCAL_STATE_PULL" ]]; then
+  fail "Unable to create pre-migration state backup"
+fi
+
+terraform -chdir="$STATE_DIR" state list |
+  sort > "$LOCAL_ADDRESS_LIST"
+
+if [[ ! -s "$LOCAL_ADDRESS_LIST" ]]; then
+  fail "Pre-migration Terraform state contains no resource addresses"
+fi
+
 info "Pre-migration backups written to: ${stack_backup_dir}"
 
+section "Validating migration destination"
+
 state_output_bucket="$(
-  terraform -chdir="$STATE_DIR" output -raw tf_state_bucket_name 2>/dev/null || true
+  terraform -chdir="$STATE_DIR" output \
+    -raw \
+    tf_state_bucket_name \
+    2>/dev/null ||
+    true
 )"
-[[ -n "$state_output_bucket" ]] || fail "Unable to read tf_state_bucket_name"
-[[ "$state_output_bucket" == "$BACKEND_BUCKET" ]] ||
-  fail "Backend template bucket mismatch. Template: ${BACKEND_BUCKET}; output: ${state_output_bucket}"
+
+require_non_empty "$state_output_bucket" "tf_state_bucket_name"
+
+if [[ "$state_output_bucket" != "$BACKEND_BUCKET" ]]; then
+  fail \
+    "Backend template bucket mismatch. Template: ${BACKEND_BUCKET}; output: ${state_output_bucket}"
+fi
 
 success "Backend template bucket matches tf_state_bucket_name"
 
 aws s3api head-bucket \
   "${aws_args[@]}" \
   --bucket "$BACKEND_BUCKET" >/dev/null
+
 success "Target S3 bucket exists"
 
 if aws s3api head-object \
   "${aws_args[@]}" \
   --bucket "$BACKEND_BUCKET" \
   --key "$BACKEND_KEY" >/dev/null 2>&1; then
-  fail "Remote state object already exists: s3://${BACKEND_BUCKET}/${BACKEND_KEY}"
+  fail \
+    "Remote state object already exists: s3://${BACKEND_BUCKET}/${BACKEND_KEY}"
 fi
 
 success "Target remote state key is unused"
+
+section "Migrating state to the remote backend"
 
 cp "$BACKEND_TEMPLATE" "$ACTIVE_BACKEND"
 success "Created active backend file: ${ACTIVE_BACKEND}"
@@ -247,16 +358,29 @@ This script intentionally does not use -force-copy.
 
 NOTICE
 
-if ! terraform -chdir="$STATE_DIR" init -migrate-state -no-color; then
+if ! terraform -chdir="$STATE_DIR" init \
+  -migrate-state \
+  -no-color; then
   warn "Migration failed. backend.tf remains in place."
+  warn "If Terraform migrated the state before reporting an error, rerun with --verify-only."
+  warn "If migration did not occur, remove backend.tf only after confirming the remote state object was not created."
   warn "Pre-migration backups remain at: ${stack_backup_dir}"
-  fail "Resolve the error before retrying."
+  fail "Resolve the migration state before retrying."
 fi
+
+section "Verifying migrated remote state"
 
 verify_remote_state "$LOCAL_ADDRESS_LIST"
 
 REMOTE_STATE_BACKUP="${stack_backup_dir}/terraform-state-pull.post-migration.json"
+
 terraform -chdir="$STATE_DIR" state pull > "$REMOTE_STATE_BACKUP"
+
+if [[ ! -s "$REMOTE_STATE_BACKUP" ]]; then
+  fail "Unable to create post-migration state backup"
+fi
+
+section "Migration result"
 
 success "Post-migration state backup written to: ${REMOTE_STATE_BACKUP}"
 success "State stack migration completed successfully: ${DISPLAY_TARGET}"
