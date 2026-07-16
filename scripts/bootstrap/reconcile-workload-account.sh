@@ -148,6 +148,16 @@ case "$TARGET" in
     ;;
 esac
 
+if [[ "$TF_VAR_environment" != "$TARGET" ]]; then
+  fail \
+    "TF_VAR_environment (${TF_VAR_environment}) must match target (${TARGET})"
+fi
+
+if [[ "$TF_VAR_environment_apply_github" != "$TARGET" ]]; then
+  fail \
+    "TF_VAR_environment_apply_github (${TF_VAR_environment_apply_github}) must match target (${TARGET})"
+fi
+
 require_env_name "$TARGET"
 shift
 
