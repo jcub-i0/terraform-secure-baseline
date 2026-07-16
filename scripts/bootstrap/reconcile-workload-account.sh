@@ -263,3 +263,55 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
 else
   warn "EXPECTED_ACCOUNT_ID is not set. The active account will still be checked against both CMK ARNs."
 fi
+
+info "Initializing workload Terraform root"
+terraform -chdir="$ENV_DIR" init \
+  -input=false \
+  -no-color >/dev/null
+success "Workload Terraform root initialized"
+
+info "Initializing bootstrap account Terraform root"
+terraform -chdir="$ACCOUNT_DIR" init \
+  -input=false \
+  -no-color >/dev/null
+success "Bootstrap account Terraform root initialized"
+
+LAMBDA_CMK_ARN="$(
+  get_required_terraform_output \
+    "$ENV_DIR" \
+    "lambda_cmk_arn"
+)"
+
+SECRETS_MANAGER_CMK_ARN="$(
+  get_required_terraform_output \
+    "$ENV_DIR" \
+    "secrets_manager_cmk_arn"
+)"
+
+success "Resolved workload-created CMK outputs"
+info "Lambda CMK ARN: ${LAMBDA_CMK_ARN}"
+info "Secrets Manager CMK ARN: ${SECRETS_MANAGER_CMK_ARN}"
+
+validate_kms_arn "$LAMBDA_CMK_ARN" "Lambda CMK"
+validate_kms_arn "$SECRETS_MANAGER_CMK_ARN" "Secrets Manager CMK"
+
+TEMP_DIR="$(mktemp -d)"
+PLAN_FILE="${TEMP_DIR}/${TARGET}-account-reconciliation.tfplan"
+
+cleanup() {
+  rm -rf "$TEMP_DIR"
+}
+
+trap cleanup EXIT
+
+info "Generating bootstrap account reconciliation plan"
+
+TF_VAR_lambda_cmk_arn="$LAMBDA_CMK_ARN" \
+TF_VAR_secrets_manager_cmk_arn="$SECRETS_MANAGER_CMK_ARN" \
+terraform -chdir="$ACCOUNT_DIR" plan \
+  -input=false \
+  -no-color \
+  -lock-timeout=5m \
+  -out="$PLAN_FILE"
+
+success "Terraform reconciliation plan generated"
