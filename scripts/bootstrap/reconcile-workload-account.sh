@@ -54,20 +54,22 @@ Options:
   -h, --help            Show this help message.
 
 Examples:
-  # First export the normal bootstrap/<env>/account Terraform inputs.
+  # Export the normal bootstrap/<env>/account Terraform inputs.
   export TF_VAR_cloud_name="tf-secure-baseline"
   export TF_VAR_environment="dev"
   export TF_VAR_primary_region="us-east-1"
 
-  # Generate and review the reconciliation plan.
-  AWS_PROFILE=dev \
-  EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-  ./scripts/bootstrap/reconcile-workload-account.sh dev
+  export TF_VAR_enable_github_oidc=true
+  export TF_VAR_owner_github="<OWNER>"
+  export TF_VAR_repo_github="<REPOSITORY>"
+  export TF_VAR_tf_state_bucket_arn="arn:aws:s3:::<STATE-BUCKET>"
+  export TF_VAR_tf_state_bucket_cmk_arn="arn:aws:kms:us-east-1:<ACCOUNT-ID>:key/<KEY-ID>"
 
-  # Apply the reconciliation plan and run strict bootstrap validation.
+  export TF_VAR_enable_apply_role_github=true
+  export TF_VAR_environment_apply_github="dev"
+
   AWS_PROFILE=dev \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-  EXPECTED_GITHUB_REPOSITORY="<OWNER>/<REPOSITORY>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev --apply
 USAGE
 }
