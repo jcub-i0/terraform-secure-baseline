@@ -63,6 +63,16 @@ require_file() {
   fi
 }
 
+require_executable_file() {
+  local file="$1"
+
+  require_file "$file"
+
+  if [[ ! -x "$file" ]]; then
+    fail "Required file is not executable: ${file}"
+  fi
+}
+
 require_env_name() {
   local environment="$1"
 
