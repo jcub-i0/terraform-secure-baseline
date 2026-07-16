@@ -118,3 +118,97 @@ validate_kms_arn() {
   success "${description} is a valid, enabled customer-managed KMS key"
 }
 
+TARGET="${1:-}"
+
+[[ -n "$TARGET" ]] || {
+  usage
+  exit 1
+}
+
+case "$TARGET" in
+  dev|staging|prod)
+    ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage
+    fail "Unsupported target: ${TARGET}"
+    ;;
+esac
+
+shift
+
+APPLY=false
+AUTO_APPROVE=false
+SKIP_VALIDATION=false
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --apply)
+      APPLY=true
+      ;;
+    --auto-approve)
+      AUTO_APPROVE=true
+      ;;
+    --skip-validation)
+      SKIP_VALIDATION=true
+      ;;
+    --h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      fail "Unknown option: $1"
+      ;;
+  esac
+done
+
+if [[ "$AUTO_APPROVE" "true" && "$APPLY" != "true" ]]; then
+  fail "--auto-approve requires --apply"
+fi
+
+for cmd in terraform aws git sed mktemp rm; do
+  require_command "$cmd"
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" ||
+  fail "Unable to resolve repository root"
+
+ENV_DIR="${REPO_ROOT}/environments/${TARGET}"
+ACCOUNT_DIR="${REPO_ROOT}/bootstrap/${TARGET}/account"
+VALIDATION_SCRIPT="${REPO_ROOT}/scripts/bootstrap/validate-bootstrap.sh"
+
+ENV_BACKEND="${ENV_DIR}/backend.tf"
+ACCOUNT_BACKEND="${ACCOUNT_DIR}/backend.tf"
+
+[[ -d "$ENV_DIR" ]] ||
+  fail "Workload environment directory not found: ${ENV_DIR}"
+
+[[ -d "$ACCOUNT_DIR" ]] ||
+  fail "Bootstrap account directory not found: ${ACCOUNT_DIR}"
+
+[[ -f "$ENV_BACKEND" ]] ||
+  fail "Workload backend file not found: ${ENV_BACKEND}"
+
+[[ -f "$ACCOUNT_BACKEND" ]] ||
+  fail "Bootstrap account backend file not found: ${ACCOUNT_BACKEND}"
+
+[[ -x "$VALIDATION_SCRIPT" ]] ||
+  fail "Bootstrap validation script is missing or not executable: ${VALIDATION_SCRIPT}"
+
+ENV_BACKEND_REGION="$(get_backend_string_value "$ENV_BACKEND" region)"
+ACCOUNT_BACKEND_REGION="$(get_backend_string_value "$ACCOUNT_BACKEND" region)"
+
+[[ -n "${ENV_BACKEND_REGION}" ]] ||
+  fail "Unable to resolve workload backend region"
+
+[[ -n "${ACCOUNT_BACKEND_REGION}" ]] ||
+  fail "Unable to resolve bootstrap account backend region"
+
+[[ "$ENV_BACKEND_REGION" == "$ACCOUNT_BACKEND_REGION" ]] ||
+  fail "Backend region mismatch. Workload: ${ENV_BACKEND_REGION}; account: ${ACCOUNT_BACKEND_REGION}"
+
