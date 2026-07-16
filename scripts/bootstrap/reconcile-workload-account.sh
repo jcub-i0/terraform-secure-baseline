@@ -10,6 +10,10 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 usage() {
   cat <<'USAGE'
+This script requires GitHub OIDC and the GitHub Apply role to already be
+enabled. It reconciles workload-created CMK permissions into the existing
+GitHub Apply role.
+
 Usage:
   reconcile-workload-account.sh <dev|staging|prod> [options]
 
