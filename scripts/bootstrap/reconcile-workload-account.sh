@@ -246,15 +246,43 @@ success "Bootstrap account backend file exists: ${ACCOUNT_BACKEND}"
 require_executable_file "$VALIDATION_SCRIPT"
 success "Bootstrap validation script is available: ${VALIDATION_SCRIPT}"
 
-ENV_BACKEND_REGION="$(get_backend_string_value "$ENV_BACKEND" region)"
-ACCOUNT_BACKEND_REGION="$(get_backend_string_value "$ACCOUNT_BACKEND" region)"
+ENV_BACKEND_REGION="$(
+  get_backend_string_value \
+    "$ENV_BACKEND" \
+    region
+)"
 
-require_non_empty "$ENV_BACKEND_REGION" "workload backend region"
-require_non_empty "$ACCOUNT_BACKEND_REGION" "bootstrap account backend region"
+ACCOUNT_BACKEND_REGION="$(
+  get_backend_string_value \
+    "$ACCOUNT_BACKEND" \
+    region
+)"
+
+require_non_empty \
+  "$ENV_BACKEND_REGION" \
+  "workload backend region"
+
+require_non_empty \
+  "$ACCOUNT_BACKEND_REGION" \
+  "bootstrap account backend region"
 
 if [[ "$ENV_BACKEND_REGION" != "$ACCOUNT_BACKEND_REGION" ]]; then
-  fail "Backend region mismatch. Workload: ${ENV_BACKEND_REGION}; account: ${ACCOUNT_BACKEND_REGION}"
+  fail \
+    "Backend region mismatch. Workload: ${ENV_BACKEND_REGION}; account: ${ACCOUNT_BACKEND_REGION}"
 fi
+
+if [[ "$TF_VAR_primary_region" != "$ENV_BACKEND_REGION" ]]; then
+  fail \
+    "TF_VAR_primary_region (${TF_VAR_primary_region}) does not match workload backend region (${ENV_BACKEND_REGION})"
+fi
+
+if [[ "$TF_VAR_primary_region" != "$ACCOUNT_BACKEND_REGION" ]]; then
+  fail \
+    "TF_VAR_primary_region (${TF_VAR_primary_region}) does not match account backend region (${ACCOUNT_BACKEND_REGION})"
+fi
+
+success \
+  "Workload region, account region, and TF_VAR_primary_region match: ${TF_VAR_primary_region}"
 
 success "Workload and account backends use the same region: ${ENV_BACKEND_REGION}"
 
