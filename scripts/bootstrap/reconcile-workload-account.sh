@@ -10,40 +10,47 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 usage() {
   cat <<'USAGE'
-This script requires GitHub OIDC and the GitHub Apply role to already be
-enabled. It reconciles workload-created CMK permissions into the existing
-GitHub Apply role.
+This script requires GitHub OIDC and the GitHub Apply role to be enabled.
+It reconciles workload-created CMK permissions into the existing GitHub
+Apply role.
 
 Usage:
   reconcile-workload-account.sh <dev|staging|prod> [options]
 
 Terraform input requirements:
-  This script inherits the normal Terraform inputs for
-  bootstrap/<env>/account from the calling shell or another supported
-  Terraform variable source.
+  This script uses Terraform's normal input-loading behavior for
+  bootstrap/<env>/account.
 
-  At minimum, the account stack requires:
-    TF_VAR_cloud_name
-    TF_VAR_environment
-    TF_VAR_primary_region
+  Inputs may be supplied through:
+    terraform.tfvars or terraform.tfvars.json
+    *.auto.tfvars or *.auto.tfvars.json
+    exported TF_VAR_* environment variables
+    Terraform variable defaults
+    --var or --var-file options accepted by this script
 
-  TF_VAR_environment must match the target passed to this script.
+  Relative --var-file paths are resolved from bootstrap/<env>/account.
 
-  The following GitHub OIDC and Apply-role inputs are also required:
-    TF_VAR_enable_github_oidc=true
-    TF_VAR_owner_github
-    TF_VAR_repo_github
-    TF_VAR_tf_state_bucket_arn
-    TF_VAR_tf_state_bucket_cmk_arn
-    TF_VAR_enable_apply_role_github=true
-    TF_VAR_environment_apply_github
+  The resolved account-stack configuration must include:
+    cloud_name
+    environment
+    primary_region
+    enable_github_oidc = true
+    owner_github
+    repo_github
+    tf_state_bucket_arn
+    tf_state_bucket_cmk_arn
+    enable_apply_role_github = true
+    environment_apply_github
+
+  The resolved environment and environment_apply_github values must match
+  the target passed to this script.
 
   See bootstrap/<env>/account/terraform.tfvars.example for the complete
   account-stack configuration.
 
-  The script automatically resolves and supplies:
-    TF_VAR_lambda_cmk_arn
-    TF_VAR_secrets_manager_cmk_arn
+  The script automatically resolves and overrides:
+    lambda_cmk_arn
+    secrets_manager_cmk_arn
 
 Options:
   --apply               Apply the generated Terraform plan.
@@ -51,43 +58,65 @@ Options:
   --auto-approve        Skip the interactive confirmation before apply.
                         Requires --apply.
   --skip-validation     Skip strict bootstrap validation after apply.
+  --var <name=value>    Pass an explicit Terraform variable.
+                        May be specified more than once.
+  --var-file <path>     Pass an additional Terraform variable file.
+                        May be specified more than once.
   -h, --help            Show this help message.
 
 Examples:
-  # Export the normal bootstrap/<env>/account Terraform inputs.
-  export TF_VAR_cloud_name="tf-secure-baseline"
-  export TF_VAR_environment="dev"
-  export TF_VAR_primary_region="us-east-1"
-
-  export TF_VAR_enable_github_oidc=true
-  export TF_VAR_owner_github="<OWNER>"
-  export TF_VAR_repo_github="<REPOSITORY>"
-  export TF_VAR_tf_state_bucket_arn="arn:aws:s3:::<STATE-BUCKET>"
-  export TF_VAR_tf_state_bucket_cmk_arn="arn:aws:kms:us-east-1:<ACCOUNT-ID>:key/<KEY-ID>"
-
-  export TF_VAR_enable_apply_role_github=true
-  export TF_VAR_environment_apply_github="dev"
-
+  # Use terraform.tfvars, *.auto.tfvars, TF_VAR_* values, and defaults.
   AWS_PROFILE=dev \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-  ./scripts/bootstrap/reconcile-workload-account.sh dev --apply
+  ./scripts/bootstrap/reconcile-workload-account.sh dev
+
+  # Use an explicit variable file and apply the saved plan.
+  AWS_PROFILE=dev \
+  EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+  ./scripts/bootstrap/reconcile-workload-account.sh dev \
+    --var-file=terraform.tfvars \
+    --apply
+
+  # Pass an individual variable explicitly.
+  AWS_PROFILE=dev \
+  EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+  ./scripts/bootstrap/reconcile-workload-account.sh dev \
+    --var='branches_apply_github=["main"]'
 USAGE
 }
 
-require_tf_var() {
-  local variable_name="$1"
-  local value="${!variable_name:-}"
+get_plan_variable() {
+  local plan_json="$1"
+  local variable_name="$2"
+  local variable_value
 
-  require_non_empty "$value" "$variable_name"
-}
-
-require_tf_var_true() {
-  local variable_name="$1"
-  local value="${!variable_name:-}"
-
-  if [[ "$value" != "true" ]]; then
-    fail "${variable_name} must be exported as true"
+  if ! jq -e \
+    --arg variable_name "$variable_name" \
+    '((.variables | type) == "object") and (.variables | has($variable_name))' \
+    "$plan_json" >/dev/null; then
+    fail "Resolved Terraform plan does not contain variable '${variable_name}'"
   fi
+
+  if jq -e \
+    --arg variable_name "$variable_name" \
+    '.variables[$variable_name].value == null' \
+    "$plan_json" >/dev/null; then
+    fail "Resolved Terraform variable '${variable_name}' is null"
+  fi
+
+  variable_value="$(
+    jq -r \
+      --arg variable_name "$variable_name" \
+      '.variables[$variable_name].value |
+        if type == "string" then . else tojson end' \
+      "$plan_json"
+  )"
+
+  require_non_empty \
+    "$variable_value" \
+    "resolved Terraform variable '${variable_name}'"
+
+  printf '%s\n' "$variable_value"
 }
 
 validate_kms_arn() {
@@ -102,11 +131,13 @@ validate_kms_arn() {
   local arn_account_id="${BASH_REMATCH[3]}"
 
   if [[ "$arn_region" != "$AWS_REGION" ]]; then
-    fail "${description} region mismatch. Expected ${AWS_REGION}, got ${arn_region}"
+    fail \
+      "${description} region mismatch. Expected ${AWS_REGION}, got ${arn_region}"
   fi
 
   if [[ "$arn_account_id" != "$ACTIVE_ACCOUNT_ID" ]]; then
-    fail "${description} account mismatch. Expected ${ACTIVE_ACCOUNT_ID}, got ${arn_account_id}"
+    fail \
+      "${description} account mismatch. Expected ${ACTIVE_ACCOUNT_ID}, got ${arn_account_id}"
   fi
 
   local key_state
@@ -133,7 +164,8 @@ validate_kms_arn() {
   fi
 
   if [[ "$key_manager" != "CUSTOMER" ]]; then
-    fail "${description} is not customer-managed. Key manager: ${key_manager}"
+    fail \
+      "${description} is not customer-managed. Key manager: ${key_manager}"
   fi
 
   success "${description} is a valid, enabled customer-managed KMS key"
@@ -159,17 +191,60 @@ shift
 APPLY=false
 AUTO_APPROVE=false
 SKIP_VALIDATION=false
+TERRAFORM_INPUT_ARGS=()
+VAR_FILE_PATHS=()
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --apply)
       APPLY=true
+      shift
       ;;
     --auto-approve)
       AUTO_APPROVE=true
+      shift
       ;;
     --skip-validation)
       SKIP_VALIDATION=true
+      shift
+      ;;
+    --var|-var)
+      if [[ "$#" -lt 2 || -z "${2:-}" ]]; then
+        fail "$1 requires a name=value argument"
+      fi
+
+      TERRAFORM_INPUT_ARGS+=("-var=$2")
+      shift 2
+      ;;
+    --var=*|-var=*)
+      variable_assignment="${1#*=}"
+
+      if [[ -z "$variable_assignment" ]]; then
+        fail "${1%%=*} requires a non-empty name=value argument"
+      fi
+
+      TERRAFORM_INPUT_ARGS+=("-var=${variable_assignment}")
+      shift
+      ;;
+    --var-file|-var-file)
+      if [[ "$#" -lt 2 || -z "${2:-}" ]]; then
+        fail "$1 requires a path"
+      fi
+
+      VAR_FILE_PATHS+=("$2")
+      TERRAFORM_INPUT_ARGS+=("-var-file=$2")
+      shift 2
+      ;;
+    --var-file=*|-var-file=*)
+      var_file_path="${1#*=}"
+
+      if [[ -z "$var_file_path" ]]; then
+        fail "${1%%=*} requires a non-empty path"
+      fi
+
+      VAR_FILE_PATHS+=("$var_file_path")
+      TERRAFORM_INPUT_ARGS+=("-var-file=${var_file_path}")
+      shift
       ;;
     -h|--help)
       usage
@@ -180,44 +255,17 @@ while [[ "$#" -gt 0 ]]; do
       fail "Unknown option: $1"
       ;;
   esac
-
-  shift
 done
 
 if [[ "$AUTO_APPROVE" == "true" && "$APPLY" != "true" ]]; then
   fail "--auto-approve requires --apply"
 fi
 
-section "Checking required account-stack Terraform inputs"
-
-require_tf_var TF_VAR_cloud_name
-require_tf_var TF_VAR_environment
-require_tf_var TF_VAR_primary_region
-
-require_tf_var_true TF_VAR_enable_github_oidc
-require_tf_var TF_VAR_owner_github
-require_tf_var TF_VAR_repo_github
-require_tf_var TF_VAR_tf_state_bucket_arn
-require_tf_var TF_VAR_tf_state_bucket_cmk_arn
-
-require_tf_var_true TF_VAR_enable_apply_role_github
-require_tf_var TF_VAR_environment_apply_github
-
-if [[ "$TF_VAR_environment" != "$TARGET" ]]; then
-  fail \
-    "TF_VAR_environment (${TF_VAR_environment}) must match target (${TARGET})"
-fi
-
-if [[ "$TF_VAR_environment_apply_github" != "$TARGET" ]]; then
-  fail \
-    "TF_VAR_environment_apply_github (${TF_VAR_environment_apply_github}) must match target (${TARGET})"
-fi
-
-success "Required account-stack Terraform inputs are configured"
+section "Workload account reconciliation: ${TARGET}"
 
 section "Checking prerequisites and Terraform roots"
 
-for command_name in terraform aws git sed mktemp rm; do
+for command_name in terraform aws git sed jq mktemp rm; do
   require_command "$command_name"
 done
 
@@ -246,6 +294,17 @@ success "Bootstrap account backend file exists: ${ACCOUNT_BACKEND}"
 require_executable_file "$VALIDATION_SCRIPT"
 success "Bootstrap validation script is available: ${VALIDATION_SCRIPT}"
 
+for var_file_path in "${VAR_FILE_PATHS[@]}"; do
+  resolved_var_file_path="$var_file_path"
+
+  if [[ "$resolved_var_file_path" != /* ]]; then
+    resolved_var_file_path="${ACCOUNT_DIR}/${resolved_var_file_path}"
+  fi
+
+  require_file "$resolved_var_file_path"
+  success "Terraform variable file exists: ${resolved_var_file_path}"
+done
+
 ENV_BACKEND_REGION="$(
   get_backend_string_value \
     "$ENV_BACKEND" \
@@ -271,28 +330,20 @@ if [[ "$ENV_BACKEND_REGION" != "$ACCOUNT_BACKEND_REGION" ]]; then
     "Backend region mismatch. Workload: ${ENV_BACKEND_REGION}; account: ${ACCOUNT_BACKEND_REGION}"
 fi
 
-if [[ "$TF_VAR_primary_region" != "$ENV_BACKEND_REGION" ]]; then
-  fail \
-    "TF_VAR_primary_region (${TF_VAR_primary_region}) does not match workload backend region (${ENV_BACKEND_REGION})"
-fi
-
-if [[ "$TF_VAR_primary_region" != "$ACCOUNT_BACKEND_REGION" ]]; then
-  fail \
-    "TF_VAR_primary_region (${TF_VAR_primary_region}) does not match account backend region (${ACCOUNT_BACKEND_REGION})"
-fi
-
 success \
-  "Workload region, account region, and TF_VAR_primary_region match: ${TF_VAR_primary_region}"
-
-success "Workload and account backends use the same region: ${ENV_BACKEND_REGION}"
+  "Workload and account backends use the same region: ${ENV_BACKEND_REGION}"
 
 AWS_REGION="${AWS_REGION:-$ENV_BACKEND_REGION}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
-EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-${TF_VAR_owner_github}/${TF_VAR_repo_github}}}"
+EXPECTED_GITHUB_REPOSITORY_INPUT="$(
+  printf '%s' \
+    "${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
+)"
 
 if [[ "$AWS_REGION" != "$ENV_BACKEND_REGION" ]]; then
-  fail "AWS_REGION (${AWS_REGION}) does not match backend region (${ENV_BACKEND_REGION})"
+  fail \
+    "AWS_REGION (${AWS_REGION}) does not match backend region (${ENV_BACKEND_REGION})"
 fi
 
 AWS_ARGS=(--region "$AWS_REGION")
@@ -302,6 +353,7 @@ if [[ -n "$AWS_PROFILE" ]]; then
 fi
 
 EXECUTION_MODE="plan-only"
+
 if [[ "$APPLY" == "true" ]]; then
   EXECUTION_MODE="apply"
 fi
@@ -328,12 +380,14 @@ info "AWS caller ARN: ${CALLER_ARN}"
 
 if [[ -n "$EXPECTED_ACCOUNT_ID" ]]; then
   if [[ "$ACTIVE_ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]]; then
-    fail "AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}"
+    fail \
+      "AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}"
   fi
 
   success "AWS account matches EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID}"
 else
-  warn "EXPECTED_ACCOUNT_ID is not set. The active account will still be checked against both CMK ARNs."
+  warn \
+    "EXPECTED_ACCOUNT_ID is not set. The active account will still be checked against both CMK ARNs."
 fi
 
 section "Initializing Terraform roots"
@@ -383,6 +437,7 @@ validate_kms_arn "$SECRETS_MANAGER_CMK_ARN" "Secrets Manager CMK"
 
 TEMP_DIR="$(mktemp -d)"
 PLAN_FILE="${TEMP_DIR}/${TARGET}-account-reconciliation.tfplan"
+PLAN_JSON="${TEMP_DIR}/${TARGET}-account-reconciliation.json"
 
 cleanup() {
   rm -rf "$TEMP_DIR"
@@ -392,15 +447,158 @@ trap cleanup EXIT
 
 section "Generating bootstrap account reconciliation plan"
 
-TF_VAR_lambda_cmk_arn="$LAMBDA_CMK_ARN" \
-TF_VAR_secrets_manager_cmk_arn="$SECRETS_MANAGER_CMK_ARN" \
 terraform -chdir="$ACCOUNT_DIR" plan \
   -input=false \
   -no-color \
   -lock-timeout=5m \
+  "${TERRAFORM_INPUT_ARGS[@]}" \
+  -var="lambda_cmk_arn=${LAMBDA_CMK_ARN}" \
+  -var="secrets_manager_cmk_arn=${SECRETS_MANAGER_CMK_ARN}" \
   -out="$PLAN_FILE"
 
 success "Terraform reconciliation plan generated"
+
+terraform -chdir="$ACCOUNT_DIR" show \
+  -json \
+  "$PLAN_FILE" > "$PLAN_JSON"
+
+if [[ ! -s "$PLAN_JSON" ]]; then
+  fail "Unable to render the saved Terraform plan as JSON"
+fi
+
+section "Validating resolved account-stack Terraform inputs"
+
+RESOLVED_CLOUD_NAME="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    cloud_name
+)"
+
+RESOLVED_ENVIRONMENT="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    environment
+)"
+
+RESOLVED_PRIMARY_REGION="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    primary_region
+)"
+
+RESOLVED_ENABLE_GITHUB_OIDC="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    enable_github_oidc
+)"
+
+RESOLVED_OWNER_GITHUB="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    owner_github
+)"
+
+RESOLVED_REPO_GITHUB="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    repo_github
+)"
+
+RESOLVED_TF_STATE_BUCKET_ARN="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    tf_state_bucket_arn
+)"
+
+RESOLVED_TF_STATE_BUCKET_CMK_ARN="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    tf_state_bucket_cmk_arn
+)"
+
+RESOLVED_ENABLE_APPLY_ROLE_GITHUB="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    enable_apply_role_github
+)"
+
+RESOLVED_ENVIRONMENT_APPLY_GITHUB="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    environment_apply_github
+)"
+
+RESOLVED_LAMBDA_CMK_ARN="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    lambda_cmk_arn
+)"
+
+RESOLVED_SECRETS_MANAGER_CMK_ARN="$(
+  get_plan_variable \
+    "$PLAN_JSON" \
+    secrets_manager_cmk_arn
+)"
+
+if [[ "$RESOLVED_ENVIRONMENT" != "$TARGET" ]]; then
+  fail \
+    "Resolved environment (${RESOLVED_ENVIRONMENT}) must match target (${TARGET})"
+fi
+
+if [[ "$RESOLVED_PRIMARY_REGION" != "$ENV_BACKEND_REGION" ]]; then
+  fail \
+    "Resolved primary_region (${RESOLVED_PRIMARY_REGION}) does not match workload backend region (${ENV_BACKEND_REGION})"
+fi
+
+if [[ "$RESOLVED_PRIMARY_REGION" != "$ACCOUNT_BACKEND_REGION" ]]; then
+  fail \
+    "Resolved primary_region (${RESOLVED_PRIMARY_REGION}) does not match account backend region (${ACCOUNT_BACKEND_REGION})"
+fi
+
+if [[ "$RESOLVED_ENABLE_GITHUB_OIDC" != "true" ]]; then
+  fail "Resolved enable_github_oidc must be true for account reconciliation"
+fi
+
+if [[ "$RESOLVED_ENABLE_APPLY_ROLE_GITHUB" != "true" ]]; then
+  fail \
+    "Resolved enable_apply_role_github must be true for account reconciliation"
+fi
+
+if [[ "$RESOLVED_ENVIRONMENT_APPLY_GITHUB" != "$TARGET" ]]; then
+  fail \
+    "Resolved environment_apply_github (${RESOLVED_ENVIRONMENT_APPLY_GITHUB}) must match target (${TARGET})"
+fi
+
+if [[ "$RESOLVED_LAMBDA_CMK_ARN" != "$LAMBDA_CMK_ARN" ]]; then
+  fail \
+    "Resolved lambda_cmk_arn does not match the workload Terraform output"
+fi
+
+if [[ "$RESOLVED_SECRETS_MANAGER_CMK_ARN" != "$SECRETS_MANAGER_CMK_ARN" ]]; then
+  fail \
+    "Resolved secrets_manager_cmk_arn does not match the workload Terraform output"
+fi
+
+RESOLVED_GITHUB_REPOSITORY="${RESOLVED_OWNER_GITHUB}/${RESOLVED_REPO_GITHUB}"
+
+if [[ -n "$EXPECTED_GITHUB_REPOSITORY_INPUT" &&
+      "$EXPECTED_GITHUB_REPOSITORY_INPUT" != "$RESOLVED_GITHUB_REPOSITORY" ]]; then
+  fail \
+    "Expected GitHub repository (${EXPECTED_GITHUB_REPOSITORY_INPUT}) does not match resolved Terraform repository (${RESOLVED_GITHUB_REPOSITORY})"
+fi
+
+EXPECTED_GITHUB_REPOSITORY="$RESOLVED_GITHUB_REPOSITORY"
+
+success "Resolved account-stack Terraform inputs passed reconciliation checks"
+info "Cloud name: ${RESOLVED_CLOUD_NAME}"
+info "Environment: ${RESOLVED_ENVIRONMENT}"
+info "Primary region: ${RESOLVED_PRIMARY_REGION}"
+info "GitHub repository: ${RESOLVED_GITHUB_REPOSITORY}"
+info "GitHub OIDC enabled: ${RESOLVED_ENABLE_GITHUB_OIDC}"
+info "GitHub Apply role enabled: ${RESOLVED_ENABLE_APPLY_ROLE_GITHUB}"
+info "GitHub Apply environment: ${RESOLVED_ENVIRONMENT_APPLY_GITHUB}"
+info "Terraform state bucket ARN: ${RESOLVED_TF_STATE_BUCKET_ARN}"
+info "Terraform state bucket CMK ARN: ${RESOLVED_TF_STATE_BUCKET_CMK_ARN}"
 
 cat <<PLAN_NOTICE
 
@@ -409,6 +607,7 @@ Terraform reconciliation plan:
   Target:               ${TARGET}
   AWS account:          ${ACTIVE_ACCOUNT_ID}
   AWS region:           ${AWS_REGION}
+  GitHub repository:    ${RESOLVED_GITHUB_REPOSITORY}
   Lambda CMK:           ${LAMBDA_CMK_ARN}
   Secrets Manager CMK:  ${SECRETS_MANAGER_CMK_ARN}
 
@@ -426,6 +625,7 @@ Environment:                        ${TARGET}
 AWS profile:                        ${AWS_PROFILE:-<default>}
 AWS region:                         ${AWS_REGION}
 AWS account ID:                     ${ACTIVE_ACCOUNT_ID}
+GitHub repository:                  ${RESOLVED_GITHUB_REPOSITORY}
 Execution mode:                     plan-only
 Lambda CMK ARN:                     ${LAMBDA_CMK_ARN}
 Secrets Manager CMK ARN:            ${SECRETS_MANAGER_CMK_ARN}
@@ -437,7 +637,8 @@ SUMMARY
 
 Plan-only reconciliation completed successfully.
 
-Review the plan above, then rerun with --apply:
+Review the plan above, then rerun with --apply. Reuse the same --var and
+--var-file options, if any:
 
   AWS_PROFILE=${AWS_PROFILE:-<profile>} \\
   EXPECTED_ACCOUNT_ID=${ACTIVE_ACCOUNT_ID} \\
@@ -488,15 +689,16 @@ fi
 section "Reconciliation summary"
 
 cat <<SUMMARY
-Environment:                    ${TARGET}
-AWS profile:                    ${AWS_PROFILE:-<default>}
-AWS region:                     ${AWS_REGION}
-AWS account ID:                 ${ACTIVE_ACCOUNT_ID}
-Execution mode:                 apply
-Lambda CMK ARN:                 ${LAMBDA_CMK_ARN}
-Secrets Manager CMK ARN:        ${SECRETS_MANAGER_CMK_ARN}
-Plan applied:                   true
-Post-apply validation performed: ${VALIDATION_PERFORMED}
+Environment:                         ${TARGET}
+AWS profile:                         ${AWS_PROFILE:-<default>}
+AWS region:                          ${AWS_REGION}
+AWS account ID:                      ${ACTIVE_ACCOUNT_ID}
+GitHub repository:                   ${RESOLVED_GITHUB_REPOSITORY}
+Execution mode:                      apply
+Lambda CMK ARN:                      ${LAMBDA_CMK_ARN}
+Secrets Manager CMK ARN:             ${SECRETS_MANAGER_CMK_ARN}
+Plan applied:                        true
+Post-apply validation performed:     ${VALIDATION_PERFORMED}
 SUMMARY
 
 section "Reconciliation result"
