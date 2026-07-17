@@ -231,4 +231,39 @@ jobs:
             "${TARGET_ENVIRONMENT}" \
             2>&1 | tee "${RECONCILIATION_LOG}"
 
-      
+      - name: Publish reconciliation summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Workload Account Reconciliation"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Operation: \`plan\`"
+            echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
+            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Workflow status: \`${{ job.status }}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -f "${RECONCILIATION_LOG}" ]]; then
+            {
+              echo "## Reconciliation Log"
+              echo
+              echo '```text'
+              tail -n 200 "${RECONCILIATION_LOG}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload reconciliation log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workload-account-reconciliation-${{ inputs.environment }}-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RECONCILIATION_LOG }}
+          if-no-files-found: warn
+          retention-days: 30
