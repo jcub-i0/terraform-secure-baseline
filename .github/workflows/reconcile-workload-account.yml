@@ -434,3 +434,16 @@ jobs:
           terraform -chdir="${STATE_DIR}" init \
             -input=false \
             -no-color
+
+      - name: Apply workload account reconciliation
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          ./scripts/bootstrap/reconcile-workload-account.sh \
+            "${TARGET_ENVIRONMENT}" \
+            --apply \
+            --auto-approve \
+            2>&1 | tee "${RECONCILIATION_LOG}"
