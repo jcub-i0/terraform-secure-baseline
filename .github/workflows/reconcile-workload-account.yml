@@ -1,0 +1,503 @@
+name: Reconcile Workload Account
+
+run-name: Workload account reconciliation - ${{ inputs.environment }} - ${{ inputs.operation }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Workload environment to reconcile"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      operation:
+        description: "Generate a plan or apply the reconciliation"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+  workflow_call:
+    inputs:
+      environment:
+        description: "Workload environment to reconcile"
+        required: true
+        type: string
+      operation:
+        description: "Reconciliation operation: plan or apply"
+        required: false
+        default: "plan"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: reconcile-workload-account-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate-request:
+    name: Validate reconciliation request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate workflow inputs
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+
+          case "${TARGET_ENVIRONMENT}" in
+            dev|staging|prod)
+              ;;
+            *)
+              echo "::error::Unsupported environment: ${TARGET_ENVIRONMENT}"
+              exit 1
+              ;;
+          esac
+
+          case "${OPERATION}" in
+            plan|apply)
+              ;;
+            *)
+              echo "::error::Unsupported operation: ${OPERATION}. Expected plan or apply."
+              exit 1
+              ;;
+          esac
+
+  reconcile-plan:
+    name: Plan ${{ inputs.environment }} account reconciliation
+    if: inputs.operation == 'plan'
+    needs: validate-request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ format('{0}-plan', inputs.environment) }}
+
+    env:
+      AWS_PAGER: ""
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+      TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
+      TF_VAR_enable_github_oidc: "true"
+      TF_VAR_owner_github: ${{ github.repository_owner }}
+      TF_VAR_repo_github: ${{ github.event.repository.name }}
+      TF_VAR_branches_plan_github: ${{ vars.BRANCHES_PLAN_GITHUB || '["main"]' }}
+      TF_VAR_allow_pull_requests_plan_github: ${{ vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB || 'false' }}
+      TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
+      TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+      TF_VAR_enable_apply_role_github: "true"
+      TF_VAR_branches_apply_github: ${{ vars.BRANCHES_APPLY_GITHUB || '["main"]' }}
+      TF_VAR_environment_apply_github: ${{ inputs.environment }}
+      RECONCILIATION_LOG: reconciliation-${{ inputs.environment }}-plan.log
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve and validate workflow settings
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+          PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+          TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
+          TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
+          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
+          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+        run: |
+          set -euo pipefail
+
+          required_settings=(
+            CLOUD_NAME
+            PRIMARY_REGION
+            PLAN_ROLE_GITHUB_ARN
+            TF_STATE_BUCKET_ARN
+            TF_STATE_BUCKET_CMK_ARN
+          )
+
+          for setting_name in "${required_settings[@]}"; do
+            if [[ -z "${!setting_name:-}" ]]; then
+              echo "::error::${setting_name} is not configured in the selected GitHub Environment."
+              exit 1
+            fi
+          done
+
+          case "${TARGET_ENVIRONMENT}" in
+            dev)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
+              ;;
+            staging)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
+              ;;
+            prod)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
+              ;;
+          esac
+
+          if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::The expected AWS account ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+            exit 1
+          fi
+
+          if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+
+          if [[ "${BASH_REMATCH[1]}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN belongs to account ${BASH_REMATCH[1]}, expected ${EXPECTED_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
+            <<< "${TF_VAR_branches_plan_github}" >/dev/null; then
+            echo "::error::BRANCHES_PLAN_GITHUB must be a JSON array of non-empty strings."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
+            <<< "${TF_VAR_branches_apply_github}" >/dev/null; then
+            echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings."
+            exit 1
+          fi
+
+          case "${TF_VAR_allow_pull_requests_plan_github}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::ALLOW_PULL_REQUESTS_PLAN_GITHUB must be true or false."
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "AWS_REGION=${PRIMARY_REGION}"
+            echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+            echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+          aws-region: ${{ vars.PRIMARY_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ACTIVE_ACCOUNT_ID="$(
+            aws sts get-caller-identity \
+              --query Account \
+              --output text
+          )"
+
+          if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      - name: Run workload account reconciliation plan
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          ./scripts/bootstrap/reconcile-workload-account.sh \
+            "${TARGET_ENVIRONMENT}" \
+            2>&1 | tee "${RECONCILIATION_LOG}"
+
+      - name: Publish reconciliation summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Workload Account Reconciliation"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Operation: \`plan\`"
+            echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
+            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Workflow status: \`${{ job.status }}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -f "${RECONCILIATION_LOG}" ]]; then
+            {
+              echo "## Reconciliation Log"
+              echo
+              echo '```text'
+              tail -n 200 "${RECONCILIATION_LOG}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload reconciliation log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workload-account-reconciliation-${{ inputs.environment }}-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RECONCILIATION_LOG }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  reconcile-apply:
+    name: Apply ${{ inputs.environment }} account reconciliation
+    if: inputs.operation == 'apply'
+    needs: validate-request
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+
+    env:
+      AWS_PAGER: ""
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+      TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
+      TF_VAR_enable_github_oidc: "true"
+      TF_VAR_owner_github: ${{ github.repository_owner }}
+      TF_VAR_repo_github: ${{ github.event.repository.name }}
+      TF_VAR_branches_plan_github: ${{ vars.BRANCHES_PLAN_GITHUB || '["main"]' }}
+      TF_VAR_allow_pull_requests_plan_github: ${{ vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB || 'false' }}
+      TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
+      TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+      TF_VAR_enable_apply_role_github: "true"
+      TF_VAR_branches_apply_github: ${{ vars.BRANCHES_APPLY_GITHUB || '["main"]' }}
+      TF_VAR_environment_apply_github: ${{ inputs.environment }}
+      RECONCILIATION_LOG: reconciliation-${{ inputs.environment }}-apply.log
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve and validate workflow settings
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+          APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+          TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
+          TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
+          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
+          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+        run: |
+          set -euo pipefail
+
+          required_settings=(
+            CLOUD_NAME
+            PRIMARY_REGION
+            APPLY_ROLE_GITHUB_ARN
+            TF_STATE_BUCKET_ARN
+            TF_STATE_BUCKET_CMK_ARN
+          )
+
+          for setting_name in "${required_settings[@]}"; do
+            if [[ -z "${!setting_name:-}" ]]; then
+              echo "::error::${setting_name} is not configured in the selected GitHub Environment."
+              exit 1
+            fi
+          done
+
+          case "${TARGET_ENVIRONMENT}" in
+            dev)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
+              ;;
+            staging)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
+              ;;
+            prod)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
+              ;;
+          esac
+
+          if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::The expected AWS account ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+            exit 1
+          fi
+
+          if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+            echo "::error::APPLY_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+
+          if [[ "${BASH_REMATCH[1]}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::APPLY_ROLE_GITHUB_ARN belongs to account ${BASH_REMATCH[1]}, expected ${EXPECTED_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
+            <<< "${TF_VAR_branches_plan_github}" >/dev/null; then
+            echo "::error::BRANCHES_PLAN_GITHUB must be a JSON array of non-empty strings."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
+            <<< "${TF_VAR_branches_apply_github}" >/dev/null; then
+            echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings."
+            exit 1
+          fi
+
+          case "${TF_VAR_allow_pull_requests_plan_github}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::ALLOW_PULL_REQUESTS_PLAN_GITHUB must be true or false."
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "AWS_REGION=${PRIMARY_REGION}"
+            echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+            echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+          aws-region: ${{ vars.PRIMARY_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ACTIVE_ACCOUNT_ID="$(
+            aws sts get-caller-identity \
+              --query Account \
+              --output text
+          )"
+
+          if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      - name: Materialize state-stack backend
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
+          STATE_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+          STATE_BACKEND_KEY: ${{ vars.STATE_STACK_BACKEND_KEY }}
+          AWS_REGION: ${{ vars.PRIMARY_REGION }}
+        run: |
+          set -euo pipefail
+
+          STATE_DIR="bootstrap/${TARGET_ENVIRONMENT}/state"
+          BACKEND_FILE="${STATE_DIR}/backend.tf"
+          STATE_BUCKET="${STATE_BUCKET_ARN#arn:aws:s3:::}"
+
+          [[ -n "${STATE_BUCKET}" ]] ||
+          { echo "::error::Unable to resolve state bucket name"; exit 1; }
+
+          [[ -n "${STATE_BACKEND_KEY}" ]] ||
+          { echo "::error::STATE_STACK_BACKEND_KEY is required"; exit 1; }
+
+          cat > "${BACKEND_FILE}" <<EOF
+          terraform {
+            backend "s3" {
+              bucket       = "${STATE_BUCKET}"
+              key          = "${STATE_BACKEND_KEY}"
+              region       = "${AWS_REGION}"
+              encrypt      = true
+              kms_key_id   = "${STATE_CMK_ARN}"
+              use_lockfile = true
+            }
+          }
+          EOF
+
+          terraform -chdir="${STATE_DIR}" init \
+            -input=false \
+            -no-color
+
+      - name: Apply workload account reconciliation
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          ./scripts/bootstrap/reconcile-workload-account.sh \
+            "${TARGET_ENVIRONMENT}" \
+            --apply \
+            --auto-approve \
+            2>&1 | tee "${RECONCILIATION_LOG}"
+
+      - name: Publish reconciliation summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Workload Account Reconciliation"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Operation: \`apply\`"
+            echo "- GitHub Environment: \`${{ inputs.environment }}\`"
+            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Strict post-apply validation: \`enabled\`"
+            echo "- Workflow status: \`${{ job.status }}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -f "${RECONCILIATION_LOG}" ]]; then
+            {
+              echo "## Reconciliation Log"
+              echo
+              echo '```text'
+              tail -n 200 "${RECONCILIATION_LOG}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload reconciliation log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workload-account-reconciliation-${{ inputs.environment }}-apply-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RECONCILIATION_LOG }}
+          if-no-files-found: warn
+          retention-days: 30
