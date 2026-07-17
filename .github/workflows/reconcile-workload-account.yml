@@ -295,3 +295,90 @@ jobs:
       TF_VAR_branches_apply_github: ${{ vars.BRANCHES_APPLY_GITHUB || '["main"]' }}
       TF_VAR_environment_apply_github: ${{ inputs.environment }}
       RECONCILIATION_LOG: reconciliation-${{ inputs.environment }}-apply.log
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve and validate workflow settings
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+          APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+          TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
+          TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
+          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
+          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+        run: |
+          set -euo pipefail
+
+          required_settings=(
+            CLOUD_NAME
+            PRIMARY_REGION
+            APPLY_ROLE_GITHUB_ARN
+            TF_STATE_BUCKET_ARN
+            TF_STATE_BUCKET_CMK_ARN
+          )
+
+          for setting_name in "${required_settings[@]}"; do
+            if [[ -z "${!setting_name:-}" ]]; then
+              echo "::error::${setting_name} is not configured in the selected GitHub Environment."
+              exit 1
+            fi
+          done
+
+          case "${TARGET_ENVIRONMNET}" in
+            dev)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
+              ;;
+            staging)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
+              ;;
+            prod)
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
+              ;;
+          esac
+
+          if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::The expected AWS account ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+            exit 1
+          fi
+
+          if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+            echo "::error::APPLY_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+
+          if [[ "${BASH_REMATCH[1]}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::APPLY_ROLE_GITHUB_ARN belongs to account ${BASH_REMATCH[1]}, expected ${EXPECTED_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
+            <<< "${TF_VAR_branches_plan_github}" >/dev/null; then
+            echo "::error::BRANCHES_PLAN_GITHUB must be a JSON array of non-empty strings."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
+            <<< "${TF_VAR_branches_apply_github}" >/dev/null; then
+            echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings."
+            exit 1
+          fi
+
+          case "${TF_VAR_allow_pull_requests_plan_github}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::ALLOW_PULL_REQUESTS_PLAN_GITHUB must be true or false."
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "AWS_REGION=${PRIMARY_REGION}"
+            echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+            echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+          } >> "${GITHUB_ENV}"
