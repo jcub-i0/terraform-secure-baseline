@@ -413,23 +413,39 @@ jobs:
           terraform_version: "1.15.8"
           terraform_wrapper: false
 
-      - name: Materialize and initialize state-stack backend
+      - name: Materialize state-stack backend
         shell: bash
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
+          STATE_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+          STATE_BACKEND_KEY: ${{ vars.STATE_STACK_BACKEND_KEY }}
+          AWS_REGION: ${{ vars.PRIMARY_REGION }}
         run: |
           set -euo pipefail
 
           STATE_DIR="bootstrap/${TARGET_ENVIRONMENT}/state"
-          BACKEND_TEMPLATE="${STATE_DIR}/backend.tf.migrated.example"
-          ACTIVE_BACKEND="${STATE_DIR}/backend.tf"
+          BACKEND_FILE="${STATE_DIR}/backend.tf"
+          STATE_BUCKET="${STATE_BUCKET_ARN#arn:aws:s3:::}"
 
-          if [[ ! -f "${BACKEND_TEMPLATE}" ]]; then
-            echo "::error::State backend template not found: ${BACKEND_TEMPLATE}"
-            exit 1
-          fi
+          [[ -n "${STATE_BUCKET}" ]] ||
+          { echo "::error::Unable to resolve state bucket name"; exit 1; }
 
-          cp "${BACKEND_TEMPLATE}" "${ACTIVE_BACKEND}"
+          [[ -n "${STATE_BACKEND_KEY}" ]] ||
+          { echo "::error::STATE_STACK_BACKEND_KEY is required"; exit 1; }
+
+          cat > "${BACKEND_FILE}" <<EOF
+          terraform {
+            backend "s3" {
+              bucket       = "${STATE_BUCKET}"
+              key          = "${STATE_BACKEND_KEY}"
+              region       = "${AWS_REGION}"
+              encrypt      = true
+              kms_key_id   = "${STATE_CMK_ARN}"
+              use_lockfile = true
+            }
+          }
+          EOF
 
           terraform -chdir="${STATE_DIR}" init \
             -input=false \
