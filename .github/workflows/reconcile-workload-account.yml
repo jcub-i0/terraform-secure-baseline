@@ -476,3 +476,12 @@ jobs:
               echo '```'
             } >> "${GITHUB_STEP_SUMMARY}"
           fi
+
+      - name: Upload reconciliation log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workload-account-reconciliation-${{ inputs.environment }}-apply-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RECONCILIATION_LOG }}
+          if-no-files-found: warn
+          retention-days: 30
