@@ -1,0 +1,77 @@
+name: Reconcile Workload Account
+
+run-name: Workload account reconciliation - ${{ inputs.environment }} - ${{ inputs.operation }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Workload environment to reconcile"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      operation:
+        description: "Generate a plan or apply the reconciliation"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+  workflow_call:
+    inputs:
+      environment:
+        description: "Workload environment to reconcile"
+        required: true
+        type: string
+      operation:
+        description: "Reconciliation operation: plan or apply"
+        required: false
+        default: "plan"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: reconcile-workload-account-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate-request:
+    name: Validate reconciliation request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Validate workflow inputs
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+
+          case "${TARGET_ENVIRONMENT}" in
+            dev|staging|prod)
+              ;;
+            *)
+              echo "::error::Unsupported environment: ${TARGET_ENVIRONMENT}"
+              exit 1
+              ;;
+          esac
+
+          case "${OPERATION}" in
+            plan|apply)
+              ;;
+            *)
+              echo "::error::Unsupported operation: ${OPERATION}. Expected plan or apply."
+              exit 1
+              ;;
+          esac
+
