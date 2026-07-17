@@ -220,4 +220,15 @@ jobs:
           terraform_version: "1.15.8"
           terraform_wrapper: false
 
-    
+      - name: Run workload account reconciliation plan
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          ./scripts/bootstrap/reconcile-workload-account.sh \
+            "${TARGET_ENVIRONMENT}" \
+            2>&1 | tee "${RECONCILIATION_LOG}"
+
+      
