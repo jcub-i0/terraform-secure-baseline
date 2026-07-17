@@ -412,3 +412,25 @@ jobs:
         with:
           terraform_version: "1.15.8"
           terraform_wrapper: false
+
+      - name: Materialize and initialize state-stack backend
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          STATE_DIR="bootstrap/${TARGET_ENVIRONMENT}/state"
+          BACKEND_TEMPLATE="${STATE_DIR}/backend.tf.migrated.example"
+          ACTIVE_BACKEND="${STATE_DIR}/backend.tf"
+
+          if [[ ! -f "${BACKEND_TEMPLATE}" ]]; then
+            echo "::error::State backend template not found: ${BACKEND_TEMPLATE}"
+            exit 1
+          fi
+
+          cp "${BACKEND_TEMPLATE}" "${ACTIVE_BACKEND}"
+
+          terraform -chdir="${STATE_DIR}" init \
+            -input=false \
+            -no-color
