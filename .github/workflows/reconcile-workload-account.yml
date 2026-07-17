@@ -196,4 +196,20 @@ jobs:
           role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
           aws-region: ${{ vars.PRIMARY_REGION }}
 
-          
+      - name: Verify AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ACTIVE_ACCOUNT_ID="$(
+            aws sts get-caller-identity \
+              --query Account \
+              --output text
+          )"
+
+          if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          aws sts get-caller-identity
