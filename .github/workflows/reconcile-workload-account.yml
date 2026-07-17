@@ -131,7 +131,7 @@ jobs:
 
           for setting_name in "${required_settings[@]}"; do
             if [[ -z "${!setting_name:-}" ]]; then
-              echo "::error::${setting_name} is not configured in the selected GitHub environment"
+              echo "::error::${setting_name} is not configured in the selected GitHub Environment."
               exit 1
             fi
           done
@@ -149,7 +149,7 @@ jobs:
           esac
 
           if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-            echo "::error:The expected AWS account ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+            echo "::error::The expected AWS account ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
             exit 1
           fi
 
@@ -169,9 +169,9 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e 'type == "array" and all(.[]; type == 'string' and length > 0)' \
+          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
             <<< "${TF_VAR_branches_apply_github}" >/dev/null; then
-            echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings"
+            echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings."
             exit 1
           fi
 
@@ -329,7 +329,7 @@ jobs:
             fi
           done
 
-          case "${TARGET_ENVIRONMNET}" in
+          case "${TARGET_ENVIRONMENT}" in
             dev)
               EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
               ;;
