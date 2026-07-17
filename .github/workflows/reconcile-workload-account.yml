@@ -447,3 +447,32 @@ jobs:
             --apply \
             --auto-approve \
             2>&1 | tee "${RECONCILIATION_LOG}"
+
+      - name: Publish reconciliation summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Workload Account Reconciliation"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Operation: \`apply\`"
+            echo "- GitHub Environment: \`${{ inputs.environment }}\`"
+            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Strict post-apply validation: \`enabled\`"
+            echo "- Workflow status: \`${{ job.status }}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -f "${RECONCILIATION_LOG}" ]]; then
+            {
+              echo "## Reconciliation Log"
+              echo
+              echo '```text'
+              tail -n 200 "${RECONCILIATION_LOG}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
