@@ -189,3 +189,11 @@ jobs:
             echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
             echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
           } >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+          aws-region: ${{ vars.PRIMARY_REGION }}
+
+          
