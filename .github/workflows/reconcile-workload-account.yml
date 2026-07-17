@@ -267,3 +267,31 @@ jobs:
           path: ${{ env.RECONCILIATION_LOG }}
           if-no-files-found: warn
           retention-days: 30
+
+  reconcile-apply:
+    name: Apply ${{ inputs.environment }} account reconciliation
+    if: inputs.operation == 'apply'
+    needs: validate-request
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+
+    env:
+      AWS_PAGER: ""
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+      TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
+      TF_VAR_enable_github_oidc: "true"
+      TF_VAR_owner_github: ${{ github.repository_owner }}
+      TF_VAR_repo_github: ${{ github.event.repository.name }}
+      TF_VAR_branches_plan_github: ${{ vars.BRANCHES_PLAN_GITHUB || '["main"]' }}
+      TF_VAR_allow_pull_requests_plan_github: ${{ vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB || 'false' }}
+      TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
+      TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+      TF_VAR_enable_apply_role_github: "true"
+      TF_VAR_branches_apply_github: ${{ vars.BRANCHES_APPLY_GITHUB || '["main"]' }}
+      TF_VAR_environment_apply_github: ${{ inputs.environment }}
+      RECONCILIATION_LOG: reconciliation-${{ inputs.environment }}-apply.log
