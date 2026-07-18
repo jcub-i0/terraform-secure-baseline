@@ -79,7 +79,7 @@ jobs:
           esac
 
           case "${OPERATION}" in
-            plan|apply)
+            plan-only|plan-and-apply)
               ;;
             *)
               echo "::error::Unsupported operation: ${OPERATION}. Expected plan-only or plan-and-apply."
