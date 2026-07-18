@@ -64,14 +64,81 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v6
 
+            - name: Resolve and validate Plan workflow settings
+              shell: bash
+              env:
+                  TARGET_ENVIRONMENT: ${{ inputs.environment }}
+                  CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+                  PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+                  PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+                  TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
+                  TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+                  ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+              run: |
+                  set -euo pipefail
+
+                  required_settings=(
+                    CLOUD_NAME
+                    PRIMARY_REGION
+                    ACCOUNT_ID
+                    PLAN_ROLE_GITHUB_ARN
+                    TF_STATE_BUCKET_ARN
+                    TF_STATE_BUCKET_CMK_ARN
+                  )
+
+                  for setting_name in "${required_settings[@]}"; do
+                    if [[ -z "${!setting_name:-}" ]]; then
+                      echo "::error::${setting_name} is not configured in the selected GitHub Environment."
+                      exit 1
+                    fi
+                  done
+
+                  EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
+
+                  if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
+                    echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+                    exit 1
+                  fi
+
+                  if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+                    exit 1
+                  fi
+
+                  ROLE_ACCOUNT_ID="${BASH_REMATCH[1]}"
+
+                  if [[ "${ROLE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+                    echo "::error::PLAN_ROLE_GITHUB_ARN belongs to account ${ROLE_ACCOUNT_ID}, expected ${EXPECTED_ACCOUNT_ID}."
+                    exit 1
+                  fi
+
+                  {
+                    echo "AWS_REGION=${PRIMARY_REGION}"
+                    echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+                    echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+                  } >> "${GITHUB_ENV}"
+
             - name: Configure AWS credentials from GitHub OIDC
               uses: aws-actions/configure-aws-credentials@v6
               with:
                   role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
                   aws-region: ${{ vars.PRIMARY_REGION }}
 
-            - name: Verify identity
-              run: aws sts get-caller-identity
+            - name: Verify AWS identity
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  ACTIVE_ACCOUNT_ID="$(
+                    aws sts get-caller-identity                       --query Account                       --output text
+                  )"
+
+                  if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+                    echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
+                    exit 1
+                  fi
+
+                  aws sts get-caller-identity
 
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v4
@@ -123,13 +190,15 @@ jobs:
                     --arg workflow_run_id "${GITHUB_RUN_ID}" \
                     --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
                     --arg terraform_version "${TERRAFORM_CLI_VERSION}" \
+                    --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
                     '{
                       environment: $environment,
                       commit_sha: $commit_sha,
                       repository: $repository,
                       workflow_run_id: $workflow_run_id,
                       workflow_run_attempt: $workflow_run_attempt,
-                      terraform_version: $terraform_version
+                      terraform_version: $terraform_version,
+                      expected_account_id: $expected_account_id
                     }' > "${PLAN_METADATA_FILE}"
 
                   (
@@ -151,6 +220,7 @@ jobs:
                     echo "- Environment: \`${{ inputs.environment }}\`"
                     echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
                     echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
                     echo "- Terraform version: \`${TERRAFORM_VERSION}\`"
                     echo "- Reconcile after apply: \`${{ inputs.reconcile_workload_account }}\`"
                     echo "- Plan job status: \`${{ job.status }}\`"
@@ -191,14 +261,81 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v6
 
+            - name: Resolve and validate Apply workflow settings
+              shell: bash
+              env:
+                  TARGET_ENVIRONMENT: ${{ inputs.environment }}
+                  CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+                  PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+                  APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+                  TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
+                  TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+                  ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+              run: |
+                  set -euo pipefail
+
+                  required_settings=(
+                    CLOUD_NAME
+                    PRIMARY_REGION
+                    ACCOUNT_ID
+                    APPLY_ROLE_GITHUB_ARN
+                    TF_STATE_BUCKET_ARN
+                    TF_STATE_BUCKET_CMK_ARN
+                  )
+
+                  for setting_name in "${required_settings[@]}"; do
+                    if [[ -z "${!setting_name:-}" ]]; then
+                      echo "::error::${setting_name} is not configured in the selected GitHub Environment."
+                      exit 1
+                    fi
+                  done
+
+                  EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
+
+                  if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
+                    echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+                    exit 1
+                  fi
+
+                  if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::APPLY_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+                    exit 1
+                  fi
+
+                  ROLE_ACCOUNT_ID="${BASH_REMATCH[1]}"
+
+                  if [[ "${ROLE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+                    echo "::error::APPLY_ROLE_GITHUB_ARN belongs to account ${ROLE_ACCOUNT_ID}, expected ${EXPECTED_ACCOUNT_ID}."
+                    exit 1
+                  fi
+
+                  {
+                    echo "AWS_REGION=${PRIMARY_REGION}"
+                    echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+                    echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+                  } >> "${GITHUB_ENV}"
+
             - name: Configure AWS credentials from GitHub OIDC
               uses: aws-actions/configure-aws-credentials@v6
               with:
                   role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
                   aws-region: ${{ vars.PRIMARY_REGION }}
 
-            - name: Verify identity
-              run: aws sts get-caller-identity
+            - name: Verify AWS identity
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  ACTIVE_ACCOUNT_ID="$(
+                    aws sts get-caller-identity                       --query Account                       --output text
+                  )"
+
+                  if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+                    echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
+                    exit 1
+                  fi
+
+                  aws sts get-caller-identity
 
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v4
@@ -240,13 +377,15 @@ jobs:
                     --arg workflow_run_id "${GITHUB_RUN_ID}" \
                     --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
                     --arg terraform_version "${TERRAFORM_VERSION}" \
+                    --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
                     '
                       .environment == $environment and
                       .commit_sha == $commit_sha and
                       .repository == $repository and
                       .workflow_run_id == $workflow_run_id and
                       .workflow_run_attempt == $workflow_run_attempt and
-                      .terraform_version == $terraform_version
+                      .terraform_version == $terraform_version and
+                      .expected_account_id == $expected_account_id
                     ' \
                     "${PLAN_METADATA_FILE}" >/dev/null
 
@@ -279,6 +418,7 @@ jobs:
                     echo "- Environment: \`${{ inputs.environment }}\`"
                     echo "- GitHub Environment: \`${{ inputs.environment }}\`"
                     echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
                     echo "- Saved plan artifact: \`${PLAN_ARTIFACT_NAME}\`"
                     echo "- Apply job status: \`${{ job.status }}\`"
                   } >> "${GITHUB_STEP_SUMMARY}"
@@ -290,7 +430,7 @@ jobs:
         uses: ./.github/workflows/reconcile-workload-account.yml
         with:
             environment: ${{ inputs.environment }}
-            operation: apply
+            operation: plan-and-apply
         permissions:
             id-token: write
             contents: read
