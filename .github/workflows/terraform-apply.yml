@@ -15,6 +15,11 @@ on:
                 description: "Type 'YES' to apply"
                 required: true
                 type: string
+            reconcile_workload_account:
+                description: "Reconcile the workload account after a successful baseline apply"
+                required: true
+                default: false
+                type: boolean
 
 permissions:
     id-token: write
@@ -82,3 +87,15 @@ jobs:
               run: |
                 set -euo pipefail
                 terraform apply -auto-approve -input=false -no-color -lock-timeout=5m
+
+    reconcile-workload-account:
+        name: Reconcile workload account
+        if: ${{ inputs.reconcile_workload_account }}
+        needs: terraform-apply
+        uses: ./.github/workflows/reconcile-workload-account.yml
+        with:
+            environment: ${{ inputs.environment }}
+            operation: apply
+        permissions:
+            id-token: write
+            contents: read
