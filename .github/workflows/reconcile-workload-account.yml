@@ -15,7 +15,7 @@ on:
           - staging
           - prod
       operation:
-        description: "Generate a plan or apply the reconciliation"
+        description: "Generate a plan or apply the reviewed reconciliation plan"
         required: true
         default: "plan"
         type: choice
@@ -41,6 +41,18 @@ permissions:
 concurrency:
   group: reconcile-workload-account-${{ inputs.environment }}
   cancel-in-progress: false
+
+env:
+  AWS_PAGER: ""
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TERRAFORM_VERSION: "1.15.8"
+  PLAN_ARTIFACT_NAME: workload-account-reconciliation-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+  PLAN_ARTIFACT_DIR: reconciliation-plan-artifact
+  PLAN_FILE_NAME: account-reconciliation.tfplan
+  PLAN_TEXT_FILE_NAME: account-reconciliation-plan.txt
+  PLAN_LOG_FILE_NAME: account-reconciliation-plan.log
+  PLAN_METADATA_FILE_NAME: account-reconciliation-plan-metadata.json
 
 jobs:
   validate-request:
@@ -77,16 +89,12 @@ jobs:
 
   reconcile-plan:
     name: Plan ${{ inputs.environment }} account reconciliation
-    if: inputs.operation == 'plan'
     needs: validate-request
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment: ${{ format('{0}-plan', inputs.environment) }}
 
     env:
-      AWS_PAGER: ""
-      TF_IN_AUTOMATION: "true"
-      TF_INPUT: "false"
       CLOUD_NAME: ${{ vars.CLOUD_NAME }}
       TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
       TF_VAR_environment: ${{ inputs.environment }}
@@ -101,7 +109,6 @@ jobs:
       TF_VAR_enable_apply_role_github: "true"
       TF_VAR_branches_apply_github: ${{ vars.BRANCHES_APPLY_GITHUB || '["main"]' }}
       TF_VAR_environment_apply_github: ${{ inputs.environment }}
-      RECONCILIATION_LOG: reconciliation-${{ inputs.environment }}-plan.log
 
     steps:
       - name: Checkout
@@ -138,8 +145,8 @@ jobs:
           EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 
           if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-          echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
-          exit 1
+            echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+            exit 1
           fi
 
           if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
@@ -206,69 +213,133 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.15.8"
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
-      - name: Run workload account reconciliation plan
+      - name: Generate saved workload account reconciliation plan
         shell: bash
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
 
+          PLAN_ARTIFACT_PATH="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
+          PLAN_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}"
+          PLAN_TEXT_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_TEXT_FILE_NAME}"
+          PLAN_LOG_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_LOG_FILE_NAME}"
+          PLAN_METADATA_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_METADATA_FILE_NAME}"
+          ACCOUNT_DIRECTORY="bootstrap/${TARGET_ENVIRONMENT}/account"
+
+          mkdir -p "${PLAN_ARTIFACT_PATH}"
+
           ./scripts/bootstrap/reconcile-workload-account.sh \
             "${TARGET_ENVIRONMENT}" \
-            2>&1 | tee "${RECONCILIATION_LOG}"
+            --plan-file="${PLAN_FILE}" \
+            2>&1 | tee "${PLAN_LOG_FILE}"
 
-      - name: Publish reconciliation summary
+          terraform -chdir="${ACCOUNT_DIRECTORY}" show \
+            -no-color \
+            "${PLAN_FILE}" > "${PLAN_TEXT_FILE}"
+
+          TERRAFORM_CLI_VERSION="$(
+            terraform version -json |
+              jq -r '.terraform_version'
+          )"
+
+          jq -n \
+            --arg environment "${TARGET_ENVIRONMENT}" \
+            --arg commit_sha "${GITHUB_SHA}" \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg workflow_run_id "${GITHUB_RUN_ID}" \
+            --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg terraform_version "${TERRAFORM_CLI_VERSION}" \
+            '{
+              environment: $environment,
+              commit_sha: $commit_sha,
+              repository: $repository,
+              workflow_run_id: $workflow_run_id,
+              workflow_run_attempt: $workflow_run_attempt,
+              terraform_version: $terraform_version
+            }' > "${PLAN_METADATA_FILE}"
+
+          (
+            cd "${PLAN_ARTIFACT_PATH}"
+            sha256sum "${PLAN_FILE_NAME}" > "${PLAN_FILE_NAME}.sha256"
+          )
+
+      - name: Publish reconciliation plan summary
         if: always()
         shell: bash
         run: |
           set -euo pipefail
 
+          PLAN_ARTIFACT_PATH="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
+          PLAN_TEXT_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_TEXT_FILE_NAME}"
+          PLAN_LOG_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_LOG_FILE_NAME}"
+
           {
-            echo "# Workload Account Reconciliation"
+            echo "# Workload Account Reconciliation Plan"
             echo
             echo "- Environment: \`${{ inputs.environment }}\`"
-            echo "- Operation: \`plan\`"
+            echo "- Requested operation: \`${{ inputs.operation }}\`"
             echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
             echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
             echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
-            echo "- Workflow status: \`${{ job.status }}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Plan job status: \`${{ job.status }}\`"
+            echo
+            echo "When apply was requested, the protected apply job will use this exact saved plan."
             echo
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          if [[ -f "${RECONCILIATION_LOG}" ]]; then
+          if [[ -f "${PLAN_TEXT_FILE}" ]]; then
+            {
+              echo "<details>"
+              echo "<summary>View reconciliation plan</summary>"
+              echo
+              echo '```text'
+              cat "${PLAN_TEXT_FILE}"
+              echo '```'
+              echo
+              echo "</details>"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          elif [[ -f "${PLAN_LOG_FILE}" ]]; then
             {
               echo "## Reconciliation Log"
               echo
               echo '```text'
-              tail -n 200 "${RECONCILIATION_LOG}"
+              tail -n 200 "${PLAN_LOG_FILE}"
               echo '```'
             } >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Upload reconciliation log
-        if: always()
+      - name: Upload saved reconciliation plan
+        if: success()
         uses: actions/upload-artifact@v7
         with:
-          name: workload-account-reconciliation-${{ inputs.environment }}-plan-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.RECONCILIATION_LOG }}
+          name: ${{ env.PLAN_ARTIFACT_NAME }}
+          path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload failed reconciliation log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workload-account-reconciliation-plan-failure-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}/${{ env.PLAN_LOG_FILE_NAME }}
           if-no-files-found: warn
           retention-days: 30
 
   reconcile-apply:
-    name: Apply ${{ inputs.environment }} account reconciliation
+    name: Apply reviewed ${{ inputs.environment }} account reconciliation
     if: inputs.operation == 'apply'
-    needs: validate-request
+    needs: reconcile-plan
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     environment: ${{ inputs.environment }}
 
     env:
-      AWS_PAGER: ""
-      TF_IN_AUTOMATION: "true"
-      TF_INPUT: "false"
       CLOUD_NAME: ${{ vars.CLOUD_NAME }}
       TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
       TF_VAR_environment: ${{ inputs.environment }}
@@ -298,6 +369,7 @@ jobs:
           TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
           TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
           ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+          STATE_STACK_BACKEND_KEY: ${{ vars.STATE_STACK_BACKEND_KEY }}
         run: |
           set -euo pipefail
 
@@ -308,6 +380,7 @@ jobs:
             APPLY_ROLE_GITHUB_ARN
             TF_STATE_BUCKET_ARN
             TF_STATE_BUCKET_CMK_ARN
+            STATE_STACK_BACKEND_KEY
           )
 
           for setting_name in "${required_settings[@]}"; do
@@ -320,8 +393,8 @@ jobs:
           EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 
           if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-          echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
-          exit 1
+            echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+            exit 1
           fi
 
           if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
@@ -333,27 +406,6 @@ jobs:
             echo "::error::APPLY_ROLE_GITHUB_ARN belongs to account ${BASH_REMATCH[1]}, expected ${EXPECTED_ACCOUNT_ID}."
             exit 1
           fi
-
-          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
-            <<< "${TF_VAR_branches_plan_github}" >/dev/null; then
-            echo "::error::BRANCHES_PLAN_GITHUB must be a JSON array of non-empty strings."
-            exit 1
-          fi
-
-          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
-            <<< "${TF_VAR_branches_apply_github}" >/dev/null; then
-            echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings."
-            exit 1
-          fi
-
-          case "${TF_VAR_allow_pull_requests_plan_github}" in
-            true|false)
-              ;;
-            *)
-              echo "::error::ALLOW_PULL_REQUESTS_PLAN_GITHUB must be true or false."
-              exit 1
-              ;;
-          esac
 
           {
             echo "AWS_REGION=${PRIMARY_REGION}"
@@ -388,8 +440,50 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.15.8"
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
+
+      - name: Download reviewed reconciliation plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.PLAN_ARTIFACT_NAME }}
+          path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}
+
+      - name: Verify saved reconciliation plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PLAN_ARTIFACT_PATH="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
+          PLAN_METADATA_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_METADATA_FILE_NAME}"
+
+          test -s "${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}"
+          test -s "${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}.sha256"
+          test -s "${PLAN_METADATA_FILE}"
+
+          (
+            cd "${PLAN_ARTIFACT_PATH}"
+            sha256sum --check "${PLAN_FILE_NAME}.sha256"
+          )
+
+          jq -e \
+            --arg environment "${{ inputs.environment }}" \
+            --arg commit_sha "${GITHUB_SHA}" \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg workflow_run_id "${GITHUB_RUN_ID}" \
+            --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg terraform_version "${TERRAFORM_VERSION}" \
+            '
+              .environment == $environment and
+              .commit_sha == $commit_sha and
+              .repository == $repository and
+              .workflow_run_id == $workflow_run_id and
+              .workflow_run_attempt == $workflow_run_attempt and
+              .terraform_version == $terraform_version
+            ' \
+            "${PLAN_METADATA_FILE}" >/dev/null
+
+          echo "Saved reconciliation plan metadata and checksum are valid."
 
       - name: Materialize state-stack backend
         shell: bash
@@ -407,10 +501,10 @@ jobs:
           STATE_BUCKET="${STATE_BUCKET_ARN#arn:aws:s3:::}"
 
           [[ -n "${STATE_BUCKET}" ]] ||
-          { echo "::error::Unable to resolve state bucket name"; exit 1; }
+            { echo "::error::Unable to resolve state bucket name"; exit 1; }
 
           [[ -n "${STATE_BACKEND_KEY}" ]] ||
-          { echo "::error::STATE_STACK_BACKEND_KEY is required"; exit 1; }
+            { echo "::error::STATE_STACK_BACKEND_KEY is required"; exit 1; }
 
           cat > "${BACKEND_FILE}" <<EOF
           terraform {
@@ -429,41 +523,44 @@ jobs:
             -input=false \
             -no-color
 
-      - name: Apply workload account reconciliation
+      - name: Apply reviewed workload account reconciliation plan
         shell: bash
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
 
+          PLAN_FILE="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_FILE_NAME}"
+
           ./scripts/bootstrap/reconcile-workload-account.sh \
             "${TARGET_ENVIRONMENT}" \
-            --apply \
+            --apply-plan="${PLAN_FILE}" \
             --auto-approve \
             2>&1 | tee "${RECONCILIATION_LOG}"
 
-      - name: Publish reconciliation summary
+      - name: Publish reconciliation apply summary
         if: always()
         shell: bash
         run: |
           set -euo pipefail
 
           {
-            echo "# Workload Account Reconciliation"
+            echo "# Workload Account Reconciliation Apply"
             echo
             echo "- Environment: \`${{ inputs.environment }}\`"
-            echo "- Operation: \`apply\`"
             echo "- GitHub Environment: \`${{ inputs.environment }}\`"
             echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
             echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Saved plan artifact: \`${PLAN_ARTIFACT_NAME}\`"
             echo "- Strict post-apply validation: \`enabled\`"
-            echo "- Workflow status: \`${{ job.status }}\`"
+            echo "- Apply job status: \`${{ job.status }}\`"
             echo
           } >> "${GITHUB_STEP_SUMMARY}"
 
           if [[ -f "${RECONCILIATION_LOG}" ]]; then
             {
-              echo "## Reconciliation Log"
+              echo "## Reconciliation Apply Log"
               echo
               echo '```text'
               tail -n 200 "${RECONCILIATION_LOG}"
@@ -471,7 +568,7 @@ jobs:
             } >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Upload reconciliation log
+      - name: Upload reconciliation apply log
         if: always()
         uses: actions/upload-artifact@v7
         with:

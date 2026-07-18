@@ -55,8 +55,12 @@ Terraform input requirements:
 Options:
   --apply               Apply the generated Terraform plan.
                         Without this option, the script is plan-only.
+  --plan-file <path>    Save the generated Terraform plan at this path.
+                        The plan is retained after the script exits.
+  --apply-plan <path>   Apply an existing saved Terraform plan.
+                        Implies --apply and does not generate a new plan.
   --auto-approve        Skip the interactive confirmation before apply.
-                        Requires --apply.
+                        Requires --apply or --apply-plan.
   --skip-validation     Skip strict bootstrap validation after apply.
   --var <name=value>    Pass an explicit Terraform variable.
                         May be specified more than once.
@@ -76,6 +80,18 @@ Examples:
   ./scripts/bootstrap/reconcile-workload-account.sh dev \
     --var-file=terraform.tfvars \
     --apply
+
+  # Save a plan for later review and application.
+  AWS_PROFILE=dev \
+  EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+  ./scripts/bootstrap/reconcile-workload-account.sh dev \
+    --plan-file=/tmp/dev-account-reconciliation.tfplan
+
+  # Apply an existing reviewed plan.
+  AWS_PROFILE=dev \
+  EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+  ./scripts/bootstrap/reconcile-workload-account.sh dev \
+    --apply-plan=/tmp/dev-account-reconciliation.tfplan
 
   # Pass an individual variable explicitly.
   AWS_PROFILE=dev \
@@ -191,12 +207,50 @@ shift
 APPLY=false
 AUTO_APPROVE=false
 SKIP_VALIDATION=false
+PLAN_OUTPUT_PATH=""
+APPLY_PLAN_PATH=""
 TERRAFORM_INPUT_ARGS=()
 VAR_FILE_PATHS=()
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --apply)
+      APPLY=true
+      shift
+      ;;
+    --plan-file)
+      if [[ "$#" -lt 2 || -z "${2:-}" ]]; then
+        fail "$1 requires a path"
+      fi
+
+      PLAN_OUTPUT_PATH="$2"
+      shift 2
+      ;;
+    --plan-file=*)
+      PLAN_OUTPUT_PATH="${1#*=}"
+
+      if [[ -z "$PLAN_OUTPUT_PATH" ]]; then
+        fail "--plan-file requires a non-empty path"
+      fi
+
+      shift
+      ;;
+    --apply-plan)
+      if [[ "$#" -lt 2 || -z "${2:-}" ]]; then
+        fail "$1 requires a path"
+      fi
+
+      APPLY_PLAN_PATH="$2"
+      APPLY=true
+      shift 2
+      ;;
+    --apply-plan=*)
+      APPLY_PLAN_PATH="${1#*=}"
+
+      if [[ -z "$APPLY_PLAN_PATH" ]]; then
+        fail "--apply-plan requires a non-empty path"
+      fi
+
       APPLY=true
       shift
       ;;
@@ -258,14 +312,22 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [[ "$AUTO_APPROVE" == "true" && "$APPLY" != "true" ]]; then
-  fail "--auto-approve requires --apply"
+  fail "--auto-approve requires --apply or --apply-plan"
+fi
+
+if [[ -n "$APPLY_PLAN_PATH" && -n "$PLAN_OUTPUT_PATH" ]]; then
+  fail "--apply-plan cannot be combined with --plan-file"
+fi
+
+if [[ -n "$APPLY_PLAN_PATH" && "${#TERRAFORM_INPUT_ARGS[@]}" -gt 0 ]]; then
+  fail "--apply-plan cannot be combined with --var or --var-file"
 fi
 
 section "Workload account reconciliation: ${TARGET}"
 
 section "Checking prerequisites and Terraform roots"
 
-for command_name in terraform aws git sed jq mktemp rm; do
+for command_name in terraform aws git sed jq mktemp rm mkdir dirname; do
   require_command "$command_name"
 done
 
@@ -354,7 +416,9 @@ fi
 
 EXECUTION_MODE="plan-only"
 
-if [[ "$APPLY" == "true" ]]; then
+if [[ -n "$APPLY_PLAN_PATH" ]]; then
+  EXECUTION_MODE="apply-saved-plan"
+elif [[ "$APPLY" == "true" ]]; then
   EXECUTION_MODE="apply"
 fi
 
@@ -436,7 +500,6 @@ validate_kms_arn "$LAMBDA_CMK_ARN" "Lambda CMK"
 validate_kms_arn "$SECRETS_MANAGER_CMK_ARN" "Secrets Manager CMK"
 
 TEMP_DIR="$(mktemp -d)"
-PLAN_FILE="${TEMP_DIR}/${TARGET}-account-reconciliation.tfplan"
 PLAN_JSON="${TEMP_DIR}/${TARGET}-account-reconciliation.json"
 
 cleanup() {
@@ -445,18 +508,39 @@ cleanup() {
 
 trap cleanup EXIT
 
-section "Generating bootstrap account reconciliation plan"
+if [[ -n "$APPLY_PLAN_PATH" ]]; then
+  if [[ "$APPLY_PLAN_PATH" != /* ]]; then
+    APPLY_PLAN_PATH="${PWD}/${APPLY_PLAN_PATH}"
+  fi
 
-terraform -chdir="$ACCOUNT_DIR" plan \
-  -input=false \
-  -no-color \
-  -lock-timeout=5m \
-  "${TERRAFORM_INPUT_ARGS[@]}" \
-  -var="lambda_cmk_arn=${LAMBDA_CMK_ARN}" \
-  -var="secrets_manager_cmk_arn=${SECRETS_MANAGER_CMK_ARN}" \
-  -out="$PLAN_FILE"
+  PLAN_FILE="$APPLY_PLAN_PATH"
+  require_file "$PLAN_FILE"
+  success "Using existing saved Terraform plan: ${PLAN_FILE}"
+else
+  if [[ -n "$PLAN_OUTPUT_PATH" ]]; then
+    if [[ "$PLAN_OUTPUT_PATH" != /* ]]; then
+      PLAN_OUTPUT_PATH="${PWD}/${PLAN_OUTPUT_PATH}"
+    fi
 
-success "Terraform reconciliation plan generated"
+    mkdir -p "$(dirname "$PLAN_OUTPUT_PATH")"
+    PLAN_FILE="$PLAN_OUTPUT_PATH"
+  else
+    PLAN_FILE="${TEMP_DIR}/${TARGET}-account-reconciliation.tfplan"
+  fi
+
+  section "Generating bootstrap account reconciliation plan"
+
+  terraform -chdir="$ACCOUNT_DIR" plan \
+    -input=false \
+    -no-color \
+    -lock-timeout=5m \
+    "${TERRAFORM_INPUT_ARGS[@]}" \
+    -var="lambda_cmk_arn=${LAMBDA_CMK_ARN}" \
+    -var="secrets_manager_cmk_arn=${SECRETS_MANAGER_CMK_ARN}" \
+    -out="$PLAN_FILE"
+
+  success "Terraform reconciliation plan generated: ${PLAN_FILE}"
+fi
 
 terraform -chdir="$ACCOUNT_DIR" show \
   -json \
@@ -637,14 +721,29 @@ SUMMARY
 
 Plan-only reconciliation completed successfully.
 
-Review the plan above, then rerun with --apply. Reuse the same --var and
---var-file options, if any:
+Review the plan above before applying it.
+NEXT_STEPS
+
+  if [[ -n "$PLAN_OUTPUT_PATH" ]]; then
+    cat <<NEXT_STEPS
+Apply the exact saved plan with:
+
+  AWS_PROFILE=${AWS_PROFILE:-<profile>} \\
+  EXPECTED_ACCOUNT_ID=${ACTIVE_ACCOUNT_ID} \\
+  ./scripts/bootstrap/reconcile-workload-account.sh ${TARGET} \\
+    --apply-plan="${PLAN_FILE}"
+
+NEXT_STEPS
+  else
+    cat <<NEXT_STEPS
+Rerun with --apply and reuse the same --var and --var-file options, if any:
 
   AWS_PROFILE=${AWS_PROFILE:-<profile>} \\
   EXPECTED_ACCOUNT_ID=${ACTIVE_ACCOUNT_ID} \\
   ./scripts/bootstrap/reconcile-workload-account.sh ${TARGET} --apply
 
 NEXT_STEPS
+  fi
 
   exit 0
 fi
@@ -704,7 +803,7 @@ AWS profile:                         ${AWS_PROFILE:-<default>}
 AWS region:                          ${AWS_REGION}
 AWS account ID:                      ${ACTIVE_ACCOUNT_ID}
 GitHub repository:                   ${RESOLVED_GITHUB_REPOSITORY}
-Execution mode:                      apply
+Execution mode:                      ${EXECUTION_MODE}
 Lambda CMK ARN:                      ${LAMBDA_CMK_ARN}
 Secrets Manager CMK ARN:             ${SECRETS_MANAGER_CMK_ARN}
 Plan applied:                        true
