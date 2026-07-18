@@ -1,5 +1,7 @@
 name: Terraform Apply
 
+run-name: Terraform apply - ${{ inputs.environment }}
+
 on:
     workflow_dispatch:
         inputs:
@@ -11,10 +13,6 @@ on:
                     - dev
                     - staging
                     - prod
-            confirm:
-                description: "Type 'YES' to apply"
-                required: true
-                type: string
             reconcile_workload_account:
                 description: "Reconcile the workload account after a successful baseline apply"
                 required: true
@@ -26,67 +24,264 @@ permissions:
     contents: read
 
 concurrency:
-    group: terraform-apply-${{inputs.environment}}
+    group: terraform-apply-${{ inputs.environment }}
     cancel-in-progress: false
 
+env:
+    AWS_PAGER: ""
+    TF_IN_AUTOMATION: "true"
+    TF_INPUT: "false"
+    TERRAFORM_VERSION: "1.15.8"
+    PLAN_ARTIFACT_NAME: terraform-baseline-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+    PLAN_ARTIFACT_DIR: .terraform-plan-artifact
+    PLAN_FILE_NAME: baseline.tfplan
+    PLAN_TEXT_FILE_NAME: baseline-plan.txt
+    PLAN_METADATA_FILE_NAME: baseline-plan-metadata.json
+
 jobs:
-    terraform-apply:
-        if: ${{inputs.confirm == 'YES'}}
+    terraform-plan:
+        name: Plan ${{ inputs.environment }} baseline
         runs-on: ubuntu-latest
-        environment: ${{inputs.environment}}
+        timeout-minutes: 30
+        environment: ${{ format('{0}-plan', inputs.environment) }}
 
         env:
-            TF_VAR_cloud_name: ${{vars.CLOUD_NAME}}
-            TF_VAR_environment: ${{vars.ENVIRONMENT}}
-            TF_VAR_primary_region: ${{vars.PRIMARY_REGION}}
-            TF_VAR_abuseipdb_api_key: ${{secrets.ABUSEIPDB_API_KEY}}
-            TF_VAR_bucket_admin_principals: ${{vars.BUCKET_ADMIN_PRINCIPALS}}
-            TF_VAR_tf_state_bucket_arn: ${{vars.TF_STATE_BUCKET_ARN}}
-            TF_VAR_tf_state_bucket_cmk_arn: ${{vars.TF_STATE_BUCKET_CMK_ARN}}
-            TF_VAR_deployment_profile: ${{vars.DEPLOYMENT_PROFILE}}
-            TF_VAR_break_glass_trusted_principal_arns: ${{vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS}}
-            TF_VAR_secops_emails: ${{vars.SECOPS_EMAILS}}
-            TF_VAR_account_id_dev: ${{vars.ACCOUNT_ID_DEV}}
-            TF_VAR_account_id_prod: ${{vars.ACCOUNT_ID_PROD}}
-            TF_VAR_account_id_staging: ${{vars.ACCOUNT_ID_STAGING}}
+            TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
+            TF_VAR_environment: ${{ inputs.environment }}
+            TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
+            TF_VAR_abuseipdb_api_key: ${{ secrets.ABUSEIPDB_API_KEY }}
+            TF_VAR_bucket_admin_principals: ${{ vars.BUCKET_ADMIN_PRINCIPALS }}
+            TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
+            TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+            TF_VAR_deployment_profile: ${{ vars.DEPLOYMENT_PROFILE }}
+            TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
+            TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
+            TF_VAR_account_id_dev: ${{ vars.ACCOUNT_ID_DEV }}
+            TF_VAR_account_id_prod: ${{ vars.ACCOUNT_ID_PROD }}
+            TF_VAR_account_id_staging: ${{ vars.ACCOUNT_ID_STAGING }}
 
         steps:
             - name: Checkout
               uses: actions/checkout@v6
-            
+
             - name: Configure AWS credentials from GitHub OIDC
               uses: aws-actions/configure-aws-credentials@v6
               with:
-                role-to-assume: ${{vars.APPLY_ROLE_GITHUB_ARN}}
-                aws-region: ${{vars.PRIMARY_REGION}}
+                  role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ vars.PRIMARY_REGION }}
 
             - name: Verify identity
               run: aws sts get-caller-identity
 
             - name: Setup Terraform
               uses: hashicorp/setup-terraform@v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
 
             - name: Terraform Init
-              working-directory: ./environments/${{inputs.environment}}
-              run: terraform init
+              working-directory: ./environments/${{ inputs.environment }}
+              run: terraform init -input=false -no-color
 
             - name: Terraform Validate
-              working-directory: ./environments/${{inputs.environment}}
-              run: terraform validate
+              working-directory: ./environments/${{ inputs.environment }}
+              run: terraform validate -no-color
 
-            - name: Terraform Plan
-              working-directory: ./environments/${{inputs.environment}}
-              run: terraform plan -input=false -no-color
+            - name: Generate saved Terraform plan
+              shell: bash
+              env:
+                  WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+              run: |
+                  set -euo pipefail
 
-            - name: Print apply target
-              run: echo "Applying environment - ${{inputs.environment}}"
+                  PLAN_ARTIFACT_PATH="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
+                  PLAN_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}"
+                  PLAN_TEXT_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_TEXT_FILE_NAME}"
+                  PLAN_METADATA_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_METADATA_FILE_NAME}"
 
-            - name: Terraform Apply
-              working-directory: ./environments/${{inputs.environment}}
+                  mkdir -p "${PLAN_ARTIFACT_PATH}"
+
+                  terraform -chdir="${WORKING_DIRECTORY}" plan \
+                    -input=false \
+                    -no-color \
+                    -lock-timeout=5m \
+                    -out="${PLAN_FILE}"
+
+                  terraform -chdir="${WORKING_DIRECTORY}" show \
+                    -no-color \
+                    "${PLAN_FILE}" | tee "${PLAN_TEXT_FILE}"
+
+                  TERRAFORM_CLI_VERSION="$(
+                    terraform version -json |
+                      jq -r '.terraform_version'
+                  )"
+
+                  jq -n \
+                    --arg environment "${{ inputs.environment }}" \
+                    --arg commit_sha "${GITHUB_SHA}" \
+                    --arg repository "${GITHUB_REPOSITORY}" \
+                    --arg workflow_run_id "${GITHUB_RUN_ID}" \
+                    --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
+                    --arg terraform_version "${TERRAFORM_CLI_VERSION}" \
+                    '{
+                      environment: $environment,
+                      commit_sha: $commit_sha,
+                      repository: $repository,
+                      workflow_run_id: $workflow_run_id,
+                      workflow_run_attempt: $workflow_run_attempt,
+                      terraform_version: $terraform_version
+                    }' > "${PLAN_METADATA_FILE}"
+
+                  (
+                    cd "${PLAN_ARTIFACT_PATH}"
+                    sha256sum "${PLAN_FILE_NAME}" > "${PLAN_FILE_NAME}.sha256"
+                  )
+
+            - name: Publish Terraform plan summary
+              if: always()
               shell: bash
               run: |
-                set -euo pipefail
-                terraform apply -auto-approve -input=false -no-color -lock-timeout=5m
+                  set -euo pipefail
+
+                  PLAN_TEXT_FILE="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_TEXT_FILE_NAME}"
+
+                  {
+                    echo "# Terraform Baseline Plan"
+                    echo
+                    echo "- Environment: \`${{ inputs.environment }}\`"
+                    echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
+                    echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- Terraform version: \`${TERRAFORM_VERSION}\`"
+                    echo "- Reconcile after apply: \`${{ inputs.reconcile_workload_account }}\`"
+                    echo "- Plan job status: \`${{ job.status }}\`"
+                    echo
+                    echo "The protected apply job will use the exact saved plan from this job."
+                    echo
+                  } >> "${GITHUB_STEP_SUMMARY}"
+
+                  if [[ -f "${PLAN_TEXT_FILE}" ]]; then
+                    {
+                      echo "<details>"
+                      echo "<summary>View Terraform plan</summary>"
+                      echo
+                      echo '```text'
+                      cat "${PLAN_TEXT_FILE}"
+                      echo '```'
+                      echo
+                      echo "</details>"
+                    } >> "${GITHUB_STEP_SUMMARY}"
+                  fi
+
+            - name: Upload saved Terraform plan
+              uses: actions/upload-artifact@v7
+              with:
+                  name: ${{ env.PLAN_ARTIFACT_NAME }}
+                  path: ${{ env.PLAN_ARTIFACT_DIR }}
+                  if-no-files-found: error
+                  retention-days: 1
+
+    terraform-apply:
+        name: Apply reviewed ${{ inputs.environment }} plan
+        needs: terraform-plan
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        environment: ${{ inputs.environment }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6
+
+            - name: Configure AWS credentials from GitHub OIDC
+              uses: aws-actions/configure-aws-credentials@v6
+              with:
+                  role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ vars.PRIMARY_REGION }}
+
+            - name: Verify identity
+              run: aws sts get-caller-identity
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
+
+            - name: Terraform Init
+              working-directory: ./environments/${{ inputs.environment }}
+              run: terraform init -input=false -no-color
+
+            - name: Download reviewed Terraform plan
+              uses: actions/download-artifact@v8
+              with:
+                  name: ${{ env.PLAN_ARTIFACT_NAME }}
+                  path: ${{ env.PLAN_ARTIFACT_DIR }}
+
+            - name: Verify saved Terraform plan
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  PLAN_ARTIFACT_PATH="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
+                  PLAN_METADATA_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_METADATA_FILE_NAME}"
+
+                  test -s "${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}"
+                  test -s "${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}.sha256"
+                  test -s "${PLAN_METADATA_FILE}"
+
+                  (
+                    cd "${PLAN_ARTIFACT_PATH}"
+                    sha256sum --check "${PLAN_FILE_NAME}.sha256"
+                  )
+
+                  jq -e \
+                    --arg environment "${{ inputs.environment }}" \
+                    --arg commit_sha "${GITHUB_SHA}" \
+                    --arg repository "${GITHUB_REPOSITORY}" \
+                    --arg workflow_run_id "${GITHUB_RUN_ID}" \
+                    --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
+                    --arg terraform_version "${TERRAFORM_VERSION}" \
+                    '
+                      .environment == $environment and
+                      .commit_sha == $commit_sha and
+                      .repository == $repository and
+                      .workflow_run_id == $workflow_run_id and
+                      .workflow_run_attempt == $workflow_run_attempt and
+                      .terraform_version == $terraform_version
+                    ' \
+                    "${PLAN_METADATA_FILE}" >/dev/null
+
+                  echo "Saved Terraform plan metadata and checksum are valid."
+
+            - name: Apply reviewed Terraform plan
+              shell: bash
+              env:
+                  WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+              run: |
+                  set -euo pipefail
+
+                  PLAN_FILE="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_FILE_NAME}"
+
+                  echo "Applying the reviewed plan for environment: ${{ inputs.environment }}"
+
+                  terraform -chdir="${WORKING_DIRECTORY}" apply \
+                    -input=false \
+                    -no-color \
+                    -lock-timeout=5m \
+                    "${PLAN_FILE}"
+
+            - name: Publish apply summary
+              if: always()
+              shell: bash
+              run: |
+                  {
+                    echo "# Terraform Baseline Apply"
+                    echo
+                    echo "- Environment: \`${{ inputs.environment }}\`"
+                    echo "- GitHub Environment: \`${{ inputs.environment }}\`"
+                    echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- Saved plan artifact: \`${PLAN_ARTIFACT_NAME}\`"
+                    echo "- Apply job status: \`${{ job.status }}\`"
+                  } >> "${GITHUB_STEP_SUMMARY}"
 
     reconcile-workload-account:
         name: Reconcile workload account
