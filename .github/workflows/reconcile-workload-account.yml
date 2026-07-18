@@ -15,13 +15,13 @@ on:
           - staging
           - prod
       operation:
-        description: "Generate a plan or apply the reviewed reconciliation plan"
+        description: "Choose whether to stop after planning or apply after approval"
         required: true
-        default: "plan"
+        default: "plan-only"
         type: choice
         options:
-          - plan
-          - apply
+          - plan-only
+          - plan-and-apply
   workflow_call:
     inputs:
       environment:
@@ -31,7 +31,7 @@ on:
       operation:
         description: "Reconciliation operation: plan or apply"
         required: false
-        default: "plan"
+        default: "plan-only"
         type: string
 
 permissions:
@@ -82,7 +82,7 @@ jobs:
             plan|apply)
               ;;
             *)
-              echo "::error::Unsupported operation: ${OPERATION}. Expected plan or apply."
+              echo "::error::Unsupported operation: ${OPERATION}. Expected plan-only or plan-and-apply."
               exit 1
               ;;
           esac
