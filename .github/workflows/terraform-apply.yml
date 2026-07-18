@@ -33,7 +33,7 @@ env:
     TF_INPUT: "false"
     TERRAFORM_VERSION: "1.15.8"
     PLAN_ARTIFACT_NAME: terraform-baseline-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
-    PLAN_ARTIFACT_DIR: .terraform-plan-artifact
+    PLAN_ARTIFACT_DIR: terraform-plan-artifact
     PLAN_FILE_NAME: baseline.tfplan
     PLAN_TEXT_FILE_NAME: baseline-plan.txt
     PLAN_METADATA_FILE_NAME: baseline-plan-metadata.json
@@ -56,7 +56,9 @@ jobs:
             TF_VAR_deployment_profile: ${{ vars.DEPLOYMENT_PROFILE }}
             TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
-            TF_VAR_account_id: ${{ vars.ACCOUNT_ID }}
+            TF_VAR_account_id_dev: ${{ vars.ACCOUNT_ID_DEV }}
+            TF_VAR_account_id_prod: ${{ vars.ACCOUNT_ID_PROD }}
+            TF_VAR_account_id_staging: ${{ vars.ACCOUNT_ID_STAGING }}
 
         steps:
             - name: Checkout
@@ -174,7 +176,7 @@ jobs:
               uses: actions/upload-artifact@v7
               with:
                   name: ${{ env.PLAN_ARTIFACT_NAME }}
-                  path: ${{ env.PLAN_ARTIFACT_DIR }}
+                  path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}
                   if-no-files-found: error
                   retention-days: 1
 
@@ -212,7 +214,7 @@ jobs:
               uses: actions/download-artifact@v8
               with:
                   name: ${{ env.PLAN_ARTIFACT_NAME }}
-                  path: ${{ env.PLAN_ARTIFACT_DIR }}
+                  path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}
 
             - name: Verify saved Terraform plan
               shell: bash
