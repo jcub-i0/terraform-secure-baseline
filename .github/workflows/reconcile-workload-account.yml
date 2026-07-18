@@ -333,7 +333,7 @@ jobs:
 
   reconcile-apply:
     name: Apply reviewed ${{ inputs.environment }} account reconciliation
-    if: inputs.operation == 'apply'
+    if: inputs.operation == 'plan-and-apply'
     needs: reconcile-plan
     runs-on: ubuntu-latest
     timeout-minutes: 40
