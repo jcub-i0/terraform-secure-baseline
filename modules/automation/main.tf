@@ -13,10 +13,10 @@ resource "aws_lambda_function" "ec2_isolation" {
   role                           = var.lambda_ec2_isolation_role_arn
   handler                        = "ec2_isolation.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = data.archive_file.lambda_ec2_isolation.output_path
+  filename                       = archive_file.lambda_ec2_isolation.output_path
   timeout                        = 60
   memory_size                    = 256
-  source_code_hash               = data.archive_file.lambda_ec2_isolation.output_base64sha256
+  source_code_hash               = archive_file.lambda_ec2_isolation.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = null #5
 
@@ -253,10 +253,10 @@ resource "aws_lambda_function" "ec2_rollback" {
   role                           = var.lambda_ec2_rollback_role_arn
   handler                        = "ec2_rollback.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = data.archive_file.lambda_ec2_rollback.output_path
+  filename                       = archive_file.lambda_ec2_rollback.output_path
   timeout                        = 60
   memory_size                    = 256
-  source_code_hash               = data.archive_file.lambda_ec2_rollback.output_base64sha256
+  source_code_hash               = archive_file.lambda_ec2_rollback.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = null #5
 
@@ -534,10 +534,10 @@ resource "aws_lambda_function" "ip_enrichment" {
   role                           = var.lambda_ip_enrichment_role_arn
   handler                        = "ip_enrichment.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = data.archive_file.lambda_ip_enrichment.output_path
+  filename                       = archive_file.lambda_ip_enrichment.output_path
   timeout                        = 60
   memory_size                    = 256
-  source_code_hash               = data.archive_file.lambda_ip_enrichment.output_base64sha256
+  source_code_hash               = archive_file.lambda_ip_enrichment.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = null #2
 
