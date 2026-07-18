@@ -115,9 +115,7 @@ jobs:
           PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
           TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
           TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
-          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
-          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
-          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+          ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
         run: |
           set -euo pipefail
 
@@ -138,13 +136,13 @@ jobs:
 
           case "${TARGET_ENVIRONMENT}" in
             dev)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
               ;;
             staging)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
               ;;
             prod)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
               ;;
           esac
 
@@ -308,9 +306,7 @@ jobs:
           APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
           TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
           TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
-          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
-          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
-          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+          ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
         run: |
           set -euo pipefail
 
@@ -331,13 +327,13 @@ jobs:
 
           case "${TARGET_ENVIRONMENT}" in
             dev)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
               ;;
             staging)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
               ;;
             prod)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
+              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
               ;;
           esac
 
