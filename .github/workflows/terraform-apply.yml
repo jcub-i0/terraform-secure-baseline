@@ -290,7 +290,7 @@ jobs:
         uses: ./.github/workflows/reconcile-workload-account.yml
         with:
             environment: ${{ inputs.environment }}
-            operation: apply
+            operation: plan-and-apply
         permissions:
             id-token: write
             contents: read
