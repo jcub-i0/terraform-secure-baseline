@@ -115,15 +115,14 @@ jobs:
           PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
           TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
           TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
-          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
-          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
-          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+          ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
         run: |
           set -euo pipefail
 
           required_settings=(
             CLOUD_NAME
             PRIMARY_REGION
+            ACCOUNT_ID
             PLAN_ROLE_GITHUB_ARN
             TF_STATE_BUCKET_ARN
             TF_STATE_BUCKET_CMK_ARN
@@ -136,21 +135,11 @@ jobs:
             fi
           done
 
-          case "${TARGET_ENVIRONMENT}" in
-            dev)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
-              ;;
-            staging)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
-              ;;
-            prod)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
-              ;;
-          esac
+          EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 
           if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-            echo "::error::The expected AWS account ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
-            exit 1
+          echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+          exit 1
           fi
 
           if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
@@ -308,15 +297,14 @@ jobs:
           APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
           TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
           TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
-          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
-          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
-          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+          ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
         run: |
           set -euo pipefail
 
           required_settings=(
             CLOUD_NAME
             PRIMARY_REGION
+            ACCOUNT_ID
             APPLY_ROLE_GITHUB_ARN
             TF_STATE_BUCKET_ARN
             TF_STATE_BUCKET_CMK_ARN
@@ -329,21 +317,11 @@ jobs:
             fi
           done
 
-          case "${TARGET_ENVIRONMENT}" in
-            dev)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
-              ;;
-            staging)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
-              ;;
-            prod)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
-              ;;
-          esac
+          EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 
           if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-            echo "::error::The expected AWS account ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
-            exit 1
+          echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+          exit 1
           fi
 
           if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
