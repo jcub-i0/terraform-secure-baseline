@@ -1,6 +1,6 @@
 # EC2 ISOLATION LAMBDA RESOURCES
 ## PACKAGE EC2 ISOLATION LAMBDA
-data "archive_file" "lambda_ec2_isolation" {
+resource "archive_file" "lambda_ec2_isolation" {
   type        = "zip"
   source_file = "${path.module}/lambda/ec2_isolation.py"
   output_path = "${path.module}/lambda/ec2_isolation.zip"
@@ -240,7 +240,7 @@ resource "aws_cloudwatch_metric_alarm" "ec2_isolation_dlq_visible_messages" {
 
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
-data "archive_file" "lambda_ec2_rollback" {
+resource "archive_file" "lambda_ec2_rollback" {
   type        = "zip"
   source_file = "${path.module}/lambda/ec2_rollback.py"
   output_path = "${path.module}/lambda/ec2_rollback.zip"
@@ -522,7 +522,7 @@ resource "aws_cloudwatch_metric_alarm" "ec2_rollback_dlq_visible_messages" {
 }
 
 # IP ENRICHMENT LAMBDA RESOURCES
-data "archive_file" "lambda_ip_enrichment" {
+resource "archive_file" "lambda_ip_enrichment" {
   type        = "zip"
   source_file = "${path.module}/lambda/ip_enrichment.py"
   output_path = "${path.module}/lambda/ip_enrichment.zip"
