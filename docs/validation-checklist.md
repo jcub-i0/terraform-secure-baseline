@@ -53,7 +53,7 @@ Recommended validation order:
 
 1. Confirm AWS profile/account variables.
 2. Verify each migrated state stack with `scripts/bootstrap/migrate-state-stack.sh <target> --verify-only`.
-3. After each workload baseline is deployed, run `scripts/bootstrap/reconcile-workload-account.sh <env>` and apply the reviewed reconciliation plan.
+3. After each workload baseline is deployed, complete workload-account reconciliation through the `Reconcile Workload Account` `plan-and-apply` workflow or a local `--plan-file` / `--apply-plan` exact-plan handoff.
 4. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
 5. Export workload bootstrap evidence with `export-bootstrap.sh` for each deployed workload environment.
 6. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
@@ -287,29 +287,83 @@ For strict workload CMK and remote-state evidence, the expected deployment seque
 2. Run scripts/bootstrap/migrate-state-stack.sh <env>.
 3. Apply bootstrap/<env>/account.
 4. Apply environments/<env>.
-5. Run scripts/bootstrap/reconcile-workload-account.sh <env> and review the plan.
-6. Rerun the reconciliation helper with --apply.
+5. Generate and review the workload-account reconciliation plan.
+6. Approve and apply the exact saved reconciliation plan.
 7. Run validate-bootstrap.sh or export-bootstrap.sh with REQUIRE_STATE_STACK_REMOTE=true and the default strict CMK behavior.
 ```
 
+For GitHub Actions, select `plan-and-apply` in the `Reconcile Workload Account`
+workflow. The Plan job runs through `<env>-plan`, publishes the plan, and
+uploads the saved artifact. The Apply job waits on the protected `<env>`
+environment, verifies the artifact and expected account, applies the exact
+plan, and runs strict bootstrap validation.
+
+For a two-step local exact-plan review:
+
+```bash
+RECONCILIATION_PLAN="/tmp/<env>-account-reconciliation.tfplan"
+
+AWS_PROFILE=<env> \
+EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh <env> \
+  --plan-file="${RECONCILIATION_PLAN}"
+
+AWS_PROFILE=<env> \
+EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh <env> \
+  --apply-plan="${RECONCILIATION_PLAN}"
+```
+
+The one-step `--apply` mode generates, displays, confirms, and applies a saved
+plan within the same invocation. It does not reuse a plan from a previous
+plan-only invocation unless that plan was retained with `--plan-file`.
+
 The reconciliation helper reads `lambda_cmk_arn` and
 `secrets_manager_cmk_arn` directly from the workload Terraform state,
-validates the resolved account-stack inputs from the saved plan, applies that
-exact plan, and runs strict bootstrap validation after apply unless
-`--skip-validation` is used.
+validates the resolved account-stack inputs from the saved plan, applies the
+current or explicitly supplied saved plan, and runs strict bootstrap
+validation after apply unless `--skip-validation` is used.
 
 ### GitHub Workflow Usage
 
-`validate-bootstrap.sh` is read-only and does not run `terraform init` or create backend files.
+The deployment workflows use paired GitHub environments:
 
-The workload bootstrap evidence workflow:
+```text
+dev-plan / dev
+staging-plan / staging
+prod-plan / prod
+```
 
-1. copies `backend.tf.migrated.example` to the ignored runtime `backend.tf`;
+The `*-plan` environment allows the plan to complete before approval. The
+protected Apply environment is used only for the job that applies the reviewed
+plan.
+
+Configure the same generic `ACCOUNT_ID` in both members of each pair. The
+Plan and Apply jobs validate:
+
+- `ACCOUNT_ID` is present and contains exactly 12 digits;
+- the configured Plan or Apply role ARN belongs to that account;
+- the active AWS OIDC caller is operating in that account; and
+- saved-plan metadata identifies the same account, repository, commit, workflow run, and Terraform version.
+
+`Terraform Apply` publishes and uploads its own saved baseline plan, waits for
+approval, then applies that exact artifact. Its optional reconciliation input
+invokes `Reconcile Workload Account` with `plan-and-apply`.
+
+`Reconcile Workload Account` supports:
+
+- `plan-only`: publish and upload the reconciliation plan, then stop;
+- `plan-and-apply`: publish and upload the plan, wait for approval, apply the exact saved plan, and run strict bootstrap validation.
+
+The workload bootstrap evidence workflow remains read-only. It:
+
+1. materializes the ignored state-stack `backend.tf`;
 2. initializes the state, account, and workload Terraform roots;
-3. runs the exporter with `REQUIRE_STATE_STACK_REMOTE=true` by default;
+3. runs the exporter with `REQUIRE_STATE_STACK_REMOTE=true` by default; and
 4. uploads the generated validation package as a GitHub Actions artifact.
 
-For a manual run from a fresh checkout of an already-migrated environment, materialize and verify the state backend before initializing the other roots:
+For a manual run from a fresh checkout of an already-migrated environment,
+materialize and verify the state backend before initializing the other roots:
 
 ```bash
 cp \
@@ -331,9 +385,11 @@ REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
-Repeat with the matching profile, account ID, and environment name for `staging` and `prod`.
+Repeat with the matching profile, account ID, and environment name for
+`staging` and `prod`.
 
-To generate workload bootstrap evidence, run `export-bootstrap.sh` after the same initialization:
+To generate workload bootstrap evidence, run `export-bootstrap.sh` after the
+same initialization:
 
 ```bash
 AWS_PROFILE=dev \
@@ -878,13 +934,28 @@ tf-secure-baseline-control-plane-github-apply-role
 
 ## GitHub Workflow Validation
 
-Run the Terraform Plan workflow in GitHub Actions.
+Run the workload `Terraform Apply` workflow with a non-production environment.
 
 Expected:
 
-- `Configure AWS credentials from GitHub OIDC` step confirms GitHub successfully assumed the plan role.
-- `Verify Identity` step returns the expected account for `aws sts get-caller-identity`.
-- `Terraform Plan` completes without OIDC errors.
+- The Plan job targets `<env>-plan` and assumes the Plan role.
+- Workflow setting validation confirms `ACCOUNT_ID`, the Plan role ARN account, and the active AWS caller account.
+- The readable Terraform plan is visible before the Apply approval.
+- A saved binary plan, checksum, readable plan, and metadata are uploaded as a short-lived artifact.
+- The Apply job targets the protected `<env>` environment and waits for its approval rules.
+- After approval, the Apply job assumes the Apply role, validates the active account, verifies the artifact checksum and metadata, and applies the exact saved plan.
+- The Apply job does not generate a replacement plan after approval.
+
+Run `Reconcile Workload Account` with `plan-only`, then with
+`plan-and-apply` in an approved non-production environment.
+
+Expected:
+
+- `plan-only` publishes the reconciliation plan and stops without applying.
+- `plan-and-apply` generates a fresh plan before approval.
+- The protected Apply job downloads and applies the exact reviewed reconciliation plan.
+- Strict workload bootstrap validation runs after reconciliation.
+- GitHub OIDC operation succeeds without requiring an AWS CLI profile.
 
 ---
 
@@ -2389,7 +2460,8 @@ Expected:
 
 ## Purpose
 
-Confirm that CI/CD workflows operate successfully.
+Confirm that CI/CD workflows operate successfully and preserve the
+plan-before-approval boundary.
 
 Run or review the following workflows:
 
@@ -2397,24 +2469,37 @@ Run or review the following workflows:
 - Docs Validation
 - Terraform Plan
 - Terraform Apply
+- Reconcile Workload Account
 - Workload Bootstrap Evidence Export
 - Workload Baseline Evidence Export
 - Control-Plane Evidence Export
 - Terraform Destroy in a non-production environment only
 
-> Ensure that `scripts/bootstrap/reconcile-workload-account.sh <env> --apply` has completed successfully before relying on strict workload bootstrap evidence or running workflows that need the workload CMK permissions.
+Before testing workload deployment workflows, confirm that:
+
+- `ACCOUNT_ID` is configured in both `<env>-plan` and `<env>`;
+- the two values match the intended workload account;
+- `PLAN_ROLE_GITHUB_ARN` is configured in `<env>-plan`;
+- `APPLY_ROLE_GITHUB_ARN` is configured in `<env>`;
+- shared region, naming, and state-backend values match across the pair; and
+- the Apply environment has the intended required-reviewer protection.
 
 Expected:
 
 - Static analysis workflow succeeds.
 - Docs validation workflow succeeds.
-- Plan workflow succeeds for expected stacks.
-- Apply workflow can deploy the selected environment.
+- Independent Plan workflow succeeds for expected stacks.
+- `Terraform Apply` produces readable plan output before approval.
+- The protected Apply job waits for approval and applies the exact saved baseline plan.
+- Saved-plan metadata and checksum validation succeed.
+- `Reconcile Workload Account` `plan-only` stops after publishing the plan.
+- `Reconcile Workload Account` `plan-and-apply` waits for approval, applies the exact saved account plan, and completes strict bootstrap validation.
+- The Plan and Apply jobs validate the configured role ARN account and active AWS caller against `ACCOUNT_ID`.
 - Evidence workflows assume the intended GitHub Plan role through OIDC.
-- Evidence workflows materialize the ignored state-stack `backend.tf` from `backend.tf.migrated.example`.
+- Evidence workflows materialize the ignored state-stack `backend.tf`.
 - Workload and control-plane evidence workflows complete with `REQUIRE_STATE_STACK_REMOTE=true` when strict migration evidence is requested.
 - Evidence packages are uploaded as GitHub Actions artifacts.
-- A blank `AWS_PROFILE` in GitHub-generated evidence is expected; the credential source should identify GitHub OIDC environment credentials.
+- A blank `AWS_PROFILE` in GitHub is expected; AWS CLI and validation commands should use the OIDC-provided default credential chain.
 - Destroy workflow first cleans up Identity Center attachments and then destroys the selected environment baseline.
 - No OIDC role assumption errors occur.
 - No Terraform state lock conflicts occur.
@@ -2617,15 +2702,27 @@ Check:
 - the state CMK can be resolved from the bucket encryption configuration, is enabled, and is customer-managed.
 - all remote-backed roots have been initialized before running validation from a fresh checkout.
 - `REQUIRE_STATE_STACK_REMOTE=true` is set when missing or unreadable migrated state should fail validation.
-- `scripts/bootstrap/reconcile-workload-account.sh <env> --apply` completed successfully after workload deployment.
+- workload-account reconciliation completed successfully after workload deployment, either through `plan-and-apply` or a local exact saved-plan apply.
 
-If strict workload CMK policy checks fail during transitional testing, first run the reconciliation helper with the current account-stack inputs:
+If strict workload CMK policy checks fail, first run the `Reconcile Workload Account` workflow with `plan-and-apply`, or use an exact local saved-plan handoff:
 
 ```bash
+RECONCILIATION_PLAN="/tmp/<env>-account-reconciliation.tfplan"
+
 AWS_PROFILE=<env> \
 EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh <env> --apply
+./scripts/bootstrap/reconcile-workload-account.sh <env> \
+  --plan-file="${RECONCILIATION_PLAN}"
+
+AWS_PROFILE=<env> \
+EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh <env> \
+  --apply-plan="${RECONCILIATION_PLAN}"
 ```
+
+For GitHub failures before OIDC configuration, confirm `ACCOUNT_ID` exists in
+both `<env>-plan` and `<env>` and contains the same 12-digit workload account
+ID.
 
 If reconciliation cannot be completed yet, run validation temporarily with:
 
