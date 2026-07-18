@@ -83,7 +83,10 @@ variables, defaults, and optional `--var` or `--var-file` arguments. It
 automatically supplies the current `lambda_cmk_arn` and
 `secrets_manager_cmk_arn` values from `environments/<env>`.
 
-Generate and review a plan:
+### Plan-Only Review
+
+Without `--apply`, the helper generates and displays a plan but does not apply
+it:
 
 ```bash
 AWS_PROFILE=dev \
@@ -91,7 +94,39 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh dev
 ```
 
-Apply the saved plan and run strict workload bootstrap validation:
+That default plan is stored in a temporary directory and removed when the
+script exits.
+
+### Durable Exact-Plan Handoff
+
+Use `--plan-file` when the reviewed plan must be retained and applied in a
+later invocation:
+
+```bash
+RECONCILIATION_PLAN="/tmp/tf-secure-baseline-dev-account-reconciliation.tfplan"
+
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh dev \
+  --plan-file="${RECONCILIATION_PLAN}"
+```
+
+Apply that exact saved file with:
+
+```bash
+AWS_PROFILE=dev \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh dev \
+  --apply-plan="${RECONCILIATION_PLAN}"
+```
+
+`--apply-plan` implies apply mode and does not generate a replacement plan. It
+cannot be combined with `--plan-file`, `--var`, or `--var-file`, because the
+saved plan already contains its resolved inputs.
+
+### One-Step Apply
+
+The existing one-step mode remains available:
 
 ```bash
 AWS_PROFILE=dev \
@@ -99,18 +134,43 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh dev --apply
 ```
 
+This mode generates a plan, displays it, asks the operator to type `apply`,
+and applies that plan within the same invocation. Use `--auto-approve` only in
+approved automation.
+
+### GitHub OIDC Behavior
+
+The `Reconcile Workload Account` workflow uses the durable plan options:
+
+- the Plan job runs `--plan-file`;
+- the protected Apply job downloads the artifact and runs `--apply-plan`;
+- strict bootstrap validation runs after apply.
+
+The workflow supports `plan-only` and `plan-and-apply`. Plan jobs use the
+matching `*-plan` GitHub environment and Plan role. Apply jobs use the
+protected workload environment and Apply role.
+
+When `AWS_PROFILE` is not set, the script and post-apply validation use the
+AWS default credential provider chain. This allows GitHub OIDC temporary
+credentials to work without attempting to load an empty AWS CLI profile.
+Local operators can continue setting `AWS_PROFILE` normally.
+
 The reconciliation helper:
 
-- validates the active AWS identity and backend regions
-- initializes the workload and account Terraform roots
-- resolves and validates the workload-created CMKs
-- validates the account stack's resolved Terraform inputs from the saved plan
-- requires GitHub OIDC and the GitHub Apply role to remain enabled
-- applies the exact reviewed saved plan when `--apply` is used
-- runs strict bootstrap validation after apply unless `--skip-validation` is used
+- validates the active AWS identity and backend regions;
+- initializes the workload and account Terraform roots;
+- resolves and validates the workload-created CMKs;
+- validates the account stack's resolved Terraform inputs from the saved plan;
+- requires GitHub OIDC and the GitHub Apply role to remain enabled;
+- applies the plan generated in the current invocation with `--apply`;
+- applies an existing exact saved plan with `--apply-plan`; and
+- runs strict bootstrap validation after apply unless `--skip-validation` is used.
 
 The script requires `jq` in addition to Terraform, the AWS CLI, Git, and the
 standard shell utilities checked at runtime.
+
+Saved Terraform plan files may contain sensitive configuration values. Store
+them securely and remove them after the apply and validation complete.
 
 ## Repository Behavior
 

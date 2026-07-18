@@ -499,12 +499,14 @@ The DLQs are terminal failure-retention queues. They are intended for SecOps rev
 
 ### CI/CD
 
-GitHub Actions workflows use GitHub OIDC to assume AWS IAM roles.
+GitHub Actions workflows use GitHub OIDC to assume environment-specific AWS IAM
+roles without storing long-lived AWS access keys.
 
 Typical workflows include:
 
 - `Terraform Plan`
 - `Terraform Apply`
+- `Reconcile Workload Account`
 - `Terraform Destroy`
 - `Terraform Static Analysis`
 - `Docs Validation`
@@ -513,9 +515,7 @@ Typical workflows include:
 - `Workload Baseline Evidence Export`
 - `Control-Plane Evidence Export`
 
-Each environment uses its own GitHub environment and AWS role for Terraform operations and read-only evidence workflows.
-
-Example mapping:
+Workload deployment workflows use separate Plan and Apply GitHub environments:
 
 ```text
 dev-plan        -> dev GitHub-Plan role
@@ -531,7 +531,38 @@ control-plane-plan -> control-plane GitHub-Plan role
 control-plane      -> control-plane GitHub-Apply role
 ```
 
-The layer-specific evidence workflows use the applicable `*-plan` GitHub environment and Plan role. For migrated state stacks, those workflows copy the tracked `backend.tf.migrated.example` to the ignored runtime `backend.tf` before running `terraform init` and read-only validation.
+The separate `*-plan` environments are intentional. Plan jobs run without the
+protected Apply-environment approval so the Terraform plan exists before a
+reviewer is asked to approve deployment. Apply jobs target the protected
+`dev`, `staging`, or `prod` environment and begin only after its required
+review rules pass.
+
+`Terraform Apply` uses a plan-first workflow:
+
+1. assume the Plan role through the selected `*-plan` environment;
+2. generate a saved Terraform plan;
+3. publish the readable plan in the workflow summary;
+4. upload the binary plan with metadata and a checksum;
+5. wait for approval on the protected Apply environment;
+6. verify and apply the exact saved plan.
+
+The workflow can optionally invoke `Reconcile Workload Account` after the
+baseline apply. Reconciliation follows the same plan-first pattern: it resolves
+the current workload-created CMKs, publishes and stores a saved account-stack
+plan, waits for approval, applies that exact plan, and runs strict bootstrap
+validation.
+
+`ACCOUNT_ID` is required in both members of each Plan/Apply environment pair.
+The workflows validate that the configured role ARN and active AWS caller both
+belong to that account, and saved-plan metadata prevents a plan generated for
+one account from being applied through a differently configured environment.
+Other shared environment values should also remain consistent across each
+pair.
+
+The layer-specific evidence workflows use the applicable `*-plan` GitHub
+environment and Plan role. For migrated state stacks, those workflows
+materialize the ignored runtime `backend.tf` before running `terraform init`
+and read-only validation.
 
 ## Deployment Order
 
@@ -541,8 +572,11 @@ At a high level, deployment follows this order:
 2. Run `scripts/bootstrap/migrate-state-stack.sh <target>` to materialize `backend.tf`, migrate the state stack into S3, and verify the remote state.
 3. Deploy **account / GitHub OIDC** resources.
 4. Deploy the **AWS Organizations** structure.
-5. Deploy the **environment baseline**.
-6. Run `scripts/bootstrap/reconcile-workload-account.sh <env>` and apply the reviewed saved plan to reconcile current workload-created CMK permissions into the GitHub Apply role.
+5. Deploy the **environment baseline** locally or through the plan-first `Terraform Apply` workflow.
+6. Reconcile the current workload-created CMK permissions into the GitHub Apply role:
+   - locally with `scripts/bootstrap/reconcile-workload-account.sh`; or
+   - through the plan-first `Reconcile Workload Account` workflow.
+   The `Terraform Apply` workflow can invoke reconciliation automatically after a successful baseline apply.
 7. Deploy or re-apply **IAM Identity Center** assignments.
 8. Validate **security automation workflows**.
 9. Export validation evidence for the applicable validation layers.
@@ -623,7 +657,7 @@ terraform -chdir=environments/dev init -input=false
 
 The workload bootstrap evidence workflow performs the state-stack backend materialization and initialization automatically.
 
-Bootstrap validation is strict by default for workload-created CMK policy evidence. `STRICT_WORKLOAD_CMK_POLICY_CHECKS` defaults to `true`, which means stale or missing GitHub Apply role policy references to the current workload Lambda and Secrets Manager CMKs fail validation. After applying a workload baseline, use `scripts/bootstrap/reconcile-workload-account.sh <env> --apply` to resolve the current CMKs, update the GitHub Apply role through a saved account-stack plan, and run strict bootstrap validation. Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional validation where those checks should be warnings instead of failures.
+Bootstrap validation is strict by default for workload-created CMK policy evidence. `STRICT_WORKLOAD_CMK_POLICY_CHECKS` defaults to `true`, which means stale or missing GitHub Apply role policy references to the current workload Lambda and Secrets Manager CMKs fail validation. After applying a workload baseline, reconcile the account stack through the `Reconcile Workload Account` workflow or the local helper. For a local two-step review that applies the exact reviewed file, generate it with `--plan-file` and apply it with `--apply-plan`. The one-step `--apply` mode generates, displays, confirms, and applies a saved plan within the same invocation. Both apply paths run strict bootstrap validation unless `--skip-validation` is used. Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional validation where those checks should be warnings instead of failures.
 
 ### Workload Baseline Validation
 
@@ -857,17 +891,40 @@ Each module also includes its own local README.md.
 
 ## Current Release Highlights
 
-## v1.4.2
+## v1.5.0
 
 ### Added
 
-- Added `scripts/bootstrap/reconcile-workload-account.sh` to resolve current
-  workload Lambda and Secrets Manager CMK outputs, safely reconcile them into
-  the workload GitHub Apply role, and run strict post-apply bootstrap
-  validation.
-- Updated deployment and validation guidance to use
-  `scripts/bootstrap/reconcile-workload-account.sh <env>` instead of manually
-  copying workload CMK outputs and re-applying `bootstrap/<env>/account`.
+- Added plan-first `Terraform Apply` execution that publishes the readable
+  workload plan before approval, uploads the exact binary plan as a short-lived
+  artifact, and applies only that reviewed plan after the protected environment
+  is approved.
+- Added optional post-baseline workload-account reconciliation to the
+  `Terraform Apply` workflow.
+- Added plan-first `Reconcile Workload Account` execution with `plan-only` and
+  `plan-and-apply` modes.
+- Added `--plan-file` and `--apply-plan` support to
+  `scripts/bootstrap/reconcile-workload-account.sh` for durable local plan
+  review and exact saved-plan application across separate invocations.
+- Added saved-plan metadata and SHA-256 verification for baseline and
+  reconciliation Apply jobs.
+- Added workload Plan and Apply account-safety validation for `ACCOUNT_ID`,
+  configured role ARN account ownership, active AWS caller identity, and saved
+  plan account metadata.
+
+### Changed
+
+- Standardized workload deployment on paired GitHub environments:
+  `dev-plan` / `dev`, `staging-plan` / `staging`, and `prod-plan` / `prod`.
+- Moved approval to the Apply job so reviewers can inspect the Terraform plan
+  before approving deployment.
+- Updated reconciliation automation to apply the exact saved account-stack plan
+  rather than regenerating a plan after approval.
+- Updated GitHub OIDC execution so an unset `AWS_PROFILE` uses the AWS default
+  credential provider chain, while local profile-based operation remains
+  supported.
+- Updated deployment, adoption, validation, and bootstrap-script documentation
+  for the final plan-before-apply CI/CD model.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
 

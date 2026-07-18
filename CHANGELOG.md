@@ -1,5 +1,105 @@
 # Changelog
 
+## v1.5.0
+
+This release completes the workload CI/CD integration (for now) by moving baseline and
+workload-account changes to a plan-before-approval model with exact saved-plan
+application, protected GitHub environments, and stronger AWS account safety
+validation.
+
+### Added
+
+- Added a plan-first `Terraform Apply` workflow that:
+  - generates the workload plan through the matching `*-plan` GitHub
+    environment and GitHub Plan role;
+  - publishes readable plan output before deployment approval;
+  - uploads the binary plan, readable plan, checksum, and workflow metadata as
+    a short-lived artifact;
+  - waits for approval on the protected workload Apply environment; and
+  - downloads, verifies, and applies the exact saved plan after approval.
+- Added optional post-baseline workload-account reconciliation to the
+  `Terraform Apply` workflow.
+- Added plan-first `Reconcile Workload Account` workflow modes:
+  - `plan-only`;
+  - `plan-and-apply`.
+- Added protected Apply-job approval and exact saved-plan handoff to workload
+  account reconciliation.
+- Added `--plan-file <path>` to
+  `scripts/bootstrap/reconcile-workload-account.sh` for retaining a generated
+  reconciliation plan after the script exits.
+- Added `--apply-plan <path>` to
+  `scripts/bootstrap/reconcile-workload-account.sh` for applying an existing
+  reviewed plan without generating a replacement plan.
+- Added Plan and Apply job validation for:
+  - required 12-digit `ACCOUNT_ID`;
+  - configured IAM role ARN account ownership; and
+  - active AWS caller account identity.
+- Added saved-plan checksum and metadata verification before baseline and
+  reconciliation Apply jobs.
+- Added expected AWS account information to the baseline saved-plan metadata
+  so the protected Apply job can verify that the reviewed plan belongs to the
+  configured workload account.
+
+### Changed
+
+- Changed workload deployment sequencing so the Terraform plan is generated
+  before the reviewer is asked to approve the Apply job.
+- Standardized workload CI/CD around paired GitHub environments:
+  - `dev-plan` / `dev`;
+  - `staging-plan` / `staging`;
+  - `prod-plan` / `prod`.
+- Changed the protected `dev`, `staging`, and `prod` environments to guard only
+  the privileged Apply jobs, while the matching `*-plan` environments provide
+  the Plan roles and allow plans to complete before approval.
+- Changed workload reconciliation automation to apply the exact reviewed
+  account-stack plan after approval instead of regenerating the plan in the
+  Apply job.
+- Preserved the existing one-step reconciliation `--apply` mode while adding a
+  durable two-invocation review path through `--plan-file` and `--apply-plan`.
+- Changed GitHub OIDC execution so an unset `AWS_PROFILE` uses the AWS default
+  credential provider chain instead of attempting to load an empty AWS CLI
+  profile.
+- Updated the root README, quickstart, validation checklist, adoption guide,
+  and bootstrap-script README for the v1.5.0 plan-before-apply model.
+
+### Fixed
+
+- Fixed saved-plan artifact upload failures caused by storing plan files in the
+  hidden `.terraform-plan-artifact` directory, which
+  `actions/upload-artifact` ignored by default.
+- Fixed strict post-reconciliation validation under GitHub OIDC by omitting
+  `AWS_PROFILE` when no profile is configured instead of exporting
+  `AWS_PROFILE=""`.
+
+### Security
+
+- Reduced blind-approval risk by ensuring reviewers can inspect Terraform plan
+  output before approving a deployment.
+- Reduced plan substitution and time-of-check/time-of-use risk by applying the
+  exact saved plan produced before approval.
+- Added account-bound role and caller validation to reduce the risk of planning
+  or applying against the wrong AWS account.
+- Kept Plan and Apply OIDC trust paths separated through distinct GitHub
+  environments and IAM roles.
+- Limited saved Terraform plan artifacts to short retention because binary plan
+  files may contain sensitive configuration values.
+
+### Notes
+
+- Configure the same workload `ACCOUNT_ID` in both members of each GitHub
+  environment pair, such as `dev-plan` and `dev`.
+- Configure `PLAN_ROLE_GITHUB_ARN` in the `*-plan` environment and
+  `APPLY_ROLE_GITHUB_ARN` in the matching protected Apply environment.
+- Keep shared values such as `PRIMARY_REGION`, `CLOUD_NAME`,
+  `TF_STATE_BUCKET_ARN`, and `TF_STATE_BUCKET_CMK_ARN` synchronized across each
+  Plan/Apply environment pair.
+- The standalone Terraform Plan workflow remains useful for pull requests,
+  pushes, and independent review. The Terraform Apply workflow generates its
+  own saved plan so the approved Apply job consumes an artifact from the same
+  workflow run.
+- The reconciliation helper continues to run strict workload bootstrap
+  validation after apply unless `--skip-validation` is explicitly used.
+
 ## v1.4.2
 
 ### Added

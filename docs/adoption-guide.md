@@ -138,6 +138,7 @@ This baseline helps address common AWS security and operational problems, includ
 - Flat single-account AWS environments
 - Lack of environment separation
 - Long-lived CI/CD access keys
+- Terraform applies approved before a reviewable plan exists
 - Weak or inconsistent logging
 - No centralized detection layer
 - Missing Security Hub / GuardDuty / Config coverage
@@ -164,6 +165,7 @@ Deploying this baseline provides a production-aligned AWS security foundation wi
 - Control-plane separation
 - Environment-specific, encrypted remote Terraform state with S3 native locking
 - GitHub OIDC CI/CD roles
+- Plan-before-apply deployment workflows with protected approvals and exact saved-plan application
 - IAM Identity Center groups and permission sets
 - Private VPC networking
 - Deployment profiles
@@ -435,15 +437,20 @@ Recommended deployment order:
 5. Apply bootstrap/<env>/state locally
 6. Migrate bootstrap/<env>/state with scripts/bootstrap/migrate-state-stack.sh
 7. Deploy bootstrap/<env>/account
-8. Deploy environments/<env>
-9. Run scripts/bootstrap/reconcile-workload-account.sh <env> and apply the reviewed plan, if using GitHub OIDC
+8. Deploy environments/<env> locally or through the plan-first Terraform Apply workflow
+9. Reconcile the workload account locally or through Reconcile Workload Account plan-and-apply
 10. Deploy or re-apply bootstrap/control_plane/identity_center
 11. Run validation and export evidence
 ```
 
-The reconciliation helper reads the current workload-created Lambda and
-Secrets Manager CMK outputs, applies them through a saved account-stack plan,
-and runs strict workload bootstrap validation after apply.
+The GitHub deployment path generates and publishes the plan before requesting
+approval, then applies the exact saved plan after the protected environment is
+approved. Reconciliation follows the same model and runs strict workload
+bootstrap validation after apply.
+
+For local reconciliation across separate review and apply invocations, use
+`--plan-file` followed by `--apply-plan`. The one-step `--apply` mode reviews
+and applies a plan within the same invocation.
 
 Deploy `dev` first before deploying `staging` or `prod`.
 
@@ -588,10 +595,14 @@ Before adopting this baseline, answer the following questions:
 ### CI/CD Strategy
 
 - Will GitHub Actions manage Terraform?
-- Which GitHub environments are required?
-- Who can approve production applies?
-- Should plan and apply roles be separated?
-- Are GitHub environment protections enabled?
+- Which paired Plan/Apply environments are required?
+- Will `dev-plan`, `staging-plan`, and `prod-plan` run without approval so plans exist before deployment review?
+- Who can approve the protected `dev`, `staging`, and `prod` Apply environments?
+- Are plan and apply roles separated in both GitHub OIDC trust and IAM permissions?
+- Is the same `ACCOUNT_ID` configured in both members of each environment pair?
+- Are shared region, naming, and state-backend values synchronized across each pair?
+- Will Apply workflows use exact saved plans rather than generating a new plan after approval?
+- How long should sensitive saved-plan artifacts be retained?
 - Are static AWS keys prohibited for CI/CD?
 
 ---
@@ -695,13 +706,46 @@ The existence of `backend.tf` alone is not proof of migration. The remote S3 obj
 
 GitHub OIDC roles are critical CI/CD access components.
 
-The `account` substacks should be modified carefully.
+Use separate Plan and Apply GitHub environments and roles:
 
-Do not destroy account stacks before destroying the baseline stacks they manage.
+```text
+dev-plan        -> dev Plan role
+dev             -> dev Apply role
 
-The `control-plane` account stack should generally be treated as manual/local-only because it creates the roles GitHub uses to access the control plane.
+staging-plan    -> staging Plan role
+staging         -> staging Apply role
 
----
+prod-plan       -> prod Plan role
+prod            -> prod Apply role
+```
+
+The Plan environment should normally run without required deployment approval.
+The Apply environment should enforce the intended reviewer and branch
+protections. Using the same protected environment for both jobs would cause
+the Plan job to wait for approval before a plan exists.
+
+Configure the generic `ACCOUNT_ID` in both members of each pair. Workflows
+should validate that:
+
+- the role ARN belongs to the expected account;
+- the active OIDC caller is operating in that account; and
+- the saved-plan metadata matches the expected account and workflow context.
+
+Keep shared values such as `PRIMARY_REGION`, `CLOUD_NAME`,
+`TF_STATE_BUCKET_ARN`, and `TF_STATE_BUCKET_CMK_ARN` synchronized across each
+pair. Role-specific values should remain scoped to the appropriate environment.
+
+The baseline and reconciliation Apply workflows should publish the plan first,
+store the exact plan as a short-lived artifact, and apply only that artifact
+after approval. Treat binary Terraform plans as sensitive because they may
+contain configuration values that are not visible in redacted terminal output.
+
+The `account` substacks should be modified carefully. Do not destroy account
+stacks before destroying the baseline stacks they manage.
+
+The `control-plane` account stack should generally be treated as
+manual/local-only because it creates the roles GitHub uses to access the
+control plane.
 
 ### IAM Identity Center
 

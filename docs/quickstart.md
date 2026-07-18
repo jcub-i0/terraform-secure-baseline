@@ -468,10 +468,35 @@ Add these to the appropriate GitHub environment variables:
 
 # Phase 6 - Configure GitHub Environment Variables (Skip if not using `GitHub OIDC`)
 
-Variables in each GitHub environment may include:
+Workload deployment uses paired GitHub environments:
+
+| Plan environment | Apply environment |
+|---|---|
+| `dev-plan` | `dev` |
+| `staging-plan` | `staging` |
+| `prod-plan` | `prod` |
+
+The Plan environment runs before approval and exposes the Plan role. The Apply
+environment should use required reviewers and exposes the Apply role only after
+approval.
+
+Configure the account-specific expected ID in both members of each pair:
 
 ```text
+ACCOUNT_ID
+```
+
+For example, `dev-plan` and `dev` must both contain the `dev` AWS account ID.
+This generic `ACCOUNT_ID` is used by workflow safety checks. It is separate
+from the Terraform input variables `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and
+`ACCOUNT_ID_PROD`, which may still be required by the workload configuration.
+
+Common variables may include:
+
+```text
+ACCOUNT_ID
 PRIMARY_REGION
+CLOUD_NAME
 TF_STATE_BUCKET_ARN
 TF_STATE_BUCKET_CMK_ARN
 BUCKET_ADMIN_PRINCIPALS
@@ -482,7 +507,27 @@ SECOPS_EMAILS
 BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS
 DEPLOYMENT_PROFILE
 EGRESS_MODE
+BRANCHES_PLAN_GITHUB
+ALLOW_PULL_REQUESTS_PLAN_GITHUB
+BRANCHES_APPLY_GITHUB
 ```
+
+Role-specific variables:
+
+| Environment type | Required role variable |
+|---|---|
+| `*-plan` | `PLAN_ROLE_GITHUB_ARN` |
+| Apply environment | `APPLY_ROLE_GITHUB_ARN` |
+
+The Apply environment also requires:
+
+```text
+STATE_STACK_BACKEND_KEY
+```
+
+`STATE_STACK_BACKEND_KEY` is used when the reconciliation Apply job
+materializes the ignored state-stack `backend.tf` before strict post-apply
+validation.
 
 Secrets may include:
 
@@ -490,9 +535,10 @@ Secrets may include:
 ABUSEIPDB_API_KEY
 ```
 
-Each GitHub environment should contain the variables appropriate for the AWS account and stack it manages.
-
-If deployment profile and egress mode are set through Terraform variable files instead of GitHub environment variables, make sure the configured values match the intended environment behavior.
+Values used by both jobs—especially `ACCOUNT_ID`, `PRIMARY_REGION`,
+`CLOUD_NAME`, and the Terraform state bucket and CMK ARNs—must match across
+each Plan/Apply pair. The workflows validate the expected AWS account, but
+operators should also keep all shared configuration synchronized.
 
 Recommended environment defaults:
 
@@ -511,6 +557,18 @@ After setting necessary variables for the workload environments (see `environmen
 > If using `GitHub OIDC`, be sure to add the `apply_role_github_arn` output value to each environment's `bucket_admin_principals` variable.
 
 You can deploy through GitHub Actions once OIDC roles and GitHub environment variables are configured or you can deploy locally if not.
+
+When the `Terraform Apply` workflow is used, it does not immediately run
+`terraform apply`. It first:
+
+1. runs the Plan job through `<env>-plan` and the Plan role;
+2. publishes the readable plan and uploads the saved plan artifact;
+3. waits for approval on the protected `<env>` environment;
+4. verifies the plan metadata and checksum; and
+5. applies the exact saved plan through the Apply role.
+
+The optional `reconcile_workload_account` input starts the plan-first
+reconciliation workflow after a successful baseline apply.
 
 Before applying, review the environment's profile settings:
 
@@ -585,61 +643,107 @@ These outputs confirm how profile defaults and explicit overrides resolved for t
 
 # Phase 8 - Reconcile Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
-After successfully applying each environment baseline, run
-`reconcile-workload-account.sh` for that environment. The helper reads the
-current workload-created Lambda and Secrets Manager CMK outputs, validates the
-resolved `bootstrap/<env>/account` configuration, and generates a saved
-Terraform plan.
+After successfully applying each environment baseline, reconcile the current
+workload-created Lambda and Secrets Manager CMK permissions into
+`bootstrap/<env>/account`.
 
-The account stack may receive its normal inputs through Terraform-supported
-variable sources such as `terraform.tfvars`, `*.auto.tfvars`, exported
-`TF_VAR_*` variables, defaults, or the helper's `--var` and `--var-file`
-options. The helper overrides only `lambda_cmk_arn` and
-`secrets_manager_cmk_arn` with the current workload outputs.
+## GitHub Actions
 
-Run these commands from the repository root. Without `--apply`, the helper is
-plan-only. Review the plan, then rerun with `--apply`; the apply path uses the
-exact saved plan and runs strict bootstrap validation afterward.
+The `Reconcile Workload Account` workflow supports:
 
-## Dev
+```text
+plan-only
+plan-and-apply
+```
+
+`plan-only` generates the reconciliation plan, publishes the readable output,
+and uploads the saved plan artifact without starting an Apply job.
+
+`plan-and-apply` generates the plan first, then pauses on the protected
+`dev`, `staging`, or `prod` environment. After approval, the Apply job
+downloads and verifies the exact saved plan, applies it through the GitHub
+Apply role, and runs strict workload bootstrap validation.
+
+The plan is generated through the matching `*-plan` environment. Both the
+Plan and Apply environments must contain the same generic `ACCOUNT_ID` for the
+target AWS account.
+
+The `Terraform Apply` workflow can invoke `plan-and-apply` automatically when
+its `reconcile_workload_account` input is selected.
+
+## Local Execution
+
+The helper uses Terraform's normal variable-loading behavior for the account
+stack, including `terraform.tfvars`, `*.auto.tfvars`, exported `TF_VAR_*`
+variables, defaults, and optional `--var` or `--var-file` arguments. It
+overrides only `lambda_cmk_arn` and `secrets_manager_cmk_arn` with the current
+workload outputs.
+
+For an exact plan review across two local invocations, save the plan explicitly
+with `--plan-file`, then apply that same file with `--apply-plan`.
+
+### Dev
 
 ```bash
+DEV_RECONCILIATION_PLAN="/tmp/tf-secure-baseline-dev-account-reconciliation.tfplan"
+
 AWS_PROFILE=dev \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh dev
+./scripts/bootstrap/reconcile-workload-account.sh dev \
+  --plan-file="${DEV_RECONCILIATION_PLAN}"
 
 AWS_PROFILE=dev \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh dev --apply
+./scripts/bootstrap/reconcile-workload-account.sh dev \
+  --apply-plan="${DEV_RECONCILIATION_PLAN}"
 ```
 
-## Staging
+### Staging
 
 ```bash
-AWS_PROFILE=staging \
-EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh staging
+STAGING_RECONCILIATION_PLAN="/tmp/tf-secure-baseline-staging-account-reconciliation.tfplan"
 
 AWS_PROFILE=staging \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh staging --apply
+./scripts/bootstrap/reconcile-workload-account.sh staging \
+  --plan-file="${STAGING_RECONCILIATION_PLAN}"
+
+AWS_PROFILE=staging \
+EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh staging \
+  --apply-plan="${STAGING_RECONCILIATION_PLAN}"
 ```
 
-## Prod
+### Prod
 
 ```bash
-AWS_PROFILE=prod \
-EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh prod
+PROD_RECONCILIATION_PLAN="/tmp/tf-secure-baseline-prod-account-reconciliation.tfplan"
 
 AWS_PROFILE=prod \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh prod --apply
+./scripts/bootstrap/reconcile-workload-account.sh prod \
+  --plan-file="${PROD_RECONCILIATION_PLAN}"
+
+AWS_PROFILE=prod \
+EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+./scripts/bootstrap/reconcile-workload-account.sh prod \
+  --apply-plan="${PROD_RECONCILIATION_PLAN}"
 ```
 
-Use `--var-file <path>` when the account inputs are stored in a custom variable
+The simpler `--apply` mode remains available. It generates a plan, displays it,
+asks for confirmation, and applies that plan within the same invocation. A
+separate earlier plan-only run is not reused unless `--plan-file` and
+`--apply-plan` are used.
+
+Use `--var-file <path>` when account inputs are stored in a custom variable
 file that Terraform would not auto-load. Relative paths are resolved from the
-selected `bootstrap/<env>/account` directory.
+selected `bootstrap/<env>/account` directory. Do not combine `--apply-plan`
+with `--var` or `--var-file`; the reviewed saved plan already contains the
+resolved input values.
+
+Saved Terraform plan files may contain sensitive configuration values. Store
+local plan files securely and remove them after the apply and validation
+complete.
 
 ---
 
@@ -735,8 +839,8 @@ Recommended validation order:
 5. Apply each bootstrap/<env>/state locally
 6. Migrate each bootstrap/<env>/state with migrate-state-stack.sh
 7. Deploy bootstrap/<env>/account
-8. Deploy environments/<env>
-9. Run reconcile-workload-account.sh <env> and apply the reviewed plan, if using GitHub OIDC
+8. Deploy environments/<env> locally or through the plan-first Terraform Apply workflow
+9. Reconcile the workload account locally or through Reconcile Workload Account plan-and-apply
 10. Deploy or re-apply bootstrap/control_plane/identity_center
 11. Run validation and export evidence
 ```
@@ -745,7 +849,8 @@ Recommended validation order:
 
 ## GitHub Actions
 
-After GitHub OIDC roles and environment variables are configured, CI/CD can manage normal plan/apply/destroy operations.
+After GitHub OIDC roles and environment variables are configured, CI/CD can
+manage normal plan/apply/destroy operations.
 
 Expected workflows:
 
@@ -753,18 +858,37 @@ Expected workflows:
 |---------|---------|
 | Terraform Static Analysis | Runs static Terraform validation and scanning |
 | Docs Validation | Runs documentation linting and link checks |
-| Terraform Plan | Runs plans for environment and control-plane stacks |
-| Terraform Apply | Applies selected environment baseline |
+| Terraform Plan | Runs independent plans for environment and control-plane stacks |
+| Terraform Apply | Generates and publishes a workload plan, waits for protected-environment approval, then applies the exact saved plan |
+| Reconcile Workload Account | Runs `plan-only` or generates a reconciliation plan, waits for approval, applies the exact saved plan, and runs strict bootstrap validation |
 | Terraform Destroy | Cleans up Identity Center attachments, then destroys the selected workload environment |
 | Workload Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
 | Workload Baseline Evidence | Exports the 14-script workload baseline evidence package |
 | Control-Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
 
-The destroy workflow first updates the Identity Center stack to remove environment-specific policy attachments before destroying the workload environment.
+The standalone `Terraform Plan` workflow remains useful for pull requests,
+pushes, and independent review. `Terraform Apply` generates its own plan in the
+same workflow run so the protected Apply job can consume the exact artifact
+that was presented for approval.
 
-This prevents IAM delete conflicts caused by Identity Center-managed roles still attaching baseline-created IAM policies.
+Plan jobs use `dev-plan`, `staging-plan`, or `prod-plan`; Apply jobs use the
+matching protected `dev`, `staging`, or `prod` environment. Configure
+`ACCOUNT_ID` in both members of each pair. The workflows validate the role ARN
+account, the active AWS caller account, and the expected account stored in the
+saved-plan metadata.
 
-Evidence workflows use the read-only GitHub Plan roles. On clean runners, they copy the tracked `backend.tf.migrated.example` into the ignored runtime `backend.tf` path before initializing the state stack. The evidence workflows require remote state by default.
+Saved binary plans are short-lived artifacts because Terraform plans can
+contain sensitive values. Keep repository and workflow-run access limited to
+trusted operators.
+
+The destroy workflow first updates the Identity Center stack to remove
+environment-specific policy attachments before destroying the workload
+environment. This prevents IAM delete conflicts caused by Identity
+Center-managed roles still attaching baseline-created IAM policies.
+
+Evidence workflows use the read-only GitHub Plan roles. On clean runners, they
+materialize the ignored runtime state-stack backend before initializing the
+state stack. The evidence workflows require remote state by default.
 
 ---
 
