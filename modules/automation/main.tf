@@ -1,6 +1,6 @@
 # EC2 ISOLATION LAMBDA RESOURCES
 ## PACKAGE EC2 ISOLATION LAMBDA
-resource "archive_file" "lambda_ec2_isolation" {
+data "archive_file" "lambda_ec2_isolation" {
   type        = "zip"
   source_file = "${path.module}/lambda/ec2_isolation.py"
   output_path = "${path.module}/lambda/ec2_isolation.zip"
@@ -13,10 +13,10 @@ resource "aws_lambda_function" "ec2_isolation" {
   role                           = var.lambda_ec2_isolation_role_arn
   handler                        = "ec2_isolation.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = archive_file.lambda_ec2_isolation.output_path
+  filename                       = data.archive_file.lambda_ec2_isolation.output_path
   timeout                        = 60
   memory_size                    = 256
-  source_code_hash               = archive_file.lambda_ec2_isolation.output_base64sha256
+  source_code_hash               = data.archive_file.lambda_ec2_isolation.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = null #5
 
@@ -240,7 +240,7 @@ resource "aws_cloudwatch_metric_alarm" "ec2_isolation_dlq_visible_messages" {
 
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
-resource "archive_file" "lambda_ec2_rollback" {
+data "archive_file" "lambda_ec2_rollback" {
   type        = "zip"
   source_file = "${path.module}/lambda/ec2_rollback.py"
   output_path = "${path.module}/lambda/ec2_rollback.zip"
@@ -253,10 +253,10 @@ resource "aws_lambda_function" "ec2_rollback" {
   role                           = var.lambda_ec2_rollback_role_arn
   handler                        = "ec2_rollback.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = archive_file.lambda_ec2_rollback.output_path
+  filename                       = data.archive_file.lambda_ec2_rollback.output_path
   timeout                        = 60
   memory_size                    = 256
-  source_code_hash               = archive_file.lambda_ec2_rollback.output_base64sha256
+  source_code_hash               = data.archive_file.lambda_ec2_rollback.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = null #5
 
@@ -522,7 +522,7 @@ resource "aws_cloudwatch_metric_alarm" "ec2_rollback_dlq_visible_messages" {
 }
 
 # IP ENRICHMENT LAMBDA RESOURCES
-resource "archive_file" "lambda_ip_enrichment" {
+data "archive_file" "lambda_ip_enrichment" {
   type        = "zip"
   source_file = "${path.module}/lambda/ip_enrichment.py"
   output_path = "${path.module}/lambda/ip_enrichment.zip"
@@ -534,10 +534,10 @@ resource "aws_lambda_function" "ip_enrichment" {
   role                           = var.lambda_ip_enrichment_role_arn
   handler                        = "ip_enrichment.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = archive_file.lambda_ip_enrichment.output_path
+  filename                       = data.archive_file.lambda_ip_enrichment.output_path
   timeout                        = 60
   memory_size                    = 256
-  source_code_hash               = archive_file.lambda_ip_enrichment.output_base64sha256
+  source_code_hash               = data.archive_file.lambda_ip_enrichment.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
   reserved_concurrent_executions = null #2
 
