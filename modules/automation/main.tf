@@ -38,18 +38,6 @@ resource "aws_lambda_function" "ec2_isolation" {
     }
   }
 
-  # PREVENT A `TERRAFORM APPLY` FROM RELEASING AN ISOLATED EC2 INSTANCE
-  lifecycle {
-    ignore_changes = [
-      vpc_security_group_ids,
-      tags["Isolated"],
-      tags["IsolatedBy"],
-      tags["IsolationFinding"],
-      tags["IsolationTime"],
-      tags["OriginalSecurityGroups"],
-    ]
-  }
-
   depends_on = [
     aws_cloudwatch_log_group.lambda_ec2_isolation
   ]

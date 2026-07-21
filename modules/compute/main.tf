@@ -72,6 +72,18 @@ resource "aws_instance" "ec2" {
     kms_key_id  = var.ebs_cmk_arn
   }
 
+  # PREVENT A `TERRAFORM APPLY` FROM RELEASING AN ISOLATED EC2 INSTANCE
+  lifecycle {
+    ignore_changes = [
+      vpc_security_group_ids,
+      tags["Isolated"],
+      tags["IsolatedBy"],
+      tags["IsolationFinding"],
+      tags["IsolationTime"],
+      tags["OriginalSecurityGroups"],
+    ]
+  }
+
   tags = {
     Name             = "${var.name_prefix}-EC2-${each.key}"
     Environment      = var.environment
