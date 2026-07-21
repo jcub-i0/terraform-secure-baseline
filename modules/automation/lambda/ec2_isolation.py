@@ -157,10 +157,6 @@ def isolate_instance(instance, finding_id):
         ],
         Tags = [
             {
-                "Key": PROTECTION_TAG,
-                "Value": "false"
-            },
-            {
                 "Key": "Isolated",
                 "Value": "true"
             },
