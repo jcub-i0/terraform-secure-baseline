@@ -56,7 +56,9 @@ resource "aws_instance" "ec2" {
   vpc_security_group_ids = [aws_security_group.compute.id]
   monitoring             = true
   iam_instance_profile   = var.instance_profile_name
+
   user_data              = templatefile("${path.module}/user_data/bootstrap.sh.tpl", {})
+  user_data_replace_on_change = true
 
   metadata_options {
     http_tokens                 = "required"
@@ -75,7 +77,7 @@ resource "aws_instance" "ec2" {
     Environment      = var.environment
     Terraform        = "true"
     Purpose          = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
-    IsolationAllowed = "true"
+    IsolationAllowed = tostring(var.isolation_allowed)
     PatchGroup       = var.patch_tag_value
     Backup           = "true"
   }
