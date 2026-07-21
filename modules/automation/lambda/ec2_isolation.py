@@ -122,8 +122,18 @@ def isolate_instance(instance, finding_id):
     
     tags = {t["Key"]: t["Value"] for t in instance.get("Tags", [])}
 
-    if tags.get(PROTECTION_TAG, "").lower() == "false":
-        logger.info(f"Instance {instance_id} is protected from isolation")
+    isolation_allowed = (
+        tags.get(PROTECTION_TAG, "")
+        .strip()
+        .lower()
+    )
+
+    if isolation_allowed != "true":
+        logger.info(
+            "Skipping isolation for %s because %s is not explicitly true",
+            instance_id,
+            PROTECTION_TAG,
+        )
         return
     
     original_sgs = [sg["GroupId"] for sg in instance["SecurityGroups"]]
