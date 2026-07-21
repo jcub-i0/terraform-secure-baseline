@@ -57,7 +57,7 @@ resource "aws_instance" "ec2" {
   monitoring             = true
   iam_instance_profile   = var.instance_profile_name
 
-  user_data              = templatefile("${path.module}/user_data/bootstrap.sh.tpl", {})
+  user_data                   = templatefile("${path.module}/user_data/bootstrap.sh.tpl", {})
   user_data_replace_on_change = true
 
   metadata_options {

@@ -55,7 +55,7 @@ module "compute" {
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
-  isolation_allowed = var.isolation_allowed
+  isolation_allowed              = var.isolation_allowed
 
   interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
   data_sg_id                = module.storage.data_sg_id
