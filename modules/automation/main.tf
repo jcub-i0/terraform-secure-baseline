@@ -34,6 +34,7 @@ resource "aws_lambda_function" "ec2_isolation" {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
       SNS_TOPIC_ARN    = var.secops_topic_arn
+      AUTO_ISOLATION_SEVERITIES = "CRITICAL"
     }
   }
 
