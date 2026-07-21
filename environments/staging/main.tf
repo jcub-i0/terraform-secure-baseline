@@ -20,4 +20,5 @@ module "baseline" {
   egress_mode                        = var.egress_mode
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
   secops_emails                      = var.secops_emails
+  isolation_allowed = var.isolation_allowed
 }
