@@ -56,7 +56,9 @@ resource "aws_instance" "ec2" {
   vpc_security_group_ids = [aws_security_group.compute.id]
   monitoring             = true
   iam_instance_profile   = var.instance_profile_name
-  user_data              = templatefile("${path.module}/user_data/bootstrap.sh.tpl", {})
+
+  user_data                   = file("${path.module}/user_data/bootstrap.sh")
+  user_data_replace_on_change = true
 
   metadata_options {
     http_tokens                 = "required"
@@ -70,12 +72,24 @@ resource "aws_instance" "ec2" {
     kms_key_id  = var.ebs_cmk_arn
   }
 
+  # PREVENT A `TERRAFORM APPLY` FROM RELEASING AN ISOLATED EC2 INSTANCE
+  lifecycle {
+    ignore_changes = [
+      vpc_security_group_ids,
+      tags["Isolated"],
+      tags["IsolatedBy"],
+      tags["IsolationFinding"],
+      tags["IsolationTime"],
+      tags["OriginalSecurityGroups"],
+    ]
+  }
+
   tags = {
     Name             = "${var.name_prefix}-EC2-${each.key}"
     Environment      = var.environment
     Terraform        = "true"
     Purpose          = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
-    IsolationAllowed = "true"
+    IsolationAllowed = tostring(var.isolation_allowed)
     PatchGroup       = var.patch_tag_value
     Backup           = "true"
   }

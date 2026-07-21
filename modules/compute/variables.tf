@@ -38,3 +38,9 @@ variable "db_port" {
 variable "patch_tag_value" {
   type = string
 }
+
+variable "isolation_allowed" {
+  description = "Whether EC2 instances may be automatically isolated by the incident-response Lambda"
+  type        = bool
+  default     = false
+}
