@@ -145,3 +145,9 @@ variable "secops_emails" {
     error_message = "Each entry in secops_emails must be a valid email address."
   }
 }
+
+variable "isolation_allowed" {
+  description = "Whether EC2 instances may be automatically isolated by the incident-response Lambda"
+  type        = bool
+  default     = true
+}
