@@ -48,9 +48,9 @@ variable "isolation_allowed" {
 variable "compute_policy_rule_ids" {
   description = "Security-policy rule IDs that must exist before EC2 instances launch"
   type = object({
-    endpoints_ingress_from_compute = string
-    compute_egress_to_endpoints = string
-    compute_egress_to_db = string
+    endpoints_ingress_from_compute    = string
+    compute_egress_to_endpoints       = string
+    compute_egress_to_db              = string
     compute_egress_to_internet_egress = optional(string)
   })
 }
