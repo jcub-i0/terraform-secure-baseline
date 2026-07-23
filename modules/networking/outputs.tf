@@ -86,5 +86,5 @@ output "endpoint_private_subnet_ids_list" {
 
 output "compute_policy_rule_ids" {
   description = "Compute security-policy rule IDs from the security_policy submodule"
-  value = module.security_policy.compute_policy_rule_ids
+  value       = module.security_policy.compute_policy_rule_ids
 }
