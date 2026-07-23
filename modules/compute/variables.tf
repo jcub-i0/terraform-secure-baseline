@@ -45,8 +45,8 @@ variable "isolation_allowed" {
   default     = false
 }
 
-variable "compute_policy_rule_ids" {
-  description = "Security-policy rule IDs that must exist before EC2 instances launch"
+variable "compute_sg_rule_ids" {
+  description = "Security Group rule IDs that must exist before compute EC2 instances launch"
   type = object({
     endpoints_ingress_from_compute    = string
     compute_egress_to_endpoints       = string
