@@ -47,6 +47,11 @@ data "aws_ami" "ec2" {
   }
 }
 
+## Compute Security Group rule IDs that must exist before compute instances launch
+resource "terraform_data" "compute_security_policy_ready" {
+  input = var.compute_policy_rule_ids
+}
+
 ## EC2 INSTANCE
 resource "aws_instance" "ec2" {
   for_each               = var.compute_private_subnet_ids_map
@@ -83,6 +88,10 @@ resource "aws_instance" "ec2" {
       tags["OriginalSecurityGroups"],
     ]
   }
+
+  depends_on = [
+    terraform_data.compute_security_policy_ready
+  ]
 
   tags = {
     Name             = "${var.name_prefix}-EC2-${each.key}"
