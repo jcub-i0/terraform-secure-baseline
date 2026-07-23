@@ -83,8 +83,3 @@ output "endpoint_private_subnet_ids_list" {
   description = "list(string) of Endpoint Private Subnet IDs"
   value       = [for subnet in aws_subnet.endpoint_private : subnet.id]
 }
-
-output "compute_policy_rule_ids" {
-  description = "Compute security-policy rule IDs from the security_policy submodule"
-  value       = module.security_policy.compute_policy_rule_ids
-}
