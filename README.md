@@ -65,7 +65,8 @@ Key capabilities include:
 - SQS-backed security and compliance notification queues
 - EventBridge target DLQs and workflow-specific automation DLQs
 - Encrypted S3, KMS, SNS, SQS, CloudWatch, and Lambda resources
-- AWS Backup and SSM patching support
+- First-boot Ubuntu package updates and scheduled SSM patching
+- Dependency-aware EC2 launch ordering so required security group rules exist before user data runs
 - Safe, read-only post-deployment validation suite
 - Layer-specific validation evidence export with Markdown and JSON summaries
 
@@ -276,6 +277,12 @@ Compute workloads are deployed in private subnets by default.
 
 The baseline avoids public IPs for application infrastructure and routes private compute egress through controlled paths, including AWS Network Firewall, NAT Gateway, and VPC endpoints where appropriate.
 
+### Dependency-Safe First Boot
+
+The compute security group is created before the networking security-policy rules that reference it. The security-policy module exports the required compute rule IDs through the networking module, and the compute module uses those IDs as a `terraform_data` readiness checkpoint.
+
+Only the EC2 instances wait on that checkpoint. This avoids a cyclic module dependency while ensuring first-boot user data does not run before required endpoint, database, and conditional internet HTTPS rules exist.
+
 ### Configurable Cost/Security Profiles
 
 The baseline supports deployment profiles that select sensible defaults for each environment type.
@@ -368,7 +375,8 @@ Environment stacks include:
 - AWS Network Firewall, when enabled by egress mode
 - NAT Gateway, when required by egress mode
 - VPC endpoints
-- EC2 workloads
+- EC2 workloads with first-boot package updates
+- Resource-level security-policy readiness before EC2 launch
 - S3 storage
 - KMS keys
 - CloudTrail
@@ -427,7 +435,7 @@ When `egress_mode = "auto"`, the effective egress mode is selected from `deploym
 
 Important:
 
-When `egress_mode = "vpc_endpoints_only"`, Network Firewall and NAT Gateways are not deployed, and compute private subnets do not receive a default internet route. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation may fail unless package access is provided another way.
+When `egress_mode = "vpc_endpoints_only"`, Network Firewall and NAT Gateways are not deployed, compute private subnets do not receive a default internet route, and the general compute TCP/443 egress rule is not created. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation and Patch Manager operations against public Ubuntu repositories require an approved package mirror or another explicitly provided path.
 
 ---
 
@@ -452,6 +460,38 @@ This baseline integrates several AWS-native security services:
 | SSM Patch Manager | Patch management |
 
 Some services are profile-aware. For example, AWS Config and Inspector are enabled by default in `production` and `development`, while `minimal` disables them by default unless explicitly overridden.
+
+### EC2 Vulnerability Remediation and Patching
+
+Amazon Inspector package vulnerabilities may appear as Security Hub findings. The baseline addresses stale operating system package findings through two complementary controls:
+
+1. **First-boot update:** each Ubuntu EC2 instance rewrites the standard Ubuntu package sources to HTTPS, refreshes APT metadata with retry behavior, runs `apt-get dist-upgrade -y`, installs `ca-certificates`, `curl`, and `jq`, and records selected package versions in `/var/log/instance-bootstrap.log`.
+2. **Ongoing patching:** the `patch_management` module targets instances by `PatchGroup` tag and runs `AWS-RunPatchBaseline` during a scheduled SSM Maintenance Window with `Install` and `RebootIfNeeded`.
+
+Selecting the latest Ubuntu AMI alone does not guarantee that all packages are current at launch. The first-boot update closes the gap between image publication and instance creation, while Patch Manager handles later baseline-approved patches.
+
+The compute module sets `user_data_replace_on_change = true`, so changes to the bootstrap script replace the affected instances and apply the new first-boot configuration.
+
+#### First-Boot Network Readiness
+
+The compute security group is consumed by the nested networking `security_policy` module, so the entire compute module cannot depend on the entire networking module without creating a cycle. Instead, the baseline passes a `compute_sg_rule_ids` readiness object through:
+
+```text
+security_policy.compute_sg_rule_ids
+        |
+        v
+networking.compute_sg_rule_ids
+        |
+        v
+compute.terraform_data.compute_security_policy_ready
+        |
+        v
+aws_instance.ec2
+```
+
+This resource-level dependency ensures the EC2 instances launch only after the required security group rules exist, including the conditional general HTTPS rule for `nat_only` and `network_firewall` modes. It prevents cloud-init from attempting Ubuntu repository access while Terraform is still creating the egress policy.
+
+SSM connectivity by itself does not prove public repository connectivity. SSM can operate through Interface VPC Endpoints while Ubuntu APT traffic requires NAT, the approved Network Firewall path, or an internal package mirror.
 
 ---
 
@@ -481,7 +521,9 @@ For an eligible instance, the workflow:
 5. adds isolation and recovery metadata tags; and
 6. sends an SNS notification when a topic is configured.
 
-The explicit `IsolationAllowed=true` requirement prevents a matching finding from isolating an instance unless the workload has opted into automatic response.
+The explicit `IsolationAllowed=true` requirement prevents a matching finding from isolating an instance unless the workload has opted into automatic response. The compute module defaults this authorization to `false`.
+
+Terraform also ignores automation-managed changes to the instance security group attachments and isolation metadata tags. A routine `terraform apply` therefore does not automatically reattach the normal compute security group or remove the recovery context from an isolated instance.
 
 ### EC2 Rollback
 
@@ -701,6 +743,8 @@ CLOUD_NAME="tf-secure-baseline" \
 ```
 
 The workload baseline validation suite checks deployed environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture. It also validates notification and failure-retention paths such as SNS subscriptions, SQS queues, EventBridge target DLQs, retry policies, and Lambda workflow wiring.
+
+For Inspector or Security Hub package findings, also confirm that the instance is SSM `Online`, review `/var/log/instance-bootstrap.log`, verify Ubuntu repository connectivity through the effective egress path, and inspect Patch Manager execution and compliance history. An SSM-online result confirms AWS management connectivity but does not by itself confirm access to public Ubuntu repositories.
 
 A successful workload baseline validation run should end with:
 
@@ -951,6 +995,12 @@ Changes completed after the `v1.5.0` release include:
 - Hardened EC2 automatic isolation with an explicit `IsolationAllowed=true` opt-in requirement.
 - Changed the default automatic-isolation severity to `CRITICAL`, with `AUTO_ISOLATION_SEVERITIES` available for explicit expansion.
 - Added ACTIVE/NEW finding checks, instance-state checks, duplicate and already-isolated detection, and fail-closed pre-isolation EBS snapshot behavior.
+- Added Terraform drift protection so routine applies do not release isolated EC2 instances or remove automation-managed isolation metadata.
+- Updated the Ubuntu EC2 bootstrap to use HTTPS package sources, retry APT operations, run a first-boot distribution upgrade, install required operational packages, and record relevant package versions.
+- Enabled EC2 replacement when user data changes through `user_data_replace_on_change`.
+- Added the `security_policy -> networking -> compute` `compute_sg_rule_ids` readiness chain so EC2 instances wait for required security group rules before cloud-init runs.
+- Made general compute TCP/443 egress conditional on the effective egress mode and omitted it for `vpc_endpoints_only`.
+- Updated the compute, networking security-policy, patch-management, root-level, and changelog documentation for the vulnerability-remediation and first-boot dependency changes.
 
 These changes are not part of the immutable `v1.5.0` tag and should remain under `Unreleased` in `CHANGELOG.md` until a later version is tagged.
 
@@ -988,6 +1038,6 @@ This project is intended for:
 
 `tf-secure-baseline` is a deployable AWS security foundation for sensitive workloads.
 
-It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dedicated VPC endpoint subnets, logging, monitoring, durable notification paths, fail-closed automated response, Terraform-managed Lambda packaging, and plan-before-approval GitHub OIDC CI/CD into a **reusable Terraform platform**.
+It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dependency-safe EC2 first boot, first-boot and scheduled patching, durable notification paths, fail-closed automated response, Terraform-managed Lambda packaging, and plan-before-approval GitHub OIDC CI/CD into a **reusable Terraform platform**.
 
 The goal is to provide a **secure-by-default foundation** that can be adapted, extended, and used as the starting point for production SaaS environments.
