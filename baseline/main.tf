@@ -53,6 +53,7 @@ module "compute" {
   environment = var.environment
 
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
+  compute_policy_rule_ids = module.networking.compute_policy_rule_ids
   instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
   isolation_allowed              = var.isolation_allowed
