@@ -2,40 +2,52 @@
 
 ## Overview
 
-The `compute` module provisions private EC2 compute resources and related security groups for the workload environment.
+The `compute` module provisions the workload EC2 compute layer.
 
-This includes:
+It creates:
 
-- A compute security group for EC2 instances
-- A quarantine security group for incident response isolation
-- Ubuntu-based EC2 instances deployed into private compute subnets
-- Encrypted EBS root volumes using the EBS CMK
-- IMDSv2 enforcement
-- Detailed monitoring
-- IAM instance profile attachment
-- User data bootstrapping through `user_data/bootstrap.sh.tpl`
-- Tags for backup, patching, and automated isolation workflows
+- A compute security group
+- A quarantine security group for incident-response isolation
+- One Ubuntu EC2 instance per configured private compute subnet
+- A dependency-readiness checkpoint that prevents EC2 instances from launching
+  before required security group rules exist
+- Encrypted `gp3` root volumes
+- IMDSv2-only metadata access
+- First-boot operating system patching and package installation
+- Tags used by patching, backup, and isolation automation
 
-This module represents the baseline workload compute layer.
+The module creates the compute security groups and EC2 instances. Security group
+rules for normal workload traffic remain owned by the networking
+`security_policy` layer.
 
 ---
 
-## Purpose
+## Architecture
 
-The purpose of this module is to deploy private EC2 instances that can be managed, patched, backed up, monitored, and isolated if needed.
+The module participates in a resource-level dependency chain:
 
-It supports:
+```text
+aws_security_group.compute
+        |
+        v
+networking.security_policy
+        |
+        v
+networking.compute_sg_rule_ids
+        |
+        v
+terraform_data.compute_security_policy_ready
+        |
+        v
+aws_instance.ec2
+```
 
-- Private-by-default compute placement
-- SSM-based instance management
-- Encrypted root volumes
-- Patch Manager targeting through tags
-- Backup targeting through tags
-- Security automation targeting through tags
-- Quarantine-based incident response
-- Initial operating system bootstrap on first boot
+This ordering allows the compute security group to be created early so the
+networking security-policy layer can attach rules to it, while delaying only
+the EC2 instances until those rules exist.
 
-The compute instances are intentionally deployed without public exposure and are designed to operate inside the secured VPC architecture.
+This prevents first-boot user data from running before required HTTPS, VPC
+endpoint, and database security group rules have been created.
 
 ---
 
@@ -43,125 +55,266 @@ The compute instances are intentionally deployed without public exposure and are
 
 ### Compute Security Group
 
-Creates the primary security group for EC2 compute instances:
-
 ```hcl
 resource "aws_security_group" "compute"
 ```
 
-Security group name format:
+Name:
 
 ```text
 <name_prefix>-Compute-SG
 ```
 
-This security group is attached to all EC2 instances created by this module.
+The compute security group is attached to every EC2 instance created by this
+module.
 
-The module creates the security group itself, but traffic rules are expected to be managed by the broader networking/security policy layer.
+The module creates the security group without inline traffic rules. Normal
+traffic rules are managed by the networking `security_policy` layer.
 
-This keeps the compute module focused on creating compute resources while centralizing network access rules elsewhere.
+This separation keeps security policy centralized while allowing the compute
+module to own the EC2 security group lifecycle.
 
 ---
 
 ### Quarantine Security Group
 
-Creates a quarantine security group used for EC2 incident response isolation:
-
 ```hcl
 resource "aws_security_group" "quarantine"
 ```
 
-Security group name format:
+Security group resource name:
 
 ```text
 <name_prefix>-Quarantine-SG
 ```
 
-Purpose:
+The `Name` tag is:
 
 ```text
-IncidentResponse
+<name_prefix>-EC2-Quarantine-SG
 ```
 
-The quarantine security group is intended to be used by the EC2 Isolation Lambda when an instance receives a high or critical security finding.
+The quarantine security group is used by EC2 isolation automation to replace an
+instance's normal security group attachments during incident response.
 
-When an instance is isolated, the automation can replace the instance’s existing security groups with this quarantine security group.
-
-Current quarantine egress allows only:
+Current quarantine egress:
 
 | Direction | Protocol | Port | Destination | Purpose |
 |---|---|---:|---|---|
-| Egress | TCP | 443 | `0.0.0.0/0` | Allow HTTPS egress for SSM and forensics |
+| Egress | TCP | 443 | `0.0.0.0/0` | Restricted HTTPS access for SSM and forensic workflows |
 
-This allows limited outbound HTTPS access while removing normal workload network paths.
+The quarantine security group intentionally defines no inbound rules.
 
 ---
 
-### Ubuntu EC2 AMI Lookup
-
-Looks up the latest Ubuntu 24.04 LTS AMI:
+### Ubuntu AMI Lookup
 
 ```hcl
 data "aws_ami" "ec2"
 ```
 
-AMI owner:
+The module selects the most recent matching Canonical Ubuntu 24.04 LTS image.
 
-```text
-099720109477
+| Setting | Value |
+|---|---|
+| Owner | `099720109477` |
+| Name filter | `ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server*` |
+| Most recent | `true` |
+
+Selecting the most recent AMI does not guarantee that every installed package is
+fully current. The first-boot bootstrap script performs an APT metadata refresh
+and distribution upgrade.
+
+---
+
+### Security-Policy Readiness Checkpoint
+
+```hcl
+resource "terraform_data" "compute_security_policy_ready"
 ```
 
-AMI filter:
+The readiness checkpoint receives the required security group rule IDs through:
 
-```text
-ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server*
+```hcl
+input = var.compute_sg_rule_ids
 ```
 
-The module uses the most recent matching Ubuntu Noble 24.04 AMI.
+It does not create AWS infrastructure. Its purpose is to preserve resource-level
+Terraform dependencies between:
+
+1. The compute security group
+2. The networking security-policy rules
+3. The EC2 instances
+
+The EC2 instances explicitly depend on this resource:
+
+```hcl
+depends_on = [
+  terraform_data.compute_security_policy_ready
+]
+```
+
+The readiness object contains:
+
+```hcl
+{
+  endpoints_ingress_from_compute    = string
+  compute_egress_to_endpoints       = string
+  compute_egress_to_db              = string
+  compute_egress_to_internet_https  = optional(string)
+}
+```
+
+`compute_egress_to_internet_https` is optional because the rule does not exist
+when the effective egress mode is `vpc_endpoints_only`.
+
+The attribute names in the compute variable and the networking output must match
+exactly. In particular, use:
+
+```text
+compute_egress_to_internet_https
+```
+
+Do not use `compute_egress_to_internet_egress`.
 
 ---
 
 ### EC2 Instances
 
-Creates one EC2 instance per private compute subnet entry:
-
 ```hcl
 resource "aws_instance" "ec2"
 ```
 
-The module uses:
+The module creates one instance per entry in:
 
 ```hcl
-for_each = var.compute_private_subnet_ids_map
+var.compute_private_subnet_ids_map
 ```
 
-This means that by default, the number of EC2 instances is driven by the number of entries in the compute private subnet map.
+Expected map format:
 
-Each instance is deployed into a private compute subnet.
+```hcl
+{
+  "us-east-1a" = "subnet-0123456789abcdef0"
+  "us-east-1b" = "subnet-0fedcba9876543210"
+}
+```
 
 Current instance configuration:
 
 | Setting | Value |
 |---|---|
-| AMI | Latest Ubuntu 24.04 Noble AMI |
+| AMI | Latest matching Canonical Ubuntu 24.04 LTS AMI |
 | Instance type | `t3.micro` |
-| Subnet | Each compute private subnet from `compute_private_subnet_ids_map` |
-| Security group | Compute security group |
+| Placement | One instance per compute private subnet map entry |
+| Security group | `aws_security_group.compute` |
 | Detailed monitoring | Enabled |
 | IAM instance profile | `var.instance_profile_name` |
-| User data | `user_data/bootstrap.sh.tpl` |
+| User data | `user_data/bootstrap.sh` |
+| Replace on user-data change | Enabled |
 | Public IP | Not explicitly associated |
 | IMDSv2 | Required |
-| Root volume size | 20 GB |
+| Metadata hop limit | `2` |
+| Root volume size | `20` GiB |
 | Root volume type | `gp3` |
 | Root volume encryption | Enabled |
 | Root volume KMS key | `var.ebs_cmk_arn` |
 
 ---
 
-### EC2 Metadata Options
+## User Data Bootstrap
 
-The EC2 instances enforce IMDSv2:
+The instance user data is loaded with:
+
+```hcl
+user_data = file("${path.module}/user_data/bootstrap.sh")
+```
+
+The module also sets:
+
+```hcl
+user_data_replace_on_change = true
+```
+
+Changing `user_data/bootstrap.sh` therefore causes Terraform to replace the EC2
+instances so the new first-boot configuration is applied.
+
+### Bootstrap Behavior
+
+The bootstrap script:
+
+1. Enables strict Bash behavior with `set -Eeuo pipefail`
+2. Writes output to `/var/log/instance-bootstrap.log`
+3. Configures noninteractive APT behavior
+4. Sets a five-minute dpkg lock timeout
+5. Configures APT retries
+6. Rewrites Ubuntu repository URLs from HTTP to HTTPS
+7. Runs `apt-get update`
+8. Runs `apt-get dist-upgrade -y`
+9. Installs:
+   - `ca-certificates`
+   - `curl`
+   - `jq`
+10. Records selected package versions
+11. Reports whether a reboot is required
+12. Logs the completion timestamp
+
+### Bootstrap Log
+
+```text
+/var/log/instance-bootstrap.log
+```
+
+From an SSM session:
+
+```bash
+sudo cat /var/log/instance-bootstrap.log
+```
+
+Also inspect the cloud-init log when first-boot execution fails:
+
+```bash
+sudo tail -n 300 /var/log/cloud-init-output.log
+```
+
+### Package Versions Recorded
+
+The current script records versions for:
+
+- `ubuntu-advantage-tools`
+- `ubuntu-pro-client`
+- `ubuntu-pro-client-l10n`
+- `vim`
+- `vim-common`
+- `vim-runtime`
+- `vim-tiny`
+- `xxd`
+
+The version-reporting command is informational and does not fail the bootstrap
+when one of the listed packages is absent.
+
+### Repository Access Requirement
+
+First-boot patching requires a functioning outbound path to the Ubuntu package
+repositories.
+
+Depending on the effective deployment profile, that path may use:
+
+- NAT Gateway egress
+- AWS Network Firewall followed by a NAT Gateway
+- An approved internal package mirror
+
+VPC endpoint access alone does not provide access to public Ubuntu repositories.
+
+The readiness dependency prevents EC2 creation before the managed security group
+rules exist. It does not replace route, NAT Gateway, firewall, DNS, or repository
+availability checks.
+
+---
+
+## Metadata Security
+
+The module requires IMDSv2:
 
 ```hcl
 metadata_options {
@@ -170,15 +323,14 @@ metadata_options {
 }
 ```
 
-This requires session tokens for instance metadata access.
-
-IMDSv2 helps reduce risk from metadata credential theft techniques that rely on unauthenticated metadata access.
+This prevents unauthenticated IMDSv1 requests and requires session tokens for
+instance metadata access.
 
 ---
 
-### Encrypted Root Volume
+## Root Volume Encryption
 
-Each EC2 instance receives an encrypted root EBS volume:
+Each instance uses an encrypted root volume:
 
 ```hcl
 root_block_device {
@@ -189,222 +341,152 @@ root_block_device {
 }
 ```
 
-This ensures the instance root volume is encrypted using the baseline EBS CMK.
-
----
-
-## User Data Bootstrap
-
-The module includes a user data directory:
-
-```text
-modules/compute/user_data
-```
-
-The EC2 instances use:
-
-```text
-modules/compute/user_data/bootstrap.sh.tpl
-```
-
-This script runs during initial instance boot.
-
----
-
-### Bootstrap Script Purpose
-
-The bootstrap script performs initial operating system preparation.
-
-Current behavior:
-
-- Enables strict shell execution with `set -euo pipefail`
-- Writes bootstrap logs to `/var/log/instance-bootstrap.log`
-- Rewrites Ubuntu package source URLs from `http://` to `https://`
-- Runs `apt-get update`
-- Installs baseline packages:
-  - `ca-certificates`
-  - `curl`
-  - `jq`
-
-This helps ensure package operations use HTTPS and that basic operational tooling is present on the instance.
-
----
-
-### Bootstrap Log File
-
-Bootstrap output is written to:
-
-```text
-/var/log/instance-bootstrap.log
-```
-
-Use this log file to troubleshoot first-boot initialization.
-
-Example command from the instance:
-
-```bash
-sudo cat /var/log/instance-bootstrap.log
-```
-
-Expected:
-
-- Bootstrap start timestamp
-- Ubuntu package source rewrite message, if the source file exists
-- Package update/install output
-- Bootstrap completion timestamp
-
----
-
-### Ubuntu Package Source Rewrite
-
-The script checks for:
-
-```text
-/etc/apt/sources.list.d/ubuntu.sources
-```
-
-If the file exists, it creates a backup:
-
-```text
-/etc/apt/sources.list.d/ubuntu.sources.bak
-```
-
-Then it replaces:
-
-```text
-http://
-```
-
-with:
-
-```text
-https://
-```
-
-This ensures Ubuntu package sources use HTTPS.
+The caller and EC2 service path must be authorized to use the supplied EBS KMS
+key.
 
 ---
 
 ## Instance Tags
 
-Each EC2 instance is tagged with:
+Each instance receives:
 
 | Tag | Value | Purpose |
 |---|---|---|
-| `Name` | `<name_prefix>-EC2-<subnet-key>` | Human-readable instance name |
+| `Name` | `<name_prefix>-EC2-<map-key>` | Human-readable resource name |
 | `Environment` | `var.environment` | Environment ownership |
-| `Terraform` | `true` | IaC ownership marker |
-| `Purpose` | Workload description | Describes the compute role |
-| `IsolationAllowed` | `true` | Marks instance as eligible for isolation automation |
-| `PatchGroup` | `var.patch_tag_value` | Used by SSM Patch Manager targeting |
-| `Backup` | `true` | Used by AWS Backup tag-based selection |
+| `Terraform` | `true` | Infrastructure-as-code ownership |
+| `Purpose` | Workload processing description | Workload role |
+| `IsolationAllowed` | `tostring(var.isolation_allowed)` | Explicit isolation authorization |
+| `PatchGroup` | `var.patch_tag_value` | SSM Patch Manager targeting |
+| `Backup` | `true` | AWS Backup tag-based selection |
 
-These tags are important for automation and operations.
+### Isolation Authorization
+
+`isolation_allowed` defaults to:
+
+```hcl
+false
+```
+
+This is a fail-closed default. Automatic isolation should occur only when the
+root configuration explicitly sets:
+
+```hcl
+isolation_allowed = true
+```
+
+The resulting EC2 tag is stored as the string `true` or `false`.
 
 ---
 
-## Automation Integration
+## Isolation Drift Protection
 
-### EC2 Isolation
+The EC2 resource ignores changes to:
 
-Instances are tagged with:
-
-```text
-IsolationAllowed = true
+```hcl
+vpc_security_group_ids
+tags["Isolated"]
+tags["IsolatedBy"]
+tags["IsolationFinding"]
+tags["IsolationTime"]
+tags["OriginalSecurityGroups"]
 ```
 
-The quarantine security group output is used by the EC2 Isolation Lambda.
+This prevents a routine `terraform apply` from:
 
-Expected isolation behavior:
+- Reattaching the normal compute security group to an isolated instance
+- Removing incident-response tags written by isolation automation
 
-```text
-Security Hub Finding
-    |
-    v
-EventBridge Rule
-    |
-    v
-EC2 Isolation Lambda
-    |
-    v
-Snapshot EBS volume(s)
-    |
-    v
-Replace instance security groups with Quarantine SG
-    |
-    v
-Update instance tags
+Terraform continues to manage `IsolationAllowed`. That policy tag is
+intentionally not ignored.
 
-```
+### Operational Tradeoff
 
-This allows high or critical EC2 findings to trigger automated containment.
+Because all changes to `vpc_security_group_ids` are ignored, Terraform will not
+automatically correct manual or automation-driven security group attachment
+changes.
+
+Restoring an isolated instance should be handled through the approved rollback
+workflow or another documented incident-response process.
 
 ---
 
-### Patch Management
+## Patch Management Integration
 
-Instances are tagged with:
+The module applies:
 
 ```text
 PatchGroup = var.patch_tag_value
 ```
 
-This allows the patch management module to target instances by patch group.
+The separate `patch_management` module uses this tag to target instances with
+SSM Patch Manager.
 
-The actual patch baseline and maintenance window behavior is managed outside this module, at `modules/patch_management/`.
+The compute bootstrap performs first-boot package updates. Patch Manager provides
+ongoing scheduled patching after launch.
 
 ---
 
-### Backup
+## Backup Integration
 
-Instances are tagged with:
+The module applies:
 
 ```text
 Backup = true
 ```
 
-This allows the backup module to include compute resources in tag-based backup selections if configured.
-
----
-
-## Network Placement
-
-The module deploys EC2 instances into private compute subnets:
-
-```hcl
-for_each  = var.compute_private_subnet_ids_map
-subnet_id = each.value
-```
-
-Expected placement:
-
-```text
-Private Compute Subnets
-    |
-    v
-Controlled egress path through firewall/NAT and/or VPC endpoints
-```
-
-The instances should not require public IP addresses for normal management.
-
-Management should generally occur through AWS Systems Manager Session Manager.
+The backup module can use this tag for resource selection.
 
 ---
 
 ## Inputs
 
-| Name | Description | Required |
-|---|---|---:|
-| `name_prefix` | Prefix used for resource naming | Yes |
-| `vpc_id` | VPC ID where compute security groups are created | Yes |
-| `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
-| `compute_private_subnet_ids_map` | Map of compute private subnet IDs keyed by subnet/AZ name | Yes |
-| `instance_profile_name` | IAM instance profile name attached to EC2 instances | Yes |
-| `ebs_cmk_arn` | KMS CMK ARN used to encrypt EC2 root EBS volumes | Yes |
-| `interface_endpoints_sg_id` | Interface endpoint security group ID; currently available for security policy integration | Yes |
-| `data_sg_id` | Data/RDS security group ID; currently available for security policy integration | Yes |
-| `db_port` | Database port; currently available for security policy integration | Yes |
-| `patch_tag_value` | Patch group tag value applied to EC2 instances | Yes |
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `name_prefix` | `string` | n/a | Prefix used for resource names |
+| `vpc_id` | `string` | n/a | VPC where the compute security groups are created |
+| `environment` | `string` | n/a | Environment name |
+| `compute_private_subnet_ids_map` | `map(string)` | n/a | Compute private subnet IDs keyed by AZ or logical subnet name |
+| `instance_profile_name` | `string` | n/a | IAM instance profile attached to EC2 instances |
+| `ebs_cmk_arn` | `string` | n/a | KMS key ARN used for root-volume encryption |
+| `interface_endpoints_sg_id` | `string` | n/a | Interface endpoint security group ID |
+| `data_sg_id` | `string` | n/a | Data-tier security group ID |
+| `db_port` | `string` | n/a | Database port |
+| `patch_tag_value` | `string` | n/a | Value assigned to the `PatchGroup` tag |
+| `isolation_allowed` | `bool` | `false` | Whether instances may be automatically isolated |
+| `compute_sg_rule_ids` | `object` | n/a | Security group rule IDs that must exist before EC2 launch |
+
+### `compute_sg_rule_ids` Type
+
+Use:
+
+```hcl
+variable "compute_sg_rule_ids" {
+  description = "Security group rule IDs that must exist before compute EC2 instances launch"
+
+  type = object({
+    endpoints_ingress_from_compute   = string
+    compute_egress_to_endpoints      = string
+    compute_egress_to_db             = string
+    compute_egress_to_internet_https = optional(string)
+  })
+}
+```
+
+### Compatibility Inputs
+
+The current `main.tf` does not directly reference:
+
+- `interface_endpoints_sg_id`
+- `data_sg_id`
+- `db_port`
+
+They remain declared for compatibility with the surrounding module interface.
+The active security group rules that use these values are owned by the
+networking `security_policy` layer.
+
+Remove these inputs from the compute module in a future breaking cleanup only
+after updating every calling root module.
 
 ---
 
@@ -412,519 +494,294 @@ Management should generally occur through AWS Systems Manager Session Manager.
 
 | Name | Description |
 |---|---|
-| `compute_sg_id` | ID of the compute EC2 security group |
-| `quarantine_sg_id` | ID of the quarantine security group used for EC2 isolation |
+| `compute_sg_id` | ID of the compute security group |
+| `quarantine_sg_id` | ID of the quarantine security group |
 
 ---
 
-## Usage Example
+## Usage
 
 ```hcl
 module "compute" {
-  source = "../modules/compute"
+  source = "../../modules/compute"
 
-  name_prefix                    = local.name_prefix
-  vpc_id                         = module.networking.vpc_id
-  environment                    = var.environment
+  name_prefix = local.name_prefix
+  vpc_id      = module.networking.vpc_id
+  environment = var.environment
 
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
-  instance_profile_name          = module.iam.instance_profile_name
-  ebs_cmk_arn                    = module.security.ebs_cmk_arn
+  instance_profile_name          = module.iam.compute_instance_profile_name
+  ebs_cmk_arn                    = module.kms.ebs_cmk_arn
 
-  interface_endpoints_sg_id      = module.vpc_endpoints.interface_endpoints_sg_id
-  data_sg_id                     = module.storage.data_sg_id
-  db_port                        = var.db_port
-  patch_tag_value                = var.patch_tag_value
+  patch_tag_value  = var.patch_tag_value
+  isolation_allowed = var.isolation_allowed
+
+  compute_sg_rule_ids = module.networking.compute_sg_rule_ids
+
+  # Retained compatibility inputs.
+  interface_endpoints_sg_id = module.networking.interface_endpoints_sg_id
+  data_sg_id                = module.storage.data_sg_id
+  db_port                   = var.db_port
 }
 ```
 
----
+The exact upstream output names may differ in the calling root. The important
+dependency input is:
 
-## Dependency Notes
+```hcl
+compute_sg_rule_ids = module.networking.compute_sg_rule_ids
+```
 
-This module depends on resources created by other modules.
-
-### Required Before Compute
-
-The following should exist before this module is applied:
-
-- VPC
-- Private compute subnets
-- EC2 instance profile
-- EBS KMS CMK
-
-### Common Downstream Consumers
-
-Outputs from this module are commonly consumed by:
-
-| Output | Consumer |
-|---|---|
-| `compute_sg_id` | Networking/security policy rules |
-| `compute_sg_id` | VPC endpoint access rules |
-| `compute_sg_id` | Database access rules |
-| `quarantine_sg_id` | EC2 Isolation Lambda |
-| `quarantine_sg_id` | EC2 Rollback Lambda |
+Do not add a module-level dependency from the entire compute module to the
+networking module when the networking security-policy layer already consumes
+`module.compute.compute_sg_id`. The readiness object provides the required
+resource-level ordering without creating a module cycle.
 
 ---
 
 ## Validation
 
-### Confirm Compute Security Groups
+### Terraform Validation
+
+```bash
+terraform fmt -recursive
+terraform validate
+terraform plan
+```
+
+### Confirm Security Groups
 
 ```bash
 aws ec2 describe-security-groups \
   --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=group-name,Values=${NAME_PREFIX}-Compute-SG,${NAME_PREFIX}-Quarantine-SG" \
+  --filters \
+    "Name=group-name,Values=${NAME_PREFIX}-Compute-SG,${NAME_PREFIX}-Quarantine-SG" \
   --query 'SecurityGroups[].[GroupName,GroupId,VpcId,Description]' \
   --output table
 ```
 
-Expected:
-
-- Compute security group exists
-- Quarantine security group exists
-- Both security groups are attached to the workload VPC
-
----
-
-### Confirm EC2 Instances
+### Confirm EC2 Placement
 
 ```bash
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
-  --query 'Reservations[].Instances[].[InstanceId,State.Name,InstanceType,SubnetId,PrivateIpAddress,PublicIpAddress]' \
+  --filters \
+    "Name=tag:Environment,Values=${ENVIRONMENT}" \
+    "Name=tag:Terraform,Values=true" \
+  --query 'Reservations[].Instances[].[InstanceId,Placement.AvailabilityZone,SubnetId,PrivateIpAddress,PublicIpAddress,State.Name]' \
   --output table
 ```
 
 Expected:
 
-- EC2 instances exist
-- Instances are in private compute subnets
+- Instances are in compute private subnets
 - Instances have private IP addresses
-- Public IP address should be empty or `None`
-- Instance type is `t3.micro` (or whatever is configured)
+- Public IP addresses are absent
+- Instances are running
 
----
-
-### Confirm Instance Tags
+### Confirm IMDSv2
 
 ```bash
 aws ec2 describe-instances \
   --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
-  --query 'Reservations[].Instances[].[InstanceId,Tags]' \
-  --output json
-```
-
-Expected tags include:
-
-- `Name`
-- `Environment`
-- `Terraform`
-- `Purpose`
-- `IsolationAllowed`
-- `PatchGroup`
-- `Backup`
-
----
-
-### Confirm IMDSv2 Enforcement
-
-```bash
-aws ec2 describe-instances \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
+  --filters \
+    "Name=tag:Environment,Values=${ENVIRONMENT}" \
+    "Name=tag:Terraform,Values=true" \
   --query 'Reservations[].Instances[].[InstanceId,MetadataOptions.HttpTokens,MetadataOptions.HttpPutResponseHopLimit]' \
   --output table
 ```
 
 Expected:
 
-- `HttpTokens` is `required`
-- `HttpPutResponseHopLimit` is `2`
-
----
-
-### Confirm EBS Root Volume Encryption
-
-```bash
-aws ec2 describe-instances \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
-  --query 'Reservations[].Instances[].BlockDeviceMappings[].Ebs.VolumeId' \
-  --output text
+```text
+HttpTokens = required
+HttpPutResponseHopLimit = 2
 ```
 
-Then describe the returned volume IDs:
-
-```bash
-VOLUME_IDS=$(aws ec2 describe-instances \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
-  --query 'Reservations[].Instances[].BlockDeviceMappings[].Ebs.VolumeId' \
-  --output text)
-
-aws ec2 describe-volumes \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --volume-ids ${VOLUME_IDS} \
-  --query 'Volumes[].[VolumeId,Encrypted,KmsKeyId,Size,VolumeType]' \
-  --output table
-```
-
-Expected:
-
-- Encrypted is `true`
-- KMS key is the EBS CMK
-- Volume size is 20 GB
-- Volume type is `gp3`
-
----
-
-### Confirm IAM Instance Profile
-
-```bash
-aws ec2 describe-instances \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
-  --query 'Reservations[].Instances[].[InstanceId,IamInstanceProfile.Arn]' \
-  --output table
-```
-
-Expected:
-
-- Each instance has an IAM instance profile attached
-- Instance profile matches the expected EC2 instance profile
-
----
-
-### Confirm SSM Managed Instance Registration
+### Confirm SSM Registration
 
 ```bash
 aws ssm describe-instance-information \
   --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'InstanceInformationList[].[InstanceId,PingStatus,PlatformName,PlatformVersion,AgentVersion]' \
+  --query 'InstanceInformationList[].[InstanceId,PingStatus,PlatformName,AgentVersion]' \
   --output table
 ```
 
 Expected:
 
-- EC2 instances appear as managed instances
-- Ping status is `Online`
+- `PingStatus` is `Online`
 - Platform is Ubuntu
 
-If instances do not appear, check IAM instance profile permissions, SSM Agent status, and VPC endpoint connectivity.
-
----
-
-### Confirm Bootstrap Log
-
-Start an SSM Session Manager session on the instance:
+### Confirm Bootstrap Results
 
 ```bash
-aws ssm start-session \
-  --target "${INSTANCE_ID}" \
+aws ssm send-command \
   --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}"
+  --instance-ids "${INSTANCE_ID}" \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=[
+    "cloud-init status --long",
+    "tail -n 250 /var/log/instance-bootstrap.log",
+    "tail -n 250 /var/log/cloud-init-output.log"
+  ]'
 ```
 
-From that SSM Session Manager session:
+The bootstrap log should show:
+
+- Successful Ubuntu repository access
+- APT metadata refresh
+- Distribution upgrade execution
+- Required package installation
+- Relevant package versions
+- Bootstrap completion timestamp
+
+### Confirm Package Repository Access
 
 ```bash
-sudo cat /var/log/instance-bootstrap.log
+aws ssm send-command \
+  --region "${AWS_REGION}" \
+  --instance-ids "${INSTANCE_ID}" \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=[
+    "curl -4 -fsSI --connect-timeout 10 --max-time 30 https://security.ubuntu.com/ubuntu/dists/noble-security/InRelease",
+    "curl -4 -fsSI --connect-timeout 10 --max-time 30 https://us-east-1.ec2.archive.ubuntu.com/ubuntu/dists/noble/InRelease"
+  ]'
 ```
 
-Expected:
-
-- Bootstrap started successfully
-- Ubuntu package sources were updated to HTTPS, if the source file existed
-- Package update completed
-- `ca-certificates`, `curl`, and `jq` were installed
-- Bootstrap completed successfully
-
----
-
-## Operational Considerations
-
-### Instances Are Private
-
-Instances are deployed into private compute subnets.
-
-They should not be managed through public SSH by default.
-
-Preferred access method:
-
-```text
-AWS Systems Manager Session Manager
-```
-
-This reduces exposure and avoids requiring inbound SSH access.
-
----
-
-### SSM Requires Supporting Infrastructure
-
-For Session Manager to work, the environment needs:
-
-- EC2 IAM instance profile with SSM permissions
-- SSM Agent installed and running
-- Network path to SSM services
-- Required VPC endpoints or controlled NAT egress
-
-Relevant VPC endpoints commonly include:
-
-```text
-ssm
-ssmmessages
-ec2messages
-logs
-kms
-```
-
----
-
-### User Data Runs at First Boot
-
-The bootstrap script runs when the instance first launches.
-
-If the script fails, check:
-
-```text
-/var/log/instance-bootstrap.log
-```
-
-The script uses:
+### Confirm Isolation Tags
 
 ```bash
-set -euo pipefail
+aws ec2 describe-instances \
+  --region "${AWS_REGION}" \
+  --instance-ids "${INSTANCE_ID}" \
+  --query 'Reservations[0].Instances[0].Tags[?Key==`IsolationAllowed` || starts_with(Key, `Isolat`) || Key==`OriginalSecurityGroups`].[Key,Value]' \
+  --output table
 ```
-
-This means unexpected command failures can stop the script early.
-
-Also ensure that the EC2 instance has a valid outbound path for package installation and AWS service access, either through controlled NAT egress, approved firewall rules, or required VPC endpoints.
-
----
-
-### Patch Group Tagging
-
-Patch targeting depends on the `PatchGroup` tag.
-
-If instances are not included in patch operations, confirm the tag value matches the patch management module configuration.
-
----
-
-### Backup Tagging
-
-Backup targeting depends on the `Backup = true` tag if the backup module uses tag-based backup selections.
-
-If instances or volumes are not included in backups, confirm tag-based selection criteria match.
-
----
-
-### Quarantine Behavior
-
-The quarantine security group allows only HTTPS egress.
-
-This is intentional.
-
-During an incident, isolated instances should have restricted network access while still allowing limited management or forensic workflows.
-
-Do not add broad inbound access to the quarantine security group unless there is a documented incident response requirement.
 
 ---
 
 ## Troubleshooting
 
-### EC2 Instances Do Not Launch
+### Bootstrap Reports No Package Upgrades
 
 Check:
 
-- Private compute subnet IDs are valid
-- The selected Ubuntu AMI exists in the region
-- Instance profile exists
-- EBS CMK exists and is enabled
-- Caller has permission to use the EBS CMK
-- Account has EC2 capacity for `t3.micro`
-- Security group creation succeeded
+1. `/var/log/instance-bootstrap.log`
+2. `/var/log/cloud-init-output.log`
+3. DNS resolution
+4. TCP/443 egress from the compute security group
+5. The compute subnet's effective default route
+6. NAT Gateway or Network Firewall availability
+7. Ubuntu repository reachability
+8. The `compute_sg_rule_ids` readiness object
 
-Useful command:
+A managed SSM connection does not prove that public Ubuntu repository access
+works. SSM may use interface VPC endpoints while APT requires a separate
+internet or package-mirror path.
 
-```bash
-aws ec2 describe-instances \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
-  --output table
-```
+### EC2 Launches Before HTTPS Egress Is Ready
 
----
+Confirm that:
+
+- `networking.security_policy` outputs all required rule IDs
+- `networking` passes through `compute_sg_rule_ids`
+- The compute module receives `module.networking.compute_sg_rule_ids`
+- `terraform_data.compute_security_policy_ready` uses that object
+- `aws_instance.ec2` depends on the readiness resource
+- The optional internet rule attribute is named
+  `compute_egress_to_internet_https`
+
+A misspelled optional object attribute can become `null` and fail to preserve
+the intended dependency on the internet HTTPS rule.
 
 ### Instance Is Not Reachable Through SSM
 
 Check:
 
-- Instance has the correct IAM instance profile
-- Instance role includes SSM permissions
-- SSM Agent is installed and running
-- Required VPC endpoints exist and are reachable
-- Compute security group can reach Interface Endpoints on TCP/443
-- Endpoint security group allows traffic from compute security group
-- Instance has a route to required AWS services
+- IAM instance-profile permissions
+- SSM Agent status
+- VPC endpoint reachability
+- Compute-to-endpoint TCP/443 rule
+- Endpoint security group ingress from compute
+- DNS support and hostnames in the VPC
 
-Useful command:
+### Terraform Tries to Undo Isolation
 
-```bash
-aws ssm describe-instance-information \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'InstanceInformationList[].[InstanceId,PingStatus,LastPingDateTime]' \
-  --output table
+The EC2 lifecycle configuration should ignore security group attachment changes
+and isolation metadata tags.
+
+Confirm the deployed resource includes:
+
+```hcl
+lifecycle {
+  ignore_changes = [
+    vpc_security_group_ids,
+    tags["Isolated"],
+    tags["IsolatedBy"],
+    tags["IsolationFinding"],
+    tags["IsolationTime"],
+    tags["OriginalSecurityGroups"],
+  ]
+}
 ```
+
+Do not add `tags["IsolationAllowed"]` to this list.
+
+### User Data Change Does Not Replace Instances
+
+Confirm:
+
+```hcl
+user_data_replace_on_change = true
+```
+
+Then inspect the plan for instance replacement after modifying
+`user_data/bootstrap.sh`.
 
 ---
 
-### Bootstrap Script Fails
+## Security Considerations
 
-Open an SSM session and check:
-
-```bash
-sudo cat /var/log/instance-bootstrap.log
-```
-
-Common causes:
-
-- Package repository access is blocked
-- DNS resolution is not working
-- NAT Gateway or required VPC endpoint access is unavailable
-- Ubuntu source file path changed
-- `apt-get update` failed
-- KMS or network policy prevents normal instance initialization
-
----
-
-### Package Install Fails
-
-Check whether the instance can reach Ubuntu package repositories.
-
-From the instance:
-
-```bash
-curl -I https://archive.ubuntu.com
-```
-
-If the environment uses controlled egress, confirm:
-
-- Network Firewall allows required package repository access
-- NAT Gateway route exists where required
-- DNS works
-- TLS/HTTPS egress is permitted
-
----
-
-### EBS Volume Is Not Encrypted With Expected Key
-
-First, get the EBS volume IDs attached to the Terraform-managed EC2 instances:
-
-```bash
-INSTANCE_IDS=$(aws ec2 describe-instances \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --filters "Name=tag:Environment,Values=${ENVIRONMENT}" "Name=tag:Terraform,Values=true" \
-  --query 'Reservations[].Instances[].InstanceId' \
-  --output text)
-
-VOLUME_IDS=$(aws ec2 describe-instances \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --instance-ids ${INSTANCE_IDS} \
-  --query 'Reservations[].Instances[].BlockDeviceMappings[].Ebs.VolumeId' \
-  --output text)
-
-aws ec2 describe-volumes \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --volume-ids ${VOLUME_IDS} \
-  --query 'Volumes[].[VolumeId,Encrypted,KmsKeyId,Size,VolumeType,State]' \
-  --output table
-```
-
-Expected:
-
-- Encrypted is `true`
-- KMS key is the expected EBS CMK
-- Volume type is `gp3`
-- Volume size is 20 GB
-
----
-
-### Isolation Automation Does Not Work
-
-Check:
-
-- Instance has `IsolationAllowed = true`
-- Quarantine security group exists
-- EC2 Isolation Lambda has permission to modify instance security groups
-- Security Hub finding matches the automation rule
-- Instance is in a supported state
-- Rollback process has stored enough original security group context to restore access later
-
-Useful command:
-
-```bash
-aws ec2 describe-security-groups \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --group-ids "${QUARANTINE_SG_ID}"
-```
-
----
-
-## Security Notes
-
-- EC2 instances are deployed into private compute subnets.
+- EC2 instances are deployed into private subnets.
 - Public IP assignment is not explicitly enabled.
 - IMDSv2 is required.
-- Root EBS volumes are encrypted using the EBS CMK.
-- Instances use an IAM instance profile instead of static credentials.
-- Instances are tagged for patching, backup, and isolation workflows.
-- The quarantine security group restricts isolated instances to HTTPS egress only.
-- User data rewrites Ubuntu package sources to HTTPS.
-- User data installs only minimal operational packages.
-- Instance management should use SSM Session Manager instead of public SSH.
+- Root volumes use customer-managed KMS encryption.
+- The default isolation authorization is fail-closed.
+- Normal security group rules remain centrally owned by the networking
+  security-policy layer.
+- EC2 instances wait for required security group rules before launch.
+- User-data changes replace instances.
+- First-boot bootstrap upgrades the installed operating system packages.
+- Routine Terraform applies do not automatically release isolated instances.
+- SSM Session Manager should be preferred over inbound SSH administration.
 
 ---
 
 ## Design Principles
 
-This module follows:
-
 - Private-by-default compute
-- Encrypted instance storage
-- SSM-first administration
-- Minimal baseline bootstrap
-- Automated patching support
-- Automated backup support
-- Incident response readiness
+- Explicit resource-level dependency ordering
+- Centralized security-policy ownership
+- Fail-closed isolation authorization
+- Encrypted storage
 - IMDSv2 enforcement
-- Clear separation between resource creation and network policy rules
+- SSM-first administration
+- First-boot patching
+- Ongoing Patch Manager integration
+- Backup integration
+- Incident-response isolation support
+- Terraform protection for automation-managed containment state
 
 ---
 
 ## Notes
 
-- Deploy this module after networking, IAM, KMS, and VPC endpoint resources are available.
-- The compute security group ID is used by the networking/security policy layer.
-- The quarantine security group ID is used by security automation.
-- The bootstrap script is located at `modules/compute/user_data/bootstrap.sh.tpl`.
-- The bootstrap script logs to `/var/log/instance-bootstrap.log`.
-- The module currently creates one EC2 instance per compute private subnet map entry.
-- Future versions may make AMI, instance type, root volume size, and user data behavior configurable.
+- The module currently creates one EC2 instance per compute subnet map entry.
+- AMI ID, instance type, and root-volume sizing are currently fixed in
+  `main.tf`.
+- The bootstrap script is located at
+  `modules/compute/user_data/bootstrap.sh`.
+- The bootstrap log is written to
+  `/var/log/instance-bootstrap.log`.
+- The networking security-policy output and compute input must use matching
+  `compute_sg_rule_ids` object attributes.
