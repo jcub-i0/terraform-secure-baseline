@@ -64,15 +64,48 @@ The workflow DLQs are encrypted SQS queues used to retain failed automation even
 
 ---
 
+## Lambda Packaging and Saved-Plan Deployment
+
+The module packages each Python Lambda handler with a managed `archive_file` resource:
+
+| Archive resource | Source file | Generated package |
+|---|---|---|
+| `archive_file.lambda_ec2_isolation` | `lambda/ec2_isolation.py` | `lambda/ec2_isolation.zip` |
+| `archive_file.lambda_ec2_rollback` | `lambda/ec2_rollback.py` | `lambda/ec2_rollback.zip` |
+| `archive_file.lambda_ip_enrichment` | `lambda/ip_enrichment.py` | `lambda/ip_enrichment.zip` |
+
+Each `aws_lambda_function` references the corresponding archive resource's `output_path` and `output_base64sha256`. This creates an explicit Terraform dependency between package creation and Lambda deployment.
+
+The archives are generated build outputs. They should not be manually maintained or treated as the source of truth; the `.py` files and Terraform configuration are authoritative.
+
+Managed archive resources also support the repository's plan-before-approval CI/CD model. The Plan job can create and publish an exact saved Terraform plan, and the protected Apply job can execute the planned archive-resource operations on a fresh runner before creating or updating the dependent Lambda functions. The GitHub Actions workflow therefore does not need a hardcoded list of Lambda ZIP filenames.
+
+When adding another Lambda to this module, define its source, managed `archive_file` resource, and `aws_lambda_function` dependency inside the module. No Lambda-specific workflow change should be required.
+
+---
+
 ## Automation Workflows
 
 ### EC2 Isolation
 
-The EC2 Isolation workflow is triggered by new HIGH or CRITICAL Security Hub findings involving EC2 instances.
+The EC2 Isolation EventBridge rule receives new HIGH or CRITICAL Security Hub findings involving EC2 instances. The Lambda then applies stricter runtime eligibility checks before changing an instance.
 
-When triggered, the Lambda function identifies affected EC2 instances, snapshots attached EBS volumes, preserves the original security group state, applies quarantine controls, tags the instance, and sends an SNS notification.
+Automatic isolation currently defaults to `CRITICAL` severity through `AUTO_ISOLATION_SEVERITIES="CRITICAL"`. HIGH-severity events can reach the Lambda through EventBridge, but they are logged and skipped unless the configured severity set is deliberately expanded.
 
-#### Trigger
+An instance is isolated only when all of the following are true:
+
+- the finding severity is included in `AUTO_ISOLATION_SEVERITIES`;
+- the finding workflow status is `NEW`;
+- the finding record state is `ACTIVE`;
+- the resource type is `AwsEc2Instance` and contains a valid instance ID;
+- the instance is `running` or `stopped`;
+- the instance tag `IsolationAllowed` is explicitly set to `true`;
+- the instance is not already marked or configured as isolated; and
+- pre-isolation snapshots can be requested for its attached EBS volumes.
+
+After the eligibility checks pass, the Lambda snapshots attached EBS volumes, preserves the original security group IDs in instance tags, replaces the attached security groups with the quarantine security group, records isolation metadata, and sends an SNS notification. Snapshot failures propagate and prevent the security-group change.
+
+#### EventBridge Match
 
 ```text
 source      = aws.securityhub
@@ -82,10 +115,21 @@ resource    = AwsEc2Instance
 workflow    = NEW
 ```
 
+#### Runtime Safety Gates
+
+```text
+automatic severity = CRITICAL by default
+record state       = ACTIVE
+instance state     = running or stopped
+IsolationAllowed   = true
+already isolated   = false
+```
+
 #### Resources
 
 | Resource | Purpose |
 |---|---|
+| `archive_file.lambda_ec2_isolation` | Generates the EC2 isolation Lambda deployment package from `ec2_isolation.py` |
 | `aws_lambda_function.ec2_isolation` | Runs the EC2 isolation workflow |
 | `aws_security_group.lambda_ec2_isolation_sg` | Security group for the VPC-enabled Lambda |
 | `aws_cloudwatch_event_rule.securityhub_ec2_high_critical` | Matches high/critical EC2 Security Hub findings |
@@ -116,6 +160,7 @@ source    = custom.rollback
 
 | Resource | Purpose |
 |---|---|
+| `archive_file.lambda_ec2_rollback` | Generates the EC2 rollback Lambda deployment package from `ec2_rollback.py` |
 | `aws_lambda_function.ec2_rollback` | Runs the rollback workflow |
 | `aws_security_group.lambda_ec2_rollback_sg` | Security group for the VPC-enabled Lambda |
 | `aws_cloudwatch_event_bus.secops` | Custom EventBridge bus for SecOps workflows |
@@ -161,6 +206,7 @@ The secret is encrypted with the Secrets Manager CMK passed into the module.
 
 | Resource | Purpose |
 |---|---|
+| `archive_file.lambda_ip_enrichment` | Generates the IP enrichment Lambda deployment package from `ip_enrichment.py` |
 | `aws_lambda_function.ip_enrichment` | Runs threat intelligence enrichment |
 | `aws_secretsmanager_secret.threat_intel_api_keys` | Stores threat intelligence API credentials |
 | `aws_secretsmanager_secret_version.threat_intel_api_keys` | Stores the current AbuseIPDB API key value |
@@ -222,12 +268,16 @@ A visible DLQ message should be treated as an operational signal that the automa
 
 This module follows several security-focused design choices:
 
+- Lambda deployment packages are generated by managed Terraform resources, preserving package-to-function dependency ordering during saved-plan Apply.
 - Lambda functions use dedicated IAM roles passed into the module.
 - Lambda function code is encrypted with the Lambda CMK.
 - Lambda CloudWatch log groups are encrypted with the logs CMK.
 - Workflow DLQs are encrypted with the logs CMK.
 - Threat intelligence API keys are stored in Secrets Manager and encrypted with the Secrets Manager CMK.
 - EC2 Isolation and EC2 Rollback Lambdas run inside private serverless subnets.
+- EC2 Isolation fails closed unless `IsolationAllowed=true` is explicitly present on the instance.
+- EC2 Isolation defaults automatic response to CRITICAL findings and requires ACTIVE, NEW findings.
+- EC2 Isolation requests snapshots for attached EBS volumes before replacing security groups.
 - IP Enrichment intentionally does not use a VPC configuration so it can reach external threat intelligence APIs without requiring NAT.
 - EC2 Rollback is routed through a custom EventBridge bus.
 - EventBridge targets use retry policies and DLQs.
@@ -375,6 +425,9 @@ Use the automated validation suite as the primary validation path:
 Expected coverage includes:
 
 - Lambda functions exist and are active
+- A fresh checkout does not require prebuilt or committed Lambda ZIP files
+- Terraform plans the managed archive resources and creates the packages before the dependent Lambda functions during Apply
+- Lambda source-code hashes change when the corresponding Python handler changes
 - Lambda runtime, timeout, memory, KMS configuration, and VPC configuration match expectations
 - Lambda CloudWatch log groups exist and are encrypted
 - EventBridge rules exist on the expected buses
@@ -407,9 +460,18 @@ Recommended response:
 
 ### EC2 Isolation Safety
 
-EC2 Isolation changes instance security group attachments.
+EC2 Isolation changes instance security group attachments and can interrupt network access to a workload.
 
-Use this workflow carefully in non-development environments and confirm rollback procedures are understood before enabling live response against production workloads.
+The function is deliberately fail-closed:
+
+- automatic isolation defaults to CRITICAL findings;
+- `IsolationAllowed=true` must be explicitly applied to the instance;
+- only ACTIVE, NEW findings are eligible;
+- only running or stopped instances are eligible;
+- duplicate or already-isolated instances are skipped; and
+- attached EBS snapshots are requested before the security groups are replaced.
+
+Use this workflow carefully in non-development environments. Confirm the quarantine security group, snapshot permissions, SNS notification path, and rollback procedure before enabling live response against production workloads.
 
 ---
 
@@ -468,12 +530,17 @@ Check:
 
 Check:
 
-- The Security Hub finding is HIGH or CRITICAL.
-- The finding resource type is `AwsEc2Instance`.
-- The finding workflow status is `NEW`.
-- The Lambda execution role can describe and modify EC2 instance security groups.
+- The finding reached the EventBridge rule as a HIGH or CRITICAL EC2 finding.
+- The finding severity is included in `AUTO_ISOLATION_SEVERITIES`; the deployed default is `CRITICAL`.
+- The finding resource type is `AwsEc2Instance` and its instance ID is valid.
+- The finding workflow status is `NEW` and its record state is `ACTIVE`.
+- The instance is in the `running` or `stopped` state.
+- The instance has `IsolationAllowed=true`; missing, false, or differently valued tags fail closed.
+- The instance is not already tagged `Isolated=true` and is not already attached only to the quarantine security group.
+- The Lambda execution role can describe instances, create and tag EBS snapshots, modify security groups, create tags, and publish to SNS.
 - The quarantine security group ID is correct.
-- The Lambda has network access to required AWS service endpoints through the configured VPC path.
+- The Lambda has network access to the required AWS APIs through the configured VPC endpoints or egress path.
+- The Lambda logs do not show a snapshot error; snapshot failure prevents isolation.
 
 ---
 
@@ -504,7 +571,10 @@ Check:
 
 ## Important Notes
 
-- EC2 Isolation is triggered only for new HIGH or CRITICAL Security Hub findings involving EC2 instances.
+- Lambda ZIP files are generated by managed `archive_file` resources and are not manually maintained deployment inputs.
+- EC2 Isolation receives new HIGH or CRITICAL EC2 findings, but automatic isolation defaults to CRITICAL severity.
+- EC2 Isolation requires `IsolationAllowed=true`, an ACTIVE/NEW finding, and a running or stopped instance.
+- EC2 Isolation requests EBS snapshots before replacing security groups and skips instances that are already isolated.
 - EC2 Rollback is triggered through the custom SecOps event bus using the `custom.rollback` source.
 - IP Enrichment is triggered by new HIGH or CRITICAL Security Hub findings.
 - IP Enrichment is intentionally not placed in a VPC.
