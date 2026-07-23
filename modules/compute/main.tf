@@ -49,7 +49,7 @@ data "aws_ami" "ec2" {
 
 ## Compute Security Group rule IDs that must exist before compute instances launch
 resource "terraform_data" "compute_security_policy_ready" {
-  input = var.compute_policy_rule_ids
+  input = var.compute_sg_rule_ids
 }
 
 ## EC2 INSTANCE
