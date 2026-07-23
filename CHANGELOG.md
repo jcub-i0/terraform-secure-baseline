@@ -1,5 +1,84 @@
 # Changelog
 
+## Unreleased
+
+This update hardens EC2 provisioning, boot-time vulnerability remediation, and
+automated isolation after validating the complete Amazon Inspector remediation
+path against fresh development deployments.
+
+### Added
+
+- Added strict first-boot Ubuntu patching that:
+  - rewrites Ubuntu APT sources to HTTPS;
+  - waits for package-manager locks and retries transient repository failures;
+  - forces IPv4 for APT repository access in the IPv4-only workload VPC;
+  - treats incomplete APT metadata refreshes as provisioning failures;
+  - performs a noninteractive `dist-upgrade` before installing required
+    bootstrap packages; and
+  - records relevant package versions and reboot-required state in the instance
+    bootstrap log.
+- Added `user_data_replace_on_change = true` so EC2 instances are replaced when
+  their bootstrap configuration changes.
+- Added a compute security-policy readiness object from the nested
+  `security_policy` module and passed it through `networking` into `compute`.
+- Added a `terraform_data` dependency bridge so EC2 instances wait for the
+  networking security-policy rules, including public HTTPS egress, before
+  launching and executing cloud-init.
+
+### Changed
+
+- Changed compute bootstrap handling to use a literal shell script instead of a
+  Terraform template when no Terraform interpolation is required.
+- Changed EC2 auto-isolation authorization to require
+  `IsolationAllowed=true` explicitly after trimming whitespace and normalizing
+  case.
+- Changed the isolation workflow to preserve the Terraform-managed
+  `IsolationAllowed` policy tag instead of changing it after isolation.
+- Changed EC2 lifecycle handling so Terraform ignores runtime quarantine
+  security-group replacement and Lambda-managed incident-response tags while
+  an instance is isolated.
+- Changed provisioning dependencies so the compute security group can still be
+  created early for nested networking security-policy rules, while only the EC2
+  instances wait for the completed security policy.
+
+### Fixed
+
+- Fixed a fresh-deployment race where EC2 cloud-init could execute before the
+  NAT route and compute HTTPS egress rule were ready, causing Ubuntu repository
+  connections to time out even though the completed development environment's
+  NAT path was healthy.
+- Fixed bootstrap behavior that allowed `apt-get update` repository failures to
+  fall back to stale package indexes, report `0 upgraded`, and incorrectly
+  complete successfully with vulnerable AMI package versions still installed.
+- Fixed Terraform template parsing failures caused by Bash/dpkg expressions
+  such as `${binary:Package}` being interpreted as Terraform interpolation.
+- Fixed EC2 isolation lifecycle settings that had been applied to the Lambda
+  resource instead of the EC2 instance resource.
+- Fixed the risk of a later Terraform apply restoring the normal compute
+  security group and removing active Lambda isolation state.
+
+### Security
+
+- Added deterministic boot-time installation of available Ubuntu security
+  updates before instances enter normal service.
+- Made isolation authorization fail closed unless the instance explicitly opts
+  in through `IsolationAllowed=true`.
+- Preserved policy ownership of `IsolationAllowed` in Terraform while retaining
+  Lambda-owned evidence tags for isolation status, finding ID, timestamp, and
+  original security groups.
+- Prevented normal Terraform reconciliation from silently reversing an active
+  quarantine action.
+
+### Notes
+
+- The existing weekly SSM Patch Manager maintenance window remains the ongoing
+  patching control; boot-time patching provides the initial remediation layer
+  for newly launched instances.
+- Development deployments continue to use the `nat_only` egress mode. Testing
+  confirmed that the NAT Gateway, Internet Gateway, route tables, security
+  groups, and NACLs were healthy after apply; the failure was caused by resource
+  readiness ordering during initial instance launch.
+
 ## v1.5.0
 
 This release completes the workload CI/CD integration (for now) by moving baseline and
