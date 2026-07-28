@@ -155,6 +155,8 @@ cp environments/dev/terraform.tfvars.example \
 
 Repeat this for each Terraform root you plan to deploy. The resulting `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its values separately through workflow matrices, GitHub variables, and GitHub secrets.
 
+For local workload deployment, set `isolation_allowed` explicitly. The current policy is `true` for development and `false` for staging and production; the variable default remains fail closed at `false`.
+
 ---
 
 ## Configure AWS CLI Profiles
@@ -512,6 +514,16 @@ ALLOW_PULL_REQUESTS_PLAN_GITHUB
 BRANCHES_APPLY_GITHUB
 ```
 
+Workload Plan environments also require an explicit automatic-isolation decision:
+
+| GitHub Plan environment | `ISOLATION_ALLOWED` |
+|---|---|
+| `dev-plan` | `true` |
+| `staging-plan` | `false` |
+| `prod-plan` | `false` |
+
+Plan workflows reject missing values and values other than exactly `true` or `false`. The protected Apply job consumes the reviewed saved plan, so it does not need to re-resolve this setting. Terraform Destroy uses `false` when the setting is absent.
+
 Role-specific variables:
 
 | Environment type | Required role variable |
@@ -542,11 +554,11 @@ operators should also keep all shared configuration synchronized.
 
 Recommended environment defaults:
 
-| Environment | `deployment_profile` | `egress_mode` |
-|---|---|---|
-| `dev` | `development` | `auto` |
-| `staging` | `development` or `production` | `auto` |
-| `prod` | `production` | `auto` |
+| Environment | `deployment_profile` | `egress_mode` | `isolation_allowed` |
+|---|---|---|---:|
+| `dev` | `development` | `auto` | `true` |
+| `staging` | `development` or `production` | `auto` | `false` |
+| `prod` | `production` | `auto` | `false` |
 
 ---
 
@@ -873,9 +885,10 @@ that was presented for approval.
 
 Plan jobs use `dev-plan`, `staging-plan`, or `prod-plan`; Apply jobs use the
 matching protected `dev`, `staging`, or `prod` environment. Configure
-`ACCOUNT_ID` in both members of each pair. The workflows validate the role ARN
-account, the active AWS caller account, and the expected account stored in the
-saved-plan metadata.
+`ACCOUNT_ID` in both members of each pair and configure `ISOLATION_ALLOWED` in
+the workload Plan environment. The workflows validate the role ARN account,
+the active AWS caller account, the expected account stored in saved-plan
+metadata, and the isolation value before planning.
 
 Saved binary plans are short-lived artifacts because Terraform plans can
 contain sensitive values. Keep repository and workflow-run access limited to
