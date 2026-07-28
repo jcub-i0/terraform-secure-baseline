@@ -160,13 +160,10 @@ Output shape:
 
 ### Dependency-Readiness Purpose
 
-The parent networking module passes this output through to the compute module:
+The baseline passes this output directly into the compute module:
 
 ```text
 security_policy.compute_sg_rule_ids
-        |
-        v
-networking.compute_sg_rule_ids
         |
         v
 compute.compute_sg_rule_ids
@@ -179,13 +176,11 @@ aws_instance.ec2
 ```
 
 This resource-level dependency chain allows the compute security group to be
-created before the security-policy rules while preventing the EC2 instances
-from launching until those required rules exist.
+created before the security-policy rules while preventing EC2 instances from
+launching until those rules exist.
 
-It avoids both:
-
-- A first-boot race where cloud-init runs before HTTPS egress is ready
-- A cyclic module-level dependency between networking and compute
+The object proves security-group rule readiness only. It does not prove route,
+NAT Gateway, Network Firewall, DNS, or package-repository availability.
 
 ---
 
@@ -206,12 +201,14 @@ module "security_policy" {
 }
 ```
 
-The parent networking module should pass through the readiness output:
+Pass the readiness output directly to `compute` in the calling baseline:
 
 ```hcl
-output "compute_sg_rule_ids" {
-  description = "Security group rule IDs that must exist before compute EC2 instances launch"
-  value       = module.security_policy.compute_sg_rule_ids
+module "compute" {
+  source = "../modules/compute"
+
+  # Other compute inputs omitted.
+  compute_sg_rule_ids = module.security_policy.compute_sg_rule_ids
 }
 ```
 
@@ -302,8 +299,6 @@ The exact state address may include additional parent module prefixes.
   Interface Endpoint security groups exist.
 - Security groups are created by other modules; this module attaches rules to
   them.
-- The `compute_sg_rule_ids` output is passed through the networking module to
-  delay EC2 instance creation until required rules exist.
-- Keep the output object attribute name
-  `compute_egress_to_internet_https` consistent through the security-policy,
-  networking, and compute modules.
+- The baseline passes `compute_sg_rule_ids` directly from this module into
+  `compute` to delay EC2 instance creation until required rules exist.
+- Keep the output and compute input attribute name `compute_egress_to_internet_https` consistent.
