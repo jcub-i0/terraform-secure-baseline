@@ -601,6 +601,7 @@ Before adopting this baseline, answer the following questions:
 - Are plan and apply roles separated in both GitHub OIDC trust and IAM permissions?
 - Is the same `ACCOUNT_ID` configured in both members of each environment pair?
 - Are shared region, naming, and state-backend values synchronized across each pair?
+- Is `ISOLATION_ALLOWED` explicitly configured as `true` or `false` in each workload Plan environment?
 - Will Apply workflows use exact saved plans rather than generating a new plan after approval?
 - How long should sensitive saved-plan artifacts be retained?
 - Are static AWS keys prohibited for CI/CD?
@@ -649,12 +650,13 @@ Before adopting this baseline, answer the following questions:
 
 ### Incident Response Strategy
 
-- Who reviews EC2 isolation events?
-- Who is allowed to trigger rollback?
-- What ticketing or approval system is used?
-- How should SNS alerts be routed?
-- Who reviews break-glass role usage?
-- What is the escalation path for tamper alerts?
+- Which environments are authorized for automatic isolation?
+- Which severities may trigger automatic containment?
+- Which workloads may receive `IsolationAllowed=true`?
+- Are quarantine security-group behavior and snapshot permissions validated?
+- Who reviews EC2 isolation events and is allowed to trigger rollback?
+- Are the SNS notification and rollback paths tested before enabling production isolation?
+- What ticketing, approval, and escalation processes apply to containment, tamper alerts, and break-glass use?
 
 ---
 
@@ -878,6 +880,8 @@ Before using this baseline for production workloads, confirm:
 - AWS Config is recording.
 - SNS subscriptions are confirmed.
 - EC2 isolation and rollback tests pass.
+- Production automatic isolation remains disabled unless it has been explicitly approved and tested.
+- Snapshot creation, quarantine networking, SNS notification, and rollback permissions are validated.
 - IP enrichment tests pass.
 - Backup resources are configured.
 - Patch management settings are reviewed.
