@@ -175,6 +175,35 @@ Each environment is independently deployable, destroyable, and testable.
 
 ---
 
+## Compute Launch and First-Boot Readiness
+
+The compute security group must exist before the standalone `security_policy` module can create rules that reference it. EC2 launch is delayed with a resource-level dependency instead of a broad module dependency:
+
+```text
+aws_security_group.compute
+        |
+        v
+security_policy security-group rules
+        |
+        v
+security_policy.compute_sg_rule_ids
+        |
+        v
+terraform_data.compute_security_policy_ready
+        |
+        v
+aws_instance.ec2
+        |
+        v
+cloud-init bootstrap
+```
+
+The readiness object includes endpoint, database, and conditional public HTTPS security-group rule IDs. It does not prove that routes, NAT Gateway, Network Firewall, DNS, or package repositories are healthy.
+
+At first boot, Ubuntu package sources are rewritten to HTTPS, APT is forced over IPv4, transient failures are retried, any repository-refresh error fails provisioning, and a noninteractive distribution upgrade runs before required packages are installed. User-data changes replace the instance.
+
+---
+
 ## Deployment Profiles
 
 The baseline supports deployment profiles that set environment-appropriate defaults.
@@ -462,6 +491,8 @@ This prevents Terraform workflows from destroying the IAM roles they are activel
 
 Layer-specific evidence workflows use the Plan roles and their corresponding `*-plan` GitHub environments. Because active state-stack `backend.tf` files are ignored, these workflows copy `backend.tf.migrated.example` to `backend.tf` before initializing and validating the migrated state stacks.
 
+Workload Plan environments validate `ISOLATION_ALLOWED` as exactly `true` or `false`. Development currently opts in; staging and production remain opted out. The protected Apply job uses the reviewed saved plan, and Destroy falls back to `false` when the value is absent.
+
 ## Terraform State Architecture
 
 Terraform state is separated by account, environment, and substack.
@@ -657,7 +688,7 @@ Automation functions include:
 
 | Function | Purpose |
 |---------|---------|
-| `EC2 Isolation` | Quarantines EC2 instances based on high-severity findings |
+| `EC2 Isolation` | Quarantines explicitly authorized EC2 instances for eligible findings; automatic response defaults to CRITICAL |
 | `EC2 Rollback` | Restores original security groups after approval |
 | `IP Enrichment` | Enriches public IPs from Security Hub findings |
 | `Tamper Detection` | Sends alerts for security control changes |
@@ -667,7 +698,7 @@ Automation functions include:
 
 ## EC2 Isolation Workflow
 
-The `EC2 Isolation` workflow provides automated containment for high- and critical-severity EC2-related Security Hub findings.
+The `EC2 Isolation` EventBridge rule receives HIGH and CRITICAL EC2-related Security Hub findings. The Lambda defaults automatic action to `CRITICAL` and applies additional fail-closed checks before containment.
 
 Workflow:
 
@@ -692,12 +723,13 @@ Tag instance and send SNS notification
 
 The isolation Lambda:
 
-- Identifies qualifying EC2 findings
-- Snapshots attached EBS volumes prior to isolation
-- Stores or preserves original security group information
-- Replaces existing security groups with a quarantine security group
-- Tags the affected instance
-- Sends a SecOps notification
+- Requires the configured severity, `NEW` workflow status, and `ACTIVE` record state
+- Requires a valid running or stopped EC2 instance with `IsolationAllowed=true`
+- Skips duplicate and already-isolated instances
+- Requests tagged EBS snapshots after eligibility checks and before quarantine
+- Preserves original security groups and the Terraform-managed authorization tag
+- Replaces existing security groups with the quarantine security group
+- Adds isolation evidence tags and sends a SecOps notification
 
 This enables rapid containment of potentially compromised instances.
 
@@ -821,6 +853,7 @@ This supports confidentiality, integrity, and separation of encryption domains.
 
 The baseline includes support for operational resilience through:
 
+- Strict first-boot Ubuntu patching and package-state logging
 - AWS Backup
 - Backup vault encryption
 - Tag-based backup selection
