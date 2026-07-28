@@ -4,7 +4,9 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 ## NOTICE: PROPRIETARY CODE
 
-This repository is the property of *NanoNexus Consulting*.
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+This repository is the property of *Nano Nexus Holdings, LLC*.
 
 This code is made publicly viewable for demonstration purposes only.
 No license is granted to use, copy, modify, or distribute this code
