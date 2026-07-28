@@ -1,14 +1,8 @@
 # terraform-secure-baseline
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 Opinionated Terraform baseline for deploying secure, cost-efficient AWS environments for early-to-mid-stage SaaS businesses handling customer data.
-
-## NOTICE: PROPRIETARY CODE
-
-This repository is the property of *NanoNexus Consulting*.
-
-This code is made publicly viewable for demonstration purposes only.
-No license is granted to use, copy, modify, or distribute this code
-without explicit written permission.
 
 ---
 
@@ -1022,3 +1016,14 @@ This project is intended for:
 It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dependency-safe EC2 first boot, first-boot and scheduled patching, durable notification paths, fail-closed automated response, Terraform-managed Lambda packaging, and plan-before-approval GitHub OIDC CI/CD into a **reusable Terraform platform**.
 
 The goal is to provide a **secure-by-default foundation** that can be adapted, extended, and used as the starting point for production SaaS environments.
+
+---
+
+## License
+
+Copyright © 2026 Jacob Molland.
+
+This project is licensed under the Apache License 2.0.
+
+Terraform Secure Baseline is developed and maintained under the Nano Nexus
+Consulting brand, operated by Nano Nexus Holdings LLC. See [LICENSE](LICENSE) for details.
