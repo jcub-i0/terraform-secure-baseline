@@ -30,10 +30,10 @@ The module participates in a resource-level dependency chain:
 aws_security_group.compute
         |
         v
-networking.security_policy
+security_policy security-group rules
         |
         v
-networking.compute_sg_rule_ids
+security_policy.compute_sg_rule_ids
         |
         v
 terraform_data.compute_security_policy_ready
@@ -246,18 +246,16 @@ The bootstrap script:
 1. Enables strict Bash behavior with `set -Eeuo pipefail`
 2. Writes output to `/var/log/instance-bootstrap.log`
 3. Configures noninteractive APT behavior
-4. Sets a five-minute dpkg lock timeout
-5. Configures APT retries
+4. Sets a five-minute dpkg lock timeout and five retries
+5. Forces APT operations over IPv4
 6. Rewrites Ubuntu repository URLs from HTTP to HTTPS
-7. Runs `apt-get update`
+7. Runs `apt-get update` with `APT::Update::Error-Mode=any`
 8. Runs `apt-get dist-upgrade -y`
-9. Installs:
-   - `ca-certificates`
-   - `curl`
-   - `jq`
-10. Records selected package versions
-11. Reports whether a reboot is required
-12. Logs the completion timestamp
+9. Installs `ca-certificates`, `curl`, and `jq`
+10. Records selected package versions and reboot-required state
+11. Logs the completion timestamp
+
+If any configured repository still fails after retries, metadata refresh fails and strict shell handling stops the bootstrap instead of continuing with stale package indexes.
 
 ### Bootstrap Log
 
@@ -376,6 +374,8 @@ isolation_allowed = true
 ```
 
 The resulting EC2 tag is stored as the string `true` or `false`.
+
+The current root-stack policy sets development to `true` and staging and production to `false`. Local tfvars or workload Plan GitHub Environment variables must make that decision explicitly.
 
 ---
 
@@ -516,7 +516,7 @@ module "compute" {
   patch_tag_value  = var.patch_tag_value
   isolation_allowed = var.isolation_allowed
 
-  compute_sg_rule_ids = module.networking.compute_sg_rule_ids
+  compute_sg_rule_ids = module.security_policy.compute_sg_rule_ids
 
   # Retained compatibility inputs.
   interface_endpoints_sg_id = module.networking.interface_endpoints_sg_id
@@ -529,11 +529,11 @@ The exact upstream output names may differ in the calling root. The important
 dependency input is:
 
 ```hcl
-compute_sg_rule_ids = module.networking.compute_sg_rule_ids
+compute_sg_rule_ids = module.security_policy.compute_sg_rule_ids
 ```
 
 Do not add a module-level dependency from the entire compute module to the
-networking module when the networking security-policy layer already consumes
+standalone `security_policy` module when that module already consumes
 `module.compute.compute_sg_id`. The readiness object provides the required
 resource-level ordering without creating a module cycle.
 
@@ -628,12 +628,13 @@ aws ssm send-command \
 
 The bootstrap log should show:
 
-- Successful Ubuntu repository access
-- APT metadata refresh
-- Distribution upgrade execution
+- Successful Ubuntu repository access without unresolved APT errors
+- APT metadata refresh followed by the distribution upgrade
 - Required package installation
-- Relevant package versions
+- Relevant package versions and reboot-required state
 - Bootstrap completion timestamp
+
+The source configuration should contain `Acquire::ForceIPv4=true` and `APT::Update::Error-Mode=any`.
 
 ### Confirm Package Repository Access
 
@@ -683,9 +684,8 @@ internet or package-mirror path.
 
 Confirm that:
 
-- `networking.security_policy` outputs all required rule IDs
-- `networking` passes through `compute_sg_rule_ids`
-- The compute module receives `module.networking.compute_sg_rule_ids`
+- the standalone `security_policy` module outputs all required rule IDs
+- the baseline passes `module.security_policy.compute_sg_rule_ids` directly into `compute`
 - `terraform_data.compute_security_policy_ready` uses that object
 - `aws_instance.ec2` depends on the readiness resource
 - The optional internet rule attribute is named
