@@ -88,17 +88,17 @@ jobs:
                     TF_VAR_isolation_allowed
                   )
 
-                  if [[ ! "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]]; then
-                    echo "::error::ISOLATION_ALLOWED must be exactly true or false."
-                    exit 1
-                  fi
-
                   for setting_name in "${required_settings[@]}"; do
                     if [[ -z "${!setting_name:-}" ]]; then
                       echo "::error::${setting_name} is not configured in the selected GitHub Environment."
                       exit 1
                     fi
                   done
+
+                  if [[ ! "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]]; then
+                    echo "::error::ISOLATION_ALLOWED must be exactly true or false."
+                    exit 1
+                  fi
 
                   EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 
