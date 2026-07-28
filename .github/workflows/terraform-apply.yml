@@ -59,7 +59,7 @@ jobs:
             TF_VAR_account_id_dev: ${{ vars.ACCOUNT_ID_DEV }}
             TF_VAR_account_id_prod: ${{ vars.ACCOUNT_ID_PROD }}
             TF_VAR_account_id_staging: ${{ vars.ACCOUNT_ID_STAGING }}
-            TF_VAR_isolation_allowed: ${{vars.ISOLATION_ALLOWED}}
+            TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
 
         steps:
             - name: Checkout
@@ -85,6 +85,7 @@ jobs:
                     PLAN_ROLE_GITHUB_ARN
                     TF_STATE_BUCKET_ARN
                     TF_STATE_BUCKET_CMK_ARN
+                    TF_VAR_isolation_allowed
                   )
 
                   for setting_name in "${required_settings[@]}"; do
@@ -93,6 +94,11 @@ jobs:
                       exit 1
                     fi
                   done
+
+                  if [[ ! "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]]; then
+                    echo "::error::ISOLATION_ALLOWED must be exactly true or false."
+                    exit 1
+                  fi
 
                   EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 

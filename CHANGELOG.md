@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.6.0
 
 This update hardens EC2 provisioning, boot-time vulnerability remediation, and
 automated isolation after validating the complete Amazon Inspector remediation
@@ -11,63 +11,85 @@ path against fresh development deployments.
 - Added strict first-boot Ubuntu patching that:
   - rewrites Ubuntu APT sources to HTTPS;
   - waits for package-manager locks and retries transient repository failures;
-  - forces IPv4 for APT repository access in the IPv4-only workload VPC;
-  - treats incomplete APT metadata refreshes as provisioning failures;
+  - forces IPv4 for APT operations in the IPv4-only workload network;
+  - treats any incomplete APT metadata refresh as a provisioning failure;
   - performs a noninteractive `dist-upgrade` before installing required
     bootstrap packages; and
   - records relevant package versions and reboot-required state in the instance
     bootstrap log.
 - Added `user_data_replace_on_change = true` so EC2 instances are replaced when
   their bootstrap configuration changes.
-- Added a compute security-policy readiness object from the nested
-  `security_policy` module and passed it through `networking` into `compute`.
-- Added a `terraform_data` dependency bridge so EC2 instances wait for the
-  networking security-policy rules, including public HTTPS egress, before
+- Added a compute security-policy readiness object from the standalone
+  `security_policy` module and passed it directly into `compute`.
+- Added a `terraform_data` dependency bridge so EC2 instances wait for required
+  security-group rules, including public HTTPS egress when enabled, before
   launching and executing cloud-init.
+- Added explicit EC2 isolation eligibility checks for configured severity,
+  finding workflow and record state, valid EC2 resource IDs, instance state,
+  duplicate resources, and already-isolated instances.
+- Added explicit `ISOLATION_ALLOWED` Boolean validation to workload Plan paths;
+  Terraform Destroy uses a safe `false` fallback when the setting is absent.
 
 ### Changed
 
 - Changed compute bootstrap handling to use a literal shell script instead of a
   Terraform template when no Terraform interpolation is required.
+- Changed environment-root `isolation_allowed` defaults to `false` so automatic
+  isolation requires an explicit environment-level decision.
+- Configured development to opt into automatic isolation while staging and
+  production remain opted out.
+- Changed automatic EC2 isolation to default to `CRITICAL` findings while still
+  allowing the accepted severity set to be configured by the Lambda
+  environment.
 - Changed EC2 auto-isolation authorization to require
   `IsolationAllowed=true` explicitly after trimming whitespace and normalizing
   case.
+- Changed the isolation workflow to require `NEW`, `ACTIVE` findings and
+  `running` or `stopped` instances before containment.
+- Changed the isolation workflow to request and tag attached EBS snapshots only
+  after all eligibility checks pass and before replacing security groups.
 - Changed the isolation workflow to preserve the Terraform-managed
   `IsolationAllowed` policy tag instead of changing it after isolation.
 - Changed EC2 lifecycle handling so Terraform ignores runtime quarantine
   security-group replacement and Lambda-managed incident-response tags while
   an instance is isolated.
 - Changed provisioning dependencies so the compute security group can still be
-  created early for nested networking security-policy rules, while only the EC2
-  instances wait for the completed security policy.
+  created early for security-policy rules while only the EC2 instances wait for
+  the completed rules.
+- Updated the automation module README and root README to document managed
+  Lambda packaging, clean-runner saved-plan deployment, and the current EC2
+  isolation safeguards.
 
 ### Fixed
 
-- Fixed a fresh-deployment race where EC2 cloud-init could execute before the
-  NAT route and compute HTTPS egress rule were ready, causing Ubuntu repository
-  connections to time out even though the completed development environment's
-  NAT path was healthy.
+- Fixed a fresh-deployment race where EC2 cloud-init could execute before
+  required compute security-group rules, including public HTTPS egress when
+  enabled, were ready, causing Ubuntu repository connections to time out.
 - Fixed bootstrap behavior that allowed `apt-get update` repository failures to
   fall back to stale package indexes, report `0 upgraded`, and incorrectly
   complete successfully with vulnerable AMI package versions still installed.
 - Fixed Terraform template parsing failures caused by Bash/dpkg expressions
   such as `${binary:Package}` being interpreted as Terraform interpolation.
-- Fixed EC2 isolation lifecycle settings that had been applied to the Lambda
-  resource instead of the EC2 instance resource.
 - Fixed the risk of a later Terraform apply restoring the normal compute
-  security group and removing active Lambda isolation state.
+  security group or removing active Lambda isolation evidence.
 
 ### Security
 
 - Added deterministic boot-time installation of available Ubuntu security
   updates before instances enter normal service.
-- Made isolation authorization fail closed unless the instance explicitly opts
-  in through `IsolationAllowed=true`.
+- Made isolation authorization fail closed unless the environment explicitly
+  enables isolation and the instance has `IsolationAllowed=true`.
+- Limited automatic isolation to `CRITICAL` findings by default and required
+  eligible finding, instance, and current-isolation state before containment.
+- Required pre-isolation EBS snapshot requests to succeed before security-group
+  replacement proceeds.
 - Preserved policy ownership of `IsolationAllowed` in Terraform while retaining
   Lambda-owned evidence tags for isolation status, finding ID, timestamp, and
   original security groups.
 - Prevented normal Terraform reconciliation from silently reversing an active
   quarantine action.
+- Added explicit workflow validation so workload plans accept only
+  `ISOLATION_ALLOWED=true` or `ISOLATION_ALLOWED=false`.
 
 ### Notes
 
@@ -75,9 +97,14 @@ path against fresh development deployments.
   patching control; boot-time patching provides the initial remediation layer
   for newly launched instances.
 - Development deployments continue to use the `nat_only` egress mode. Testing
-  confirmed that the NAT Gateway, Internet Gateway, route tables, security
-  groups, and NACLs were healthy after apply; the failure was caused by resource
-  readiness ordering during initial instance launch.
+  confirmed that the completed NAT, Internet Gateway, route-table,
+  security-group, and NACL path was healthy; the launch-time failure was
+  addressed by waiting for required compute security-group rules.
+- Configure `ISOLATION_ALLOWED` in workload Plan GitHub Environments. The
+  current deployment policy enables it for development and disables it for
+  staging and production.
+- Managed Lambda archive resources shipped in `v1.5.0` but were omitted from
+  the original changelog entry; the `v1.5.0` history below now records them.
 
 ## v1.5.0
 
@@ -118,6 +145,8 @@ validation.
 - Added expected AWS account information to the baseline saved-plan metadata
   so the protected Apply job can verify that the reviewed plan belongs to the
   configured workload account.
+- Added managed `archive_file` resources for the EC2 Isolation, EC2 Rollback,
+  and IP Enrichment Lambda deployment packages.
 
 ### Changed
 
@@ -140,6 +169,9 @@ validation.
   profile.
 - Updated the root README, quickstart, validation checklist, adoption guide,
   and bootstrap-script README for the v1.5.0 plan-before-apply model.
+- Changed Lambda packaging from plan-time archive data sources to managed
+  Terraform resources so the protected Apply runner can create required ZIP
+  files while applying the exact reviewed saved plan.
 
 ### Fixed
 
@@ -149,6 +181,8 @@ validation.
 - Fixed strict post-reconciliation validation under GitHub OIDC by omitting
   `AWS_PROFILE` when no profile is configured instead of exporting
   `AWS_PROFILE=""`.
+- Fixed fresh-runner Terraform Apply failures where Lambda ZIP files created on
+  the separate Plan runner were unavailable during exact saved-plan Apply.
 
 ### Security
 
@@ -178,6 +212,8 @@ validation.
   workflow run.
 - The reconciliation helper continues to run strict workload bootstrap
   validation after apply unless `--skip-validation` is explicitly used.
+- Generated Lambda ZIP files are Terraform-managed build artifacts and are not
+  manually maintained or committed as source files.
 
 ## v1.4.2
 

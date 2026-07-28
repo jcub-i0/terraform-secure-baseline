@@ -73,6 +73,9 @@ Before running these tests, confirm:
 - The `Quarantine` security group exists.
 - The SecOps SNS topic exists.
 - A test EC2 instance exists in the target environment.
+- Use development for destructive isolation tests unless another environment has been explicitly approved and enabled.
+- The target instance has `IsolationAllowed=true`; staging and production default to `false`.
+- The Lambda role can describe instances, create and tag snapshots, modify instance security groups, create tags, and publish to SNS.
 - Your principal has permission to invoke the Lambda directly.
 - You know the AWS account ID and region for the target environment.
 
@@ -156,6 +159,21 @@ aws ec2 describe-tags \
 ```
 > Ensure that the instance's `IsolationAllowed` tag is set to `true` and the `Isolated` tag either does not exist or is set to `false`.
 
+### Check Pre-Isolation Snapshots
+
+After a successful isolation test, confirm that snapshots were requested for the target instance:
+
+```bash
+aws ec2 describe-snapshots \
+  --region "${AWS_REGION}" \
+  --owner-ids self \
+  --filters "Name=tag:InstanceId,Values=${INSTANCE_ID}" \
+  --query 'Snapshots[].[SnapshotId,VolumeId,State,StartTime,Tags[?Key==`IsolationFinding`].Value|[0]]' \
+  --output table
+```
+
+The snapshots should include the test instance ID and isolation finding tag.
+
 ### Check Lambda Logs
 
 ```bash
@@ -173,16 +191,14 @@ aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
 
 ### Purpose
 
-Validate that a `HIGH` severity Security Hub finding for an EC2 instance causes the instance to be isolated.
+Validate that a `HIGH` severity EC2 finding is skipped by the default `CRITICAL`-only automatic-isolation policy.
 
 ### Expected Outcome
 
 - Lambda executes successfully.
-- A snapshot is taken of the instance's EBS volume
-- Instance is moved into the quarantine security group.
-- Isolation tags are applied to the instance.
-- SNS notification is sent to the configured SecOps topic.
-- No errors appear in CloudWatch Logs.
+- The finding is logged and skipped because `HIGH` is not in the default configured severity set.
+- No snapshots, security-group changes, isolation tags, or isolation SNS notification are created.
+- No unexpected errors appear in CloudWatch Logs.
 
 ### Manual Event via AWS CLI
 
@@ -213,6 +229,7 @@ aws lambda invoke \
         "Workflow": {
           "Status": "NEW"
         },
+        "RecordState": "ACTIVE",
         "Resources": [
           {
             "Type": "AwsEc2Instance",
@@ -248,9 +265,9 @@ Validate that a `CRITICAL` severity Security Hub finding for an EC2 instance cau
 ### Expected Outcome
 
 - Lambda executes successfully.
-- A snapshot is taken of the instance's EBS volume
-- Instance is moved into the quarantine security group.
-- Isolation tags are applied to the instance.
+- Tagged snapshots are requested for every attached EBS volume before the security-group change.
+- The instance is moved into the quarantine security group.
+- Isolation evidence tags are applied while `IsolationAllowed` remains `true`.
 - SNS notification is sent to the configured SecOps topic.
 - No errors appear in CloudWatch Logs.
 
@@ -283,6 +300,7 @@ aws lambda invoke \
         "Workflow": {
           "Status": "NEW"
         },
+        "RecordState": "ACTIVE",
         "Resources": [
           {
             "Type": "AwsEc2Instance",
@@ -309,11 +327,11 @@ response.json && cat response.json && rm response.json
 
 ---
 
-## Test 3 - HIGH Non-EC2 Finding
+## Test 3 - CRITICAL Non-EC2 Finding
 
 ### Purpose
 
-Validate that a `HIGH` severity finding for a non-EC2 resource does not trigger EC2 isolation.
+Validate that a configured `CRITICAL` finding for a non-EC2 resource does not trigger EC2 isolation.
 
 ### Expected Outcome
 
@@ -334,7 +352,7 @@ aws lambda invoke \
   --payload "$(cat <<EOF
 {
   "version": "0",
-  "id": "test-high-non-ec2",
+  "id": "test-critical-non-ec2",
   "detail-type": "Security Hub Findings - Imported",
   "source": "aws.securityhub",
   "account": "${ACCOUNT_ID}",
@@ -344,15 +362,16 @@ aws lambda invoke \
   "detail": {
     "findings": [
       {
-        "Id": "test-finding-high-non-ec2-001",
-        "Title": "Manual test HIGH non-EC2 finding",
+        "Id": "test-finding-critical-non-ec2-001",
+        "Title": "Manual test CRITICAL non-EC2 finding",
         "Description": "Manual test event used to validate non-EC2 findings are ignored.",
         "Severity": {
-          "Label": "HIGH"
+          "Label": "CRITICAL"
         },
         "Workflow": {
           "Status": "NEW"
         },
+        "RecordState": "ACTIVE",
         "Resources": [
           {
             "Type": "AwsS3Bucket",
@@ -423,6 +442,7 @@ aws lambda invoke \
         "Workflow": {
           "Status": "NEW"
         },
+        "RecordState": "ACTIVE",
         "Resources": [
           {
             "Type": "AwsEc2Instance",
@@ -493,6 +513,7 @@ aws lambda invoke \
         "Workflow": {
           "Status": "NEW"
         },
+        "RecordState": "ACTIVE",
         "Resources": [
           {
             "Type": "AwsEc2Instance",
@@ -558,11 +579,12 @@ aws lambda invoke \
         "Title": "Manual test RESOLVED EC2 finding",
         "Description": "Manual test event used to validate resolved findings are ignored.",
         "Severity": {
-          "Label": "HIGH"
+          "Label": "CRITICAL"
         },
         "Workflow": {
           "Status": "RESOLVED"
         },
+        "RecordState": "ACTIVE",
         "Resources": [
           {
             "Type": "AwsEc2Instance",
@@ -589,6 +611,26 @@ response.json && cat response.json && rm response.json
 
 ---
 
+## Additional Safety-Gate Checks
+
+Use the Test 2 `CRITICAL` payload and change one condition at a time.
+
+| Condition | Expected result |
+|---|---|
+| `IsolationAllowed` is missing or `false` | Invocation succeeds; instance is skipped |
+| `RecordState` is `ARCHIVED` | Finding is skipped |
+| Workflow status is not `NEW` | Finding is skipped |
+| Instance state is not `running` or `stopped` | Instance is skipped |
+| Instance already has `Isolated=true` or only the quarantine security group | Instance is skipped without another snapshot |
+| The same instance appears more than once in one invocation | It is evaluated once |
+| Snapshot creation returns an error | Isolation fails closed and security groups are unchanged |
+
+Run snapshot-failure testing only in an isolated development test using mocks or a deliberately scoped test role. Do not remove production permissions to induce this failure.
+
+Before continuing, restore `IsolationAllowed=true` on the approved development test instance.
+
+---
+
 ## Test 7 - Multi-Account Environment Naming Validation
 
 ### Purpose
@@ -610,7 +652,7 @@ aws lambda invoke \
   --payload "$(cat <<EOF
 {
   "version": "0",
-  "id": "test-staging-high-ec2-isolation",
+  "id": "test-staging-critical-ec2-isolation",
   "detail-type": "Security Hub Findings - Imported",
   "source": "aws.securityhub",
   "account": "${ACCOUNT_ID}",
@@ -620,15 +662,16 @@ aws lambda invoke \
   "detail": {
     "findings": [
       {
-        "Id": "test-finding-staging-high-ec2-001",
-        "Title": "Manual staging test HIGH EC2 finding",
+        "Id": "test-finding-staging-critical-ec2-001",
+        "Title": "Manual staging test CRITICAL EC2 finding",
         "Description": "Manual test event used to validate environment-specific Lambda naming.",
         "Severity": {
-          "Label": "HIGH"
+          "Label": "CRITICAL"
         },
         "Workflow": {
           "Status": "NEW"
         },
+        "RecordState": "ACTIVE",
         "Resources": [
           {
             "Type": "AwsEc2Instance",
@@ -647,8 +690,9 @@ response.json && cat response.json && rm response.json
 ### Expected Outcome
 
 - The environment-specific Lambda function is invoked.
-- The finding is processed according to the same isolation rules.
-- Only the target account/environment is affected.
+- The same eligibility checks are applied in that account.
+- Staging and production skip isolation by default because their instances have `IsolationAllowed=false`.
+- Only the target account/environment is evaluated.
 
 ---
 
@@ -662,7 +706,7 @@ This test does not invoke the rollback Lambda directly. It confirms that isolati
 
 ### Expected Outcome
 
-After running one of the `EC2 Isolation` tests that results in an isolated instance (Test 1 or 2), ensure the following:
+After running Test 2 against an approved development instance, ensure the following:
 
 - Instance is isolated
 - Snapshot is taken of EBS volume(s) associated with the instance
@@ -724,13 +768,7 @@ EC2 Security Group Replacement + SNS Alert
 
 ## Expected Integration Behavior
 
-When a qualifying Security Hub finding is imported:
-
-- EventBridge matches the finding.
-- The EC2 Isolation Lambda is invoked.
-- The target EC2 instance is isolated.
-- An SNS notification is sent.
-- CloudWatch Logs show successful execution.
+When a HIGH or CRITICAL EC2 finding is imported, EventBridge invokes the Lambda. Isolation occurs only when the runtime severity configuration and all finding, instance, authorization, and snapshot checks pass. With the default configuration, a `CRITICAL`, `NEW`, `ACTIVE` finding against a development instance with `IsolationAllowed=true` should result in quarantine, evidence tags, and an SNS notification.
 
 ---
 
@@ -760,12 +798,14 @@ Ensure that all environment variables are correctly set prior to following the t
 
 Check:
 
-- Finding severity is `HIGH` or `CRITICAL`.
-- Resource type is `AwsEc2Instance`.
-- Resource ID is a valid EC2 instance ARN.
-- Lambda execution role has required EC2 permissions.
-- Quarantine security group exists.
-- Instance is in the expected VPC.
+- Finding severity is included in `AUTO_ISOLATION_SEVERITIES`; the deployed default is `CRITICAL`.
+- Workflow status is `NEW` and record state is `ACTIVE`.
+- Resource type is `AwsEc2Instance` and the resource ID is valid.
+- Instance state is `running` or `stopped`.
+- Instance has `IsolationAllowed=true` and is not already isolated.
+- Snapshot creation succeeded before the security-group change.
+- Lambda execution role has the required EC2 and SNS permissions.
+- Quarantine security group exists in the expected VPC.
 
 ---
 
@@ -821,9 +861,10 @@ These tests validate the EC2 Isolation Lambda in the context of the full `tf-sec
 
 They confirm that:
 
-- High and critical EC2 findings trigger isolation.
-- Medium and low findings are ignored.
-- Non-EC2 findings are ignored.
-- Environment-specific naming works across accounts.
-- Isolation supports the controlled rollback workflow.
+- CRITICAL EC2 findings isolate only explicitly authorized, eligible instances by default.
+- HIGH findings are skipped unless the configured severity set is expanded.
+- Non-EC2, inactive, non-NEW, ineligible, duplicate, and already-isolated targets are skipped.
+- Snapshot failure prevents quarantine.
+- Environment-specific naming and authorization work across accounts.
+- Isolation preserves the controlled rollback workflow.
 - The function fits into the broader Identity Center, EventBridge, Security Hub, and multi-account architecture.

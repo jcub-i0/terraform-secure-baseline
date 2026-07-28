@@ -188,6 +188,8 @@ prod            -> prod GitHub-Apply role
 
 This keeps CI/CD access scoped to the environment being operated on.
 
+Workload deployment follows a plan-before-approval model. The Plan job publishes and stores the exact Terraform plan, and the protected Apply job verifies and applies that saved plan without replanning after approval. Security-sensitive inputs such as `ISOLATION_ALLOWED` are validated before the plan is created.
+
 ---
 
 ## 5. Human Access Through IAM Identity Center
@@ -455,9 +457,9 @@ This enables rapid response without requiring humans to manually execute every a
 
 ## 14. Automated Containment, Human-Approved Recovery
 
-Containment can happen automatically when a high-confidence security condition is detected.
+Containment can happen automatically when a high-confidence security condition is detected, but authorization fails closed. Automatic isolation defaults to `CRITICAL`, requires an eligible `NEW` and `ACTIVE` finding, and requires the instance to have `IsolationAllowed=true`.
 
-Recovery should require human review.
+The reusable environment default is `false`; development explicitly opts in while staging and production remain opted out. Attached EBS snapshots are requested before quarantine, and recovery should require human review.
 
 For example:
 
@@ -589,6 +591,8 @@ Examples include:
 - GitHub OIDC instead of static credentials
 - Profile defaults that keep production security controls enabled
 - Egress defaults that route production workloads through Network Firewall
+- Automatic EC2 isolation disabled unless an environment explicitly opts in
+- Strict first-boot failure when package metadata cannot be refreshed safely
 
 The platform can be customized, but defaults should guide users toward safer outcomes.
 
@@ -650,6 +654,16 @@ It can help produce evidence for areas such as:
 However, SOC 2 and ISO 27001 also require business processes, policies, risk management, vendor management, and human operational controls.
 
 Infrastructure alone is not a certification.
+
+---
+
+## 23. Dependency-Safe and Deterministic First Boot
+
+New instances should not enter service with stale package metadata or before required security-group policy exists.
+
+The standalone `security_policy` module exports the rule IDs required by compute. Those IDs feed a `terraform_data` readiness checkpoint that delays EC2 creation without introducing a module cycle. This dependency covers security-group rules only; route, NAT Gateway, firewall, DNS, and repository health remain runtime requirements.
+
+The Ubuntu bootstrap forces APT over IPv4, retries transient failures, treats any repository-refresh error as fatal, performs a distribution upgrade, and records package and reboot state. Changes to user data replace the instance so the revised bootstrap runs from first boot.
 
 ---
 

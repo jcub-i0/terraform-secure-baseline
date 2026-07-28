@@ -16,6 +16,8 @@ without explicit written permission.
 
 `tf-secure-baseline` is a Terraform-driven AWS security baseline designed for organizations running applications that handle PII or other sensitive data.
 
+**Current release:** `v1.6.0` — EC2 provisioning, first-boot vulnerability remediation, dependency-safe launch ordering, and fail-closed isolation hardening.
+
 It provides a secure, multi-account cloud foundation with:
 
 - Centralized identity and access management
@@ -25,7 +27,8 @@ It provides a secure, multi-account cloud foundation with:
 - Centralized logging, monitoring, and alert routing
 - Automated detection and response
 - Durable SNS/SQS notification paths with DLQs for failed alert delivery
-- GitHub OIDC-based CI/CD
+- GitHub OIDC-based plan-before-approval CI/CD
+- Exact reviewed-plan application through protected Apply environments
 - Environment isolation across `dev`, `staging`, and `prod`
 - SOC 2 / ISO 27001-aligned security architecture to support audit readiness
 
@@ -54,14 +57,16 @@ Key capabilities include:
 - Centralized CloudTrail, Config, and VPC Flow Logs
 - GuardDuty, Security Hub, Inspector, and AWS Config
 - Event-driven security automation
-- EC2 isolation and rollback workflows
+- Fail-closed EC2 isolation and controlled rollback workflows
+- Terraform-managed Lambda deployment packaging
 - IP threat enrichment
 - Tamper detection
 - Break-glass role monitoring
 - SQS-backed security and compliance notification queues
 - EventBridge target DLQs and workflow-specific automation DLQs
 - Encrypted S3, KMS, SNS, SQS, CloudWatch, and Lambda resources
-- AWS Backup and SSM patching support
+- First-boot Ubuntu package updates and scheduled SSM patching
+- Dependency-aware EC2 launch ordering so required security group rules exist before user data runs
 - Safe, read-only post-deployment validation suite
 - Layer-specific validation evidence export with Markdown and JSON summaries
 
@@ -109,17 +114,24 @@ Bootstrap and Governance Stacks
     +--> bootstrap/staging/account
     +--> bootstrap/prod/account
 
-GitHub Actions
+GitHub Actions through OIDC
     |
-    | OIDC
-    v
-Environment Plan / Apply Roles
+    +--> <env>-plan / GitHub Plan role
+    |       |
+    |       +--> readable plan evidence
+    |       +--> saved binary plan + metadata + checksum
+    |
+    +--> protected <env> / GitHub Apply role
+            |
+            +--> verify and apply exact reviewed plan
+            +--> optional workload-account reconciliation
+            +--> strict validation and evidence
+
+Workload Environments
     |
     +--> environments/dev
     +--> environments/staging
     +--> environments/prod
-    |
-    +--> layer-specific validation evidence workflows
 ```
 
 Each `state` stack is initialized and applied locally first because it creates the S3 bucket and KMS key that will store its own Terraform state. After those resources exist, `scripts/bootstrap/migrate-state-stack.sh` materializes the ignored active `backend.tf` from the tracked `backend.tf.migrated.example`, migrates the existing local state into S3, and verifies that the remote state is readable.
@@ -265,6 +277,12 @@ Compute workloads are deployed in private subnets by default.
 
 The baseline avoids public IPs for application infrastructure and routes private compute egress through controlled paths, including AWS Network Firewall, NAT Gateway, and VPC endpoints where appropriate.
 
+### Dependency-Safe First Boot
+
+The compute security group is created before the standalone `security_policy` module creates rules that reference it. The baseline passes the resulting `compute_sg_rule_ids` object directly into `compute`, where a `terraform_data` resource acts as a readiness checkpoint.
+
+Only the EC2 instances wait on that checkpoint. This avoids a cyclic module dependency while ensuring first-boot user data does not run before required endpoint, database, and conditional internet HTTPS security-group rules exist. Route, NAT Gateway, firewall, DNS, and repository availability remain separate runtime requirements.
+
 ### Configurable Cost/Security Profiles
 
 The baseline supports deployment profiles that select sensible defaults for each environment type.
@@ -357,7 +375,8 @@ Environment stacks include:
 - AWS Network Firewall, when enabled by egress mode
 - NAT Gateway, when required by egress mode
 - VPC endpoints
-- EC2 workloads
+- EC2 workloads with first-boot package updates
+- Resource-level security-policy readiness before EC2 launch
 - S3 storage
 - KMS keys
 - CloudTrail
@@ -416,7 +435,7 @@ When `egress_mode = "auto"`, the effective egress mode is selected from `deploym
 
 Important:
 
-When `egress_mode = "vpc_endpoints_only"`, Network Firewall and NAT Gateways are not deployed, and compute private subnets do not receive a default internet route. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation may fail unless package access is provided another way.
+When `egress_mode = "vpc_endpoints_only"`, Network Firewall and NAT Gateways are not deployed, compute private subnets do not receive a default internet route, and the general compute TCP/443 egress rule is not created. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation and Patch Manager operations against public Ubuntu repositories require an approved package mirror or another explicitly provided path.
 
 ---
 
@@ -442,6 +461,38 @@ This baseline integrates several AWS-native security services:
 
 Some services are profile-aware. For example, AWS Config and Inspector are enabled by default in `production` and `development`, while `minimal` disables them by default unless explicitly overridden.
 
+### EC2 Vulnerability Remediation and Patching
+
+Amazon Inspector package vulnerabilities may appear as Security Hub findings. The baseline addresses stale operating system package findings through two complementary controls:
+
+1. **First-boot update:** each Ubuntu EC2 instance rewrites the standard Ubuntu package sources to HTTPS, forces APT over IPv4, retries transient failures, fails when any configured repository cannot refresh, runs `apt-get dist-upgrade -y`, installs `ca-certificates`, `curl`, and `jq`, and records selected package versions and reboot-required state in `/var/log/instance-bootstrap.log`.
+2. **Ongoing patching:** the `patch_management` module targets instances by `PatchGroup` tag and runs `AWS-RunPatchBaseline` during a scheduled SSM Maintenance Window with `Install` and `RebootIfNeeded`.
+
+Selecting the latest Ubuntu AMI alone does not guarantee that all packages are current at launch. The first-boot update closes the gap between image publication and instance creation, while Patch Manager handles later baseline-approved patches.
+
+The compute module sets `user_data_replace_on_change = true`, so changes to the bootstrap script replace the affected instances and apply the new first-boot configuration.
+
+#### First-Boot Network Readiness
+
+The standalone `security_policy` module consumes the compute security group, so the entire compute module cannot depend on the entire security-policy module without creating a cycle. Instead, the baseline passes a `compute_sg_rule_ids` readiness object directly into `compute`:
+
+```text
+security_policy.compute_sg_rule_ids
+        |
+        v
+compute.compute_sg_rule_ids
+        |
+        v
+terraform_data.compute_security_policy_ready
+        |
+        v
+aws_instance.ec2
+```
+
+This resource-level dependency ensures the EC2 instances launch only after the required security-group rules exist, including the conditional general HTTPS rule for `nat_only` and `network_firewall` modes. It does not prove that route, NAT Gateway, Network Firewall, DNS, or repository dependencies are healthy.
+
+SSM connectivity by itself does not prove public repository connectivity. SSM can operate through Interface VPC Endpoints while Ubuntu APT traffic requires NAT, the approved Network Firewall path, or an internal package mirror.
+
 ---
 
 ## Automation Workflows
@@ -450,24 +501,53 @@ The baseline includes several security automation workflows.
 
 ### EC2 Isolation
 
-Triggered by High- and Critical-severity Security Hub findings.
+The EventBridge rule receives new HIGH- and CRITICAL-severity Security Hub findings involving EC2 instances. The Lambda function then applies additional fail-closed eligibility checks before changing the instance.
 
-Actions include:
+Default behavior:
 
-- Replacing existing security groups with a quarantine security group
-- Snapshotting the EBS volume(s)
-- Tagging the instance
-- Sending an SNS alert
+- Automatic isolation defaults to `CRITICAL` findings only.
+- `AUTO_ISOLATION_SEVERITIES` can explicitly enable additional severities, such as `HIGH,CRITICAL`.
+- The finding must be `ACTIVE` with workflow status `NEW`.
+- The resource must be an EC2 instance in the `running` or `stopped` state.
+- The instance must explicitly have `IsolationAllowed=true`.
+- Already-isolated instances and duplicate instance references in the same invocation are skipped.
+
+For an eligible instance, the workflow:
+
+1. records the existing security groups;
+2. requests tagged snapshots for attached EBS volumes;
+3. fails closed if snapshot creation fails;
+4. replaces the existing security groups with the quarantine security group;
+5. adds isolation and recovery metadata tags; and
+6. sends an SNS notification when a topic is configured.
+
+The explicit `IsolationAllowed=true` requirement prevents a matching finding from isolating an instance unless the workload has opted into automatic response. The reusable defaults are `false`; the current environment policy enables isolation for development and disables it for staging and production.
+
+Terraform also ignores automation-managed changes to the instance security group attachments and isolation metadata tags. A routine `terraform apply` therefore does not automatically reattach the normal compute security group or remove the recovery context from an isolated instance.
 
 ### EC2 Rollback
 
-Triggered manually through a controlled EventBridge event.
+Triggered manually through a controlled EventBridge event on the custom SecOps event bus.
 
-This allows a SecOps operator to restore previously isolated EC2 instances after review and approval.
+This allows a SecOps operator to restore previously isolated EC2 instances after review and approval without granting operators broad direct EC2 modification access.
 
 ### IP Threat Enrichment
 
-Enriches IP-related Security Hub findings using threat intelligence sources and sends the results to SNS.
+Enriches IP-related Security Hub findings using the configured threat intelligence source and sends the results to SNS. The function intentionally runs outside a VPC so it can reach the external API without requiring NAT.
+
+### Lambda Deployment Packaging
+
+The automation module packages its three Lambda source files with managed Terraform `archive_file` resources:
+
+```text
+lambda/ec2_isolation.py  -> lambda/ec2_isolation.zip
+lambda/ec2_rollback.py   -> lambda/ec2_rollback.zip
+lambda/ip_enrichment.py  -> lambda/ip_enrichment.zip
+```
+
+The ZIP files are generated build outputs rather than manually maintained source artifacts. The Lambda functions depend directly on the matching archive resources, so Terraform creates each package before creating or updating the function.
+
+This resource-based packaging is required by the plan-before-approval workflow. Plan and Apply run on separate GitHub Actions runners, and the protected Apply job can execute the archive-resource operations contained in the reviewed saved plan. No Lambda filename list or ZIP-copying logic is required in the workflow. Adding a future Lambda should remain encapsulated within the Terraform module.
 
 ### Tamper Detection
 
@@ -499,8 +579,7 @@ The DLQs are terminal failure-retention queues. They are intended for SecOps rev
 
 ### CI/CD
 
-GitHub Actions workflows use GitHub OIDC to assume environment-specific AWS IAM
-roles without storing long-lived AWS access keys.
+GitHub Actions workflows use GitHub OIDC to assume environment-specific AWS IAM roles without storing long-lived AWS access keys.
 
 Typical workflows include:
 
@@ -531,11 +610,7 @@ control-plane-plan -> control-plane GitHub-Plan role
 control-plane      -> control-plane GitHub-Apply role
 ```
 
-The separate `*-plan` environments are intentional. Plan jobs run without the
-protected Apply-environment approval so the Terraform plan exists before a
-reviewer is asked to approve deployment. Apply jobs target the protected
-`dev`, `staging`, or `prod` environment and begin only after its required
-review rules pass.
+The separate `*-plan` environments are intentional. Plan jobs run without protected Apply-environment approval so the Terraform plan exists before a reviewer is asked to approve deployment. Apply jobs target the protected `dev`, `staging`, or `prod` environment and begin only after its required review rules pass.
 
 `Terraform Apply` uses a plan-first workflow:
 
@@ -544,25 +619,22 @@ review rules pass.
 3. publish the readable plan in the workflow summary;
 4. upload the binary plan with metadata and a checksum;
 5. wait for approval on the protected Apply environment;
-6. verify and apply the exact saved plan.
+6. verify the artifact and workflow context; and
+7. apply the exact saved plan without generating a replacement plan.
 
-The workflow can optionally invoke `Reconcile Workload Account` after the
-baseline apply. Reconciliation follows the same plan-first pattern: it resolves
-the current workload-created CMKs, publishes and stores a saved account-stack
-plan, waits for approval, applies that exact plan, and runs strict bootstrap
-validation.
+Managed `archive_file` resources allow the exact saved-plan model to work across separate runners: the protected Apply runner creates the required Lambda ZIP files as Terraform resources before the dependent Lambda functions are deployed.
 
-`ACCOUNT_ID` is required in both members of each Plan/Apply environment pair.
-The workflows validate that the configured role ARN and active AWS caller both
-belong to that account, and saved-plan metadata prevents a plan generated for
-one account from being applied through a differently configured environment.
-Other shared environment values should also remain consistent across each
-pair.
+The workflow can optionally invoke `Reconcile Workload Account` after the baseline apply. Reconciliation follows the same plan-first pattern: it resolves the current workload-created CMKs, publishes and stores a saved account-stack plan, waits for approval, applies that exact plan, and runs strict bootstrap validation.
 
-The layer-specific evidence workflows use the applicable `*-plan` GitHub
-environment and Plan role. For migrated state stacks, those workflows
-materialize the ignored runtime `backend.tf` before running `terraform init`
-and read-only validation.
+`ACCOUNT_ID` is required in both members of each Plan/Apply environment pair. Both baseline and reconciliation jobs validate that the configured role ARN and active AWS caller belong to that account.
+
+The baseline saved-plan metadata additionally records the expected AWS account ID together with the environment, commit, repository, workflow run, attempt, and Terraform version. Reconciliation verifies its checksum and workflow-context metadata, while its Plan and Apply jobs independently repeat the account and caller checks.
+
+Workload Plan environments must also define `ISOLATION_ALLOWED` as exactly `true` or `false`. The current policy is `true` for `dev-plan` and `false` for `staging-plan` and `prod-plan`. Apply consumes the reviewed saved plan and does not re-resolve this value; Destroy uses `false` when it is absent.
+
+Other shared environment values should remain synchronized across each Plan/Apply pair.
+
+The layer-specific evidence workflows use the applicable `*-plan` GitHub environment and Plan role. For migrated state stacks, those workflows materialize the ignored runtime `backend.tf` before running `terraform init` and read-only validation.
 
 ## Deployment Order
 
@@ -674,12 +746,16 @@ CLOUD_NAME="tf-secure-baseline" \
 
 The workload baseline validation suite checks deployed environments for account identity, Terraform outputs, networking, VPC endpoints, logging, security services, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM posture. It also validates notification and failure-retention paths such as SNS subscriptions, SQS queues, EventBridge target DLQs, retry policies, and Lambda workflow wiring.
 
+For Inspector or Security Hub package findings, also confirm that the instance is SSM `Online`, review `/var/log/instance-bootstrap.log`, verify Ubuntu repository connectivity through the effective egress path, and inspect Patch Manager execution and compliance history. An SSM-online result confirms AWS management connectivity but does not by itself confirm access to public Ubuntu repositories.
+
 A successful workload baseline validation run should end with:
 
 ```text
 Validation scripts passed:  14/14
 Validation scripts failed:  0/14
 ```
+
+A clean CI/CD regression test should also confirm that a fresh Plan runner and fresh Apply runner can deploy all three Lambda functions without pre-existing ZIP files. The Apply run should create the managed archive resources before the Lambda functions and should not report `reading ZIP file: no such file or directory`.
 
 Individual scripts can also be run directly when troubleshooting a specific architecture area.
 
@@ -889,42 +965,25 @@ Each module also includes its own local README.md.
 
 ---
 
-## Current Release Highlights
+## Release Status and Highlights
 
-## v1.5.0
+### Current Release: `v1.6.0`
 
-### Added
+`v1.6.0` hardens EC2 launch ordering, first-boot patching, and automated isolation.
 
-- Added plan-first `Terraform Apply` execution that publishes the readable
-  workload plan before approval, uploads the exact binary plan as a short-lived
-  artifact, and applies only that reviewed plan after the protected environment
-  is approved.
-- Added optional post-baseline workload-account reconciliation to the
-  `Terraform Apply` workflow.
-- Added plan-first `Reconcile Workload Account` execution with `plan-only` and
-  `plan-and-apply` modes.
-- Added `--plan-file` and `--apply-plan` support to
-  `scripts/bootstrap/reconcile-workload-account.sh` for durable local plan
-  review and exact saved-plan application across separate invocations.
-- Added saved-plan metadata and SHA-256 verification for baseline and
-  reconciliation Apply jobs.
-- Added workload Plan and Apply account-safety validation for `ACCOUNT_ID`,
-  configured role ARN account ownership, active AWS caller identity, and saved
-  plan account metadata.
+Highlights:
 
-### Changed
+- Forces Ubuntu APT operations over IPv4, retries transient failures, and fails bootstrap when any configured repository cannot refresh.
+- Runs a noninteractive first-boot distribution upgrade and records package versions and reboot-required state.
+- Replaces EC2 instances when user data changes.
+- Passes `security_policy.compute_sg_rule_ids` directly into `compute` so EC2 instances wait for required security-group rules.
+- Defaults automatic isolation to `CRITICAL`, `NEW`, `ACTIVE` findings for running or stopped EC2 instances.
+- Requires explicit `IsolationAllowed=true`, skips duplicate or already-isolated instances, and requests EBS snapshots before quarantine.
+- Prevents routine Terraform reconciliation from reversing active isolation state.
+- Defaults environment isolation authorization to `false`; development opts in while staging and production remain opted out.
+- Validates `ISOLATION_ALLOWED` in workload Plan workflows and uses a safe `false` fallback during Destroy.
 
-- Standardized workload deployment on paired GitHub environments:
-  `dev-plan` / `dev`, `staging-plan` / `staging`, and `prod-plan` / `prod`.
-- Moved approval to the Apply job so reviewers can inspect the Terraform plan
-  before approving deployment.
-- Updated reconciliation automation to apply the exact saved account-stack plan
-  rather than regenerating a plan after approval.
-- Updated GitHub OIDC execution so an unset `AWS_PROFILE` uses the AWS default
-  credential provider chain, while local profile-based operation remains
-  supported.
-- Updated deployment, adoption, validation, and bootstrap-script documentation
-  for the final plan-before-apply CI/CD model.
+Managed Lambda archive resources shipped in `v1.5.0`; the changelog now records that historical implementation accurately.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
 
@@ -960,6 +1019,6 @@ This project is intended for:
 
 `tf-secure-baseline` is a deployable AWS security foundation for sensitive workloads.
 
-It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dedicated VPC endpoint subnets, logging, monitoring, durable notification paths, automated response, and GitHub OIDC CI/CD into a **reusable Terraform platform**.
+It combines multi-account architecture, centralized identity, secure networking, deployment profiles, configurable egress modes, dependency-safe EC2 first boot, first-boot and scheduled patching, durable notification paths, fail-closed automated response, Terraform-managed Lambda packaging, and plan-before-approval GitHub OIDC CI/CD into a **reusable Terraform platform**.
 
 The goal is to provide a **secure-by-default foundation** that can be adapted, extended, and used as the starting point for production SaaS environments.

@@ -13,6 +13,7 @@ apt_get() {
   apt-get \
     -o DPkg::Lock::Timeout=300 \
     -o Acquire::Retries=5 \
+    -o Acquire::ForceIPv4=true \
     "$@"
 }
 
@@ -27,7 +28,9 @@ else
 fi
 
 echo "[INFO] Refreshing APT metadata"
-apt_get update
+# Fail when any configured repository cannot refresh instead of silently
+# continuing with stale package indexes.
+apt_get -o APT::Update::Error-Mode=any update
 
 echo "[INFO] Installing current package updates"
 apt_get dist-upgrade -y
