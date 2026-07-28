@@ -344,7 +344,18 @@ Plan and Apply jobs validate:
 - `ACCOUNT_ID` is present and contains exactly 12 digits;
 - the configured Plan or Apply role ARN belongs to that account;
 - the active AWS OIDC caller is operating in that account; and
-- saved-plan metadata identifies the same account, repository, commit, workflow run, and Terraform version.
+- saved-plan metadata identifies the same account, repository, commit, workflow run, and Terraform version; and
+- workload Plan environments provide `ISOLATION_ALLOWED` as exactly `true` or `false`.
+
+Expected workload Plan values:
+
+```text
+dev-plan      ISOLATION_ALLOWED=true
+staging-plan  ISOLATION_ALLOWED=false
+prod-plan     ISOLATION_ALLOWED=false
+```
+
+Apply uses the reviewed saved plan and does not re-resolve this variable. Destroy uses a safe `false` fallback when the value is absent.
 
 `Terraform Apply` publishes and uploads its own saved baseline plan, waits for
 approval, then applies that exact artifact. Its optional reconciliation input
@@ -1262,6 +1273,44 @@ Expected:
 - Workload instances exist if enabled.
 - Private workload instances do not have public IPs.
 - Instances are in the expected state.
+
+---
+
+## 5.5 Validate First-Boot Patching and Isolation Policy
+
+Confirm the bootstrap source contains the strict APT controls:
+
+```bash
+grep -nE \
+  'Acquire::ForceIPv4=true|APT::Update::Error-Mode=any|dist-upgrade|user_data_replace_on_change' \
+  modules/compute/user_data/bootstrap.sh \
+  modules/compute/main.tf
+```
+
+For a fresh instance, review:
+
+```text
+/var/log/instance-bootstrap.log
+/var/log/cloud-init-output.log
+```
+
+Expected:
+
+- APT metadata refresh completes without unresolved repository errors.
+- The distribution upgrade and required package installation complete.
+- Relevant package versions and reboot-required state are recorded.
+- A bootstrap or repository failure prevents a successful cloud-init completion.
+- The `IsolationAllowed` tag is `true` in development and `false` in staging and production.
+
+Verify the policy tag:
+
+```bash
+aws ec2 describe-instances \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --query 'Reservations[].Instances[].[InstanceId,Tags[?Key==`IsolationAllowed`].Value|[0]]' \
+  --output table
+```
 
 ---
 
@@ -2184,10 +2233,13 @@ docs/lambda_tests/ec2_isolation.md
 
 Expected:
 
-- High or critical EC2 finding causes isolation.
-- Instance is moved to quarantine security group.
-- Instance is tagged.
-- SNS notification is sent.
+- A `CRITICAL`, `NEW`, `ACTIVE` EC2 finding isolates an eligible development instance by default.
+- A `HIGH` finding is skipped unless `AUTO_ISOLATION_SEVERITIES` explicitly includes `HIGH`.
+- Staging and production instances are skipped while `IsolationAllowed=false`.
+- Attached EBS snapshots are requested before the quarantine security group is applied.
+- Isolation evidence tags are added while `IsolationAllowed` remains Terraform-managed.
+- A routine Terraform plan does not attempt to restore the normal security group or remove active isolation evidence.
+- SNS notification is sent after successful isolation.
 
 ## EC2 Rollback
 
