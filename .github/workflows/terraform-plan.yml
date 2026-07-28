@@ -89,6 +89,27 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         uses: hashicorp/setup-terraform@v4
 
+      - name: Validate workload isolation setting
+        if: >-
+          (github.event_name != 'workflow_dispatch' ||
+          matrix.environment == inputs.target_environment) &&
+          (matrix.environment == 'dev' ||
+          matrix.environment == 'staging' ||
+          matrix.environment == 'prod')
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TF_VAR_isolation_allowed:-}" ]]; then
+            echo "::error::ISOLATION_ALLOWED is not configured for this workload Plan environment."
+            exit 1
+          fi
+
+          if [[ ! "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]]; then
+            echo "::error::ISOLATION_ALLOWED must be exactly true or false."
+            exit 1
+          fi
+
       - name: Terraform Init
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         working-directory: ${{ matrix.working_directory }}
