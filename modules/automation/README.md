@@ -105,6 +105,8 @@ An instance is isolated only when all of the following are true:
 
 After the eligibility checks pass, the Lambda snapshots attached EBS volumes, preserves the original security group IDs in instance tags, replaces the attached security groups with the quarantine security group, records isolation metadata, and sends an SNS notification. Snapshot failures propagate and prevent the security-group change.
 
+Environment-root authorization defaults to `false`. The current policy enables development and disables staging and production. Workload Plan workflows require `ISOLATION_ALLOWED` to be exactly `true` or `false`; Apply uses the reviewed saved plan and Destroy falls back to `false` when the value is absent.
+
 #### EventBridge Match
 
 ```text
@@ -465,6 +467,7 @@ EC2 Isolation changes instance security group attachments and can interrupt netw
 The function is deliberately fail-closed:
 
 - automatic isolation defaults to CRITICAL findings;
+- environment authorization defaults to `false`, with development explicitly enabled and staging and production disabled;
 - `IsolationAllowed=true` must be explicitly applied to the instance;
 - only ACTIVE, NEW findings are eligible;
 - only running or stopped instances are eligible;
