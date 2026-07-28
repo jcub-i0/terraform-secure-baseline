@@ -85,7 +85,13 @@ jobs:
                     PLAN_ROLE_GITHUB_ARN
                     TF_STATE_BUCKET_ARN
                     TF_STATE_BUCKET_CMK_ARN
+                    TF_VAR_isolation_allowed
                   )
+
+                  if [[ ! "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]]; then
+                    echo "::error::ISOLATION_ALLOWED must be exactly true or false."
+                    exit 1
+                  fi
 
                   for setting_name in "${required_settings[@]}"; do
                     if [[ -z "${!setting_name:-}" ]]; then
