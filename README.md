@@ -16,7 +16,7 @@ without explicit written permission.
 
 `tf-secure-baseline` is a Terraform-driven AWS security baseline designed for organizations running applications that handle PII or other sensitive data.
 
-**Current published release:** `v1.5.0` — released July 18, 2026. The `v1.5.0` tag is immutable; changes merged afterward remain unreleased until a later version is tagged.
+**Current release:** `v1.6.0` — EC2 provisioning, first-boot vulnerability remediation, dependency-safe launch ordering, and fail-closed isolation hardening.
 
 It provides a secure, multi-account cloud foundation with:
 
@@ -279,9 +279,9 @@ The baseline avoids public IPs for application infrastructure and routes private
 
 ### Dependency-Safe First Boot
 
-The compute security group is created before the networking security-policy rules that reference it. The security-policy module exports the required compute rule IDs through the networking module, and the compute module uses those IDs as a `terraform_data` readiness checkpoint.
+The compute security group is created before the standalone `security_policy` module creates rules that reference it. The baseline passes the resulting `compute_sg_rule_ids` object directly into `compute`, where a `terraform_data` resource acts as a readiness checkpoint.
 
-Only the EC2 instances wait on that checkpoint. This avoids a cyclic module dependency while ensuring first-boot user data does not run before required endpoint, database, and conditional internet HTTPS rules exist.
+Only the EC2 instances wait on that checkpoint. This avoids a cyclic module dependency while ensuring first-boot user data does not run before required endpoint, database, and conditional internet HTTPS security-group rules exist. Route, NAT Gateway, firewall, DNS, and repository availability remain separate runtime requirements.
 
 ### Configurable Cost/Security Profiles
 
@@ -465,7 +465,7 @@ Some services are profile-aware. For example, AWS Config and Inspector are enabl
 
 Amazon Inspector package vulnerabilities may appear as Security Hub findings. The baseline addresses stale operating system package findings through two complementary controls:
 
-1. **First-boot update:** each Ubuntu EC2 instance rewrites the standard Ubuntu package sources to HTTPS, refreshes APT metadata with retry behavior, runs `apt-get dist-upgrade -y`, installs `ca-certificates`, `curl`, and `jq`, and records selected package versions in `/var/log/instance-bootstrap.log`.
+1. **First-boot update:** each Ubuntu EC2 instance rewrites the standard Ubuntu package sources to HTTPS, forces APT over IPv4, retries transient failures, fails when any configured repository cannot refresh, runs `apt-get dist-upgrade -y`, installs `ca-certificates`, `curl`, and `jq`, and records selected package versions and reboot-required state in `/var/log/instance-bootstrap.log`.
 2. **Ongoing patching:** the `patch_management` module targets instances by `PatchGroup` tag and runs `AWS-RunPatchBaseline` during a scheduled SSM Maintenance Window with `Install` and `RebootIfNeeded`.
 
 Selecting the latest Ubuntu AMI alone does not guarantee that all packages are current at launch. The first-boot update closes the gap between image publication and instance creation, while Patch Manager handles later baseline-approved patches.
@@ -474,22 +474,22 @@ The compute module sets `user_data_replace_on_change = true`, so changes to the 
 
 #### First-Boot Network Readiness
 
-The compute security group is consumed by the nested networking `security_policy` module, so the entire compute module cannot depend on the entire networking module without creating a cycle. Instead, the baseline passes a `compute_sg_rule_ids` readiness object through:
+The standalone `security_policy` module consumes the compute security group, so the entire compute module cannot depend on the entire security-policy module without creating a cycle. Instead, the baseline passes a `compute_sg_rule_ids` readiness object directly into `compute`:
 
 ```text
 security_policy.compute_sg_rule_ids
         |
         v
-networking.compute_sg_rule_ids
+compute.compute_sg_rule_ids
         |
         v
-compute.terraform_data.compute_security_policy_ready
+terraform_data.compute_security_policy_ready
         |
         v
 aws_instance.ec2
 ```
 
-This resource-level dependency ensures the EC2 instances launch only after the required security group rules exist, including the conditional general HTTPS rule for `nat_only` and `network_firewall` modes. It prevents cloud-init from attempting Ubuntu repository access while Terraform is still creating the egress policy.
+This resource-level dependency ensures the EC2 instances launch only after the required security-group rules exist, including the conditional general HTTPS rule for `nat_only` and `network_firewall` modes. It does not prove that route, NAT Gateway, Network Firewall, DNS, or repository dependencies are healthy.
 
 SSM connectivity by itself does not prove public repository connectivity. SSM can operate through Interface VPC Endpoints while Ubuntu APT traffic requires NAT, the approved Network Firewall path, or an internal package mirror.
 
@@ -521,7 +521,7 @@ For an eligible instance, the workflow:
 5. adds isolation and recovery metadata tags; and
 6. sends an SNS notification when a topic is configured.
 
-The explicit `IsolationAllowed=true` requirement prevents a matching finding from isolating an instance unless the workload has opted into automatic response. The compute module defaults this authorization to `false`.
+The explicit `IsolationAllowed=true` requirement prevents a matching finding from isolating an instance unless the workload has opted into automatic response. The reusable defaults are `false`; the current environment policy enables isolation for development and disables it for staging and production.
 
 Terraform also ignores automation-managed changes to the instance security group attachments and isolation metadata tags. A routine `terraform apply` therefore does not automatically reattach the normal compute security group or remove the recovery context from an isolated instance.
 
@@ -629,6 +629,8 @@ The workflow can optionally invoke `Reconcile Workload Account` after the baseli
 `ACCOUNT_ID` is required in both members of each Plan/Apply environment pair. Both baseline and reconciliation jobs validate that the configured role ARN and active AWS caller belong to that account.
 
 The baseline saved-plan metadata additionally records the expected AWS account ID together with the environment, commit, repository, workflow run, attempt, and Terraform version. Reconciliation verifies its checksum and workflow-context metadata, while its Plan and Apply jobs independently repeat the account and caller checks.
+
+Workload Plan environments must also define `ISOLATION_ALLOWED` as exactly `true` or `false`. The current policy is `true` for `dev-plan` and `false` for `staging-plan` and `prod-plan`. Apply consumes the reviewed saved plan and does not re-resolve this value; Destroy uses `false` when it is absent.
 
 Other shared environment values should remain synchronized across each Plan/Apply pair.
 
@@ -965,44 +967,23 @@ Each module also includes its own local README.md.
 
 ## Release Status and Highlights
 
-### Current Published Release: `v1.5.0`
+### Current Release: `v1.6.0`
 
-`v1.5.0` was tagged and published on July 18, 2026. The release tag must not be moved or rewritten. Changes merged into `main` after that tag remain unreleased until a later release is created.
+`v1.6.0` hardens EC2 launch ordering, first-boot patching, and automated isolation.
 
-#### Added
+Highlights:
 
-- Added plan-first `Terraform Apply` execution that publishes the readable workload plan before approval, uploads the exact binary plan as a short-lived artifact, and applies only that reviewed plan after the protected environment is approved.
-- Added optional post-baseline workload-account reconciliation to the `Terraform Apply` workflow.
-- Added plan-first `Reconcile Workload Account` execution with `plan-only` and `plan-and-apply` modes.
-- Added `--plan-file` and `--apply-plan` support to `scripts/bootstrap/reconcile-workload-account.sh` for durable local plan review and exact saved-plan application across separate invocations.
-- Added saved-plan metadata and SHA-256 verification for baseline and reconciliation Apply jobs. Baseline metadata also records the expected AWS account ID.
-- Added workload Plan and Apply account-safety validation for `ACCOUNT_ID`, configured role ARN account ownership, and active AWS caller identity.
+- Forces Ubuntu APT operations over IPv4, retries transient failures, and fails bootstrap when any configured repository cannot refresh.
+- Runs a noninteractive first-boot distribution upgrade and records package versions and reboot-required state.
+- Replaces EC2 instances when user data changes.
+- Passes `security_policy.compute_sg_rule_ids` directly into `compute` so EC2 instances wait for required security-group rules.
+- Defaults automatic isolation to `CRITICAL`, `NEW`, `ACTIVE` findings for running or stopped EC2 instances.
+- Requires explicit `IsolationAllowed=true`, skips duplicate or already-isolated instances, and requests EBS snapshots before quarantine.
+- Prevents routine Terraform reconciliation from reversing active isolation state.
+- Defaults environment isolation authorization to `false`; development opts in while staging and production remain opted out.
+- Validates `ISOLATION_ALLOWED` in workload Plan workflows and uses a safe `false` fallback during Destroy.
 
-#### Changed
-
-- Standardized workload deployment on paired GitHub environments: `dev-plan` / `dev`, `staging-plan` / `staging`, and `prod-plan` / `prod`.
-- Moved approval to the Apply job so reviewers can inspect the Terraform plan before approving deployment.
-- Updated reconciliation automation to apply the exact saved account-stack plan rather than regenerating a plan after approval.
-- Updated GitHub OIDC execution so an unset `AWS_PROFILE` uses the AWS default credential provider chain, while local profile-based operation remains supported.
-- Updated deployment, adoption, validation, and bootstrap-script documentation for the final plan-before-apply CI/CD model.
-
-### Unreleased Changes on `main`
-
-Changes completed after the `v1.5.0` release include:
-
-- Replaced plan-time Lambda archive data sources with managed `archive_file` resources for EC2 isolation, EC2 rollback, and IP enrichment.
-- Confirmed that a reviewed saved plan can create the Lambda packages on a fresh protected Apply runner without workflow-specific ZIP handling.
-- Hardened EC2 automatic isolation with an explicit `IsolationAllowed=true` opt-in requirement.
-- Changed the default automatic-isolation severity to `CRITICAL`, with `AUTO_ISOLATION_SEVERITIES` available for explicit expansion.
-- Added ACTIVE/NEW finding checks, instance-state checks, duplicate and already-isolated detection, and fail-closed pre-isolation EBS snapshot behavior.
-- Added Terraform drift protection so routine applies do not release isolated EC2 instances or remove automation-managed isolation metadata.
-- Updated the Ubuntu EC2 bootstrap to use HTTPS package sources, retry APT operations, run a first-boot distribution upgrade, install required operational packages, and record relevant package versions.
-- Enabled EC2 replacement when user data changes through `user_data_replace_on_change`.
-- Added the `security_policy -> networking -> compute` `compute_sg_rule_ids` readiness chain so EC2 instances wait for required security group rules before cloud-init runs.
-- Made general compute TCP/443 egress conditional on the effective egress mode and omitted it for `vpc_endpoints_only`.
-- Updated the compute, networking security-policy, patch-management, root-level, and changelog documentation for the vulnerability-remediation and first-boot dependency changes.
-
-These changes are not part of the immutable `v1.5.0` tag and should remain under `Unreleased` in `CHANGELOG.md` until a later version is tagged.
+Managed Lambda archive resources shipped in `v1.5.0`; the changelog now records that historical implementation accurately.
 
 For previous release highlights and detailed change history, see `CHANGELOG.md`.
 
