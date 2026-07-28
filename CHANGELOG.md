@@ -3,8 +3,7 @@
 ## v1.6.0
 
 This update hardens EC2 provisioning, boot-time vulnerability remediation, and
-automated isolation after validating the complete Amazon Inspector remediation
-path against fresh development deployments.
+automated isolation after testing the Amazon Inspector remediation path against fresh development deployments.
 
 ### Added
 
