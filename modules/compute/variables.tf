@@ -51,6 +51,6 @@ variable "compute_sg_rule_ids" {
     endpoints_ingress_from_compute    = string
     compute_egress_to_endpoints       = string
     compute_egress_to_db              = string
-    compute_egress_to_internet_egress = optional(string)
+    compute_egress_to_internet_https = optional(string)
   })
 }
