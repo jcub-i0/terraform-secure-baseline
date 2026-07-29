@@ -248,6 +248,7 @@ The **environment** stacks manage:
 │   └── workflows
 │
 ├── CHANGELOG.md
+├── LICENSE
 ├── README.md
 └── SECURITY.md
 ```
