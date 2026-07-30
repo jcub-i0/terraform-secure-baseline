@@ -25,7 +25,7 @@ resource "aws_organizations_organizational_unit" "prod" {
   parent_id = aws_organizations_organizational_unit.workloads.id
 }
 
-resource "aws_organizations_organizational_unit" "secops" {
-  name = "Security-Operations"
+resource "aws_organizations_organizational_unit" "security" {
+  name = "Security"
   parent_id = data.aws_organizations_organization.main.roots[0].id
 }
