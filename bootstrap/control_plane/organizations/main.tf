@@ -26,6 +26,6 @@ resource "aws_organizations_organizational_unit" "prod" {
 }
 
 resource "aws_organizations_organizational_unit" "security" {
-  name = "Security"
+  name      = "Security"
   parent_id = data.aws_organizations_organization.main.roots[0].id
 }
