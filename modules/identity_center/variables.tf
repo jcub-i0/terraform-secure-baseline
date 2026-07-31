@@ -25,6 +25,12 @@ variable "enable_secops_engineer" {
   default     = false
 }
 
+variable "enable_secops_operator" {
+  description = "Determines whether SecOps-Operator resources are deployed"
+  type = bool
+  default = true
+}
+
 variable "secops_operator_group_name" {
   description = "Name of the SecOps-Operator Identity Center group"
   type        = string
