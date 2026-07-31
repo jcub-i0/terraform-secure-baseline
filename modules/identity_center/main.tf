@@ -119,7 +119,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_analyst_logs_s3_read" {
   count = (
     var.enable_secops_analyst &&
-    var.logs_cmk_decrypt_policy_name != null
+    var.logs_s3_readonly_policy_name != null != null
   ) ? 1 : 0
 
   instance_arn       = local.instance_arn
@@ -166,7 +166,7 @@ resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs
 resource "aws_ssoadmin_customer_managed_policy_attachment" "secops_engineer_logs_cmk" {
   count = (
     var.enable_secops_engineer &&
-    var.logs_s3_readonly_policy_name != null
+    var.logs_cmk_decrypt_policy_name != null
   ) ? 1 : 0
 
   instance_arn       = local.instance_arn
