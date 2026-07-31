@@ -11,6 +11,16 @@ variable "account_id" {
 variable "secops_event_bus_arn" {
   description = "ARN of the SecOps Event Bus"
   type        = string
+  default = null
+
+  validation {
+    condition = !(
+      var.enable_secops_operator &&
+      var.secops_event_bus_arn == null
+    )
+
+    error_message = "secops_event_bus_arn must be set when enable_secops_operator is true."
+  }
 }
 
 variable "enable_secops_analyst" {
