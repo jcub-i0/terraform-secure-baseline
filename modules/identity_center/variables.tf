@@ -11,7 +11,7 @@ variable "account_id" {
 variable "secops_event_bus_arn" {
   description = "ARN of the SecOps Event Bus"
   type        = string
-  default = null
+  default     = null
 
   validation {
     condition = !(
@@ -37,8 +37,8 @@ variable "enable_secops_engineer" {
 
 variable "enable_secops_operator" {
   description = "Determines whether SecOps-Operator resources are deployed"
-  type = bool
-  default = true
+  type        = bool
+  default     = true
 }
 
 variable "secops_operator_group_name" {
