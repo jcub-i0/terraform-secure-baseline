@@ -11,7 +11,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 usage() {
   cat <<'USAGE'
 Usage:
-  migrate-state-stack.sh <dev|staging|prod|control-plane> [--verify-only]
+  migrate-state-stack.sh <dev|staging|prod|control-plane|security-operations> [--verify-only]
 
 Options:
   --verify-only    Verify an already-migrated state stack.
@@ -90,6 +90,10 @@ case "$TARGET" in
   control-plane|control_plane)
     STACK_PATH_COMPONENT="control_plane"
     DISPLAY_TARGET="control-plane"
+    ;;
+  security-operations|security_operations)
+    STACK_PATH_COMPONENT="security_operations"
+    DISPLAY_TARGET="security-operations"
     ;;
   *)
     usage

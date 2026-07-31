@@ -48,7 +48,12 @@ variable "account_id_staging" {
   description = "ID of the AWS account managing the 'staging' environment"
   type        = string
 }
-
+/*
+variable "account_id_secops" {
+  description = "ID of the AWS account managing the 'security-operations' environment"
+  type        = string
+}
+*/
 variable "primary_region_dev" {
   description = "Primary region used by the 'dev' environment"
   type        = string

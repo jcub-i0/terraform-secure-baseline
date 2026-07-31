@@ -14,6 +14,7 @@ Supported command targets and directories:
 | `staging` | `bootstrap/staging/state` |
 | `prod` | `bootstrap/prod/state` |
 | `control-plane` | `bootstrap/control_plane/state` |
+| `security-operations` | `bootstrap/security_operations/state` |
 
 Example:
 
