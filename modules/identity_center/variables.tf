@@ -44,6 +44,19 @@ variable "enable_secops_operator" {
 variable "secops_operator_group_name" {
   description = "Name of the SecOps-Operator Identity Center group"
   type        = string
+  default     = null
+
+  validation {
+    condition = !(
+      var.enable_secops_operator &&
+      (
+        var.secops_operator_group_name == null ||
+        trimspace(var.secops_operator_group_name) == ""
+      )
+    )
+
+    error_message = "secops_operator_group_name must be set when enable_secops_operator is true."
+  }
 }
 
 variable "secops_analyst_group_name" {
