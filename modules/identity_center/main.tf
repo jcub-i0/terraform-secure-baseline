@@ -32,6 +32,8 @@ resource "aws_identitystore_group" "secops_engineers" {
 }
 
 resource "aws_identitystore_group" "secops_operators" {
+  count = var.enable_secops_operator ? 1 : 0
+
   identity_store_id = local.identity_store_id
   display_name      = var.secops_operator_group_name
   description       = "SecOps-Operators Identity Center Group"
@@ -60,6 +62,8 @@ resource "aws_ssoadmin_permission_set" "secops_engineer" {
 }
 
 resource "aws_ssoadmin_permission_set" "secops_operator" {
+  count = var.enable_secops.operator ? 1 : 0
+
   name             = "SecOps-Operator-${var.environment}"
   description      = "Privileged operational rollback access"
   instance_arn     = local.instance_arn
@@ -209,6 +213,8 @@ resource "aws_ssoadmin_permission_set_inline_policy" "secops_engineer_inline" {
 ##########################################
 
 resource "aws_ssoadmin_permission_set_inline_policy" "secops_operator_inline" {
+  count = var.enable_secops_operator ? 1 : 0
+
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
 
@@ -278,6 +284,8 @@ resource "aws_ssoadmin_account_assignment" "engineers" {
 }
 
 resource "aws_ssoadmin_account_assignment" "operators" {
+  count = var.enable_secops_operator ? 1 : 0
+
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
 
