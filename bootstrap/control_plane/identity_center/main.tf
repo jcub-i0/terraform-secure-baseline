@@ -57,10 +57,10 @@ module "identity_center_secops" {
   secops_event_bus_arn       = null
 
   enable_secops_analyst     = false
-  secops_analyst_group_name = "SecOps-Analyst"
+  secops_analyst_group_name = null
 
   enable_secops_engineer     = false
-  secops_engineer_group_name = "SecOps-Engineer"
+  secops_engineer_group_name = null
 
   logs_cmk_decrypt_policy_name = null
   logs_s3_readonly_policy_name = null
