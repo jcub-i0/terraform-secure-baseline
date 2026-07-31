@@ -49,12 +49,12 @@ module "identity_center_staging" {
 module "identity_center_secops" {
   source = "../../../modules/identity_center"
 
-  account_id           = var.account_id_secops
-  environment          = "secops"
+  account_id  = var.account_id_secops
+  environment = "secops"
 
-  enable_secops_operator = false
-  secops_operator_group_name   = null
-  secops_event_bus_arn   = null
+  enable_secops_operator     = false
+  secops_operator_group_name = null
+  secops_event_bus_arn       = null
 
   enable_secops_analyst     = false
   secops_analyst_group_name = "SecOps-Analyst"
