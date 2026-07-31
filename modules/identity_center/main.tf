@@ -287,9 +287,9 @@ resource "aws_ssoadmin_account_assignment" "operators" {
   count = var.enable_secops_operator ? 1 : 0
 
   instance_arn       = local.instance_arn
-  permission_set_arn = aws_ssoadmin_permission_set.secops_operator.arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_operator[0].arn
 
-  principal_id   = aws_identitystore_group.secops_operators.group_id
+  principal_id   = aws_identitystore_group.secops_operators[0].group_id
   principal_type = "GROUP"
 
   target_id   = var.account_id
