@@ -124,3 +124,24 @@ variable "logs_cmk_decrypt_policy_name" {
     error_message = "'logs_cmk_decrypt_policy_name_${var.environment}' must be set when 'enable_secops_analyst' or 'enable_secops_engineer_${var.environment}' is set to 'true'"
   }
 }
+
+variable "enable_secops_administrator" {
+  description = "Determines whether SecOps-Administrator resources are deployed"
+  type        = bool
+  default     = false
+}
+
+variable "secops_administrator_group_name" {
+  description = "Name of the SecOps-Administrator Identity Center group"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_secops_administrator ||
+      try(trimspace(var.secops_administrator_group_name), "") != ""
+    )
+
+    error_message = "secops_administrator_group_name must be set when enable_secops_administrator is true."
+  }
+}
