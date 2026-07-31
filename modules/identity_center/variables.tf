@@ -47,12 +47,9 @@ variable "secops_operator_group_name" {
   default     = null
 
   validation {
-    condition = !(
-      var.enable_secops_operator &&
-      (
-        var.secops_operator_group_name == null ||
-        trimspace(var.secops_operator_group_name) == ""
-      )
+    condition = (
+      !var.enable_secops_operator ||
+      try(trimspace(var.secops_operator_group_name), "") != ""
     )
 
     error_message = "secops_operator_group_name must be set when enable_secops_operator is true."
@@ -63,12 +60,30 @@ variable "secops_analyst_group_name" {
   description = "Name of the SecOps-Analyst IAM group"
   type        = string
   default     = null
+
+  validation {
+    condition = (
+      !var.enable_secops_analyst ||
+      try(trimspace(var.secops_analyst_group_name), "") != ""
+    )
+
+    error_message = "secops_analyst_group_name must be set when enable_secops_analyst is true."
+  }
 }
 
 variable "secops_engineer_group_name" {
   description = "Name of the SecOps-Engineer IAM group"
   type        = string
   default     = null
+
+  validation {
+    condition = (
+      !var.enable_secops_engineer ||
+      try(trimspace(var.secops_engineer_group_name), "") != ""
+    )
+
+    error_message = "secops_engineer_group_name must be set when enable_secops_engineer is true."
+  }
 }
 
 variable "customer_managed_policy_path" {
