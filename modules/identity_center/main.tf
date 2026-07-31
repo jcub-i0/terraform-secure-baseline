@@ -39,6 +39,14 @@ resource "aws_identitystore_group" "secops_operators" {
   description       = "SecOps-Operators Identity Center Group"
 }
 
+resource "aws_identitystore_group" "secops_administrators" {
+  count = var.enable_secops_administrator ? 1 : 0
+
+  identity_store_id = local.identity_store_id
+  display_name      = var.secops_administrator_group_name
+  description       = "SecOps-Administrators Identity Center group"
+}
+
 ##########################################
 # PERMISSION SETS
 ##########################################
@@ -66,6 +74,15 @@ resource "aws_ssoadmin_permission_set" "secops_operator" {
 
   name             = "SecOps-Operator-${var.environment}"
   description      = "Privileged operational rollback access"
+  instance_arn     = local.instance_arn
+  session_duration = "PT2H"
+}
+
+resource "aws_ssoadmin_permission_set" "secops_administrator" {
+  count = var.enable_secops_administrator ? 1 : 0
+
+  name             = "SecOps-Administrator-${var.environment}"
+  description      = "Administrative access for the central security account"
   instance_arn     = local.instance_arn
   session_duration = "PT2H"
 }
@@ -108,6 +125,16 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
   managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# SECOPS-ADMIN POLICY ATTACHMENT
+
+resource "aws_ssoadmin_managed_policy_attachment" "secops_administrator_access" {
+  count = var.enable_secops_administrator ? 1 : 0
+
+  instance_arn       = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_administrator[0].arn
+  managed_policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
 ##########################################
@@ -297,5 +324,22 @@ resource "aws_ssoadmin_account_assignment" "operators" {
 
   depends_on = [
     aws_ssoadmin_permission_set_inline_policy.secops_operator_inline
+  ]
+}
+
+resource "aws_ssoadmin_account_assignment" "administrators" {
+  count = var.enable_secops_administrator ? 1 : 0
+
+  instance_arn       = local.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.secops_administrator[0].arn
+
+  principal_id   = aws_identitystore_group.secops_administrators[0].group_id
+  principal_type = "GROUP"
+
+  target_id   = var.account_id
+  target_type = "AWS_ACCOUNT"
+
+  depends_on = [
+    aws_ssoadmin_managed_policy_attachment.secops_administrator_access
   ]
 }
