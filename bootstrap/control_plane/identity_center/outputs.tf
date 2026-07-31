@@ -12,3 +12,8 @@ output "staging_permission_set_arns" {
   description = "Permission set ARNs for the 'staging' environment"
   value       = module.identity_center_staging.permission_set_arns
 }
+
+output "secops_permission_set_arns" {
+  description = "Permission set ARNs for the 'security-operations' environment"
+  value       = module.identity_center_secops.permission_set_arns
+}

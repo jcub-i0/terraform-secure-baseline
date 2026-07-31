@@ -16,6 +16,12 @@ variable "enable_secops_analyst_staging" {
   default     = false
 }
 
+variable "enable_secops_analyst_secops" {
+  description = "Determines whether SecOps-Analyst resources are deployed in the 'security-operations' env"
+  type        = bool
+  default     = false
+}
+
 variable "enable_secops_engineer_dev" {
   description = "Determines whether SecOps-Engineer resources are deployed in the 'dev' env"
   type        = bool
@@ -34,6 +40,12 @@ variable "enable_secops_engineer_staging" {
   default     = false
 }
 
+variable "enable_secops_engineer_secops" {
+  description = "Determines whether SecOps-Engineer resources are deployed in the 'security-operations' env"
+  type        = bool
+  default     = false
+}
+
 variable "account_id_dev" {
   description = "ID of the AWS account managing the 'dev' environment"
   type        = string
@@ -48,12 +60,12 @@ variable "account_id_staging" {
   description = "ID of the AWS account managing the 'staging' environment"
   type        = string
 }
-/*
+
 variable "account_id_secops" {
   description = "ID of the AWS account managing the 'security-operations' environment"
   type        = string
 }
-*/
+
 variable "primary_region_dev" {
   description = "Primary region used by the 'dev' environment"
   type        = string
@@ -87,6 +99,12 @@ variable "logs_s3_readonly_policy_name_staging" {
   default     = null
 }
 
+variable "logs_s3_readonly_policy_name_secops" {
+  description = "'Name' attribute of the 'security-operations' env's logs_s3_readonly policy"
+  type        = string
+  default     = null
+}
+
 variable "logs_cmk_decrypt_policy_name_dev" {
   description = "'Name' attribute of the 'dev' env's logs_cmk_decrypt policy"
   type        = string
@@ -101,6 +119,12 @@ variable "logs_cmk_decrypt_policy_name_prod" {
 
 variable "logs_cmk_decrypt_policy_name_staging" {
   description = "'Name' attribute of the 'staging' env's logs_cmk_decrypt policy"
+  type        = string
+  default     = null
+}
+
+variable "logs_cmk_decrypt_policy_name_secops" {
+  description = "'Name' attribute of the 'security-operations' env's logs_cmk_decrypt policy"
   type        = string
   default     = null
 }
