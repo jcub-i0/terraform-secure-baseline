@@ -46,6 +46,8 @@ resource "aws_guardduty_detector_feature" "main" {
 
 # SECURITY HUB
 resource "aws_securityhub_account" "main" {
+  count = var.manage_securityhub_cspm_locally ? 1 : 0
+
   enable_default_standards = true
 
   depends_on = [aws_guardduty_detector.main]
