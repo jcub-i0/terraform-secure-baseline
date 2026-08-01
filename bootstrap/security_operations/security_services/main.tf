@@ -36,6 +36,28 @@ locals {
   )
 }
 
+check "dev_account" {
+  assert {
+    condition = (
+      !var.enable_securityhub_dev_configuration_policy_association ||
+      length(local.dev_accounts) == 1
+    )
+
+    error_message = "Exactly one active AWS Organizations account named '${var.dev_account_name}' must exist when the dev Security Hub policy association is enabled."
+  }
+}
+
+check "dev_policy_association_requires_policy" {
+  assert {
+    condition = (
+      !var.enable_securityhub_dev_configuration_policy_association ||
+      var.enable_securityhub_dev_configuration_policy
+    )
+
+    error_message = "The dev Security Hub configuration policy must be enabled before it can be associated."
+  }
+}
+
 data "aws_caller_identity" "current" {}
 
 check "target_account" {
