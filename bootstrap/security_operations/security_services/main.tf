@@ -10,3 +10,11 @@ check "target_account" {
     error_message = "The active AWS credentials do not belong to the configured security-operations account."
   }
 }
+
+##########################################
+# SECURITY HUB ADMINISTRATOR ACCOUNT
+##########################################
+
+resource "aws_securityhub_account" "main" {
+  enable_default_standards = false
+}
