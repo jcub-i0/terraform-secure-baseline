@@ -65,3 +65,9 @@ variable "securityhub_enabled_standard_keys_dev" {
     error_message = "securityhub_enabled_standard_keys_dev contains an unsupported standard key."
   }
 }
+
+variable "securityhub_disabled_control_identifiers_dev" {
+  description = "Security Hub controls disabled by the dev configuration policy"
+  type = set(string)
+  default = []
+}
