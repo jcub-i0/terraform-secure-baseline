@@ -18,3 +18,15 @@ check "target_account" {
 resource "aws_securityhub_account" "main" {
   enable_default_standards = false
 }
+
+##########################################
+# SECURITY HUB HOME REGION
+##########################################
+
+resource "aws_securityhub_finding_aggregator" "main" {
+  linking_mode = "NO_REGIONS"
+
+  depends_on = [
+    aws_securityhub_account.main
+  ]
+}
