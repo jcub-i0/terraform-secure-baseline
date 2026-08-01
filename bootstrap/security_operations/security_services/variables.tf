@@ -71,3 +71,20 @@ variable "securityhub_disabled_control_identifiers_dev" {
   type        = set(string)
   default     = []
 }
+
+variable "enable_securityhub_dev_configuration_policy_association" {
+  description = "Associate the dev account with its central Security Hub CSPM configuration policy"
+  type        = bool
+  default     = false
+}
+
+variable "dev_account_name" {
+  description = "Name of the AWS Organizations account used for the dev workload"
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = trimspace(var.dev_account_name) != ""
+    error_message = "dev_account_name cannot be empty."
+  }
+}
