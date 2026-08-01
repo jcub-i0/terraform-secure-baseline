@@ -35,3 +35,17 @@ output "securityhub_dev_configuration_policy_arn" {
     null
   )
 }
+
+output "securityhub_dev_configuration_policy_association_target_id" {
+  description = "AWS account ID directly associated with the dev Security Hub CSPM configuration policy"
+
+  value = try(
+    aws_securityhub_configuration_policy_association.dev[0].target_id,
+    null
+  )
+}
+
+output "securityhub_dev_account_id" {
+  description = "AWS Organizations account ID discovered for dev"
+  value       = local.dev_account_id
+}
