@@ -63,7 +63,7 @@ resource "aws_organizations_aws_service_access" "securityhub" {
 resource "aws_securityhub_organization_admin_account" "security_operations" {
   count = var.enable_securityhub_delegated_administrator ? 1 : 0
 
-  admin_account_id = var.security_operations_account_id
+  admin_account_id = local.security_operations_account_id
 
   depends_on = [
     aws_organizations_aws_service_access.securityhub
