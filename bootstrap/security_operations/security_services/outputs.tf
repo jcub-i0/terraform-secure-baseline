@@ -17,3 +17,12 @@ output "securityhub_central_configuration_enabled" {
   description = "Whether Security Hub central organization configuration is enabled"
   value       = var.enable_securityhub_organization_configuration
 }
+
+output "securityhub_dev_configuration_policy_id" {
+  description = "ID of the dev Security Hub CSPM configuration policy"
+
+  value = try(
+    aws_securityhub_configuration_policy.dev[0].id,
+    null
+  )
+}
