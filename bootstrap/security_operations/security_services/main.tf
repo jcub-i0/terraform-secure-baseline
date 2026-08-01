@@ -17,7 +17,7 @@ check "target_account" {
 
 resource "aws_securityhub_account" "main" {
   enable_default_standards = false
-  auto_enable_controls = false
+  auto_enable_controls     = false
 }
 
 ##########################################

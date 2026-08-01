@@ -49,7 +49,7 @@ locals {
 
 check "security_operations_account" {
   assert {
-    condition     = (
+    condition = (
       !var.enable_securityhub_delegated_administrator ||
       length(local.security_operations_accounts) == 1
     )
