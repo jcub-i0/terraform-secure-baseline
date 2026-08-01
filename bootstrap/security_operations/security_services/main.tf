@@ -70,3 +70,36 @@ resource "aws_securityhub_organization_configuration" "main" {
     aws_securityhub_finding_aggregator.main
   ]
 }
+
+##########################################
+# SECURITY HUB DEV CONFIGURATION POLICY
+##########################################
+
+resource "aws_securityhub_configuration_policy" "dev" {
+  count = var.enable_securityhub_dev_configuration_policy ? 1 : 0
+
+  name = "${local.name_prefix}-dev"
+  description = "Central Security Hub CSPM configuration policy for the dev account"
+
+  configuration_policy {
+    service_enabled = true
+    enabled_standard_arns = local.securityhub_enabled_standard_arns_dev
+
+    security_controls_configuration {
+      disabled_control_identifiers = sort(
+        tolist(var.securityhub_disabled_control_identifiers_dev)
+      )
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition = var.enable_securityhub_organization_configuration
+      error_message = "Security Hub central organization configuration must be enabled before creating configuration policies."
+    }
+  }
+
+  depends_on = [
+    aws_securityhub_organization_configuration.main
+  ]
+}
