@@ -51,6 +51,12 @@ resource "aws_securityhub_account" "main" {
   depends_on = [aws_guardduty_detector.main]
 }
 
+resource "aws_securityhub_account_v2" "main" {
+  depends_on = [
+    aws_securityhub_account.main
+  ]
+}
+
 ## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
 resource "aws_securityhub_standards_subscription" "main" {
   for_each      = local.securityhub_standards
