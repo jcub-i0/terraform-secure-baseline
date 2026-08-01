@@ -14,7 +14,6 @@ on:
             - prod
             - control-plane-identity-center
             - control-plane-organizations
-            - security-operations-account
     pull_request:
     push:
         branches:
@@ -45,9 +44,6 @@ jobs:
           - environment: control-plane-organizations
             github_environment: control-plane-plan
             working_directory: ./bootstrap/control_plane/organizations
-          - environment: security-operations-account
-            github_environment: security-operations-plan
-            working_directory: ./bootstrap/security_operations/account
 
     concurrency:
       group: terraform-plan-${{ github.head_ref || github.ref_name }}-${{ matrix.environment }}
