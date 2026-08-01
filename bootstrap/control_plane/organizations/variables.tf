@@ -1,5 +1,5 @@
 variable "enable_securityhub_delegated_administrator" {
-  description = "Enable Security Hub trusted accerss and designate the security-operations account as administrator"
+  description = "Enable Security Hub trusted access and designate the security-operations account as administrator"
   type        = bool
   default     = false
 }
