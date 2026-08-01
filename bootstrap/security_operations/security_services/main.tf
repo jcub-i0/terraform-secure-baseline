@@ -78,11 +78,11 @@ resource "aws_securityhub_organization_configuration" "main" {
 resource "aws_securityhub_configuration_policy" "dev" {
   count = var.enable_securityhub_dev_configuration_policy ? 1 : 0
 
-  name = "${local.name_prefix}-dev"
+  name        = "${local.name_prefix}-dev"
   description = "Central Security Hub CSPM configuration policy for the dev account"
 
   configuration_policy {
-    service_enabled = true
+    service_enabled       = true
     enabled_standard_arns = local.securityhub_enabled_standard_arns_dev
 
     security_controls_configuration {
@@ -94,7 +94,7 @@ resource "aws_securityhub_configuration_policy" "dev" {
 
   lifecycle {
     precondition {
-      condition = var.enable_securityhub_organization_configuration
+      condition     = var.enable_securityhub_organization_configuration
       error_message = "Security Hub central organization configuration must be enabled before creating configuration policies."
     }
   }
