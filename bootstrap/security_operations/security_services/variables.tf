@@ -36,6 +36,32 @@ variable "enable_securityhub_organization_configuration" {
 
 variable "enable_securityhub_dev_configuration_policy" {
   description = "Create the central Security Hub CSPM configuration policy for the dev account"
-  type        = bool
-  default     = false
+  type = bool
+  default = false
+}
+
+variable "securityhub_enabled_standard_keys_dev" {
+  description = "Security Hub CSPM standards enabled by the dev configuration policy"
+  type = set(string)
+
+  default = [
+    "aws_fsbp",
+    "cis_5_0"
+  ]
+
+  validation {
+    condition = length(setsubtract(
+      var.securityhub_enabled_standard_keys_dev,
+      toset([
+        "aws_fsbp",
+        "aws_tagging",
+        "cis_1_2",
+        "cis_5_0",
+        "nist_800_53",
+        "pci_dss",
+      ])
+    )) == 0
+
+    error_message = "securityhub_enabled_standard_keys_dev contains an unsupported standard key."
+  }
 }
