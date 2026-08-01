@@ -49,7 +49,10 @@ locals {
 
 check "security_operations_account" {
   assert {
-    condition     = length(local.security_operations_accounts) == 1
+    condition     = (
+      !var.enable_securityhub_delegated_administrator ||
+      length(local.security_operations_accounts) == 1
+    )
     error_message = "Exactly one AWS Organizations account name '${var.security_operations_account_name}' must exist."
   }
 }
