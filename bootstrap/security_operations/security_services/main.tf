@@ -30,3 +30,22 @@ resource "aws_securityhub_finding_aggregator" "main" {
     aws_securityhub_account.main
   ]
 }
+
+##########################################
+# CENTRAL ORGANIZATION CONFIGURATION
+##########################################
+
+resource "aws_securityhub_organization_configuration" "main" {
+  count = var.enable_securityhub_organization_configuration ? 1 : 0
+
+  auto_enable           = false
+  auto_enable_standards = "NONE"
+
+  organization_configuration {
+    configuration_type = "CENTRAL"
+  }
+
+  depends_on = [
+    aws_securityhub_finding_aggregator.main
+  ]
+}
