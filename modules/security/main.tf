@@ -61,7 +61,7 @@ resource "aws_securityhub_account_v2" "main" {
 
 ## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
 resource "aws_securityhub_standards_subscription" "main" {
-  for_each      = local.securityhub_standards
+  for_each      = var.manage_securityhub_cspm_locally ? local.securityhub_standards : {}
   standards_arn = each.value
   depends_on    = [aws_securityhub_account.main]
 }
