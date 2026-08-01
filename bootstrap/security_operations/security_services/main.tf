@@ -22,6 +22,18 @@ locals {
     for standard_key in var.securityhub_enabled_standard_keys_dev :
     local.securityhub_standard_catalog[standard_key]
   ])
+
+  dev_accounts = [
+    for account in data.aws_organizations_organization.main.accounts :
+    account
+    if account.name == var.dev_account_name &&
+    account.state == "ACTIVE"
+  ]
+
+  dev_account_id = try(
+    one(local.dev_accounts).id,
+    null
+  )
 }
 
 data "aws_caller_identity" "current" {}
