@@ -26,3 +26,12 @@ output "securityhub_dev_configuration_policy_id" {
     null
   )
 }
+
+output "securityhub_dev_configuration_policy_arn" {
+  description = "ARN of the dev Security Hub CSPM configuration policy"
+
+  value = try(
+    aws_securityhub_configuration_policy.dev[0].arn,
+    null
+  )
+}
