@@ -8,5 +8,5 @@ output "securityhub_delegated_administrator_account_id" {
 
 output "securityhub_trusted_access_enabled" {
   description = "Whether trusted access for Security Hub is managed by this stack"
-  value = var.enable_securityhub_delegated_administrator
+  value       = var.enable_securityhub_delegated_administrator
 }
