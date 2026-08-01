@@ -36,13 +36,13 @@ variable "enable_securityhub_organization_configuration" {
 
 variable "enable_securityhub_dev_configuration_policy" {
   description = "Create the central Security Hub CSPM configuration policy for the dev account"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "securityhub_enabled_standard_keys_dev" {
   description = "Security Hub CSPM standards enabled by the dev configuration policy"
-  type = set(string)
+  type        = set(string)
 
   default = [
     "aws_fsbp",
