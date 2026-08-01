@@ -139,3 +139,22 @@ resource "aws_securityhub_configuration_policy" "dev" {
     aws_securityhub_organization_configuration.main
   ]
 }
+
+##########################################
+# DEV CONFIGURATION POLICY ASSOCIATION
+##########################################
+
+resource "aws_securityhub_configuration_policy_association" "dev" {
+  count = (
+    var.enable_securityhub_dev_configuration_policy_association &&
+    var.enable_securityhub_dev_configuration_policy
+  ) ? 1 : 0
+
+  target_id = local.dev_account_id
+  policy_id = aws_securityhub_configuration_policy.dev[0].id
+
+  depends_on = [
+    aws_securityhub_organization_configuration.this,
+    aws_securityhub_configuration_policy.dev,
+  ]
+}
