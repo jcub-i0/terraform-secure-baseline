@@ -1,3 +1,5 @@
+data "aws_organizations_organization" "main" {}
+
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
 
