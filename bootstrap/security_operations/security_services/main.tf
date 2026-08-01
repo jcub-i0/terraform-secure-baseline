@@ -154,7 +154,7 @@ resource "aws_securityhub_configuration_policy_association" "dev" {
   policy_id = aws_securityhub_configuration_policy.dev[0].id
 
   depends_on = [
-    aws_securityhub_organization_configuration.this,
+    aws_securityhub_organization_configuration.main,
     aws_securityhub_configuration_policy.dev,
   ]
 }
