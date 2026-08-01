@@ -68,6 +68,6 @@ variable "securityhub_enabled_standard_keys_dev" {
 
 variable "securityhub_disabled_control_identifiers_dev" {
   description = "Security Hub controls disabled by the dev configuration policy"
-  type = set(string)
-  default = []
+  type        = set(string)
+  default     = []
 }
