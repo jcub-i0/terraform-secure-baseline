@@ -16,6 +16,6 @@ variable "enable_securityhub_delegated_administrator" {
 
 variable "security_operations_account_name" {
   description = "Name of the AWS Organizations account used for centralized security operations"
-  type = string
-  default = "security-operations"
+  type        = string
+  default     = "security-operations"
 }
