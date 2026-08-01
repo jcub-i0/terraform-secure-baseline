@@ -34,6 +34,19 @@ resource "aws_organizations_organizational_unit" "security" {
 # SECURITY HUB ORGANIZATION INTEGRATION
 ##########################################
 
+locals {
+  security_operations_accounts = [
+    for account in data.aws_organizations_organization.main.accounts :
+    account
+    if account.name == var.security_operations_account_name
+  ]
+
+  security_operations_account_id = try(
+    one(local.security_operations_accounts).id,
+    null
+  )
+}
+
 resource "aws_organizations_aws_service_access" "securityhub" {
   count = var.enable_securityhub_delegated_administrator ? 1 : 0
 
