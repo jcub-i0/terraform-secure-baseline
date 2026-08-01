@@ -10,7 +10,7 @@ output "securityhub_home_region" {
 
 output "securityhub_finding_aggregator_arn" {
   description = "ARN of the Security Hub finding aggregator"
-  value       = aws_securityhub_finding_aggregator.this.arn
+  value       = aws_securityhub_finding_aggregator.main.arn
 }
 
 output "securityhub_central_configuration_enabled" {
