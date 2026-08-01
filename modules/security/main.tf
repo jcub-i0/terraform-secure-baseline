@@ -46,6 +46,8 @@ resource "aws_guardduty_detector_feature" "main" {
 
 # SECURITY HUB
 resource "aws_securityhub_account" "main" {
+  enable_default_standards = true
+
   depends_on = [aws_guardduty_detector.main]
 }
 
