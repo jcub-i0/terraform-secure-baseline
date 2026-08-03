@@ -3,8 +3,8 @@ locals {
   ## Select the SecurityHub standards you want by uncommenting the respective standard(s)
   securityhub_standards = {
     aws_fsbp = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0",
+    cis      = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0",
     #aws_tagging = "arn:aws:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0",
-    #cis = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0",
     #nist_800 = "arn:aws:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0",
     #pci_dss = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
   }
@@ -46,6 +46,8 @@ resource "aws_guardduty_detector_feature" "main" {
 
 # SECURITY HUB
 resource "aws_securityhub_account" "main" {
+  count = var.manage_securityhub_cspm_locally ? 1 : 0
+
   enable_default_standards = true
 
   depends_on = [aws_guardduty_detector.main]
@@ -59,7 +61,7 @@ resource "aws_securityhub_account_v2" "main" {
 
 ## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
 resource "aws_securityhub_standards_subscription" "main" {
-  for_each      = local.securityhub_standards
+  for_each      = var.manage_securityhub_cspm_locally ? local.securityhub_standards : {}
   standards_arn = each.value
   depends_on    = [aws_securityhub_account.main]
 }

@@ -1,0 +1,8 @@
+enable_securityhub_dev_configuration_policy = false
+
+securityhub_enabled_standard_keys_dev = [
+  "aws_fsbp",
+  "cis_1_5",
+]
+
+securityhub_disabled_control_identifiers_dev = []

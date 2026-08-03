@@ -96,3 +96,9 @@ variable "sec_notifs_eventbridge_dlq_arn" {
   description = "ARN of the 'security_notifications_eventbridge_dlq' DLQ"
   type        = string
 }
+
+variable "manage_securityhub_cspm_locally" {
+  description = "Manage Security Hub CSPM enablement and standards within the workload account"
+  type        = bool
+  default     = true
+}
