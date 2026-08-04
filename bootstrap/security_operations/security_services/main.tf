@@ -1,5 +1,14 @@
 data "aws_organizations_organization" "main" {}
 
+data "aws_caller_identity" "current" {}
+
+check "target_account" {
+  assert {
+    condition     = data.aws_caller_identity.current.account_id == var.account_id
+    error_message = "The active AWS credentials do not belong to the configured security-operations account."
+  }
+}
+
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
   securityhub_standard_catalog = {
@@ -48,15 +57,6 @@ check "dev_policy_association_requires_policy" {
     )
 
     error_message = "The dev Security Hub configuration policy must be enabled before it can be associated."
-  }
-}
-
-data "aws_caller_identity" "current" {}
-
-check "target_account" {
-  assert {
-    condition     = data.aws_caller_identity.current.account_id == var.account_id
-    error_message = "The active AWS credentials do not belong to the configured security-operations account."
   }
 }
 
