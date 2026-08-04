@@ -44,9 +44,9 @@ variable "securityhub_cspm_account_policies" {
   description = "Per-account Security Hub CSPM central configuration policies and associations"
 
   type = map(object({
-    create_policy = optional(bool, false)
-    associate_policy = optional(bool, false)
-    enabled_standard_keys = optional(set(string), ["aws_fsbp", "cis_5_0"])
+    create_policy                = optional(bool, false)
+    associate_policy             = optional(bool, false)
+    enabled_standard_keys        = optional(set(string), ["aws_fsbp", "cis_5_0"])
     disabled_control_identifiers = optional(set(string), [])
   }))
 
@@ -54,8 +54,8 @@ variable "securityhub_cspm_account_policies" {
 
   validation {
     condition = alltrue([
-        for account_name, configuration in var.securityhub_cspm_account_policies :
-        trimspace(account_name) != ""
+      for account_name, configuration in var.securityhub_cspm_account_policies :
+      trimspace(account_name) != ""
     ])
 
     error_message = "Security Hub CSPM policy account names cannot be empty."
@@ -63,18 +63,18 @@ variable "securityhub_cspm_account_policies" {
 
   validation {
     condition = alltrue([
-        for account_name, configuration in var.securityhub_cspm_account_policies :
-        length(setsubstract(
-            configuration.enabled_standard_keys,
-            toset([
-                "aws_fsbp",
-                "aws_tagging",
-                "cis_1_2",
-                "cis_5_0",
-                "nist_800_53",
-                "pci_dss",
-            ])
-        )) == 0
+      for account_name, configuration in var.securityhub_cspm_account_policies :
+      length(setsubstract(
+        configuration.enabled_standard_keys,
+        toset([
+          "aws_fsbp",
+          "aws_tagging",
+          "cis_1_2",
+          "cis_5_0",
+          "nist_800_53",
+          "pci_dss",
+        ])
+      )) == 0
     ])
 
     error_message = "A Security Hub CSPM policy contains an unsupported standard key."
@@ -82,8 +82,8 @@ variable "securityhub_cspm_account_policies" {
 
   validation {
     condition = alltrue([
-        for account_name, configuration in var.securityhub_cspm_account_policies :
-        !configuration.associate_policy || configuration.create_policy
+      for account_name, configuration in var.securityhub_cspm_account_policies :
+      !configuration.associate_policy || configuration.create_policy
     ])
 
     error_message = "A Security Hub CSPM policy must be created before it can be associated."
@@ -91,8 +91,8 @@ variable "securityhub_cspm_account_policies" {
 
   validation {
     condition = alltrue([
-        for account_name, configuration in var.securityhub_cspm_account_policies :
-        !configuration.associate_policy || length(configuration.enabled_standard_keys) > 0
+      for account_name, configuration in var.securityhub_cspm_account_policies :
+      !configuration.associate_policy || length(configuration.enabled_standard_keys) > 0
     ])
 
     error_message = "Each enabled Security Hub CSPM policy must contain at least one standard."
