@@ -18,34 +18,10 @@ output "securityhub_central_configuration_enabled" {
   value       = var.enable_securityhub_organization_configuration
 }
 
-output "securityhub_dev_configuration_policy_id" {
-  description = "ID of the dev Security Hub CSPM configuration policy"
-
-  value = try(
-    aws_securityhub_configuration_policy.dev[0].id,
-    null
-  )
-}
-
-output "securityhub_dev_configuration_policy_arn" {
-  description = "ARN of the dev Security Hub CSPM configuration policy"
-
-  value = try(
-    aws_securityhub_configuration_policy.dev[0].arn,
-    null
-  )
-}
-
-output "securityhub_dev_configuration_policy_association_target_id" {
-  description = "AWS account ID directly associated with the dev Security Hub CSPM configuration policy"
-
-  value = try(
-    aws_securityhub_configuration_policy_association.dev[0].target_id,
-    null
-  )
-}
-
-output "securityhub_dev_account_id" {
-  description = "AWS Organizations account ID discovered for dev"
-  value       = local.dev_account_id
+output "securityhub_cspm_configuraiton_policy_ids" {
+  description = "Security Hub CSPM configuration policy IDs by AWS Organizations account name"
+  value = {
+    for account_name, policy in aws_securityhub_configuration_policy.account :
+    account_name => policy.id
+  }
 }
