@@ -43,7 +43,7 @@ locals {
   securityhub_cspm_association_accounts = {
     for account_name, configuration in local.securityhub_cspm_associations :
     account_name => [
-      for account in data.aws_organizations_organization.main[accounts] :
+      for account in data.aws_organizations_organization.main[account] :
       account
       if account.name == account_name &&
       account.state == "ACTIVE"
