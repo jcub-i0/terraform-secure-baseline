@@ -1,69 +1,72 @@
 data "aws_organizations_organization" "main" {}
 
-locals {
-  name_prefix = "${var.cloud_name}-${var.environment}"
-
-
-  securityhub_standard_catalog = {
-    aws_fsbp = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
-
-    aws_tagging = "arn:aws:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0"
-
-    cis_1_2 = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0"
-
-    cis_5_0 = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0"
-
-    nist_800_53 = "arn:aws:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0"
-
-    pci_dss = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
-  }
-
-  securityhub_enabled_standard_arns_dev = sort([
-    for standard_key in var.securityhub_enabled_standard_keys_dev :
-    local.securityhub_standard_catalog[standard_key]
-  ])
-
-  dev_accounts = [
-    for account in data.aws_organizations_organization.main.accounts :
-    account
-    if account.name == var.dev_account_name &&
-    account.state == "ACTIVE"
-  ]
-
-  dev_account_id = try(
-    one(local.dev_accounts).id,
-    null
-  )
-}
-
-check "dev_account" {
-  assert {
-    condition = (
-      !var.enable_securityhub_dev_configuration_policy_association ||
-      length(local.dev_accounts) == 1
-    )
-
-    error_message = "Exactly one active AWS Organizations account named '${var.dev_account_name}' must exist when the dev Security Hub policy association is enabled."
-  }
-}
-
-check "dev_policy_association_requires_policy" {
-  assert {
-    condition = (
-      !var.enable_securityhub_dev_configuration_policy_association ||
-      var.enable_securityhub_dev_configuration_policy
-    )
-
-    error_message = "The dev Security Hub configuration policy must be enabled before it can be associated."
-  }
-}
-
 data "aws_caller_identity" "current" {}
 
 check "target_account" {
   assert {
     condition     = data.aws_caller_identity.current.account_id == var.account_id
     error_message = "The active AWS credentials do not belong to the configured security-operations account."
+  }
+}
+
+locals {
+  name_prefix = "${var.cloud_name}-${var.environment}"
+  securityhub_standard_catalog = {
+    aws_fsbp    = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
+    aws_tagging = "arn:aws:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0"
+    cis_1_2     = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0"
+    cis_5_0     = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0"
+    nist_800_53 = "arn:aws:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0"
+    pci_dss     = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
+  }
+
+  securityhub_cspm_policies = {
+    for account_name, configuration in var.securityhub_cspm_account_policies :
+    account_name => configuration
+    if configuration.create_policy
+  }
+
+  securityhub_cspm_associations = {
+    for account_name, configuration in var.securityhub_cspm_account_policies :
+    account_name => configuration
+    if configuration.create_policy && configuration.associate_policy
+  }
+
+  securityhub_cspm_enabled_standard_arns = {
+    for account_name, configuration in var.securityhub_cspm_account_policies :
+    account_name => sort([
+      for standard in configuration.enabled_standards :
+      local.securityhub_standard_catalog[standard]
+    ])
+  }
+
+  securityhub_cspm_association_accounts = {
+    for account_name, configuration in local.securityhub_cspm_associations :
+    account_name => [
+      for account in data.aws_organizations_organization.main.accounts :
+      account
+      if account.name == account_name &&
+      account.state == "ACTIVE"
+    ]
+  }
+
+  securityhub_cspm_association_account_ids = {
+    for account_name, accounts in local.securityhub_cspm_association_accounts :
+    account_name => try(
+      one(accounts).id,
+      null
+    )
+  }
+}
+
+check "securityhub_cspm_association_accounts" {
+  assert {
+    condition = alltrue([
+      for account_name, accounts in local.securityhub_cspm_association_accounts :
+      length(accounts) == 1
+    ])
+
+    error_message = "Each associated Security Hub CSPM policy must match exactly one active AWS Organizations accoutn using the policy map key as the account name."
   }
 }
 
@@ -107,23 +110,23 @@ resource "aws_securityhub_organization_configuration" "main" {
   ]
 }
 
-##########################################
-# SECURITY HUB DEV CONFIGURATION POLICY
-##########################################
+###############################################
+# SECURITY HUB WORKLOAD CONFIGURATION POLICIES
+###############################################
 
-resource "aws_securityhub_configuration_policy" "dev" {
-  count = var.enable_securityhub_dev_configuration_policy ? 1 : 0
+resource "aws_securityhub_configuration_policy" "account" {
+  for_each = local.securityhub_cspm_policies
 
-  name        = "${local.name_prefix}-dev"
-  description = "Central Security Hub CSPM configuration policy for the dev account"
+  name        = "${local.name_prefix}-${each.key}"
+  description = "Central Security Hub CSPM configuration policy for the ${each.key} account"
 
   configuration_policy {
     service_enabled       = true
-    enabled_standard_arns = local.securityhub_enabled_standard_arns_dev
+    enabled_standard_arns = local.securityhub_cspm_enabled_standard_arns[each.key]
 
     security_controls_configuration {
       disabled_control_identifiers = sort(
-        tolist(var.securityhub_disabled_control_identifiers_dev)
+        tolist(each.value.disabled_control_identifiers)
       )
     }
   }
@@ -140,21 +143,23 @@ resource "aws_securityhub_configuration_policy" "dev" {
   ]
 }
 
-##########################################
-# DEV CONFIGURATION POLICY ASSOCIATION
-##########################################
+#############################################
+# WORKLOAD CONFIGURATION POLICY ASSOCIATIONS
+#############################################
 
-resource "aws_securityhub_configuration_policy_association" "dev" {
-  count = (
-    var.enable_securityhub_dev_configuration_policy_association &&
-    var.enable_securityhub_dev_configuration_policy
-  ) ? 1 : 0
+resource "aws_securityhub_configuration_policy_association" "account" {
+  for_each = local.securityhub_cspm_associations
 
-  target_id = local.dev_account_id
-  policy_id = aws_securityhub_configuration_policy.dev[0].id
+  target_id = local.securityhub_cspm_association_account_ids[each.key]
+  policy_id = aws_securityhub_configuration_policy.account[each.key].id
 
-  depends_on = [
-    aws_securityhub_organization_configuration.main,
-    aws_securityhub_configuration_policy.dev,
-  ]
+  lifecycle {
+    precondition {
+      condition = (
+        length(local.securityhub_cspm_association_accounts[each.key]) == 1
+      )
+
+      error_message = "Exactly one active AWS Organizations account named '${each.key}' must exist before its Security Hub CSPM policy can be associated."
+    }
+  }
 }

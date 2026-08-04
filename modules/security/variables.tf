@@ -98,7 +98,7 @@ variable "sec_notifs_eventbridge_dlq_arn" {
 }
 
 variable "manage_securityhub_cspm_locally" {
-  description = "Manage Security Hub CSPM enablement and standards within the workload account"
+  description = "Whether this workload account manages its own Security Hub CSPM enablement and standards. Set to false when CSPM is centrally managed from the security-operations account."
   type        = bool
-  default     = true
+  default     = false
 }

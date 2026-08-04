@@ -6,6 +6,7 @@ variable "cloud_name" {
 variable "environment" {
   description = "Environment name"
   type        = string
+  default     = "dev"
 }
 
 variable "deployment_profile" {
@@ -153,7 +154,7 @@ variable "isolation_allowed" {
 }
 
 variable "manage_securityhub_cspm_locally" {
-  description = "Manage Security Hub CSPM and standards in the workload account"
+  description = "Whether this workload account manages its own Security Hub CSPM enablement and standards. Set to false when CSPM is centrally managed from the security-operations account."
   type        = bool
   default     = false
 }

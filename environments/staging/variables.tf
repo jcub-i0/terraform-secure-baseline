@@ -6,6 +6,7 @@ variable "cloud_name" {
 variable "environment" {
   description = "Environment name"
   type        = string
+  default     = "staging"
 }
 
 variable "deployment_profile" {
@@ -148,6 +149,12 @@ variable "secops_emails" {
 
 variable "isolation_allowed" {
   description = "Whether EC2 instances may be automatically isolated by the incident-response Lambda"
+  type        = bool
+  default     = false
+}
+
+variable "manage_securityhub_cspm_locally" {
+  description = "Whether this workload account manages its own Security Hub CSPM enablement and standards. Set to false when CSPM is centrally managed from the security-operations account."
   type        = bool
   default     = false
 }

@@ -1,8 +1,21 @@
-enable_securityhub_dev_configuration_policy = false
+securityhub_cspm_account_policies = {
+  dev = {
+    create_policy    = true
+    associate_policy = true
+    enabled_standard_keys = [
+      "aws_fsbp",
+      "cis_5_0"
+    ]
+    disabled_control_identifiers = []
+  }
 
-securityhub_enabled_standard_keys_dev = [
-  "aws_fsbp",
-  "cis_1_5",
-]
-
-securityhub_disabled_control_identifiers_dev = []
+  staging = {
+    create_policy    = true
+    associate_policy = true
+    enabled_standard_keys = [
+      "aws_fsbp",
+      "cis_5_0"
+    ]
+    disabled_control_identifiers = []
+  }
+}
