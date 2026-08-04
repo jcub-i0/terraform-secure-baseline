@@ -47,5 +47,5 @@ output "securityhub_cspm_policy_association_target_ids" {
 
 output "securityhub_cspm_account_ids" {
   description = "AWS Organizations account IDs discovered for Security Hub CSPM policy associations"
-  value = local.securityhub_cspm_association_account_ids
+  value       = local.securityhub_cspm_association_account_ids
 }
