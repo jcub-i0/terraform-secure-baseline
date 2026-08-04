@@ -6,6 +6,7 @@ variable "cloud_name" {
 variable "environment" {
   description = "Environment name"
   type        = string
+  default = "staging"
 }
 
 variable "deployment_profile" {
