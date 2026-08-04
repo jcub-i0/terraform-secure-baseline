@@ -25,3 +25,12 @@ output "securityhub_cspm_configuraiton_policy_ids" {
     account_name => policy.id
   }
 }
+
+output "securityhub_cspm_configuration_policy_arns" {
+  description = "Security Hub CSPM configuration policy ARNs by AWS Organizations account name"
+  value = {
+    for account_name, policy in aws_securityhub_configuration_policy.account :
+    account_name => policy.arn
+  }
+}
+
