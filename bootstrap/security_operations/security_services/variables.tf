@@ -44,11 +44,11 @@ variable "securityhub_cspm_account_policies" {
   description = "Per-account Security Hub CSPM central configuration policies and associations"
 
   type = map(object({
-    create_policy                = optional(bool, false)
-    associate_policy             = optional(bool, false)
-    enabled_standards            = optional(set(string), [
-        "aws_fsbp",
-        "cis_5_0"
+    create_policy    = optional(bool, false)
+    associate_policy = optional(bool, false)
+    enabled_standards = optional(set(string), [
+      "aws_fsbp",
+      "cis_5_0"
     ])
     disabled_control_identifiers = optional(set(string), [])
   }))
