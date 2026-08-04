@@ -18,7 +18,7 @@ output "securityhub_central_configuration_enabled" {
   value       = var.enable_securityhub_organization_configuration
 }
 
-output "securityhub_cspm_configuraiton_policy_ids" {
+output "securityhub_cspm_configuration_policy_ids" {
   description = "Security Hub CSPM configuration policy IDs by AWS Organizations account name"
 
   value = {
