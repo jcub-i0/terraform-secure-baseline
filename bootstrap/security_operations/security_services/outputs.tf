@@ -34,3 +34,11 @@ output "securityhub_cspm_configuration_policy_arns" {
   }
 }
 
+output "securityhub_cspm_policy_association_target_ids" {
+  description = "AWS account IDs associated with Security Hub CSPM configuration policies"
+
+  value = {
+    for account_name, association in aws_securityhub_configuration_policy_association.account :
+    account_name => association.target_id
+  }
+}
