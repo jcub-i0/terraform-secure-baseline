@@ -20,7 +20,7 @@ output "securityhub_central_configuration_enabled" {
 
 output "securityhub_cspm_configuraiton_policy_ids" {
   description = "Security Hub CSPM configuration policy IDs by AWS Organizations account name"
-  
+
   value = {
     for account_name, policy in aws_securityhub_configuration_policy.account :
     account_name => policy.id
@@ -43,4 +43,9 @@ output "securityhub_cspm_policy_association_target_ids" {
     for account_name, association in aws_securityhub_configuration_policy_association.account :
     account_name => association.target_id
   }
+}
+
+output "securityhub_cspm_account_ids" {
+  description = "AWS Organizations account IDs discovered for Security Hub CSPM policy associations"
+  value = local.securityhub_cspm_association_account_ids
 }
