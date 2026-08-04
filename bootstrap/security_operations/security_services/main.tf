@@ -20,43 +20,53 @@ locals {
     pci_dss     = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
   }
 
-  securityhub_enabled_standard_arns_dev = sort([
-    for standard_key in var.securityhub_enabled_standard_keys_dev :
-    local.securityhub_standard_catalog[standard_key]
-  ])
+  securityhub_cspm_policies = {
+    for account_name, configuration in var.securityhub_cspm_account_policies :
+    account_name => configuration
+    if configuration.create_policy
+  }
 
-  dev_accounts = [
-    for account in data.aws_organizations_organization.main.accounts :
-    account
-    if account.name == var.dev_account_name &&
-    account.state == "ACTIVE"
-  ]
+  securityhub_cspm_associations = {
+    for account_name, configuration in var.securityhub_cspm_account_policies :
+    account_name => configuration
+    if configuration.create_policy && configuration.associate_policy
+  }
 
-  dev_account_id = try(
-    one(local.dev_accounts).id,
-    null
-  )
-}
+  securityhub_cspm_enabled_standard_arns = {
+    for account_name, configuration in var.securityhub_cspm_account_policies :
+    account_name => sort([
+        for standard in configuration.enabled_standards :
+        local.securityhub_standard_catalog[standard]
+    ])
+  }
 
-check "dev_account" {
-  assert {
-    condition = (
-      !var.enable_securityhub_dev_configuration_policy_association ||
-      length(local.dev_accounts) == 1
+  securityhub_cspm_association_accounts = {
+    for account_name, configuration in local.securityhub_cspm_associations :
+    account_name => [
+        for account in data.data.aws_organizations_organization.main[accounts] :
+        account
+        if account.name == account_name &&
+        account.state == "ACTIVE"
+    ]
+  }
+
+  securityhub_cspm_association_account_ids = {
+    for account_name, accounts in local.securityhub_cspm_association_accounts :
+    account_name => try(
+        one(accounts).id,
+        null
     )
-
-    error_message = "Exactly one active AWS Organizations account named '${var.dev_account_name}' must exist when the dev Security Hub policy association is enabled."
   }
 }
 
-check "dev_policy_association_requires_policy" {
+check "securityhub_cspm_association_accounts" {
   assert {
-    condition = (
-      !var.enable_securityhub_dev_configuration_policy_association ||
-      var.enable_securityhub_dev_configuration_policy
-    )
+    condition = alltrue([
+        for account_name, accounts in local.securityhub_cspm_association_accounts :
+        length(accounts) == 1
+    ])
 
-    error_message = "The dev Security Hub configuration policy must be enabled before it can be associated."
+    error_message = "Each associated Security Hub CSPM policy must match exactly one active AWS Organizations accoutn using the policy map key as the account name."
   }
 }
 
