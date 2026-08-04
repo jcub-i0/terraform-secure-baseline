@@ -151,9 +151,3 @@ variable "isolation_allowed" {
   type        = bool
   default     = true
 }
-
-variable "manage_securityhub_cspm_locally" {
-  description = "Manage Security Hub CSPM and standards in the workload account"
-  type        = bool
-  default     = false
-}

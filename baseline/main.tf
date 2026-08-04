@@ -125,7 +125,6 @@ module "security" {
   primary_region               = var.primary_region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
-  manage_securityhub_cspm_locally = var.manage_securityhub_cspm_locally
   guardduty_features              = var.guardduty_features
   enable_rules                    = local.effective_enable_rules
   inspector_enabled               = local.effective_inspector_enabled

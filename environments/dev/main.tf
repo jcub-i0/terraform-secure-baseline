@@ -21,5 +21,4 @@ module "baseline" {
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
   secops_emails                      = var.secops_emails
   isolation_allowed                  = var.isolation_allowed
-  manage_securityhub_cspm_locally    = var.manage_securityhub_cspm_locally
 }
