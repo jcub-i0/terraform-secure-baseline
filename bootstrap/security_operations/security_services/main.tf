@@ -114,19 +114,19 @@ resource "aws_securityhub_organization_configuration" "main" {
 # SECURITY HUB DEV CONFIGURATION POLICY
 ##########################################
 
-resource "aws_securityhub_configuration_policy" "dev" {
-  count = var.enable_securityhub_dev_configuration_policy ? 1 : 0
+resource "aws_securityhub_configuration_policy" "account" {
+  for_each = local.securityhub_cspm_policies
 
-  name        = "${local.name_prefix}-dev"
-  description = "Central Security Hub CSPM configuration policy for the dev account"
+  name        = "${local.name_prefix}-${each.key}"
+  description = "Central Security Hub CSPM configuration policy for the ${each.key} account"
 
   configuration_policy {
     service_enabled       = true
-    enabled_standard_arns = local.securityhub_enabled_standard_arns_dev
+    enabled_standard_arns = local.securityhub_cspm_enabled_standard_arns[each.key]
 
     security_controls_configuration {
       disabled_control_identifiers = sort(
-        tolist(var.securityhub_disabled_control_identifiers_dev)
+        tolist(each.value.disabled_control_identifiers)
       )
     }
   }
@@ -147,17 +147,19 @@ resource "aws_securityhub_configuration_policy" "dev" {
 # DEV CONFIGURATION POLICY ASSOCIATION
 ##########################################
 
-resource "aws_securityhub_configuration_policy_association" "dev" {
-  count = (
-    var.enable_securityhub_dev_configuration_policy_association &&
-    var.enable_securityhub_dev_configuration_policy
-  ) ? 1 : 0
+resource "aws_securityhub_configuration_policy_association" "account" {
+  for_each = local.securityhub_cspm_associations
 
-  target_id = local.dev_account_id
-  policy_id = aws_securityhub_configuration_policy.dev[0].id
+  target_id = local.securityhub_cspm_association_account_ids[each.key]
+  policy_id = aws_securityhub_configuration_policy.account[each.key].id
 
-  depends_on = [
-    aws_securityhub_organization_configuration.main,
-    aws_securityhub_configuration_policy.dev,
-  ]
+  lifecycle {
+    precondition {
+      condition = (
+        length(local.securityhub_cspm_association_accounts[each.key]) == 1
+      )
+
+      error_message = "Exactly one active AWS Organizations account named '${each.key}' must exist before its Security Hub CSPM policy can be associated."
+    }
+  }
 }
