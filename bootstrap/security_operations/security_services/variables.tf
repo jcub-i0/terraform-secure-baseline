@@ -68,7 +68,7 @@ variable "securityhub_cspm_account_policies" {
     condition = alltrue([
       for account_name, configuration in var.securityhub_cspm_account_policies :
       length(setsubstract(
-        configuration.enabled_standard_keys,
+        configuration.enabled_standards,
         toset([
           "aws_fsbp",
           "aws_tagging",
@@ -80,7 +80,7 @@ variable "securityhub_cspm_account_policies" {
       )) == 0
     ])
 
-    error_message = "A Security Hub CSPM policy contains an unsupported standard key."
+    error_message = "A Security Hub CSPM policy contains an unsupported standard."
   }
 
   validation {
@@ -95,7 +95,7 @@ variable "securityhub_cspm_account_policies" {
   validation {
     condition = alltrue([
       for account_name, configuration in var.securityhub_cspm_account_policies :
-      !configuration.associate_policy || length(configuration.enabled_standard_keys) > 0
+      !configuration.associate_policy || length(configuration.enabled_standards) > 0
     ])
 
     error_message = "Each enabled Security Hub CSPM policy must contain at least one standard."
