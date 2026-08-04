@@ -61,7 +61,7 @@ variable "securityhub_cspm_account_policies" {
   validation {
     condition = alltrue([
       for account_name, configuration in var.securityhub_cspm_account_policies :
-      length(setsubstract(
+      length(setsubtract(
         configuration.enabled_standards,
         toset([
           "aws_fsbp",
