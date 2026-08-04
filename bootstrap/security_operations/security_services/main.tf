@@ -110,9 +110,9 @@ resource "aws_securityhub_organization_configuration" "main" {
   ]
 }
 
-##########################################
-# SECURITY HUB DEV CONFIGURATION POLICY
-##########################################
+###############################################
+# SECURITY HUB WORKLOAD CONFIGURATION POLICIES
+###############################################
 
 resource "aws_securityhub_configuration_policy" "account" {
   for_each = local.securityhub_cspm_policies
@@ -143,9 +143,9 @@ resource "aws_securityhub_configuration_policy" "account" {
   ]
 }
 
-##########################################
-# DEV CONFIGURATION POLICY ASSOCIATION
-##########################################
+#############################################
+# WORKLOAD CONFIGURATION POLICY ASSOCIATIONS
+#############################################
 
 resource "aws_securityhub_configuration_policy_association" "account" {
   for_each = local.securityhub_cspm_associations
