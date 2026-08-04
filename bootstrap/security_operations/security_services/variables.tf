@@ -34,12 +34,6 @@ variable "enable_securityhub_organization_configuration" {
   default     = false
 }
 
-variable "enable_securityhub_dev_configuration_policy" {
-  description = "Create the central Security Hub CSPM configuration policy for the dev account"
-  type        = bool
-  default     = false
-}
-
 variable "securityhub_cspm_account_policies" {
   description = "Per-account Security Hub CSPM central configuration policies and associations"
 
