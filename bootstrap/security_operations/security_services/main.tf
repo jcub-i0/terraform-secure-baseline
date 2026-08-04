@@ -35,26 +35,26 @@ locals {
   securityhub_cspm_enabled_standard_arns = {
     for account_name, configuration in var.securityhub_cspm_account_policies :
     account_name => sort([
-        for standard in configuration.enabled_standards :
-        local.securityhub_standard_catalog[standard]
+      for standard in configuration.enabled_standards :
+      local.securityhub_standard_catalog[standard]
     ])
   }
 
   securityhub_cspm_association_accounts = {
     for account_name, configuration in local.securityhub_cspm_associations :
     account_name => [
-        for account in data.data.aws_organizations_organization.main[accounts] :
-        account
-        if account.name == account_name &&
-        account.state == "ACTIVE"
+      for account in data.data.aws_organizations_organization.main[accounts] :
+      account
+      if account.name == account_name &&
+      account.state == "ACTIVE"
     ]
   }
 
   securityhub_cspm_association_account_ids = {
     for account_name, accounts in local.securityhub_cspm_association_accounts :
     account_name => try(
-        one(accounts).id,
-        null
+      one(accounts).id,
+      null
     )
   }
 }
@@ -62,8 +62,8 @@ locals {
 check "securityhub_cspm_association_accounts" {
   assert {
     condition = alltrue([
-        for account_name, accounts in local.securityhub_cspm_association_accounts :
-        length(accounts) == 1
+      for account_name, accounts in local.securityhub_cspm_association_accounts :
+      length(accounts) == 1
     ])
 
     error_message = "Each associated Security Hub CSPM policy must match exactly one active AWS Organizations accoutn using the policy map key as the account name."
