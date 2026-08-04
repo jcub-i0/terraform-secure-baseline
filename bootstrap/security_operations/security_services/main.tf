@@ -12,12 +12,12 @@ check "target_account" {
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
   securityhub_standard_catalog = {
-    aws_fsbp = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
+    aws_fsbp    = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
     aws_tagging = "arn:aws:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0"
-    cis_1_2 = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0"
-    cis_5_0 = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0"
+    cis_1_2     = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0"
+    cis_5_0     = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0"
     nist_800_53 = "arn:aws:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0"
-    pci_dss = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
+    pci_dss     = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
   }
 
   securityhub_enabled_standard_arns_dev = sort([
