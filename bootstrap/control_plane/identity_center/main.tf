@@ -55,10 +55,6 @@ module "identity_center_secops" {
   enable_secops_administrator     = true
   secops_administrator_group_name = "SecOps-Administrator"
 
-  enable_secops_operator     = false
-  secops_operator_group_name = null
-  secops_event_bus_arn       = null
-
   enable_secops_analyst     = var.enable_secops_analyst_secops
   secops_analyst_group_name = "SecOps-Analyst-SecOps"
 
