@@ -71,6 +71,4 @@ module "identity_center_secops" {
 
   logs_s3_readonly_policy_name = var.logs_s3_readonly_policy_name_secops
   logs_cmk_decrypt_policy_name = var.logs_cmk_decrypt_policy_name_secops
-
-  customer_managed_policy_path = "/"
 }
