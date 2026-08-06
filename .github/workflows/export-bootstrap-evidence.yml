@@ -58,9 +58,7 @@ jobs:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
           PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
-          ACCOUNT_ID_DEV: ${{ vars.ACCOUNT_ID_DEV }}
-          ACCOUNT_ID_STAGING: ${{ vars.ACCOUNT_ID_STAGING }}
-          ACCOUNT_ID_PROD: ${{ vars.ACCOUNT_ID_PROD }}
+          ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
         run: |
           set -euo pipefail
 
@@ -75,14 +73,7 @@ jobs:
           fi
 
           case "${TARGET_ENVIRONMENT}" in
-            dev)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_DEV}"
-              ;;
-            staging)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_STAGING}"
-              ;;
-            prod)
-              EXPECTED_ACCOUNT_ID="${ACCOUNT_ID_PROD}"
+            dev|staging|prod)
               ;;
             *)
               echo "::error::Unsupported environment: ${TARGET_ENVIRONMENT}"
@@ -90,8 +81,10 @@ jobs:
               ;;
           esac
 
+          EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
+
           if [[ -z "${EXPECTED_ACCOUNT_ID}" ]]; then
-            echo "::error::The expected AWS account ID is not configured for ${TARGET_ENVIRONMENT}."
+            echo "::error::ACCOUNT_ID is not configured in the selected GitHub Environment."
             exit 1
           fi
 
