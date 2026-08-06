@@ -1,30 +1,32 @@
 name: Terraform Plan
 
 on:
-    workflow_dispatch:
-      inputs:
-        target_environment:
-          description: "Environment to plan"
-          required: true
-          default: "dev"
-          type: choice
-          options:
-            - dev
-            - staging
-            - prod
-            - control-plane-identity-center
-            - control-plane-organizations
-    pull_request:
-    push:
-        branches:
-            - main
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Environment to plan"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+          - control-plane-identity-center
+          - control-plane-organizations
+  pull_request:
+  push:
+    branches:
+      - main
+
 permissions:
-    id-token: write
-    contents: read
+  id-token: write
+  contents: read
 
 jobs:
   terraform-plan:
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
@@ -52,23 +54,18 @@ jobs:
     environment: ${{ matrix.github_environment }}
 
     env:
-        TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
-        TF_VAR_environment: ${{ vars.ENVIRONMENT }}
-        TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
-        TF_VAR_primary_region_dev: ${{ vars.PRIMARY_REGION_DEV }}
-        TF_VAR_primary_region_staging: ${{ vars.PRIMARY_REGION_STAGING }}
-        TF_VAR_primary_region_prod: ${{ vars.PRIMARY_REGION_PROD }}
-        TF_VAR_abuseipdb_api_key: ${{ secrets.ABUSEIPDB_API_KEY }}
-        TF_VAR_bucket_admin_principals: ${{ vars.BUCKET_ADMIN_PRINCIPALS }}
-        TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
-        TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
-        TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
-        TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
-        TF_VAR_account_id_dev: ${{ vars.ACCOUNT_ID_DEV }}
-        TF_VAR_account_id_prod: ${{ vars.ACCOUNT_ID_PROD }}
-        TF_VAR_account_id_staging: ${{ vars.ACCOUNT_ID_STAGING }}
-        TF_VAR_account_id_secops: ${{ vars.ACCOUNT_ID_SECOPS }}
-        TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
+      TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
+      TF_VAR_environment: ${{ vars.ENVIRONMENT }}
+      TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
+      TF_VAR_identity_center_workloads: ${{ vars.IDENTITY_CENTER_WORKLOADS }}
+      TF_VAR_identity_center_secops: ${{ vars.IDENTITY_CENTER_SECOPS }}
+      TF_VAR_abuseipdb_api_key: ${{ secrets.ABUSEIPDB_API_KEY }}
+      TF_VAR_bucket_admin_principals: ${{ vars.BUCKET_ADMIN_PRINCIPALS }}
+      TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
+      TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+      TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
+      TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
+      TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
 
     steps:
       - name: Checkout
@@ -89,6 +86,60 @@ jobs:
       - name: Setup Terraform
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         uses: hashicorp/setup-terraform@v4
+
+      - name: Validate Identity Center input variables
+        if: >-
+          (github.event_name != 'workflow_dispatch' ||
+          matrix.environment == inputs.target_environment) &&
+          matrix.environment == 'control-plane-identity-center'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TF_VAR_identity_center_workloads:-}" ]]; then
+            echo "::error::IDENTITY_CENTER_WORKLOADS is not configured in the control-plane Plan environment."
+            exit 1
+          fi
+
+          if [[ -z "${TF_VAR_identity_center_secops:-}" ]]; then
+            echo "::error::IDENTITY_CENTER_SECOPS is not configured in the control-plane Plan environment."
+            exit 1
+          fi
+
+          if ! jq -e '
+            type == "object" and
+            (keys | sort) == ["dev", "prod", "staging"] and
+            all(.[];
+              (.account_id | type == "string") and
+              (.account_id | test("^[0-9]{12}$")) and
+              (.primary_region | type == "string") and
+              (.primary_region | length > 0) and
+              ((.enable_secops_analyst // false) | type == "boolean") and
+              ((.enable_secops_engineer // false) | type == "boolean") and
+              (.logs_s3_readonly_policy_name | type == "string") and
+              (.logs_s3_readonly_policy_name | length > 0) and
+              (.logs_cmk_decrypt_policy_name | type == "string") and
+              (.logs_cmk_decrypt_policy_name | length > 0)
+            )
+          ' <<< "${TF_VAR_identity_center_workloads}" >/dev/null; then
+            echo "::error::IDENTITY_CENTER_WORKLOADS is not valid JSON matching the Terraform workload map schema."
+            exit 1
+          fi
+
+          if ! jq -e '
+            type == "object" and
+            (.account_id | type == "string") and
+            (.account_id | test("^[0-9]{12}$")) and
+            ((.enable_secops_analyst // false) | type == "boolean") and
+            ((.enable_secops_engineer // false) | type == "boolean") and
+            ((.logs_s3_readonly_policy_name == null) or
+              (.logs_s3_readonly_policy_name | type == "string")) and
+            ((.logs_cmk_decrypt_policy_name == null) or
+              (.logs_cmk_decrypt_policy_name | type == "string"))
+          ' <<< "${TF_VAR_identity_center_secops}" >/dev/null; then
+            echo "::error::IDENTITY_CENTER_SECOPS is not valid JSON matching the Terraform security-operations object schema."
+            exit 1
+          fi
 
       - name: Validate workload isolation setting
         if: >-
