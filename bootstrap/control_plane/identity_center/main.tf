@@ -1,72 +1,62 @@
-module "identity_center_dev" {
+module "identity_center_workload" {
+  for_each = var.identity_center_workloads
+
   source = "../../../modules/identity_center"
 
-  account_id                   = var.account_id_dev
-  environment                  = "dev"
-  secops_operator_group_name   = "SecOps-Operator-Dev"
-  secops_event_bus_arn         = "arn:aws:events:${var.primary_region_dev}:${var.account_id_dev}:event-bus/secops-bus"
-  enable_secops_analyst        = var.enable_secops_analyst_dev
-  secops_analyst_group_name    = "SecOps-Analyst-Dev"
-  enable_secops_engineer       = var.enable_secops_engineer_dev
-  secops_engineer_group_name   = "SecOps-Engineer-Dev"
-  logs_cmk_decrypt_policy_name = var.logs_cmk_decrypt_policy_name_dev
-  logs_s3_readonly_policy_name = var.logs_s3_readonly_policy_name_dev
-  customer_managed_policy_path = "/"
-}
+  account_id  = each.value.account_id
+  environment = each.key
 
-module "identity_center_prod" {
-  source = "../../../modules/identity_center"
+  enable_secops_operator = true
+  secops_operator_group_name = "SecOps-Operator-${title(each.key)}"
 
-  account_id                   = var.account_id_prod
-  environment                  = "prod"
-  secops_operator_group_name   = "SecOps-Operator-Prod"
-  secops_event_bus_arn         = "arn:aws:events:${var.primary_region_prod}:${var.account_id_prod}:event-bus/secops-bus"
-  enable_secops_analyst        = var.enable_secops_analyst_prod
-  secops_analyst_group_name    = "SecOps-Analyst-Prod"
-  enable_secops_engineer       = var.enable_secops_engineer_prod
-  secops_engineer_group_name   = "SecOps-Engineer-Prod"
-  logs_cmk_decrypt_policy_name = var.logs_cmk_decrypt_policy_name_prod
-  logs_s3_readonly_policy_name = var.logs_s3_readonly_policy_name_prod
-  customer_managed_policy_path = "/"
-}
+  secops_event_bus_arn = "arn:aws:events:${each.value.primary_region}:${each.value.account_id}:event-bus/secops-bus"
 
-module "identity_center_staging" {
-  source = "../../../modules/identity_center"
+  enable_secops_analyst     = each.value.enable_secops_analyst
+  secops_analyst_group_name = "SecOps-Analyst-${title(each.key)}"
 
-  account_id                   = var.account_id_staging
-  environment                  = "staging"
-  secops_operator_group_name   = "SecOps-Operator-Staging"
-  secops_event_bus_arn         = "arn:aws:events:${var.primary_region_staging}:${var.account_id_staging}:event-bus/secops-bus"
-  enable_secops_analyst        = var.enable_secops_analyst_staging
-  secops_analyst_group_name    = "SecOps-Analyst-Staging"
-  enable_secops_engineer       = var.enable_secops_engineer_staging
-  secops_engineer_group_name   = "SecOps-Engineer-Staging"
-  logs_cmk_decrypt_policy_name = var.logs_cmk_decrypt_policy_name_staging
-  logs_s3_readonly_policy_name = var.logs_s3_readonly_policy_name_staging
-  customer_managed_policy_path = "/"
+  enable_secops_engineer     = each.value.enable_secops_engineer
+  secops_engineer_group_name = "SecOps-Engineer-${title(each.key)}"
+
+  logs_s3_readonly_policy_name = each.value.logs_s3_readonly_policy_name
+  logs_cmk_decrypt_policy_name = each.value.logs_cmk_decrypt_policy_name
 }
 
 module "identity_center_secops" {
   source = "../../../modules/identity_center"
 
-  account_id  = var.account_id_secops
+  account_id  = var.identity_center_secops.account_id
   environment = "secops"
 
   enable_secops_administrator     = true
   secops_administrator_group_name = "SecOps-Administrator"
 
-  enable_secops_operator     = false
-  secops_operator_group_name = null
-  secops_event_bus_arn       = null
+  enable_secops_operator = false
 
-  enable_secops_analyst     = var.enable_secops_analyst_secops
-  secops_analyst_group_name = "SecOps-Analyst-SecOps"
+  enable_secops_analyst = (
+    var.identity_center_secops.enable_secops_analyst
+  )
 
-  enable_secops_engineer     = var.enable_secops_engineer_secops
-  secops_engineer_group_name = "SecOps-Engineer-SecOps"
+  secops_analyst_group_name = (
+    var.identity_center_secops.enable_secops_analyst
+    ? "SecOps-Analyst-SecOps"
+    : null
+  )
 
-  logs_s3_readonly_policy_name = var.logs_s3_readonly_policy_name_secops
-  logs_cmk_decrypt_policy_name = var.logs_cmk_decrypt_policy_name_secops
+  enable_secops_engineer = (
+    var.identity_center_secops.enable_secops_engineer
+  )
 
-  customer_managed_policy_path = "/"
+  secops_engineer_group_name = (
+    var.identity_center_secops.enable_secops_engineer
+    ? "SecOps-Engineer-SecOps"
+    : null
+  )
+
+  logs_s3_readonly_policy_name = (
+    var.identity_center_secops.logs_s3_readonly_policy_name
+  )
+
+  logs_cmk_decrypt_policy_name = (
+    var.identity_center_secops.logs_cmk_decrypt_policy_name
+  )
 }

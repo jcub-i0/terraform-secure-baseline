@@ -1,19 +1,13 @@
-output "dev_permission_set_arns" {
-  description = "Permission set ARNs for the 'dev' environment"
-  value       = module.identity_center_dev.permission_set_arns
-}
+output "workload_permission_set_arns" {
+  description = "Permission set ARNs by workload environment"
 
-output "prod_permission_set_arns" {
-  description = "Permission set ARNs for the 'prod' environment"
-  value       = module.identity_center_prod.permission_set_arns
-}
-
-output "staging_permission_set_arns" {
-  description = "Permission set ARNs for the 'staging' environment"
-  value       = module.identity_center_staging.permission_set_arns
+  value = {
+    for environment, identity_center in module.identity_center_workload :
+    environment => identity_center.permission_set_arns
+  }
 }
 
 output "secops_permission_set_arns" {
-  description = "Permission set ARNs for the 'security-operations' environment"
+  description = "Permission set ARNs for the security-operations account"
   value       = module.identity_center_secops.permission_set_arns
 }

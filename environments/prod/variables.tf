@@ -45,6 +45,7 @@ variable "egress_mode" {
 variable "primary_region" {
   description = "Primary Region used"
   type        = string
+  default     = "us-east-1"
 }
 
 variable "bucket_admin_principals" {

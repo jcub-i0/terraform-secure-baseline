@@ -36,9 +36,14 @@ case "$REQUIRE_STATE_STACK_REMOTE" in
     ;;
 esac
 
-ACCOUNT_ID_DEV="${ACCOUNT_ID_DEV:-}"
-ACCOUNT_ID_STAGING="${ACCOUNT_ID_STAGING:-}"
-ACCOUNT_ID_PROD="${ACCOUNT_ID_PROD:-}"
+IDENTITY_CENTER_WORKLOADS="${IDENTITY_CENTER_WORKLOADS:-${TF_VAR_identity_center_workloads:-}}"
+IDENTITY_CENTER_SECOPS="${IDENTITY_CENTER_SECOPS:-${TF_VAR_identity_center_secops:-}}"
+
+ACCOUNT_ID_DEV=""
+ACCOUNT_ID_STAGING=""
+ACCOUNT_ID_PROD=""
+ACCOUNT_ID_SECOPS=""
+IDENTITY_CENTER_WORKLOAD_ACCOUNT_IDS='{}'
 
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
@@ -78,6 +83,58 @@ success "jq found"
 require_command "git"
 success "git found"
 
+section "Resolving Identity Center configuration inputs"
+
+if [[ -z "$IDENTITY_CENTER_WORKLOADS" ]]; then
+  fail "IDENTITY_CENTER_WORKLOADS or TF_VAR_identity_center_workloads must be set"
+fi
+
+if [[ -z "$IDENTITY_CENTER_SECOPS" ]]; then
+  fail "IDENTITY_CENTER_SECOPS or TF_VAR_identity_center_secops must be set"
+fi
+
+if ! jq -e '
+  type == "object" and
+  has("dev") and
+  has("staging") and
+  has("prod") and
+  all(
+    .dev,
+    .staging,
+    .prod;
+    type == "object" and
+    (.account_id | type == "string" and test("^[0-9]{12}$")) and
+    (.primary_region | type == "string" and length > 0) and
+    ((.enable_secops_analyst // false) | type == "boolean") and
+    ((.enable_secops_engineer // false) | type == "boolean")
+  )
+' >/dev/null <<<"$IDENTITY_CENTER_WORKLOADS"; then
+  fail "IDENTITY_CENTER_WORKLOADS does not match the expected workload configuration structure"
+fi
+
+if ! jq -e '
+  type == "object" and
+  (.account_id | type == "string" and test("^[0-9]{12}$")) and
+  ((.enable_secops_analyst // false) | type == "boolean") and
+  ((.enable_secops_engineer // false) | type == "boolean")
+' >/dev/null <<<"$IDENTITY_CENTER_SECOPS"; then
+  fail "IDENTITY_CENTER_SECOPS does not match the expected security-operations configuration structure"
+fi
+
+ACCOUNT_ID_DEV="$(jq -r '.dev.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
+ACCOUNT_ID_STAGING="$(jq -r '.staging.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
+ACCOUNT_ID_PROD="$(jq -r '.prod.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
+ACCOUNT_ID_SECOPS="$(jq -r '.account_id' <<<"$IDENTITY_CENTER_SECOPS")"
+IDENTITY_CENTER_WORKLOAD_ACCOUNT_IDS="$(
+  jq '{
+    dev: .dev.account_id,
+    staging: .staging.account_id,
+    prod: .prod.account_id
+  }' <<<"$IDENTITY_CENTER_WORKLOADS"
+)"
+
+success "Identity Center workload and security-operations configuration inputs are valid"
+
 section "Resolving repository paths and report settings"
 
 info "Repository root: ${REPO_ROOT}"
@@ -95,9 +152,8 @@ info "CHECK_OPTIONAL_SECOPS_GROUPS: ${CHECK_OPTIONAL_SECOPS_GROUPS}"
 info "STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${STRICT_IDENTITY_CENTER_ASSIGNMENTS}"
 info "STRICT_ACCOUNT_OU_CHECKS: ${STRICT_ACCOUNT_OU_CHECKS}"
 info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
-info "ACCOUNT_ID_DEV: ${ACCOUNT_ID_DEV:-<not set>}"
-info "ACCOUNT_ID_STAGING: ${ACCOUNT_ID_STAGING:-<not set>}"
-info "ACCOUNT_ID_PROD: ${ACCOUNT_ID_PROD:-<not set>}"
+info "IDENTITY_CENTER_WORKLOADS configured: $([[ -n "$IDENTITY_CENTER_WORKLOADS" ]] && echo true || echo false)"
+info "IDENTITY_CENTER_SECOPS configured: $([[ -n "$IDENTITY_CENTER_SECOPS" ]] && echo true || echo false)"
 info "Validation time: ${VALIDATION_TIME}"
 
 if [[ "$NAME_PREFIX" != *"-${CONTROL_PLANE_ENV_NAME}" ]]; then
@@ -142,9 +198,10 @@ export CHECK_OPTIONAL_SECOPS_GROUPS
 export STRICT_IDENTITY_CENTER_ASSIGNMENTS
 export STRICT_ACCOUNT_OU_CHECKS
 export REQUIRE_STATE_STACK_REMOTE
-export ACCOUNT_ID_DEV
-export ACCOUNT_ID_STAGING
-export ACCOUNT_ID_PROD
+export IDENTITY_CENTER_WORKLOADS
+export IDENTITY_CENTER_SECOPS
+export TF_VAR_identity_center_workloads="${TF_VAR_identity_center_workloads:-$IDENTITY_CENTER_WORKLOADS}"
+export TF_VAR_identity_center_secops="${TF_VAR_identity_center_secops:-$IDENTITY_CENTER_SECOPS}"
 
 if [[ ! -x "$SCRIPT_PATH" ]]; then
   warn "${VALIDATION_SCRIPT} is missing or not executable"
@@ -205,9 +262,8 @@ jq -n \
   --arg strict_identity_center_assignments "$STRICT_IDENTITY_CENTER_ASSIGNMENTS" \
   --arg strict_account_ou_checks "$STRICT_ACCOUNT_OU_CHECKS" \
   --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
-  --arg account_id_dev "$ACCOUNT_ID_DEV" \
-  --arg account_id_staging "$ACCOUNT_ID_STAGING" \
-  --arg account_id_prod "$ACCOUNT_ID_PROD" \
+  --argjson identity_center_workload_account_ids "$IDENTITY_CENTER_WORKLOAD_ACCOUNT_IDS" \
+  --arg identity_center_secops_account_id "$ACCOUNT_ID_SECOPS" \
   --argjson scripts_passed "$PASSED_COUNT" \
   --argjson scripts_failed "$FAILED_COUNT" \
   --argjson scripts_total "$TOTAL_COUNT" \
@@ -236,9 +292,8 @@ jq -n \
       strict_identity_center_assignments: $strict_identity_center_assignments,
       strict_account_ou_checks: $strict_account_ou_checks,
       require_state_stack_remote: $require_state_stack_remote,
-      account_id_dev: $account_id_dev,
-      account_id_staging: $account_id_staging,
-      account_id_prod: $account_id_prod
+      identity_center_workload_account_ids: $identity_center_workload_account_ids,
+      identity_center_secops_account_id: $identity_center_secops_account_id
     },
     results: $results,
     validation_scope: [
@@ -325,9 +380,10 @@ section "Generating Markdown summary"
   echo "| Strict Identity Center Assignments | ${STRICT_IDENTITY_CENTER_ASSIGNMENTS} |"
   echo "| Strict Account OU Checks | ${STRICT_ACCOUNT_OU_CHECKS} |"
   echo "| Require State Stack Remote | ${REQUIRE_STATE_STACK_REMOTE} |"
-  echo "| Dev Account ID | \`${ACCOUNT_ID_DEV:-not configured}\` |"
-  echo "| Staging Account ID | \`${ACCOUNT_ID_STAGING:-not configured}\` |"
-  echo "| Prod Account ID | \`${ACCOUNT_ID_PROD:-not configured}\` |"
+  echo "| Dev Account ID | \`${ACCOUNT_ID_DEV}\` |"
+  echo "| Staging Account ID | \`${ACCOUNT_ID_STAGING}\` |"
+  echo "| Prod Account ID | \`${ACCOUNT_ID_PROD}\` |"
+  echo "| Security-Operations Account ID | \`${ACCOUNT_ID_SECOPS}\` |"
   echo
   echo "## Validation Summary"
   echo
@@ -415,6 +471,10 @@ echo "AWS credential source:      ${AWS_CREDENTIAL_SOURCE}"
 echo "AWS region:                 ${AWS_REGION}"
 echo "AWS account ID:             ${AWS_ACCOUNT_ID}"
 echo "Name prefix:                ${NAME_PREFIX}"
+echo "Dev account ID:             ${ACCOUNT_ID_DEV}"
+echo "Staging account ID:         ${ACCOUNT_ID_STAGING}"
+echo "Prod account ID:            ${ACCOUNT_ID_PROD}"
+echo "Security-operations ID:     ${ACCOUNT_ID_SECOPS}"
 echo "Require remote state stack: ${REQUIRE_STATE_STACK_REMOTE}"
 echo
 echo "Output directory:           ${OUTPUT_DIR}"
