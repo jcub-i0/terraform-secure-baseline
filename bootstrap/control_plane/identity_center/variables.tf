@@ -49,32 +49,3 @@ variable "identity_center_secops" {
     error_message = "The Security-Operations account ID must contain exactly 12 digits."
   }
 }
-
-variable "enable_secops_analyst_secops" {
-  description = "Determines whether SecOps-Analyst resources are deployed in the 'security-operations' env"
-  type        = bool
-  default     = false
-}
-
-variable "enable_secops_engineer_secops" {
-  description = "Determines whether SecOps-Engineer resources are deployed in the 'security-operations' env"
-  type        = bool
-  default     = false
-}
-
-variable "account_id_secops" {
-  description = "ID of the AWS account managing the 'security-operations' environment"
-  type        = string
-}
-
-variable "logs_s3_readonly_policy_name_secops" {
-  description = "'Name' attribute of the 'security-operations' env's logs_s3_readonly policy"
-  type        = string
-  default     = null
-}
-
-variable "logs_cmk_decrypt_policy_name_secops" {
-  description = "'Name' attribute of the 'security-operations' env's logs_cmk_decrypt policy"
-  type        = string
-  default     = null
-}
