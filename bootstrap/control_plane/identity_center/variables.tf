@@ -12,7 +12,7 @@ variable "identity_center_workloads" {
 
   validation {
     condition = alltrue([
-      for environment, configuration in var.idenitty_center_workloads :
+      for environment, configuration in var.identity_center_workloads :
       contains(["dev", "staging", "prod"], environment)
     ])
 
