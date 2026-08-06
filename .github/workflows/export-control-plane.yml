@@ -1,40 +1,63 @@
-name: Export Baseline Evidence
+name: Export Control-Plane Evidence
 
-run-name: Baseline evidence - ${{ inputs.environment }}
+run-name: Control-plane evidence
 
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: "Workload environment to validate"
+      check_optional_secops_groups:
+        description: "Check optional SecOps Analyst and Engineer groups"
         required: true
-        default: "dev"
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
+        default: false
+        type: boolean
+      strict_identity_center_assignments:
+        description: "Fail when expected Identity Center account assignments are missing"
+        required: true
+        default: true
+        type: boolean
+      strict_account_ou_checks:
+        description: "Fail when workload accounts are not in their expected OUs"
+        required: true
+        default: false
+        type: boolean
+      require_state_stack_remote:
+        description: "Require the control-plane state stack to use a readable remote S3 backend"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: export-baseline-evidence-${{ inputs.environment }}
+  group: export-control-plane-evidence
   cancel-in-progress: false
 
 jobs:
-  export-baseline-evidence:
-    name: Export ${{ inputs.environment }} baseline evidence
+  export-control-plane-evidence:
+    name: Export control-plane evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: ${{ format('{0}-plan', inputs.environment) }}
+    timeout-minutes: 30
+    environment: control-plane-plan
 
     env:
       AWS_PAGER: ""
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
+
+      CONTROL_PLANE_ENV_NAME: "control-plane"
       CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+      EXPECTED_GITHUB_REPOSITORY: ${{ github.repository }}
+
+      REQUIRE_CONTROL_PLANE_GITHUB_OIDC: "true"
+      CHECK_OPTIONAL_SECOPS_GROUPS: ${{ inputs.check_optional_secops_groups }}
+      STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${{ inputs.strict_identity_center_assignments }}
+      STRICT_ACCOUNT_OU_CHECKS: ${{ inputs.strict_account_ou_checks }}
+      REQUIRE_STATE_STACK_REMOTE: ${{ inputs.require_state_stack_remote }}
+
+      TF_VAR_identity_center_workloads: ${{ vars.IDENTITY_CENTER_WORKLOADS }}
+      TF_VAR_identity_center_secops: ${{ vars.IDENTITY_CENTER_SECOPS }}
 
     steps:
       - name: Checkout
@@ -43,41 +66,69 @@ jobs:
       - name: Resolve and validate workflow settings
         shell: bash
         env:
-          TARGET_ENVIRONMENT: ${{ inputs.environment }}
           PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
           PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
-          ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
         run: |
           set -euo pipefail
 
           if [[ -z "${PRIMARY_REGION}" ]]; then
-            echo "::error::PRIMARY_REGION is not configured in the selected GitHub Environment."
+            echo "::error::PRIMARY_REGION is not configured in the control-plane-plan GitHub Environment."
             exit 1
           fi
 
           if [[ -z "${PLAN_ROLE_GITHUB_ARN}" ]]; then
-            echo "::error::PLAN_ROLE_GITHUB_ARN is not configured in the selected GitHub Environment."
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not configured in the control-plane-plan GitHub Environment."
             exit 1
           fi
 
-          case "${TARGET_ENVIRONMENT}" in
-            dev|staging|prod)
-              ;;
-            *)
-              echo "::error::Unsupported environment: ${TARGET_ENVIRONMENT}"
+          if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:aws:iam::([0-9]{12}):role/.+ ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+
+          EXPECTED_ACCOUNT_ID="${BASH_REMATCH[1]}"
+          IDENTITY_CENTER_WORKLOADS="${TF_VAR_identity_center_workloads:-}"
+          IDENTITY_CENTER_SECOPS="${TF_VAR_identity_center_secops:-}"
+
+          for setting_name in IDENTITY_CENTER_WORKLOADS IDENTITY_CENTER_SECOPS; do
+            if [[ -z "${!setting_name:-}" ]]; then
+              echo "::error::${setting_name} is not configured in the control-plane-plan GitHub Environment."
               exit 1
-              ;;
-          esac
+            fi
 
-          EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
+            if ! jq -e . >/dev/null 2>&1 <<<"${!setting_name}"; then
+              echo "::error::${setting_name} must contain valid JSON."
+              exit 1
+            fi
+          done
 
-          if [[ -z "${EXPECTED_ACCOUNT_ID}" ]]; then
-            echo "::error::ACCOUNT_ID is not configured in the selected GitHub Environment."
+          if ! jq -e '
+            type == "object" and
+            has("dev") and
+            has("staging") and
+            has("prod") and
+            all(
+              .dev,
+              .staging,
+              .prod;
+              type == "object" and
+              (.account_id | type == "string" and test("^[0-9]{12}$")) and
+              (.primary_region | type == "string" and length > 0) and
+              ((.enable_secops_analyst // false) | type == "boolean") and
+              ((.enable_secops_engineer // false) | type == "boolean")
+            )
+          ' >/dev/null <<<"${IDENTITY_CENTER_WORKLOADS}"; then
+            echo "::error::IDENTITY_CENTER_WORKLOADS does not match the expected workload configuration structure."
             exit 1
           fi
 
-          if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-            echo "::error::Expected AWS account ID must contain exactly 12 digits."
+          if ! jq -e '
+            type == "object" and
+            (.account_id | type == "string" and test("^[0-9]{12}$")) and
+            ((.enable_secops_analyst // false) | type == "boolean") and
+            ((.enable_secops_engineer // false) | type == "boolean")
+          ' >/dev/null <<<"${IDENTITY_CENTER_SECOPS}"; then
+            echo "::error::IDENTITY_CENTER_SECOPS does not match the expected security-operations configuration structure."
             exit 1
           fi
 
@@ -97,6 +148,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          CALLER_ACCOUNT_ID="$(
+            aws sts get-caller-identity \
+              --query 'Account' \
+              --output text
+          )"
+
+          if [[ "${CALLER_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${CALLER_ACCOUNT_ID}."
+            exit 1
+          fi
+
           aws sts get-caller-identity
 
       - name: Setup Terraform
@@ -105,33 +168,64 @@ jobs:
           terraform_version: "1.15.8"
           terraform_wrapper: false
 
-      - name: Initialize workload baseline backend
+      - name: Materialize control-plane state backend
         shell: bash
         run: |
           set -euo pipefail
-          terraform -chdir="environments/${{ inputs.environment }}" init \
+
+          cp \
+          "bootstrap/control_plane/state/backend.tf.migrated.example" \
+          "bootstrap/control_plane/state/backend.tf"
+
+      - name: Initialize control-plane state backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/control_plane/state" init \
             -input=false \
             -no-color
 
-      - name: Export workload baseline evidence
+      - name: Initialize control-plane account backend
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/validation/export-baseline.sh "${{ inputs.environment }}"
+          terraform -chdir="bootstrap/control_plane/account" init \
+            -input=false \
+            -no-color
+
+      - name: Initialize control-plane Organizations backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/control_plane/organizations" init \
+            -input=false \
+            -no-color
+
+      - name: Initialize control-plane Identity Center backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir="bootstrap/control_plane/identity_center" init \
+            -input=false \
+            -no-color
+
+      - name: Export control-plane evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/validation/export-control-plane.sh
 
       - name: Locate generated evidence
         id: evidence
         if: always()
         shell: bash
-        env:
-          TARGET_ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
 
-          EVIDENCE_ROOT="validation-results/${TARGET_ENVIRONMENT}/baseline"
+          EVIDENCE_ROOT="validation-results/control-plane"
 
           if [[ ! -d "${EVIDENCE_ROOT}" ]]; then
-            echo "::warning::No baseline evidence directory was generated."
+            echo "::warning::No control-plane evidence directory was generated."
             exit 0
           fi
 
@@ -146,7 +240,7 @@ jobs:
           )"
 
           if [[ -z "${LATEST_TIMESTAMP}" ]]; then
-            echo "::warning::No timestamped baseline evidence package was found."
+            echo "::warning::No timestamped control-plane evidence package was found."
             exit 0
           fi
 
@@ -172,13 +266,17 @@ jobs:
           set -euo pipefail
 
           {
-            echo "# Workload Baseline Evidence"
+            echo "# Control-Plane Evidence"
             echo
-            echo "- Environment: \`${{ inputs.environment }}\`"
-            echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
-            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
-            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
-            echo "- Evidence directory: \`${EVIDENCE_DIR:-<not generated>}\`"
+            echo "- GitHub Environment: \`control-plane-plan\`"
+            echo "- AWS Region: \`${AWS_REGION:-not resolved}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-not resolved}\`"
+            echo "- Expected GitHub Repository: \`${EXPECTED_GITHUB_REPOSITORY}\`"
+            echo "- Optional SecOps group checks: \`${CHECK_OPTIONAL_SECOPS_GROUPS}\`"
+            echo "- Strict Identity Center assignments: \`${STRICT_IDENTITY_CENTER_ASSIGNMENTS}\`"
+            echo "- Strict account OU checks: \`${STRICT_ACCOUNT_OU_CHECKS}\`"
+            echo "- Require state stack remote: \`${REQUIRE_STATE_STACK_REMOTE}\`"
+            echo "- Evidence directory: \`${EVIDENCE_DIR:-not generated}\`"
             echo
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -192,11 +290,11 @@ jobs:
             } >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Upload baseline evidence artifact
+      - name: Upload control-plane evidence artifact
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: baseline-validation-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: validation-results/${{ inputs.environment }}/baseline/
+          name: control-plane-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: validation-results/control-plane/
           if-no-files-found: warn
           retention-days: 30
