@@ -963,23 +963,9 @@ require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_name "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_arn "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn "state"
 
-STATE_BUCKET_NAME="$(
-  get_terraform_output_value \
-    "$STATE_OUTPUTS_JSON" \
-    tf_state_bucket_name
-)"
-
-STATE_BUCKET_ARN="$(
-  get_terraform_output_value \
-    "$STATE_OUTPUTS_JSON" \
-    tf_state_bucket_arn
-)"
-
-STATE_CMK_ARN="$(
-  get_terraform_output_value \
-    "$STATE_OUTPUTS_JSON" \
-    tf_state_bucket_cmk_arn
-)"
+STATE_BUCKET_NAME="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_name)"
+STATE_BUCKET_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_arn)"
+STATE_CMK_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn)"
 
 require_non_empty "$STATE_BUCKET_NAME" "control-plane state bucket name"
 require_non_empty "$STATE_BUCKET_ARN" "control-plane state bucket ARN"
