@@ -29,6 +29,8 @@ module "identity_center_secops" {
   enable_secops_administrator     = true
   secops_administrator_group_name = "SecOps-Administrator"
 
+  enable_secops_operator = false
+
   enable_secops_analyst = (
     var.identity_center_secops.enable_secops_analyst
   )
