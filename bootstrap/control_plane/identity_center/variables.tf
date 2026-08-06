@@ -29,6 +29,12 @@ variable "identity_center_workloads" {
   }
 }
 
+variable "enable_secops_analyst_secops" {
+  description = "Determines whether SecOps-Analyst resources are deployed in the 'security-operations' env"
+  type        = bool
+  default     = false
+}
+
 variable "enable_secops_engineer_secops" {
   description = "Determines whether SecOps-Engineer resources are deployed in the 'security-operations' env"
   type        = bool
