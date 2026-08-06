@@ -13,7 +13,7 @@ module "identity_center_workload" {
   enable_secops_analyst     = each.value.enable_secops_analyst
   secops_analyst_group_name = "SecOps-Analyst-${title(each.key)}"
 
-  enable_secops_engineer     = each.value.enable_secops_engineeer
+  enable_secops_engineer     = each.value.enable_secops_engineer
   secops_engineer_group_name = "SecOps-Engineer-${title(each.key)}"
 
   logs_s3_readonly_policy_name = each.value.logs_s3_readonly_policy_name
@@ -29,20 +29,31 @@ module "identity_center_secops" {
   enable_secops_administrator     = true
   secops_administrator_group_name = "SecOps-Administrator"
 
-  enable_secops_analyst = var.identity_center_secops.enable_secops_analyst
+  enable_secops_analyst = (
+    var.identity_center_secops.enable_secops_analyst
+  )
+
   secops_analyst_group_name = (
     var.identity_center_secops.enable_secops_analyst
     ? "SecOps-Analyst-SecOps"
     : null
   )
 
-  enable_secops_engineer = var.identity_center_secops.enable_secops_engineer
+  enable_secops_engineer = (
+    var.identity_center_secops.enable_secops_engineer
+  )
+
   secops_engineer_group_name = (
     var.identity_center_secops.enable_secops_engineer
     ? "SecOps-Engineer-SecOps"
     : null
   )
 
-  logs_s3_readonly_policy_name = var.identity_center_secops.logs_s3_readonly_policy_name
-  logs_cmk_decrypt_policy_name = var.identity_center_secops.logs_cmk_decrypt_policy_name
+  logs_s3_readonly_policy_name = (
+    var.identity_center_secops.logs_s3_readonly_policy_name
+  )
+
+  logs_cmk_decrypt_policy_name = (
+    var.identity_center_secops.logs_cmk_decrypt_policy_name
+  )
 }
