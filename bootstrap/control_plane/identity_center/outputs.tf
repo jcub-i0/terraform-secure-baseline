@@ -2,7 +2,7 @@ output "workload_permission_set_arns" {
   description = "Permission set ARNs by workload environment"
 
   value = {
-    for environment, identity_center in module.identity_center_workloads :
+    for environment, identity_center in module.identity_center_workload :
     environment => identity_center.permission_set_arns
   }
 }
