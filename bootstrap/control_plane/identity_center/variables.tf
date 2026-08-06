@@ -33,9 +33,9 @@ variable "identity_center_secops" {
   description = "Identity Center configuration for the security-operations account"
 
   type = object({
-    account_id = string
-    enable_secops_analyst = optional(bool, false)
-    enable_secops_engineer = optional(bool, false)
+    account_id                   = string
+    enable_secops_analyst        = optional(bool, false)
+    enable_secops_engineer       = optional(bool, false)
     logs_s3_readonly_policy_name = optional(string)
     logs_cmk_decrypt_policy_name = optional(string)
   })
