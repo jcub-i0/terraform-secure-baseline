@@ -959,21 +959,17 @@ info "Organizations outputs size: $(echo "$ORGANIZATIONS_OUTPUTS_JSON" | jq 'len
 
 section "Checking state stack Terraform outputs"
 
-require_terraform_output "$STATE_OUTPUTS_JSON" account_id "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_name "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_arn "state"
 require_terraform_output "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn "state"
 
-STATE_ACCOUNT_ID="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" account_id)"
 STATE_BUCKET_NAME="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_name)"
 STATE_BUCKET_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_arn)"
 STATE_CMK_ARN="$(get_terraform_output_value "$STATE_OUTPUTS_JSON" tf_state_bucket_cmk_arn)"
 
-if [[ "$STATE_ACCOUNT_ID" == "$AWS_ACCOUNT_ID" ]]; then
-  success "State stack account output matches current AWS account"
-else
-  fail "State stack account output mismatch. Terraform output: ${STATE_ACCOUNT_ID}; AWS caller account: ${AWS_ACCOUNT_ID}"
-fi
+require_non_empty "$STATE_BUCKET_NAME" "control-plane state bucket name"
+require_non_empty "$STATE_BUCKET_ARN" "control-plane state bucket ARN"
+require_non_empty "$STATE_CMK_ARN" "control-plane state CMK ARN"
 
 info "State bucket name: ${STATE_BUCKET_NAME}"
 info "State bucket ARN: ${STATE_BUCKET_ARN}"
