@@ -1,5 +1,5 @@
 variable "identity_center_workloads" {
-  description = "Identity Center configuraiton for workload accounts"
+  description = "Identity Center configuration for workload accounts"
 
   type = map(object({
     account_id                   = string
