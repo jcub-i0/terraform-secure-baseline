@@ -6,6 +6,7 @@ module "identity_center_workload" {
   account_id  = each.value.account_id
   environment = each.key
 
+  enable_secops_operator = true
   secops_operator_group_name = "SecOps-Operator-${title(each.key)}"
 
   secops_event_bus_arn = "arn:aws:events:${each.value.primary_region}:${each.value.account_id}:event-bus/secops-bus"
