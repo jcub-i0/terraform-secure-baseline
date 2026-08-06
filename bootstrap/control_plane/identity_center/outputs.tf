@@ -3,7 +3,7 @@ output "workload_permission_set_arns" {
 
   value = {
     for environment, identity_center in module.identity_center_workload :
-    environment => module.identity_center_workload.permission_set_arns
+    environment => identity_center.permission_set_arns
   }
 }
 
