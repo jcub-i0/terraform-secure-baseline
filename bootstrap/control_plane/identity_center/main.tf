@@ -46,6 +46,28 @@ module "identity_center_staging" {
   customer_managed_policy_path = "/"
 }
 
+module "identity_center_workload" {
+  for_each = var.identity_center_workloads
+
+  source = "../../../modules/identity_center"
+
+  account_id = each.value.account_id
+  environment = each.key
+
+  secops_operator_group_name = "SecOps-Operator-${title(each.key)}"
+
+  secops_event_bus_arn = "arn:aws:events:${each.value.primary_region}:${each.value.account_id}:event-bus/secops-bus"
+
+  enable_secops_analyst = each.value.enable_secops_analyst
+  secops_analyst_group_name = "SecOps-Analyst-${title(each.key)}"
+
+  enable_secops_engineer = each.value.enable_secops_engineeer
+  secops_engineer_group_name = "SecOps-Engineer-${title(each.key)}"
+
+  logs_s3_readonly_policy_name = each.value.logs_s3_readonly_policy_name
+  logs_cmk_decrypt_policy_name = each.value.logs_cmk_decrypt_policy_name
+}
+
 module "identity_center_secops" {
   source = "../../../modules/identity_center"
 
