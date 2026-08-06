@@ -55,14 +55,14 @@ module "identity_center_secops" {
   enable_secops_administrator     = true
   secops_administrator_group_name = "SecOps-Administrator"
 
-  enable_secops_analyst     = var.enable_secops_analyst_secops
+  enable_secops_analyst = var.enable_secops_analyst_secops
   secops_analyst_group_name = (
     var.enable_secops_analyst_secops
     ? "SecOps-Analyst-SecOps"
     : null
   )
 
-  enable_secops_engineer     = var.enable_secops_engineer_secops
+  enable_secops_engineer = var.enable_secops_engineer_secops
   secops_engineer_group_name = (
     var.enable_secops_engineer_secops
     ? "SecOps-Engineer-SecOps"

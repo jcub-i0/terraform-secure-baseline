@@ -133,10 +133,10 @@ variable "identity_center_workloads" {
   description = "Identity Center configuraiton for workload accounts"
 
   type = map(object({
-    account_id = string
-    primary_region = string
-    enable_secops_analyst = optional(bool, false)
-    enable_secops_engineer = optional(bool, false)
+    account_id                   = string
+    primary_region               = string
+    enable_secops_analyst        = optional(bool, false)
+    enable_secops_engineer       = optional(bool, false)
     logs_s3_readonly_policy_name = string
     logs_cmk_decrypt_policy_name = string
   }))
