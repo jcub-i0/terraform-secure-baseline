@@ -22,9 +22,13 @@
 #   REQUIRE_STATE_STACK_REMOTE=true
 #   NAME_PREFIX=tf-secure-baseline-control-plane
 #   EXPECTED_GITHUB_REPOSITORY=owner/repo
-#   ACCOUNT_ID_DEV=<dev-account-id>
-#   ACCOUNT_ID_STAGING=<staging-account-id>
-#   ACCOUNT_ID_PROD=<prod-account-id>
+#   IDENTITY_CENTER_WORKLOADS='<JSON workload configuration map>'
+#   IDENTITY_CENTER_SECOPS='<JSON security-operations configuration object>'
+#
+# The same values may be supplied through Terraform's standard environment
+# variable names:
+#   TF_VAR_identity_center_workloads
+#   TF_VAR_identity_center_secops
 #
 # Notes:
 #   This script is intentionally read-only. It does not run GitHub workflows,
@@ -58,9 +62,21 @@ case "$REQUIRE_STATE_STACK_REMOTE" in
     ;;
 esac
 
-ACCOUNT_ID_DEV="${ACCOUNT_ID_DEV:-}"
-ACCOUNT_ID_STAGING="${ACCOUNT_ID_STAGING:-}"
-ACCOUNT_ID_PROD="${ACCOUNT_ID_PROD:-}"
+IDENTITY_CENTER_WORKLOADS="${IDENTITY_CENTER_WORKLOADS:-${TF_VAR_identity_center_workloads:-}}"
+IDENTITY_CENTER_SECOPS="${IDENTITY_CENTER_SECOPS:-${TF_VAR_identity_center_secops:-}}"
+
+ACCOUNT_ID_DEV=""
+ACCOUNT_ID_STAGING=""
+ACCOUNT_ID_PROD=""
+ACCOUNT_ID_SECOPS=""
+ENABLE_SECOPS_ANALYST_DEV="false"
+ENABLE_SECOPS_ANALYST_STAGING="false"
+ENABLE_SECOPS_ANALYST_PROD="false"
+ENABLE_SECOPS_ANALYST_SECOPS="false"
+ENABLE_SECOPS_ENGINEER_DEV="false"
+ENABLE_SECOPS_ENGINEER_STAGING="false"
+ENABLE_SECOPS_ENGINEER_PROD="false"
+ENABLE_SECOPS_ENGINEER_SECOPS="false"
 
 export AWS_PAGER=""
 
@@ -144,6 +160,67 @@ require_non_empty() {
   if [[ -z "$value" || "$value" == "null" || "$value" == "None" ]]; then
     fail "Unable to resolve ${description}"
   fi
+}
+
+resolve_identity_center_configuration() {
+  section "Checking Identity Center configuration inputs"
+
+  if [[ -z "$IDENTITY_CENTER_WORKLOADS" ]]; then
+    fail "IDENTITY_CENTER_WORKLOADS or TF_VAR_identity_center_workloads must be set"
+  fi
+
+  if [[ -z "$IDENTITY_CENTER_SECOPS" ]]; then
+    fail "IDENTITY_CENTER_SECOPS or TF_VAR_identity_center_secops must be set"
+  fi
+
+  if ! jq -e '
+    type == "object" and
+    has("dev") and
+    has("staging") and
+    has("prod") and
+    all(
+      .dev,
+      .staging,
+      .prod;
+      type == "object" and
+      (.account_id | type == "string" and test("^[0-9]{12}$")) and
+      (.primary_region | type == "string" and length > 0) and
+      ((.enable_secops_analyst // false) | type == "boolean") and
+      ((.enable_secops_engineer // false) | type == "boolean")
+    )
+  ' >/dev/null <<<"$IDENTITY_CENTER_WORKLOADS"; then
+    fail "IDENTITY_CENTER_WORKLOADS does not match the expected workload configuration structure"
+  fi
+
+  if ! jq -e '
+    type == "object" and
+    (.account_id | type == "string" and test("^[0-9]{12}$")) and
+    ((.enable_secops_analyst // false) | type == "boolean") and
+    ((.enable_secops_engineer // false) | type == "boolean")
+  ' >/dev/null <<<"$IDENTITY_CENTER_SECOPS"; then
+    fail "IDENTITY_CENTER_SECOPS does not match the expected security-operations configuration structure"
+  fi
+
+  ACCOUNT_ID_DEV="$(jq -r '.dev.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ACCOUNT_ID_STAGING="$(jq -r '.staging.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ACCOUNT_ID_PROD="$(jq -r '.prod.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ACCOUNT_ID_SECOPS="$(jq -r '.account_id' <<<"$IDENTITY_CENTER_SECOPS")"
+
+  ENABLE_SECOPS_ANALYST_DEV="$(jq -r '.dev.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ENABLE_SECOPS_ANALYST_STAGING="$(jq -r '.staging.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ENABLE_SECOPS_ANALYST_PROD="$(jq -r '.prod.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ENABLE_SECOPS_ANALYST_SECOPS="$(jq -r '.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_SECOPS")"
+
+  ENABLE_SECOPS_ENGINEER_DEV="$(jq -r '.dev.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ENABLE_SECOPS_ENGINEER_STAGING="$(jq -r '.staging.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ENABLE_SECOPS_ENGINEER_PROD="$(jq -r '.prod.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
+  ENABLE_SECOPS_ENGINEER_SECOPS="$(jq -r '.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_SECOPS")"
+
+  success "Identity Center workload and security-operations configuration inputs are valid"
+  info "Dev account ID: ${ACCOUNT_ID_DEV}"
+  info "Staging account ID: ${ACCOUNT_ID_STAGING}"
+  info "Prod account ID: ${ACCOUNT_ID_PROD}"
+  info "Security-operations account ID: ${ACCOUNT_ID_SECOPS}"
 }
 
 validate_backend_locking() {
@@ -484,7 +561,7 @@ check_account_parent_if_requested() {
   local expected_parent_name="$4"
 
   if [[ -z "$account_id" ]]; then
-    warn "ACCOUNT_ID_${env_name^^} not set. Skipping optional ${env_name} account OU placement check."
+    warn "No account ID resolved for ${env_name}. Skipping optional account OU placement check."
     return 0
   fi
 
@@ -678,7 +755,7 @@ check_identity_center_assignments_for_env() {
   local permission_set_arns=("$@")
 
   if [[ -z "$account_id" ]]; then
-    warn "ACCOUNT_ID_${env_name^^} not set. Skipping Identity Center account assignment checks for ${env_name}."
+    warn "No account ID resolved for ${env_name}. Skipping Identity Center account assignment checks."
     return 0
   fi
 
@@ -719,38 +796,56 @@ check_identity_center() {
   check_identity_center_group "SecOps-Operator-Dev" "true"
   check_identity_center_group "SecOps-Operator-Staging" "true"
   check_identity_center_group "SecOps-Operator-Prod" "true"
+  check_identity_center_group "SecOps-Administrator" "true"
 
   if [[ "$CHECK_OPTIONAL_SECOPS_GROUPS" == "true" ]]; then
-    check_identity_center_group "SecOps-Analyst-Dev" "false"
-    check_identity_center_group "SecOps-Analyst-Staging" "false"
-    check_identity_center_group "SecOps-Analyst-Prod" "false"
-    check_identity_center_group "SecOps-Engineer-Dev" "false"
-    check_identity_center_group "SecOps-Engineer-Staging" "false"
-    check_identity_center_group "SecOps-Engineer-Prod" "false"
+    check_identity_center_group "SecOps-Analyst-Dev" "$ENABLE_SECOPS_ANALYST_DEV"
+    check_identity_center_group "SecOps-Analyst-Staging" "$ENABLE_SECOPS_ANALYST_STAGING"
+    check_identity_center_group "SecOps-Analyst-Prod" "$ENABLE_SECOPS_ANALYST_PROD"
+    check_identity_center_group "SecOps-Engineer-Dev" "$ENABLE_SECOPS_ENGINEER_DEV"
+    check_identity_center_group "SecOps-Engineer-Staging" "$ENABLE_SECOPS_ENGINEER_STAGING"
+    check_identity_center_group "SecOps-Engineer-Prod" "$ENABLE_SECOPS_ENGINEER_PROD"
+    check_identity_center_group "SecOps-Analyst-SecOps" "$ENABLE_SECOPS_ANALYST_SECOPS"
+    check_identity_center_group "SecOps-Engineer-SecOps" "$ENABLE_SECOPS_ENGINEER_SECOPS"
   else
     warn "CHECK_OPTIONAL_SECOPS_GROUPS is false. Skipping optional SecOps-Analyst and SecOps-Engineer group checks."
   fi
 
   section "Checking IAM Identity Center Terraform outputs and permission sets"
 
-  require_terraform_output "$identity_center_outputs_json" dev_permission_set_arns "identity_center"
-  require_terraform_output "$identity_center_outputs_json" staging_permission_set_arns "identity_center"
-  require_terraform_output "$identity_center_outputs_json" prod_permission_set_arns "identity_center"
+  require_terraform_output "$identity_center_outputs_json" workload_permission_set_arns "identity_center"
+  require_terraform_output "$identity_center_outputs_json" secops_permission_set_arns "identity_center"
 
-  mapfile -t DEV_PERMISSION_SET_ARNS < <(get_output_string_values "$identity_center_outputs_json" dev_permission_set_arns)
-  mapfile -t STAGING_PERMISSION_SET_ARNS < <(get_output_string_values "$identity_center_outputs_json" staging_permission_set_arns)
-  mapfile -t PROD_PERMISSION_SET_ARNS < <(get_output_string_values "$identity_center_outputs_json" prod_permission_set_arns)
+  mapfile -t DEV_PERMISSION_SET_ARNS < <(
+    echo "$identity_center_outputs_json" |
+      jq -r '.workload_permission_set_arns.value.dev | .. | strings | select(length > 0)'
+  )
+  mapfile -t STAGING_PERMISSION_SET_ARNS < <(
+    echo "$identity_center_outputs_json" |
+      jq -r '.workload_permission_set_arns.value.staging | .. | strings | select(length > 0)'
+  )
+  mapfile -t PROD_PERMISSION_SET_ARNS < <(
+    echo "$identity_center_outputs_json" |
+      jq -r '.workload_permission_set_arns.value.prod | .. | strings | select(length > 0)'
+  )
+  mapfile -t SECOPS_PERMISSION_SET_ARNS < <(
+    get_output_string_values "$identity_center_outputs_json" secops_permission_set_arns
+  )
 
   if [[ "${#DEV_PERMISSION_SET_ARNS[@]}" -eq 0 ]]; then
-    fail "No dev permission set ARNs found in identity_center output"
+    fail "No dev permission set ARNs found in identity_center workload output"
   fi
 
   if [[ "${#STAGING_PERMISSION_SET_ARNS[@]}" -eq 0 ]]; then
-    fail "No staging permission set ARNs found in identity_center output"
+    fail "No staging permission set ARNs found in identity_center workload output"
   fi
 
   if [[ "${#PROD_PERMISSION_SET_ARNS[@]}" -eq 0 ]]; then
-    fail "No prod permission set ARNs found in identity_center output"
+    fail "No prod permission set ARNs found in identity_center workload output"
+  fi
+
+  if [[ "${#SECOPS_PERMISSION_SET_ARNS[@]}" -eq 0 ]]; then
+    fail "No security-operations permission set ARNs found in identity_center secops output"
   fi
 
   local arn
@@ -766,11 +861,16 @@ check_identity_center() {
     check_permission_set_arn "$arn" "prod"
   done
 
+  for arn in "${SECOPS_PERMISSION_SET_ARNS[@]}"; do
+    check_permission_set_arn "$arn" "security-operations"
+  done
+
   section "Checking IAM Identity Center account assignments"
 
   check_identity_center_assignments_for_env "dev" "$ACCOUNT_ID_DEV" "${DEV_PERMISSION_SET_ARNS[@]}"
   check_identity_center_assignments_for_env "staging" "$ACCOUNT_ID_STAGING" "${STAGING_PERMISSION_SET_ARNS[@]}"
   check_identity_center_assignments_for_env "prod" "$ACCOUNT_ID_PROD" "${PROD_PERMISSION_SET_ARNS[@]}"
+  check_identity_center_assignments_for_env "security-operations" "$ACCOUNT_ID_SECOPS" "${SECOPS_PERMISSION_SET_ARNS[@]}"
 }
 
 # -----------------------------------------------------------------------------
@@ -792,6 +892,8 @@ success "jq found"
 
 require_command git
 success "git found"
+
+resolve_identity_center_configuration
 
 section "Resolving repository paths"
 
@@ -927,11 +1029,13 @@ Identity Store ID:                 ${IDENTITY_STORE_ID}
 Dev permission sets:               ${#DEV_PERMISSION_SET_ARNS[@]}
 Staging permission sets:           ${#STAGING_PERMISSION_SET_ARNS[@]}
 Prod permission sets:              ${#PROD_PERMISSION_SET_ARNS[@]}
+Security-operations permission sets: ${#SECOPS_PERMISSION_SET_ARNS[@]}
 
 Account assignment checks:
-  dev account ID:                  ${ACCOUNT_ID_DEV:-<not checked>}
-  staging account ID:              ${ACCOUNT_ID_STAGING:-<not checked>}
-  prod account ID:                 ${ACCOUNT_ID_PROD:-<not checked>}
+  dev account ID:                  ${ACCOUNT_ID_DEV}
+  staging account ID:              ${ACCOUNT_ID_STAGING}
+  prod account ID:                 ${ACCOUNT_ID_PROD}
+  security-operations account ID:  ${ACCOUNT_ID_SECOPS}
 SUMMARY
 
 section "Validation Result"
