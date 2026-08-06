@@ -46,6 +46,12 @@ variable "account_id_secops" {
   type        = string
 }
 
+variable "logs_s3_readonly_policy_name_secops" {
+  description = "'Name' attribute of the 'security-operations' env's logs_s3_readonly policy"
+  type        = string
+  default     = null
+}
+
 variable "logs_cmk_decrypt_policy_name_secops" {
   description = "'Name' attribute of the 'security-operations' env's logs_cmk_decrypt policy"
   type        = string
