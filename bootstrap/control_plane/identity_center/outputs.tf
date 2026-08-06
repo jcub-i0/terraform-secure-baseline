@@ -9,5 +9,5 @@ output "workload_permission_set_arns" {
 
 output "secops_permission_set_arns" {
   description = "Permission set ARNs for the security-operations account"
-  value = module.identity_center_secops.permission_set_arns
+  value       = module.identity_center_secops.permission_set_arns
 }
