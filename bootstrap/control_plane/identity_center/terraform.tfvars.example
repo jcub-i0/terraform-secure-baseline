@@ -1,8 +1,28 @@
-primary_region_dev = "us-east-1"
-account_id_dev     = "0123456789012"
+identity_center_workloads = {
+  "dev" = {
+    account_id                   = "123456789012"
+    primary_region               = "us-east-1"
+    enable_secops_analyst        = true
+    enable_secops_engineer       = true
+    logs_s3_readonly_policy_name = "tf-secure-baseline-dev-CentralizedLogsS3ReadOnly"
+    logs_cmk_decrypt_policy_name = "tf-secure-baseline-dev-LogsKmsDecrypt"
+  }
 
-primary_region_prod = "us-east-1"
-account_id_prod     = "0123456789012"
+  "staging" = {
+    account_id                   = "123456789012"
+    primary_region               = "us-east-1"
+    enable_secops_analyst        = true
+    enable_secops_engineer       = true
+    logs_s3_readonly_policy_name = "tf-secure-baseline-staging-CentralizedLogsS3ReadOnly"
+    logs_cmk_decrypt_policy_name = "tf-secure-baseline-staging-LogsKmsDecrypt"
+  }
 
-primary_region_staging = "us-east-1"
-account_id_staging     = "0123456789012"
+  "prod" = {
+    account_id                   = "123456789012"
+    primary_region               = "us-east-1"
+    enable_secops_analyst        = true
+    enable_secops_engineer       = true
+    logs_s3_readonly_policy_name = "tf-secure-baseline-prod-CentralizedLogsS3ReadOnly"
+    logs_cmk_decrypt_policy_name = "tf-secure-baseline-prod-LogsKmsDecrypt"
+  }
+}
