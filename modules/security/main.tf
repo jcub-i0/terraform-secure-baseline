@@ -33,7 +33,8 @@ resource "aws_guardduty_detector" "main" {
 
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
-  for_each    = toset(var.guardduty_features)
+  for_each    = var.manage_guardduty_locally ? toset(var.guardduty_features) : toset([])
+  
   detector_id = aws_guardduty_detector.main.id
   name        = each.value
   status      = "ENABLED"
