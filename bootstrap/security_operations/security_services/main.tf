@@ -17,6 +17,13 @@ data "aws_guardduty_detector" "main" {
   region = var.primary_region
 }
 
+check "guardduty_detector_enabled" {
+  assert {
+    condition     = data.aws_guardduty_detector.main.status == "ENABLED"
+    error_message = "The security-operations GuardDuty detector must be enabled."
+  }
+}
+
 ##########################################
 # GUARDDUTY ORGANIZATION CONFIGURATION
 ##########################################
