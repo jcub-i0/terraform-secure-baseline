@@ -18,6 +18,8 @@ resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
 
 # GUARDDUTY
 resource "aws_guardduty_detector" "main" {
+  count = var.manage_guardduty_locally ? 1 : 0
+
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
   region                       = var.primary_region
