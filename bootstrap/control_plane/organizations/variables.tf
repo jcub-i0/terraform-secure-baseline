@@ -11,6 +11,6 @@ variable "security_operations_account_name" {
 }
 
 variable "enable_guardduty_delegated_administrator" {
-  type = bool
+  type    = bool
   default = false
 }
