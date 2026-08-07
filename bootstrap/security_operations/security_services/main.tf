@@ -45,7 +45,7 @@ resource "aws_guardduty_organization_configuration_feature" "main" {
   auto_enable = each.value.auto_enable
 
   dynamic "additional_configuration" {
-    for_each = each.value.additiona_configuration
+    for_each = each.value.additional_configuration
 
     content {
       name        = additional_configuration.key
