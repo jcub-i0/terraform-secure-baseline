@@ -279,11 +279,11 @@ variable "isolation_allowed" {
 variable "manage_securityhub_cspm_locally" {
   description = "Whether this workload account manages its own Security Hub CSPM enablement and standards. Set to false when CSPM is centrally managed from the security-operations account."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "manage_guardduty_locally" {
   description = "Whether this workload account manages its own GuardDuty detector and detector features. Set to false when GuardDuty is centrally managed from the security-operations account."
   type        = bool
-  default     = false
+  default     = true
 }
