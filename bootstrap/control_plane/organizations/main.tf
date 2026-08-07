@@ -1,12 +1,18 @@
-/*
-If AWS Organizations is not already enabled in the account, uncomment this resource
 resource "aws_organizations_organization" "main" {
   feature_set = "ALL"
 
-  aws_service_access_principals = []
-  enabled_policy_types          = []
+  enabled_policy_types = [
+    "SECURITYHUB_POLICY",
+  ]
+
+  lifecycle {
+    prevent_destroy = true
+
+    ignore_changes = [
+      aws_service_access_principals,
+    ]
+  }
 }
-*/
 
 data "aws_organizations_organization" "main" {}
 
