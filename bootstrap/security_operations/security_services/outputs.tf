@@ -59,3 +59,14 @@ output "guardduty_auto_enable_organization_members" {
   description = "GuardDuty organization member auto-enablement mode."
   value       = aws_guardduty_organization_configuration.main.auto_enable_organization_members
 }
+
+output "guardduty_organization_features" {
+  description = "GuardDuty organization protection-plan auto-enablement configuration."
+
+  value = {
+    for feature_name, feature in aws_guardduty_organization_configuration_feature.main :
+    feature_name => {
+        auto_enable = feature.auto_enable
+    }
+  }
+}
