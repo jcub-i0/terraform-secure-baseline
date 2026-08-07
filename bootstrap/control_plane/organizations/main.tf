@@ -79,6 +79,10 @@ resource "aws_securityhub_organization_admin_account" "security_operations" {
   ]
 }
 
+##########################################
+# GUARDDUTY ORGANIZATION INTEGRATION
+##########################################
+
 resource "aws_organizations_aws_service_access" "guardduty" {
   count = var.enable_guardduty_delegated_administrator ? 1 : 0
 
