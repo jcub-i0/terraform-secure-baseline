@@ -66,7 +66,7 @@ output "guardduty_organization_features" {
   value = {
     for feature_name, feature in aws_guardduty_organization_configuration_feature.main :
     feature_name => {
-        auto_enable = feature.auto_enable
+      auto_enable = feature.auto_enable
     }
   }
 }
