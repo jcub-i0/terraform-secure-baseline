@@ -9,3 +9,8 @@ variable "security_operations_account_name" {
   type        = string
   default     = "security-operations"
 }
+
+variable "enable_guardduty_delegated_administrator" {
+  type = bool
+  default = false
+}
