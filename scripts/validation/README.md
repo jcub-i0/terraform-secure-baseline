@@ -75,6 +75,8 @@ Most scripts use the following environment variables:
 | `CLOUD_NAME` | Cloud/project prefix, defaults to `tf-secure-baseline` | Optional |
 | `NAME_PREFIX` | Resource name prefix override. Defaults to `${CLOUD_NAME}-${ENV_NAME}` for environment-specific scripts. | Optional |
 | `REQUIRE_STATE_STACK_REMOTE` | Makes migrated state-stack backend findings fail instead of warn. Defaults to `false` in direct script/exporter runs; GitHub evidence workflows default it to `true`. | Optional |
+| `IDENTITY_CENTER_WORKLOADS` | JSON map containing the `dev`, `staging`, and `prod` Identity Center workload configurations. Required by the control-plane validator and exporter. | Control plane only |
+| `IDENTITY_CENTER_SECOPS` | JSON object containing the security-operations Identity Center configuration. Required by the control-plane validator and exporter. | Control plane only |
 
 Recommended defaults:
 
@@ -389,24 +391,76 @@ This script validates:
 - control-plane GitHub Plan and Apply roles
 - GitHub OIDC trust conditions
 - AWS Organizations root and expected OU structure
+- workload account placement under the expected `NonProd` and `Prod` OUs
 - IAM Identity Center instance
-- expected SecOps groups
-- Identity Center permission sets
-- optional Identity Center account assignments
+- required workload `SecOps-Operator-*` groups
+- required `SecOps-Administrator` group for the security-operations account
+- optional workload and security-operations Analyst and Engineer groups
+- the consolidated Identity Center Terraform outputs:
+  - `workload_permission_set_arns`
+  - `secops_permission_set_arns`
+- permission-set existence for `dev`, `staging`, `prod`, and `security-operations`
+- account assignments for each workload account and the security-operations account
+
+### Identity Center Configuration Inputs
+
+The validator requires the current consolidated Identity Center configuration:
+
+```text
+IDENTITY_CENTER_WORKLOADS
+IDENTITY_CENTER_SECOPS
+```
+
+The same values may be supplied using Terraform's standard environment-variable names:
+
+```text
+TF_VAR_identity_center_workloads
+TF_VAR_identity_center_secops
+```
+
+`IDENTITY_CENTER_WORKLOADS` must be a JSON object containing `dev`, `staging`, and `prod`. Each entry must contain a 12-digit `account_id` and a non-empty `primary_region`. The Analyst and Engineer flags are optional and default to `false`.
+
+`IDENTITY_CENTER_SECOPS` must contain the security-operations account ID. Its Analyst and Engineer flags are also optional and default to `false`.
 
 Example:
 
 ```bash
+export IDENTITY_CENTER_WORKLOADS='{
+  "dev": {
+    "account_id": "<DEV-ACCOUNT-ID>",
+    "primary_region": "us-east-1",
+    "enable_secops_analyst": false,
+    "enable_secops_engineer": false
+  },
+  "staging": {
+    "account_id": "<STAGING-ACCOUNT-ID>",
+    "primary_region": "us-east-1",
+    "enable_secops_analyst": false,
+    "enable_secops_engineer": false
+  },
+  "prod": {
+    "account_id": "<PROD-ACCOUNT-ID>",
+    "primary_region": "us-east-1",
+    "enable_secops_analyst": false,
+    "enable_secops_engineer": false
+  }
+}'
+
+export IDENTITY_CENTER_SECOPS='{
+  "account_id": "<SECURITY-OPERATIONS-ACCOUNT-ID>",
+  "enable_secops_analyst": false,
+  "enable_secops_engineer": false
+}'
+
 AWS_PROFILE=control-plane \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
-ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
-ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
 REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
+
+The account IDs used for AWS Organizations and Identity Center assignment checks are derived from these JSON structures. The old `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and `ACCOUNT_ID_PROD` inputs are no longer used by this script.
 
 ### Control-Plane Remote State Evidence
 
@@ -418,11 +472,28 @@ REQUIRE_STATE_STACK_REMOTE=true
 
 The validator confirms that `bootstrap/control_plane/state/backend.tf` declares S3 with `use_lockfile = true`, that the configured state object exists and is readable, that the bucket matches the state stack output, and that `terraform state pull` succeeds.
 
-The **Export Control-Plane Evidence** workflow uses the `control-plane-plan` GitHub Environment, initializes all four control-plane Terraform roots, and defaults this setting to `true`.
+The **Export Control-Plane Evidence** workflow uses the `control-plane-plan` GitHub Environment, initializes all four control-plane Terraform roots, supplies the Identity Center workload and security-operations JSON values, and defaults remote-state validation to `true`.
 
 ### Optional SecOps Groups
 
-To check optional SecOps groups:
+Required groups are always checked:
+
+```text
+SecOps-Operator-Dev
+SecOps-Operator-Staging
+SecOps-Operator-Prod
+SecOps-Administrator
+```
+
+To validate optional Analyst and Engineer groups, set:
+
+```bash
+CHECK_OPTIONAL_SECOPS_GROUPS=true
+```
+
+The validator uses the corresponding `enable_secops_analyst` and `enable_secops_engineer` values from `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` to determine whether each optional group is required.
+
+Example:
 
 ```bash
 CHECK_OPTIONAL_SECOPS_GROUPS=true \
@@ -430,26 +501,48 @@ AWS_PROFILE=control-plane \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
-ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
-ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
 REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
-### AWS Organizations Account Placement Warnings
+This example assumes `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` were exported as shown above.
 
-The control-plane script may warn if workload accounts are under the AWS Organizations root rather than the expected OUs.
+### Identity Center Assignment Strictness
 
-Example:
+Identity Center account-assignment checks are controlled by:
+
+```bash
+STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
+```
+
+| Value | Behavior |
+|---|---|
+| `true` | A missing assignment for a discovered workload or security-operations permission set fails validation. |
+| `false` | Missing assignments are reported as warnings. |
+
+### AWS Organizations Account Placement
+
+The validator checks:
+
+```text
+dev      -> Workloads/NonProd
+staging  -> Workloads/NonProd
+prod     -> Workloads/Prod
+```
+
+Account placement behavior is controlled by:
+
+```bash
+STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
+```
+
+With the default `false`, a placement mismatch is a warning. Set it to `true` when OU placement must be enforced as a blocking validation requirement.
+
+Example warning:
 
 ```text
 [WARN] dev account parent mismatch. Expected NonProd, got root
-[WARN] staging account parent mismatch. Expected NonProd, got root
-[WARN] prod account parent mismatch. Expected Prod, got root
 ```
-
-These warnings are non-blocking unless account placement is explicitly managed and required.
 
 ---
 
@@ -540,16 +633,34 @@ validate-iam.log
 
 Use `export-control-plane.sh` to export control-plane validation evidence.
 
+The exporter requires the same consolidated Identity Center JSON inputs as `validate-control-plane.sh`. It validates those inputs, derives the workload and security-operations account IDs, passes the configuration to the validator, and records the resolved account IDs in `summary.json`.
+
 Example:
 
 ```bash
+export IDENTITY_CENTER_WORKLOADS='{
+  "dev": {
+    "account_id": "<DEV-ACCOUNT-ID>",
+    "primary_region": "us-east-1"
+  },
+  "staging": {
+    "account_id": "<STAGING-ACCOUNT-ID>",
+    "primary_region": "us-east-1"
+  },
+  "prod": {
+    "account_id": "<PROD-ACCOUNT-ID>",
+    "primary_region": "us-east-1"
+  }
+}'
+
+export IDENTITY_CENTER_SECOPS='{
+  "account_id": "<SECURITY-OPERATIONS-ACCOUNT-ID>"
+}'
+
 AWS_PROFILE="control-plane" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
-ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
-ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
 REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-control-plane.sh
@@ -567,6 +678,13 @@ Expected files include:
 summary.md
 summary.json
 validate-control-plane.log
+```
+
+The machine-readable summary records:
+
+```text
+settings.identity_center_workload_account_ids
+settings.identity_center_secops_account_id
 ```
 
 ---
@@ -595,8 +713,8 @@ AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" EX
 AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" ./scripts/validation/export-baseline.sh prod
 
 # Control plane
-AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-control-plane.sh
-AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-control-plane.sh
+IDENTITY_CENTER_WORKLOADS='<JSON-WORKLOAD-CONFIGURATION-MAP>' IDENTITY_CENTER_SECOPS='<JSON-SECURITY-OPERATIONS-CONFIGURATION>' AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-control-plane.sh
+IDENTITY_CENTER_WORKLOADS='<JSON-WORKLOAD-CONFIGURATION-MAP>' IDENTITY_CENTER_SECOPS='<JSON-SECURITY-OPERATIONS-CONFIGURATION>' AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-control-plane.sh
 ```
 
 ---
