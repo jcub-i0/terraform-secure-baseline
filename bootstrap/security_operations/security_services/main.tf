@@ -13,14 +13,17 @@ check "target_account" {
 # GUARDDUTY ADMINISTRATOR DETECTOR
 ##########################################
 
-data "aws_guardduty_detector" "security_operations" {}
+data "aws_guardduty_detector" "main" {
+  region = var.primary_region
+}
 
 ##########################################
 # GUARDDUTY ORGANIZATION CONFIGURATION
 ##########################################
 
 resource "aws_guardduty_organization_configuration" "main" {
-  detector_id = data.aws_guardduty_detector.security_operations.id
+  region = var.primary_region
+  detector_id = data.aws_guardduty_detector.main.id
 
   auto_enable_organization_members = "ALL"
 }
