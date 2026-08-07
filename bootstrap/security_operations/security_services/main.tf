@@ -38,17 +38,17 @@ resource "aws_guardduty_organization_configuration" "main" {
 resource "aws_guardduty_organization_configuration_feature" "main" {
   for_each = var.guardduty_organization_features
 
-  region = var.primary_region
+  region      = var.primary_region
   detector_id = data.aws_guardduty_detector.main.id
 
-  name = each.key
+  name        = each.key
   auto_enable = each.value.auto_enable
 
   dynamic "additional_configuration" {
     for_each = each.value.additiona_configuration
 
     content {
-      name = additional_configuration.key
+      name        = additional_configuration.key
       auto_enable = additional_configuration.value
     }
   }
