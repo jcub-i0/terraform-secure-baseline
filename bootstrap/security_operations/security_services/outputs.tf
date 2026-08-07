@@ -49,3 +49,24 @@ output "securityhub_cspm_account_ids" {
   description = "AWS Organizations account IDs discovered for Security Hub CSPM policy associations"
   value       = local.securityhub_cspm_association_account_ids
 }
+
+output "guardduty_detector_id" {
+  description = "GuardDuty detector ID for the security-operations delegated administrator account."
+  value       = data.aws_guardduty_detector.main.id
+}
+
+output "guardduty_auto_enable_organization_members" {
+  description = "GuardDuty organization member auto-enablement mode."
+  value       = aws_guardduty_organization_configuration.main.auto_enable_organization_members
+}
+
+output "guardduty_organization_features" {
+  description = "GuardDuty organization protection-plan auto-enablement configuration."
+
+  value = {
+    for feature_name, feature in aws_guardduty_organization_configuration_feature.main :
+    feature_name => {
+      auto_enable = feature.auto_enable
+    }
+  }
+}
