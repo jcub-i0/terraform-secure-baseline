@@ -29,7 +29,7 @@ check "guardduty_detector_enabled" {
 ##########################################
 
 resource "aws_guardduty_organization_configuration" "main" {
-  region = var.primary_region
+  region      = var.primary_region
   detector_id = data.aws_guardduty_detector.main.id
 
   auto_enable_organization_members = "ALL"
