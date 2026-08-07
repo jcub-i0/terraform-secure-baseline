@@ -52,5 +52,5 @@ output "securityhub_cspm_account_ids" {
 
 output "guardduty_detector_id" {
   description = "GuardDuty detector ID for the security-operations delegated administrator account."
-  value = data.aws_guardduty_detector.main.id
+  value       = data.aws_guardduty_detector.main.id
 }
