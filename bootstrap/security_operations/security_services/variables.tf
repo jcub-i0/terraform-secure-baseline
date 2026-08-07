@@ -139,6 +139,7 @@ variable "guardduty_organization_features" {
   validation {
     condition = alltrue(flatten([
       for feature in values(var.guardduty_organization_features) : [
+        for value in values(feature.additional_configuration) :
         contains(["ALL", "NEW", "NONE"], value)
       ]
     ]))

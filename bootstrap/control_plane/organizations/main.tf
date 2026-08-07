@@ -79,6 +79,10 @@ resource "aws_organizations_aws_service_access" "guardduty" {
   service_principal = "guardduty.amazonaws.com"
 }
 
+resource "aws_organizations_aws_service_access" "guardduty_malware_protection" {
+  service_principal = "malware-protection.guardduty.amazonaws.com"
+}
+
 resource "aws_guardduty_organization_admin_account" "security_operations" {
   count = var.enable_guardduty_delegated_administrator ? 1 : 0
 
