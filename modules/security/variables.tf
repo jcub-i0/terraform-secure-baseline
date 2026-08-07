@@ -105,6 +105,6 @@ variable "manage_securityhub_cspm_locally" {
 
 variable "manage_guardduty_locally" {
   description = "Whether this workload account manages its own GuardDuty detector and detector features. Set to false when GuardDuty is centrally managed from the security-operations account."
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
