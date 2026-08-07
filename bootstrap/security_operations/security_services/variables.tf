@@ -95,3 +95,54 @@ variable "securityhub_cspm_account_policies" {
     error_message = "Each enabled Security Hub CSPM policy must contain at least one standard."
   }
 }
+
+variable "guardduty_organization_features" {
+  description = "GuardDuty protection plans centrally-managed across the AWS organization."
+
+  type = map(object({
+    auto_enable = optional(string, "ALL")
+
+    additional_configuration = optional(map(string), {})
+  }))
+
+  default = {
+    S3_DATA_EVENTS = {
+      auto_enable = "ALL"
+    }
+
+    EBS_MALWARE_PROTECTION = {
+        auto_enable = "ALL"
+    }
+
+    LAMBDA_NETWORK_LOGS = {
+        auto_enable = "ALL"
+    }
+
+    RUNTIME_MONITORING = {
+        auto_enable = "ALL"
+
+        additional_configuration = {
+            EC2_AGENT_MANAGEMENT = "ALL"
+        }
+    }
+  }
+
+  validation {
+    condition = alltrue([
+        for feature in values(var.guardduty_organization_features) :
+        contains(["ALL", "NEW", "NONE"], feature.auto_enable)
+    ])
+
+    error_message = "GuardDuty organization feature auto_enable values must be ALL, NEW, or NONE."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+        for feature in values(var.guardduty_organization_features) : [
+        contains(["ALL", "NEW", "NONE"], value)
+        ] 
+    ]))
+
+    error_message = "GuardDuty additional confiruation values must be ALL, NEW, or NONE."
+  }
+}
