@@ -49,3 +49,8 @@ output "securityhub_cspm_account_ids" {
   description = "AWS Organizations account IDs discovered for Security Hub CSPM policy associations"
   value       = local.securityhub_cspm_association_account_ids
 }
+
+output "guardduty_detector_id" {
+  description = "GuardDuty detector ID for the security-operations delegated administrator account."
+  value = data.aws_guardduty_detector.main.id
+}
