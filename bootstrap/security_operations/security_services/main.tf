@@ -9,6 +9,22 @@ check "target_account" {
   }
 }
 
+##########################################
+# GUARDDUTY ADMINISTRATOR DETECTOR
+##########################################
+
+data "aws_guardduty_detector" "security_operations" {}
+
+##########################################
+# GUARDDUTY ORGANIZATION CONFIGURATION
+##########################################
+
+resource "aws_guardduty_organization_configuration" "main" {
+  detector_id = data.aws_guardduty_detector.security_operations.id
+
+  auto_enable_organization_members = "ALL"
+}
+
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
   securityhub_standard_catalog = {
