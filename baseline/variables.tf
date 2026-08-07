@@ -132,7 +132,7 @@ variable "secops_emails" {
 
 variable "guardduty_features" {
   description = "GuardDuty protection plans centrally enabled across the AWS organization."
-  type        = set(string)
+  type        = list(string)
   default = [
     "S3_DATA_EVENTS",
     "EBS_MALWARE_PROTECTION",
