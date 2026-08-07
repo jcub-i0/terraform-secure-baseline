@@ -54,3 +54,8 @@ output "guardduty_detector_id" {
   description = "GuardDuty detector ID for the security-operations delegated administrator account."
   value       = data.aws_guardduty_detector.main.id
 }
+
+output "guardduty_auto_enable_organization_members" {
+  description = "GuardDuty organization member auto-enablement mode."
+  value = aws_guardduty_organization_configuration.main.auto_enable_organization_members
+}
