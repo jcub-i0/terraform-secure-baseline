@@ -22,4 +22,5 @@ module "baseline" {
   secops_emails                      = var.secops_emails
   isolation_allowed                  = var.isolation_allowed
   manage_securityhub_cspm_locally    = var.manage_securityhub_cspm_locally
+  manage_guardduty_locally           = var.manage_guardduty_locally
 }

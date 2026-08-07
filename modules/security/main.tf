@@ -18,6 +18,8 @@ resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
 
 # GUARDDUTY
 resource "aws_guardduty_detector" "main" {
+  count = var.manage_guardduty_locally ? 1 : 0
+
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
   region                       = var.primary_region
@@ -31,8 +33,9 @@ resource "aws_guardduty_detector" "main" {
 
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
-  for_each    = toset(var.guardduty_features)
-  detector_id = aws_guardduty_detector.main.id
+  for_each = var.manage_guardduty_locally ? toset(var.guardduty_features) : toset([])
+
+  detector_id = aws_guardduty_detector.main[0].id
   name        = each.value
   status      = "ENABLED"
 
@@ -49,8 +52,6 @@ resource "aws_securityhub_account" "main" {
   count = var.manage_securityhub_cspm_locally ? 1 : 0
 
   enable_default_standards = true
-
-  depends_on = [aws_guardduty_detector.main]
 }
 
 resource "aws_securityhub_account_v2" "main" {

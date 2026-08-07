@@ -13,16 +13,45 @@ check "target_account" {
 # GUARDDUTY ADMINISTRATOR DETECTOR
 ##########################################
 
-data "aws_guardduty_detector" "security_operations" {}
+data "aws_guardduty_detector" "main" {
+  region = var.primary_region
+}
+
+check "guardduty_detector_enabled" {
+  assert {
+    condition     = data.aws_guardduty_detector.main.status == "ENABLED"
+    error_message = "The security-operations GuardDuty detector must be enabled."
+  }
+}
 
 ##########################################
 # GUARDDUTY ORGANIZATION CONFIGURATION
 ##########################################
 
 resource "aws_guardduty_organization_configuration" "main" {
-  detector_id = data.aws_guardduty_detector.security_operations.id
+  region      = var.primary_region
+  detector_id = data.aws_guardduty_detector.main.id
 
   auto_enable_organization_members = "ALL"
+}
+
+resource "aws_guardduty_organization_configuration_feature" "main" {
+  for_each = var.guardduty_organization_features
+
+  region      = var.primary_region
+  detector_id = data.aws_guardduty_detector.main.id
+
+  name        = each.key
+  auto_enable = each.value.auto_enable
+
+  dynamic "additional_configuration" {
+    for_each = each.value.additiona_configuration
+
+    content {
+      name        = additional_configuration.key
+      auto_enable = additional_configuration.value
+    }
+  }
 }
 
 locals {
