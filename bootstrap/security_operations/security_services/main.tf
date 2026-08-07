@@ -35,6 +35,25 @@ resource "aws_guardduty_organization_configuration" "main" {
   auto_enable_organization_members = "ALL"
 }
 
+resource "aws_guardduty_organization_configuration_feature" "main" {
+  for_each = var.guardduty_organization_features
+
+  region = var.primary_region
+  detector_id = data.aws_guardduty_detector.main.id
+
+  name = each.key
+  auto_enable = each.value.auto_enable
+
+  dynamic "additional_configuration" {
+    for_each = each.value.additiona_configuration
+
+    content {
+      name = additional_configuration.key
+      auto_enable = additional_configuration.value
+    }
+  }
+}
+
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
   securityhub_standard_catalog = {
