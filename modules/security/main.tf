@@ -35,7 +35,7 @@ resource "aws_guardduty_detector" "main" {
 resource "aws_guardduty_detector_feature" "main" {
   for_each = var.manage_guardduty_locally ? toset(var.guardduty_features) : toset([])
 
-  detector_id = aws_guardduty_detector.main.id
+  detector_id = aws_guardduty_detector.main[0].id
   name        = each.value
   status      = "ENABLED"
 
