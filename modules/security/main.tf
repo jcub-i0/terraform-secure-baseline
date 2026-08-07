@@ -34,7 +34,7 @@ resource "aws_guardduty_detector" "main" {
 ## LOOP THROUGH EACH FEATURE LISTED IN 'var.guardduty_features'
 resource "aws_guardduty_detector_feature" "main" {
   for_each    = var.manage_guardduty_locally ? toset(var.guardduty_features) : toset([])
-  
+
   detector_id = aws_guardduty_detector.main.id
   name        = each.value
   status      = "ENABLED"
@@ -52,8 +52,6 @@ resource "aws_securityhub_account" "main" {
   count = var.manage_securityhub_cspm_locally ? 1 : 0
 
   enable_default_standards = true
-
-  depends_on = [aws_guardduty_detector.main]
 }
 
 resource "aws_securityhub_account_v2" "main" {
