@@ -72,3 +72,19 @@ resource "aws_securityhub_organization_admin_account" "security_operations" {
     aws_organizations_aws_service_access.securityhub
   ]
 }
+
+resource "aws_organizations_aws_service_access" "guardduty" {
+  count = var.enable_guardduty_delegated_administrator ? 1 : 0
+
+  service_principal = "guardduty.amazonaws.com"
+}
+
+resource "aws_guardduty_organization_admin_account" "security_operations" {
+  count = var.enable_guardduty_delegated_administrator ? 1 : 0
+
+  admin_account_id = local.security_operations_account_id
+
+  depends_on = [
+    aws_organizations_aws_service_access.guardduty
+  ]
+}
