@@ -79,6 +79,11 @@ resource "aws_securityhub_organization_admin_account" "security_operations" {
   ]
 }
 
+resource "aws_iam_service_linked_role" "securityhub_v2" {
+  aws_service_name = "securityhubv2.amazonaws.com"
+  description = "Service-linked role for AWS Security Hub V2 organization management"
+}
+
 ##########################################
 # GUARDDUTY ORGANIZATION INTEGRATION
 ##########################################
