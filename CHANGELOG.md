@@ -1,5 +1,138 @@
 # Changelog
 
+## Unreleased
+
+This update establishes centralized Security Hub CSPM governance through the
+security-operations account and refactors IAM Identity Center, validation, and
+GitHub Actions automation around consolidated multi-account configuration
+objects.
+
+### Added
+
+- Added dedicated `security_operations` Terraform roots for:
+  - remote Terraform state;
+  - account bootstrap and GitHub OIDC access; and
+  - centralized security-service administration.
+- Added AWS Organizations structure for workload separation through:
+  - `Workloads/NonProd` for development and staging; and
+  - `Workloads/Prod` for production.
+- Added delegated-administrator registration for the security-operations
+  account for Security Hub CSPM and GuardDuty administration.
+- Added centralized Security Hub CSPM configuration policies and account
+  associations for `dev`, `staging`, and `prod`.
+- Added the `securityhub_cspm_account_policies` map for per-account control of:
+  - configuration-policy creation;
+  - policy association;
+  - enabled Security Hub standards; and
+  - disabled control identifiers.
+- Added centralized Security Hub policy output maps for configuration-policy
+  IDs, ARNs, association targets, and discovered workload account IDs.
+- Added a dedicated security-operations IAM Identity Center access model with
+  the required `SecOps-Administrator` group and permission set.
+- Added consolidated IAM Identity Center GitHub Environment variables:
+  - `IDENTITY_CENTER_WORKLOADS`; and
+  - `IDENTITY_CENTER_SECOPS`.
+- Added JSON structure validation for the consolidated IAM Identity Center
+  inputs in control-plane Plan, Destroy, validation, and evidence paths.
+- Added control-plane validation coverage for:
+  - consolidated workload and security-operations account configuration;
+  - required workload Operator groups;
+  - the security-operations Administrator group;
+  - optional Analyst and Engineer groups according to their enablement flags;
+  - workload and security-operations permission sets; and
+  - account assignments across all four target accounts.
+- Added workload and security-operations account identifiers to exported
+  control-plane validation evidence.
+
+### Changed
+
+- Changed workload Security Hub CSPM ownership from account-local standards
+  management to centrally associated policies managed by the
+  security-operations account.
+- Changed the workload Security Hub integration to support
+  `manage_securityhub_cspm_locally = false` when an account is governed by the
+  central CSPM policy.
+- Refactored three duplicated workload IAM Identity Center module calls into a
+  single `module.identity_center_workload` block using `for_each` over
+  `identity_center_workloads`.
+- Kept `module.identity_center_secops` separate because the
+  security-operations account uses a different access model from workload
+  accounts.
+- Replaced the previous per-environment IAM Identity Center variables with:
+  - `identity_center_workloads`, a map containing workload account IDs,
+    Regions, optional roles, and optional customer-managed policy names; and
+  - `identity_center_secops`, an object containing the corresponding
+    security-operations configuration.
+- Replaced the separate workload permission-set outputs with:
+  - `workload_permission_set_arns`, keyed by workload environment; and
+  - `secops_permission_set_arns` for the security-operations account.
+- Updated `terraform-plan.yml` to pass and validate the consolidated IAM
+  Identity Center JSON values for the control-plane Identity Center stack.
+- Updated `terraform-destroy.yml` so Identity Center cleanup modifies only the
+  selected workload entry inside `identity_center_workloads` instead of
+  exporting dynamically named per-environment Terraform variables.
+- Updated the Terraform Apply workflow to remove obsolete workload Identity
+  Center scalar-variable wiring that is no longer consumed by workload roots.
+- Updated workload bootstrap and baseline evidence workflows to use each
+  selected GitHub Environment's singular `ACCOUNT_ID` variable.
+- Updated the control-plane evidence workflow to pass
+  `TF_VAR_identity_center_workloads` and `TF_VAR_identity_center_secops`.
+- Updated `validate-control-plane.sh` and `export-control-plane.sh` to consume
+  the consolidated JSON inputs and the refactored Terraform outputs.
+- Updated control-plane validation summaries to report workload and
+  security-operations permission-set and assignment coverage.
+- Updated the IAM Identity Center README and validation README to document the
+  new inputs, outputs, deployment sequence, GitHub variables, validation
+  behavior, and evidence format.
+
+### Fixed
+
+- Fixed control-plane validation and evidence paths that still referenced the
+  removed `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and `ACCOUNT_ID_PROD`
+  interface.
+- Fixed validation logic that expected the removed
+  `dev_permission_set_arns`, `staging_permission_set_arns`, and
+  `prod_permission_set_arns` outputs.
+- Fixed optional Identity Center group validation so required or advisory
+  behavior follows each account configuration's Analyst and Engineer
+  enablement flags.
+- Fixed Terraform Destroy Identity Center cleanup so the selected environment
+  is updated inside the consolidated workload map without altering the other
+  workload or security-operations configurations.
+- Removed stale CI/CD references to dynamically named Identity Center feature
+  variables and per-environment control-plane account variables.
+
+### Security
+
+- Centralized Security Hub CSPM standards and control configuration to reduce
+  account-level drift across development, staging, and production.
+- Preserved separate workload and security-operations IAM Identity Center
+  access models so workload Operator permissions are not reused as
+  security-operations Administrator permissions.
+- Kept optional Analyst and Engineer access disabled by default until the
+  required target-account customer-managed policies exist.
+- Added strict account-ID, JSON type, permission-set, and account-assignment
+  validation to reduce the risk of planning, validating, or exporting evidence
+  against the wrong AWS account.
+- Preserved customer-managed policy attachment requirements by continuing to
+  reference workload policy names only after those policies exist in the
+  target accounts.
+
+### Notes
+
+- The IAM Identity Center stack was intentionally destroyed and recreated in
+  the development environment after the module-address refactor instead of
+  retaining long-term `moved` blocks. This was acceptable because no client or
+  production deployment depended on the previous state addresses.
+- Configure `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` as raw JSON
+  GitHub Environment variables in both `control-plane-plan` and
+  `control-plane`; do not include Bash-style outer single quotes.
+- Continue configuring the singular `ACCOUNT_ID` variable in each workload
+  Plan and Apply GitHub Environment.
+- Security Hub CSPM central configuration is complete for the current workload
+  accounts. Security Hub V2 remains locally enabled, and full Security Hub V2
+  and GuardDuty organization-wide centralization remain future work.
+
 ## v1.6.0
 
 This update hardens EC2 provisioning, boot-time vulnerability remediation, and
