@@ -161,7 +161,7 @@ variable "manage_securityhub_cspm_locally" {
 }
 
 variable "manage_securityhub_v2_locally" {
-  description = "Whether this workload account manages Security Hub V2 directly in the workload account"
+  description = "Whether Security Hub V2 is managed locally instead of through centralized organization policy"
   type        = bool
   default     = false
 }
