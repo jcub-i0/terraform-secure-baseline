@@ -8,14 +8,19 @@ output "securityhub_home_region" {
   value       = var.primary_region
 }
 
+output "central_security_features_enabled" {
+  description = "Central security-service capabilities enabled by this stack"
+
+  value = {
+    securityhub_cspm = var.enable_securityhub_organization_configuration
+    guardduty        = var.enable_guardduty_organization_configuration
+    securityhub_v2   = var.enable_securityhub_v2_organization_policy
+  }
+}
+
 output "securityhub_finding_aggregator_arn" {
   description = "ARN of the Security Hub finding aggregator"
   value       = aws_securityhub_finding_aggregator.main.arn
-}
-
-output "securityhub_central_configuration_enabled" {
-  description = "Whether Security Hub central organization configuration is enabled"
-  value       = var.enable_securityhub_organization_configuration
 }
 
 output "securityhub_cspm_configuration_policy_ids" {
@@ -24,15 +29,6 @@ output "securityhub_cspm_configuration_policy_ids" {
   value = {
     for account_name, policy in aws_securityhub_configuration_policy.account :
     account_name => policy.id
-  }
-}
-
-output "securityhub_cspm_configuration_policy_arns" {
-  description = "Security Hub CSPM configuration policy ARNs by AWS Organizations account name"
-
-  value = {
-    for account_name, policy in aws_securityhub_configuration_policy.account :
-    account_name => policy.arn
   }
 }
 
@@ -45,28 +41,16 @@ output "securityhub_cspm_policy_association_target_ids" {
   }
 }
 
-output "securityhub_cspm_account_ids" {
-  description = "AWS Organizations account IDs discovered for Security Hub CSPM policy associations"
-  value       = local.securityhub_cspm_association_account_ids
-}
-
 output "guardduty_detector_id" {
-  description = "GuardDuty detector ID for the security-operations delegated administrator account."
+  description = "GuardDuty detector ID for the security-operations delegated administrator account"
   value       = data.aws_guardduty_detector.main.id
 }
 
-output "guardduty_auto_enable_organization_members" {
-  description = "GuardDuty organization member auto-enablement mode."
-  value       = aws_guardduty_organization_configuration.main[0].auto_enable_organization_members
-}
+output "securityhub_v2_organization_policy_id" {
+  description = "ID of the Security Hub V2 AWS Organizations policy"
 
-output "guardduty_organization_features" {
-  description = "GuardDuty organization protection-plan auto-enablement configuration."
-
-  value = {
-    for feature_name, feature in aws_guardduty_organization_configuration_feature.main :
-    feature_name => {
-      auto_enable = feature.auto_enable
-    }
-  }
+  value = try(
+    aws_organizations_policy.securityhub_v2_workloads[0].id,
+    null
+  )
 }
