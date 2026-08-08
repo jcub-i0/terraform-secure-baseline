@@ -132,7 +132,7 @@ check "securityhub_cspm_association_accounts" {
 
 check "workloads_ou" {
   assert {
-    condition = length(local.workloads_ous) == 1
+    condition     = length(local.workloads_ous) == 1
     error_message = "Exactly one root-level AWS Organizations OU named 'Workloads' must exist."
   }
 }
