@@ -57,7 +57,7 @@ output "guardduty_detector_id" {
 
 output "guardduty_auto_enable_organization_members" {
   description = "GuardDuty organization member auto-enablement mode."
-  value       = aws_guardduty_organization_configuration.main.auto_enable_organization_members
+  value       = aws_guardduty_organization_configuration.main[0].auto_enable_organization_members
 }
 
 output "guardduty_organization_features" {

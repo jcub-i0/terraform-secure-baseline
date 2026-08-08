@@ -289,7 +289,7 @@ resource "aws_organizations_policy" "securityhub_v2_workloads" {
 resource "aws_organizations_policy_attachment" "securityhub_v2_workloads" {
   count = var.enable_securityhub_v2_organization_policy ? 1 : 0
 
-  policy_id = aws_organizations_policy.securityhub_v2_workloads.id
+  policy_id = aws_organizations_policy.securityhub_v2_workloads[0].id
   target_id = local.workloads_ou_id
 
   depends_on = [
