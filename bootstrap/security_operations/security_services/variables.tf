@@ -188,3 +188,9 @@ variable "guardduty_organization_features" {
     error_message = "GuardDuty additional configuration contains an unsupported name."
   }
 }
+
+variable "enable_securityhub_v2_organization_policy" {
+  description = "Enable the Security Hub V2 AWS Organizations policy and attach it to workload accounts"
+  type        = bool
+  default     = false
+}
