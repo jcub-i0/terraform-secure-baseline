@@ -248,3 +248,33 @@ resource "aws_securityhub_account_v2" "main" {
     aws_securityhub_account.main,
   ]
 }
+
+resource "aws_organizations_policy" "securityhub_v2_workloads" {
+  name = "${local.name_prefix}-securityhub_v2_workloads"
+  description = "Central Security Hub V2 policy for workload accounts"
+  type = "SECURITYHUB_POLICY"
+
+  content = jsonencode({
+    securityhub = {
+      enable_in_regions = {
+        "@@assign" = [
+          var.primary_region
+        ]
+      }
+
+      disable_in_regions = {
+        "@@assign" = []
+      }
+    }
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-securityhub-v2-workloads"
+    Environment = var.environment
+    Terraform = "true"
+  }
+
+  depends_on = [
+    aws_securityhub_account_v2.main,
+  ]
+}
