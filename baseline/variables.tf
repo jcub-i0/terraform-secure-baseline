@@ -287,3 +287,9 @@ variable "manage_guardduty_locally" {
   type        = bool
   default     = true
 }
+
+variable "manage_guardduty_locally" {
+  description = "Whether this workload account manages its own GuardDuty detector and detector features. Set to false when GuardDuty is centrally managed from the security-operations account."
+  type        = bool
+  default     = true
+}
