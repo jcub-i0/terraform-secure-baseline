@@ -1,5 +1,9 @@
 data "aws_organizations_organization" "main" {}
 
+data "aws_organizations_organizational_units" "root" {
+  parent_id = data.aws_organizations_organization.main.roots[0].id
+}
+
 data "aws_caller_identity" "current" {}
 
 check "target_account" {
@@ -102,6 +106,17 @@ locals {
       null
     )
   }
+
+  workloads_ous = [
+    for ou in data.aws_organizations_organizational_units.root.children :
+    ou
+    if ou.name == "Workloads"
+  ]
+
+  workloads_ou_id = try(
+    one(local.workloads_ous).id,
+    null
+  )
 }
 
 check "securityhub_cspm_association_accounts" {
@@ -112,6 +127,13 @@ check "securityhub_cspm_association_accounts" {
     ])
 
     error_message = "Each associated Security Hub CSPM policy must match exactly one active AWS Organizations accoutn using the policy map key as the account name."
+  }
+}
+
+check "workloads_ou" {
+  assert {
+    condition = length(local.workloads_ous) == 1
+    error_message = "Exactly one root-level AWS Organizations OU named 'Workloads' must exist."
   }
 }
 
