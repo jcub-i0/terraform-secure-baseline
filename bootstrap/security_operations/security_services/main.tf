@@ -134,8 +134,11 @@ check "securityhub_cspm_association_accounts" {
 
 check "workloads_ou" {
   assert {
-    condition     = length(local.workloads_ous) == 1
-    error_message = "Exactly one root-level AWS Organizations OU named 'Workloads' must exist."
+    condition     = (
+      !var.enable_securityhub_v2_organization_policy ||
+      length(local.workloads_ous) == 1
+    )
+    error_message = "Exactly one root-level AWS Organizations OU named 'Workloads' must exist when Security Hub V2 organization policy management is enabled."
   }
 }
 
@@ -285,7 +288,7 @@ resource "aws_organizations_policy" "securityhub_v2_workloads" {
 
 resource "aws_organizations_policy_attachment" "securityhub_v2_workloads" {
   count = var.enable_securityhub_v2_organization_policy ? 1 : 0
-  
+
   policy_id = aws_organizations_policy.securityhub_v2_workloads.id
   target_id = local.workloads_ou_id
 
