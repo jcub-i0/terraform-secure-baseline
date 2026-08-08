@@ -86,7 +86,7 @@ resource "aws_iam_service_linked_role" "securityhub_v2" {
 
 data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
   statement {
-    sid = "SecurityHubV2OrganizationRead"
+    sid    = "SecurityHubV2OrganizationRead"
     effect = "Allow"
 
     principals {
@@ -113,7 +113,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
   }
 
   statement {
-    sid = "SecurityHubV2PolicyRead"
+    sid    = "SecurityHubV2PolicyRead"
     effect = "Allow"
 
     principals {
@@ -134,7 +134,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     resources = ["*"]
 
     condition {
-      test = "StringLikeIfExists"
+      test     = "StringLikeIfExists"
       variable = "organizations:PolicyType"
 
       values = [
@@ -144,7 +144,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
   }
 
   statement {
-    sid = "SecurityHubV2PolicyManagement"
+    sid    = "SecurityHubV2PolicyManagement"
     effect = "Allow"
 
     principals {
@@ -170,7 +170,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     ]
 
     condition {
-      test = "StringLikeIfExists"
+      test     = "StringLikeIfExists"
       variable = "organization:PolicyType"
 
       values = [
