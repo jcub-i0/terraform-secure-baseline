@@ -23,4 +23,5 @@ module "baseline" {
   isolation_allowed                  = var.isolation_allowed
   manage_securityhub_cspm_locally    = var.manage_securityhub_cspm_locally
   manage_guardduty_locally           = var.manage_guardduty_locally
+  manage_securityhub_v2_locally = var.manage_securityhub_v2_locally
 }
