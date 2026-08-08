@@ -80,11 +80,15 @@ resource "aws_securityhub_organization_admin_account" "security_operations" {
 }
 
 resource "aws_iam_service_linked_role" "securityhub_v2" {
+  count = var.enable_securityhub_v2_organization_management ? 1 : 0
+
   aws_service_name = "securityhubv2.amazonaws.com"
   description      = "Service-linked role for AWS Security Hub V2 organization management"
 }
 
 data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
+  count = var.enable_securityhub_v2_organization_management ? 1 : 0
+
   statement {
     sid    = "SecurityHubV2OrganizationRead"
     effect = "Allow"
@@ -202,7 +206,9 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
 }
 
 resource "aws_organizations_resource_policy" "securityhub_v2" {
-  content = data.aws_iam_policy_document.securityhub_v2_organizations_delegation.json
+  count = var.enable_securityhub_v2_organization_management ? 1 : 0
+
+  content = data.aws_iam_policy_document.securityhub_v2_organizations_delegation[0].json
 
   depends_on = [
     aws_iam_service_linked_role.securityhub_v2,
