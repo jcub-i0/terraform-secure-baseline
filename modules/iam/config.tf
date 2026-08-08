@@ -4,6 +4,14 @@ data "aws_iam_policy" "ssm_automation" {
   name = "AmazonSSMAutomationRole"
 }
 
+data "aws_partition" "current" {}
+
+locals {
+  config_service_linked_role_arn = (
+    "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
+  )
+}
+
 # CONFIG REMEDIATION TRUST POLICY
 data "aws_iam_policy_document" "config_remediation_assume_role" {
   statement {
