@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_organizations_organization" "main" {
   feature_set = "ALL"
 
