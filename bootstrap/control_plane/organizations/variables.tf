@@ -11,6 +11,7 @@ variable "security_operations_account_name" {
 }
 
 variable "enable_guardduty_delegated_administrator" {
+  description = "Enable GuardDuty trusted access and designate the security-operations account as administrator"
   type    = bool
   default = false
 }
