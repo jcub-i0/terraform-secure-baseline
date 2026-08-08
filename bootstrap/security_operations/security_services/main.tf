@@ -282,7 +282,7 @@ resource "aws_organizations_policy" "securityhub_v2_workloads" {
   }
 
   depends_on = [
-    aws_securityhub_account_v2.main[0],
+    aws_securityhub_account_v2.main,
   ]
 }
 
