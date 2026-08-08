@@ -79,7 +79,7 @@ PASSED_COUNT=0
 FAILED_COUNT=0
 TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
 
-section "${CLOUD_NAME} Validation Report Export"
+section "${CLOUD_NAME} Workload Validation Report Export"
 
 section "Checking required local commands"
 
@@ -226,7 +226,7 @@ success "JSON summary written: ${SUMMARY_JSON}"
 section "Generating Markdown summary"
 
 {
-  echo "# ${CLOUD_NAME} Validation Report"
+  echo "# ${CLOUD_NAME} Workload Validation Report"
   echo
   echo "This report summarizes automated read-only validation results for the \`$ENV_NAME\` workload environment."
   echo
