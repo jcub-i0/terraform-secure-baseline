@@ -230,3 +230,21 @@ resource "aws_securityhub_configuration_policy_association" "account" {
     }
   }
 }
+
+##########################################
+# SECURITY HUB V2 ADMINISTRATOR ACCOUNT
+##########################################
+
+resource "aws_securityhub_account_v2" "main" {
+  region = var.primary_region
+
+  tags = {
+    Name = "${local.name_prefix}-securityhub-v2"
+    Environment = var.environment
+    Terraform = "true"
+  }
+
+  depends_on = [
+    aws_securityhub_account.main,
+  ]
+}
