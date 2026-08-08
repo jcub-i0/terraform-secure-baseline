@@ -96,6 +96,12 @@ variable "securityhub_cspm_account_policies" {
   }
 }
 
+variable "enable_guardduty_organization_configuration" {
+  description = "Enable GuardDuty organization-wide member and protection-plan configuration after delegated administration is configured"
+  type        = bool
+  default     = false
+}
+
 variable "guardduty_organization_features" {
   description = "GuardDuty protection plans centrally-managed across the AWS organization."
 
