@@ -16,11 +16,9 @@ resource "aws_organizations_organization" "main" {
   }
 }
 
-data "aws_organizations_organization" "main" {}
-
 resource "aws_organizations_organizational_unit" "workloads" {
   name      = "Workloads"
-  parent_id = data.aws_organizations_organization.main.roots[0].id
+  parent_id = aws_organizations_organization.main.roots[0].id
 }
 
 resource "aws_organizations_organizational_unit" "nonprod" {
@@ -35,12 +33,12 @@ resource "aws_organizations_organizational_unit" "prod" {
 
 resource "aws_organizations_organizational_unit" "security" {
   name      = "Security"
-  parent_id = data.aws_organizations_organization.main.roots[0].id
+  parent_id = aws_organizations_organization.main.roots[0].id
 }
 
 locals {
   security_operations_accounts = [
-    for account in data.aws_organizations_organization.main.accounts :
+    for account in aws_organizations_organization.main.accounts :
     account
     if account.name == var.security_operations_account_name
   ]
