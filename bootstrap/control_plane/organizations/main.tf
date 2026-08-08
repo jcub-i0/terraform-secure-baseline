@@ -3,9 +3,9 @@ data "aws_caller_identity" "current" {}
 resource "aws_organizations_organization" "main" {
   feature_set = "ALL"
 
-  enabled_policy_types = [
+  enabled_policy_types = var.enable_securityhub_v2_organization_management ? [
     "SECURITYHUB_POLICY",
-  ]
+  ] : []
 
   lifecycle {
     prevent_destroy = true
