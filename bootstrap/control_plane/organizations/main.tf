@@ -178,6 +178,27 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
       ]
     }
   }
+
+  statement {
+    sid    = "SecurityHubV2PolicyTagging"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${local.security_operations_account_id}:root"
+      ]
+    }
+
+    actions = [
+      "organizations:TagResource",
+      "organizations:UntagResource",
+    ]
+
+    resources = [
+      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:policy/${aws_organizations_organization.main.id}/securityhub_policy/*",
+    ]
+  }
 }
 
 resource "aws_organizations_resource_policy" "securityhub_v2" {
