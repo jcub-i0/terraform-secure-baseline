@@ -278,3 +278,12 @@ resource "aws_organizations_policy" "securityhub_v2_workloads" {
     aws_securityhub_account_v2.main,
   ]
 }
+
+resource "aws_organizations_policy_attachment" "securityhub_v2_workloads" {
+  policy_id = aws_organizations_policy.securityhub_v2_workloads.id
+  target_id = local.workloads_ou_id
+
+  depends_on = [
+    aws_organizations_policy.securityhub_v2_workloads,
+  ]
+}
