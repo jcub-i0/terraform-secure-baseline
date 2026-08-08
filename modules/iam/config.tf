@@ -4,11 +4,6 @@ data "aws_iam_policy" "ssm_automation" {
   name = "AmazonSSMAutomationRole"
 }
 
-# CONFIG SERVICE-LINKED ROLE
-resource "aws_iam_service_linked_role" "config" {
-  aws_service_name = "config.amazonaws.com"
-}
-
 # CONFIG REMEDIATION TRUST POLICY
 data "aws_iam_policy_document" "config_remediation_assume_role" {
   statement {
