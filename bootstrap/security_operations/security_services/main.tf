@@ -33,6 +33,8 @@ check "guardduty_detector_enabled" {
 ##########################################
 
 resource "aws_guardduty_organization_configuration" "main" {
+  count = var.enable_guardduty_organization_configuration ? 1 : 0
+
   region      = var.primary_region
   detector_id = data.aws_guardduty_detector.main.id
 
@@ -40,7 +42,7 @@ resource "aws_guardduty_organization_configuration" "main" {
 }
 
 resource "aws_guardduty_organization_configuration_feature" "main" {
-  for_each = var.guardduty_organization_features
+  for_each = var.enable_guardduty_organization_configuration ? var.guardduty_organization_features : {}
 
   region      = var.primary_region
   detector_id = data.aws_guardduty_detector.main.id
