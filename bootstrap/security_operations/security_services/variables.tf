@@ -144,6 +144,6 @@ variable "guardduty_organization_features" {
       ]
     ]))
 
-    error_message = "GuardDuty additional confiruation values must be ALL, NEW, or NONE."
+    error_message = "GuardDuty additional configuration values must be ALL, NEW, or NONE."
   }
 }
