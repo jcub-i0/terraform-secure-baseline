@@ -24,6 +24,16 @@ output "security_operations_account_id" {
   value       = local.security_operations_account_id
 }
 
+output "central_security_features_enabled" {
+  description = "Central security administration capabilities enabled by this stack"
+
+  value = {
+    securityhub_delegated_administrator    = var.enable_securityhub_delegated_administrator
+    guardduty_delegated_administrator      = var.enable_guardduty_delegated_administrator
+    securityhub_v2_organization_management = var.enable_securityhub_v2_organization_management
+  }
+}
+
 output "delegated_administrator_account_ids" {
   description = "AWS account IDs configured as delegated administrators for centralized security services"
 
@@ -38,9 +48,4 @@ output "delegated_administrator_account_ids" {
       null
     )
   }
-}
-
-output "securityhub_trusted_access_enabled" {
-  description = "Whether this stack manages trusted access for Security Hub"
-  value       = length(aws_organizations_aws_service_access.securityhub) == 1
 }
