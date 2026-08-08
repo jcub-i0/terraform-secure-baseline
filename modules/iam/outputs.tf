@@ -12,7 +12,8 @@ output "flowlogs_role_arn" {
 }
 
 output "config_role_arn" {
-  value = aws_iam_service_linked_role.config.arn
+  description = "ARN of the AWS-managed Config service-linked role"
+  value = local.config_service_linked_role_arn
 }
 
 output "lambda_ec2_isolation_role_arn" {
