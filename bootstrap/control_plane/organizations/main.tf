@@ -84,6 +84,112 @@ resource "aws_iam_service_linked_role" "securityhub_v2" {
   description      = "Service-linked role for AWS Security Hub V2 organization management"
 }
 
+data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
+  statement {
+    sid = "SecurityHubV2OrganizationRead"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${local.security_operations_account_id}:root"
+      ]
+    }
+
+    actions = [
+      "organizations:DescribeOrganization",
+      "organizations:DescribeOrganizationalUnit",
+      "organizations:DescribeAccount",
+      "organizations:ListRoots",
+      "organizations:ListOrganizationalUnitsForParent",
+      "organizations:ListParents",
+      "organizations:ListChildren",
+      "organizations:ListAccounts",
+      "organizations:ListAccountsForParent",
+      "organizations:ListTagsForResource",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "SecurityHubV2PolicyRead"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "aws:aws:iam::${local.security_operations_account_id}:root"
+      ]
+    }
+
+    actions = [
+      "organizations:DescribePolicy",
+      "organizations:DescribeEffectivePolicy",
+      "organizations:ListPolicies",
+      "organizations:ListPoliciesForTarget",
+      "organizations:ListTargetsForPolicy",
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test = "StringLikeIfExists"
+      variable = "organizations:PolicyType"
+
+      values = [
+        "SECURITYHUB_POLICY",
+      ]
+    }
+  }
+
+  statement {
+    sid = "SecurityHubV2PolicyManagement"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${local.security_operations_account_id}:root"
+      ]
+    }
+
+    actions = [
+      "organizations:CreatePolicy",
+      "organizations:UpdatePolicy",
+      "organizations:DeletePolicy",
+      "organizations:AttachPolicy",
+      "organizations:DetachPolicy",
+    ]
+
+    resources = [
+      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:root/${aws_organizations_organization.main.id}/*",
+      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:ou/${aws_organizations_organization.main.id}/*",
+      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:account/${aws_organizations_organization.main.id}/*",
+      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:policy/${aws_organizations_organization.main.id}/securityhub_policy/*",
+    ]
+
+    condition {
+      test = "StringLikeIfExists"
+      variable = "organization:PolicyType"
+
+      values = [
+        "SECURITYHUB_POLICY",
+      ]
+    }
+  }
+}
+
+resource "aws_organizations_resource_policy" "securityhub_v2" {
+  content = data.aws_iam_policy_document.securityhub_v2_organizations_delegation.json
+
+  depends_on = [
+    aws_iam_service_linked_role.securityhub_v2,
+    aws_organizations_organization.main,
+    aws_securityhub_organization_admin_account.security_operations,
+  ]
+}
+
 ##########################################
 # GUARDDUTY ORGANIZATION INTEGRATION
 ##########################################
