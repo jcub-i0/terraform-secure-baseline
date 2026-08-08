@@ -252,6 +252,8 @@ resource "aws_securityhub_account_v2" "main" {
 }
 
 resource "aws_organizations_policy" "securityhub_v2_workloads" {
+  count = var.enable_securityhub_v2_organization_policy ? 1 : 0
+
   name        = "${local.name_prefix}-securityhub_v2_workloads"
   description = "Central Security Hub V2 policy for workload accounts"
   type        = "SECURITYHUB_POLICY"
@@ -282,6 +284,8 @@ resource "aws_organizations_policy" "securityhub_v2_workloads" {
 }
 
 resource "aws_organizations_policy_attachment" "securityhub_v2_workloads" {
+  count = var.enable_securityhub_v2_organization_policy ? 1 : 0
+  
   policy_id = aws_organizations_policy.securityhub_v2_workloads.id
   target_id = local.workloads_ou_id
 
