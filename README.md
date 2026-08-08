@@ -238,7 +238,7 @@ The **environment** stacks manage:
 │       ├── validate-lambda.sh
 │       ├── validate-logging.sh
 │       ├── validate-networking.sh
-│       ├── validate-security-services.sh
+│       ├── validate-security-workload.sh
 │       ├── validate-sns.sh
 │       ├── validate-sqs.sh
 │       ├── validate-ssm.sh

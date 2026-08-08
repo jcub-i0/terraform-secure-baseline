@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# validate-security-services.sh
+# validate-security-workload.sh
 #
 # Validates security services for a deployed tf-secure-baseline environment.
 #
@@ -13,13 +13,13 @@
 # - AWS Backup is validated when effective_backup_enabled = true
 #
 # Usage:
-#   ./scripts/validation/validate-security-services.sh dev
+#   ./scripts/validation/validate-security-workload.sh dev
 #
 # Optional:
-#   AWS_PROFILE=tf-secure-baseline-dev AWS_REGION=us-east-1 ./scripts/validation/validate-security-services.sh dev
+#   AWS_PROFILE=tf-secure-baseline-dev AWS_REGION=us-east-1 ./scripts/validation/validate-security-workload.sh dev
 #
 # Optional override:
-#   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-security-services.sh dev
+#   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-security-workload.sh dev
 
 set -euo pipefail
 

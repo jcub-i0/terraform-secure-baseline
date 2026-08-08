@@ -246,7 +246,7 @@ validation-results/<env>/baseline/<timestamp>/
 | Networking | `validate-networking.sh` | `<PASS/FAIL/Not Run>` | `validate-networking.log` | `<notes>` |
 | VPC Endpoints | `validate-vpc-endpoints.sh` | `<PASS/FAIL/Not Run>` | `validate-vpc-endpoints.log` | `<notes>` |
 | Logging | `validate-logging.sh` | `<PASS/FAIL/Not Run>` | `validate-logging.log` | `<notes>` |
-| Security Services | `validate-security-services.sh` | `<PASS/FAIL/Not Run>` | `validate-security-services.log` | `<notes>` |
+| Security Services | `validate-security-workload.sh` | `<PASS/FAIL/Not Run>` | `validate-security-services.log` | `<notes>` |
 | KMS | `validate-kms.sh` | `<PASS/FAIL/Not Run>` | `validate-kms.log` | `<notes>` |
 | Backup | `validate-backup.sh` | `<PASS/FAIL/Not Run>` | `validate-backup.log` | `<notes>` |
 | SNS | `validate-sns.sh` | `<PASS/FAIL/Not Run>` | `validate-sns.log` | `<notes>` |
