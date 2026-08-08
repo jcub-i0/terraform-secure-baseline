@@ -55,9 +55,7 @@ resource "aws_securityhub_account" "main" {
 }
 
 resource "aws_securityhub_account_v2" "main" {
-  depends_on = [
-    aws_securityhub_account.main
-  ]
+  count = var.manage_securityhub_v2_locally ? 1 : 0
 }
 
 ## SUBSCRIBE TO EACH SECURITY HUB STANDARD LISTED IN 'local.securityhub_standards'
