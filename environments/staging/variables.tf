@@ -160,6 +160,12 @@ variable "manage_securityhub_cspm_locally" {
   default     = false
 }
 
+variable "manage_securityhub_v2_locally" {
+  description = "Whether Security Hub V2 is managed locally instead of through centralized organization policy"
+  type        = bool
+  default     = false
+}
+
 variable "manage_guardduty_locally" {
   description = "Whether this workload account manages its own GuardDuty detector and detector features. Set to false when GuardDuty is centrally managed from the security-operations account."
   type        = bool

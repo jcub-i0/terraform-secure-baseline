@@ -96,13 +96,22 @@ variable "securityhub_cspm_account_policies" {
   }
 }
 
+variable "enable_guardduty_organization_configuration" {
+  description = "Enable GuardDuty organization-wide member and protection-plan configuration after delegated administration is configured"
+  type        = bool
+  default     = false
+}
+
 variable "guardduty_organization_features" {
   description = "GuardDuty protection plans centrally-managed across the AWS organization."
 
   type = map(object({
     auto_enable = optional(string, "ALL")
 
-    additional_configuration = optional(map(string), {})
+    additional_configuration = optional(list(object({
+      name        = string
+      auto_enable = string
+    })), [])
   }))
 
   default = {
@@ -121,9 +130,20 @@ variable "guardduty_organization_features" {
     RUNTIME_MONITORING = {
       auto_enable = "ALL"
 
-      additional_configuration = {
-        EC2_AGENT_MANAGEMENT = "ALL"
-      }
+      additional_configuration = [
+        {
+          name        = "ECS_FARGATE_AGENT_MANAGEMENT"
+          auto_enable = "NONE"
+        },
+        {
+          name        = "EC2_AGENT_MANAGEMENT"
+          auto_enable = "ALL"
+        },
+        {
+          name        = "EKS_ADDON_MANAGEMENT"
+          auto_enable = "NONE"
+        }
+      ]
     }
   }
 
@@ -139,11 +159,38 @@ variable "guardduty_organization_features" {
   validation {
     condition = alltrue(flatten([
       for feature in values(var.guardduty_organization_features) : [
-        for value in values(feature.additional_configuration) :
-        contains(["ALL", "NEW", "NONE"], value)
+        for configuration in feature.additional_configuration :
+        contains(
+          ["ALL", "NEW", "NONE"],
+          configuration.auto_enable
+        )
       ]
     ]))
 
-    error_message = "GuardDuty additional confiruation values must be ALL, NEW, or NONE."
+    error_message = "GuardDuty additional configuration values must be ALL, NEW, or NONE."
   }
+
+  validation {
+    condition = alltrue(flatten([
+      for feature in values(var.guardduty_organization_features) : [
+        for configuration in feature.additional_configuration :
+        contains(
+          [
+            "ECS_FARGATE_AGENT_MANAGEMENT",
+            "EC2_AGENT_MANAGEMENT",
+            "EKS_ADDON_MANAGEMENT",
+          ],
+          configuration.name
+        )
+      ]
+    ]))
+
+    error_message = "GuardDuty additional configuration contains an unsupported name."
+  }
+}
+
+variable "enable_securityhub_v2_organization_policy" {
+  description = "Enable the Security Hub V2 AWS Organizations policy and attach it to workload accounts"
+  type        = bool
+  default     = false
 }

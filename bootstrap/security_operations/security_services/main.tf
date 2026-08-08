@@ -1,5 +1,9 @@
 data "aws_organizations_organization" "main" {}
 
+data "aws_organizations_organizational_units" "root" {
+  parent_id = data.aws_organizations_organization.main.roots[0].id
+}
+
 data "aws_caller_identity" "current" {}
 
 check "target_account" {
@@ -29,6 +33,8 @@ check "guardduty_detector_enabled" {
 ##########################################
 
 resource "aws_guardduty_organization_configuration" "main" {
+  count = var.enable_guardduty_organization_configuration ? 1 : 0
+
   region      = var.primary_region
   detector_id = data.aws_guardduty_detector.main.id
 
@@ -36,7 +42,7 @@ resource "aws_guardduty_organization_configuration" "main" {
 }
 
 resource "aws_guardduty_organization_configuration_feature" "main" {
-  for_each = var.guardduty_organization_features
+  for_each = var.enable_guardduty_organization_configuration ? var.guardduty_organization_features : {}
 
   region      = var.primary_region
   detector_id = data.aws_guardduty_detector.main.id
@@ -48,8 +54,8 @@ resource "aws_guardduty_organization_configuration_feature" "main" {
     for_each = each.value.additional_configuration
 
     content {
-      name        = additional_configuration.key
-      auto_enable = additional_configuration.value
+      name        = additional_configuration.value.name
+      auto_enable = additional_configuration.value.auto_enable
     }
   }
 }
@@ -102,6 +108,17 @@ locals {
       null
     )
   }
+
+  workloads_ous = [
+    for ou in data.aws_organizations_organizational_units.root.children :
+    ou
+    if ou.name == "Workloads"
+  ]
+
+  workloads_ou_id = try(
+    one(local.workloads_ous).id,
+    null
+  )
 }
 
 check "securityhub_cspm_association_accounts" {
@@ -112,6 +129,16 @@ check "securityhub_cspm_association_accounts" {
     ])
 
     error_message = "Each associated Security Hub CSPM policy must match exactly one active AWS Organizations accoutn using the policy map key as the account name."
+  }
+}
+
+check "workloads_ou" {
+  assert {
+    condition = (
+      !var.enable_securityhub_v2_organization_policy ||
+      length(local.workloads_ous) == 1
+    )
+    error_message = "Exactly one root-level AWS Organizations OU named 'Workloads' must exist when Security Hub V2 organization policy management is enabled."
   }
 }
 
@@ -207,4 +234,65 @@ resource "aws_securityhub_configuration_policy_association" "account" {
       error_message = "Exactly one active AWS Organizations account named '${each.key}' must exist before its Security Hub CSPM policy can be associated."
     }
   }
+}
+
+##########################################
+# SECURITY HUB V2 ADMINISTRATOR ACCOUNT
+##########################################
+
+resource "aws_securityhub_account_v2" "main" {
+  region = var.primary_region
+
+  tags = {
+    Name        = "${local.name_prefix}-securityhub-v2"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+
+  depends_on = [
+    aws_securityhub_account.main,
+  ]
+}
+
+resource "aws_organizations_policy" "securityhub_v2_workloads" {
+  count = var.enable_securityhub_v2_organization_policy ? 1 : 0
+
+  name        = "${local.name_prefix}-securityhub_v2_workloads"
+  description = "Central Security Hub V2 policy for workload accounts"
+  type        = "SECURITYHUB_POLICY"
+
+  content = jsonencode({
+    securityhub = {
+      enable_in_regions = {
+        "@@assign" = [
+          var.primary_region
+        ]
+      }
+
+      disable_in_regions = {
+        "@@assign" = []
+      }
+    }
+  })
+
+  tags = {
+    Name        = "${local.name_prefix}-securityhub-v2-workloads"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+
+  depends_on = [
+    aws_securityhub_account_v2.main,
+  ]
+}
+
+resource "aws_organizations_policy_attachment" "securityhub_v2_workloads" {
+  count = var.enable_securityhub_v2_organization_policy ? 1 : 0
+
+  policy_id = aws_organizations_policy.securityhub_v2_workloads[0].id
+  target_id = local.workloads_ou_id
+
+  depends_on = [
+    aws_organizations_policy.securityhub_v2_workloads,
+  ]
 }
