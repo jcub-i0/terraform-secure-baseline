@@ -103,10 +103,10 @@ variable "guardduty_organization_features" {
     auto_enable = optional(string, "ALL")
 
     additional_configuration = optional(list(object({
-        name        = string
-        auto_enable = string
+      name        = string
+      auto_enable = string
     })), [])
-    }))
+  }))
 
   default = {
     S3_DATA_EVENTS = {
@@ -126,16 +126,16 @@ variable "guardduty_organization_features" {
 
       additional_configuration = [
         {
-            name = "ECS_FARGATE_AGENT_MANAGEMENT"
-            auto_enable = "NONE"
+          name        = "ECS_FARGATE_AGENT_MANAGEMENT"
+          auto_enable = "NONE"
         },
         {
-            name = "EC2_AGENT_MANAGEMENT"
-            auto_enable = "ALL"
+          name        = "EC2_AGENT_MANAGEMENT"
+          auto_enable = "ALL"
         },
         {
-            name = "EKS_ADDON_MANAGEMENT"
-            auto_enable = "NONE"
+          name        = "EKS_ADDON_MANAGEMENT"
+          auto_enable = "NONE"
         }
       ]
     }
@@ -152,13 +152,13 @@ variable "guardduty_organization_features" {
 
   validation {
     condition = alltrue(flatten([
-        for feature in values(var.guardduty_organization_features) : [
+      for feature in values(var.guardduty_organization_features) : [
         for configuration in feature.additional_configuration :
         contains(
-            ["ALL", "NEW", "NONE"],
-            configuration.auto_enable
+          ["ALL", "NEW", "NONE"],
+          configuration.auto_enable
         )
-        ]
+      ]
     ]))
 
     error_message = "GuardDuty additional configuration values must be ALL, NEW, or NONE."
@@ -166,17 +166,17 @@ variable "guardduty_organization_features" {
 
   validation {
     condition = alltrue(flatten([
-        for feature in values(var.guardduty_organization_features) : [
+      for feature in values(var.guardduty_organization_features) : [
         for configuration in feature.additional_configuration :
         contains(
-            [
+          [
             "ECS_FARGATE_AGENT_MANAGEMENT",
             "EC2_AGENT_MANAGEMENT",
             "EKS_ADDON_MANAGEMENT",
-            ],
-            configuration.name
+          ],
+          configuration.name
         )
-        ]
+      ]
     ]))
 
     error_message = "GuardDuty additional configuration contains an unsupported name."
