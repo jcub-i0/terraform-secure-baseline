@@ -52,7 +52,7 @@ resource "aws_guardduty_organization_configuration_feature" "main" {
     for_each = each.value.additional_configuration
 
     content {
-      name        = additional_configuration.value.key
+      name        = additional_configuration.value.name
       auto_enable = additional_configuration.value.auto_enable
     }
   }
