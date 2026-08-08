@@ -93,3 +93,7 @@ output "effective_manage_securityhub_v2_locally" {
   value = var.manage_securityhub_v2_locally
 }
 
+output "effective_manage_guardduty_locally" {
+  description = "Whether GuardDuty resources are managed locally by Terraform in this workload account"
+  value = var.manage_guardduty_locally
+}
