@@ -38,10 +38,6 @@ resource "aws_organizations_organizational_unit" "security" {
   parent_id = data.aws_organizations_organization.main.roots[0].id
 }
 
-##########################################
-# SECURITY HUB ORGANIZATION INTEGRATION
-##########################################
-
 locals {
   security_operations_accounts = [
     for account in data.aws_organizations_organization.main.accounts :
@@ -64,6 +60,10 @@ check "security_operations_account" {
     error_message = "Exactly one AWS Organizations account name '${var.security_operations_account_name}' must exist."
   }
 }
+
+##########################################
+# SECURITY HUB ORGANIZATION INTEGRATION
+##########################################
 
 resource "aws_organizations_aws_service_access" "securityhub" {
   count = var.enable_securityhub_delegated_administrator ? 1 : 0
