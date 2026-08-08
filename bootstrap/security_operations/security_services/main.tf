@@ -239,9 +239,9 @@ resource "aws_securityhub_account_v2" "main" {
   region = var.primary_region
 
   tags = {
-    Name = "${local.name_prefix}-securityhub-v2"
+    Name        = "${local.name_prefix}-securityhub-v2"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 
   depends_on = [
