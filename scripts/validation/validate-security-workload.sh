@@ -5,9 +5,10 @@
 # Validates security services for a deployed tf-secure-baseline environment.
 #
 # Checks:
-# - Terraform effective security-service outputs are readable
-# - GuardDuty detector exists and is enabled
-# - Security Hub is enabled
+# - Terraform effective security-service and ownership outputs are readable
+# - GuardDuty workload state and, when centrally managed, administrator association
+# - Security Hub CSPM workload state and, when centrally managed, administrator association
+# - Security Hub V2 workload state
 # - Inspector is validated when effective_inspector_enabled = true
 # - AWS Config is validated when effective_enable_config = true
 # - AWS Backup is validated when effective_backup_enabled = true
@@ -50,7 +51,7 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
-section "${CLOUD_NAME} Security Services Validation"
+section "${CLOUD_NAME} Workload Security Validation"
 
 section "Checking required local commands"
 
@@ -94,6 +95,9 @@ REQUIRED_OUTPUTS=(
   effective_backup_enabled
   effective_inspector_enabled
   effective_inspector_resource_types
+  effective_manage_securityhub_cspm_locally
+  effective_manage_guardduty_locally
+  effective_manage_securityhub_v2_locally
 )
 
 for output_name in "${REQUIRED_OUTPUTS[@]}"; do
@@ -107,10 +111,16 @@ done
 EFFECTIVE_ENABLE_CONFIG="$(get_terraform_output_value "$OUTPUTS_JSON" effective_enable_config)"
 EFFECTIVE_BACKUP_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled)"
 EFFECTIVE_INSPECTOR_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_inspector_enabled)"
+EFFECTIVE_MANAGE_SECURITYHUB_CSPM_LOCALLY="$(get_terraform_output_value "$OUTPUTS_JSON" effective_manage_securityhub_cspm_locally)"
+EFFECTIVE_MANAGE_GUARDDUTY_LOCALLY="$(get_terraform_output_value "$OUTPUTS_JSON" effective_manage_guardduty_locally)"
+EFFECTIVE_MANAGE_SECURITYHUB_V2_LOCALLY="$(get_terraform_output_value "$OUTPUTS_JSON" effective_manage_securityhub_v2_locally)"
 
 require_value_in_list "$EFFECTIVE_ENABLE_CONFIG" "true false" "effective_enable_config"
 require_value_in_list "$EFFECTIVE_BACKUP_ENABLED" "true false" "effective_backup_enabled"
 require_value_in_list "$EFFECTIVE_INSPECTOR_ENABLED" "true false" "effective_inspector_enabled"
+require_value_in_list "$EFFECTIVE_MANAGE_SECURITYHUB_CSPM_LOCALLY" "true false" "effective_manage_securityhub_cspm_locally"
+require_value_in_list "$EFFECTIVE_MANAGE_GUARDDUTY_LOCALLY" "true false" "effective_manage_guardduty_locally"
+require_value_in_list "$EFFECTIVE_MANAGE_SECURITYHUB_V2_LOCALLY" "true false" "effective_manage_securityhub_v2_locally"
 
 EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON="$(
   echo "$OUTPUTS_JSON" |
@@ -140,6 +150,9 @@ success "effective_inspector_resource_types is valid: ${EFFECTIVE_INSPECTOR_RESO
 success "effective_enable_config is valid: $EFFECTIVE_ENABLE_CONFIG"
 success "effective_backup_enabled is valid: $EFFECTIVE_BACKUP_ENABLED"
 success "effective_inspector_enabled is valid: $EFFECTIVE_INSPECTOR_ENABLED"
+success "effective_manage_securityhub_cspm_locally is valid: $EFFECTIVE_MANAGE_SECURITYHUB_CSPM_LOCALLY"
+success "effective_manage_guardduty_locally is valid: $EFFECTIVE_MANAGE_GUARDDUTY_LOCALLY"
+success "effective_manage_securityhub_v2_locally is valid: $EFFECTIVE_MANAGE_SECURITYHUB_V2_LOCALLY"
 
 section "Checking AWS caller identity"
 
@@ -199,7 +212,44 @@ fi
 
 info "GuardDuty detector ID: $GUARDDUTY_DETECTOR_ID"
 
-section "Checking Security Hub"
+GUARDDUTY_ADMINISTRATOR_ACCOUNT_ID=""
+GUARDDUTY_ADMINISTRATOR_RELATIONSHIP_STATUS="not-checked"
+
+if [[ "$EFFECTIVE_MANAGE_GUARDDUTY_LOCALLY" == "false" ]]; then
+  GUARDDUTY_ADMINISTRATOR_JSON="$(
+    aws guardduty get-administrator-account \
+      "${aws_args[@]}" \
+      --detector-id "$GUARDDUTY_DETECTOR_ID" \
+      --output json
+  )"
+
+  GUARDDUTY_ADMINISTRATOR_ACCOUNT_ID="$(
+    echo "$GUARDDUTY_ADMINISTRATOR_JSON" |
+      jq -r '.Administrator.AccountId // empty'
+  )"
+
+  GUARDDUTY_ADMINISTRATOR_RELATIONSHIP_STATUS="$(
+    echo "$GUARDDUTY_ADMINISTRATOR_JSON" |
+      jq -r '.Administrator.RelationshipStatus // "unknown"'
+  )"
+
+  if [[ -z "$GUARDDUTY_ADMINISTRATOR_ACCOUNT_ID" ]]; then
+    echo "$GUARDDUTY_ADMINISTRATOR_JSON" | jq .
+    fail "GuardDuty is centrally managed, but no administrator account is associated with this workload."
+  fi
+
+  if [[ "${GUARDDUTY_ADMINISTRATOR_RELATIONSHIP_STATUS^^}" != "ENABLED" ]]; then
+    echo "$GUARDDUTY_ADMINISTRATOR_JSON" | jq .
+    fail "GuardDuty administrator relationship is not enabled. Current status: ${GUARDDUTY_ADMINISTRATOR_RELATIONSHIP_STATUS}"
+  fi
+
+  success "GuardDuty is centrally managed by administrator account ${GUARDDUTY_ADMINISTRATOR_ACCOUNT_ID}"
+  success "GuardDuty administrator relationship is enabled"
+else
+  success "GuardDuty is configured for local Terraform ownership"
+fi
+
+section "Checking Security Hub CSPM"
 
 SECURITY_HUB_JSON=""
 SECURITY_HUB_ENABLED="false"
@@ -227,6 +277,79 @@ SECURITY_HUB_SUBSCRIBED_AT="$(
 
 info "Security Hub ARN: ${SECURITY_HUB_ARN:-<unknown>}"
 info "Security Hub subscribed at: ${SECURITY_HUB_SUBSCRIBED_AT:-<unknown>}"
+
+SECURITY_HUB_ADMINISTRATOR_ACCOUNT_ID=""
+SECURITY_HUB_MEMBER_STATUS="not-checked"
+
+if [[ "$EFFECTIVE_MANAGE_SECURITYHUB_CSPM_LOCALLY" == "false" ]]; then
+  SECURITY_HUB_ADMINISTRATOR_JSON="$(
+    aws securityhub get-administrator-account \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  SECURITY_HUB_ADMINISTRATOR_ACCOUNT_ID="$(
+    echo "$SECURITY_HUB_ADMINISTRATOR_JSON" |
+      jq -r '.Administrator.AccountId // empty'
+  )"
+
+  SECURITY_HUB_MEMBER_STATUS="$(
+    echo "$SECURITY_HUB_ADMINISTRATOR_JSON" |
+      jq -r '.Administrator.MemberStatus // "unknown"'
+  )"
+
+  if [[ -z "$SECURITY_HUB_ADMINISTRATOR_ACCOUNT_ID" ]]; then
+    echo "$SECURITY_HUB_ADMINISTRATOR_JSON" | jq .
+    fail "Security Hub CSPM is centrally managed, but no administrator account is associated with this workload."
+  fi
+
+  SECURITY_HUB_MEMBER_STATUS_NORMALIZED="${SECURITY_HUB_MEMBER_STATUS^^}"
+
+  if [[ "$SECURITY_HUB_MEMBER_STATUS_NORMALIZED" != "ASSOCIATED" && "$SECURITY_HUB_MEMBER_STATUS_NORMALIZED" != "ENABLED" ]]; then
+    echo "$SECURITY_HUB_ADMINISTRATOR_JSON" | jq .
+    fail "Security Hub CSPM member relationship is not active. Current status: ${SECURITY_HUB_MEMBER_STATUS}"
+  fi
+
+  success "Security Hub CSPM is centrally managed by administrator account ${SECURITY_HUB_ADMINISTRATOR_ACCOUNT_ID}"
+  success "Security Hub CSPM member relationship is active: ${SECURITY_HUB_MEMBER_STATUS}"
+else
+  success "Security Hub CSPM is configured for local Terraform ownership"
+fi
+
+section "Checking Security Hub V2"
+
+SECURITY_HUB_V2_JSON=""
+SECURITY_HUB_V2_ENABLED="false"
+SECURITY_HUB_V2_ARN=""
+SECURITY_HUB_V2_SUBSCRIBED_AT=""
+
+if SECURITY_HUB_V2_JSON="$(
+  aws securityhub describe-security-hub-v2 \
+    "${aws_args[@]}" \
+    --output json 2>/dev/null
+)"; then
+  SECURITY_HUB_V2_ARN="$(echo "$SECURITY_HUB_V2_JSON" | jq -r '.HubV2Arn // empty')"
+  SECURITY_HUB_V2_SUBSCRIBED_AT="$(echo "$SECURITY_HUB_V2_JSON" | jq -r '.SubscribedAt // empty')"
+
+  if [[ -z "$SECURITY_HUB_V2_ARN" ]]; then
+    echo "$SECURITY_HUB_V2_JSON" | jq .
+    fail "Security Hub V2 returned successfully, but HubV2Arn is empty."
+  fi
+
+  SECURITY_HUB_V2_ENABLED="true"
+  success "Security Hub V2 is enabled"
+else
+  fail "Security Hub V2 is not enabled or describe-security-hub-v2 failed in region ${AWS_REGION}."
+fi
+
+if [[ "$EFFECTIVE_MANAGE_SECURITYHUB_V2_LOCALLY" == "false" ]]; then
+  success "Security Hub V2 is centrally governed; local Terraform ownership is disabled"
+else
+  success "Security Hub V2 is configured for local Terraform ownership"
+fi
+
+info "Security Hub V2 ARN: ${SECURITY_HUB_V2_ARN:-<unknown>}"
+info "Security Hub V2 subscribed at: ${SECURITY_HUB_V2_SUBSCRIBED_AT:-<unknown>}"
 
 section "Checking Inspector"
 
@@ -446,7 +569,7 @@ else
   warn "This is expected for development/minimal profiles or explicit cost-control overrides."
 fi
 
-section "Security Services Summary"
+section "Workload Security Summary"
 
 cat <<SUMMARY
 Environment:                        ${ENV_NAME}
@@ -459,13 +582,23 @@ effective_enable_config:            ${EFFECTIVE_ENABLE_CONFIG}
 effective_backup_enabled:           ${EFFECTIVE_BACKUP_ENABLED}
 effective_inspector_enabled:        ${EFFECTIVE_INSPECTOR_ENABLED}
 effective_inspector_resource_types: ${EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON}
+effective_manage_securityhub_cspm_locally: ${EFFECTIVE_MANAGE_SECURITYHUB_CSPM_LOCALLY}
+effective_manage_guardduty_locally:        ${EFFECTIVE_MANAGE_GUARDDUTY_LOCALLY}
+effective_manage_securityhub_v2_locally:   ${EFFECTIVE_MANAGE_SECURITYHUB_V2_LOCALLY}
 
 GuardDuty detector count:           ${GUARDDUTY_DETECTOR_COUNT}
 GuardDuty detector ID:              ${GUARDDUTY_DETECTOR_ID}
 GuardDuty status:                   ${GUARDDUTY_STATUS}
+GuardDuty administrator account:    ${GUARDDUTY_ADMINISTRATOR_ACCOUNT_ID:-<local ownership>}
+GuardDuty administrator status:     ${GUARDDUTY_ADMINISTRATOR_RELATIONSHIP_STATUS}
 
-Security Hub enabled:               ${SECURITY_HUB_ENABLED}
-Security Hub ARN:                   ${SECURITY_HUB_ARN:-<unknown>}
+Security Hub CSPM enabled:          ${SECURITY_HUB_ENABLED}
+Security Hub CSPM ARN:              ${SECURITY_HUB_ARN:-<unknown>}
+Security Hub CSPM administrator:    ${SECURITY_HUB_ADMINISTRATOR_ACCOUNT_ID:-<local ownership>}
+Security Hub CSPM member status:    ${SECURITY_HUB_MEMBER_STATUS}
+
+Security Hub V2 enabled:            ${SECURITY_HUB_V2_ENABLED}
+Security Hub V2 ARN:                ${SECURITY_HUB_V2_ARN:-<unknown>}
 
 Inspector account status:           ${INSPECTOR_ACCOUNT_STATUS}
 Inspector EC2 status:               ${INSPECTOR_EC2_STATUS}
@@ -483,4 +616,4 @@ SUMMARY
 
 section "Validation Result"
 
-success "Security services validation completed successfully for: ${ENV_NAME}"
+success "Workload security validation completed successfully for: ${ENV_NAME}"
