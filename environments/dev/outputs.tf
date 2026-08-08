@@ -88,3 +88,8 @@ output "effective_manage_securithub_cspm_locally" {
   value = var.manage_securityhub_cspm_locally
 }
 
+output "effective_manage_securityhub_v2_locally" {
+  description = "Whether Security Hub V2 resources are managed locally by Terraform in this workload account"
+  value = var.manage_securityhub_v2_locally
+}
+
