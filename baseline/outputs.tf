@@ -82,3 +82,18 @@ output "db_port" {
   description = "Port used by the database (Postgres=5432, MySQL=3306)"
   value       = var.db_port
 }
+
+output "effective_manage_securithub_cspm_locally" {
+  description = "Whether Security Hub CSPM resources are managed locally by Terraform in this workload account"
+  value       = var.manage_securityhub_cspm_locally
+}
+
+output "effective_manage_securityhub_v2_locally" {
+  description = "Whether Security Hub V2 resources are managed locally by Terraform in this workload account"
+  value       = var.manage_securityhub_v2_locally
+}
+
+output "effective_manage_guardduty_locally" {
+  description = "Whether GuardDuty resources are managed locally by Terraform in this workload account"
+  value       = var.manage_guardduty_locally
+}
