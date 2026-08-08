@@ -83,7 +83,7 @@ output "db_port" {
   value       = var.db_port
 }
 
-output "effective_manage_securithub_cspm_locally" {
+output "effective_manage_securityhub_cspm_locally" {
   description = "Whether Security Hub CSPM resources are managed locally by Terraform in this workload account"
   value       = var.manage_securityhub_cspm_locally
 }
