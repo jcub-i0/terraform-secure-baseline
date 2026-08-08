@@ -119,7 +119,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     principals {
       type = "AWS"
       identifiers = [
-        "aws:aws:iam::${local.security_operations_account_id}:root"
+        "arn:aws:iam::${local.security_operations_account_id}:root"
       ]
     }
 
@@ -171,7 +171,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
 
     condition {
       test     = "StringLikeIfExists"
-      variable = "organization:PolicyType"
+      variable = "organizations:PolicyType"
 
       values = [
         "SECURITYHUB_POLICY",
