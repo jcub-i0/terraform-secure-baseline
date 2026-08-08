@@ -83,17 +83,17 @@ output "db_port" {
   value       = module.baseline.db_port
 }
 
-output "effective_manage_securithub_cspm_locally" {
+output "effective_manage_securityhub_cspm_locally" {
   description = "Whether Security Hub CSPM resources are managed locally by Terraform in this workload account"
-  value       = var.manage_securityhub_cspm_locally
+  value       = module.baseline.effective_manage_securityhub_cspm_locally
 }
 
 output "effective_manage_securityhub_v2_locally" {
   description = "Whether Security Hub V2 resources are managed locally by Terraform in this workload account"
-  value       = var.manage_securityhub_v2_locally
+  value       = module.baseline.effective_manage_securityhub_v2_locally
 }
 
 output "effective_manage_guardduty_locally" {
   description = "Whether GuardDuty resources are managed locally by Terraform in this workload account"
-  value       = var.manage_guardduty_locally
+  value       = module.baseline.effective_manage_guardduty_locally
 }
