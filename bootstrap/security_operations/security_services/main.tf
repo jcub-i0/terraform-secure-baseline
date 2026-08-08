@@ -134,7 +134,7 @@ check "securityhub_cspm_association_accounts" {
 
 check "workloads_ou" {
   assert {
-    condition     = (
+    condition = (
       !var.enable_securityhub_v2_organization_policy ||
       length(local.workloads_ous) == 1
     )
