@@ -8,7 +8,8 @@
 #   - Control-plane AWS caller identity
 #   - bootstrap/control_plane/state backend resources and optional remote-state proof
 #   - bootstrap/control_plane/account GitHub OIDC roles
-#   - bootstrap/control_plane/organizations OU structure
+#   - bootstrap/control_plane/organizations Organization mode, OU structure,
+#     account placement, and centralized-security prerequisites
 #   - bootstrap/control_plane/identity_center instance, groups, permission sets,
 #     and optional account assignments
 #
@@ -51,16 +52,25 @@ REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
 CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
-STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
+STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-true}"
 REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
 
-case "$REQUIRE_STATE_STACK_REMOTE" in
-  true|false)
-    ;;
-  *)
-    fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
-    ;;
-esac
+WORKLOADS_OU_NAME="${WORKLOADS_OU_NAME:-Workloads}"
+NONPROD_OU_NAME="${NONPROD_OU_NAME:-NonProd}"
+PROD_OU_NAME="${PROD_OU_NAME:-Prod}"
+SECURITY_OU_NAME="${SECURITY_OU_NAME:-Security}"
+SECURITY_OPERATIONS_ACCOUNT_NAME="${SECURITY_OPERATIONS_ACCOUNT_NAME:-security-operations}"
+
+for boolean_setting in   REQUIRE_CONTROL_PLANE_GITHUB_OIDC   CHECK_OPTIONAL_SECOPS_GROUPS   STRICT_IDENTITY_CENTER_ASSIGNMENTS   STRICT_ACCOUNT_OU_CHECKS   REQUIRE_STATE_STACK_REMOTE; do
+  boolean_value="${!boolean_setting}"
+  case "$boolean_value" in
+    true|false)
+      ;;
+    *)
+      fail "Invalid ${boolean_setting}: ${boolean_value}. Expected true or false."
+      ;;
+  esac
+done
 
 IDENTITY_CENTER_WORKLOADS="${IDENTITY_CENTER_WORKLOADS:-${TF_VAR_identity_center_workloads:-}}"
 IDENTITY_CENTER_SECOPS="${IDENTITY_CENTER_SECOPS:-${TF_VAR_identity_center_secops:-}}"
@@ -69,6 +79,14 @@ ACCOUNT_ID_DEV=""
 ACCOUNT_ID_STAGING=""
 ACCOUNT_ID_PROD=""
 ACCOUNT_ID_SECOPS=""
+
+ORGANIZATION_ID=""
+ORGANIZATION_ROOT_ID=""
+WORKLOADS_OU_ID=""
+NONPROD_OU_ID=""
+PROD_OU_ID=""
+SECURITY_OU_ID=""
+
 ENABLE_SECOPS_ANALYST_DEV="false"
 ENABLE_SECOPS_ANALYST_STAGING="false"
 ENABLE_SECOPS_ANALYST_PROD="false"
@@ -561,7 +579,7 @@ check_account_parent_if_requested() {
   local expected_parent_name="$4"
 
   if [[ -z "$account_id" ]]; then
-    warn "No account ID resolved for ${env_name}. Skipping optional account OU placement check."
+    warn "No account ID resolved for ${env_name}. Skipping account OU placement check."
     return 0
   fi
 
@@ -586,8 +604,283 @@ check_account_parent_if_requested() {
   fi
 }
 
+resolve_unique_ou_id() {
+  local parent_id="$1"
+  local ou_name="$2"
+  local description="$3"
+
+  local ous_json
+  ous_json="$(
+    aws organizations list-organizational-units-for-parent \
+      "${aws_args[@]}" \
+      --parent-id "$parent_id" \
+      --output json
+  )"
+
+  local match_count
+  match_count="$(
+    echo "$ous_json" |
+      jq --arg name "$ou_name" '[.OrganizationalUnits[]? | select(.Name == $name)] | length'
+  )"
+
+  if [[ "$match_count" -ne 1 ]]; then
+    echo "$ous_json" | jq .
+    fail "Expected exactly one ${description} OU named '${ou_name}' under parent ${parent_id}; found ${match_count}"
+  fi
+
+  echo "$ous_json" |
+    jq -r --arg name "$ou_name" '.OrganizationalUnits[] | select(.Name == $name) | .Id'
+}
+
+check_organization_account_identity() {
+  local expected_name="$1"
+  local expected_id="$2"
+  local accounts_json="$3"
+
+  local account_json
+  account_json="$(
+    echo "$accounts_json" |
+      jq -c --arg account_id "$expected_id" '
+        [
+          .Accounts[]?
+          | select(.Id == $account_id)
+        ][0] // {}
+      '
+  )"
+
+  if [[ "$account_json" == "{}" ]]; then
+    fail "AWS Organizations account ID ${expected_id} (${expected_name}) was not found."
+  fi
+
+  local actual_name
+  actual_name="$(echo "$account_json" | jq -r '.Name // empty')"
+
+  local actual_state
+  actual_state="$(echo "$account_json" | jq -r '.State // .Status // empty')"
+
+  if [[ "$actual_name" != "$expected_name" ]]; then
+    fail "AWS Organizations account ${expected_id} is named '${actual_name}', expected '${expected_name}'."
+  fi
+
+  if [[ "$actual_state" != "ACTIVE" ]]; then
+    fail "AWS Organizations account '${expected_name}' (${expected_id}) is not ACTIVE. Current state: ${actual_state:-<unknown>}"
+  fi
+
+  success "AWS Organizations account identity is correct: ${expected_name} (${expected_id})"
+}
+
+compare_organizations_output_if_present() {
+  local output_name="$1"
+  local actual_value="$2"
+  local description="$3"
+
+  if ! terraform_output_exists "$ORGANIZATIONS_OUTPUTS_JSON" "$output_name"; then
+    return 0
+  fi
+
+  local expected_value
+  expected_value="$(get_terraform_output_value "$ORGANIZATIONS_OUTPUTS_JSON" "$output_name")"
+
+  if [[ "$expected_value" == "$actual_value" ]]; then
+    success "${description} matches organizations Terraform output"
+  else
+    fail "${description} mismatch. Terraform: ${expected_value}; AWS: ${actual_value}"
+  fi
+}
+
+check_required_trusted_service_access() {
+  local service_access_json="$1"
+  local service_principal="$2"
+  local description="$3"
+
+  if echo "$service_access_json" |
+    jq -e --arg principal "$service_principal" '
+      any(.EnabledServicePrincipals[]?; .ServicePrincipal == $principal)
+    ' >/dev/null; then
+    success "${description} trusted service access is enabled"
+  else
+    fail "${description} trusted service access is not enabled (${service_principal})."
+  fi
+}
+
+check_expected_delegated_administrator() {
+  local service_principal="$1"
+  local expected_account_id="$2"
+  local description="$3"
+
+  local delegated_json
+  delegated_json="$(
+    aws organizations list-delegated-administrators \
+      "${aws_args[@]}" \
+      --service-principal "$service_principal" \
+      --output json
+  )"
+
+  local matching_count
+  matching_count="$(
+    echo "$delegated_json" |
+      jq --arg account_id "$expected_account_id" '
+        [
+          .DelegatedAdministrators[]?
+          | select(
+              .Id == $account_id
+              and (.State // .Status) == "ACTIVE"
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$matching_count" -ne 1 ]]; then
+    echo "$delegated_json" | jq .
+    fail "${description} delegated administrator is not the expected security-operations account (${expected_account_id})."
+  fi
+
+  success "${description} delegated administrator is the security-operations account"
+}
+
+check_organizations_security_prerequisites() {
+  local roots_json="$1"
+
+  section "Checking AWS Organizations centralized-security prerequisites"
+
+  if ! terraform_output_exists "$ORGANIZATIONS_OUTPUTS_JSON" central_security_features_enabled; then
+    warn "organizations output central_security_features_enabled is not present. Skipping rollout-aware prerequisite checks."
+    return 0
+  fi
+
+  local features_json
+  features_json="$(
+    echo "$ORGANIZATIONS_OUTPUTS_JSON" |
+      jq -c '.central_security_features_enabled.value // {}'
+  )"
+
+  local securityhub_da_enabled
+  securityhub_da_enabled="$(
+    echo "$features_json" |
+      jq -r '
+        .securityhub_delegated_administrator
+        // .securityhub
+        // .securityhub_cspm
+        // false
+      '
+  )"
+
+  local guardduty_da_enabled
+  guardduty_da_enabled="$(
+    echo "$features_json" |
+      jq -r '
+        .guardduty_delegated_administrator
+        // .guardduty
+        // false
+      '
+  )"
+
+  local securityhub_v2_org_enabled
+  securityhub_v2_org_enabled="$(
+    echo "$features_json" |
+      jq -r '
+        .securityhub_v2_organization_management
+        // .securityhub_v2
+        // false
+      '
+  )"
+
+  local service_access_json
+  service_access_json="$(
+    aws organizations list-aws-service-access-for-organization \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  if [[ "$securityhub_da_enabled" == "true" ]]; then
+    check_required_trusted_service_access \
+      "$service_access_json" \
+      "securityhub.amazonaws.com" \
+      "Security Hub"
+
+    check_expected_delegated_administrator \
+      "securityhub.amazonaws.com" \
+      "$ACCOUNT_ID_SECOPS" \
+      "Security Hub"
+  else
+    warn "Security Hub delegated-administrator rollout is disabled in organizations Terraform output."
+  fi
+
+  if [[ "$guardduty_da_enabled" == "true" ]]; then
+    check_required_trusted_service_access \
+      "$service_access_json" \
+      "guardduty.amazonaws.com" \
+      "GuardDuty"
+
+    check_required_trusted_service_access \
+      "$service_access_json" \
+      "malware-protection.guardduty.amazonaws.com" \
+      "GuardDuty malware protection"
+
+    check_expected_delegated_administrator \
+      "guardduty.amazonaws.com" \
+      "$ACCOUNT_ID_SECOPS" \
+      "GuardDuty"
+  else
+    warn "GuardDuty delegated-administrator rollout is disabled in organizations Terraform output."
+  fi
+
+  if [[ "$securityhub_v2_org_enabled" == "true" ]]; then
+    local securityhub_policy_status
+    securityhub_policy_status="$(
+      echo "$roots_json" |
+        jq -r '
+          [
+            .Roots[0].PolicyTypes[]?
+            | select(.Type == "SECURITYHUB_POLICY")
+            | .Status
+          ][0] // "NOT_ENABLED"
+        '
+    )"
+
+    if [[ "$securityhub_policy_status" != "ENABLED" ]]; then
+      fail "SECURITYHUB_POLICY must be enabled on the organization root. Current status: ${securityhub_policy_status}"
+    fi
+
+    success "SECURITYHUB_POLICY is enabled on the organization root"
+  else
+    warn "Security Hub V2 organization-management rollout is disabled in organizations Terraform output."
+  fi
+
+  if terraform_output_exists "$ORGANIZATIONS_OUTPUTS_JSON" delegated_administrator_account_ids; then
+    local delegated_output_json
+    delegated_output_json="$(
+      echo "$ORGANIZATIONS_OUTPUTS_JSON" |
+        jq -c '.delegated_administrator_account_ids.value // {}'
+    )"
+
+    local output_securityhub_account_id
+    output_securityhub_account_id="$(
+      echo "$delegated_output_json" |
+        jq -r '.securityhub // .securityhub_cspm // empty'
+    )"
+
+    local output_guardduty_account_id
+    output_guardduty_account_id="$(
+      echo "$delegated_output_json" |
+        jq -r '.guardduty // empty'
+    )"
+
+    if [[ -n "$output_securityhub_account_id" && "$output_securityhub_account_id" != "$ACCOUNT_ID_SECOPS" ]]; then
+      fail "organizations delegated-administrator output for Security Hub (${output_securityhub_account_id}) does not match security-operations account ${ACCOUNT_ID_SECOPS}."
+    fi
+
+    if [[ -n "$output_guardduty_account_id" && "$output_guardduty_account_id" != "$ACCOUNT_ID_SECOPS" ]]; then
+      fail "organizations delegated-administrator output for GuardDuty (${output_guardduty_account_id}) does not match security-operations account ${ACCOUNT_ID_SECOPS}."
+    fi
+
+    success "Organizations delegated-administrator outputs are consistent with the security-operations account"
+  fi
+}
+
 check_organizations_ou_structure() {
-  section "Checking AWS Organizations OU structure"
+  section "Checking AWS Organizations structure"
 
   local org_json
   org_json="$(
@@ -596,77 +889,175 @@ check_organizations_ou_structure() {
       --output json
   )"
 
-  local org_id
-  org_id="$(echo "$org_json" | jq -r '.Organization.Id')"
+  ORGANIZATION_ID="$(echo "$org_json" | jq -r '.Organization.Id // empty')"
 
   local feature_set
-  feature_set="$(echo "$org_json" | jq -r '.Organization.FeatureSet')"
+  feature_set="$(echo "$org_json" | jq -r '.Organization.FeatureSet // empty')"
 
-  require_non_empty "$org_id" "AWS Organizations organization ID"
-  success "AWS Organizations is accessible: ${org_id}"
-  info "AWS Organizations feature set: ${feature_set}"
+  require_non_empty "$ORGANIZATION_ID" "AWS Organizations organization ID"
+  success "AWS Organizations is accessible: ${ORGANIZATION_ID}"
 
-  local root_id
-  root_id="$(
+  if [[ "$feature_set" == "ALL" ]]; then
+    success "AWS Organizations all-features mode is enabled"
+  else
+    fail "AWS Organizations FeatureSet must be ALL. Current value: ${feature_set:-<empty>}"
+  fi
+
+  local roots_json
+  roots_json="$(
     aws organizations list-roots \
       "${aws_args[@]}" \
-      --query 'Roots[0].Id' \
-      --output text
-  )"
-
-  require_non_empty "$root_id" "AWS Organizations root ID"
-  success "Resolved AWS Organizations root ID: ${root_id}"
-
-  local root_ous_json
-  root_ous_json="$(
-    aws organizations list-organizational-units-for-parent \
-      "${aws_args[@]}" \
-      --parent-id "$root_id" \
       --output json
   )"
 
-  local workloads_ou_id
-  workloads_ou_id="$(
-    echo "$root_ous_json" |
-      jq -r '.OrganizationalUnits[]? | select(.Name == "Workloads") | .Id' |
-      head -n 1
+  local root_count
+  root_count="$(echo "$roots_json" | jq '.Roots | length')"
+
+  if [[ "$root_count" -ne 1 ]]; then
+    echo "$roots_json" | jq .
+    fail "Expected exactly one AWS Organizations root; found ${root_count}."
+  fi
+
+  ORGANIZATION_ROOT_ID="$(echo "$roots_json" | jq -r '.Roots[0].Id // empty')"
+  require_non_empty "$ORGANIZATION_ROOT_ID" "AWS Organizations root ID"
+  success "Resolved AWS Organizations root ID: ${ORGANIZATION_ROOT_ID}"
+
+  WORKLOADS_OU_ID="$(
+    resolve_unique_ou_id \
+      "$ORGANIZATION_ROOT_ID" \
+      "$WORKLOADS_OU_NAME" \
+      "workloads"
   )"
 
-  require_non_empty "$workloads_ou_id" "Workloads OU ID"
-  success "Workloads OU exists: ${workloads_ou_id}"
+  SECURITY_OU_ID="$(
+    resolve_unique_ou_id \
+      "$ORGANIZATION_ROOT_ID" \
+      "$SECURITY_OU_NAME" \
+      "security"
+  )"
 
-  local workloads_child_ous_json
-  workloads_child_ous_json="$(
-    aws organizations list-organizational-units-for-parent \
+  NONPROD_OU_ID="$(
+    resolve_unique_ou_id \
+      "$WORKLOADS_OU_ID" \
+      "$NONPROD_OU_NAME" \
+      "non-production workloads"
+  )"
+
+  PROD_OU_ID="$(
+    resolve_unique_ou_id \
+      "$WORKLOADS_OU_ID" \
+      "$PROD_OU_NAME" \
+      "production workloads"
+  )"
+
+  success "${WORKLOADS_OU_NAME} OU exists: ${WORKLOADS_OU_ID}"
+  success "${NONPROD_OU_NAME} OU exists under ${WORKLOADS_OU_NAME}: ${NONPROD_OU_ID}"
+  success "${PROD_OU_NAME} OU exists under ${WORKLOADS_OU_NAME}: ${PROD_OU_ID}"
+  success "${SECURITY_OU_NAME} OU exists: ${SECURITY_OU_ID}"
+
+  if terraform_output_exists "$ORGANIZATIONS_OUTPUTS_JSON" organization_id; then
+    compare_organizations_output_if_present \
+      organization_id \
+      "$ORGANIZATION_ID" \
+      "Organization ID"
+  fi
+
+  if terraform_output_exists "$ORGANIZATIONS_OUTPUTS_JSON" organization_root_id; then
+    compare_organizations_output_if_present \
+      organization_root_id \
+      "$ORGANIZATION_ROOT_ID" \
+      "Organization root ID"
+  fi
+
+  if terraform_output_exists "$ORGANIZATIONS_OUTPUTS_JSON" organizational_unit_ids; then
+    local expected_ou_ids_json
+    expected_ou_ids_json="$(
+      echo "$ORGANIZATIONS_OUTPUTS_JSON" |
+        jq -c '.organizational_unit_ids.value // {}'
+    )"
+
+    local expected_workloads_ou_id
+    local expected_nonprod_ou_id
+    local expected_prod_ou_id
+    local expected_security_ou_id
+
+    expected_workloads_ou_id="$(echo "$expected_ou_ids_json" | jq -r '.workloads // empty')"
+    expected_nonprod_ou_id="$(echo "$expected_ou_ids_json" | jq -r '.nonprod // empty')"
+    expected_prod_ou_id="$(echo "$expected_ou_ids_json" | jq -r '.prod // empty')"
+    expected_security_ou_id="$(echo "$expected_ou_ids_json" | jq -r '.security // empty')"
+
+    [[ -z "$expected_workloads_ou_id" || "$expected_workloads_ou_id" == "$WORKLOADS_OU_ID" ]] ||
+      fail "Workloads OU ID mismatch. Terraform: ${expected_workloads_ou_id}; AWS: ${WORKLOADS_OU_ID}"
+
+    [[ -z "$expected_nonprod_ou_id" || "$expected_nonprod_ou_id" == "$NONPROD_OU_ID" ]] ||
+      fail "NonProd OU ID mismatch. Terraform: ${expected_nonprod_ou_id}; AWS: ${NONPROD_OU_ID}"
+
+    [[ -z "$expected_prod_ou_id" || "$expected_prod_ou_id" == "$PROD_OU_ID" ]] ||
+      fail "Prod OU ID mismatch. Terraform: ${expected_prod_ou_id}; AWS: ${PROD_OU_ID}"
+
+    [[ -z "$expected_security_ou_id" || "$expected_security_ou_id" == "$SECURITY_OU_ID" ]] ||
+      fail "Security OU ID mismatch. Terraform: ${expected_security_ou_id}; AWS: ${SECURITY_OU_ID}"
+
+    success "Live OU IDs match organizations Terraform output"
+  fi
+
+  if terraform_output_exists "$ORGANIZATIONS_OUTPUTS_JSON" security_operations_account_id; then
+    local output_secops_account_id
+    output_secops_account_id="$(
+      get_terraform_output_value \
+        "$ORGANIZATIONS_OUTPUTS_JSON" \
+        security_operations_account_id
+    )"
+
+    if [[ "$output_secops_account_id" != "$ACCOUNT_ID_SECOPS" ]]; then
+      fail "organizations security_operations_account_id output (${output_secops_account_id}) does not match Identity Center configuration (${ACCOUNT_ID_SECOPS})."
+    fi
+
+    success "Security-operations account ID matches organizations Terraform output"
+  fi
+
+  local accounts_json
+  accounts_json="$(
+    aws organizations list-accounts \
       "${aws_args[@]}" \
-      --parent-id "$workloads_ou_id" \
       --output json
   )"
 
-  local nonprod_ou_id
-  nonprod_ou_id="$(
-    echo "$workloads_child_ous_json" |
-      jq -r '.OrganizationalUnits[]? | select(.Name == "NonProd") | .Id' |
-      head -n 1
-  )"
+  check_organization_account_identity "dev" "$ACCOUNT_ID_DEV" "$accounts_json"
+  check_organization_account_identity "staging" "$ACCOUNT_ID_STAGING" "$accounts_json"
+  check_organization_account_identity "prod" "$ACCOUNT_ID_PROD" "$accounts_json"
+  check_organization_account_identity \
+    "$SECURITY_OPERATIONS_ACCOUNT_NAME" \
+    "$ACCOUNT_ID_SECOPS" \
+    "$accounts_json"
 
-  local prod_ou_id
-  prod_ou_id="$(
-    echo "$workloads_child_ous_json" |
-      jq -r '.OrganizationalUnits[]? | select(.Name == "Prod") | .Id' |
-      head -n 1
-  )"
+  check_account_parent_if_requested \
+    "dev" \
+    "$ACCOUNT_ID_DEV" \
+    "$NONPROD_OU_ID" \
+    "$NONPROD_OU_NAME"
 
-  require_non_empty "$nonprod_ou_id" "NonProd OU ID"
-  success "NonProd OU exists under Workloads: ${nonprod_ou_id}"
+  check_account_parent_if_requested \
+    "staging" \
+    "$ACCOUNT_ID_STAGING" \
+    "$NONPROD_OU_ID" \
+    "$NONPROD_OU_NAME"
 
-  require_non_empty "$prod_ou_id" "Prod OU ID"
-  success "Prod OU exists under Workloads: ${prod_ou_id}"
+  check_account_parent_if_requested \
+    "prod" \
+    "$ACCOUNT_ID_PROD" \
+    "$PROD_OU_ID" \
+    "$PROD_OU_NAME"
 
-  check_account_parent_if_requested "dev" "$ACCOUNT_ID_DEV" "$nonprod_ou_id" "NonProd"
-  check_account_parent_if_requested "staging" "$ACCOUNT_ID_STAGING" "$nonprod_ou_id" "NonProd"
-  check_account_parent_if_requested "prod" "$ACCOUNT_ID_PROD" "$prod_ou_id" "Prod"
+  check_account_parent_if_requested \
+    "$SECURITY_OPERATIONS_ACCOUNT_NAME" \
+    "$ACCOUNT_ID_SECOPS" \
+    "$SECURITY_OU_ID" \
+    "$SECURITY_OU_NAME"
+
+  check_organizations_security_prerequisites "$roots_json"
 }
+
 
 resolve_identity_center_instance() {
   local instances_json
@@ -914,6 +1305,12 @@ info "Name prefix: ${NAME_PREFIX}"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
 info "AWS_REGION: ${AWS_REGION}"
 info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
+info "STRICT_ACCOUNT_OU_CHECKS: ${STRICT_ACCOUNT_OU_CHECKS}"
+info "WORKLOADS_OU_NAME: ${WORKLOADS_OU_NAME}"
+info "NONPROD_OU_NAME: ${NONPROD_OU_NAME}"
+info "PROD_OU_NAME: ${PROD_OU_NAME}"
+info "SECURITY_OU_NAME: ${SECURITY_OU_NAME}"
+info "SECURITY_OPERATIONS_ACCOUNT_NAME: ${SECURITY_OPERATIONS_ACCOUNT_NAME}"
 
 require_directory "$CONTROL_PLANE_DIR"
 require_directory "$STATE_DIR"
@@ -1019,6 +1416,15 @@ GitHub OIDC required:              ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}
 GitHub plan role ARN:              ${PLAN_ROLE_ARN}
 GitHub apply role ARN:             ${APPLY_ROLE_ARN}
 Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
+
+AWS Organizations:
+  organization ID:                 ${ORGANIZATION_ID}
+  root ID:                         ${ORGANIZATION_ROOT_ID}
+  Workloads OU:                    ${WORKLOADS_OU_ID}
+  NonProd OU:                      ${NONPROD_OU_ID}
+  Prod OU:                         ${PROD_OU_ID}
+  Security OU:                     ${SECURITY_OU_ID}
+  strict account OU checks:        ${STRICT_ACCOUNT_OU_CHECKS}
 
 Identity Center instance ARN:      ${IDENTITY_CENTER_INSTANCE_ARN}
 Identity Store ID:                 ${IDENTITY_STORE_ID}
