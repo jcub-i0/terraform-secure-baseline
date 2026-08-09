@@ -8,7 +8,7 @@
 # Checks:
 # - security_operations/security_services Terraform outputs and applied state
 # - AWS caller identity matches the security-operations account
-# - AWS Organizations structure and workload account placement
+# - AWS Organizations prerequisites required by centralized security
 # - trusted service access and delegated-administrator registration
 # - Security Hub CSPM administrator state, finding aggregation, CENTRAL
 #   organization configuration, configuration policies, and associations
@@ -24,14 +24,14 @@
 #   AWS_PROFILE=security-operations AWS_REGION=us-east-1 \
 #     ./scripts/validation/validate-security-operations.sh
 #
-# Optional organization naming overrides:
-#   SECURITY_OPERATIONS_ACCOUNT_NAME=security-operations
+# Optional centralized-security target overrides:
 #   WORKLOADS_OU_NAME=Workloads
-#   NONPROD_OU_NAME=NonProd
-#   PROD_OU_NAME=Prod
-#   SECURITY_OU_NAME=Security
-#   NONPROD_ACCOUNT_NAMES="dev staging"
-#   PROD_ACCOUNT_NAMES="prod"
+#   WORKLOAD_ACCOUNT_NAMES="dev staging prod"
+#
+# For a complete PASS, every workload account represented by the centrally
+# managed CSPM policy associations must have its workload-local prerequisites
+# deployed and healthy. In this architecture that includes AWS Config, which is
+# required for centrally enabled Security Hub CSPM standards.
 
 set -euo pipefail
 
@@ -43,17 +43,10 @@ CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
-SECURITY_OPERATIONS_ACCOUNT_NAME="${SECURITY_OPERATIONS_ACCOUNT_NAME:-security-operations}"
 WORKLOADS_OU_NAME="${WORKLOADS_OU_NAME:-Workloads}"
-NONPROD_OU_NAME="${NONPROD_OU_NAME:-NonProd}"
-PROD_OU_NAME="${PROD_OU_NAME:-Prod}"
-SECURITY_OU_NAME="${SECURITY_OU_NAME:-Security}"
-NONPROD_ACCOUNT_NAMES="${NONPROD_ACCOUNT_NAMES:-dev staging}"
-PROD_ACCOUNT_NAMES="${PROD_ACCOUNT_NAMES:-prod}"
+WORKLOAD_ACCOUNT_NAMES="${WORKLOAD_ACCOUNT_NAMES:-dev staging prod}"
 
-read -r -a NONPROD_ACCOUNTS <<< "$NONPROD_ACCOUNT_NAMES"
-read -r -a PROD_ACCOUNTS <<< "$PROD_ACCOUNT_NAMES"
-WORKLOAD_ACCOUNTS=("${NONPROD_ACCOUNTS[@]}" "${PROD_ACCOUNTS[@]}")
+read -r -a WORKLOAD_ACCOUNTS <<< "$WORKLOAD_ACCOUNT_NAMES"
 
 export AWS_PAGER=""
 
@@ -318,34 +311,17 @@ success "AWS credentials belong to the Terraform security-operations account"
 info "AWS account ID: $CALLER_ACCOUNT_ID"
 info "AWS caller ARN: $CALLER_ARN"
 
-section "Checking AWS Organizations"
+section "Checking centralized-security Organizations prerequisites"
 
-ORGANIZATION_JSON="$(
-  aws organizations describe-organization \
-    "${aws_profile_args[@]}" \
-    --output json
-)"
-
-ORGANIZATION_ID="$(
-  echo "$ORGANIZATION_JSON" |
-    jq -r '.Organization.Id // empty'
-)"
-
-ORGANIZATION_FEATURE_SET="$(
-  echo "$ORGANIZATION_JSON" |
-    jq -r '.Organization.FeatureSet // empty'
-)"
-
-if [[ -z "$ORGANIZATION_ID" ]]; then
-  fail "Unable to resolve AWS Organizations organization ID."
-fi
-
-if [[ "$ORGANIZATION_FEATURE_SET" != "ALL" ]]; then
-  fail "AWS Organizations FeatureSet must be ALL. Current value: ${ORGANIZATION_FEATURE_SET:-<empty>}"
-fi
-
-success "AWS Organizations all-features mode is enabled"
-info "Organization ID: $ORGANIZATION_ID"
+# The control-plane validator owns the complete Organizations topology:
+# Organization FeatureSet, root/OU hierarchy, and account placement.
+#
+# This validator intentionally resolves only the Organizations state required
+# to prove centralized security itself:
+# - SECURITYHUB_POLICY policy-type enablement
+# - the Workloads OU used by the Security Hub V2 policy attachment
+# - workload account IDs used by CSPM associations and effective-policy checks
+# - trusted service access and delegated-administrator registrations
 
 ROOTS_JSON="$(
   aws organizations list-roots \
@@ -359,15 +335,19 @@ ROOT_COUNT="$(
 )"
 
 if [[ "$ROOT_COUNT" -ne 1 ]]; then
-  fail "Expected exactly one AWS Organizations root, found ${ROOT_COUNT}."
+  fail "Expected exactly one AWS Organizations root while resolving centralized-security prerequisites; found ${ROOT_COUNT}."
 fi
 
 ROOT_ID="$(
   echo "$ROOTS_JSON" |
-    jq -r '.Roots[0].Id'
+    jq -r '.Roots[0].Id // empty'
 )"
 
-success "AWS Organizations root resolved: $ROOT_ID"
+if [[ -z "$ROOT_ID" ]]; then
+  fail "Unable to resolve AWS Organizations root ID required for centralized-security validation."
+fi
+
+success "AWS Organizations root resolved for centralized-security prerequisites: $ROOT_ID"
 
 if [[ "$SECURITYHUB_V2_POLICY_ENABLED" == "true" ]]; then
   SECURITYHUB_POLICY_TYPE_STATUS="$(
@@ -382,10 +362,10 @@ if [[ "$SECURITYHUB_V2_POLICY_ENABLED" == "true" ]]; then
   )"
 
   if [[ "$SECURITYHUB_POLICY_TYPE_STATUS" != "ENABLED" ]]; then
-    fail "SECURITYHUB_POLICY must be enabled on the organization root. Current status: ${SECURITYHUB_POLICY_TYPE_STATUS}"
+    fail "SECURITYHUB_POLICY must be enabled for centralized Security Hub V2 governance. Current status: ${SECURITYHUB_POLICY_TYPE_STATUS}"
   fi
 
-  success "SECURITYHUB_POLICY is enabled on the organization root"
+  success "SECURITYHUB_POLICY is enabled"
 else
   warn "central_security_features_enabled.securityhub_v2=false. Skipping SECURITYHUB_POLICY enablement requirement."
 fi
@@ -417,15 +397,9 @@ resolve_unique_ou_id() {
 }
 
 WORKLOADS_OU_ID="$(resolve_unique_ou_id "$ROOT_ID" "$WORKLOADS_OU_NAME")"
-SECURITY_OU_ID="$(resolve_unique_ou_id "$ROOT_ID" "$SECURITY_OU_NAME")"
-NONPROD_OU_ID="$(resolve_unique_ou_id "$WORKLOADS_OU_ID" "$NONPROD_OU_NAME")"
-PROD_OU_ID="$(resolve_unique_ou_id "$WORKLOADS_OU_ID" "$PROD_OU_NAME")"
 
-success "OU hierarchy resolved"
-info "${WORKLOADS_OU_NAME}: ${WORKLOADS_OU_ID}"
-info "${NONPROD_OU_NAME}: ${NONPROD_OU_ID}"
-info "${PROD_OU_NAME}: ${PROD_OU_ID}"
-info "${SECURITY_OU_NAME}: ${SECURITY_OU_ID}"
+success "Resolved ${WORKLOADS_OU_NAME} OU for Security Hub V2 policy validation"
+info "${WORKLOADS_OU_NAME} OU ID: ${WORKLOADS_OU_ID}"
 
 ORGANIZATION_ACCOUNTS_JSON="$(
   aws organizations list-accounts \
@@ -466,72 +440,19 @@ resolve_active_account_id() {
     '
 }
 
-validate_account_parent() {
-  local account_name="$1"
-  local account_id="$2"
-  local expected_parent_id="$3"
-  local parents_json=""
-  local actual_parent_id=""
-
-  parents_json="$(
-    aws organizations list-parents \
-      "${aws_profile_args[@]}" \
-      --child-id "$account_id" \
-      --output json
-  )"
-
-  actual_parent_id="$(
-    echo "$parents_json" |
-      jq -r '.Parents[0].Id // empty'
-  )"
-
-  if [[ "$actual_parent_id" != "$expected_parent_id" ]]; then
-    fail "Account '${account_name}' (${account_id}) is under ${actual_parent_id:-<unknown>}; expected ${expected_parent_id}."
-  fi
-
-  success "Account '${account_name}' is in the expected OU"
-}
-
-SECURITY_OPERATIONS_ORG_ACCOUNT_ID="$(
-  resolve_active_account_id "$SECURITY_OPERATIONS_ACCOUNT_NAME"
-)"
-
-if [[ "$SECURITY_OPERATIONS_ORG_ACCOUNT_ID" != "$EXPECTED_SECURITY_OPERATIONS_ACCOUNT_ID" ]]; then
-  fail "Organizations account '${SECURITY_OPERATIONS_ACCOUNT_NAME}' resolves to ${SECURITY_OPERATIONS_ORG_ACCOUNT_ID}, but Terraform expects ${EXPECTED_SECURITY_OPERATIONS_ACCOUNT_ID}."
-fi
-
-validate_account_parent \
-  "$SECURITY_OPERATIONS_ACCOUNT_NAME" \
-  "$SECURITY_OPERATIONS_ORG_ACCOUNT_ID" \
-  "$SECURITY_OU_ID"
-
 declare -A WORKLOAD_ACCOUNT_IDS=()
 
-for account_name in "${NONPROD_ACCOUNTS[@]}"; do
+for account_name in "${WORKLOAD_ACCOUNTS[@]}"; do
   [[ -z "$account_name" ]] && continue
 
   account_id="$(resolve_active_account_id "$account_name")"
   WORKLOAD_ACCOUNT_IDS["$account_name"]="$account_id"
 
-  validate_account_parent \
-    "$account_name" \
-    "$account_id" \
-    "$NONPROD_OU_ID"
+  success "Resolved workload account '${account_name}' for centralized-security validation"
+  info "${account_name} account ID: ${account_id}"
 done
 
-for account_name in "${PROD_ACCOUNTS[@]}"; do
-  [[ -z "$account_name" ]] && continue
-
-  account_id="$(resolve_active_account_id "$account_name")"
-  WORKLOAD_ACCOUNT_IDS["$account_name"]="$account_id"
-
-  validate_account_parent \
-    "$account_name" \
-    "$account_id" \
-    "$PROD_OU_ID"
-done
-
-section "Checking Organizations security-service integration"
+section "Checking centralized-security Organizations integration"
 
 AWS_SERVICE_ACCESS_JSON="$(
   aws organizations list-aws-service-access-for-organization \
@@ -1231,13 +1152,9 @@ cat <<SUMMARY
 Security-operations account:            ${EXPECTED_SECURITY_OPERATIONS_ACCOUNT_ID}
 AWS profile:                            ${AWS_PROFILE:-<default>}
 AWS region:                             ${AWS_REGION}
-Organization ID:                        ${ORGANIZATION_ID}
-Organization root:                      ${ROOT_ID}
-
-Workloads OU:                           ${WORKLOADS_OU_ID}
-NonProd OU:                             ${NONPROD_OU_ID}
-Prod OU:                                ${PROD_OU_ID}
-Security OU:                            ${SECURITY_OU_ID}
+Organizations root dependency:          ${ROOT_ID}
+Workloads OU policy target:             ${WORKLOADS_OU_ID}
+Workload accounts:                      ${WORKLOAD_ACCOUNT_NAMES}
 
 Central Security Hub CSPM enabled:      ${SECURITYHUB_CSPM_ENABLED}
 CSPM configuration policy count:        ${CSPM_POLICY_COUNT}
