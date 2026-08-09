@@ -1,0 +1,197 @@
+name: Export Security Operations Evidence
+
+run-name: Security operations evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: export-security-operations-evidence
+  cancel-in-progress: false
+
+jobs:
+  export-security-operations-evidence:
+    name: Export security operations evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: security-operations-plan
+
+    env:
+      AWS_PAGER: ""
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+      SECURITY_OPERATIONS_ENV_NAME: "security-operations"
+      CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+
+      # Central security is intentionally validated across every governed
+      # workload account. Run this workflow only while dev, staging, and prod
+      # are deployed and their workload-local prerequisites are healthy.
+      WORKLOADS_OU_NAME: "Workloads"
+      WORKLOAD_ACCOUNT_NAMES: "dev staging prod"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve and validate workflow settings
+        shell: bash
+        env:
+          PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+          PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PRIMARY_REGION}" ]]; then
+            echo "::error::PRIMARY_REGION is not configured in the security-operations-plan GitHub Environment."
+            exit 1
+          fi
+
+          if [[ -z "${PLAN_ROLE_GITHUB_ARN}" ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not configured in the security-operations-plan GitHub Environment."
+            exit 1
+          fi
+
+          if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:aws:iam::([0-9]{12}):role/.+ ]]; then
+            echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+
+          EXPECTED_ACCOUNT_ID="${BASH_REMATCH[1]}"
+
+          {
+            echo "AWS_REGION=${PRIMARY_REGION}"
+            echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
+            echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+          aws-region: ${{ vars.PRIMARY_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CALLER_ACCOUNT_ID="$(
+            aws sts get-caller-identity \
+              --query 'Account' \
+              --output text
+          )"
+
+          if [[ "${CALLER_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${CALLER_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      - name: Initialize security-operations security-services backend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          terraform -chdir="bootstrap/security_operations/security_services" init \
+            -input=false \
+            -no-color
+
+      - name: Export security operations evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./scripts/validation/export-security-operations.sh
+
+      - name: Locate generated evidence
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EVIDENCE_ROOT="validation-results/security-operations/security-services"
+
+          if [[ ! -d "${EVIDENCE_ROOT}" ]]; then
+            echo "::warning::No security-operations evidence directory was generated."
+            exit 0
+          fi
+
+          LATEST_TIMESTAMP="$(
+            find "${EVIDENCE_ROOT}" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              -printf '%f\n' \
+            | sort \
+            | tail -n 1
+          )"
+
+          if [[ -z "${LATEST_TIMESTAMP}" ]]; then
+            echo "::warning::No timestamped security-operations evidence package was found."
+            exit 0
+          fi
+
+          EVIDENCE_DIR="${EVIDENCE_ROOT}/${LATEST_TIMESTAMP}"
+          SUMMARY_MD="${EVIDENCE_DIR}/summary.md"
+          SUMMARY_JSON="${EVIDENCE_DIR}/summary.json"
+
+          {
+            echo "evidence_dir=${EVIDENCE_DIR}"
+            echo "summary_md=${SUMMARY_MD}"
+            echo "summary_json=${SUMMARY_JSON}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Evidence directory: ${EVIDENCE_DIR}"
+
+      - name: Publish validation report to workflow summary
+        if: always()
+        shell: bash
+        env:
+          EVIDENCE_DIR: ${{ steps.evidence.outputs.evidence_dir }}
+          SUMMARY_MD: ${{ steps.evidence.outputs.summary_md }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Security Operations Evidence"
+            echo
+            echo "- GitHub Environment: \`security-operations-plan\`"
+            echo "- AWS Region: \`${AWS_REGION:-<not resolved>}\`"
+            echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+            echo "- Workloads OU: \`${WORKLOADS_OU_NAME}\`"
+            echo "- Workload accounts: \`${WORKLOAD_ACCOUNT_NAMES}\`"
+            echo "- Evidence directory: \`${EVIDENCE_DIR:-<not generated>}\`"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -n "${SUMMARY_MD}" && -f "${SUMMARY_MD}" ]]; then
+            cat "${SUMMARY_MD}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            {
+              echo "## Validation Report"
+              echo
+              echo "No generated \`summary.md\` file was available. Review the workflow logs for the failure that occurred before or during evidence export."
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload security operations evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-operations-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: validation-results/security-operations/security-services/
+          if-no-files-found: warn
+          retention-days: 30

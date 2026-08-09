@@ -43,7 +43,7 @@ VALIDATION_SCRIPTS=(
   "validate-networking.sh"
   "validate-vpc-endpoints.sh"
   "validate-logging.sh"
-  "validate-security-services.sh"
+  "validate-security-workload.sh"
   "validate-kms.sh"
   "validate-backup.sh"
   "validate-sns.sh"
@@ -60,7 +60,7 @@ declare -A VALIDATION_AREAS=(
   ["validate-networking.sh"]="Networking"
   ["validate-vpc-endpoints.sh"]="VPC Endpoints"
   ["validate-logging.sh"]="Logging"
-  ["validate-security-services.sh"]="Security Services"
+  ["validate-security-workload.sh"]="Workload Security"
   ["validate-kms.sh"]="KMS"
   ["validate-backup.sh"]="Backup"
   ["validate-sns.sh"]="SNS"
@@ -79,7 +79,7 @@ PASSED_COUNT=0
 FAILED_COUNT=0
 TOTAL_COUNT="${#VALIDATION_SCRIPTS[@]}"
 
-section "${CLOUD_NAME} Validation Report Export"
+section "${CLOUD_NAME} Workload Validation Report Export"
 
 section "Checking required local commands"
 
@@ -226,7 +226,7 @@ success "JSON summary written: ${SUMMARY_JSON}"
 section "Generating Markdown summary"
 
 {
-  echo "# ${CLOUD_NAME} Validation Report"
+  echo "# ${CLOUD_NAME} Workload Validation Report"
   echo
   echo "This report summarizes automated read-only validation results for the \`$ENV_NAME\` workload environment."
   echo

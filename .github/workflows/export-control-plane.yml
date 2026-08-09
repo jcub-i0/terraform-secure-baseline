@@ -15,11 +15,6 @@ on:
         required: true
         default: true
         type: boolean
-      strict_account_ou_checks:
-        description: "Fail when workload accounts are not in their expected OUs"
-        required: true
-        default: false
-        type: boolean
       require_state_stack_remote:
         description: "Require the control-plane state stack to use a readable remote S3 backend"
         required: true
@@ -53,8 +48,14 @@ jobs:
       REQUIRE_CONTROL_PLANE_GITHUB_OIDC: "true"
       CHECK_OPTIONAL_SECOPS_GROUPS: ${{ inputs.check_optional_secops_groups }}
       STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${{ inputs.strict_identity_center_assignments }}
-      STRICT_ACCOUNT_OU_CHECKS: ${{ inputs.strict_account_ou_checks }}
+      STRICT_ACCOUNT_OU_CHECKS: "true"
       REQUIRE_STATE_STACK_REMOTE: ${{ inputs.require_state_stack_remote }}
+
+      WORKLOADS_OU_NAME: "Workloads"
+      NONPROD_OU_NAME: "NonProd"
+      PROD_OU_NAME: "Prod"
+      SECURITY_OU_NAME: "Security"
+      SECURITY_OPERATIONS_ACCOUNT_NAME: "security-operations"
 
       TF_VAR_identity_center_workloads: ${{ vars.IDENTITY_CENTER_WORKLOADS }}
       TF_VAR_identity_center_secops: ${{ vars.IDENTITY_CENTER_SECOPS }}
@@ -275,6 +276,11 @@ jobs:
             echo "- Optional SecOps group checks: \`${CHECK_OPTIONAL_SECOPS_GROUPS}\`"
             echo "- Strict Identity Center assignments: \`${STRICT_IDENTITY_CENTER_ASSIGNMENTS}\`"
             echo "- Strict account OU checks: \`${STRICT_ACCOUNT_OU_CHECKS}\`"
+            echo "- Workloads OU: \`${WORKLOADS_OU_NAME}\`"
+            echo "- NonProd OU: \`${NONPROD_OU_NAME}\`"
+            echo "- Prod OU: \`${PROD_OU_NAME}\`"
+            echo "- Security OU: \`${SECURITY_OU_NAME}\`"
+            echo "- Security-operations account name: \`${SECURITY_OPERATIONS_ACCOUNT_NAME}\`"
             echo "- Require state stack remote: \`${REQUIRE_STATE_STACK_REMOTE}\`"
             echo "- Evidence directory: \`${EVIDENCE_DIR:-not generated}\`"
             echo

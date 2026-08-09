@@ -479,7 +479,7 @@ validate-env.sh
 validate-networking.sh
 validate-vpc-endpoints.sh
 validate-logging.sh
-validate-security-services.sh
+validate-security-workload.sh
 validate-kms.sh
 validate-backup.sh
 validate-sns.sh
@@ -499,7 +499,7 @@ Examples:
 ./scripts/validation/validate-networking.sh dev
 ./scripts/validation/validate-vpc-endpoints.sh dev
 ./scripts/validation/validate-logging.sh dev
-./scripts/validation/validate-security-services.sh dev
+./scripts/validation/validate-security-workload.sh dev
 ./scripts/validation/validate-kms.sh dev
 ./scripts/validation/validate-backup.sh dev
 ./scripts/validation/validate-sns.sh dev
