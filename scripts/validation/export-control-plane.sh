@@ -25,8 +25,14 @@ REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
 CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
-STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
+STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-true}"
 REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
+
+WORKLOADS_OU_NAME="${WORKLOADS_OU_NAME:-Workloads}"
+NONPROD_OU_NAME="${NONPROD_OU_NAME:-NonProd}"
+PROD_OU_NAME="${PROD_OU_NAME:-Prod}"
+SECURITY_OU_NAME="${SECURITY_OU_NAME:-Security}"
+SECURITY_OPERATIONS_ACCOUNT_NAME="${SECURITY_OPERATIONS_ACCOUNT_NAME:-security-operations}"
 
 case "$REQUIRE_STATE_STACK_REMOTE" in
   true|false)
@@ -152,6 +158,11 @@ info "CHECK_OPTIONAL_SECOPS_GROUPS: ${CHECK_OPTIONAL_SECOPS_GROUPS}"
 info "STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${STRICT_IDENTITY_CENTER_ASSIGNMENTS}"
 info "STRICT_ACCOUNT_OU_CHECKS: ${STRICT_ACCOUNT_OU_CHECKS}"
 info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
+info "WORKLOADS_OU_NAME: ${WORKLOADS_OU_NAME}"
+info "NONPROD_OU_NAME: ${NONPROD_OU_NAME}"
+info "PROD_OU_NAME: ${PROD_OU_NAME}"
+info "SECURITY_OU_NAME: ${SECURITY_OU_NAME}"
+info "SECURITY_OPERATIONS_ACCOUNT_NAME: ${SECURITY_OPERATIONS_ACCOUNT_NAME}"
 info "IDENTITY_CENTER_WORKLOADS configured: $([[ -n "$IDENTITY_CENTER_WORKLOADS" ]] && echo true || echo false)"
 info "IDENTITY_CENTER_SECOPS configured: $([[ -n "$IDENTITY_CENTER_SECOPS" ]] && echo true || echo false)"
 info "Validation time: ${VALIDATION_TIME}"
@@ -198,6 +209,11 @@ export CHECK_OPTIONAL_SECOPS_GROUPS
 export STRICT_IDENTITY_CENTER_ASSIGNMENTS
 export STRICT_ACCOUNT_OU_CHECKS
 export REQUIRE_STATE_STACK_REMOTE
+export WORKLOADS_OU_NAME
+export NONPROD_OU_NAME
+export PROD_OU_NAME
+export SECURITY_OU_NAME
+export SECURITY_OPERATIONS_ACCOUNT_NAME
 export IDENTITY_CENTER_WORKLOADS
 export IDENTITY_CENTER_SECOPS
 export TF_VAR_identity_center_workloads="${TF_VAR_identity_center_workloads:-$IDENTITY_CENTER_WORKLOADS}"
@@ -262,6 +278,11 @@ jq -n \
   --arg strict_identity_center_assignments "$STRICT_IDENTITY_CENTER_ASSIGNMENTS" \
   --arg strict_account_ou_checks "$STRICT_ACCOUNT_OU_CHECKS" \
   --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
+  --arg workloads_ou_name "$WORKLOADS_OU_NAME" \
+  --arg nonprod_ou_name "$NONPROD_OU_NAME" \
+  --arg prod_ou_name "$PROD_OU_NAME" \
+  --arg security_ou_name "$SECURITY_OU_NAME" \
+  --arg security_operations_account_name "$SECURITY_OPERATIONS_ACCOUNT_NAME" \
   --argjson identity_center_workload_account_ids "$IDENTITY_CENTER_WORKLOAD_ACCOUNT_IDS" \
   --arg identity_center_secops_account_id "$ACCOUNT_ID_SECOPS" \
   --argjson scripts_passed "$PASSED_COUNT" \
@@ -292,6 +313,11 @@ jq -n \
       strict_identity_center_assignments: $strict_identity_center_assignments,
       strict_account_ou_checks: $strict_account_ou_checks,
       require_state_stack_remote: $require_state_stack_remote,
+      workloads_ou_name: $workloads_ou_name,
+      nonprod_ou_name: $nonprod_ou_name,
+      prod_ou_name: $prod_ou_name,
+      security_ou_name: $security_ou_name,
+      security_operations_account_name: $security_operations_account_name,
       identity_center_workload_account_ids: $identity_center_workload_account_ids,
       identity_center_secops_account_id: $identity_center_secops_account_id
     },
@@ -311,9 +337,14 @@ jq -n \
       "control_plane_github_plan_role",
       "control_plane_github_apply_role",
       "github_repository_trust_conditions",
+      "aws_organizations_all_features",
       "aws_organizations_root",
       "aws_organizations_ou_structure",
-      "optional_workload_account_ou_placement",
+      "aws_organizations_account_identity",
+      "aws_organizations_account_placement",
+      "aws_organizations_security_service_trusted_access",
+      "aws_organizations_delegated_administrators",
+      "aws_organizations_securityhub_policy_type",
       "identity_center_instance",
       "identity_center_groups",
       "identity_center_permission_sets",
@@ -380,6 +411,11 @@ section "Generating Markdown summary"
   echo "| Strict Identity Center Assignments | ${STRICT_IDENTITY_CENTER_ASSIGNMENTS} |"
   echo "| Strict Account OU Checks | ${STRICT_ACCOUNT_OU_CHECKS} |"
   echo "| Require State Stack Remote | ${REQUIRE_STATE_STACK_REMOTE} |"
+  echo "| Workloads OU | \`${WORKLOADS_OU_NAME}\` |"
+  echo "| NonProd OU | \`${NONPROD_OU_NAME}\` |"
+  echo "| Prod OU | \`${PROD_OU_NAME}\` |"
+  echo "| Security OU | \`${SECURITY_OU_NAME}\` |"
+  echo "| Security-Operations Account Name | \`${SECURITY_OPERATIONS_ACCOUNT_NAME}\` |"
   echo "| Dev Account ID | \`${ACCOUNT_ID_DEV}\` |"
   echo "| Staging Account ID | \`${ACCOUNT_ID_STAGING}\` |"
   echo "| Prod Account ID | \`${ACCOUNT_ID_PROD}\` |"
@@ -413,8 +449,13 @@ section "Generating Markdown summary"
   echo "- Control-plane GitHub OIDC provider"
   echo "- Control-plane GitHub Plan and Apply roles"
   echo "- Expected GitHub repository trust conditions when configured"
-  echo "- AWS Organizations root and OU structure"
-  echo "- Optional workload account OU placement checks"
+  echo "- AWS Organizations ALL-features mode"
+  echo "- AWS Organizations root and OU structure, including the root-level Security OU"
+  echo "- Active dev, staging, prod, and security-operations account identity"
+  echo "- Strict workload and security-operations account placement in their expected OUs"
+  echo "- Security Hub and GuardDuty trusted service access required by centralized security"
+  echo "- Security Hub and GuardDuty delegated-administrator registration"
+  echo "- Security Hub V2 SECURITYHUB_POLICY enablement when centralized V2 organization management is enabled"
   echo "- IAM Identity Center instance"
   echo "- Required SecOps Identity Center groups"
   echo "- Optional SecOps Identity Center groups when enabled"
@@ -475,6 +516,11 @@ echo "Dev account ID:             ${ACCOUNT_ID_DEV}"
 echo "Staging account ID:         ${ACCOUNT_ID_STAGING}"
 echo "Prod account ID:            ${ACCOUNT_ID_PROD}"
 echo "Security-operations ID:     ${ACCOUNT_ID_SECOPS}"
+echo "Workloads OU:               ${WORKLOADS_OU_NAME}"
+echo "NonProd OU:                 ${NONPROD_OU_NAME}"
+echo "Prod OU:                    ${PROD_OU_NAME}"
+echo "Security OU:                ${SECURITY_OU_NAME}"
+echo "Strict account OU checks:   ${STRICT_ACCOUNT_OU_CHECKS}"
 echo "Require remote state stack: ${REQUIRE_STATE_STACK_REMOTE}"
 echo
 echo "Output directory:           ${OUTPUT_DIR}"
