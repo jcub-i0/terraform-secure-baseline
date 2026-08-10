@@ -468,7 +468,6 @@ section "Generating Markdown summary"
   echo
   echo "- Workload bootstrap validation"
   echo "- Workload baseline validation"
-  echo "- GitHub Actions workflow execution validation"
   echo "- End-user SSO login validation"
   echo "- Live EC2 isolation test"
   echo "- Live EC2 rollback test"
