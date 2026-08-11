@@ -278,7 +278,6 @@ jq -n \
     manual_validation_remaining: [
       "workload_baseline_validation",
       "control_plane_validation",
-      "github_actions_workflows",
       "identity_center_assignments",
       "live_ec2_isolation",
       "live_ec2_rollback",
@@ -374,7 +373,6 @@ section "Generating Markdown summary"
   echo
   echo "- Workload baseline validation"
   echo "- Control-plane validation"
-  echo "- GitHub Actions workflow execution validation"
   echo "- IAM Identity Center assignment validation"
   echo "- Live EC2 isolation test"
   echo "- Live EC2 rollback test"
