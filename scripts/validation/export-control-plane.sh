@@ -353,7 +353,6 @@ jq -n \
     manual_validation_remaining: [
       "workload_bootstrap_validation",
       "workload_baseline_validation",
-      "github_actions_workflows",
       "end_user_sso_login",
       "live_ec2_isolation",
       "live_ec2_rollback",
