@@ -221,15 +221,42 @@ jq -n \
       "securityhub_v2_effective_workload_policies"
     ],
     manual_validation_remaining: [
-      "control_plane_validation",
-      "workload_bootstrap_validation",
-      "workload_baseline_validation",
-      "live_ec2_isolation",
-      "live_ec2_rollback",
-      "live_ip_enrichment",
-      "tamper_detection",
-      "break_glass",
-      "destroy_safety"
+      {
+        "validation": "control_plane_and_organizations_topology_validation",
+        "workflow": "Export Control Plane Evidence"
+      },
+      {
+        "validation": "workload_bootstrap_validation",
+        "workflow": "Export Bootstrap Evidence"
+      },
+      {
+        "validation": "workload_baseline_validation",
+        "workflow": "Export Baseline Evidence"
+      },
+      {
+        "validation": "live_ec2_isolation",
+        "workflow": null
+      },
+      {
+        "validation": "live_ec2_rollback",
+        "workflow": null
+      },
+      {
+        "validation": "live_ip_enrichment",
+        "workflow": null
+      },
+      {
+        "validation": "tamper_detection",
+        "workflow": null
+      },
+      {
+        "validation": "break_glass_role_assumption",
+        "workflow": null
+      },
+      {
+        "validation": "destroy_safety_review",
+        "workflow": null
+      }
     ]
   }' > "$SUMMARY_JSON"
 
