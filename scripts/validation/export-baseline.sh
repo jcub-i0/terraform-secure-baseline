@@ -209,14 +209,42 @@ jq -n \
     scripts_failed: $scripts_failed,
     results: $results,
     manual_validation_remaining: [
-      "control_plane",
-      "identity_center_assignments",
-      "live_ec2_isolation",
-      "live_ec2_rollback",
-      "live_ip_enrichment",
-      "tamper_detection",
-      "break_glass",
-      "destroy_safety"
+      {
+        "validation": "control_plane_and_organizations_topology_validation",
+        "workflow": "Export Control Plane Evidence"
+      },
+      {
+        "validation": "workload_bootstrap_validation",
+        "workflow": "Export Bootstrap Evidence"
+      },
+      {
+        "validation": "end_user_sso_login_validation",
+        "workflow: null
+      }
+      {
+        "validation": "live_ec2_isolation",
+        "workflow": null
+      },
+      {
+        "validation": "live_ec2_rollback",
+        "workflow": null
+      },
+      {
+        "validation": "live_ip_enrichment",
+        "workflow": null
+      },
+      {
+        "validation": "tamper_detection",
+        "workflow": null
+      },
+      {
+        "validation": "break_glass_role_assumption",
+        "workflow": null
+      },
+      {
+        "validation": "destroy_safety_review",
+        "workflow": null
+      }
     ]
   }' > "$SUMMARY_JSON"
 
@@ -270,8 +298,8 @@ section "Generating Markdown summary"
   echo
   echo "The automated validation suite is intentionally read-only. The following checks remain manual:"
   echo
-  echo "- Control-plane resource validation"
-  echo "- IAM Identity Center assignment validation"
+  echo "- Full control-plane and AWS Organizations topology validation"
+  echo "- End-user SSO login validation"
   echo "- Live EC2 isolation test"
   echo "- Live EC2 rollback test"
   echo "- Live IP enrichment test"
