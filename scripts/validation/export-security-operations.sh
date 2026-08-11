@@ -224,7 +224,6 @@ jq -n \
       "control_plane_validation",
       "workload_bootstrap_validation",
       "workload_baseline_validation",
-      "github_actions_workflows",
       "live_ec2_isolation",
       "live_ec2_rollback",
       "live_ip_enrichment",
