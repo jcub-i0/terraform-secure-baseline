@@ -18,7 +18,8 @@ locals {
     "ec2",
     "events",
     "securityhub",
-    "lambda"
+    "lambda",
+    "guardduty-data",
   ]
 }
 
