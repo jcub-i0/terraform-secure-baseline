@@ -35,18 +35,6 @@ variable "subnet_cidrs" {
   type = map(list(string))
 }
 
-variable "compute_sg_id" {
-  type = string
-}
-
-variable "lambda_ec2_isolation_sg_id" {
-  type = string
-}
-
-variable "lambda_ec2_rollback_sg_id" {
-  type = string
-}
-
 variable "endpoint_private_route_table_ids_map" {
   description = "map(string) of Endpoint Private Route Table IDs"
   type        = map(string)

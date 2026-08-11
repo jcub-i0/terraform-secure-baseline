@@ -52,6 +52,11 @@ resource "terraform_data" "compute_security_policy_ready" {
   input = var.compute_sg_rule_ids
 }
 
+## Interface VPC Endpoint IDs that must exist before compute instances launch
+resource "terraform_data" "compute_vpc_endpoints_ready" {
+  input = var.interface_endpoint_ids
+}
+
 ## EC2 INSTANCE
 resource "aws_instance" "ec2" {
   for_each               = var.compute_private_subnet_ids_map
@@ -90,7 +95,8 @@ resource "aws_instance" "ec2" {
   }
 
   depends_on = [
-    terraform_data.compute_security_policy_ready
+    terraform_data.compute_security_policy_ready,
+    terraform_data.compute_vpc_endpoints_ready
   ]
 
   tags = {

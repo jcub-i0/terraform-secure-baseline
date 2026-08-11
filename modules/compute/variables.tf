@@ -54,3 +54,8 @@ variable "compute_sg_rule_ids" {
     compute_egress_to_internet_https = optional(string)
   })
 }
+
+variable "interface_endpoint_ids" {
+  description = "Map of Interface-type VPC Endpoints and their IDs"
+  type        = map(string)
+}
