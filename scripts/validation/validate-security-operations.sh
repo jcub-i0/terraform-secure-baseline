@@ -1124,20 +1124,22 @@ if [[ "$SECURITYHUB_V2_POLICY_ENABLED" == "true" ]]; then
 
     if ! printf '%s' "$EFFECTIVE_POLICY_CONTENT" |
       jq -e --arg region "$SECURITYHUB_HOME_REGION" '
-        (.securityhub.enable_in_regions."@@assign" // [])
-        | index($region) != null
+        (.securityhub.enable_in_regions // []) as $enabled
+        | ($enabled | index($region) != null)
+          or ($enabled | index("ALL_SUPPORTED") != null)
       ' >/dev/null; then
       echo "$EFFECTIVE_POLICY_CONTENT" | jq .
       fail "Effective Security Hub V2 policy for '${account_name}' does not enable ${SECURITYHUB_HOME_REGION}."
     fi
 
     if ! printf '%s' "$EFFECTIVE_POLICY_CONTENT" |
-      jq -e '
-        (.securityhub.disable_in_regions."@@assign" // [])
-        | length == 0
+      jq -e --arg region "$SECURITYHUB_HOME_REGION" '
+        (.securityhub.disable_in_regions // []) as $disabled
+        | ($disabled | index($region) == null)
+          and ($disabled | index("ALL_SUPPORTED") == null)
       ' >/dev/null; then
       echo "$EFFECTIVE_POLICY_CONTENT" | jq .
-      fail "Effective Security Hub V2 policy for '${account_name}' disables one or more Regions unexpectedly."
+      fail "Effective Security Hub V2 policy for '${account_name}' disables ${SECURITYHUB_HOME_REGION}."
     fi
 
     success "Effective Security Hub V2 policy is correct for workload account '${account_name}'"
