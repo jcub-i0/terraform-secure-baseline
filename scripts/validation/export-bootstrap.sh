@@ -286,7 +286,7 @@ jq -n \
       },
       {
         "validation": "end_user_sso_login_validation",
-        "workflow: null
+        "workflow:" null
       },
       {
         "validation": "live_ec2_isolation",
