@@ -58,7 +58,7 @@ module "compute" {
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
   isolation_allowed              = var.isolation_allowed
 
-  interface_endpoint_ids = module.vpc_endpoints.interface_endpoint_ids
+  interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
   interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
   data_sg_id                = module.storage.data_sg_id
   db_port                   = var.db_port
@@ -241,7 +241,7 @@ module "vpc_endpoints" {
     values(module.networking.serverless_private_route_table_ids_map)
   )
 
-  subnet_cidrs  = var.subnet_cidrs
+  subnet_cidrs = var.subnet_cidrs
 }
 
 module "firewall" {

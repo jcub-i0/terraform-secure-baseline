@@ -57,5 +57,5 @@ variable "compute_sg_rule_ids" {
 
 variable "interface_endpoint_ids" {
   description = "Map of Interface-type VPC Endpoints and their IDs"
-  type = map(string)
+  type        = map(string)
 }
