@@ -241,10 +241,6 @@ module "vpc_endpoints" {
   )
 
   subnet_cidrs  = var.subnet_cidrs
-  compute_sg_id = module.compute.compute_sg_id
-
-  lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
-  lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
 }
 
 module "firewall" {
