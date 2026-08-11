@@ -211,7 +211,6 @@ jq -n \
     manual_validation_remaining: [
       "control_plane",
       "identity_center_assignments",
-      "github_actions_workflows",
       "live_ec2_isolation",
       "live_ec2_rollback",
       "live_ip_enrichment",
@@ -273,7 +272,6 @@ section "Generating Markdown summary"
   echo
   echo "- Control-plane resource validation"
   echo "- IAM Identity Center assignment validation"
-  echo "- GitHub Actions workflow validation"
   echo "- Live EC2 isolation test"
   echo "- Live EC2 rollback test"
   echo "- Live IP enrichment test"
