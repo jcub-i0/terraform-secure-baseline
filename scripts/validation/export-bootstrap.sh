@@ -276,15 +276,42 @@ jq -n \
       "github_workload_cmk_access_strict_by_default"
     ],
     manual_validation_remaining: [
-      "workload_baseline_validation",
-      "control_plane_validation",
-      "identity_center_assignments",
-      "live_ec2_isolation",
-      "live_ec2_rollback",
-      "live_ip_enrichment",
-      "tamper_detection",
-      "break_glass",
-      "destroy_safety"
+      {
+        "validation": "control_plane_and_organizations_topology_validation",
+        "workflow": "Export Control Plane Evidence"
+      },
+      {
+        "validation": "workload_baseline_validation",
+        "workflow": "Export Baseline Evidence"
+      },
+      {
+        "validation": "end_user_sso_login_validation",
+        "workflow: null
+      }
+      {
+        "validation": "live_ec2_isolation",
+        "workflow": null
+      },
+      {
+        "validation": "live_ec2_rollback",
+        "workflow": null
+      },
+      {
+        "validation": "live_ip_enrichment",
+        "workflow": null
+      },
+      {
+        "validation": "tamper_detection",
+        "workflow": null
+      },
+      {
+        "validation": "break_glass_role_assumption",
+        "workflow": null
+      },
+      {
+        "validation": "destroy_safety_review",
+        "workflow": null
+      }
     ]
   }' > "$SUMMARY_JSON"
 
@@ -372,7 +399,7 @@ section "Generating Markdown summary"
   echo "The automated workload bootstrap validation export is intentionally read-only. The following checks remain outside this report:"
   echo
   echo "- Workload baseline validation"
-  echo "- Control-plane validation"
+  echo "- Full control-plane and AWS Organizations topology validation"
   echo "- IAM Identity Center assignment validation"
   echo "- Live EC2 isolation test"
   echo "- Live EC2 rollback test"
