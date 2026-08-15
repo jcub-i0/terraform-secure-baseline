@@ -35,7 +35,7 @@ This checklist validates:
 
 ## Validation Scope
 
-Run this checklist for each deployed workload environment:
+Run workload checks for each deployed environment:
 
 ```text
 dev
@@ -43,38 +43,32 @@ staging
 prod
 ```
 
-Some checks also apply to the control plane:
+The complete platform also has two centralized validation targets:
 
 ```text
 control-plane
+security-operations
 ```
 
 Recommended validation order:
 
 1. Confirm AWS profile/account variables.
-2. Verify each migrated state stack with `scripts/bootstrap/migrate-state-stack.sh <target> --verify-only`.
-3. After each workload baseline is deployed, complete workload-account reconciliation through the `Reconcile Workload Account` `plan-and-apply` workflow or a local `--plan-file` / `--apply-plan` exact-plan handoff.
-4. Run automated workload bootstrap validation with `validate-bootstrap.sh` for each deployed workload environment.
-5. Export workload bootstrap evidence with `export-bootstrap.sh` for each deployed workload environment.
-6. Run automated workload baseline validation with `validate-baseline.sh` for each deployed workload environment.
-7. Export workload baseline evidence with `export-baseline.sh` for each deployed workload environment.
-8. Run automated control-plane validation with `validate-control-plane.sh`.
-9. Export control-plane evidence with `export-control-plane.sh`.
-10. Review any control-plane warnings, especially AWS Organizations account placement warnings.
-11. Validate GitHub Actions plan/apply/destroy workflows manually.
-12. Review the layer-specific GitHub evidence-export workflow results.
-13. Validate IAM Identity Center end-user access manually where required.
-14. Run live Lambda workflow tests only in approved environments.
-15. Run tamper and break-glass tests only when explicitly approved.
-16. Review destroy safety requirements before running any destroy or teardown workflow.
+2. Verify each migrated state stack with `scripts/bootstrap/migrate-state-stack.sh <target> --verify-only` where applicable.
+3. Run and export control-plane validation.
+4. Run and export security-operations validation.
+5. After each workload baseline is deployed, complete workload-account reconciliation.
+6. Run and export workload bootstrap validation for each workload account.
+7. Run and export workload baseline validation for each deployed workload account.
+8. Review the four evidence layers together; do not treat a single layer as proof of the full platform.
+9. Validate IAM Identity Center end-user access where required.
+10. Run live Lambda, tamper, and break-glass tests only in approved environments.
+11. Review destroy safety requirements before teardown.
 
 ---
 
 ## Required Variables
 
-Because these validation checks require switching between different workload accounts, it is recommended to use **four separate terminals**, each dedicated to a specific account.
-
-Set these variables before running environment-specific checks.
+Because validation crosses five AWS accounts, separate terminals or clearly isolated CLI profiles are recommended for `control-plane`, `security-operations`, `dev`, `staging`, and `prod`.
 
 ### Dev
 
@@ -121,6 +115,18 @@ export ENVIRONMENT="control-plane"
 export AWS_REGION="us-east-1"
 export CLOUD_NAME="tf-secure-baseline"
 export ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>"
+export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
+```
+
+### Security-Operations
+
+```bash
+export AWS_PAGER=""
+export AWS_PROFILE="security-operations"
+export ENVIRONMENT="security-operations"
+export AWS_REGION="us-east-1"
+export CLOUD_NAME="tf-secure-baseline"
+export ACCOUNT_ID="<SECURITY-OPERATIONS-ACCOUNT-ID>"
 export NAME_PREFIX="${CLOUD_NAME}-${ENVIRONMENT}"
 ```
 
@@ -518,7 +524,7 @@ These scripts validate:
 - VPC, subnets, route tables, NAT Gateway, and Network Firewall expectations
 - VPC endpoint placement, state, route table associations, and endpoint security group paths
 - CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, and alarms
-- GuardDuty, Security Hub, AWS Config, Inspector, and AWS Backup enablement based on effective profile settings
+- workload-local AWS Config, Inspector, and AWS Backup state plus GuardDuty, Security Hub CSPM, and Security Hub V2 ownership/administrator relationships based on effective Terraform outputs
 - KMS aliases, CMKs, key state, key manager, and rotation status
 - Backup vaults, plans, selections, schedules, retention, tagged resources, recent jobs, and recovery point reporting
 - SNS topics, subscriptions, pending confirmations, and encryption mode
@@ -538,197 +544,100 @@ Validation scripts failed:  0/14
 
 ## Automated Control-Plane Validation
 
-Control-plane validation is handled separately from workload validation because the control plane manages governance and bootstrap resources rather than workload baseline infrastructure.
+Control-plane validation proves organization topology and prerequisites rather than workload baseline state.
 
-Run the control-plane validation script with the control-plane AWS profile:
+Use the consolidated Identity Center configuration expected by the Terraform stack:
 
 ```bash
+IDENTITY_CENTER_WORKLOADS='<JSON-WORKLOAD-CONFIGURATION-MAP>' \
+IDENTITY_CENTER_SECOPS='<JSON-SECURITY-OPERATIONS-CONFIGURATION>' \
 AWS_PAGER="" \
 AWS_PROFILE=control-plane \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
-ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
-ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
 REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
-Example:
+The validator covers:
+
+- control-plane AWS identity, state outputs, backend locking, and optional strict remote-state proof
+- state bucket and state CMK protections
+- control-plane GitHub OIDC provider and Plan/Apply roles
+- AWS Organizations ALL-features mode
+- `Workloads`, `NonProd`, `Prod`, and `Security` OU topology
+- active `dev`, `staging`, `prod`, and `security-operations` accounts
+- strict account placement under the expected OUs
+- Security Hub / GuardDuty trusted service access and delegated-administrator registration
+- Security Hub V2 `SECURITYHUB_POLICY` prerequisite
+- IAM Identity Center required groups, permission sets, and assignments
+
+`STRICT_ACCOUNT_OU_CHECKS` and `STRICT_IDENTITY_CENTER_ASSIGNMENTS` default to `true`; required mismatches fail the current validator unless a run explicitly relaxes those settings.
+
+---
+
+## Automated Security-Operations Validation
+
+Run centralized-security validation from the `security-operations` account:
 
 ```bash
 AWS_PAGER="" \
-AWS_PROFILE=control-plane \
+AWS_PROFILE=security-operations \
 AWS_REGION=us-east-1 \
-EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
-EXPECTED_GITHUB_REPOSITORY="example-org/terraform-secure-baseline" \
-ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
-ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
-ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
-REQUIRE_STATE_STACK_REMOTE=true \
-./scripts/validation/validate-control-plane.sh
+EXPECTED_ACCOUNT_ID="<SECURITY-OPERATIONS-ACCOUNT-ID>" \
+./scripts/validation/validate-security-operations.sh
 ```
 
-This script performs safe, read-only validation for:
+The validator covers:
 
-- AWS caller identity and expected control-plane account ID
-- Control-plane Terraform state stack outputs
-- active post-migration control-plane state backend configuration
-- migrated control-plane state object existence and readability
-- successful `terraform state pull` for the control-plane state stack
-- Terraform state S3 bucket existence, versioning, encryption, and public access block settings
-- Terraform state KMS CMK existence and key state
-- S3 native backend locking configuration with `use_lockfile = true`
-- GitHub OIDC provider existence
-- Control-plane GitHub plan/apply role existence
-- GitHub OIDC trust policy conditions for the expected repository
-- AWS Organizations root and expected OU structure
-- IAM Identity Center instance discovery
-- Expected SecOps Identity Center groups
-- Identity Center permission set outputs
-- Identity Center permission set existence
-- Identity Center account assignment presence for dev, staging, and prod
+- security-operations AWS identity and applied `security_services` Terraform state
+- directly required trusted-access and delegated-administrator dependencies
+- Security Hub CSPM administrator state and finding aggregation
+- Security Hub CSPM `CENTRAL` organization configuration
+- configuration policies and workload account associations
+- GuardDuty administrator detector and organization member enrollment
+- GuardDuty organization protection plans and Runtime Monitoring configuration
+- Security Hub V2 administrator state
+- Security Hub V2 organization policy attachment to `Workloads`
+- effective Security Hub V2 policy for the configured workload accounts
 
-A successful run should end with:
+This layer does not replace full organization topology validation or workload-local security validation.
 
-```text
-[PASS] Control-plane validation completed successfully
-```
-
-To generate control-plane evidence, run:
-
-```bash
-AWS_PAGER="" \
-AWS_PROFILE=control-plane \
-AWS_REGION=us-east-1 \
-EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
-EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
-ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
-ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
-REQUIRE_STATE_STACK_REMOTE=true \
-./scripts/validation/export-control-plane.sh
-```
-
-### Control-Plane Warning Behavior
-
-Some control-plane checks may warn instead of fail.
-
-For example, account OU placement may produce warnings if workload accounts currently remain under the AWS Organizations root instead of under the `NonProd` or `Prod` OUs.
-
-This is expected if the Organizations stack creates OU structure but does not currently manage account placement. Treat these warnings as governance follow-up items unless account placement has been made a strict requirement for the deployment.
+---
 
 ## Exporting Validation Evidence
 
-Evidence exporters create timestamped report packages with `summary.md`, `summary.json`, and per-script logs.
+Evidence exporters create timestamped `summary.md`, `summary.json`, and supporting logs.
 
-Use `summary.md` for human review and client handoff. Use `summary.json` for automation, indexing, or future reporting workflows.
+| Layer | Export command | Package location |
+|---|---|---|
+| Workload bootstrap | `export-bootstrap.sh <env>` | `validation-results/<env>/bootstrap/<timestamp>/` |
+| Workload baseline | `export-baseline.sh <env>` | `validation-results/<env>/baseline/<timestamp>/` |
+| Control plane | `export-control-plane.sh` | `validation-results/control-plane/<timestamp>/` |
+| Security operations | `export-security-operations.sh` | `validation-results/security-operations/security-services/<timestamp>/` |
 
-Generated evidence is environment-specific and should generally not be committed to the repository.
+The current workload baseline package contains `validate-security-workload.log`.
 
-### Workload Bootstrap Evidence
+GitHub evidence workflows use the corresponding Plan GitHub Environment and OIDC credentials. A blank AWS profile in generated GitHub evidence is expected when the report identifies the credential source as `GitHub OIDC environment credentials`.
 
-After running workload bootstrap validation, export a timestamped bootstrap evidence package:
+---
 
-```bash
-AWS_PROFILE="dev" \
-AWS_REGION="us-east-1" \
-EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-CLOUD_NAME="tf-secure-baseline" \
-./scripts/validation/export-bootstrap.sh dev
-```
+## Validation Still Required Outside Each Report
 
-The export creates:
+The exporters are layer-specific. Control-plane, security-operations, workload-bootstrap, and workload-baseline checks may be outside one report while still being automated by another workflow.
 
-```text
-validation-results/<environment>/bootstrap/<timestamp>/
-├── summary.md
-├── summary.json
-└── validate-bootstrap.log
-```
+The activities that remain live/manual by design are:
 
-### Workload Baseline Evidence
+- IAM Identity Center end-user login and effective-access testing
+- live EC2 isolation testing
+- live EC2 rollback testing
+- live IP enrichment testing
+- tamper-detection simulation
+- break-glass role assumption testing
+- destroy-safety review and approved teardown execution
 
-After running the workload baseline validation suite, export a timestamped workload baseline report package:
-
-```bash
-AWS_PROFILE="dev" \
-AWS_REGION="us-east-1" \
-EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-CLOUD_NAME="tf-secure-baseline" \
-./scripts/validation/export-baseline.sh dev
-```
-
-The export creates:
-
-```text
-validation-results/<environment>/baseline/<timestamp>/
-├── summary.md
-├── summary.json
-├── validate-env.log
-├── validate-networking.log
-├── validate-vpc-endpoints.log
-├── validate-logging.log
-├── validate-security-services.log
-├── validate-kms.log
-├── validate-backup.log
-├── validate-sns.log
-├── validate-sqs.log
-├── validate-eventbridge.log
-├── validate-lambda.log
-├── validate-ssm.log
-├── validate-compute.log
-└── validate-iam.log
-```
-
-### Control-Plane Evidence
-
-After running control-plane validation, export a timestamped control-plane report package:
-
-```bash
-AWS_PROFILE="control-plane" \
-AWS_REGION="us-east-1" \
-EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
-EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-ACCOUNT_ID_DEV="<DEV-ACCOUNT-ID>" \
-ACCOUNT_ID_STAGING="<STAGING-ACCOUNT-ID>" \
-ACCOUNT_ID_PROD="<PROD-ACCOUNT-ID>" \
-CLOUD_NAME="tf-secure-baseline" \
-./scripts/validation/export-control-plane.sh
-```
-
-The export creates:
-
-```text
-validation-results/control-plane/<timestamp>/
-├── summary.md
-├── summary.json
-└── validate-control-plane.log
-```
-
-The exported reports do not replace GitHub Actions workflow execution, Identity Center end-user access, live Lambda workflows, tamper detection, break-glass access, or destroy safety review.
-
-## Manual Validation Still Required
-
-The automated validation scripts are intentionally read-only. They do not perform live, destructive, or privileged workflow tests.
-
-Manual validation is still required for:
-
-- GitHub Actions workflow execution
-- IAM Identity Center end-user login and effective access testing
-- Identity Center group membership review
-- Live EC2 isolation testing
-- Live EC2 rollback testing
-- Live IP enrichment testing
-- Tamper detection tests
-- Break-glass role assumption tests
-- Destroy workflow and teardown safety checks
-
-The automated control-plane validation script confirms control-plane resource presence and selected configuration, but it does not execute GitHub workflows, modify Identity Center assignments, test end-user SSO login, assume privileged roles, move AWS accounts between OUs, or perform destructive operations.
-
-Use the remaining sections in this checklist for manual spot checks, deeper troubleshooting, or tests that intentionally trigger live workflows.
+Use the remaining sections for manual spot checks, troubleshooting, and approved live tests.
 
 ---
 
@@ -1037,10 +946,11 @@ aws organizations list-organizational-units-for-parent \
   --output table
 ```
 
-Expected OUs:
+Expected root-level OUs:
 
 ```text
 Workloads
+Security
 ```
 
 Then verify child OUs under `Workloads`:
@@ -1063,6 +973,15 @@ Expected child OUs:
 ```text
 NonProd
 Prod
+```
+
+Also confirm account placement:
+
+```text
+dev                 -> Workloads/NonProd
+staging             -> Workloads/NonProd
+prod                -> Workloads/Prod
+security-operations -> Security
 ```
 
 ---
@@ -1099,12 +1018,13 @@ aws identitystore list-groups \
   --output table
 ```
 
-Expected groups may include:
+Required groups include:
 
 ```text
 SecOps-Operator-Dev
 SecOps-Operator-Staging
 SecOps-Operator-Prod
+SecOps-Administrator
 ```
 
 Optional groups may include:
@@ -1739,61 +1659,40 @@ Expected:
 
 ## Purpose
 
-Confirm that core AWS security services are enabled according to the selected deployment profile and explicit overrides.
+Confirm that workload-local security controls are active and that centrally governed services have the expected administrator relationship.
 
----
+The preferred check is:
+
+```bash
+./scripts/validation/validate-security-workload.sh <dev|staging|prod>
+```
+
+That script reads these effective ownership outputs before deciding which AWS state is expected:
+
+```text
+effective_manage_guardduty_locally
+effective_manage_securityhub_cspm_locally
+effective_manage_securityhub_v2_locally
+```
+
+For the centrally governed workload environments, those values are expected to be `false`.
 
 ## 10.1 GuardDuty
 
-```bash
-aws guardduty list-detectors \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}"
-```
+When GuardDuty is centrally governed, the workload account should have an enabled detector/member state associated with the `security-operations` delegated administrator; organization feature policy is validated from the security-operations account rather than recreated locally.
 
-Expected:
+Use `validate-security-operations.sh` to prove organization enrollment, protection plans, and Runtime Monitoring configuration.
 
-- At least one detector ID is returned.
+## 10.2 Security Hub CSPM and Security Hub V2
 
----
+When Security Hub CSPM is centrally governed, the member account should resolve to the `security-operations` administrator and receive its configuration policy from central governance. Do not infer central-policy health solely from a local `get-enabled-standards` command.
 
-## 10.2 Security Hub
-
-```bash
-aws securityhub describe-hub \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}"
-```
-
-Expected:
-
-- Security Hub is enabled.
-- Hub ARN is returned.
-
-Check enabled standards:
-
-```bash
-aws securityhub get-enabled-standards \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'StandardsSubscriptions[].StandardsArn' \
-  --output table
-```
-
-Expected:
-
-- Expected standards are enabled according to configuration.
-
----
+Security Hub V2 workload enablement is likewise governed by the Organizations `SECURITYHUB_POLICY`; validate its direct `Workloads` attachment and effective workload policy from the security-operations evidence layer.
 
 ## 10.3 AWS Config
 
 ```bash
 aws configservice describe-configuration-recorders \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}"
-
-aws configservice describe-delivery-channels \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 
@@ -1804,11 +1703,9 @@ aws configservice describe-configuration-recorder-status \
 
 Expected:
 
-- If `effective_enable_config = true`, configuration recorder exists, delivery channel exists, and recorder is enabled.
-- If `effective_enable_config = false`, AWS Config resources may be absent or disabled, depending on current state and configuration.
-- If Config is disabled, Config rule groups should be forced off.
-
----
+- If `effective_enable_config = true`, the configuration recorder exists and is recording.
+- If `effective_enable_config = false`, Config resources may be absent or disabled.
+- Centrally associated Security Hub CSPM standards depend on Config being available in workload accounts where those controls require it.
 
 ## 10.4 Inspector
 
@@ -1823,8 +1720,8 @@ aws inspector2 batch-get-account-status \
 
 Expected:
 
-- If `effective_inspector_enabled = true`, Inspector account/resource statuses should be enabled according to configuration.
-- If `effective_inspector_enabled = false`, Inspector may be disabled or return no enabled resource status.
+- If `effective_inspector_enabled = true`, Inspector status matches the configured resource types.
+- If disabled by profile or override, Inspector may report disabled resource states.
 
 ---
 
@@ -2122,10 +2019,10 @@ aws events list-rules \
 Expected rules may include:
 
 - Amazon Inspector rules, if enabled
-- Security Hub high/critical finding handling
+- Security Hub finding routing, including HIGH/CRITICAL events where configured
 - Tamper detection
 - Break-glass detection (`break-glass-admin-assumed`)
-- EC2 isolation trigger (`EC2-High-Critical`)
+- EC2 isolation trigger (`EC2-High-Critical`); the Lambda still applies its default `CRITICAL` containment threshold and eligibility gates
 
 Validate `secops` custom event bus:
 
@@ -2525,6 +2422,7 @@ Run or review the following workflows:
 - Workload Bootstrap Evidence Export
 - Workload Baseline Evidence Export
 - Control-Plane Evidence Export
+- Security Operations Evidence Export
 - Terraform Destroy in a non-production environment only
 
 Before testing workload deployment workflows, confirm that:
@@ -2549,7 +2447,8 @@ Expected:
 - The Plan and Apply jobs validate the configured role ARN account and active AWS caller against `ACCOUNT_ID`.
 - Evidence workflows assume the intended GitHub Plan role through OIDC.
 - Evidence workflows materialize the ignored state-stack `backend.tf`.
-- Workload and control-plane evidence workflows complete with `REQUIRE_STATE_STACK_REMOTE=true` when strict migration evidence is requested.
+- Workload bootstrap and control-plane evidence workflows complete with `REQUIRE_STATE_STACK_REMOTE=true` when strict migration evidence is requested.
+- Security Operations Evidence runs through `security-operations-plan` and validates centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance.
 - Evidence packages are uploaded as GitHub Actions artifacts.
 - A blank `AWS_PROFILE` in GitHub is expected; AWS CLI and validation commands should use the OIDC-provided default credential chain.
 - Destroy workflow first cleans up Identity Center attachments and then destroys the selected environment baseline.
@@ -2582,6 +2481,7 @@ Important rules:
 - Do not destroy `bootstrap/<env>/state` before all stacks using that backend are destroyed.
 - Do not destroy `bootstrap/control_plane/account` before other control-plane substacks.
 - Destroy `bootstrap/control_plane/state` last.
+- Treat `bootstrap/security_operations/security_services`, `account`, and `state` as long-lived centralized-security/bootstrap infrastructure; do not include them in routine workload Destroy operations.
 - For single-environment teardown, clean up Identity Center attachments before destroying the environment baseline.
 
 ---
@@ -2696,13 +2596,26 @@ Check:
 
 ## Security Hub or GuardDuty Is Missing
 
-Check:
+First inspect the workload ownership outputs:
 
-- The security module is enabled.
-- Region is correct.
-- Account is correct.
-- Terraform apply completed successfully.
-- Service-linked roles exist.
+```text
+effective_manage_securityhub_cspm_locally
+effective_manage_guardduty_locally
+effective_manage_securityhub_v2_locally
+```
+
+If an ownership value is `false`, do not troubleshoot the service as though workload Terraform owns its organization configuration. Check:
+
+- workload account and Region are correct
+- `validate-security-workload.sh <env>` output
+- the expected Security Hub / GuardDuty administrator relationship
+- `validate-security-operations.sh` results
+- Security Hub CSPM configuration-policy association status
+- GuardDuty organization member enrollment and protection-plan state
+- Security Hub V2 effective workload policy
+- AWS Config availability when Security Hub standards depend on it
+
+If an ownership value is `true`, troubleshoot the corresponding workload-local Terraform resources instead.
 
 ---
 
@@ -2827,7 +2740,7 @@ Check:
 - `AWS_PROFILE` is set to the control-plane profile.
 - `EXPECTED_ACCOUNT_ID` matches the control-plane account ID.
 - `EXPECTED_GITHUB_REPOSITORY` matches the repository trusted by the GitHub OIDC role, using the exact owner/repo spelling.
-- `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and `ACCOUNT_ID_PROD` are set when validating Identity Center assignments or account placement.
+- `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` contain the expected workload and security-operations account IDs and role settings.
 - `bootstrap/control_plane/state` was applied locally and migrated with `scripts/bootstrap/migrate-state-stack.sh control-plane`.
 - `bootstrap/control_plane/state/backend.tf` exists locally, matches `backend.tf.migrated.example`, and uses `use_lockfile = true`.
 - `scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only` succeeds.
@@ -2837,7 +2750,22 @@ Check:
 - `bootstrap/control_plane/organizations` has been applied.
 - `bootstrap/control_plane/identity_center` has been applied after workload baseline policy names were available, if optional policy-backed roles are enabled.
 
-If the script warns that workload accounts are under the AWS Organizations root instead of the expected OUs, confirm whether account placement is currently managed by Terraform. If account placement is not managed, treat this as a governance warning rather than a deployment failure.
+With the current default `STRICT_ACCOUNT_OU_CHECKS=true`, an account-placement mismatch is a validation failure. Verify `dev` and `staging` are under `Workloads/NonProd`, `prod` is under `Workloads/Prod`, and `security-operations` is under `Security`.
+
+---
+
+## Security-Operations Validation Fails
+
+Check:
+
+- `AWS_PROFILE` points to the `security-operations` account.
+- `EXPECTED_ACCOUNT_ID` matches that account.
+- `bootstrap/security_operations/security_services` has been applied with central rollout flags enabled as intended.
+- Security Hub and GuardDuty delegated administrators still point to `security-operations`.
+- the CSPM configuration-policy association is `SUCCESS` for each deployed workload account.
+- the GuardDuty detector and organization feature configuration match Terraform state.
+- the Security Hub V2 organization policy remains attached to `Workloads` and resolves correctly for the workload accounts.
+- workload AWS Config is running before treating a CSPM standards-association failure as a central-policy defect.
 
 ---
 
@@ -2930,27 +2858,13 @@ Do not delete DLQ messages until the root cause has been understood and the oper
 
 # Summary
 
-This checklist validates that `tf-secure-baseline` is deployed correctly and that the core security workflows function as intended.
+A complete validation pass means the applicable evidence layers agree with one another:
 
-A successful validation means:
+- control-plane validation confirms state/OIDC foundations, AWS Organizations topology, centralized-security prerequisites, and IAM Identity Center
+- security-operations validation confirms centralized Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 governance
+- workload bootstrap validation confirms workload state/OIDC foundations
+- workload baseline validation confirms networking, VPC endpoints, workload-security realization, KMS, Backup, messaging, automation, SSM, compute, and IAM controls
+- generated evidence packages use the expected GitHub OIDC credential source and contain the supporting logs
+- live isolation, rollback, enrichment, tamper, break-glass, end-user SSO, and destroy-safety tests are completed where appropriate
 
-- Automated workload bootstrap validation passes for the target environment.
-- Workload bootstrap evidence exports successfully through `export-bootstrap.sh`.
-- Automated workload baseline validation passes for the target environment.
-- Workload baseline evidence exports successfully through `export-baseline.sh`.
-- Automated control-plane validation passes for state backend resources, GitHub OIDC, Organizations OU structure, and IAM Identity Center basics.
-- Control-plane evidence exports successfully through `export-control-plane.sh`.
-- AWS accounts and profiles are correct.
-- Terraform state backends exist and remote-backed stacks use S3 native locking with `use_lockfile = true`.
-- GitHub OIDC roles work if enabled.
-- Environment baselines exist.
-- Deployment profile outputs resolve correctly.
-- Egress mode behavior matches the selected profile or override.
-- Private networking and endpoint access are configured.
-- Interface Endpoints are deployed into dedicated endpoint private subnets.
-- Logging and security services are active where expected.
-- KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM controls validate successfully.
-- Notification and automation DLQs exist, are encrypted, and are reviewed when messages appear.
-- Identity Center permission sets and account assignments are present, with end-user login and group membership reviewed manually where required.
-- Live EC2 isolation, rollback, IP enrichment, tamper detection, and break-glass workflows have been tested manually where appropriate.
-- Destroy procedures are understood before teardown.
+Passing automated validation demonstrates selected deployed control presence and configuration. It does not by itself establish SOC 2 or ISO 27001 compliance, operating effectiveness over time, or completion of organizational controls.
