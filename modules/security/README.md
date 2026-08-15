@@ -7,10 +7,9 @@ The `security` module provisions core AWS security services, encryption keys, an
 This includes:
 
 - SSM document public sharing protection
-- Amazon GuardDuty
-- GuardDuty detector features
-- AWS Security Hub
-- Security Hub standards subscriptions
+- Amazon GuardDuty detector and features when GuardDuty is workload-managed
+- AWS Security Hub CSPM and standards when CSPM is workload-managed
+- AWS Security Hub V2 when V2 is workload-managed
 - Amazon Inspector v2
 - Security Hub integration with Inspector
 - KMS customer-managed keys for baseline services
@@ -24,12 +23,13 @@ This module provides the main security service foundation for the environment.
 
 ## Purpose
 
-The purpose of this module is to enable AWS-native security monitoring, vulnerability detection, compliance evaluation, and encryption support.
+The purpose of this module is to provide workload-local security controls and encryption support while allowing organization-level services to be owned centrally when the workload is part of the managed multi-account platform.
 
 It supports:
 
-- Threat detection through GuardDuty
-- Security posture management through Security Hub
+- Threat detection through GuardDuty, either locally or through centralized organization governance
+- Security posture management through Security Hub CSPM, either locally or through centralized configuration policies
+- Security Hub V2 enablement either locally or through an inherited Organizations policy
 - Vulnerability scanning through Inspector
 - SSM document sharing hardening
 - KMS-backed encryption for logs, Lambda, EBS, Secrets Manager, and AWS Backup
@@ -37,6 +37,24 @@ It supports:
 - Security service tamper detection through the `tamper_detection` child module
 
 This module is a foundational part of the security baseline. Other modules depend on its outputs, especially the KMS CMK ARNs and tamper detection rule outputs.
+
+---
+
+## Security-Service Ownership Model
+
+This module supports both standalone workload deployments and centrally governed workload accounts.
+
+| Capability | Local ownership variable | Module default | Managed platform setting |
+|---|---|---:|---:|
+| Security Hub CSPM account/standards | `manage_securityhub_cspm_locally` | `true` | `false` |
+| Security Hub V2 account enablement | `manage_securityhub_v2_locally` | `true` | `false` |
+| GuardDuty detector/features | `manage_guardduty_locally` | `true` | `false` |
+
+The reusable module defaults to local ownership so it can operate independently. In the repository's centrally governed `dev`, `staging`, and `prod` environments, these values are set to `false`; the `security-operations` delegated administrator owns Security Hub CSPM policies, GuardDuty organization configuration, and the Security Hub V2 Organizations policy.
+
+Workload-local controls remain here regardless of centralization, including AWS Config, Inspector, KMS keys, SSM document-sharing protection, and tamper detection.
+
+This ownership split avoids competing Terraform resources in workload accounts while preserving standalone use of the module.
 
 ---
 
@@ -66,95 +84,75 @@ This helps prevent accidental public sharing of SSM documents from the account.
 
 ---
 
-### GuardDuty Detector
+### GuardDuty Detector and Features
 
-Enables GuardDuty in the target region:
+GuardDuty resources are created only when:
+
+```hcl
+manage_guardduty_locally = true
+```
+
+The detector uses:
 
 ```hcl
 resource "aws_guardduty_detector" "main"
 ```
 
-Configuration:
-
-| Setting | Value |
-|---|---|
-| Enabled | `true` |
-| Finding publishing frequency | `FIFTEEN_MINUTES` |
-| Region | `var.primary_region` |
-
-GuardDuty provides threat detection for AWS account activity, workloads, and supported data sources.
-
----
-
-### GuardDuty Detector Features
-
-Enables GuardDuty detector features from the `guardduty_features` variable:
+with a finding publishing frequency of `FIFTEEN_MINUTES`. Configured detector features are created with:
 
 ```hcl
 resource "aws_guardduty_detector_feature" "main"
 ```
 
-The module loops through:
+from `var.guardduty_features`.
 
-```hcl
-var.guardduty_features
-```
+When `manage_guardduty_locally = false`, this module creates neither the detector nor its feature resources. That is the normal setting for the centrally governed workload environments, where the `security-operations` delegated administrator manages organization enrollment and protection plans.
 
-This allows the baseline to enable supported GuardDuty features in a configurable way.
-
-The resource also ignores changes to:
-
-```hcl
-additional_configuration
-status
-```
-
-This helps avoid unnecessary Terraform drift for feature settings that AWS may manage or report differently over time.
+The local detector-feature resource intentionally ignores provider-reported changes to `additional_configuration` and `status`. Centralized Runtime Monitoring configuration is not managed through this workload resource.
 
 ---
 
-### Security Hub Account
+### Security Hub CSPM
 
-Enables Security Hub:
+Security Hub CSPM account enablement and local standards are created only when:
+
+```hcl
+manage_securityhub_cspm_locally = true
+```
+
+The local resources are:
 
 ```hcl
 resource "aws_securityhub_account" "main"
+resource "aws_securityhub_standards_subscription" "main"
 ```
 
-Security Hub depends on GuardDuty being enabled first:
-
-```hcl
-depends_on = [aws_guardduty_detector.main]
-```
-
-Security Hub centralizes findings from AWS security services and enabled standards.
-
----
-
-### Security Hub Standards
-
-Subscribes Security Hub to the standards defined in:
-
-```hcl
-local.securityhub_standards
-```
-
-Current active standard:
+The current local standards map includes:
 
 | Key | Standard |
 |---|---|
 | `aws_fsbp` | AWS Foundational Security Best Practices v1.0.0 |
+| `cis` | CIS AWS Foundations Benchmark v5.0.0 |
 
-The module also includes commented options for additional standards:
+Additional standards are present as commented options in `main.tf`.
 
-```text
-AWS Resource Tagging Standard
-CIS AWS Foundations Benchmark v5.0.0
-NIST 800-53 v5.0.0
-PCI DSS v4.0.1
+When `manage_securityhub_cspm_locally = false`, this module does not own the workload account's CSPM account resource or standards subscriptions. In the centrally governed platform, those settings are inherited from Security Hub configuration policies managed by `bootstrap/security_operations/security_services`.
+
+### Security Hub V2
+
+Security Hub V2 is enabled locally only when:
+
+```hcl
+manage_securityhub_v2_locally = true
 ```
 
-Only uncommented standards in `local.securityhub_standards` are subscribed. If you wish to enable any additional features, simply uncomment them in the `securityhub_standards` local variable.
+using:
+
+```hcl
+resource "aws_securityhub_account_v2" "main"
+```
+
+When the value is `false`, the workload defers V2 enablement to the centrally managed `SECURITYHUB_POLICY` attached to the `Workloads` OU.
 
 ---
 
@@ -216,7 +214,7 @@ Product ARN:
 arn:aws:securityhub:<region>::product/aws/inspector
 ```
 
-This allows Inspector findings to flow into Security Hub.
+This allows Inspector findings to flow into Security Hub. The product subscription remains workload-local even when Security Hub account enablement and standards are centrally governed.
 
 ---
 
@@ -477,6 +475,9 @@ Refer to the child module README for detailed detection coverage.
 | `inspector_enabled` | Whether Amazon Inspector is enabled for the selected resource types | Yes |
 | `inspector_resource_types` | Amazon Inspector resource types to enable. Defaults to `["EC2"]`; Lambda scan types are disabled by default | No |
 | `sec_notifs_eventbridge_dlq_arn` | ARN of the `security_notifications_eventbridge_dlq` DLQ | Yes |
+| `manage_securityhub_cspm_locally` | Whether this module owns Security Hub CSPM enablement and standards in the workload account. Defaults to `true`; centrally governed workload roots set it to `false` | No |
+| `manage_securityhub_v2_locally` | Whether this module enables Security Hub V2 directly in the workload account. Defaults to `true`; centrally governed workload roots set it to `false` | No |
+| `manage_guardduty_locally` | Whether this module owns the GuardDuty detector and detector features. Defaults to `true`; centrally governed workload roots set it to `false` | No |
 
 ---
 
@@ -535,10 +536,13 @@ module "security" {
   primary_region               = var.primary_region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
-  guardduty_features       = var.guardduty_features
-  enable_rules             = local.effective_enable_rules
-  inspector_enabled        = local.effective_inspector_enabled
-  inspector_resource_types = var.inspector_resource_types
+  manage_securityhub_cspm_locally = var.manage_securityhub_cspm_locally
+  manage_securityhub_v2_locally   = var.manage_securityhub_v2_locally
+  manage_guardduty_locally        = var.manage_guardduty_locally
+  guardduty_features              = var.guardduty_features
+  enable_rules                    = local.effective_enable_rules
+  inspector_enabled               = local.effective_inspector_enabled
+  inspector_resource_types        = var.inspector_resource_types
 
   enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
@@ -589,6 +593,10 @@ Because of these relationships, deployment order should be handled carefully in 
 
 ## Validation
 
+For the repository's centrally governed workload environments, use `scripts/validation/validate-security-workload.sh` as the primary workload-level check. Organization-level ownership and policy correctness are validated separately by `validate-security-operations.sh`.
+
+The direct AWS CLI checks below are still useful for troubleshooting. Interpret GuardDuty and Security Hub results according to the ownership mode: centrally governed services should exist and be effective in the workload account even though this module does not own their account-level resources.
+
 ### Confirm SSM Document Public Sharing Is Disabled
 
 ```bash
@@ -617,7 +625,8 @@ aws guardduty list-detectors \
 
 Expected:
 
-- One GuardDuty detector ID is returned
+- One GuardDuty detector ID is returned.
+- If `manage_guardduty_locally = false`, the detector is centrally governed rather than owned by this module.
 
 Then describe it:
 
@@ -632,8 +641,9 @@ aws guardduty get-detector \
 
 Expected:
 
-- Status is enabled
-- Finding publishing frequency is `FIFTEEN_MINUTES`
+- Status is enabled.
+- For locally managed GuardDuty, the configured finding publishing frequency is `FIFTEEN_MINUTES`.
+- For centrally governed GuardDuty, organization enrollment and protection-plan configuration should be validated from the security-operations layer.
 
 ---
 
@@ -650,8 +660,9 @@ aws guardduty get-detector \
 
 Expected:
 
-- Configured GuardDuty features are listed
-- Enabled features show `ENABLED`
+- Effective GuardDuty features are listed.
+- For local ownership, enabled `var.guardduty_features` entries show `ENABLED`.
+- For central ownership, compare effective workload state with the organization configuration validated by the security-operations evidence path.
 
 ---
 
@@ -684,8 +695,9 @@ aws securityhub get-enabled-standards \
 
 Expected:
 
-- AWS Foundational Security Best Practices is enabled
-- Any additional uncommented standards are listed
+- Security Hub is effective in the workload account.
+- Local ownership uses the standards configured in `local.securityhub_standards`.
+- The centrally governed platform currently applies AWS Foundational Security Best Practices and CIS AWS Foundations Benchmark v5.0.0 through account configuration policies.
 
 ---
 
@@ -832,9 +844,9 @@ This adds a Terraform-level guardrail against accidental KMS key destruction.
 
 ### Security Hub Standards Are Intentionally Selective
 
-Only AWS Foundational Security Best Practices is currently active in the parent module.
+The local fallback configuration currently includes AWS Foundational Security Best Practices and CIS AWS Foundations Benchmark v5.0.0. Additional standards remain commented out.
 
-Additional standards are present but commented out.
+For the managed multi-account platform, the authoritative workload standards are the centralized Security Hub CSPM configuration policies in `bootstrap/security_operations/security_services`, not this module's local fallback map.
 
 Before enabling more standards, consider:
 
@@ -849,11 +861,9 @@ Before enabling more standards, consider:
 
 ### GuardDuty Feature Selection
 
-GuardDuty features are controlled through `var.guardduty_features`.
+`var.guardduty_features` applies only when GuardDuty is managed locally. In the centrally governed platform, organization protection plans and Runtime Monitoring configuration are owned by `bootstrap/security_operations/security_services`.
 
-Only enable features that are supported in the target region and account configuration.
-
-If a feature is unsupported or unavailable, Terraform may fail or AWS may reject the configuration.
+For standalone/local ownership, enable only features supported in the target Region and account configuration. Unsupported features may be rejected by AWS.
 
 ---
 
@@ -891,12 +901,16 @@ This output is intended to support that SNS topic policy wiring.
 
 ### Security Hub Fails to Enable
 
-Check:
+First determine the intended ownership mode.
 
-- GuardDuty detector was created successfully
-- AWS region is correct
-- The account is not already in a conflicting Security Hub organization setup
+For local ownership, check:
+
+- `manage_securityhub_cspm_locally = true`
+- AWS Region is correct
+- the account is not already governed by a conflicting organization configuration
 - Terraform has permissions for Security Hub account and standards resources
+
+For centralized ownership, do not try to repair the workload by creating competing local account/standards resources. Validate the central configuration policy association and workload-local AWS Config state instead.
 
 Useful command:
 
@@ -910,12 +924,14 @@ aws securityhub describe-hub \
 
 ### Security Hub Standard Subscription Fails
 
-Check:
+For local ownership, check:
 
-- The standard ARN matches the region
-- Security Hub is enabled first
-- The standard is supported in the region
-- The account has permission to subscribe to standards
+- The standard ARN matches the Region.
+- Security Hub is enabled first.
+- The standard is supported in the Region.
+- The account has permission to subscribe to standards.
+
+For centralized ownership, standards subscriptions are controlled by the Security Hub CSPM configuration policy. Troubleshoot the policy association from the security-operations layer rather than adding workload-local subscriptions.
 
 Current active standard ARN pattern:
 
@@ -927,7 +943,7 @@ arn:aws:securityhub:<region>::standards/aws-foundational-security-best-practices
 
 ### GuardDuty Feature Fails to Enable
 
-Check:
+If GuardDuty is centrally governed, troubleshoot the organization protection plan in the security-operations stack. For local ownership, check:
 
 - The feature name is valid
 - The feature is supported in the selected region
@@ -948,8 +964,9 @@ aws guardduty get-detector \
 
 Expected:
 
-- Configured GuardDuty features are listed
-- Enabled features show `ENABLED`
+- Effective GuardDuty features are listed.
+- For local ownership, enabled `var.guardduty_features` entries show `ENABLED`.
+- For central ownership, compare effective workload state with the organization configuration validated by the security-operations evidence path.
 
 ---
 
@@ -1056,9 +1073,9 @@ For detailed troubleshooting, use the `tamper_detection` child module README.
 ## Security Notes
 
 - SSM document public sharing is disabled.
-- GuardDuty is enabled with 15-minute finding publishing.
-- Security Hub is enabled after GuardDuty.
-- AWS Foundational Security Best Practices is enabled by default.
+- GuardDuty and Security Hub account-level ownership is selectable so centrally governed workload accounts do not create competing resources.
+- The managed workload environments defer GuardDuty, Security Hub CSPM, and Security Hub V2 account-level governance to the security-operations layer.
+- The local fallback Security Hub standards map includes AWS Foundational Security Best Practices and CIS AWS Foundations Benchmark v5.0.0.
 - Inspector v2 is enabled conditionally and defaults to EC2 scanning only.
 - Inspector findings are imported into Security Hub.
 - KMS keys are purpose-specific instead of using one shared key for everything.
@@ -1079,7 +1096,7 @@ This module follows:
 
 - AWS-native security service enablement
 - Purpose-specific encryption keys
-- Centralized security finding aggregation
+- Centralized security governance with workload-local control realization
 - Configurable vulnerability detection for supported workloads
 - Security control evaluation through AWS Config
 - Event-driven tamper detection
@@ -1090,7 +1107,7 @@ This module follows:
 
 ## Notes
 
-- Deploy this module before modules that need its KMS outputs.
+- Deploy this module before modules that need its KMS outputs. For centrally governed workloads, deploy the central security governance layer before relying on inherited GuardDuty/Security Hub behavior.
 - The logs CMK is consumed heavily by logging, storage, monitoring, and Config resources.
 - The Lambda CMK is consumed by automation Lambda functions.
 - The Secrets Manager CMK is consumed by secrets created outside this module.
