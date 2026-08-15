@@ -28,12 +28,14 @@ This document is not an audit report and does not guarantee SOC 2, ISO 27001, or
 The platform is built around:
 
 - Multi-account environment isolation
-- Centralized control plane
+- Centralized control plane for organization structure and identity
+- Dedicated security-operations delegated administrator account
 - IAM Identity Center access
 - GitHub OIDC-based CI/CD
 - Private-first networking
 - Centralized logging
-- AWS-native detection services
+- Centrally governed Security Hub CSPM, GuardDuty, and Security Hub V2 for workload accounts
+- Workload-local AWS Config, Inspector, remediation, and supporting security controls
 - Event-driven security automation
 - Encrypted and protected operational evidence
 
@@ -45,7 +47,7 @@ The controls described below are infrastructure-level controls. They should be p
 
 ## Control Intent
 
-Separate AWS environments to reduce blast radius and prevent non-production activity from affecting production systems.
+Separate governance, centralized security administration, and workload environments to reduce blast radius and prevent non-production activity from affecting production systems.
 
 ## Implementation
 
@@ -53,19 +55,23 @@ The baseline uses separate AWS accounts for:
 
 ```text
 control-plane
+security-operations
 dev
 staging
 prod
 ```
 
-The control-plane account manages shared governance and access resources, including:
+The AWS Organizations structure separates workload and centralized-security responsibilities:
 
-- AWS Organizations structure
-- IAM Identity Center
-- Control-plane Terraform state
-- Control-plane GitHub OIDC roles
+```text
+Root
+├── Workloads
+│   ├── NonProd -> dev, staging
+│   └── Prod    -> prod
+└── Security    -> security-operations
+```
 
-Workload accounts host environment-specific baseline infrastructure.
+The control-plane account owns organization structure, centralized identity, control-plane state, and organization-level prerequisites. The `security-operations` account acts as delegated administrator for centralized security services. Workload accounts host environment-specific infrastructure and workload-local controls.
 
 ## Security Impact
 
@@ -73,6 +79,7 @@ This supports:
 
 - Environment isolation
 - Reduced blast radius
+- Separation of management and delegated security administration
 - Cleaner access boundaries
 - Safer experimentation in non-production
 - More controlled production access
@@ -84,37 +91,55 @@ This supports:
 
 ## Control Intent
 
-Prevent foundational access, identity, and state resources from being accidentally modified or destroyed by workload infrastructure changes.
+Prevent foundational organization, identity, and state resources from being accidentally modified or destroyed by workload infrastructure changes.
 
 ## Implementation
 
-Control-plane resources are deployed separately from workload baseline resources.
-
-The control plane contains:
-
-- `state`
-- `account`
-- `organizations`
-- `identity_center`
-
-Workload environments are deployed separately from:
+Control-plane resources are deployed separately in:
 
 ```text
-environments/dev
-environments/staging
-environments/prod
+bootstrap/control_plane/state
+bootstrap/control_plane/account
+bootstrap/control_plane/organizations
+bootstrap/control_plane/identity_center
 ```
+
+The control plane owns AWS Organizations topology and the management-account prerequisites required for delegated security administration. It does not own the delegated administrator's Security Hub CSPM, GuardDuty, or Security Hub V2 configuration.
 
 ## Security Impact
 
-This separation helps prevent:
+This separation helps prevent workload changes from affecting centralized identity, organization structure, or control-plane access and reduces the chance of CI/CD lockout or cross-stack failures.
 
-- Terraform destroying the IAM roles it is actively using
-- Workload changes affecting centralized identity
-- Environment teardown breaking control-plane access
-- Accidental cross-stack dependency failures
+---
 
-It improves operational stability and reduces the chance of CI/CD lockout.
+# Centralized Security Administration
+
+## Control Intent
+
+Apply consistent threat-detection and posture-governance policy across workload accounts while separating organization ownership from delegated security-service administration.
+
+## Implementation
+
+The dedicated `security-operations` account centrally manages:
+
+- Security Hub CSPM administrator state and finding aggregation
+- Security Hub CSPM `CENTRAL` organization configuration
+- workload configuration policies and associations
+- GuardDuty organization enrollment and protection plans
+- GuardDuty Runtime Monitoring configuration
+- Security Hub V2 administrator state and the `SECURITYHUB_POLICY` attached to `Workloads`
+
+The control-plane Organizations stack owns trusted service access, delegated-administrator registration, the `SECURITYHUB_POLICY` organization prerequisite, and OU/account placement. Workload Terraform defers account-level ownership of centrally governed Security Hub CSPM, GuardDuty, and Security Hub V2 resources while continuing to manage AWS Config, Inspector, remediation, and other workload-local controls.
+
+## Security Impact
+
+This supports:
+
+- Consistent security-service policy across dev, staging, and prod
+- Reduced account-level configuration drift
+- Separation of organization governance from security operations
+- Central finding visibility and delegated administration
+- Explicit evidence boundaries between organization, central security, and workload state
 
 ---
 
@@ -210,14 +235,13 @@ SecOps-Operator-Staging
 SecOps-Operator-Prod
 ```
 
-Optional groups may include:
+The security-operations account receives a required administrative persona:
 
 ```text
-SecOps-Analyst
-SecOps-Engineer
+SecOps-Administrator
 ```
 
-The `SecOps-Operator` role is intentionally limited to submitting rollback events to the environment-specific SecOps EventBridge bus.
+Optional Analyst and Engineer personas can be enabled independently for workload and security-operations accounts. The workload `SecOps-Operator` role is intentionally limited to submitting rollback events to its environment-specific SecOps EventBridge bus; the security-operations account intentionally does not receive that Operator persona.
 
 ## Security Impact
 
@@ -344,12 +368,15 @@ Examples may include:
 
 - SSM
 - SSM Messages
-- EC2 Messages
+- SQS
 - CloudWatch Logs
 - KMS
 - Secrets Manager
 - EC2
 - S3
+- GuardDuty data (`guardduty-data`) for Runtime Monitoring
+
+The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources.
 
 ## Security Impact
 
@@ -402,37 +429,28 @@ This supports:
 
 ## Control Intent
 
-Provide continuous visibility into threats, misconfigurations, and security-relevant activity.
+Detect suspicious activity, vulnerabilities, and configuration problems across workload accounts while preserving a centralized governance boundary.
 
 ## Implementation
 
-The baseline enables AWS-native detection and posture services such as:
+The baseline combines centrally governed and workload-local services:
 
-- GuardDuty
-- Security Hub
-- AWS Config
-- Inspector
-- CloudTrail
-- EventBridge
-
-These services monitor for:
-
-- Suspicious activity
-- Vulnerable resources
-- Misconfigurations
-- Public exposure
-- Policy violations
-- Security service changes
+- GuardDuty is organization-enrolled and centrally configured from `security-operations`.
+- Security Hub CSPM uses centralized configuration policies and finding aggregation.
+- Security Hub V2 workload enablement is governed through an Organizations policy attached to `Workloads`.
+- AWS Config remains workload-local and provides configuration recording/rule evaluation where enabled.
+- Inspector remains workload-local and provides vulnerability detection for configured resource types.
+- CloudTrail, EventBridge, CloudWatch, and SNS provide activity capture, routing, and alerting.
 
 ## Security Impact
 
 This supports:
 
-- Threat detection
-- Configuration monitoring
-- Centralized findings visibility
-- Faster triage
-- Audit and compliance readiness
+- Centralized visibility into workload security findings
+- Consistent threat-detection and posture policy
+- Workload-specific configuration and vulnerability evidence
+- Event-driven response and alerting
+- Reduced drift between workload accounts
 
 ---
 
@@ -478,9 +496,9 @@ Contain potentially compromised EC2 instances quickly when high-severity finding
 
 ## Implementation
 
-The EC2 Isolation Lambda responds to qualifying Security Hub findings.
+The EC2 Isolation Lambda responds to qualifying Security Hub findings. The default automated-isolation threshold is `CRITICAL`, and the finding must also satisfy the workflow eligibility gates.
 
-When a high or critical EC2-related finding is detected, the Lambda can:
+When an eligible finding is processed, the Lambda can:
 
 - Identify the affected EC2 instance
 - Preserve original security group information
