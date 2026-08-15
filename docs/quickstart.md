@@ -33,15 +33,17 @@ Expected AWS accounts:
 
 ```text
 control-plane
+security-operations
 dev
 staging
 prod
 ```
 
-The repository is organized into three major deployment areas:
+The repository is organized into four major deployment areas:
 
 ```text
 bootstrap/control_plane
+bootstrap/security_operations
 bootstrap/<env>
 environments/<env>
 ```
@@ -50,10 +52,11 @@ At a high level:
 
 | Area | Purpose |
 |------|---------|
-| `bootstrap/control_plane` | Centralized control plane resources |
+| `bootstrap/control_plane` | AWS Organizations, Identity Center, control-plane state, and control-plane OIDC resources |
+| `bootstrap/security_operations` | Security-operations state/OIDC resources and centralized Security Hub, GuardDuty, and Security Hub V2 administration |
 | `bootstrap/<env>/state` | Two-phase bootstrap stack that creates its state bucket and CMK locally, then migrates its own state to S3 |
-| `bootstrap/<env>/account` | Creates GitHub OIDC roles for an environment |
-| `environments/<env>` | Deploys the full workload security baseline |
+| `bootstrap/<env>/account` | Creates GitHub OIDC roles for a workload environment |
+| `environments/<env>` | Deploys the workload-local security baseline |
 
 The `state` stacks are applied locally first because they create the remote backend resources that later Terraform stacks depend on. After each initial apply, its state is migrated to S3 with `scripts/bootstrap/migrate-state-stack.sh`.
 
@@ -110,7 +113,7 @@ When `egress_mode = "vpc_endpoints_only"`, NAT Gateways and Network Firewall are
 
 ## Prerequisites
 
-This configuration requires **four AWS accounts**: `dev`, `staging`, `prod`, and `control-plane`.
+This configuration requires **five AWS accounts**: `control-plane`, `security-operations`, `dev`, `staging`, and `prod`.
 
 Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.**
 
@@ -124,6 +127,7 @@ Install and configure:
 - A GitHub account with the following environments, if using `GitHub OIDC`:
   - control-plane
   - control-plane-plan
+  - security-operations-plan
   - dev
   - dev-plan
   - staging
@@ -163,7 +167,7 @@ For local workload deployment, set `isolation_allowed` explicitly. The current p
 
 Create or configure AWS CLI profiles for each AWS account.
 
-Because this deployment requires switching between multiple AWS accounts, it is recommended to use **four separate terminals**, each dedicated to a specific AWS account.
+Because this deployment requires switching between multiple AWS accounts, it is recommended to use **five separate terminals**, each dedicated to a specific AWS account.
 
 This reduces the chance of applying Terraform in the wrong account and also makes environment-specific variables easier to manage.
 
@@ -183,6 +187,7 @@ Example profile names:
 
 ```text
 control-plane
+security-operations
 dev
 staging
 prod
@@ -219,6 +224,7 @@ Verify each profile before deploying:
 
 ```bash
 aws sts get-caller-identity --profile control-plane
+aws sts get-caller-identity --profile security-operations
 aws sts get-caller-identity --profile dev
 aws sts get-caller-identity --profile staging
 aws sts get-caller-identity --profile prod
@@ -319,19 +325,29 @@ The control-plane `account` stack should generally be treated as manual/local-on
 
 # Phase 3 - Deploy AWS Organizations Structure
 
-The `organizations` stack defines the AWS Organizations structure, including OUs such as:
+The `organizations` stack defines the AWS Organizations structure and centralized-security prerequisites.
+
+The expected OU structure is:
 
 ```text
-Workloads
-NonProd
-Prod
+Root
+├── Workloads
+│   ├── NonProd
+│   │   ├── dev
+│   │   └── staging
+│   └── Prod
+│       └── prod
+└── Security
+    └── security-operations
 ```
 
 Before applying this stack, ensure:
 
-- AWS Organizations is enabled in the bootstrap account
-- The `control-plane` account is the management account
-- `dev`, `staging`, and `prod` accounts have been invited and accepted into the organization
+- AWS Organizations is enabled in all-features mode in the `control-plane` management account
+- `security-operations`, `dev`, `staging`, and `prod` are active organization member accounts
+- the intended account IDs and account names are configured correctly
+
+This stack also owns the organization-level prerequisites for centralized security, including Security Hub and GuardDuty trusted service access, delegated-administrator registration, GuardDuty Malware Protection trusted access, and Security Hub V2 `SECURITYHUB_POLICY` prerequisites.
 
 From the repository root:
 
@@ -342,7 +358,87 @@ terraform -chdir=bootstrap/control_plane/organizations apply
 
 ---
 
-# Phase 4 - Deploy and Migrate Environment State Stacks
+# Phase 4 - Deploy and Migrate Security-Operations State
+
+The `security-operations` account uses its own two-phase state bootstrap.
+
+Review:
+
+```text
+bootstrap/security_operations/state/backend.tf.migrated.example
+```
+
+Then apply and migrate the state stack:
+
+```bash
+export AWS_PROFILE=security-operations
+export TF_VAR_bucket_admin_principals='["arn:aws:iam::<security-operations-account-id>:user/baseline-admin","arn:aws:iam::<security-operations-account-id>:root"]'
+
+terraform -chdir=bootstrap/security_operations/state init
+terraform -chdir=bootstrap/security_operations/state apply
+
+EXPECTED_ACCOUNT_ID="<SECURITY-OPERATIONS-ACCOUNT-ID>" \
+./scripts/bootstrap/migrate-state-stack.sh security-operations
+```
+
+Record:
+
+```text
+tf_state_bucket_name
+tf_state_bucket_arn
+tf_state_bucket_cmk_arn
+```
+
+---
+
+# Phase 5 - Deploy Security-Operations Account Stack (Skip if not using `GitHub OIDC`)
+
+This stack creates the security-operations GitHub OIDC roles. It remains separate from `security_services` so centralized security changes cannot remove the CI/CD roles used to inspect them.
+
+```bash
+export AWS_PROFILE=security-operations
+
+terraform -chdir=bootstrap/security_operations/account init
+terraform -chdir=bootstrap/security_operations/account apply
+```
+
+Record the Plan role ARN. The current Terraform Plan and Export Security Operations Evidence workflows use the `security-operations-plan` GitHub Environment.
+
+The general-purpose Terraform Apply and Terraform Destroy workflows remain workload-scoped; centralized security services are not part of routine workload lifecycle automation.
+
+---
+
+# Phase 6 - Deploy Centralized Security Services
+
+The `bootstrap/security_operations/security_services` stack configures the delegated-administrator side of the centralized security model established by the control plane.
+
+Before applying, copy and review its variable template and confirm the centralized rollout settings. The intended centralized deployment enables:
+
+```text
+enable_securityhub_organization_configuration = true
+enable_guardduty_organization_configuration    = true
+enable_securityhub_v2_organization_policy      = true
+```
+
+Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. GuardDuty organization protection-plan defaults are defined in the stack's `variables.tf`; override them only when the client requires a different strategy.
+
+Apply locally:
+
+```bash
+export AWS_PROFILE=security-operations
+
+terraform -chdir=bootstrap/security_operations/security_services init
+terraform -chdir=bootstrap/security_operations/security_services plan
+terraform -chdir=bootstrap/security_operations/security_services apply
+```
+
+At this stage, central Security Hub CSPM policy associations can exist before workload-local AWS Config has been deployed. AWS may report an association as pending or failed because standards cannot be enabled until Config is recording in the target account. Treat final association health as a post-workload validation condition rather than changing the deployment order.
+
+The workload environment roots are configured to defer local Security Hub CSPM, GuardDuty, and Security Hub V2 ownership to this centralized layer.
+
+---
+
+# Phase 7 - Deploy and Migrate Environment State Stacks
 
 Each workload account needs its own Terraform backend resources.
 
@@ -411,7 +507,7 @@ The generated active `bootstrap/<env>/state/backend.tf` files are ignored by Git
 
 ---
 
-# Phase 5 - Deploy Environment Account Stacks (Skip if not using `GitHub OIDC`)
+# Phase 8 - Deploy Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
 Each environment `account` stack creates the `GitHub OIDC` roles used by GitHub Actions for that environment.
 
@@ -468,7 +564,7 @@ Add these to the appropriate GitHub environment variables:
 
 ---
 
-# Phase 6 - Configure GitHub Environment Variables (Skip if not using `GitHub OIDC`)
+# Phase 9 - Configure GitHub Environment Variables (Skip if not using `GitHub OIDC`)
 
 Workload deployment uses paired GitHub environments:
 
@@ -477,6 +573,23 @@ Workload deployment uses paired GitHub environments:
 | `dev-plan` | `dev` |
 | `staging-plan` | `staging` |
 | `prod-plan` | `prod` |
+
+Centralized security planning and evidence use:
+
+```text
+security-operations-plan
+```
+
+Configure its `PLAN_ROLE_GITHUB_ARN`, `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, and `ENVIRONMENT=security-operations`, plus the centralized security Terraform inputs used by the security-services Plan job:
+
+```text
+ENABLE_SECURITYHUB_ORGANIZATION_CONFIGURATION=true
+SECURITYHUB_CSPM_ACCOUNT_POLICIES=<JSON policy map>
+ENABLE_GUARDDUTY_ORGANIZATION_CONFIGURATION=true
+ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY=true
+```
+
+The GuardDuty organization feature map remains defined in Terraform unless you intentionally choose to override it.
 
 The Plan environment runs before approval and exposes the Plan role. The Apply
 environment should use required reviewers and exposes the Apply role only after
@@ -562,7 +675,7 @@ Recommended environment defaults:
 
 ---
 
-# Phase 7 - Deploy Environment Baseline
+# Phase 10 - Deploy Environment Baseline
 
 After setting necessary variables for the workload environments (see `environments/<env>/variables.tf`), deploy each environment from the `environments/<env>` directory.
 
@@ -647,13 +760,16 @@ effective_enable_config
 effective_enable_rules
 effective_backup_enabled
 effective_inspector_enabled
+effective_manage_securityhub_cspm_locally
+effective_manage_guardduty_locally
+effective_manage_securityhub_v2_locally
 ```
 
-These outputs confirm how profile defaults and explicit overrides resolved for the environment.
+These outputs confirm how profile defaults and explicit overrides resolved for the environment. In the centralized deployment, the three `effective_manage_*_locally` security-service outputs should be `false`.
 
 ---
 
-# Phase 8 - Reconcile Environment Account Stacks (Skip if not using `GitHub OIDC`)
+# Phase 11 - Reconcile Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
 After successfully applying each environment baseline, reconcile the current
 workload-created Lambda and Secrets Manager CMK permissions into
@@ -759,49 +875,52 @@ complete.
 
 ---
 
-# Phase 9 - Deploy IAM Identity Center
+# Phase 12 - Deploy IAM Identity Center
 
-The Identity Center stack is deployed from the control plane.
+The Identity Center stack is deployed from the control plane and manages workforce access to both workload accounts and the centralized security-operations account.
 
-It creates environment-specific groups, permission sets, and account assignments.
+It uses two consolidated Terraform inputs:
 
-Run these commands from the repository root:
+```text
+identity_center_workloads
+identity_center_secops
+```
+
+The workload map contains `dev`, `staging`, and `prod`. Each workload always receives its `SecOps-Operator` access model; optional Analyst and Engineer access remains disabled unless explicitly enabled. The security-operations object always enables the required `SecOps-Administrator` access model, while its Analyst and Engineer roles are optional.
+
+For GitHub Actions, the matching control-plane environment variables are:
+
+```text
+IDENTITY_CENTER_WORKLOADS
+IDENTITY_CENTER_SECOPS
+```
+
+For local deployment, copy `bootstrap/control_plane/identity_center/terraform.tfvars.example` to `terraform.tfvars` and populate the workload account IDs, Regions, expected workload policy names, and security-operations account ID.
+
+Then apply:
 
 ```bash
 export AWS_PROFILE=control-plane
 
 terraform -chdir=bootstrap/control_plane/identity_center init
+terraform -chdir=bootstrap/control_plane/identity_center plan
 terraform -chdir=bootstrap/control_plane/identity_center apply
 ```
 
-At minimum, this creates the SecOps Operator access model used for the rollback workflow.
-
-Example groups:
+Required groups include:
 
 ```text
 SecOps-Operator-Dev
 SecOps-Operator-Staging
 SecOps-Operator-Prod
+SecOps-Administrator
 ```
 
-If enabling optional `SecOps-Analyst` or `SecOps-Engineer` roles, pass the IAM policy names created by the environment baseline stacks.
-
-Example:
-
-```bash
-export TF_VAR_logs_s3_readonly_policy_name_dev="<dev-logs-s3-readonly-policy-name>"
-export TF_VAR_logs_cmk_decrypt_policy_name_dev="<dev-logs-cmk-decrypt-policy-name>"
-export TF_VAR_enable_secops_analyst_dev=true
-export TF_VAR_enable_secops_engineer_dev=true
-
-terraform -chdir=bootstrap/control_plane/identity_center apply
-```
-
-This avoids circular dependencies by allowing environment stacks to create environment-specific IAM policies first, then allowing Identity Center to attach those policies by name/path.
+Workload-created customer-managed policy names are only attached when the corresponding optional Analyst or Engineer role is enabled. Keeping those roles disabled during the first deployment avoids a circular dependency; re-apply Identity Center after workload deployment if optional access is later enabled.
 
 ---
 
-# Phase 10 - Validate Deployment
+# Phase 13 - Validate Deployment
 
 After deployment completes, run the validation checklist:
 
@@ -816,25 +935,28 @@ Recommended validation order:
 1. Verify every migrated state stack:
    ```bash
    AWS_PROFILE=control-plane ./scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only
+   AWS_PROFILE=security-operations ./scripts/bootstrap/migrate-state-stack.sh security-operations --verify-only
    AWS_PROFILE=dev ./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
    AWS_PROFILE=staging ./scripts/bootstrap/migrate-state-stack.sh staging --verify-only
    AWS_PROFILE=prod ./scripts/bootstrap/migrate-state-stack.sh prod --verify-only
    ```
-2. Run workload and control-plane bootstrap validation with `REQUIRE_STATE_STACK_REMOTE=true`.
-3. Run the workload bootstrap, workload baseline, and control-plane evidence workflows.
-4. Confirm GitHub OIDC roles can be assumed by running the applicable GitHub Actions workflows.
-5. Confirm baseline infrastructure exists in each environment.
+2. Run the **Export Control Plane Evidence** workflow and confirm Organizations topology, account placement, delegated-administrator prerequisites, and Identity Center are green.
+3. Run the **Export Security Operations Evidence** workflow and confirm Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 central governance are green.
+4. Run **Export Bootstrap Evidence** and **Export Baseline Evidence** for each workload environment.
+5. Confirm GitHub OIDC roles can be assumed by the applicable workflows.
 6. Confirm deployment profile outputs resolved correctly.
 7. Confirm egress mode behavior:
    - `network_firewall`: Network Firewall and NAT Gateway are deployed, compute private default route points to firewall endpoints.
    - `nat_only`: Network Firewall is not deployed, NAT Gateway is deployed, compute private default route points to NAT.
    - `vpc_endpoints_only`: Network Firewall and NAT Gateway are not deployed, compute private subnets have no default route.
 8. Confirm dedicated endpoint private subnets exist.
-9. Confirm Interface VPC Endpoints are deployed into endpoint private subnets.
-10. Confirm the S3 Gateway Endpoint is associated with the expected private route tables.
-11. Confirm Security Hub, GuardDuty, AWS Config, and CloudTrail are active where expected by profile.
-12. Confirm SNS subscriptions are confirmed.
-13. Run Lambda tests:
+9. Confirm all Terraform-managed Interface VPC Endpoints, including `guardduty-data`, are deployed into endpoint private subnets.
+10. Confirm `guardduty-data` is Terraform-owned and only one such endpoint exists per workload VPC.
+11. Confirm the S3 Gateway Endpoint is associated with the expected private route tables.
+12. Confirm workload-local AWS Config and Inspector are active where expected by profile.
+13. Confirm centralized Security Hub CSPM policy associations and effective Security Hub V2 workload policies are healthy after workload deployment.
+14. Confirm SNS subscriptions are confirmed.
+15. Run Lambda tests:
     - `docs/lambda_tests/ec2_isolation.md`
     - `docs/lambda_tests/ec2_rollback.md`
     - `docs/lambda_tests/ip_enrichment.md`
@@ -844,17 +966,21 @@ Recommended validation order:
 ## Deployment Order Summary
 
 ```text
-1. Apply bootstrap/control_plane/state locally
-2. Migrate bootstrap/control_plane/state with migrate-state-stack.sh
-3. Deploy bootstrap/control_plane/account
-4. Deploy bootstrap/control_plane/organizations
-5. Apply each bootstrap/<env>/state locally
-6. Migrate each bootstrap/<env>/state with migrate-state-stack.sh
-7. Deploy bootstrap/<env>/account
-8. Deploy environments/<env> locally or through the plan-first Terraform Apply workflow
-9. Reconcile the workload account locally or through Reconcile Workload Account plan-and-apply
-10. Deploy or re-apply bootstrap/control_plane/identity_center
-11. Run validation and export evidence
+1. Bootstrap control-plane state
+2. Deploy control-plane account and Organizations stacks
+3. Bootstrap security-operations state and account stacks
+4. Deploy security-operations/security_services
+5. Bootstrap workload state and account stacks
+6. Deploy workload environments
+7. Reconcile workload account stacks when GitHub OIDC is enabled
+8. Deploy or re-apply control-plane Identity Center
+9. Run control-plane, security-operations, bootstrap, and baseline evidence workflows
+```
+
+Architecturally:
+
+```text
+control-plane -> security-operations -> bootstrap-workloads -> workloads
 ```
 
 ---
@@ -870,21 +996,22 @@ Expected workflows:
 |---------|---------|
 | Terraform Static Analysis | Runs static Terraform validation and scanning |
 | Docs Validation | Runs documentation linting and link checks |
-| Terraform Plan | Runs independent plans for environment and control-plane stacks |
+| Terraform Plan | Runs independent plans for workload, selected control-plane, and security-operations security-services stacks |
 | Terraform Apply | Generates and publishes a workload plan, waits for protected-environment approval, then applies the exact saved plan |
 | Reconcile Workload Account | Runs `plan-only` or generates a reconciliation plan, waits for approval, applies the exact saved plan, and runs strict bootstrap validation |
 | Terraform Destroy | Cleans up Identity Center attachments, then destroys the selected workload environment |
 | Workload Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
 | Workload Baseline Evidence | Exports the 14-script workload baseline evidence package |
 | Control-Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
+| Security Operations Evidence | Validates centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance from `security-operations-plan` |
 
 The standalone `Terraform Plan` workflow remains useful for pull requests,
 pushes, and independent review. `Terraform Apply` generates its own plan in the
 same workflow run so the protected Apply job can consume the exact artifact
 that was presented for approval.
 
-Plan jobs use `dev-plan`, `staging-plan`, or `prod-plan`; Apply jobs use the
-matching protected `dev`, `staging`, or `prod` environment. Configure
+Workload Plan jobs use `dev-plan`, `staging-plan`, or `prod-plan`; Apply jobs use the
+matching protected `dev`, `staging`, or `prod` environment. The standalone Plan workflow also uses `control-plane-plan` and `security-operations-plan` for their supported stacks. Configure
 `ACCOUNT_ID` in both members of each pair and configure `ISOLATION_ALLOWED` in
 the workload Plan environment. The workflows validate the role ARN account,
 the active AWS caller account, the expected account stored in saved-plan
@@ -972,7 +1099,7 @@ Interface VPC Endpoints are deployed into dedicated endpoint private subnets.
 
 These subnets have their own route tables and do not require a default internet route.
 
-Workloads reach Interface Endpoints over VPC-local routing and security group rules.
+Workloads reach Interface Endpoints over VPC-local routing and security group rules. The Terraform-managed endpoint set includes `guardduty-data`, and compute waits for Interface Endpoint creation before EC2 launches. This allows GuardDuty Runtime Monitoring to use the existing endpoint and keeps endpoint lifecycle inside Terraform.
 
 ---
 
@@ -1020,13 +1147,14 @@ Review estimated costs before deploying all environments.
 This quickstart deploys `tf-secure-baseline` in the intended order:
 
 - Bootstrap control-plane foundations
-- Bootstrap environment backends and GitHub OIDC roles
+- Bootstrap and configure the centralized security-operations layer
+- Bootstrap workload backends and GitHub OIDC roles
 - Deploy workload baselines
 - Confirm deployment profile and egress mode behavior
 - Deploy centralized Identity Center access
-- Validate security workflows
+- Validate each architecture layer through its evidence workflow
 
-After completion, the platform provides a multi-account AWS security baseline with centralized identity, secure CI/CD, logging, detection, configurable egress behavior, private VPC endpoint access, and event-driven response automation.
+After completion, the platform provides a multi-account AWS security baseline with centralized identity, delegated security administration, secure CI/CD, logging, detection, configurable egress behavior, private VPC endpoint access, and event-driven response automation.
 
 # Destruction / Cleanup Procedure
 
@@ -1040,7 +1168,7 @@ Destroying stacks out of order can cause failures such as:
 - GitHub Actions losing access because OIDC roles were destroyed too early
 - Terraform state backend resources being destroyed before dependent stacks are removed
 
-A migrated state stack must not destroy the S3 bucket that currently stores its own active state. Before destroying any `bootstrap/<env>/state` or `bootstrap/control_plane/state` stack, first migrate that stack's state back to local state or to another independent backend and retain an external backup.
+A migrated state stack must not destroy the S3 bucket that currently stores its own active state. Before destroying any workload, control-plane, or security-operations `state` stack, first migrate that stack's state back to local state or to another independent backend and retain an external backup.
 
 Do not run `terraform destroy` against a state stack while its active backend still points to the bucket it manages.
 
@@ -1054,14 +1182,17 @@ Instead, first update the Identity Center stack to remove that environment’s o
 
 Example for `dev`:
 
-From the repository root:
+Update the `dev` object in `identity_center_workloads` so optional Analyst and Engineer access is disabled, then apply the Identity Center stack before deleting workload-created IAM policies:
+
+```hcl
+dev = {
+  # existing account/Region/policy-name values
+  enable_secops_analyst  = false
+  enable_secops_engineer = false
+}
+```
 
 ```bash
-export TF_VAR_enable_secops_analyst_dev=false
-export TF_VAR_enable_secops_engineer_dev=false
-export TF_VAR_logs_s3_readonly_policy_name_dev=""
-export TF_VAR_logs_cmk_decrypt_policy_name_dev=""
-
 terraform -chdir=bootstrap/control_plane/identity_center apply
 ```
 
@@ -1147,12 +1278,19 @@ terraform -chdir=bootstrap/control_plane/identity_center destroy
 11. Migrate `bootstrap/prod/state` away from its self-managed S3 backend
 12. Destroy `bootstrap/prod/state`
 
+### Security Operations
+
+13. `bootstrap/security_operations/security_services`
+14. `bootstrap/security_operations/account`
+15. Migrate `bootstrap/security_operations/state` away from its self-managed S3 backend
+16. Destroy `bootstrap/security_operations/state`
+
 ### Control Plane
 
-13. `bootstrap/control_plane/organizations`
-14. `bootstrap/control_plane/account`
-15. Migrate `bootstrap/control_plane/state` away from its self-managed S3 backend
-16. Destroy `bootstrap/control_plane/state`
+17. `bootstrap/control_plane/organizations`
+18. `bootstrap/control_plane/account`
+19. Migrate `bootstrap/control_plane/state` away from its self-managed S3 backend
+20. Destroy `bootstrap/control_plane/state`
 
 ---
 
@@ -1163,6 +1301,12 @@ terraform -chdir=bootstrap/control_plane/identity_center destroy
 
 - Do **not** destroy `bootstrap/<env>/state` before all stacks using that backend are destroyed.
   - The state stack contains the Terraform backend resources.
+
+- Do **not** destroy `bootstrap/security_operations/account` before `bootstrap/security_operations/security_services`.
+  - It contains the security-operations GitHub OIDC roles.
+
+- Do **not** destroy `bootstrap/security_operations/state` before the security-operations account and security-services stacks are gone.
+  - Migrate its state away from its self-managed backend first.
 
 - Do **not** destroy `bootstrap/control_plane/account` before other control-plane substacks.
   - It contains the GitHub OIDC roles used to manage the control plane.

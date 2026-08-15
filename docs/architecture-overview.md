@@ -27,6 +27,7 @@ migrate-state-stack.sh
 Remote S3 State with Native Lockfiles
     |
     +--> bootstrap/control_plane/state
+    +--> bootstrap/security_operations/state
     +--> bootstrap/dev/state
     +--> bootstrap/staging/state
     +--> bootstrap/prod/state
@@ -45,6 +46,10 @@ Terraform Stacks
     |       +--> organizations
     |       +--> identity_center
     |
+    +--> bootstrap/security_operations
+    |       +--> account
+    |       +--> security_services
+    |
     +--> bootstrap/dev/account
     +--> bootstrap/staging/account
     +--> bootstrap/prod/account
@@ -56,14 +61,15 @@ Terraform Stacks
 
 At a high level:
 
-- The **control plane** manages organization-wide structure, centralized identity, and control-plane CI/CD access.
+- The **control plane** manages AWS Organizations structure, centralized identity, and organization-level prerequisites for delegated security administration.
+- The dedicated **security-operations account** is the delegated administrator for centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance.
 - Each **state substack** is initialized and applied locally first so it can create its S3 state bucket and KMS key.
 - The state-stack migration helper then materializes the ignored active backend configuration from `backend.tf.migrated.example`, migrates the state into S3, and verifies the remote state.
 - Each **account substack** creates the GitHub OIDC roles used by CI/CD for that account/environment.
-- Each **environment stack** deploys the actual security baseline into its dedicated AWS account.
+- Each **environment stack** deploys the workload-local security baseline into its dedicated AWS account while deferring centrally governed services to `security-operations`.
 - GitHub Actions uses OIDC to assume environment-specific roles.
-- Read-only evidence workflows use the applicable `*-plan` role and materialize the state-stack backend at runtime.
-- IAM Identity Center provides centralized human access.
+- Read-only evidence workflows use the applicable `*-plan` role and materialize state-stack backends at runtime.
+- IAM Identity Center provides centralized human access to workload and security-operations accounts.
 - EventBridge, Security Hub, Lambda, and SNS provide event-driven detection and response.
 
 ## Account Model
@@ -71,35 +77,39 @@ At a high level:
 The architecture separates platform responsibilities across multiple AWS accounts.
 
 ```text
-bootstrap / control-plane account
+control-plane account (AWS Organizations management account)
     |
     +--> AWS Organizations
     +--> IAM Identity Center
     +--> Control-plane Terraform state
     +--> Control-plane GitHub OIDC roles
+    +--> Central-security organization prerequisites
 
-dev account
+Security OU
     |
-    +--> Dev baseline infrastructure
-    +--> Dev account infrastructure
+    +--> security-operations account
+            +--> Delegated Security Hub CSPM administration
+            +--> Delegated GuardDuty administration
+            +--> Security Hub V2 organization policy management
+            +--> Security-operations Terraform state and OIDC roles
 
-staging account
+Workloads OU
     |
-    +--> Staging baseline infrastructure
-    +--> Staging account infrastructure
-
-prod account
+    +--> NonProd
+    |       +--> dev
+    |       +--> staging
     |
-    +--> Prod baseline infrastructure
-    +--> Prod account infrastructure
+    +--> Prod
+            +--> prod
 ```
 
 This model provides:
 
 - Environment isolation
 - Reduced blast radius
+- A dedicated security administration boundary outside workload accounts
 - Separate Terraform state per account/environment
-- Cleaner access boundaries
+- Cleaner access and governance boundaries
 - Production-aligned account segmentation
 - Multi-AZ / Multi-region capabilities, if configured
 
@@ -121,17 +131,20 @@ The control plane consists of four substacks:
 |---------|---------|
 | `state` | Creates the control-plane state bucket and CMK, then stores its own state in that remote backend after migration |
 | `account` | Creates GitHub OIDC roles used by CI/CD |
-| `organizations` | Defines AWS Organizations OU structure |
-| `identity_center` | Manages IAM Identity Center groups, permission sets, and account assignments |
+| `organizations` | Defines AWS Organizations structure, account placement, delegated-administrator prerequisites, and Security Hub V2 organization-policy prerequisites |
+| `identity_center` | Manages IAM Identity Center groups, permission sets, and account assignments for workload and security-operations accounts |
 
 The control plane does **not** deploy application or workload infrastructure.
 
 Its purpose is to define:
 
 - How accounts are organized
-- How humans access accounts
+- Which account is delegated to administer centralized security services
+- How humans access workload and security-operations accounts
 - How GitHub Actions authenticates to AWS
 - How Terraform state is stored for control-plane resources
+
+The control plane owns organization-level prerequisites such as Security Hub and GuardDuty trusted service access, delegated-administrator registration, the `SECURITYHUB_POLICY` policy type, and the management-account resources required for Security Hub V2 organization policy management. The delegated-administrator-side service configuration is intentionally owned by `bootstrap/security_operations/security_services`.
 
 ---
 
@@ -163,44 +176,49 @@ Environment stacks can include:
 - CloudTrail
 - CloudWatch
 - AWS Config, when enabled by profile or override
-- GuardDuty
-- Security Hub
+- Workload-local Security Hub CSPM, GuardDuty, and Security Hub V2 resources only when local ownership is explicitly enabled
 - Inspector, when enabled by profile
 - EventBridge rules
 - Lambda automation
 - SNS topics
 - Backup and patch management resources
 
-Each environment is independently deployable, destroyable, and testable.
+In the centralized multi-account deployment, `dev`, `staging`, and `prod` set `manage_securityhub_cspm_locally = false`, `manage_guardduty_locally = false`, and `manage_securityhub_v2_locally = false`. AWS Config, Inspector, workload logging, remediation, and response automation remain workload-local.
+
+Each workload environment is independently deployable, destroyable, and testable without making centralized security-services state part of the normal workload destroy lifecycle.
 
 ---
 
 ## Compute Launch and First-Boot Readiness
 
-The compute security group must exist before the standalone `security_policy` module can create rules that reference it. EC2 launch is delayed with a resource-level dependency instead of a broad module dependency:
+The compute security group must exist before the standalone `security_policy` module can create rules that reference it. EC2 launch is delayed with resource-level readiness dependencies rather than a broad module dependency:
 
 ```text
-aws_security_group.compute
-        |
-        v
-security_policy security-group rules
-        |
-        v
-security_policy.compute_sg_rule_ids
-        |
-        v
-terraform_data.compute_security_policy_ready
-        |
-        v
-aws_instance.ec2
-        |
-        v
-cloud-init bootstrap
+aws_security_group.compute                 Interface VPC Endpoints
+        |                                          |
+        v                                          v
+security_policy security-group rules       interface_endpoint_ids
+        |                                          |
+        v                                          v
+compute_sg_rule_ids                         compute_vpc_endpoints_ready
+        |                                          |
+        v                                          |
+compute_security_policy_ready                      |
+        |                                          |
+        +-------------------+----------------------+
+                            |
+                            v
+                    aws_instance.ec2
+                            |
+                            v
+                    cloud-init bootstrap
 ```
 
-The readiness object includes endpoint, database, and conditional public HTTPS security-group rule IDs. It does not prove that routes, NAT Gateway, Network Firewall, DNS, or package repositories are healthy.
+The security-policy readiness object covers endpoint, database, and conditional public HTTPS security-group rule IDs. The endpoint readiness object requires Terraform-managed Interface VPC Endpoints to exist before EC2 launches.
 
-At first boot, Ubuntu package sources are rewritten to HTTPS, APT is forced over IPv4, transient failures are retried, any repository-refresh error fails provisioning, and a noninteractive distribution upgrade runs before required packages are installed. User-data changes replace the instance.
+The endpoint set includes `guardduty-data`. Creating that endpoint before eligible EC2 instances allows GuardDuty Runtime Monitoring to use the Terraform-managed endpoint instead of introducing a GuardDuty-managed endpoint and security group outside the workload dependency graph.
+
+These readiness checks do not prove that routes, NAT Gateway, Network Firewall, DNS, or package repositories are healthy. At first boot, Ubuntu package sources are rewritten to HTTPS, APT is forced over IPv4, transient failures are retried, any repository-refresh error fails provisioning, and a noninteractive distribution upgrade runs before required packages are installed. User-data changes replace the instance.
 
 ---
 
@@ -402,24 +420,26 @@ These endpoint subnets:
 - Host Interface Endpoint ENIs
 - Allow workloads to reach supported AWS services over private VPC-local paths
 
-Examples include endpoints for services such as:
+The current Interface Endpoint set includes:
 
-- S3
-- Systems Manager
+- STS
+- SQS
 - CloudWatch Logs
+- Systems Manager
+- SSM Messages
 - Secrets Manager
 - KMS
-- EC2 Messages
-- SSM Messages
+- AWS Config
+- SNS
+- EC2
+- EventBridge
 - Security Hub
 - Lambda
-- EventBridge
-- SNS
-- STS
+- GuardDuty Runtime Monitoring (`guardduty-data`)
 
 Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-This supports private connectivity for management, logging, secrets retrieval, and automation workflows.
+The `guardduty-data` endpoint is intentionally Terraform-managed and participates in the compute readiness dependency so Runtime Monitoring does not need to create an unmanaged endpoint after EC2 appears. This also keeps endpoint placement and destroy ordering inside the Terraform graph.
 
 ---
 
@@ -433,31 +453,28 @@ The Identity Center stack manages:
 - Permission sets
 - Account assignments
 
-Example groups include:
+Required groups include:
 
 ```text
 SecOps-Operator-Dev
 SecOps-Operator-Staging
 SecOps-Operator-Prod
+SecOps-Administrator
 ```
 
-Optional groups may include:
-
-```text
-SecOps-Analyst
-SecOps-Engineer
-```
+Optional Analyst and Engineer groups can be enabled per workload account and for the security-operations account.
 
 The access model separates operational duties:
 
 | Role | Purpose |
 |-----|---------|
-| SecOps-Operator | Submit approved rollback events |
-| SecOps-Analyst | Read-only investigation and visibility |
-| SecOps-Engineer | Investigation and limited response actions |
+| SecOps-Operator | Submit approved rollback events in a workload account |
+| SecOps-Administrator | Administrative access to the centralized security-operations account |
+| SecOps-Analyst | Optional read-only investigation and visibility |
+| SecOps-Engineer | Optional investigation and limited response actions |
 | Break-glass admin | Emergency administrative access |
 
-The `SecOps-Operator` role is intentionally limited. It can submit events to the environment-specific SecOps event bus, but it does not directly modify EC2 instances or invoke Lambda functions.
+`SecOps-Operator` remains intentionally limited: it can submit events to the environment-specific SecOps event bus, but it does not directly modify EC2 instances or invoke Lambda functions. The security-operations account uses a separate access model in which `SecOps-Administrator` is required and `SecOps-Operator` is disabled.
 
 ---
 
@@ -481,15 +498,19 @@ staging         -> staging GitHub-Apply role
 prod-plan       -> prod GitHub-Plan role
 prod            -> prod GitHub-Apply role
 
-control-plane-plan -> control-plane GitHub-Plan role
-control-plane      -> control-plane GitHub-Apply role
+control-plane-plan    -> control-plane GitHub-Plan role
+control-plane         -> control-plane GitHub-Apply role
+
+security-operations-plan -> security-operations GitHub-Plan role
 ```
 
 The GitHub OIDC roles are created by account substacks and are intentionally separated from the baseline infrastructure they manage.
 
 This prevents Terraform workflows from destroying the IAM roles they are actively using.
 
-Layer-specific evidence workflows use the Plan roles and their corresponding `*-plan` GitHub environments. Because active state-stack `backend.tf` files are ignored, these workflows copy `backend.tf.migrated.example` to `backend.tf` before initializing and validating the migrated state stacks.
+Layer-specific evidence workflows use the Plan roles and their corresponding `*-plan` GitHub environments. Because active state-stack `backend.tf` files are ignored, these workflows copy `backend.tf.migrated.example` to `backend.tf` before initializing and validating migrated state stacks.
+
+The standalone Terraform Plan workflow covers workload environments, control-plane Identity Center and Organizations, and `bootstrap/security_operations/security_services`. The current general-purpose Terraform Apply and Terraform Destroy workflows remain workload-scoped; centralized security services are not part of routine workload lifecycle operations.
 
 Workload Plan environments validate `ISOLATION_ALLOWED` as exactly `true` or `false`. Development currently opts in; staging and production remain opted out. The protected Apply job uses the reviewed saved plan, and Destroy falls back to `false` when the value is absent.
 
@@ -522,7 +543,7 @@ After the state resources exist, the operator runs:
 ```bash
 AWS_PROFILE="<profile>" \
 EXPECTED_ACCOUNT_ID="<account-id>" \
-./scripts/bootstrap/migrate-state-stack.sh <dev|staging|prod|control-plane>
+./scripts/bootstrap/migrate-state-stack.sh <dev|staging|prod|control-plane|security-operations>
 ```
 
 The helper:
@@ -569,6 +590,8 @@ bootstrap/control_plane/identity_center
 bootstrap/control_plane/organizations
     -> remote backend key: control-plane/organizations.tfstate
 ```
+
+The security-operations account follows the same separation pattern: its `state`, `account`, and `security_services` roots use distinct state objects in the security-operations state bucket.
 
 All remote-backed stacks use S3 native locking with:
 
@@ -618,20 +641,47 @@ This supports monitoring continuity, incident response, and evidence preservatio
 
 ---
 
+## Centralized Security Governance
+
+Organization-wide security ownership is split deliberately between the AWS Organizations management account and the delegated security administrator.
+
+The control-plane `organizations` stack owns the organization-level prerequisites:
+
+- Security Hub and GuardDuty trusted service access
+- GuardDuty Malware Protection trusted service access
+- Security Hub and GuardDuty delegated-administrator registration
+- `SECURITYHUB_POLICY` enablement
+- the management-account service-linked and delegation resources required for Security Hub V2 organization policy management
+
+The `bootstrap/security_operations/security_services` stack owns the delegated-administrator-side configuration:
+
+- Security Hub CSPM enablement, finding aggregation, CENTRAL organization configuration, and per-workload configuration policies/associations
+- GuardDuty administrator detector discovery, organization member enrollment, and organization protection plans
+- GuardDuty Runtime Monitoring with EC2 agent management enabled and unused ECS/Fargate and EKS agent-management integrations disabled
+- Security Hub V2 enablement in `security-operations`
+- a Security Hub V2 organization policy attached to the `Workloads` OU for the primary Region
+
+Workload Terraform defers local Security Hub CSPM, GuardDuty, and Security Hub V2 ownership when this centralized model is enabled. AWS Config, Inspector, deterministic remediation, and workload response automation remain local to each workload account.
+
+The current Security Hub V2 design is primary-Region organization policy governance; it does not add a separate Security Hub V2 finding aggregator.
+
+---
+
 ## Detection Layer
 
 Continuous monitoring is enabled through AWS-native detection and posture management services.
 
 Core detection services include:
 
-| Service | Purpose |
-|--------|---------|
-| `GuardDuty` | Threat detection |
-| `Security Hub` | Findings aggregation |
-| `AWS Config` | Configuration compliance |
-| `Inspector` | Vulnerability detection |
-| `CloudTrail` | API activity logging |
-| `EventBridge` | Event routing and automation trigger |
+| Service | Purpose | Primary ownership |
+|--------|---------|-------------------|
+| `GuardDuty` | Threat detection and Runtime Monitoring | Centralized through `security-operations` |
+| `Security Hub CSPM` | Findings aggregation and posture policy | Centralized through `security-operations` |
+| `Security Hub V2` | Workload enablement policy in the primary Region | Centralized through `security-operations` and AWS Organizations |
+| `AWS Config` | Configuration compliance | Workload-local |
+| `Inspector` | Vulnerability detection | Workload-local |
+| `CloudTrail` | API activity logging | Workload-local logging path |
+| `EventBridge` | Event routing and automation trigger | Workload-local response path |
 
 These services provide visibility into:
 
@@ -946,6 +996,6 @@ These profiles do not replace environment-specific review. Production deployment
 
 ## Summary
 
-`tf-secure-baseline` implements a multi-account AWS security baseline with centralized identity, secure networking, encrypted logging, continuous detection, event-driven response, deployment profile support, configurable egress modes, dedicated VPC endpoint subnets, and GitHub OIDC-based CI/CD.
+`tf-secure-baseline` implements a multi-account AWS security baseline with centralized identity, delegated security administration, secure networking, encrypted logging, continuous detection, event-driven response, deployment profile support, configurable egress modes, dedicated VPC endpoint subnets, and GitHub OIDC-based CI/CD.
 
 The architecture is designed to provide a secure starting point for SaaS companies and teams handling sensitive data while remaining modular enough to adapt to different environments, cost requirements, and organizational security expectations.

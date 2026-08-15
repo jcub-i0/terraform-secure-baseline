@@ -9,8 +9,8 @@ It creates:
 - A compute security group
 - A quarantine security group for incident-response isolation
 - One Ubuntu EC2 instance per configured private compute subnet
-- A dependency-readiness checkpoint that prevents EC2 instances from launching
-  before required security group rules exist
+- Dependency-readiness checkpoints that prevent EC2 instances from launching
+  before required security group rules and Terraform-managed Interface VPC Endpoints exist
 - Encrypted `gp3` root volumes
 - IMDSv2-only metadata access
 - First-boot operating system patching and package installation
@@ -24,7 +24,7 @@ rules for normal workload traffic remain owned by the networking
 
 ## Architecture
 
-The module participates in a resource-level dependency chain:
+The module participates in two resource-level readiness chains:
 
 ```text
 aws_security_group.compute
@@ -38,16 +38,22 @@ security_policy.compute_sg_rule_ids
         v
 terraform_data.compute_security_policy_ready
         |
-        v
-aws_instance.ec2
+        +------------------+
+                           |
+vpc_endpoints.interface_endpoint_ids
+        |
+        v                  |
+terraform_data.compute_vpc_endpoints_ready
+        |                  |
+        +------------------+
+                |
+                v
+        aws_instance.ec2
 ```
 
-This ordering allows the compute security group to be created early so the
-networking security-policy layer can attach rules to it, while delaying only
-the EC2 instances until those rules exist.
+This ordering allows the compute security group to exist early enough for the networking `security_policy` layer to reference it, while delaying EC2 launch until both the required traffic rules and the Terraform-managed Interface Endpoints exist.
 
-This prevents first-boot user data from running before required HTTPS, VPC
-endpoint, and database security group rules have been created.
+The endpoint dependency is especially important for GuardDuty Runtime Monitoring. Because `guardduty-data` is part of the Terraform-managed Interface Endpoint set, eligible EC2 instances are not launched before that endpoint exists, avoiding reliance on a GuardDuty-created VPC endpoint.
 
 ---
 
@@ -179,6 +185,35 @@ Do not use `compute_egress_to_internet_egress`.
 
 ---
 
+### Interface Endpoint Readiness Checkpoint
+
+```hcl
+resource "terraform_data" "compute_vpc_endpoints_ready"
+```
+
+The second readiness checkpoint receives:
+
+```hcl
+input = var.interface_endpoint_ids
+```
+
+where `interface_endpoint_ids` is the map exported by `modules/vpc_endpoints`.
+
+The EC2 instances depend on both readiness resources:
+
+```hcl
+depends_on = [
+  terraform_data.compute_security_policy_ready,
+  terraform_data.compute_vpc_endpoints_ready
+]
+```
+
+This establishes a narrow Terraform dependency on the endpoint resources themselves rather than a broad module-level `depends_on`.
+
+The map currently includes the full Terraform-managed Interface Endpoint set, including `guardduty-data`. The checkpoint proves Terraform has created those endpoint resources before EC2 launch; it does not prove endpoint DNS resolution, route health, AWS service health, or public package-repository reachability.
+
+---
+
 ### EC2 Instances
 
 ```hcl
@@ -304,9 +339,7 @@ Depending on the effective deployment profile, that path may use:
 
 VPC endpoint access alone does not provide access to public Ubuntu repositories.
 
-The readiness dependency prevents EC2 creation before the managed security group
-rules exist. It does not replace route, NAT Gateway, firewall, DNS, or repository
-availability checks.
+The readiness dependencies prevent EC2 creation before the managed security group rules and Interface Endpoint resources exist. They do not replace route, NAT Gateway, firewall, DNS, endpoint-health, or package-repository availability checks.
 
 ---
 
@@ -455,6 +488,7 @@ The backup module can use this tag for resource selection.
 | `patch_tag_value` | `string` | n/a | Value assigned to the `PatchGroup` tag |
 | `isolation_allowed` | `bool` | `false` | Whether instances may be automatically isolated |
 | `compute_sg_rule_ids` | `object` | n/a | Security group rule IDs that must exist before EC2 launch |
+| `interface_endpoint_ids` | `map(string)` | n/a | Terraform-managed Interface Endpoint IDs that must exist before EC2 launch |
 
 ### `compute_sg_rule_ids` Type
 
@@ -472,6 +506,27 @@ variable "compute_sg_rule_ids" {
   })
 }
 ```
+
+### `interface_endpoint_ids` Type
+
+Use:
+
+```hcl
+variable "interface_endpoint_ids" {
+  description = "Map of Interface-type VPC Endpoints and their IDs"
+  type        = map(string)
+}
+```
+
+The expected caller is:
+
+```hcl
+interface_endpoint_ids = module.vpc_endpoints.interface_endpoint_ids
+```
+
+This creates the resource-level dependency from the Interface Endpoint resources to the EC2 instances.
+
+---
 
 ### Compatibility Inputs
 
@@ -511,31 +566,29 @@ module "compute" {
 
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   instance_profile_name          = module.iam.compute_instance_profile_name
-  ebs_cmk_arn                    = module.kms.ebs_cmk_arn
+  ebs_cmk_arn                    = module.security.ebs_cmk_arn
 
   patch_tag_value  = var.patch_tag_value
   isolation_allowed = var.isolation_allowed
 
-  compute_sg_rule_ids = module.security_policy.compute_sg_rule_ids
+  compute_sg_rule_ids   = module.security_policy.compute_sg_rule_ids
+  interface_endpoint_ids = module.vpc_endpoints.interface_endpoint_ids
 
   # Retained compatibility inputs.
-  interface_endpoints_sg_id = module.networking.interface_endpoints_sg_id
+  interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
   data_sg_id                = module.storage.data_sg_id
   db_port                   = var.db_port
 }
 ```
 
-The exact upstream output names may differ in the calling root. The important
-dependency input is:
+The important dependency inputs are:
 
 ```hcl
-compute_sg_rule_ids = module.security_policy.compute_sg_rule_ids
+compute_sg_rule_ids   = module.security_policy.compute_sg_rule_ids
+interface_endpoint_ids = module.vpc_endpoints.interface_endpoint_ids
 ```
 
-Do not add a module-level dependency from the entire compute module to the
-standalone `security_policy` module when that module already consumes
-`module.compute.compute_sg_id`. The readiness object provides the required
-resource-level ordering without creating a module cycle.
+Do not add a module-level dependency from the entire compute module to the standalone `security_policy` or `vpc_endpoints` module. The readiness objects preserve the required resource-level ordering while keeping the dependency graph narrow and avoiding a cycle with `security_policy`, which already consumes `module.compute.compute_sg_id`.
 
 ---
 
@@ -680,16 +733,20 @@ A managed SSM connection does not prove that public Ubuntu repository access
 works. SSM may use interface VPC endpoints while APT requires a separate
 internet or package-mirror path.
 
-### EC2 Launches Before HTTPS Egress Is Ready
+### EC2 Launches Before Managed Dependencies Are Ready
 
 Confirm that:
 
-- the standalone `security_policy` module outputs all required rule IDs
-- the baseline passes `module.security_policy.compute_sg_rule_ids` directly into `compute`
-- `terraform_data.compute_security_policy_ready` uses that object
-- `aws_instance.ec2` depends on the readiness resource
-- The optional internet rule attribute is named
-  `compute_egress_to_internet_https`
+- the standalone `security_policy` module outputs all required rule IDs;
+- the baseline passes `module.security_policy.compute_sg_rule_ids` directly into `compute`;
+- `terraform_data.compute_security_policy_ready` uses that object;
+- the VPC Endpoints module exports `interface_endpoint_ids`;
+- the baseline passes `module.vpc_endpoints.interface_endpoint_ids` into `compute`;
+- `terraform_data.compute_vpc_endpoints_ready` uses that map;
+- `aws_instance.ec2` depends on both readiness resources; and
+- the optional internet rule attribute is named `compute_egress_to_internet_https`.
+
+If GuardDuty Runtime Monitoring is expected, also confirm the endpoint map contains `guardduty-data` before EC2 creation.
 
 A misspelled optional object attribute can become `null` and fail to preserve
 the intended dependency on the internet HTTPS rule.
@@ -749,7 +806,8 @@ Then inspect the plan for instance replacement after modifying
 - The default isolation authorization is fail-closed.
 - Normal security group rules remain centrally owned by the networking
   security-policy layer.
-- EC2 instances wait for required security group rules before launch.
+- EC2 instances wait for required security group rules and Terraform-managed Interface Endpoints before launch.
+- The `guardduty-data` endpoint can therefore exist before GuardDuty Runtime Monitoring evaluates eligible EC2 instances.
 - User-data changes replace instances.
 - First-boot bootstrap upgrades the installed operating system packages.
 - Routine Terraform applies do not automatically release isolated instances.
@@ -761,6 +819,7 @@ Then inspect the plan for instance replacement after modifying
 
 - Private-by-default compute
 - Explicit resource-level dependency ordering
+- Terraform-owned service dependencies before compute launch
 - Centralized security-policy ownership
 - Fail-closed isolation authorization
 - Encrypted storage
@@ -783,5 +842,5 @@ Then inspect the plan for instance replacement after modifying
   `modules/compute/user_data/bootstrap.sh`.
 - The bootstrap log is written to
   `/var/log/instance-bootstrap.log`.
-- The networking security-policy output and compute input must use matching
-  `compute_sg_rule_ids` object attributes.
+- The networking security-policy output and compute input must use matching `compute_sg_rule_ids` object attributes.
+- `interface_endpoint_ids` should come directly from the VPC Endpoints module so endpoint creation remains part of the EC2 dependency graph.

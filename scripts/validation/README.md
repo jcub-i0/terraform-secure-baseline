@@ -25,25 +25,28 @@ scripts/validation/
 
 ## Validation Layers
 
-`tf-secure-baseline` has three validation layers and matching evidence exporters:
+`tf-secure-baseline` has four validation layers and matching evidence exporters:
 
 ```text
 Workload bootstrap validation  -> validate-bootstrap.sh <dev|staging|prod>
 Workload baseline validation   -> validate-baseline.sh <dev|staging|prod>
 Control-plane validation       -> validate-control-plane.sh
+Security-operations validation -> validate-security-operations.sh
 
 Workload bootstrap evidence    -> export-bootstrap.sh <dev|staging|prod>
 Workload baseline evidence     -> export-baseline.sh <dev|staging|prod>
 Control-plane evidence         -> export-control-plane.sh
+Security-operations evidence   -> export-security-operations.sh
 ```
-
-Each layer validates a different part of the platform.
 
 | Layer | Scope | Validation script | Evidence exporter |
 |---|---|---|---|
 | Workload bootstrap | `bootstrap/<env>/state` and `bootstrap/<env>/account` | `validate-bootstrap.sh` | `export-bootstrap.sh` |
 | Workload baseline | deployed workload environment under `environments/<env>` | `validate-baseline.sh` | `export-baseline.sh` |
-| Control plane | control-plane state, GitHub OIDC, Organizations, and Identity Center | `validate-control-plane.sh` | `export-control-plane.sh` |
+| Control plane | state/OIDC, AWS Organizations topology and prerequisites, IAM Identity Center | `validate-control-plane.sh` | `export-control-plane.sh` |
+| Security operations | centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance | `validate-security-operations.sh` | `export-security-operations.sh` |
+
+The boundary is intentional: control plane proves organization structure and prerequisites; security operations proves delegated centralized-security configuration; workload validation proves member-account realization and workload controls.
 
 ---
 
@@ -77,6 +80,8 @@ Most scripts use the following environment variables:
 | `REQUIRE_STATE_STACK_REMOTE` | Makes migrated state-stack backend findings fail instead of warn. Defaults to `false` in direct script/exporter runs; GitHub evidence workflows default it to `true`. | Optional |
 | `IDENTITY_CENTER_WORKLOADS` | JSON map containing the `dev`, `staging`, and `prod` Identity Center workload configurations. Required by the control-plane validator and exporter. | Control plane only |
 | `IDENTITY_CENTER_SECOPS` | JSON object containing the security-operations Identity Center configuration. Required by the control-plane validator and exporter. | Control plane only |
+| `WORKLOADS_OU_NAME` | Workloads OU name used by centralized-security validation. Defaults to `Workloads`. | Security operations / control plane |
+| `WORKLOAD_ACCOUNT_NAMES` | Space-delimited workload account names used by the security-operations exporter. Defaults to `dev staging prod`. | Security operations only |
 
 Recommended defaults:
 
@@ -522,27 +527,58 @@ STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
 
 ### AWS Organizations Account Placement
 
-The validator checks:
+The control-plane validator checks the current organization topology and account placement:
 
 ```text
-dev      -> Workloads/NonProd
-staging  -> Workloads/NonProd
-prod     -> Workloads/Prod
+Root
+├── Workloads
+│   ├── NonProd
+│   │   ├── dev
+│   │   └── staging
+│   └── Prod
+│       └── prod
+└── Security
+    └── security-operations
 ```
 
 Account placement behavior is controlled by:
 
 ```bash
-STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-false}"
+STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-true}"
 ```
 
-With the default `false`, a placement mismatch is a warning. Set it to `true` when OU placement must be enforced as a blocking validation requirement.
+With the current default `true`, a placement mismatch fails validation. Set the flag to `false` only for deliberate transitional troubleshooting, and document the weaker evidence posture.
 
-Example warning:
+---
 
-```text
-[WARN] dev account parent mismatch. Expected NonProd, got root
+## Security-Operations Validation
+
+Use `validate-security-operations.sh` from the dedicated `security-operations` account to validate centralized security governance.
+
+Example:
+
+```bash
+AWS_PAGER="" \
+AWS_PROFILE=security-operations \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<SECURITY-OPERATIONS-ACCOUNT-ID>" \
+./scripts/validation/validate-security-operations.sh
 ```
+
+The validator checks selected live AWS state and Terraform state for:
+
+- security-operations account identity
+- centralized Security Hub CSPM administrator state and finding aggregation
+- Security Hub CSPM `CENTRAL` organization configuration
+- per-workload CSPM configuration policies and associations
+- GuardDuty delegated-administrator detector and organization enrollment
+- GuardDuty organization protection plans and Runtime Monitoring configuration
+- Security Hub V2 administrator state
+- Security Hub V2 organization policy attachment to the `Workloads` OU
+- effective Security Hub V2 policy for configured workload accounts
+- directly required trusted-service/delegated-administrator prerequisites
+
+The security-operations validator does not replace complete organization topology checks or workload-local checks. Use `validate-control-plane.sh` for the former and `validate-baseline.sh` / `validate-security-workload.sh` for the latter.
 
 ---
 
@@ -560,10 +596,6 @@ Generated evidence is environment-specific and should generally not be committed
 
 ### Workload Bootstrap Evidence
 
-Use `export-bootstrap.sh` to export workload bootstrap evidence.
-
-Example:
-
 ```bash
 AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
@@ -574,25 +606,13 @@ CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-bootstrap.sh dev
 ```
 
-The report package is written to:
+Package location:
 
 ```text
 validation-results/<environment>/bootstrap/<timestamp>/
 ```
 
-Expected files include:
-
-```text
-summary.md
-summary.json
-validate-bootstrap.log
-```
-
 ### Workload Baseline Evidence
-
-Use `export-baseline.sh` to export workload baseline evidence.
-
-Example:
 
 ```bash
 AWS_PROFILE="dev" \
@@ -602,22 +622,20 @@ CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-baseline.sh dev
 ```
 
-The report package is written to:
+Package location:
 
 ```text
 validation-results/<environment>/baseline/<timestamp>/
 ```
 
-Expected files include:
+Current baseline logs include:
 
 ```text
-summary.md
-summary.json
 validate-env.log
 validate-networking.log
 validate-vpc-endpoints.log
 validate-logging.log
-validate-security-services.log
+validate-security-workload.log
 validate-kms.log
 validate-backup.log
 validate-sns.log
@@ -631,32 +649,11 @@ validate-iam.log
 
 ### Control-Plane Evidence
 
-Use `export-control-plane.sh` to export control-plane validation evidence.
-
-The exporter requires the same consolidated Identity Center JSON inputs as `validate-control-plane.sh`. It validates those inputs, derives the workload and security-operations account IDs, passes the configuration to the validator, and records the resolved account IDs in `summary.json`.
-
-Example:
+The exporter consumes the consolidated Identity Center configuration used by Terraform:
 
 ```bash
-export IDENTITY_CENTER_WORKLOADS='{
-  "dev": {
-    "account_id": "<DEV-ACCOUNT-ID>",
-    "primary_region": "us-east-1"
-  },
-  "staging": {
-    "account_id": "<STAGING-ACCOUNT-ID>",
-    "primary_region": "us-east-1"
-  },
-  "prod": {
-    "account_id": "<PROD-ACCOUNT-ID>",
-    "primary_region": "us-east-1"
-  }
-}'
-
-export IDENTITY_CENTER_SECOPS='{
-  "account_id": "<SECURITY-OPERATIONS-ACCOUNT-ID>"
-}'
-
+IDENTITY_CENTER_WORKLOADS='<JSON-WORKLOAD-CONFIGURATION-MAP>' \
+IDENTITY_CENTER_SECOPS='<JSON-SECURITY-OPERATIONS-CONFIGURATION>' \
 AWS_PROFILE="control-plane" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
@@ -666,77 +663,70 @@ CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-control-plane.sh
 ```
 
-The report package is written to:
+Package location:
 
 ```text
 validation-results/control-plane/<timestamp>/
 ```
 
-Expected files include:
+### Security-Operations Evidence
+
+```bash
+AWS_PROFILE="security-operations" \
+AWS_REGION="us-east-1" \
+EXPECTED_ACCOUNT_ID="<SECURITY-OPERATIONS-ACCOUNT-ID>" \
+CLOUD_NAME="tf-secure-baseline" \
+./scripts/validation/export-security-operations.sh
+```
+
+Package location:
+
+```text
+validation-results/security-operations/security-services/<timestamp>/
+```
+
+Expected files:
 
 ```text
 summary.md
 summary.json
-validate-control-plane.log
-```
-
-The machine-readable summary records:
-
-```text
-settings.identity_center_workload_account_ids
-settings.identity_center_secops_account_id
+validate-security-operations.log
 ```
 
 ---
 
 ## Recommended Full Validation Order
 
-For a full post-deployment validation run:
+For a complete release/client-facing evidence pass, follow the platform boundaries rather than treating one report as sufficient:
 
-```bash
-# Dev
-AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh dev
-AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" ./scripts/validation/validate-baseline.sh dev
-AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-bootstrap.sh dev
-AWS_PROFILE=dev AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" ./scripts/validation/export-baseline.sh dev
+1. `validate-control-plane.sh` and `export-control-plane.sh`
+2. `validate-security-operations.sh` and `export-security-operations.sh`
+3. `validate-bootstrap.sh <env>` and `export-bootstrap.sh <env>` for each workload account
+4. `validate-baseline.sh <env>` and `export-baseline.sh <env>` for each deployed workload account
+5. Review all generated summaries and logs together
+6. Complete approved live/manual tests
 
-# Staging
-AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh staging
-AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" ./scripts/validation/validate-baseline.sh staging
-AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-bootstrap.sh staging
-AWS_PROFILE=staging AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" ./scripts/validation/export-baseline.sh staging
-
-# Prod
-AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh prod
-AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" ./scripts/validation/validate-baseline.sh prod
-AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-bootstrap.sh prod
-AWS_PROFILE=prod AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" ./scripts/validation/export-baseline.sh prod
-
-# Control plane
-IDENTITY_CENTER_WORKLOADS='<JSON-WORKLOAD-CONFIGURATION-MAP>' IDENTITY_CENTER_SECOPS='<JSON-SECURITY-OPERATIONS-CONFIGURATION>' AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-control-plane.sh
-IDENTITY_CENTER_WORKLOADS='<JSON-WORKLOAD-CONFIGURATION-MAP>' IDENTITY_CENTER_SECOPS='<JSON-SECURITY-OPERATIONS-CONFIGURATION>' AWS_PROFILE=control-plane AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/export-control-plane.sh
-```
+This order aligns evidence with the deployment architecture: control-plane prerequisites first, centralized security next, then workload bootstrap and workload realization.
 
 ---
 
 ## What Remains Manual
 
-The validation scripts are intentionally read-only.
+The validation scripts are intentionally read-only. Cross-layer validation should not be mislabeled as manual merely because it is outside the current report; the other evidence exporters cover those layers.
 
-They do not perform:
+The following activities remain live/manual or review-based:
 
-- Terraform `plan`, `apply`, and `destroy` workflow execution
-- end-user SSO login testing
+- IAM Identity Center end-user login and effective-access testing
 - live EC2 isolation testing
 - live EC2 rollback testing
 - live IP enrichment execution
-- tamper detection simulation
+- tamper-detection simulation
 - break-glass role assumption
-- destroy workflow execution
+- destroy-safety review and approved teardown execution
 - policy/procedure review
 - formal audit evidence review
 
-Track these activities separately in the validation checklist or assurance documentation.
+Track these separately in the validation checklist or assurance documentation.
 
 ---
 
@@ -754,7 +744,7 @@ Examples:
 
 - optional resources not enabled
 - optional Identity Center groups not configured
-- AWS Organizations account placement not managed by Terraform
+- intentionally relaxed strictness checks during transitional troubleshooting
 - environment-specific exceptions
 
 ### FAIL

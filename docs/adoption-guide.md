@@ -54,7 +54,8 @@ Use this baseline when your AWS environment needs:
 - Continuous monitoring
 - IAM Identity Center-based human access
 - GitHub OIDC-based CI/CD access
-- Security Hub and GuardDuty visibility
+- Centralized Security Hub CSPM and GuardDuty governance
+- Security Hub V2 workload policy governance
 - AWS Config posture monitoring
 - Event-driven incident response
 - Automated EC2 isolation
@@ -115,10 +116,11 @@ This baseline can be used as a reusable implementation foundation for client env
 
 It provides a repeatable structure for:
 
-- Account separation
+- Account and OU separation
 - Terraform state management
 - GitHub OIDC setup
 - Centralized identity
+- Delegated security administration
 - Logging
 - Detection
 - Response automation
@@ -140,8 +142,8 @@ This baseline helps address common AWS security and operational problems, includ
 - Long-lived CI/CD access keys
 - Terraform applies approved before a reviewable plan exists
 - Weak or inconsistent logging
-- No centralized detection layer
-- Missing Security Hub / GuardDuty / Config coverage
+- No centralized detection or security-administration layer
+- Inconsistent Security Hub / GuardDuty / Config coverage
 - Limited incident containment capability
 - Manual and inconsistent incident response
 - Lack of tamper detection
@@ -161,8 +163,8 @@ This baseline helps address common AWS security and operational problems, includ
 
 Deploying this baseline provides a production-aligned AWS security foundation with:
 
-- Multi-account architecture
-- Control-plane separation
+- Multi-account architecture with dedicated `control-plane`, `security-operations`, `dev`, `staging`, and `prod` accounts
+- Control-plane and delegated security-administration separation
 - Environment-specific, encrypted remote Terraform state with S3 native locking
 - GitHub OIDC CI/CD roles
 - Plan-before-apply deployment workflows with protected approvals and exact saved-plan application
@@ -178,8 +180,9 @@ Deploying this baseline provides a production-aligned AWS security foundation wi
 - KMS-backed encryption
 - CloudTrail
 - AWS Config, when enabled
-- GuardDuty
-- Security Hub
+- Centralized GuardDuty organization administration and Runtime Monitoring
+- Centralized Security Hub CSPM configuration and workload policy associations
+- Security Hub V2 organization policy governance for the `Workloads` OU
 - Inspector, when enabled
 - EventBridge rules
 - SNS alerts
@@ -308,7 +311,7 @@ This baseline may still work, but will require more customization if your team:
 - Already has a SIEM/logging pipeline
 - Requires multi-region failover
 - Uses containers or Kubernetes as the primary workload platform
-- Needs organization-wide GuardDuty or Security Hub delegation
+- Requires a different centralized security-services ownership model
 - Requires custom egress paths or proxy-based internet access
 - Requires additional VPC endpoints beyond the default endpoint set
 
@@ -351,8 +354,9 @@ Confirm that the model aligns with your intended AWS account strategy.
 
 Key decisions:
 
-- Will you use `dev`, `staging`, and `prod` accounts?
-- Will you use a separate `control-plane` account?
+- Will you use `dev`, `staging`, and `prod` workload accounts?
+- Will you use separate `control-plane` and `security-operations` accounts?
+- Will the `security-operations` account be the delegated administrator for centralized Security Hub and GuardDuty?
 - Will GitHub Actions manage Terraform?
 - Will IAM Identity Center be used for human access?
 - Which AWS region will be primary?
@@ -372,6 +376,7 @@ Create or identify the required AWS accounts:
 
 ```text
 control-plane
+security-operations
 dev
 staging
 prod
@@ -381,14 +386,20 @@ The control-plane account should manage:
 
 - AWS Organizations
 - IAM Identity Center
-- Control-plane Terraform state
-- Control-plane GitHub OIDC roles
+- Control-plane Terraform state and GitHub OIDC roles
+- Organization-level prerequisites for delegated Security Hub, GuardDuty, and Security Hub V2 governance
+
+The security-operations account should host:
+
+- its own Terraform state and GitHub OIDC roles
+- delegated Security Hub CSPM administration
+- delegated GuardDuty administration and organization protection-plan configuration
+- Security Hub V2 administrator-side configuration and workload organization policy management
 
 Workload accounts should host:
 
-- Dev baseline and GitHub OIDC resources
-- Staging baseline and GitHub OIDC resources
-- Prod baseline and GitHub OIDC resources
+- Dev, staging, and prod baseline infrastructure and workload GitHub OIDC resources
+- workload-local Config, Inspector, logging, remediation, and response automation
 
 ---
 
@@ -430,18 +441,24 @@ docs/quickstart.md
 Recommended deployment order:
 
 ```text
-1. Apply bootstrap/control_plane/state locally
-2. Migrate bootstrap/control_plane/state with scripts/bootstrap/migrate-state-stack.sh
-3. Deploy bootstrap/control_plane/account
-4. Deploy bootstrap/control_plane/organizations
-5. Apply bootstrap/<env>/state locally
-6. Migrate bootstrap/<env>/state with scripts/bootstrap/migrate-state-stack.sh
-7. Deploy bootstrap/<env>/account
-8. Deploy environments/<env> locally or through the plan-first Terraform Apply workflow
-9. Reconcile the workload account locally or through Reconcile Workload Account plan-and-apply
-10. Deploy or re-apply bootstrap/control_plane/identity_center
-11. Run validation and export evidence
+1. Bootstrap the control-plane state and account stacks
+2. Deploy bootstrap/control_plane/organizations
+3. Bootstrap security-operations state and account stacks
+4. Deploy bootstrap/security_operations/security_services
+5. Bootstrap each workload state and account stack
+6. Deploy environments/<env> locally or through the plan-first Terraform Apply workflow
+7. Reconcile each workload account when GitHub OIDC is enabled
+8. Deploy or re-apply bootstrap/control_plane/identity_center
+9. Run control-plane, security-operations, workload bootstrap, and workload baseline validation/evidence
 ```
+
+The architectural sequence is therefore:
+
+```text
+control-plane -> security-operations -> bootstrap-workloads -> workloads
+```
+
+The control plane establishes organization structure and delegated-administrator prerequisites before the security-operations stack configures centralized services. Workload baselines then defer local Security Hub CSPM, GuardDuty, and Security Hub V2 ownership to that central model.
 
 The GitHub deployment path generates and publishes the plan before requesting
 approval, then applies the exact saved plan after the protected environment is
@@ -484,13 +501,21 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 
 For client-readiness or release evidence, use `REQUIRE_STATE_STACK_REMOTE=true` for direct bootstrap and control-plane validation. The GitHub evidence workflows enforce this by default.
 
+Run the layer-specific evidence paths rather than treating workload validation as proof of central governance:
+
+- **Export Control Plane Evidence** for Organizations topology, account placement, delegated-administrator prerequisites, and Identity Center.
+- **Export Security Operations Evidence** for centralized Security Hub CSPM, GuardDuty, and Security Hub V2.
+- **Export Bootstrap Evidence** for workload bootstrap/state/OIDC controls.
+- **Export Baseline Evidence** for workload-local control realization.
+
 Also confirm:
 
 - Effective deployment profile outputs are correct.
 - Effective egress mode resolved as expected.
 - Network Firewall and NAT Gateway deployment matches the selected egress mode.
 - Dedicated endpoint private subnets exist.
-- Interface VPC Endpoints are deployed into endpoint private subnets.
+- Terraform manages the `guardduty-data` Interface Endpoint in those endpoint subnets.
+- Interface VPC Endpoints are created before EC2 and are deployed into endpoint private subnets.
 - S3 Gateway Endpoint is associated with the intended private route tables.
 - AWS Config, Backup, Inspector, and CloudWatch retention match the selected profile or explicit overrides.
 
@@ -513,7 +538,8 @@ Common customization areas include:
 - GitHub organization and repository names
 - IAM Identity Center groups
 - Permission set behavior
-- Enabled Security Hub standards
+- Central Security Hub CSPM policy/standard selection
+- GuardDuty organization protection-plan settings
 - AWS Config rules
 - VPC endpoint coverage
 - Backup retention
@@ -536,7 +562,11 @@ Before using the baseline for production workloads, review:
 - Break-glass access procedure
 - SNS subscription confirmation
 - CloudTrail logging status
-- GuardDuty / Security Hub / Config status
+- Security Hub and GuardDuty delegated-administrator state
+- Security Hub CSPM workload policy associations
+- GuardDuty organization protection plans and Runtime Monitoring
+- Security Hub V2 effective workload policy
+- Workload-local AWS Config and Inspector status
 - Backup policies
 - Patch management settings
 - Egress mode behavior
@@ -554,16 +584,17 @@ Before adopting this baseline, answer the following questions:
 
 ### Account Strategy
 
-- Will each environment use a separate AWS account?
+- Will each workload environment use a separate AWS account?
 - Which account is the AWS Organizations management account?
-- Will the control-plane account be separate from workload accounts?
+- Will `control-plane` and `security-operations` be separate from workload accounts?
+- Will `security-operations` be the delegated administrator for centralized Security Hub and GuardDuty?
 - Who owns each account?
 
 ---
 
 ### Terraform State Strategy
 
-- What bucket name will each workload and control-plane state stack use?
+- What bucket name will each workload, control-plane, and security-operations state stack use?
 - What distinct object key will each Terraform root use?
 - Who is authorized through `bucket_admin_principals`?
 - Where will migration backups be retained?
@@ -585,8 +616,9 @@ Before adopting this baseline, answer the following questions:
 ### Identity Strategy
 
 - Who administers IAM Identity Center?
-- Which users need `SecOps-Operator` access?
-- Will `SecOps-Analyst` and `SecOps-Engineer` roles be enabled?
+- Which users need workload `SecOps-Operator` access?
+- Who receives `SecOps-Administrator` access to the security-operations account?
+- Will optional `SecOps-Analyst` and `SecOps-Engineer` roles be enabled for workloads or security-operations?
 - Who owns break-glass credentials?
 - How is break-glass access reviewed?
 
@@ -597,6 +629,7 @@ Before adopting this baseline, answer the following questions:
 - Will GitHub Actions manage Terraform?
 - Which paired Plan/Apply environments are required?
 - Will `dev-plan`, `staging-plan`, and `prod-plan` run without approval so plans exist before deployment review?
+- Is `security-operations-plan` configured for security-services planning and read-only evidence?
 - Who can approve the protected `dev`, `staging`, and `prod` Apply environments?
 - Are plan and apply roles separated in both GitHub OIDC trust and IAM permissions?
 - Is the same `ACCOUNT_ID` configured in both members of each environment pair?
@@ -641,8 +674,9 @@ Before adopting this baseline, answer the following questions:
 - Who receives compliance alerts?
 - How long should logs be retained?
 - Should Object Lock be enabled?
-- What Security Hub standards should be enabled?
-- What AWS Config rules are required?
+- Which Security Hub CSPM standards and disabled controls should be assigned centrally to each workload?
+- Which GuardDuty organization protection plans should be enabled?
+- What AWS Config rules are required locally in workload accounts?
 - Should findings be exported to an external SIEM?
 - Should CloudWatch retention follow deployment profile defaults or explicit overrides?
 
@@ -719,12 +753,16 @@ staging         -> staging Apply role
 
 prod-plan       -> prod Plan role
 prod            -> prod Apply role
+
+security-operations-plan -> security-operations Plan role
 ```
 
-The Plan environment should normally run without required deployment approval.
-The Apply environment should enforce the intended reviewer and branch
+Workload Plan environments should normally run without required deployment approval.
+Workload Apply environments should enforce the intended reviewer and branch
 protections. Using the same protected environment for both jobs would cause
 the Plan job to wait for approval before a plan exists.
+
+`security-operations-plan` is used by the security-services Terraform Plan matrix entry and the read-only security-operations evidence workflow. The general-purpose Terraform Apply and Destroy workflows remain workload-scoped, so centralized security services are not part of routine workload lifecycle automation.
 
 Configure the generic `ACCOUNT_ID` in both members of each pair. Workflows
 should validate that:
@@ -760,11 +798,14 @@ This is expected.
 The intended pattern is:
 
 ```text
-1. Deploy minimal Identity Center roles
-2. Deploy workload baseline
-3. Pass baseline-created IAM policy names into Identity Center
-4. Re-apply Identity Center
+1. Configure workload Operator access and required SecOps-Administrator access
+2. Deploy workload baselines
+3. Confirm workload-created policy names
+4. Enable optional Analyst/Engineer roles as needed
+5. Re-apply Identity Center
 ```
+
+The security-operations access model is separate from workload access: `SecOps-Administrator` is required there, `SecOps-Operator` is disabled, and Analyst/Engineer access remains optional.
 
 ---
 
@@ -790,6 +831,8 @@ These subnets have their own route tables and do not require a default internet 
 
 Workloads reach Interface Endpoints over VPC-local routing and security group rules.
 
+The endpoint set includes Terraform-managed `guardduty-data`. Compute waits for the Interface Endpoint resources before EC2 launches so GuardDuty Runtime Monitoring can use the existing endpoint instead of creating one outside the Terraform dependency graph.
+
 The S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
 ---
@@ -810,6 +853,8 @@ Before teardown, follow the destruction procedure in:
 ```text
 docs/quickstart.md
 ```
+
+Workload Apply/Destroy automation is intentionally separate from centralized security-services lifecycle. Destroy workload environments before foundational account, security-operations, control-plane, or state stacks.
 
 A state stack must be migrated away from the S3 bucket it manages before that bucket is destroyed. Preserve an external state backup and do not run a self-destructive teardown while the active backend still points to the same bucket.
 
@@ -875,9 +920,11 @@ Before using this baseline for production workloads, confirm:
 - IAM Identity Center groups are assigned correctly.
 - Break-glass access is documented and tested.
 - CloudTrail is logging.
-- GuardDuty is enabled.
-- Security Hub is enabled.
-- AWS Config is recording.
+- The security-operations account is the expected Security Hub and GuardDuty delegated administrator.
+- Security Hub CSPM central policies are associated successfully with intended workload accounts.
+- GuardDuty organization features and Runtime Monitoring match the approved configuration.
+- Security Hub V2 policy is attached to `Workloads` and resolves correctly for workload accounts.
+- AWS Config is recording in workload accounts where expected.
 - SNS subscriptions are confirmed.
 - EC2 isolation and rollback tests pass.
 - Production automatic isolation remains disabled unless it has been explicitly approved and tested.
@@ -890,6 +937,7 @@ Before using this baseline for production workloads, confirm:
 - Network Firewall routing is active if required.
 - VPC endpoint coverage is sufficient for private AWS service access.
 - Dedicated endpoint subnets are deployed and validated.
+- `guardduty-data` is Terraform-managed and deployed before workload EC2.
 - Cost estimates are understood.
 - Destroy procedure is understood.
 
@@ -900,8 +948,7 @@ Before using this baseline for production workloads, confirm:
 Common extension areas include:
 
 - Adding Service Control Policies
-- Adding delegated GuardDuty administration
-- Adding delegated Security Hub administration
+- Expanding centralized security governance to additional services or Regions
 - Adding external SIEM forwarding
 - Adding additional AWS Config rules
 - Adding additional VPC endpoint services
@@ -935,6 +982,7 @@ It provides a strong starting point for:
 - Multi-account AWS structure
 - Secure CI/CD access
 - Centralized identity
+- Delegated security administration
 - Private networking
 - Configurable deployment profiles
 - Configurable egress behavior

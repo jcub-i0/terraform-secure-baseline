@@ -9,7 +9,7 @@ This stack creates and assigns environment-specific SecOps groups and permission
 - workload accounts: `dev`, `staging`, and `prod`;
 - the centralized `security-operations` account.
 
-The stack uses the reusable `modules/identity_center` module but applies different access models to workload and security-operations accounts.
+The stack uses the reusable `modules/identity_center` module with two access models: one repeated workload model and one dedicated security-operations model.
 
 ---
 
@@ -21,19 +21,21 @@ The stack uses the reusable `modules/identity_center` module but applies differe
   - `SecOps-Operator-Dev`
   - `SecOps-Operator-Staging`
   - `SecOps-Operator-Prod`
-  - optional `SecOps-Analyst-*` groups and permission sets
-  - optional `SecOps-Engineer-*` groups and permission sets
-- Create the security-operations administrator group and permission set:
+  - optional `SecOps-Analyst-*`
+  - optional `SecOps-Engineer-*`
+- Create the required security-operations administrator group:
   - `SecOps-Administrator`
+- Create the corresponding `SecOps-Administrator-secops` permission set with `AdministratorAccess`.
 - Optionally create security-operations Analyst and Engineer access:
   - `SecOps-Analyst-SecOps`
   - `SecOps-Engineer-SecOps`
 - Assign enabled permission sets to their target AWS accounts.
-- Reference workload-created customer-managed IAM policies by name.
+- Reference workload-created customer-managed log-access policies by name.
 - Configure each workload Operator permission set with its environment-specific SecOps EventBridge bus ARN.
 
 ### This stack does not
 
+- Create or manage Identity Center users or group membership.
 - Create the referenced customer-managed IAM policies.
 - Create workload application or baseline infrastructure.
 - Create the workload SecOps EventBridge buses.
@@ -43,6 +45,13 @@ The stack uses the reusable `modules/identity_center` module but applies differe
 ---
 
 ## Access Model
+
+| Target | Required role | Optional roles | Operator |
+|---|---|---|---|
+| `dev` | `SecOps-Operator-Dev` | Analyst, Engineer | Enabled |
+| `staging` | `SecOps-Operator-Staging` | Analyst, Engineer | Enabled |
+| `prod` | `SecOps-Operator-Prod` | Analyst, Engineer | Enabled |
+| `security-operations` | `SecOps-Administrator` | Analyst, Engineer | Disabled |
 
 ### Workload accounts
 
@@ -79,12 +88,14 @@ The security-operations account is configured separately through `identity_cente
 - `SecOps-Analyst` is optional and defaults to disabled.
 - `SecOps-Engineer` is optional and defaults to disabled.
 
+The required Administrator permission set uses a two-hour session and the AWS-managed `AdministratorAccess` policy. This access is intentionally scoped to the dedicated security-operations account rather than granted across workload accounts.
+
 ---
 
 ## Design Principles
 
 - **Centralized administration**
-  - Identity Center groups, permission sets, and account assignments are managed from the control-plane stack.
+  - Identity Center groups, permission sets, and account assignments are managed from the control-plane account.
 
 - **Consistent workload configuration**
   - Workload accounts use one typed map and one `for_each` module call.
@@ -94,7 +105,7 @@ The security-operations account is configured separately through `identity_cente
 
 - **No circular Terraform dependencies**
   - Customer-managed policies are referenced by name rather than through workload remote state.
-  - The referenced policies must exist in the target account before their permission-set attachments can be provisioned successfully.
+  - The referenced policies must exist in the target account before a permission-set attachment that uses them can be provisioned.
 
 - **Least-privilege expansion**
   - Analyst and Engineer access is disabled by default and enabled explicitly per account.
@@ -107,11 +118,13 @@ The security-operations account is configured separately through `identity_cente
 
 Apply this stack with workload Operator access enabled and optional Analyst and Engineer access disabled.
 
-The workload configuration must still include the expected customer-managed policy names because those fields are required by the workload input schema.
+The workload configuration must still include the expected customer-managed policy names because those fields are required by the workload input schema, but those policies are not attached while Analyst and Engineer access remains disabled.
 
-### 2. Deploy each workload baseline
+Workload Operator permission sets can be created before the target EventBridge buses exist because the bus ARN is used as the policy scope; the workload baseline creates the actual buses later.
 
-The workload baseline creates the customer-managed IAM policies used by the optional Analyst and Engineer permission sets, including:
+### 2. Deploy workload baselines
+
+Each workload baseline creates the customer-managed IAM policies used by optional Analyst and Engineer permission sets, including:
 
 - centralized logs S3 read-only access;
 - centralized logs KMS decrypt access.
@@ -132,7 +145,7 @@ The security-operations policy-name fields are optional and may remain `null` wh
 
 ### `identity_center_workloads`
 
-Identity Center configuration keyed by workload environment.
+Identity Center configuration keyed by workload environment:
 
 ```hcl
 map(object({
@@ -186,7 +199,7 @@ identity_center_workloads = {
 
 ### `identity_center_secops`
 
-Identity Center configuration for the security-operations account.
+Identity Center configuration for the security-operations account:
 
 ```hcl
 object({
@@ -227,8 +240,8 @@ Store raw JSON in GitHub without surrounding shell quotes.
 
 | Name | Description |
 |---|---|
-| `workload_permission_set_arns` | Permission-set ARN maps keyed by workload environment |
-| `secops_permission_set_arns` | Permission-set ARNs for the security-operations account |
+| `workload_permission_set_arns` | Permission-set ARN maps keyed by workload environment. |
+| `secops_permission_set_arns` | Permission-set ARNs for the security-operations account. |
 
 Example workload output shape:
 
@@ -242,11 +255,28 @@ workload_permission_set_arns = {
 
 ---
 
+## Validation
+
+Control-plane validation verifies the required Identity Center resources, including the workload Operator groups, the security-operations Administrator group, permission sets, and expected account assignments.
+
+Optional Analyst and Engineer checks can be enabled separately when those personas are deployed.
+
+Use:
+
+```bash
+./scripts/validation/validate-control-plane.sh
+```
+
+End-user SSO login and effective human access remain live/manual validation activities.
+
+---
+
 ## Important Notes
 
 - Identity Center customer-managed policy attachments reference a policy by name and path in the target AWS account.
 - A referenced policy must exist in the target account before AWS can provision the corresponding attachment successfully.
 - IAM Identity Center provisions `AWSReservedSSO_*` roles into assigned target accounts.
+- This stack manages groups, permission sets, and account assignments, but not users or group membership.
 - Disabling a role removes the Terraform-managed group, permission set, policy attachments, and account assignment associated with that role.
-- Changes to map keys alter Terraform module instance addresses. Treat key renames as state migrations rather than ordinary configuration changes.
+- Changes to workload map keys alter Terraform module instance addresses. Treat key renames as state migrations rather than ordinary configuration changes.
 - The security-operations account intentionally does not receive the workload Operator role.
