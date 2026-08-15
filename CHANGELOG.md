@@ -1,222 +1,127 @@
 # Changelog
 
-## Unreleased
+## v1.7.0
 
-This update establishes centralized Security Hub CSPM and GuardDuty governance
-through the security-operations account, adds the AWS Organizations foundations
-and workload policy model for Security Hub V2, and refactors IAM Identity
-Center, validation, and GitHub Actions automation around consolidated
-multi-account configuration objects.
+This update introduces a dedicated `security-operations` administration layer and centralizes Security Hub CSPM, GuardDuty, and Security Hub V2 governance while preserving workload-local configuration, detection, remediation, and response responsibilities.
 
 ### Added
 
-- Added dedicated `security_operations` Terraform roots for:
-  - remote Terraform state;
-  - account bootstrap and GitHub OIDC access; and
+- Added dedicated `bootstrap/security_operations` Terraform roots for:
+  - protected remote Terraform state;
+  - account bootstrap and GitHub OIDC roles; and
   - centralized security-service administration.
-- Added AWS Organizations structure for workload separation through:
-  - `Workloads/NonProd` for development and staging;
-  - `Workloads/Prod` for production; and
-  - a dedicated `Security` OU for centralized security administration.
-- Added delegated-administrator registration for the security-operations
-  account for Security Hub CSPM and GuardDuty administration.
-- Added centralized Security Hub CSPM configuration policies and account
-  associations for `dev`, `staging`, and `prod`.
-- Added the `securityhub_cspm_account_policies` map for per-account control of:
-  - configuration-policy creation;
-  - policy association;
-  - enabled Security Hub standards; and
-  - disabled control identifiers.
-- Added centralized Security Hub policy output maps for configuration-policy
-  IDs and association targets.
-- Added centralized GuardDuty organization configuration with organization
-  member auto-enrollment and centrally managed protection-plan settings.
-- Added centralized GuardDuty organization protection-plan configuration for:
+- Added a root-level `Security` OU and placed the `security-operations` account in that dedicated administration boundary.
+- Added Security Hub and GuardDuty delegated-administrator registration and the Organizations trusted-service prerequisites required by centralized security.
+- Added centralized Security Hub CSPM administration with:
+  - a finding aggregator;
+  - CENTRAL organization configuration;
+  - per-workload configuration policies;
+  - workload policy associations; and
+  - FSBP and CIS v5.0 standard selection through the policy input model.
+- Added centralized GuardDuty organization governance with:
+  - automatic organization member enrollment;
   - S3 data events;
   - EBS malware protection;
   - Lambda network logs; and
-  - Runtime Monitoring with EC2 agent management enabled and unused ECS/Fargate
-    and EKS agent-management integrations explicitly disabled.
-- Added the GuardDuty Malware Protection AWS Organizations trusted-service
-  access required for centralized EBS malware protection.
-- Added Security Hub V2 AWS Organizations prerequisites, including:
+  - Runtime Monitoring with EC2 agent management enabled while unused ECS/Fargate and EKS agent-management integrations are explicitly disabled.
+- Added GuardDuty Malware Protection Organizations trusted-service access for centralized EBS malware protection.
+- Added Security Hub V2 organization-management prerequisites, including:
   - `SECURITYHUB_POLICY` enablement;
-  - the Security Hub V2 service-linked role in the management account; and
-  - an AWS Organizations resource-based delegation policy allowing the
-    security-operations account to manage Security Hub organization policies.
-- Added Security Hub V2 administrator-account enablement in the
-  security-operations account.
-- Added a Security Hub V2 `SECURITYHUB_POLICY` for workload accounts in the
-  primary Region and associated it with the `Workloads` OU.
-- Added staged central-security rollout controls for:
-  - Security Hub CSPM organization configuration;
-  - GuardDuty organization configuration;
-  - Security Hub V2 organization policy management; and
-  - Security Hub V2 management-account Organizations prerequisites.
-- Added `manage_securityhub_v2_locally` support to the reusable workload
-  security path so standalone deployments can manage Security Hub V2 locally
-  while centrally governed environments can defer to AWS Organizations policy.
-- Added dedicated security-operations IAM Identity Center access with the
-  required `SecOps-Administrator` group and permission set.
-- Added consolidated IAM Identity Center GitHub Environment variables:
+  - the management-account Security Hub V2 service-linked role; and
+  - an Organizations resource policy allowing the delegated administrator to manage and tag Security Hub organization policies.
+- Added Security Hub V2 administrator enablement in `security-operations` and a `SECURITYHUB_POLICY` attached to the `Workloads` OU for the primary Region.
+- Added staged rollout controls for centralized Security Hub CSPM, GuardDuty, and Security Hub V2 organization configuration.
+- Added workload ownership flags so reusable security modules can still manage Security Hub/GuardDuty locally while centrally governed `dev`, `staging`, and `prod` environments defer those resources.
+- Added the required `SecOps-Administrator` IAM Identity Center group, permission set, and security-operations account assignment.
+- Added consolidated Identity Center configuration inputs:
   - `IDENTITY_CENTER_WORKLOADS`; and
   - `IDENTITY_CENTER_SECOPS`.
-- Added JSON structure validation for the consolidated IAM Identity Center
-  inputs in control-plane Plan, Destroy, validation, and evidence paths.
-- Added control-plane validation coverage for:
-  - consolidated workload and security-operations account configuration;
-  - required workload Operator groups;
-  - the security-operations Administrator group;
-  - optional Analyst and Engineer groups according to their enablement flags;
-  - workload and security-operations permission sets; and
-  - account assignments across all four target accounts.
-- Added workload and security-operations account identifiers to exported
-  control-plane validation evidence.
-- Added focused control-plane and security-operations Terraform outputs for
-  organization identifiers, OU identifiers, delegated-administrator ownership,
-  central security policy identifiers, and other values intended for future
-  centralized-security validation.
+- Added strict JSON/schema validation for consolidated Identity Center inputs in control-plane CI and evidence paths.
+- Added `security-operations` as a supported `migrate-state-stack.sh` target.
+- Added `guardduty-data` to the Terraform-managed Interface VPC Endpoint set so GuardDuty Runtime Monitoring does not create an unmanaged workload endpoint.
+- Added Interface Endpoint ID outputs and a compute endpoint-readiness dependency so EC2 instances wait for Terraform-managed Interface Endpoints before launch.
+- Added `validate-security-operations.sh` and `export-security-operations.sh` for delegated-administrator validation and evidence export.
+- Added the `Export Security Operations Evidence` GitHub Actions workflow using the `security-operations-plan` environment and Plan role.
+- Added the `bootstrap/security_operations/security_services` stack to the standalone Terraform Plan matrix.
+- Added machine-readable validation metadata that distinguishes cross-layer evidence workflows from genuinely manual/live validation activities.
+- Added `bootstrap/security_operations/README.md` and refreshed architecture, adoption, quickstart, design, module, assurance, validation, root README, and release documentation for the centralized-security model.
 
 ### Changed
 
-- Changed workload Security Hub CSPM ownership from account-local standards
-  management to centrally associated policies managed by the
-  security-operations account.
-- Changed the workload Security Hub integration to support
-  `manage_securityhub_cspm_locally = false` when an account is governed by the
-  central CSPM policy.
-- Changed workload GuardDuty ownership to support
-  `manage_guardduty_locally = false` when GuardDuty is centrally governed by
-  the security-operations delegated administrator.
-- Changed workload Security Hub V2 ownership to support
-  `manage_securityhub_v2_locally = false` when Security Hub V2 is enabled by the
-  AWS Organizations workload policy.
-- Preserved standalone defaults for reusable security modules while setting
-  centralized `dev`, `staging`, and `prod` environments to defer Security Hub
-  CSPM, GuardDuty, and Security Hub V2 ownership to centralized governance.
-- Changed GuardDuty Runtime Monitoring additional configuration from unordered
-  map-based input to an ordered representation matching the AWS provider's
-  returned configuration and preventing perpetual replacement plans.
-- Imported the existing AWS Organization into Terraform ownership and enabled
-  `SECURITYHUB_POLICY` through the managed
-  `aws_organizations_organization` resource.
-- Changed the control-plane Organizations stack to use the managed
-  `aws_organizations_organization.main` resource directly instead of relying on
-  a redundant organization data source for resources owned by that stack.
-- Refactored three duplicated workload IAM Identity Center module calls into a
-  single `module.identity_center_workload` block using `for_each` over
-  `identity_center_workloads`.
-- Kept `module.identity_center_secops` separate because the
-  security-operations account uses a different access model from workload
-  accounts.
-- Replaced the previous per-environment IAM Identity Center variables with:
-  - `identity_center_workloads`, a map containing workload account IDs,
-    Regions, optional roles, and optional customer-managed policy names; and
-  - `identity_center_secops`, an object containing the corresponding
-    security-operations configuration.
-- Replaced the separate workload permission-set outputs with:
-  - `workload_permission_set_arns`, keyed by workload environment; and
-  - `secops_permission_set_arns` for the security-operations account.
-- Updated `terraform-plan.yml` to pass and validate the consolidated IAM
-  Identity Center JSON values for the control-plane Identity Center stack.
-- Updated `terraform-destroy.yml` so Identity Center cleanup modifies only the
-  selected workload entry inside `identity_center_workloads` instead of
-  exporting dynamically named per-environment Terraform variables.
-- Updated the Terraform Apply workflow to remove obsolete workload Identity
-  Center scalar-variable wiring that is no longer consumed by workload roots.
-- Updated workload bootstrap and baseline evidence workflows to use each
-  selected GitHub Environment's singular `ACCOUNT_ID` variable.
-- Updated the control-plane evidence workflow to pass
-  `TF_VAR_identity_center_workloads` and `TF_VAR_identity_center_secops`.
-- Updated `validate-control-plane.sh` and `export-control-plane.sh` to consume
-  the consolidated JSON inputs and the refactored Terraform outputs.
-- Updated control-plane validation summaries to report workload and
-  security-operations permission-set and assignment coverage.
-- Updated the IAM Identity Center README and validation README to document the
-  new inputs, outputs, deployment sequence, GitHub variables, validation
-  behavior, and evidence format.
+- Changed the platform account model from control-plane plus three workloads to five explicit accounts:
+  - `control-plane`;
+  - `security-operations`;
+  - `dev`;
+  - `staging`; and
+  - `prod`.
+- Changed workload Security Hub CSPM ownership from local standards subscriptions to centrally associated CSPM policies in the managed environments.
+- Changed workload GuardDuty ownership so centrally governed environments defer detector/feature management to the delegated administrator.
+- Changed workload Security Hub V2 ownership so centrally governed environments inherit the Organizations policy instead of managing V2 locally.
+- Preserved standalone module defaults for local Security Hub/GuardDuty ownership outside the centralized deployment model.
+- Changed GuardDuty Runtime Monitoring additional configuration from an unordered map representation to an ordered structure matching AWS/provider return ordering and avoiding perpetual replacement plans.
+- Imported the existing AWS Organization into Terraform ownership and enabled `SECURITYHUB_POLICY` through the managed `aws_organizations_organization` resource with destroy protection.
+- Changed the Organizations stack to own strict account placement for:
+  - `dev` and `staging` under `Workloads/NonProd`;
+  - `prod` under `Workloads/Prod`; and
+  - `security-operations` under `Security`.
+- Refactored duplicated workload IAM Identity Center module calls into one `for_each` workload map while keeping the security-operations access model separate.
+- Replaced previous per-environment Identity Center variables and outputs with consolidated workload/security-operations structures.
+- Changed validation architecture from three layers to four current layers:
+  - control plane;
+  - security operations;
+  - workload bootstrap; and
+  - workload baseline.
+- Changed workload security validation from the previous `validate-security-services.sh` naming/scope to `validate-security-workload.sh`, reflecting the split between centralized and member-account responsibilities.
+- Changed validation/evidence language so checks performed by another evidence workflow are reported as outside the current report rather than incorrectly labeled manual.
+- Changed compute launch ordering so EC2 waits for both security-policy rule readiness and the Terraform-managed Interface Endpoint set.
+- Updated the Terraform Plan workflow to pass security-operations rollout flags and CSPM workload policy configuration through the `security-operations-plan` GitHub Environment.
+- Kept GuardDuty organization feature defaults in source-controlled Terraform rather than duplicating that policy object in GitHub variables.
+- Kept security-operations out of the generic workload Apply and Destroy workflows; centralized security remains a deliberately separate platform lifecycle because of its organization-wide blast radius.
 
 ### Fixed
 
-- Fixed GuardDuty Runtime Monitoring drift that caused Terraform to propose
-  replacement of the organization configuration feature when AWS returned
-  disabled ECS/Fargate and EKS sub-configurations alongside the enabled EC2
-  agent-management configuration.
-- Fixed centralized GuardDuty EBS malware protection configuration by enabling
-  the required `malware-protection.guardduty.amazonaws.com` Organizations
-  trusted-service access from the management account.
-- Fixed Security Hub V2 organization-policy creation from the delegated
-  security-operations account by extending the AWS Organizations delegation
-  policy to include policy tagging permissions required during policy creation.
-- Fixed the AWS Organizations bootstrap dependency path so a fresh deployment
-  can create the Organization before OU and account-discovery logic consumes
-  managed organization attributes.
-- Fixed conditional central-security resources and outputs so disabled rollout
-  controls do not require nonexistent indexed Terraform resource instances.
-- Fixed control-plane validation and evidence paths that still referenced the
-  removed `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and `ACCOUNT_ID_PROD`
-  interface.
-- Fixed validation logic that expected the removed
-  `dev_permission_set_arns`, `staging_permission_set_arns`, and
-  `prod_permission_set_arns` outputs.
-- Fixed optional Identity Center group validation so required or advisory
-  behavior follows each account configuration's Analyst and Engineer
-  enablement flags.
-- Fixed Terraform Destroy Identity Center cleanup so the selected environment
-  is updated inside the consolidated workload map without altering the other
-  workload or security-operations configurations.
-- Removed stale CI/CD references to dynamically named Identity Center feature
-  variables and per-environment control-plane account variables.
+- Fixed GuardDuty Runtime Monitoring drift caused by AWS returning disabled ECS/Fargate and EKS sub-configurations alongside enabled EC2 agent management.
+- Fixed centralized EBS malware protection by enabling the required `malware-protection.guardduty.amazonaws.com` Organizations trusted service.
+- Fixed Security Hub V2 organization-policy creation from the delegated administrator by granting required Organizations policy tagging permissions.
+- Fixed fresh Organizations deployment ordering so managed organization attributes exist before dependent OU/account discovery consumes them.
+- Fixed conditional centralized-security resources and outputs when rollout controls are disabled.
+- Fixed control-plane validation paths that referenced removed per-environment account and permission-set outputs.
+- Fixed optional Identity Center group validation so advisory/required behavior follows configured role enablement.
+- Fixed Destroy-side Identity Center cleanup to modify only the selected workload entry in the consolidated map.
+- Fixed unmanaged GuardDuty Runtime Monitoring VPC endpoint drift by pre-creating `guardduty-data` in the workload VPC.
+- Fixed a potential EC2/GuardDuty sequencing problem by making compute wait for the Interface Endpoint resources before instance launch.
+- Fixed VPC endpoint validation to match the Terraform-owned endpoint set, including `guardduty-data`.
+- Fixed stale validation-report references so workload security evidence uses `validate-security-workload.log`.
 
 ### Security
 
-- Centralized Security Hub CSPM standards and control configuration to reduce
-  account-level drift across development, staging, and production.
-- Centralized GuardDuty organization enrollment and protection-plan governance
-  through the security-operations delegated administrator.
-- Added Security Hub V2 workload enablement through an AWS Organizations
-  `SECURITYHUB_POLICY` attached to the `Workloads` OU so current and future
-  workload accounts can inherit the approved primary-Region configuration.
-- Preserved explicit management-account versus delegated-administrator
-  ownership boundaries for trusted access, delegated administration, and
-  administrator-side security-service configuration.
-- Preserved workload-local deterministic remediation while centralizing
-  Security Hub CSPM, GuardDuty, and Security Hub V2 service governance.
-- Preserved separate workload and security-operations IAM Identity Center
-  access models so workload Operator permissions are not reused as
-  security-operations Administrator permissions.
-- Kept optional Analyst and Engineer access disabled by default until the
-  required target-account customer-managed policies exist.
-- Added strict account-ID, JSON type, permission-set, and account-assignment
-  validation to reduce the risk of planning, validating, or exporting evidence
-  against the wrong AWS account.
-- Preserved customer-managed policy attachment requirements by continuing to
-  reference workload policy names only after those policies exist in the
-  target accounts.
-- Added opt-in rollout controls so reusable fresh deployments do not
-  automatically enable organization-wide central security governance until the
-  required delegated-administration prerequisites are established.
+- Centralized Security Hub CSPM standards and control governance to reduce workload-account drift.
+- Centralized GuardDuty membership and protection-plan governance in the dedicated delegated-administrator account.
+- Added Security Hub V2 workload enablement through an Organizations policy attached to the `Workloads` OU.
+- Preserved management-account versus delegated-administrator ownership boundaries for organization prerequisites and service configuration.
+- Preserved workload-local Config, Inspector, remediation, incident-response automation, and supporting controls while centralizing account-level Security Hub/GuardDuty governance.
+- Added a dedicated `SecOps-Administrator` access model rather than reusing workload Operator permissions in the security-operations account.
+- Kept optional Analyst and Engineer access disabled by default until required target-account policies exist.
+- Added stricter account identity, OU placement, policy-association, and effective-policy validation across control-plane and security-operations evidence.
+- Made GuardDuty Runtime Monitoring networking deterministic by keeping `guardduty-data` under Terraform ownership and sequencing it before eligible EC2 instances.
+
+### Validation and Evidence
+
+- Control-plane evidence validates Organizations topology, strict account placement, delegated-administrator prerequisites, and Identity Center assignments.
+- Security Operations evidence validates centralized Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 delegated-administrator state.
+- Workload bootstrap evidence validates state/OIDC readiness and current workload CMK references.
+- Workload baseline evidence validates 14 workload control areas, including workload security realization and VPC endpoints.
+- Current security-operations and production workload evidence runs complete successfully with `1/1` and `14/14` validation scripts passing respectively.
 
 ### Notes
 
-- The IAM Identity Center stack was intentionally destroyed and recreated in
-  the development environment after the module-address refactor instead of
-  retaining long-term `moved` blocks. This was acceptable because no client or
-  production deployment depended on the previous state addresses.
-- Configure `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` as raw JSON
-  GitHub Environment variables in both `control-plane-plan` and
-  `control-plane`; do not include Bash-style outer single quotes.
-- Continue configuring the singular `ACCOUNT_ID` variable in each workload
-  Plan and Apply GitHub Environment.
-- Security Hub CSPM central configuration and GuardDuty organization
-  centralization are implemented for the current centralized architecture.
-- Security Hub V2 administrator enablement and workload organization-policy
-  governance are implemented in the primary Region; workload Terraform now
-  defers local V2 ownership when centralized governance is enabled.
-- The centralized-security implementation is not yet a `v1.7.0` release.
-  Security-operations validation/evidence scripts, CI/CD workflow integration,
-  documentation updates, and final release validation remain to be completed
-  before the next release is tagged.
+- Centralized Security Hub CSPM, GuardDuty, and Security Hub V2 organization governance are implemented for the current architecture.
+- Security-operations planning and validation/evidence are integrated with GitHub Actions through `security-operations-plan`.
+- The generic workload Apply and Destroy workflows intentionally do not include security-operations stacks.
+- Configure `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` as raw JSON in both `control-plane-plan` and `control-plane` GitHub Environments.
+- Configure `ACCOUNT_ID` in each workload Plan/Apply GitHub Environment pair and in `security-operations-plan` for centralized-security planning/evidence.
+- The top-level deployment sequence is `control-plane -> security-operations -> bootstrap-workloads -> workloads`.
+- Centralized CSPM policy associations depend on required workload-local services such as AWS Config being correctly realized; validate both the central association and workload state before treating the control as healthy.
 
 ## v1.6.0
 
