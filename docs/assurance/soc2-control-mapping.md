@@ -78,7 +78,7 @@ Organizations adopting this baseline must pair it with appropriate people, proce
 | Logical access | CC6 | Restricts access to systems and data |
 | Network access | CC6 | Reduces exposure and enforces controlled communication paths |
 | CI/CD access | CC6 / CC8 | Controls infrastructure deployment permissions |
-| Identity management | CC6 | Centralizes human access through IAM Identity Center |
+| Identity management | CC6 | Centralizes human access through IAM Identity Center across workload and security-operations accounts |
 | Logging and monitoring | CC7 | Captures security-relevant activity |
 | Threat detection | CC7 | Identifies suspicious activity and misconfiguration |
 | Incident response support | CC7.4 | Supports containment, triage, and recovery workflows |
@@ -107,18 +107,19 @@ Organizations adopting this baseline must pair it with appropriate people, proce
 
 ### Baseline Control
 
-The platform separates AWS environments into dedicated accounts:
+The platform separates governance, centralized security administration, and workloads into dedicated AWS accounts:
 
 ```text
 control-plane
+security-operations
 dev
 staging
 prod
 ```
 
-The control-plane account manages centralized governance and identity resources.
+The organization places `dev` and `staging` under `Workloads/NonProd`, `prod` under `Workloads/Prod`, and `security-operations` under the root-level `Security` OU.
 
-Workload accounts host environment-specific infrastructure.
+The control-plane account manages organization structure and centralized identity. The security-operations account is the delegated administrator for centralized security services. Workload accounts host environment-specific infrastructure.
 
 ### SOC 2 Alignment
 
@@ -128,9 +129,7 @@ Workload accounts host environment-specific infrastructure.
 
 ### Narrative
 
-Separating environments into different AWS accounts reduces blast radius and supports stronger access boundaries.
-
-Development, staging, and production infrastructure are isolated from each other, limiting the risk that activity in one environment affects another.
+Account separation reduces blast radius and creates distinct administrative boundaries between management, security operations, and workloads. Development, staging, and production remain isolated from each other.
 
 ---
 
@@ -148,12 +147,7 @@ SecOps-Operator-Staging
 SecOps-Operator-Prod
 ```
 
-Optional roles may include:
-
-```text
-SecOps-Analyst
-SecOps-Engineer
-```
+The security-operations account receives the required `SecOps-Administrator` permission set. Optional Analyst and Engineer personas can be enabled per workload or security-operations account.
 
 ### SOC 2 Alignment
 
@@ -292,12 +286,13 @@ Common endpoints may include:
 
 - SSM
 - SSM Messages
-- EC2 Messages
+- SQS
 - CloudWatch Logs
 - KMS
 - Secrets Manager
 - EC2
 - S3
+- GuardDuty data (`guardduty-data`) for Runtime Monitoring
 
 ### SOC 2 Alignment
 
@@ -485,7 +480,9 @@ Encryption, versioning, and Object Lock help protect log integrity and support f
 
 ### Baseline Control
 
-GuardDuty is enabled in workload accounts to detect suspicious activity.
+GuardDuty is centrally governed from the `security-operations` delegated administrator account. Organization member enrollment and configured protection plans are managed centrally, including Runtime Monitoring with EC2 agent management for the current workload architecture.
+
+Workload Terraform records whether it owns GuardDuty locally; centrally governed workload environments defer that ownership while retaining member/detector state expected by the organization configuration.
 
 ### SOC 2 Alignment
 
@@ -494,29 +491,28 @@ GuardDuty is enabled in workload accounts to detect suspicious activity.
 
 ### Narrative
 
-GuardDuty provides continuous threat detection for AWS accounts and workloads.
-
-Findings can be routed through EventBridge and Security Hub for visibility and response.
+Central GuardDuty administration provides consistent threat-detection policy across workload accounts and reduces account-level configuration drift. Findings remain available for central visibility and downstream response workflows.
 
 ---
 
-## Security Hub Findings Aggregation
+## Security Hub CSPM and Security Hub V2 Governance
 
 ### Baseline Control
 
-Security Hub is enabled to aggregate and normalize security findings.
+The `security-operations` account centrally manages Security Hub CSPM finding aggregation and `CENTRAL` organization configuration. Workload accounts receive centrally associated configuration policies; the current central policy set uses AWS Foundational Security Best Practices and CIS AWS Foundations Benchmark v5.0 unless deliberately changed.
 
-Security Hub standards may include AWS Foundational Security Best Practices, CIS, NIST, PCI, and tagging standards depending on configuration.
+Security Hub V2 workload enablement is governed by an AWS Organizations `SECURITYHUB_POLICY` attached to the `Workloads` OU. The control plane owns the organization-level prerequisite and delegated-administrator boundary; the security-operations account owns the administrator-side policy.
 
 ### SOC 2 Alignment
 
-- CC7.2 - Security events are monitored.
-- CC7.3 - Security events are evaluated.
-- CC7.4 - Security events are used to support response activities.
+- CC7.2 - Security events and control states are monitored.
+- CC7.3 - Security events and configuration results are evaluated.
+- CC7.4 - Findings support response activities.
+- CC8.1 - Central policy reduces uncontrolled configuration divergence.
 
 ### Narrative
 
-Security Hub centralizes findings from AWS security services and provides a common findings format for event-driven automation.
+Centralized Security Hub governance creates a common findings and posture-management plane while keeping organization ownership separate from delegated security operations. Workload-local AWS Config remains necessary for controls that depend on Config recording.
 
 ---
 
@@ -603,7 +599,7 @@ This helps prevent monitoring degradation from going unnoticed.
 
 ### Baseline Control
 
-High and critical EC2-related Security Hub findings can trigger the EC2 Isolation Lambda.
+Qualifying EC2-related Security Hub findings can trigger the EC2 Isolation Lambda. The default automated-isolation threshold is `CRITICAL`, with additional eligibility gates applied before containment.
 
 The Lambda can:
 
@@ -951,58 +947,55 @@ Patch management supports vulnerability reduction and operational hygiene for ma
 
 # Evidence Examples
 
-The following artifacts can support audit or customer due diligence discussions.
+The following artifacts can support audit or customer due diligence discussions. Evidence should be reviewed as a package rather than treating any one validator as proof of the complete control environment.
 
-## Terraform Evidence
+## Generated Validation Evidence
 
 ```text
-Terraform plan output
-Terraform apply output
-Git commit history
-Pull request approvals
-GitHub Actions workflow logs
-Terraform state backend configuration
+validation-results/control-plane/<timestamp>/
+validation-results/security-operations/security-services/<timestamp>/
+validation-results/<env>/bootstrap/<timestamp>/
+validation-results/<env>/baseline/<timestamp>/
+```
+
+Useful generated artifacts include `summary.md`, `summary.json`, and the supporting validation logs. Current workload baseline evidence includes `validate-security-workload.log`; centralized-security evidence includes `validate-security-operations.log`.
+
+## Terraform / CI/CD Evidence
+
+```text
+Terraform plans and apply logs
+GitHub Actions workflow history
+GitHub OIDC role and trust-policy configuration
+Terraform state backend and native-locking configuration
+AWS Organizations / Identity Center Terraform state
+security_operations/security_services Terraform state
 ```
 
 ## AWS Evidence
 
 ```text
-CloudTrail trail configuration
-CloudTrail trail status
-AWS Config recorder status
-AWS Config rule evaluations
-Security Hub enabled standards
-GuardDuty detector status
-Inspector account status
-KMS key aliases and policies
-S3 bucket encryption settings
-S3 Object Lock configuration
-VPC Flow Logs status
-SNS topic subscriptions
-EventBridge rule configuration
-Lambda logs
-Backup vault configuration
+CloudTrail status and protected log storage
+AWS Config recorder/rule state
+Security Hub CSPM central configuration and policy associations
+Security Hub finding aggregator
+Security Hub V2 effective workload policies
+GuardDuty detector, organization enrollment, protection plans, and Runtime Monitoring state
+Inspector account/resource status
+KMS aliases and policies
+VPC endpoint placement, including guardduty-data
+Backup and patch-management state where enabled
 ```
 
-## Identity Evidence
+## Identity / Response Evidence
 
 ```text
-IAM Identity Center groups
-Permission sets
-Account assignments
-GitHub OIDC role trust policies
-Break-glass role CloudTrail events
-```
-
-## Response Evidence
-
-```text
-EC2 isolation test results
-EC2 rollback test results
-IP enrichment test results
-Tamper detection alerts
-SNS notifications
-Security Hub finding notes
+IAM Identity Center groups, permission sets, and account assignments
+SecOps-Administrator assignment for security-operations
+AWSReservedSSO role assumptions in CloudTrail
+Break-glass role events
+EC2 isolation / rollback test evidence
+IP enrichment evidence
+Tamper alerts and SNS notifications
 ```
 
 ---
