@@ -266,17 +266,47 @@ before deploying or reconciling workload environments.
 
 ## Validation
 
-Centralized security validation should verify live AWS state rather than rely
-only on Terraform state. The planned `validate-security-operations.sh` workflow
-should cover, at minimum:
+Centralized security validation verifies live AWS state rather than relying only
+on Terraform state.
+
+Run:
+
+```bash
+AWS_PROFILE=security-operations \
+AWS_REGION=us-east-1 \
+./scripts/validation/validate-security-operations.sh
+```
+
+The validator checks:
 
 - the expected security-operations account and Region;
-- Security Hub delegated administration and central configuration;
-- CSPM configuration-policy associations;
-- GuardDuty detector status, organization enrollment, and protection plans;
-- Security Hub V2 administrator enablement;
-- the `SECURITYHUB_POLICY` attachment and effective workload policy; and
-- expected workload account placement beneath the `Workloads` OU.
+- required AWS Organizations trusted-service and delegated-administrator state;
+- Security Hub CSPM administrator state and finding aggregation;
+- Security Hub CSPM CENTRAL organization configuration;
+- CSPM configuration policies and workload associations;
+- the GuardDuty administrator detector, organization enrollment, protection
+  plans, and Runtime Monitoring configuration;
+- Security Hub V2 administrator state;
+- the `SECURITYHUB_POLICY` attachment to the `Workloads` OU; and
+- effective Security Hub V2 policy for configured workload accounts.
 
-Terraform outputs from this stack provide expected identifiers; AWS API
-responses provide the effective-state validation evidence.
+Full AWS Organizations topology and workload-account placement are validated
+separately by the control-plane validation layer. Workload-local realization of
+centrally governed services is validated by the workload baseline layer.
+
+Evidence can be exported with:
+
+```bash
+AWS_PROFILE=security-operations \
+AWS_REGION=us-east-1 \
+./scripts/validation/export-security-operations.sh
+```
+
+Generated evidence is written beneath:
+
+```text
+validation-results/security-operations/security-services/<timestamp>/
+```
+
+Terraform outputs from this stack provide expected identifiers and configuration
+intent; the validation scripts query AWS APIs to verify effective live state.
