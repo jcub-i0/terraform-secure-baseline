@@ -2,258 +2,246 @@
 
 ## Overview
 
-The `identity_center` module implements centralized, role-based access control for AWS accounts using AWS IAM Identity Center (SSO).
+The `modules/identity_center` module creates IAM Identity Center groups, permission sets, policy attachments, and account assignments for one target AWS account.
 
-This module enables:
+It is a reusable persona module: the caller decides which SecOps personas are enabled, supplies their group names, and identifies the account that receives each assignment.
 
-- Centralized workforce authentication via IAM Identity Center
-- Role-based access using permission sets
-- Group-based access management
-- Least-privilege access aligned with security operations workflows
-- Integration with existing IAM policies and security controls
+The control-plane Identity Center stack currently uses this module for:
 
-This replaces the use of long-lived IAM users with short-lived, federated access.
+- workload `SecOps-Operator` access in `dev`, `staging`, and `prod`;
+- optional workload Analyst and Engineer access;
+- required `SecOps-Administrator` access in the security-operations account;
+- optional security-operations Analyst and Engineer access.
 
 ---
 
-## Architecture
+## What the Module Manages
 
-The access model is structured as follows:
+When the corresponding persona is enabled, the module can create:
 
-1. IAM Identity Center instance is discovered:
-- `aws_ssoadmin_instances`
-
-2. Security groups are created or referenced:
 - `aws_identitystore_group`
-
-3. Permission sets define access levels:
 - `aws_ssoadmin_permission_set`
-
-4. Policies are attached:
-- AWS-managed policies (e.g., `SecurityAudit`, `ReadOnlyAccess`)
-- Customer-managed policies (e.g., logs access, rollback trigger)
-- Inline policies for specific actions
-
-5. Groups are assigned to AWS accounts:
+- AWS-managed permission-set policy attachments
+- customer-managed permission-set policy attachments
+- inline permission-set policies
 - `aws_ssoadmin_account_assignment`
 
-6. IAM Identity Center provisions roles automatically:
-- `AWSReservedSSO_<PermissionSetName>_<random>`
+The module discovers the existing IAM Identity Center instance and identity store with `aws_ssoadmin_instances`.
+
+It does **not** create:
+
+- the IAM Identity Center instance;
+- users or group membership;
+- customer-managed IAM policies referenced by permission sets;
+- workload EventBridge buses;
+- AWS accounts or Organizations structure.
 
 ---
 
-## Features
+## Persona Model
 
-- **Centralized Authentication**
-  - Eliminates IAM users in favor of SSO-based login
+| Persona | Default | Session | Primary permissions |
+|---|---:|---:|---|
+| `SecOps-Administrator` | Disabled | 2 hours | AWS-managed `AdministratorAccess` |
+| `SecOps-Operator` | Enabled | 2 hours | EventBridge discovery plus `DescribeEventBus` / `PutEvents` on the configured SecOps bus |
+| `SecOps-Analyst` | Disabled | 4 hours | `SecurityAudit`, `ReadOnlyAccess`, and configured log-read policies |
+| `SecOps-Engineer` | Disabled | 4 hours | Analyst-style visibility plus limited Security Hub and EC2 response actions |
 
-- **Role-Based Access Control (RBAC)**
-  - Permission sets define access levels per persona
+The caller supplies the actual Identity Center group display names. This module does not impose fixed default group names.
 
-- **Group-Based Access Management**
-  - Users are assigned to groups instead of roles directly
+### SecOps-Administrator
 
-- **Least-Privilege Design**
-  - Permissions scoped to operational responsibilities
+When enabled, the module creates:
 
-- **Policy Reuse**
-  - Integrates with existing customer-managed IAM policies
+- the configured Administrator group;
+- permission set `SecOps-Administrator-${environment}`;
+- AWS-managed `AdministratorAccess` attachment;
+- an account assignment for the configured `account_id`.
 
-- **Separation of Duties**
-  - Distinct roles for analysts, engineers, and operators
-
----
-
-## Default Security Groups
-
-This module defines three baseline groups:
-
-- `SecOps-Analysts`
-- `SecOps-Engineers`
-- `SecOps-Operators`
-
-These represent a **basic starting point** for security operations access control.
-
-> These groups are intentionally simple and should be extended or modified based on organizational needs, team structure, and compliance requirements.
-
----
-
-## Access Model
-
-### SecOps-Analyst
-- Read-only access to security telemetry and logs
-- Attached policies:
-  - `SecurityAudit`
-  - `ReadOnlyAccess`
-  - `Centralized Logs` S3 read access
-  - `logs` KMS decrypt access
-
-### SecOps-Engineer
-- Investigation and response capabilities
-- Includes:
-  - All Analyst permissions
-  - Security Hub updates
-  - EC2 response actions (tagging, instance modification, etc.)
+This persona is disabled by default and is enabled explicitly by the control-plane stack for the dedicated security-operations account.
 
 ### SecOps-Operator
-- Limited to operational actions (e.g., rollback trigger)
-- Scoped permissions:
-  - EventBridge `PutEvents` to security operations bus
+
+When enabled, the module creates permission set:
+
+```text
+SecOps-Operator-${environment}
+```
+
+Its inline policy allows:
+
+- `events:ListEventBuses` across EventBridge;
+- `events:DescribeEventBus` and `events:PutEvents` on the configured `secops_event_bus_arn`.
+
+`secops_event_bus_arn` is required whenever Operator access is enabled.
+
+The Operator persona is intended for controlled event submission rather than direct EC2 or Lambda administration.
+
+### SecOps-Analyst
+
+When enabled, the Analyst permission set receives:
+
+- AWS-managed `SecurityAudit`;
+- AWS-managed `ReadOnlyAccess`;
+- the configured centralized-logs S3 read-only customer-managed policy;
+- the configured logs KMS decrypt customer-managed policy.
+
+Both customer-managed policy names are required when Analyst access is enabled.
+
+### SecOps-Engineer
+
+When enabled, the Engineer permission set receives:
+
+- AWS-managed `SecurityAudit`;
+- AWS-managed `ReadOnlyAccess`;
+- the configured centralized-logs S3 read-only customer-managed policy;
+- the configured logs KMS decrypt customer-managed policy;
+- an inline response policy.
+
+The inline policy currently permits:
+
+```text
+securityhub:BatchUpdateFindings
+ec2:CreateTags
+ec2:ModifyInstanceAttribute
+ec2:ReplaceIamInstanceProfileAssociation
+ec2:AssociateIamInstanceProfile
+ec2:DisassociateIamInstanceProfile
+```
+
+Both customer-managed policy names are required when Engineer access is enabled.
 
 ---
 
-## Resources Created
+## Customer-Managed Policy References
 
-- `aws_identitystore_group`
-- `aws_ssoadmin_permission_set`
-- `aws_ssoadmin_managed_policy_attachment`
-- `aws_ssoadmin_customer_managed_policy_attachment`
-- `aws_ssoadmin_permission_set_inline_policy`
-- `aws_ssoadmin_account_assignment`
+Analyst and Engineer roles reference existing IAM policies by **name and path** through IAM Identity Center customer-managed policy attachments.
+
+The module does not create these IAM policies. The referenced policy must already exist in the target account before AWS can successfully provision an enabled permission set attachment.
+
+The default policy path is:
+
+```text
+/
+```
+
+This design avoids a Terraform dependency from the control plane into workload remote state while still allowing workload-specific policies to be attached centrally.
 
 ---
 
-## Requirements
+## Inputs
 
-- IAM Identity Center must be enabled in the AWS account
+| Name | Type | Default | Requirement |
+|---|---|---|---|
+| `environment` | `string` | required | Suffix used in permission-set names. |
+| `account_id` | `string` | required | Target AWS account for assignments. |
+| `secops_event_bus_arn` | `string` | `null` | Required when `enable_secops_operator = true`. |
+| `enable_secops_analyst` | `bool` | `false` | Enables Analyst resources. |
+| `enable_secops_engineer` | `bool` | `false` | Enables Engineer resources. |
+| `enable_secops_operator` | `bool` | `true` | Enables Operator resources. |
+| `enable_secops_administrator` | `bool` | `false` | Enables Administrator resources. |
+| `secops_analyst_group_name` | `string` | `null` | Required when Analyst is enabled. |
+| `secops_engineer_group_name` | `string` | `null` | Required when Engineer is enabled. |
+| `secops_operator_group_name` | `string` | `null` | Required when Operator is enabled. |
+| `secops_administrator_group_name` | `string` | `null` | Required when Administrator is enabled. |
+| `logs_s3_readonly_policy_name` | `string` | `null` | Required when Analyst or Engineer is enabled. |
+| `logs_cmk_decrypt_policy_name` | `string` | `null` | Required when Analyst or Engineer is enabled. |
+| `customer_managed_policy_path` | `string` | `/` | Path used for customer-managed policy references. |
 
-- The AWS account must be accessible via Identity Center
-
-- Customer-managed IAM policies must already exist in the account:
-  - Logs S3 read policy
-  - Logs KMS decrypt policy
-  - Rollback trigger policy
-
-- Users must be created in Identity Center and assigned to groups after running `terraform apply`
-  - This module manages groups and permission sets; it does not provision users
+The module validates role-dependent inputs, but environment names and account-ID formats are intentionally left to the calling stack. The control-plane Identity Center stack adds stricter validation for its workload and security-operations inputs.
 
 ---
 
 ## Usage
 
-### Example
+### Workload Operator example
 
 ```hcl
-module "identity_center" {
-  source = "./modules/identity_center"
+module "identity_center_workload" {
+  source = "../../../modules/identity_center"
 
-  account_id = data.aws_caller_identity.current.account_id
+  account_id  = "0123456789012"
+  environment = "dev"
 
-  secops_analyst_group_name  = "SecOps-Analysts"
-  secops_engineer_group_name = "SecOps-Engineers"
-  secops_operator_group_name = "SecOps-Operators"
+  enable_secops_operator     = true
+  secops_operator_group_name = "SecOps-Operator-Dev"
+  secops_event_bus_arn       = "arn:aws:events:us-east-1:0123456789012:event-bus/secops-bus"
 
-  logs_s3_readonly_policy_name        = module.iam.logs_s3_readonly_policy_name
-  logs_cmk_decrypt_policy_name        = module.iam.logs_kms_decrypt_policy_name
-  secops_rollback_trigger_policy_name = module.iam.secops_rollback_trigger_policy_name
+  enable_secops_analyst  = false
+  enable_secops_engineer = false
+}
+```
 
-  customer_managed_policy_path = "/"
-  secops_event_bus_arn         = module.automation.secops_event_bus_arn
+### Security-operations Administrator example
+
+```hcl
+module "identity_center_secops" {
+  source = "../../../modules/identity_center"
+
+  account_id  = "0123456789012"
+  environment = "secops"
+
+  enable_secops_administrator     = true
+  secops_administrator_group_name = "SecOps-Administrator"
+
+  enable_secops_operator = false
 }
 ```
 
 ---
 
-### Inputs
+## Outputs
 
-| Name | Description | Type | Default |
-|------|-------------|------|---------|
-| `account_id` | AWS account ID for assignments | `string` | n/a |
-| `secops_analyst_group_name` | SecOps Analyst group display name | `string` | n/a |
-| `secops_engineer_group_name` | SecOps Engineer Group display name | `string` | n/a |
-| `secops_operator_group_name` | SecOps Operator Group display name | `string` | n/a |
-| `logs_s3_readonly_policy_name` | IAM policy name for Centralized Logs S3 read access | `string` | n/a |
-| `logs_cmk_decrypt_policy_name` | IAM policy name for 'logs' CMK decrypt | `string` | n/a |
-| `secops_rollback_trigger_policy_name` | IAM policy name for rollback trigger | `string` | n/a |
-| `customer_managed_policy_path` | Path for IAM policies | `string` | `"/"` |
-| `secops_event_bus_arn` | ARN of the Security Operations EventBridge bus | `string` | n/a |
+### `permission_set_arns`
+
+Returns only the permission sets that are enabled for the module instance:
+
+```hcl
+{
+  "secops-administrator" = "..." # when enabled
+  "secops-operator"      = "..." # when enabled
+  "secops-analyst"       = "..." # when enabled
+  "secops-engineer"      = "..." # when enabled
+}
+```
 
 ---
 
-### Outputs
+## Deployment Dependencies
 
-| Name | Description |
-|------|-------------|
-| `permission_set_arns` | ARNs of created permission sets |
+IAM Identity Center must already be enabled and accessible from the account running this module.
+
+For workload deployments:
+
+- Operator access can be created before the actual SecOps EventBridge bus exists because the ARN is used to scope the inline policy.
+- Analyst and Engineer roles should remain disabled until their referenced customer-managed log-access policies exist in the target account.
+
+For the security-operations deployment, the current control-plane stack enables Administrator access and disables Operator access.
 
 ---
 
 ## Validation
 
-To confirm the module is working:
+The module itself does not perform an end-user login test. The control-plane validator checks the expected Identity Center groups, permission sets, and account assignments created through the control-plane stack.
 
-  1. Log into IAM Identity Center portal:
-    - `https://<your-org>.awsapps.com/start
-
-  2. Verify access:
-    - SecOps-Analyst sees read-only data
-    - SecOps-Engineer can perform response actions
-    - SecOps-Operator can trigger rollback only
-
-  3. Confirm IAM roles exist:
-    - Navigate to `IAM` ➔ `Roles`
-    - Locate `AWSReservedSSO_SecOps-*` roles
-
-  4. Test access via CLI:
-    ```bash
-    aws sts get-caller-identity --profile <profile-name>
-    ```
-
-> Example:
-  ```bash
-  aws sts get-caller-identity --profile analyst
-  ```
-
-> Note:
-> - `<profile-name>` is the local AWS CLI profile configured via `aws configure sso`
-> - This profile is mapped to the IAM Identity Center permission set (i.e., `SecOps-Analyst`)
-
-5. Validate permissions:
-- SecOps-Analyst:
-  - Can view logs and findings
-  - Cannot modify resources
-
-- SecOps-Engineer:
-  - Can update findings and modify EC2 instances
-
-- SecOps-Operator:
-  - Can publish events to EventBridge Rollback bus only
+Effective human access should still be verified through an IAM Identity Center login and role-assumption test when performing release or client-readiness validation.
 
 ---
 
 ## Security Considerations
 
-- Access is granted via short-lived, federatred sessions (no static access keys)
-- Eliminates long-lived IAM user credentials
-- Enforces least-privilege access via permission sets
-- Uses short-lived credentials via SSO
-- Integrates with KMS-encrypted resources securely
-- Supports centralized audit and access control
+- Identity Center provides short-lived federated AWS sessions rather than requiring long-lived IAM user credentials for these personas.
+- Permissions are separated by persona and enabled explicitly.
+- The Operator role is scoped to an EventBridge workflow rather than direct infrastructure modification.
+- Analyst and Engineer customer-managed policies are resolved in the target account by name and path.
+- Administrator access is intentionally opt-in and should be limited to accounts where full administrative access is required.
 
 ---
 
 ## Limitations
 
-- Groups are basic and may not reflect real organizational structure
-- No external IdP integration (Okta, Entra ID, etc.) in this module
-- No automated user provisioning
-- No session tagging or advanced conditional access controls
-
----
-
-## Future Enhancements
-
-- External IdP federation (Okta / Entra ID)
-- Automated user provisioning
-- Attribute-based access control (ABAC)
-- Session tagging for fine-grained access control
-- Cross-account access patterns
-- Just-in-Time (JIT) access workflows
-
----
-
-## Summary
-
-This module provides a centralized, scalable, and secure access control model for AWS environments.
-
-It replaces IAM users with a modern SSO-based approach, enforces the least privilege principle, and establishes a strong foundation for enterprise-grade identity and access management.
+- The module does not provision or synchronize users.
+- The module does not manage external IdP federation, SCIM, or conditional-access policy.
+- The module does not create the customer-managed policies used by Analyst or Engineer roles.
+- The module does not validate that an EventBridge bus exists before creating an Operator policy that references its ARN.
+- Account-specific naming and persona policy are determined by the calling stack.
