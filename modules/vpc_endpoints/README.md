@@ -10,7 +10,7 @@ This module creates:
 - Interface VPC Endpoints for core AWS services
 - A dedicated security group for Interface VPC Endpoints
 - Private DNS support for Interface VPC Endpoints
-- An output exposing the Interface Endpoint security group ID
+- Outputs exposing the Interface Endpoint security group ID and each Interface Endpoint ID
 
 The module is designed to support private-first AWS workloads by allowing compute resources, Lambda functions, and security automation to reach AWS APIs without relying entirely on public internet paths.
 
@@ -29,6 +29,7 @@ This supports:
 - Private access to Security Hub
 - Private access to EventBridge
 - Private access to Lambda APIs
+- Private GuardDuty Runtime Monitoring data-plane connectivity
 - Private S3 access through a Gateway Endpoint
 - Reduced dependency on NAT Gateway paths for AWS service traffic
 
@@ -66,10 +67,12 @@ Creates Interface VPC Endpoints for the following AWS services:
 | `kms` | KMS API access |
 | `config` | AWS Config API access |
 | `sns` | SNS API access |
+| `sqs` | SQS API access |
 | `ec2` | EC2 API access |
 | `events` | EventBridge API access |
 | `securityhub` | Security Hub API access |
 | `lambda` | Lambda API access |
+| `guardduty-data` | GuardDuty Runtime Monitoring data-plane endpoint |
 
 Each endpoint is created using:
 
@@ -80,6 +83,23 @@ resource "aws_vpc_endpoint" "interface"
 The module uses `for_each` over the endpoint service list, so each service receives its own Interface Endpoint.
 
 Private DNS is enabled for all Interface Endpoints.
+
+---
+
+### GuardDuty Runtime Monitoring Endpoint
+
+`guardduty-data` is intentionally part of the Terraform-managed Interface Endpoint set.
+
+This prevents GuardDuty Runtime Monitoring from needing to create and own its own VPC endpoint after eligible EC2 instances appear. The baseline passes the resulting `interface_endpoint_ids` map to the compute module, and EC2 launch waits until the endpoint resources—including `guardduty-data`—exist.
+
+The endpoint is therefore treated like the rest of the workload's VPC infrastructure:
+
+- Terraform owns its lifecycle.
+- It is placed only in the dedicated endpoint private subnets.
+- It uses the shared Interface Endpoint security group.
+- It is validated by the workload VPC endpoint validation path.
+
+This ownership model avoids unmanaged `GuardDutyManaged` endpoint resources and makes workload teardown more deterministic.
 
 ---
 
@@ -154,7 +174,7 @@ The endpoint private subnets have their own route tables and do not require a de
 The S3 Gateway Endpoint is associated with the route tables passed into the module:
 
 ```hcl
-route_table_ids = var.s3_gateway_endpoint_route_table_ids
+route_table_ids = var.s3_gateway_endpoint_rt_ids_list
 ```
 
 This allows the root baseline stack to decide which private route tables need S3 Gateway Endpoint access.
@@ -217,14 +237,18 @@ When queried from inside the VPC, those names resolve through the Interface Endp
 | `name_prefix` | Prefix used for resource naming | Yes |
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
 | `vpc_id` | ID of the VPC where endpoints are created | Yes |
-| `account_id` | AWS account ID | Yes |
-| `primary_region` | AWS region used to build endpoint service names | Yes |
-| `endpoint_private_subnet_ids_map` | Map of dedicated endpoint private subnet IDs where Interface Endpoints are deployed | Yes |
-| `endpoint_private_rt_ids_map` | Map of dedicated endpoint private route table IDs | Yes |
-| `s3_gateway_endpoint_route_table_ids` | List of route table IDs that should use the S3 Gateway Endpoint | Yes |
-| `compute_sg_id` | Security group ID for compute workloads | Yes |
-| `lambda_ec2_isolation_sg_id` | Security group ID for the EC2 Isolation Lambda | Yes |
-| `lambda_ec2_rollback_sg_id` | Security group ID for the EC2 Rollback Lambda | Yes |
+| `account_id` | AWS account ID; retained in the module interface | Yes |
+| `primary_region` | AWS Region used to build endpoint service names | Yes |
+| `endpoint_private_subnet_ids_map` | Dedicated endpoint private subnet IDs used for all Interface Endpoints | Yes |
+| `compute_private_subnet_ids_map` | Compute private subnet map retained in the module interface | Yes |
+| `serverless_private_subnet_ids_map` | Serverless private subnet map retained in the module interface | Yes |
+| `subnet_cidrs` | Subnet CIDR map retained for endpoint-subnet context | Yes |
+| `endpoint_private_route_table_ids_map` | Endpoint private route table map retained for endpoint-tier context | Yes |
+| `s3_gateway_endpoint_rt_ids_list` | Route table IDs associated with the S3 Gateway Endpoint | Yes |
+
+The active Interface Endpoint resources use `endpoint_private_subnet_ids_map`; the S3 Gateway Endpoint uses `s3_gateway_endpoint_rt_ids_list`.
+
+`account_id`, `compute_private_subnet_ids_map`, `serverless_private_subnet_ids_map`, and the endpoint route/CIDR context are currently declared for compatibility or surrounding topology context rather than direct endpoint-resource arguments. Do not reintroduce compute or Lambda security-group inputs here; endpoint traffic rules are owned by `modules/networking/security_policy`.
 
 ---
 
@@ -233,6 +257,7 @@ When queried from inside the VPC, those names resolve through the Interface Endp
 | Name | Description |
 |---|---|
 | `interface_endpoints_sg_id` | Security group ID for the Interface VPC Endpoints |
+| `interface_endpoint_ids` | Map of Interface Endpoint service names to VPC Endpoint IDs |
 
 ---
 
@@ -259,21 +284,18 @@ module "vpc_endpoints" {
     values(module.networking.serverless_private_route_table_ids_map)
   )
 
-  subnet_cidrs  = var.subnet_cidrs
-  compute_sg_id = module.compute.compute_sg_id
-
-  lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
-  lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
+  subnet_cidrs = var.subnet_cidrs
 }
 ```
 
-The `interface_endpoints_sg_id` output should be passed back into the networking/security policy layer so security group rules can be attached to the endpoint security group.
-
-Example:
+The endpoint security group output should be passed into the networking `security_policy` layer, while the endpoint-ID map should be passed into the compute module:
 
 ```hcl
 interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
+interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
 ```
+
+The first connection allows the networking layer to own endpoint traffic rules. The second preserves the EC2 launch dependency on the actual Interface Endpoint resources.
 
 ---
 
@@ -290,6 +312,16 @@ modules/networking/security_policy
 ```
 
 This keeps traffic policy decisions centralized in the networking module instead of scattering security group rules across multiple modules.
+
+---
+
+### Terraform Owns `guardduty-data`
+
+GuardDuty Runtime Monitoring can create a `guardduty-data` VPC endpoint when no suitable endpoint exists. This baseline instead pre-creates that endpoint in Terraform as part of the standard Interface Endpoint set.
+
+That keeps the endpoint in the dedicated endpoint subnet tier and under the same lifecycle, tagging, security-group, validation, and destroy model as the other workload endpoints.
+
+The compute module consumes `interface_endpoint_ids`, so Terraform establishes endpoint creation before eligible EC2 instances launch.
 
 ---
 
@@ -342,10 +374,11 @@ aws ec2 describe-vpc-endpoints \
 
 Expected:
 
-- S3 Gateway Endpoint exists
-- Interface Endpoints exist for the configured AWS services
-- Endpoint state is `available`
-- Interface Endpoints have private DNS enabled
+- The S3 Gateway Endpoint exists.
+- Interface Endpoints exist for the configured AWS services, including `sqs` and `guardduty-data`.
+- Endpoint state is `available`.
+- Interface Endpoints have private DNS enabled.
+- Terraform-managed Interface Endpoints are placed only in the dedicated endpoint private subnets.
 
 ---
 
@@ -416,6 +449,29 @@ Expected:
 - S3 Gateway Endpoint exists.
 - Route table IDs include the private route tables intentionally passed to the module.
 - S3 Gateway Endpoint route tables commonly include compute private route tables and serverless private route tables.
+
+---
+
+### Confirm Terraform Owns the GuardDuty Data Endpoint
+
+```bash
+aws ec2 describe-vpc-endpoints \
+  --region "${AWS_REGION}" \
+  --profile "${AWS_PROFILE}" \
+  --filters \
+    "Name=vpc-id,Values=${VPC_ID}" \
+    "Name=service-name,Values=com.amazonaws.${AWS_REGION}.guardduty-data" \
+  --query 'VpcEndpoints[].[VpcEndpointId,State,SubnetIds,Tags]' \
+  --output json
+```
+
+Expected:
+
+- Exactly the intended `guardduty-data` endpoint is present.
+- It uses the dedicated endpoint private subnets.
+- Its tags identify normal Terraform/environment ownership rather than a separate GuardDuty-managed endpoint.
+
+The workload `validate-vpc-endpoints.sh` path should remain the authoritative automated check for endpoint placement and inventory.
 
 ---
 
@@ -507,6 +563,14 @@ This module creates multiple Interface Endpoints, so costs can add up across:
 - prod
 
 Deployment profiles and egress modes can reduce NAT Gateway and Network Firewall cost, but Interface Endpoint costs still apply when endpoints are deployed.
+
+---
+
+### GuardDuty Runtime Monitoring Ownership
+
+Do not remove `guardduty-data` from the Terraform endpoint set while centrally managed EC2 Runtime Monitoring is enabled unless the lifecycle implications are understood.
+
+Allowing GuardDuty to create an unmanaged endpoint can introduce resources outside Terraform ownership and make destroy/reapply behavior less deterministic. Keeping the endpoint pre-created also ensures it follows the endpoint-subnet placement policy.
 
 ---
 
@@ -607,7 +671,8 @@ Check:
 - Endpoint private subnets do not require a default internet route.
 - S3 private access is handled through a Gateway Endpoint and route table association.
 - Private DNS avoids hardcoding endpoint-specific URLs.
-- The module supports private operation of SSM, logging, encryption, secrets retrieval, EventBridge, Security Hub, and Lambda API access.
+- The module supports private operation of SSM, logging, encryption, secrets retrieval, EventBridge, Security Hub, Lambda API access, and the GuardDuty Runtime Monitoring data endpoint.
+- `guardduty-data` is Terraform-owned instead of being left for GuardDuty to create opportunistically.
 - Endpoint access should remain scoped to approved workload and automation security groups.
 
 ---
@@ -621,6 +686,7 @@ This module follows:
 - Dedicated endpoint subnet segmentation
 - Centralized security group policy
 - Reduced public internet dependency
+- Terraform ownership of Runtime Monitoring network dependencies
 - Compatibility with AWS-native tooling
 - Secure-by-default workload operations
 
@@ -628,8 +694,9 @@ This module follows:
 
 ## Notes
 
-- This module should be deployed after the VPC, subnets, route tables, and workload security groups exist.
+- This module requires the VPC and endpoint subnet topology, but it does not require compute or Lambda security groups in order to create endpoints.
 - The endpoint security group ID should be passed into the networking/security policy layer.
+- The endpoint-ID map should be passed into compute so EC2 launch waits for the Terraform-managed Interface Endpoints.
 - Security group rules for the endpoint security group are not defined inside this module.
 - The S3 Gateway Endpoint attaches to the route tables passed into this module.
 - Interface Endpoints deploy into dedicated endpoint private subnets.
