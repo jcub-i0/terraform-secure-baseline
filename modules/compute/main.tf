@@ -65,6 +65,7 @@ resource "aws_instance" "ec2" {
   subnet_id              = each.value
   vpc_security_group_ids = [aws_security_group.compute.id]
   monitoring             = true
+  ebs_optimized = true
   iam_instance_profile   = var.instance_profile_name
 
   user_data                   = file("${path.module}/user_data/bootstrap.sh")
