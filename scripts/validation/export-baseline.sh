@@ -296,7 +296,7 @@ section "Generating Markdown summary"
   echo
   echo "## Manual Validation Remaining"
   echo
-  echo "The automated validation suite is intentionally read-only. The following checks remain manual:"
+  echo "The automated validation suite is intentionally read-only. The following checks remain outside this workload baseline report:"
   echo
   echo "- Full control-plane and AWS Organizations topology validation"
   echo "- End-user SSO login validation"
