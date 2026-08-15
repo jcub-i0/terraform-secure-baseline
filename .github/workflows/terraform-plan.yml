@@ -71,6 +71,10 @@ jobs:
       TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
       TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
       TF_VAR_account_id: ${{ vars.ACCOUNT_ID }}
+      TF_VAR_enable_securityhub_organization_configuration: ${{ vars.ENABLE_SECURITYHUB_ORGANIZATION_CONFIGURATION }}
+      TF_VAR_securityhub_cspm_account_policies: ${{ vars.SECURITYHUB_CSPM_ACCOUNT_POLICIES }}
+      TF_VAR_enable_guardduty_organization_configuration: ${{ vars.ENABLE_GUARDDUTY_ORGANIZATION_CONFIGURATION }}
+      TF_VAR_enable_securityhub_v2_organization_policy: ${{ vars.ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY }}
 
     steps:
       - name: Checkout
