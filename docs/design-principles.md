@@ -66,6 +66,7 @@ Each major environment is deployed into a dedicated AWS account.
 
 ```text
 control-plane
+security-operations
 dev
 staging
 prod
@@ -76,7 +77,8 @@ This reduces blast radius and creates cleaner separation between:
 - Development workloads
 - Staging workloads
 - Production workloads
-- Control-plane resources
+- Control-plane governance resources
+- Centralized security administration
 - Human access management
 - CI/CD execution roles
 
@@ -90,10 +92,19 @@ Control-plane resources are separated from workload infrastructure.
 
 The control plane manages:
 
-- AWS Organizations structure
+- AWS Organizations structure and account placement
 - IAM Identity Center access
+- Organization-level trusted-service and delegated-administrator prerequisites
+- Security Hub V2 organization-policy prerequisites
 - Control-plane Terraform state
 - GitHub OIDC roles for control-plane automation
+
+The security-operations layer manages:
+
+- its own Terraform state and GitHub OIDC roles
+- delegated Security Hub CSPM administration
+- delegated GuardDuty administration and organization protection plans
+- Security Hub V2 administrator-side organization policy management
 
 Environment bootstrap stacks manage:
 
@@ -105,11 +116,13 @@ Workload baseline stacks manage:
 - Networking
 - Compute
 - Logging
-- Security services
-- Automation
+- workload-local AWS Config and Inspector
+- deterministic remediation and response automation
 - Storage
 - Backup
 - Patch management
+
+In the centralized deployment, workload Terraform explicitly defers local Security Hub CSPM, GuardDuty, and Security Hub V2 ownership to the security-operations layer.
 
 This separation prevents workload changes from accidentally impacting foundational access and governance resources.
 
@@ -184,9 +197,11 @@ staging         -> staging GitHub-Apply role
 
 prod-plan       -> prod GitHub-Plan role
 prod            -> prod GitHub-Apply role
+
+security-operations-plan -> security-operations GitHub-Plan role
 ```
 
-This keeps CI/CD access scoped to the environment being operated on.
+This keeps CI/CD access scoped to the account and stack being operated on. The current general-purpose Apply and Destroy workflows remain workload-scoped; `security-operations-plan` is used for security-services planning and read-only evidence.
 
 Workload deployment follows a plan-before-approval model. The Plan job publishes and stores the exact Terraform plan, and the protected Apply job verifies and applies that saved plan without replanning after approval. Security-sensitive inputs such as `ISOLATION_ALLOWED` are validated before the plan is created.
 
@@ -204,24 +219,18 @@ The design favors:
 - Environment-specific roles
 - Least-privilege operational workflows
 
-Example Identity Center groups:
+Required Identity Center groups include:
 
 ```text
 SecOps-Operator-Dev
 SecOps-Operator-Staging
 SecOps-Operator-Prod
+SecOps-Administrator
 ```
 
-Optional roles may include:
+Optional Analyst and Engineer access can be enabled per workload account and for the security-operations account.
 
-```text
-SecOps-Analyst
-SecOps-Engineer
-```
-
-The access model is designed so that humans receive only the access needed for their function.
-
-For example, `SecOps-Operator` can submit approved rollback events, but it does not directly modify EC2 instances or invoke Lambda functions.
+The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is limited to approved event submission, while the separate `SecOps-Administrator` permission set provides administrative access to the centralized security-operations account.
 
 ---
 
@@ -350,24 +359,26 @@ This improves:
 - Auditability
 - Dependency reduction on public internet routes
 
-Examples of services commonly accessed through VPC endpoints include:
+The current endpoint set supports private access to services including:
 
-- S3
-- Systems Manager
+- S3 through a Gateway Endpoint
+- STS
+- SQS
 - CloudWatch Logs
+- Systems Manager and SSM Messages
 - Secrets Manager
 - KMS
-- SSM Messages
+- AWS Config
+- SNS
+- EC2
+- EventBridge
 - Security Hub
 - Lambda
-- EventBridge
-- SNS
-- SQS
-- STS
+- GuardDuty Runtime Monitoring (`guardduty-data`)
 
 Interface VPC Endpoints are deployed into dedicated private endpoint subnets.
 
-This keeps endpoint ENIs separate from compute, data, serverless, firewall, and public subnet tiers.
+This keeps endpoint ENIs separate from compute, data, serverless, firewall, and public subnet tiers. The Terraform-managed `guardduty-data` endpoint is also created before workload EC2 so GuardDuty Runtime Monitoring can use the existing endpoint instead of introducing an endpoint outside the Terraform dependency graph.
 
 The S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
@@ -393,9 +404,15 @@ Workloads reach Interface Endpoints through normal VPC-local routing and securit
 
 ---
 
-## 11. Centralized Logging and Evidence Preservation
+## 11. Centralized Security Governance, Logging, and Evidence Preservation
 
-Security and operational logs should be centralized, encrypted, and protected from tampering.
+Organization-wide security controls should have explicit ownership rather than being independently configured in every workload account.
+
+The control plane owns AWS Organizations prerequisites such as trusted service access, delegated-administrator registration, and Security Hub V2 policy enablement. The dedicated security-operations account owns centralized Security Hub CSPM configuration, GuardDuty organization governance and Runtime Monitoring, and Security Hub V2 workload policy management. Workload accounts retain local Config, Inspector, logging, remediation, and response responsibilities.
+
+This split reduces per-account drift while keeping management-account privileges separate from delegated security administration.
+
+Security and operational logs should also be centralized, encrypted, and protected from tampering.
 
 The baseline captures data from services such as:
 
@@ -585,7 +602,8 @@ Examples include:
 - Private subnets for compute
 - KMS encryption
 - Centralized logging
-- Security Hub and GuardDuty
+- Centralized Security Hub CSPM and GuardDuty governance
+- Security Hub V2 workload policy governance
 - Event-driven alerting
 - Identity Center access
 - GitHub OIDC instead of static credentials
@@ -659,11 +677,13 @@ Infrastructure alone is not a certification.
 
 ## 23. Dependency-Safe and Deterministic First Boot
 
-New instances should not enter service with stale package metadata or before required security-group policy exists.
+New instances should not enter service with stale package metadata, before required security-group policy exists, or before required Interface VPC Endpoints have been created.
 
-The standalone `security_policy` module exports the rule IDs required by compute. Those IDs feed a `terraform_data` readiness checkpoint that delays EC2 creation without introducing a module cycle. This dependency covers security-group rules only; route, NAT Gateway, firewall, DNS, and repository health remain runtime requirements.
+The standalone `security_policy` module exports the rule IDs required by compute. Those IDs feed a `terraform_data` readiness checkpoint. A second readiness checkpoint consumes the Terraform-managed Interface Endpoint IDs. EC2 depends on both checkpoints, which delays instance creation without introducing a module cycle.
 
-The Ubuntu bootstrap forces APT over IPv4, retries transient failures, treats any repository-refresh error as fatal, performs a distribution upgrade, and records package and reboot state. Changes to user data replace the instance so the revised bootstrap runs from first boot.
+This ordering is especially important for GuardDuty Runtime Monitoring: Terraform creates `guardduty-data` in the dedicated endpoint subnets before eligible EC2 instances appear, keeping the endpoint and its security-group relationships inside the Terraform graph.
+
+These dependencies do not prove route, NAT Gateway, firewall, DNS, or repository health. The Ubuntu bootstrap separately forces APT over IPv4, retries transient failures, treats any repository-refresh error as fatal, performs a distribution upgrade, and records package and reboot state. Changes to user data replace the instance so the revised bootstrap runs from first boot.
 
 ---
 
@@ -711,10 +731,11 @@ The baseline supports data protection through:
 Detection and visibility are provided through:
 
 - CloudTrail
-- GuardDuty
-- Security Hub
-- AWS Config
-- Inspector
+- centrally governed GuardDuty and Runtime Monitoring
+- centrally governed Security Hub CSPM
+- Security Hub V2 workload organization policy
+- workload-local AWS Config
+- workload-local Inspector
 - CloudWatch
 - EventBridge
 - VPC Flow Logs
@@ -728,7 +749,7 @@ Detection and visibility are provided through:
 Access control is implemented through:
 
 - IAM Identity Center
-- Environment-specific groups
+- Workload-specific groups and a dedicated security-operations administrator group
 - Permission sets
 - GitHub OIDC roles
 - Least-privilege IAM policies
@@ -747,7 +768,7 @@ Network control is implemented through:
 - AWS Network Firewall, when enabled
 - NAT Gateway, when required
 - Dedicated endpoint private subnets
-- Interface VPC Endpoints
+- Terraform-managed Interface VPC Endpoints, including `guardduty-data`
 - S3 Gateway Endpoint
 - Security group-to-security group rules
 
@@ -858,6 +879,7 @@ Some organizations may still need:
 - Organization-wide SCP strategy
 - Enterprise network connectivity
 - Centralized SIEM integration
+- broader multi-Region security governance
 - Custom compliance guardrails
 
 ---
@@ -931,7 +953,7 @@ The intended outcomes of this baseline are:
 
 - Faster deployment of secure AWS environments
 - Reduced risk of public exposure
-- Stronger logging and detection posture
+- Stronger centralized detection and posture governance
 - Safer CI/CD authentication
 - More consistent access control
 - Faster containment of EC2-related incidents
@@ -950,6 +972,7 @@ Its design favors:
 - Separation of duties
 - Private infrastructure
 - Centralized identity
+- Delegated security administration
 - Immutable logging
 - Event-driven detection and response
 - Configurable egress control
