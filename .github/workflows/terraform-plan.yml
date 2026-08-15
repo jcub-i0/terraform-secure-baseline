@@ -47,6 +47,9 @@ jobs:
           - environment: control-plane-organizations
             github_environment: control-plane-plan
             working_directory: ./bootstrap/control_plane/organizations
+          - environment: security-operations-security-services
+            github_environment: security-operations-plan
+            working_directory: ./bootstrap/security_operations/security_services
 
     concurrency:
       group: terraform-plan-${{ github.head_ref || github.ref_name }}-${{ matrix.environment }}
