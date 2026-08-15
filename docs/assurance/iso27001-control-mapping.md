@@ -135,12 +135,7 @@ SecOps-Operator-Staging
 SecOps-Operator-Prod
 ```
 
-Optional groups may include:
-
-```text
-SecOps-Analyst
-SecOps-Engineer
-```
+The security-operations account receives the required `SecOps-Administrator` permission set. Optional Analyst and Engineer personas may be enabled separately for workload and security-operations accounts.
 
 ### ISO 27001 Alignment
 
@@ -207,8 +202,8 @@ Organizations must still perform periodic access reviews and maintain approval w
 
 The baseline provides a secure AWS cloud foundation using:
 
-- Multi-account structure
-- Control-plane separation
+- Multi-account structure with dedicated `control-plane`, `security-operations`, `dev`, `staging`, and `prod` accounts
+- Control-plane and delegated security-administrator separation
 - Private networking
 - Centralized logging
 - Detection services
@@ -290,7 +285,7 @@ Human triage and decision-making remain an organizational responsibility.
 
 The baseline provides response automation such as:
 
-- EC2 isolation for high/critical findings
+- EC2 isolation for qualifying findings, with `CRITICAL` as the default automated threshold
 - Controlled EC2 rollback
 - SNS alerting
 - Tamper detection alerts
@@ -712,26 +707,22 @@ The baseline provides technical log collection and protection, while organizatio
 
 ### Baseline Control
 
-Monitoring is supported through:
+Monitoring is supported through a combination of centrally governed and workload-local services:
 
-- GuardDuty
-- Security Hub
-- AWS Config
-- Inspector
-- EventBridge
-- CloudWatch
-- SNS notifications
-- Lambda automation logs
+- centrally administered GuardDuty organization enrollment and protection plans
+- GuardDuty Runtime Monitoring configuration
+- centralized Security Hub CSPM finding aggregation and configuration policies
+- Security Hub V2 organization policy for workload enablement
+- workload-local AWS Config and Inspector
+- EventBridge, CloudWatch, CloudTrail, and SNS
 
 ### ISO 27001 Alignment
 
-A.8.16 addresses monitoring networks, systems, and applications for anomalous behavior.
+A.8.16 addresses monitoring networks, systems, and applications for anomalous behavior and security events.
 
 ### Narrative
 
-The baseline enables AWS-native monitoring and event routing.
-
-It supports detection of suspicious behavior, misconfiguration, and security service tampering.
+Centralized GuardDuty and Security Hub governance reduce account-level drift and provide common security visibility, while workload-local Config and Inspector preserve environment-specific configuration and vulnerability evidence. The baseline supplies technical monitoring mechanisms; organizations must still define review, escalation, and response procedures.
 
 ---
 
@@ -909,9 +900,11 @@ Organizations should implement code review, dependency scanning, SAST/DAST, secr
 
 ### Baseline Control
 
-The baseline separates environments into different AWS accounts:
+Development, staging, and production workloads run in separate AWS accounts. Central platform responsibilities are also separated into dedicated accounts:
 
 ```text
+control-plane
+security-operations
 dev
 staging
 prod
@@ -919,11 +912,11 @@ prod
 
 ### ISO 27001 Alignment
 
-A.8.31 addresses separating development, test, and production environments.
+A.8.31 addresses separation of development, testing, and production environments.
 
 ### Narrative
 
-Dedicated AWS accounts enforce strong separation between environments and reduce the risk of non-production activity impacting production.
+Separate workload accounts create strong boundaries between development, staging, and production. Keeping control-plane and security-operations responsibilities outside the workload accounts further reduces the chance that workload lifecycle activity affects organization governance or centralized security administration.
 
 ---
 
@@ -955,64 +948,56 @@ Organizations must still define approval requirements, emergency change procedur
 
 # Evidence Examples
 
-The following artifacts can support ISO 27001 readiness discussions.
+The following artifacts can support ISO 27001 readiness discussions. They should be reviewed with organizational policies, risk treatment, control ownership, and operating evidence rather than treated as certification evidence by themselves.
+
+## Generated Validation Evidence
+
+```text
+validation-results/control-plane/<timestamp>/
+validation-results/security-operations/security-services/<timestamp>/
+validation-results/<env>/bootstrap/<timestamp>/
+validation-results/<env>/baseline/<timestamp>/
+```
+
+The four evidence layers distinguish organization/access foundations, centralized security governance, workload bootstrap foundations, and deployed workload realization.
 
 ## Terraform / CI/CD Evidence
 
 ```text
-Terraform plan output
-Terraform apply output
-Terraform destroy workflow logs
-Git commit history
-Pull request approvals
-GitHub Actions workflow logs
-GitHub OIDC role trust policies
-Terraform backend configuration
+Terraform plans and apply logs
+GitHub Actions workflow history
+GitHub OIDC trust and role configuration
+Terraform state backend / native-locking configuration
+AWS Organizations and Identity Center state
+security_operations/security_services state
 ```
 
 ## AWS Evidence
 
 ```text
-CloudTrail trail configuration
-CloudTrail trail status
-AWS Config recorder status
-AWS Config rule evaluations
-Security Hub enabled standards
-GuardDuty detector status
+CloudTrail status and protected log storage
+AWS Config recorder and rule state
+Security Hub CSPM central configuration, finding aggregation, policies, and associations
+Security Hub V2 effective workload policies
+GuardDuty detector, organization enrollment, protection plans, and Runtime Monitoring state
 Inspector account status
-KMS key aliases and policies
-S3 bucket encryption settings
-S3 Object Lock configuration
-VPC Flow Logs status
-SNS topic subscriptions
-EventBridge rule configuration
-Lambda logs
-Backup vault configuration
-Patch baseline configuration
+KMS aliases and policies
+S3 encryption/Object Lock configuration
+VPC Flow Logs and VPC endpoint state
+Backup and patch state where enabled
 ```
 
-## Identity Evidence
+## Identity / Incident Evidence
 
 ```text
-IAM Identity Center groups
-IAM Identity Center permission sets
-IAM Identity Center account assignments
+IAM Identity Center groups, permission sets, and account assignments
+SecOps-Administrator assignment for security-operations
 AWSReservedSSO role assumptions in CloudTrail
-Break-glass role CloudTrail events
-GitHub OIDC role assumptions
-```
-
-## Incident / Response Evidence
-
-```text
-EC2 isolation test results
-EC2 rollback test results
-IP enrichment test results
-Tamper detection alerts
-SNS notifications
-Security Hub finding notes
-GuardDuty findings
-Security Hub findings
+Break-glass events
+EC2 isolation and rollback test results
+IP enrichment results
+Tamper alerts and SNS notifications
+Security Hub / GuardDuty findings
 ```
 
 ---
