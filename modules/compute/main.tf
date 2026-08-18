@@ -19,14 +19,6 @@ resource "aws_security_group" "quarantine" {
   description = "Security Group for isolating EC2 instances suspected of compromisation so that security triage and remediation can be performed safely without allowing unrestricted network access"
   vpc_id      = var.vpc_id
 
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow ONLY HTTPS egress for SSM and forensics"
-  }
-
   tags = {
     Name        = "${var.name_prefix}-EC2-Quarantine-SG"
     Environment = var.environment
