@@ -25,3 +25,7 @@ variable "interface_endpoints_sg_id" {
 variable "db_port" {
   type = string
 }
+
+variable "quarantine_sg_id" {
+  type = string
+}
