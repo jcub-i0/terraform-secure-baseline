@@ -84,6 +84,16 @@ resource "aws_security_group_rule" "endpoints_ingress_from_quarantine" {
   description              = "Quarantined EC2 instances to Interface VPC Endpoints over HTTPS"
 }
 
+resource "aws_security_group_rule" "quarantine_egress_to_endpoints" {
+  type = "egress"
+  security_group_id = var.quarantine_sg_id
+  from_port = 443
+  to_port = 443
+  protocol = "tcp"
+  source_security_group_id = var.interface_endpoints_sg_id
+  description = "Quarantined EC2 instances to Interface VPC Endpoints over HTTPS"
+}
+
 ## DATA SG RULES
 resource "aws_security_group_rule" "db_ingress_from_compute" {
   type                     = "ingress"
