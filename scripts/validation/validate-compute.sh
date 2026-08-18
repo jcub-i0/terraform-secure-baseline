@@ -10,6 +10,9 @@
 # - AWS caller identity is valid
 # - VPC is resolved
 # - Compute and quarantine security groups exist
+# - Quarantine security group has no unrestricted internet egress
+# - Quarantine security group has a private HTTPS path to Interface VPC Endpoints
+# - Interface VPC Endpoints allow HTTPS ingress from the quarantine security group
 # - EC2 instances exist and are private
 # - EC2 instances are in compute private subnets
 # - EC2 instances have no public IPs
@@ -235,24 +238,43 @@ else
   fail "One or more compute security groups are outside expected VPC"
 fi
 
-QUARANTINE_EGRESS_443_COUNT="$(
+QUARANTINE_UNRESTRICTED_EGRESS_COUNT="$(
   echo "$SECURITY_GROUPS_JSON" |
     jq --arg sg_id "$QUARANTINE_SG_ID" '
       [
         .SecurityGroups[]
         | select(.GroupId == $sg_id)
         | .IpPermissionsEgress[]?
-        | select(.IpProtocol == "tcp")
-        | select(.FromPort == 443 and .ToPort == 443)
+        | select(
+            ([.IpRanges[]?.CidrIp] | index("0.0.0.0/0"))
+            or
+            ([.Ipv6Ranges[]?.CidrIpv6] | index("::/0"))
+          )
       ]
       | length
     '
 )"
 
-if [[ "$QUARANTINE_EGRESS_443_COUNT" -gt 0 ]]; then
-  success "Quarantine security group has HTTPS egress rule"
+if [[ "$QUARANTINE_UNRESTRICTED_EGRESS_COUNT" -eq 0 ]]; then
+  success "Quarantine SG has no unrestricted IPv4/IPv6 internet egress"
 else
-  warn "Quarantine security group does not show explicit TCP/443 egress rule"
+  echo "$SECURITY_GROUPS_JSON" |
+    jq -r --arg sg_id "$QUARANTINE_SG_ID" '
+      .SecurityGroups[]
+      | select(.GroupId == $sg_id)
+      | .IpPermissionsEgress[]?
+      | select(
+          ([.IpRanges[]?.CidrIp] | index("0.0.0.0/0"))
+          or
+          ([.Ipv6Ranges[]?.CidrIpv6] | index("::/0"))
+        )
+      | "- Protocol=" + .IpProtocol
+        + " FromPort=" + ((.FromPort // -1) | tostring)
+        + " ToPort=" + ((.ToPort // -1) | tostring)
+        + " IPv4=" + ([.IpRanges[]?.CidrIp] | join(","))
+        + " IPv6=" + ([.Ipv6Ranges[]?.CidrIpv6] | join(","))
+    '
+  fail "Quarantine SG has unrestricted internet egress"
 fi
 
 section "Discovering compute private subnets"
@@ -479,7 +501,7 @@ else
   )"
 
   if [[ -z "$INTERFACE_ENDPOINTS_SG_ID" || "$INTERFACE_ENDPOINTS_SG_ID" == "None" ]]; then
-    warn "Unable to resolve interface endpoints security group. Skipping endpoint SG rule validation."
+    fail "Unable to resolve interface endpoints security group required for compute and quarantine management paths"
   else
     success "Resolved interface endpoints security group: $INTERFACE_ENDPOINTS_SG_ID"
   fi
@@ -557,6 +579,56 @@ if [[ -n "$INTERFACE_ENDPOINTS_SG_ID" && "$INTERFACE_ENDPOINTS_SG_ID" != "None" 
     success "Interface endpoints SG allows HTTPS ingress from compute SG"
   else
     fail "Interface endpoints SG does not allow HTTPS ingress from compute SG"
+  fi
+
+  QUARANTINE_EGRESS_TO_ENDPOINTS_COUNT="$(
+    echo "$SECURITY_GROUPS_JSON" |
+      jq --arg quarantine_sg_id "$QUARANTINE_SG_ID" --arg endpoints_sg_id "$INTERFACE_ENDPOINTS_SG_ID" '
+        [
+          .SecurityGroups[]
+          | select(.GroupId == $quarantine_sg_id)
+          | .IpPermissionsEgress[]?
+          | select(.IpProtocol == "tcp")
+          | select(.FromPort == 443 and .ToPort == 443)
+          | select(
+              [.UserIdGroupPairs[]?.GroupId]
+              | index($endpoints_sg_id)
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$QUARANTINE_EGRESS_TO_ENDPOINTS_COUNT" -gt 0 ]]; then
+    success "Quarantine SG allows HTTPS egress only through the interface endpoints SG path"
+  else
+    fail "Quarantine SG does not allow HTTPS egress to interface endpoints SG"
+  fi
+
+  ENDPOINTS_INGRESS_FROM_QUARANTINE_COUNT="$(
+    aws ec2 describe-security-groups \
+      "${aws_args[@]}" \
+      --group-ids "$INTERFACE_ENDPOINTS_SG_ID" \
+      --output json |
+      jq --arg quarantine_sg_id "$QUARANTINE_SG_ID" '
+        [
+          .SecurityGroups[]
+          | .IpPermissions[]?
+          | select(.IpProtocol == "tcp")
+          | select(.FromPort == 443 and .ToPort == 443)
+          | select(
+              [.UserIdGroupPairs[]?.GroupId]
+              | index($quarantine_sg_id)
+            )
+        ]
+        | length
+      '
+  )"
+
+  if [[ "$ENDPOINTS_INGRESS_FROM_QUARANTINE_COUNT" -gt 0 ]]; then
+    success "Interface endpoints SG allows HTTPS ingress from quarantine SG"
+  else
+    fail "Interface endpoints SG does not allow HTTPS ingress from quarantine SG"
   fi
 fi
 
