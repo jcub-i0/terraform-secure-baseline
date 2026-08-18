@@ -43,6 +43,7 @@ module "security_policy" {
   lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
   interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
   db_port                    = var.db_port
+  quarantine_sg_id           = module.compute.quarantine_sg_id
 }
 
 module "compute" {
