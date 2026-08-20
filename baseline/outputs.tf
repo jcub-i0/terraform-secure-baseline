@@ -87,7 +87,7 @@ output "effective_allowed_egress_domains" {
   description = "Effective Network Firewall domain targets; empty when Network Firewall is not instantiated"
   value = (
     local.effective_egress_mode == "network_firewall"
-    ? module.firewall[0].effective_domain_targets
+    ? module.firewall[0].effective_allowed_egress_domains
     : toset([])
   )
 }
