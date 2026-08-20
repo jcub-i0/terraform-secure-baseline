@@ -254,7 +254,8 @@ module "firewall" {
   environment = var.environment
   vpc_id      = module.networking.vpc_id
 
-  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+  cloudwatch_retention_days  = local.effective_cloudwatch_retention_days
+  allowed_egress_domains = local.effective_allowed_egress_domains
 
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
   logs_cmk_arn                    = module.security.logs_cmk_arn
