@@ -1309,12 +1309,18 @@ logs
 kms
 secretsmanager
 ec2
+ecr.api
+ecr.dkr
 events
 sns
 securityhub
 lambda
 s3
 ```
+
+For the planned Fargate runtime, private ECR pulls use the `ecr.api` and
+`ecr.dkr` Interface Endpoints, while image layers use the existing S3 Gateway
+Endpoint.
 
 ---
 
