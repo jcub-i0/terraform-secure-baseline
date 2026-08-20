@@ -380,6 +380,12 @@ Examples:
 
 Use individual scripts when validating a specific area after a targeted change.
 
+### Networking domain validation
+
+`validate-networking.sh` reads `effective_egress_mode` and `effective_allowed_egress_domains` from the selected workload environment's Terraform outputs. Terraform owns composition of the effective Network Firewall allowlist; the script does not recreate platform and caller domain-union logic.
+
+When the effective mode is `network_firewall`, the script describes the live `${NAME_PREFIX}-egress-stateful-domains` stateful rule group and performs an order-independent, exact set comparison between its domain targets and `effective_allowed_egress_domains`. Missing or unexpected live domains fail validation. For `nat_only` and `vpc_endpoints_only`, the effective domain output must be empty and the script does not query a domain rule group. Supplying `allowed_egress_domains` does not create connectivity in those modes.
+
 ---
 
 ## Control-Plane Validation
