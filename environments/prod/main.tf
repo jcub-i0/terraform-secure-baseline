@@ -18,7 +18,7 @@ module "baseline" {
   inspector_resource_types           = var.inspector_resource_types
   deployment_profile                 = var.deployment_profile
   egress_mode                        = var.egress_mode
-  allowed_egress_domains         = var.allowed_egress_domains
+  allowed_egress_domains             = var.allowed_egress_domains
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
   secops_emails                      = var.secops_emails
   isolation_allowed                  = var.isolation_allowed

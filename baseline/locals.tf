@@ -50,9 +50,9 @@ locals {
   effective_allowed_egress_domains = (
     local.effective_egress_mode == "network_firewall"
     ? setunion(
-        local.platform_required_egress_domains,
-        var.allowed_egress_domains,
-      )
+      local.platform_required_egress_domains,
+      var.allowed_egress_domains,
+    )
     : toset([])
   )
 
