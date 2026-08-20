@@ -13,7 +13,7 @@ resource "aws_cloudwatch_log_group" "network_firewall" {
 
 # RULE GROUP FOR NETWORK FIREWALL
 resource "aws_networkfirewall_rule_group" "stateful_domains" {
-  capacity = 100
+  capacity = 1000
   name     = "${var.name_prefix}-egress-stateful-domains"
   type     = "STATEFUL"
 
