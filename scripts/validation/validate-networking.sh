@@ -116,6 +116,37 @@ require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_en
 
 success "effective_egress_mode is valid: $EFFECTIVE_EGRESS_MODE"
 
+if ! terraform_output_exists "$OUTPUTS_JSON" effective_allowed_egress_domains; then
+  fail "Missing required Terraform output: effective_allowed_egress_domains"
+fi
+
+if ! EFFECTIVE_ALLOWED_EGRESS_DOMAINS_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -ce '
+      .effective_allowed_egress_domains.value
+      | if type == "array" and all(.[]; type == "string") then sort | unique
+        else error("effective_allowed_egress_domains must be an array of strings")
+        end
+    '
+)"; then
+  fail "Unable to resolve effective_allowed_egress_domains as a Terraform domain set."
+fi
+
+EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT="$(echo "$EFFECTIVE_ALLOWED_EGRESS_DOMAINS_JSON" | jq 'length')"
+
+case "$EFFECTIVE_EGRESS_MODE" in
+  network_firewall)
+    success "Resolved ${EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT} effective Network Firewall domain target(s) from Terraform"
+    ;;
+  nat_only|vpc_endpoints_only)
+    if [[ "$EFFECTIVE_ALLOWED_EGRESS_DOMAINS_JSON" != "[]" ]]; then
+      fail "effective_allowed_egress_domains must be empty when Network Firewall is not instantiated."
+    fi
+
+    success "effective_allowed_egress_domains is empty as expected for ${EFFECTIVE_EGRESS_MODE}"
+    ;;
+esac
+
 section "Checking AWS caller identity"
 
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
@@ -235,6 +266,56 @@ case "$EFFECTIVE_EGRESS_MODE" in
     fi
     ;;
 esac
+
+if [[ "$EFFECTIVE_EGRESS_MODE" == "network_firewall" ]]; then
+  EXPECTED_RULE_GROUP_NAME="${NAME_PREFIX}-egress-stateful-domains"
+
+  if ! FIREWALL_RULE_GROUP_JSON="$(
+    aws network-firewall describe-rule-group \
+      "${aws_args[@]}" \
+      --rule-group-name "$EXPECTED_RULE_GROUP_NAME" \
+      --type STATEFUL \
+      --output json
+  )"; then
+    fail "Unable to describe Network Firewall rule group: ${EXPECTED_RULE_GROUP_NAME}"
+  fi
+
+  if ! LIVE_FIREWALL_DOMAIN_TARGETS_JSON="$(
+    echo "$FIREWALL_RULE_GROUP_JSON" |
+      jq -ce '
+        .RuleGroup.RulesSource.RulesSourceList.Targets
+        | if type == "array" and all(.[]; type == "string") then sort | unique
+          else error("live Network Firewall targets must be an array of strings")
+          end
+      '
+  )"; then
+    fail "Unable to resolve live domain targets from Network Firewall rule group: ${EXPECTED_RULE_GROUP_NAME}"
+  fi
+
+  MISSING_LIVE_FIREWALL_DOMAINS_JSON="$(
+    jq -cn \
+      --argjson expected "$EFFECTIVE_ALLOWED_EGRESS_DOMAINS_JSON" \
+      --argjson live "$LIVE_FIREWALL_DOMAIN_TARGETS_JSON" \
+      '$expected - $live'
+  )"
+
+  UNEXPECTED_LIVE_FIREWALL_DOMAINS_JSON="$(
+    jq -cn \
+      --argjson expected "$EFFECTIVE_ALLOWED_EGRESS_DOMAINS_JSON" \
+      --argjson live "$LIVE_FIREWALL_DOMAIN_TARGETS_JSON" \
+      '$live - $expected'
+  )"
+
+  if [[ "$MISSING_LIVE_FIREWALL_DOMAINS_JSON" != "[]" || "$UNEXPECTED_LIVE_FIREWALL_DOMAINS_JSON" != "[]" ]]; then
+    info "Terraform effective firewall domain targets: $EFFECTIVE_ALLOWED_EGRESS_DOMAINS_JSON"
+    info "Live firewall domain targets: $LIVE_FIREWALL_DOMAIN_TARGETS_JSON"
+    info "Domains missing from live AWS: $MISSING_LIVE_FIREWALL_DOMAINS_JSON"
+    info "Unexpected domains in live AWS: $UNEXPECTED_LIVE_FIREWALL_DOMAINS_JSON"
+    fail "Live Network Firewall domain targets do not exactly match effective_allowed_egress_domains."
+  fi
+
+  success "Live Network Firewall domain targets exactly match effective_allowed_egress_domains"
+fi
 
 section "Checking compute private route tables"
 
@@ -557,6 +638,7 @@ AWS region:                 ${AWS_REGION}
 Name prefix:                ${NAME_PREFIX}
 VPC ID:                     ${VPC_ID}
 effective_egress_mode:      ${EFFECTIVE_EGRESS_MODE}
+Effective firewall domains: ${EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT}
 
 NAT Gateway count:          ${NAT_GATEWAY_COUNT}
 Matching Network Firewalls: ${MATCHING_FIREWALL_COUNT}
