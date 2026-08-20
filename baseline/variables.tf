@@ -43,14 +43,14 @@ variable "egress_mode" {
   }
 }
 
-variable "application_egress_domains" {
-  description = "Environment-approved application domains added to the platform-required Network Firewall allowlist. Use exact domains or an initial dot for AWS Network Firewall suffix matching."
+variable "allowed_egress_domains" {
+  description = "Environment-approved application egress domains added to the platform-required Network Firewall allowlist. Use exact domains or an initial dot for AWS Network Firewall suffix matching."
   type        = set(string)
   default     = []
 
   validation {
     condition = alltrue([
-      for domain in var.application_egress_domains :
+      for domain in var.allowed_egress_domains :
       length(domain) > 0 &&
       domain == trimspace(domain) &&
       length(regexall("\\s", domain)) == 0 &&
@@ -66,7 +66,7 @@ variable "application_egress_domains" {
       length(regexall("^\\.?[0-9]+(\\.[0-9]+){3}\\.?$", domain)) == 0
     ])
 
-    error_message = "application_egress_domains entries must be exact domains or initial-dot suffix domains, not empty values, URLs, paths, wildcard expressions, IP addresses, or CIDRs."
+    error_message = "allowed_egress_domains entries must be exact domains or initial-dot suffix domains, not empty values, URLs, paths, wildcard expressions, IP addresses, or CIDRs."
   }
 }
 
