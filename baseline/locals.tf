@@ -34,6 +34,29 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
+  # Network Firewall domain allowlist
+  #
+  # Platform-required domains remain baseline-owned. Application domains are
+  # included only when Network Firewall is the effective egress mode.
+  # ---------------------------------------------------------------------------
+  platform_required_egress_domains = toset([
+    ".ubuntu.com",
+    ".security.ubuntu.com",
+    ".archive.ubuntu.com",
+    ".ntp.ubuntu.com",
+    ".ec2.archive.ubuntu.com",
+  ])
+
+  effective_firewall_domain_targets = (
+    local.effective_egress_mode == "network_firewall"
+    ? setunion(
+        local.platform_required_egress_domains,
+        var.application_egress_domains,
+      )
+    : toset([])
+  )
+
+  # ---------------------------------------------------------------------------
   # CloudWatch Logs retention
   #
   # If cloudwatch_retention_days is null, the deployment profile selects the
