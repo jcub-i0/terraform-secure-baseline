@@ -13,6 +13,41 @@ output "centralized_logs_bucket_name" {
   value       = module.storage.centralized_logs_bucket_name
 }
 
+output "rds_address" {
+  description = "DNS address of the RDS instance"
+  value       = module.storage.rds_address
+}
+
+output "rds_endpoint" {
+  description = "Connection endpoint of the RDS instance in address:port form"
+  value       = module.storage.rds_endpoint
+}
+
+output "rds_port" {
+  description = "Port on which the RDS instance accepts connections"
+  value       = module.storage.rds_port
+}
+
+output "rds_database_name" {
+  description = "Initial database name configured on the RDS instance"
+  value       = module.storage.rds_database_name
+}
+
+output "rds_master_username" {
+  description = "Master username configured on the RDS instance"
+  value       = module.storage.rds_master_username
+}
+
+output "rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master password"
+  value       = module.storage.rds_master_secret_arn
+}
+
+output "data_sg_id" {
+  description = "ID of the RDS/data security group"
+  value       = module.storage.data_sg_id
+}
+
 output "lambda_cmk_arn" {
   description = "ARN of the CMK used to encrypt Lambda functions"
   value       = module.security.lambda_cmk_arn
