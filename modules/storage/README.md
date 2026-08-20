@@ -571,6 +571,12 @@ This provides an additional Terraform-level guardrail against accidental deletio
 | `centralized_logs_bucket_arn` | ARN of the centralized logs S3 bucket |
 | `centralized_logs_bucket_id` | ID of the centralized logs S3 bucket |
 | `data_sg_id` | ID of the RDS/data security group |
+| `rds_address` | DNS address of the RDS instance |
+| `rds_endpoint` | RDS connection endpoint in `address:port` form |
+| `rds_port` | Port on which the RDS instance accepts connections |
+| `rds_database_name` | Initial database name configured on the RDS instance |
+| `rds_master_username` | Master username configured on the RDS instance |
+| `rds_master_secret_arn` | ARN of the Secrets Manager secret containing the RDS master password; does not expose the secret value |
 
 ---
 
