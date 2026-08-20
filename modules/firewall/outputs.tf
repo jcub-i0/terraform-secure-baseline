@@ -24,5 +24,5 @@ output "firewall_endpoint_ids_by_az" {
 
 output "effective_allowed_egress_domains" {
   description = "Effective domain targets configured on the Network Firewall stateful domain allowlist."
-  value = aws_networkfirewall_rule_group.stateful_domains.rule_group[0].rules_source[0].rules_source_list[0].targets
+  value       = aws_networkfirewall_rule_group.stateful_domains.rule_group[0].rules_source[0].rules_source_list[0].targets
 }
