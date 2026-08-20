@@ -93,7 +93,7 @@ The effective allowlist is the union of:
 - Module-owned platform-required domains for Ubuntu package repositories and
   secure OS patching.
 - Environment-approved application domains supplied through
-  `application_egress_domains`.
+  `allowed_egress_domains`.
 
 The application set defaults to empty. Callers do not repeat platform domains,
 and the module contains no customer-specific defaults. AWS Network Firewall
