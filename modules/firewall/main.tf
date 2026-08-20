@@ -22,13 +22,7 @@ resource "aws_networkfirewall_rule_group" "stateful_domains" {
       rules_source_list {
         generated_rules_type = "ALLOWLIST"
         target_types         = ["TLS_SNI", "HTTP_HOST"]
-        targets = [
-          ".ubuntu.com",
-          ".security.ubuntu.com",
-          ".archive.ubuntu.com",
-          ".ntp.ubuntu.com",
-          ".ec2.archive.ubuntu.com"
-        ]
+        targets              = var.allowed_egress_domains
       }
     }
 
