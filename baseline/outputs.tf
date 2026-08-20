@@ -83,6 +83,15 @@ output "effective_egress_mode" {
   value       = local.effective_egress_mode
 }
 
+output "effective_allowed_egress_domains" {
+  description = "Effective Network Firewall domain targets; empty when Network Firewall is not instantiated"
+  value = (
+    local.effective_egress_mode == "network_firewall"
+    ? module.firewall[0].effective_domain_targets
+    : toset([])
+  )
+}
+
 output "effective_cloudwatch_retention_days" {
   description = "Effective CloudWatch Logs retention period after resolving deployment_profile and cloudwatch_retention_days override"
   value       = local.effective_cloudwatch_retention_days
