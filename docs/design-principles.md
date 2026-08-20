@@ -371,6 +371,8 @@ The current endpoint set supports private access to services including:
 - AWS Config
 - SNS
 - EC2
+- Amazon ECR API (`ecr.api`)
+- Amazon ECR Docker Registry (`ecr.dkr`)
 - EventBridge
 - Security Hub
 - Lambda
@@ -381,6 +383,10 @@ Interface VPC Endpoints are deployed into dedicated private endpoint subnets.
 This keeps endpoint ENIs separate from compute, data, serverless, firewall, and public subnet tiers. The Terraform-managed `guardduty-data` endpoint is also created before workload EC2 so GuardDuty Runtime Monitoring can use the existing endpoint instead of introducing an endpoint outside the Terraform dependency graph.
 
 The S3 Gateway Endpoint is associated with the private route tables that need S3 access.
+
+Private ECR image pulls for the planned Fargate runtime use the `ecr.api` and
+`ecr.dkr` Interface Endpoints, while ECR image layers use the existing S3
+Gateway Endpoint.
 
 ---
 
