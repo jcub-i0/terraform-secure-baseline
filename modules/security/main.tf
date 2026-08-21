@@ -552,7 +552,7 @@ resource "aws_kms_key" "ecr" {
   description             = "CMK for ECR"
   enable_key_rotation     = true
   deletion_window_in_days = 30
-  policy = data.aws_iam_policy_document.ecr_kms.json
+  policy                  = data.aws_iam_policy_document.ecr_kms.json
 
   lifecycle {
     prevent_destroy = false # CHANGE THIS IN PROD
