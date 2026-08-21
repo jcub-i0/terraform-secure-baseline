@@ -575,6 +575,9 @@ data "aws_iam_policy_document" "ecr_kms" {
         "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
       ]
     }
+
+    actions = ["kms:*"]
+    resources = ["*"]
   }
 }
 
