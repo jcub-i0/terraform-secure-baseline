@@ -156,6 +156,7 @@ control-plane -> security-operations -> bootstrap-workloads -> workloads
 │   ├── automation
 │   ├── backup
 │   ├── compute
+│   ├── ecr
 │   ├── firewall
 │   ├── github_oidc
 │   ├── iam
