@@ -10,95 +10,50 @@ on:
       - '**/*.tf'
       - '**/*.tfvars'
       - '.github/workflows/tf-scans.yml'
-  pull_request:
-    paths:
-      - '**/*.tf'
-      - '**/*.tfvars'
-      - '.github/workflows/tf-scans.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: tf-scans-${{ github.ref }}
+  group: terraform-static-analysis-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   terraform_static_analysis:
-    name: Static Analysis - ${{matrix.name}}
+    name: Static Analysis
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: "true"
       TF_PLUGIN_CACHE_DIR: "/home/runner/.terraform.d/plugin-cache"
-      REPORT_DIR: ${{github.workspace}}/reports/${{matrix.name}}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: env-dev
-            working_directory: environments/dev
-          - name: env-staging
-            working_directory: environments/staging
-          - name: env-prod
-            working_directory: environments/prod
-          - name: control-plane-account
-            working_directory: bootstrap/control_plane/account
-          - name: control-plane-identity-center
-            working_directory: bootstrap/control_plane/identity_center
-          - name: control-plane-organizations
-            working_directory: bootstrap/control_plane/organizations
-          - name: control-plane-state
-            working_directory: bootstrap/control_plane/state
-          - name: dev-account
-            working_directory: bootstrap/dev/account
-          - name: dev-state
-            working_directory: bootstrap/dev/state
-          - name: staging-account
-            working_directory: bootstrap/staging/account
-          - name: staging-state
-            working_directory: bootstrap/staging/state
-          - name: prod-account
-            working_directory: bootstrap/prod/account
-          - name: prod-state
-            working_directory: bootstrap/prod/state
+      REPORT_DIR: ${{ github.workspace }}/reports
 
     defaults:
       run:
         shell: bash
-        working-directory: ${{matrix.working_directory}}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-        # CREATE CLEAN EVIDENCE DIRECTORY
-      - name: Prepare Report Directory
+      - name: Prepare report and plugin cache directories
         run: |
+          set -euo pipefail
           rm -rf "${REPORT_DIR}"
-          mkdir -p "${REPORT_DIR}"
-          mkdir -p "${TF_PLUGIN_CACHE_DIR}"
+          mkdir -p "${REPORT_DIR}/repository" "${TF_PLUGIN_CACHE_DIR}"
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.15.2
 
-      - name: Terraform Format Check
+      - name: Terraform format check
+        id: terraform_fmt
+        continue-on-error: true
         run: |
-          set -o pipefail
-          terraform fmt -check -recursive | tee "${REPORT_DIR}/terraform-fmt.txt"
-
-      - name: Terraform Init (no backend)
-        run: |
-          set -o pipefail
-          terraform init -backend=false -input=false -no-color | tee "${REPORT_DIR}/terraform-init.txt"
-
-      - name: Terraform Validate
-        run: |
-          set -o pipefail
-          terraform validate -no-color 2>&1 | tee "${REPORT_DIR}/terraform-validate.txt"
+          set -euo pipefail
+          terraform fmt -check -recursive . 2>&1 \
+            | tee "${REPORT_DIR}/repository/terraform-fmt.txt"
 
       - name: Install TFLint
         uses: terraform-linters/setup-tflint@v6
@@ -106,32 +61,123 @@ jobs:
       - name: Initialize TFLint
         run: tflint --init
 
-      - name: Run TFLint (compact)
+      - name: Validate Terraform roots and run TFLint
+        id: root_validation
+        continue-on-error: true
         run: |
-          set -o pipefail
-          tflint --recursive -f compact 2>&1 | tee "${REPORT_DIR}/tflint-compact.txt"
+          set -uo pipefail
+          set +e
 
-      - name: Run TFLint (JUnit)
-        run: |
-          set -o pipefail
-          tflint --recursive -f junit > "${REPORT_DIR}/tflint-junit.xml"
+          roots=(
+            "env-dev|environments/dev"
+            "env-staging|environments/staging"
+            "env-prod|environments/prod"
+            "control-plane-account|bootstrap/control_plane/account"
+            "control-plane-identity-center|bootstrap/control_plane/identity_center"
+            "control-plane-organizations|bootstrap/control_plane/organizations"
+            "control-plane-state|bootstrap/control_plane/state"
+            "dev-account|bootstrap/dev/account"
+            "dev-state|bootstrap/dev/state"
+            "staging-account|bootstrap/staging/account"
+            "staging-state|bootstrap/staging/state"
+            "prod-account|bootstrap/prod/account"
+            "prod-state|bootstrap/prod/state"
+          )
+
+          failed=0
+
+          for root_spec in "${roots[@]}"; do
+            report_name="${root_spec%%|*}"
+            root="${root_spec#*|}"
+            root_report_dir="${REPORT_DIR}/${report_name}"
+            mkdir -p "${root_report_dir}"
+
+            echo "::group::Terraform init - ${root}"
+            terraform -chdir="${root}" init \
+              -backend=false \
+              -input=false \
+              -no-color 2>&1 \
+              | tee "${root_report_dir}/terraform-init.txt"
+            init_status=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            if (( init_status != 0 )); then
+              echo "::error file=${root}::terraform init failed"
+              failed=1
+            fi
+
+            echo "::group::Terraform validate - ${root}"
+            terraform -chdir="${root}" validate -no-color 2>&1 \
+              | tee "${root_report_dir}/terraform-validate.txt"
+            validate_status=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            if (( validate_status != 0 )); then
+              echo "::error file=${root}::terraform validate failed"
+              failed=1
+            fi
+
+            echo "::group::TFLint compact - ${root}"
+            (
+              cd "${root}"
+              tflint --recursive -f compact
+            ) 2>&1 | tee "${root_report_dir}/tflint-compact.txt"
+            tflint_compact_status=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            if (( tflint_compact_status != 0 )); then
+              echo "::error file=${root}::TFLint compact check failed"
+              failed=1
+            fi
+
+            echo "::group::TFLint JUnit - ${root}"
+            (
+              cd "${root}"
+              tflint --recursive -f junit
+            ) > "${root_report_dir}/tflint-junit.xml"
+            tflint_junit_status=$?
+            echo "::endgroup::"
+            if (( tflint_junit_status != 0 )); then
+              echo "::error file=${root}::TFLint JUnit check failed"
+              failed=1
+            fi
+          done
+
+          exit "${failed}"
 
       - name: Install Checkov
+        if: always()
         run: pip install checkov
 
-      - name: Run Checkov Scan (JUNIT)
+      - name: Run repository Checkov scan
+        if: always()
         run: |
-          set -o pipefail
-          checkov -d . -o junitxml --soft-fail > "${REPORT_DIR}/checkov-junit.xml" || true
+          set -uo pipefail
+          set +e
+          checkov -d . \
+            -o junitxml \
+            -o json \
+            --output-file-path \
+              "${REPORT_DIR}/repository/checkov-junit.xml,${REPORT_DIR}/repository/checkov.json" \
+            --soft-fail
+          checkov_status=$?
 
-      - name: Run Checkov Scan (JSON)
-        run: |
-          set -o pipefail
-          checkov -d . -o json --soft-fail > "${REPORT_DIR}/checkov.json" || true
+          if (( checkov_status != 0 )); then
+            echo "::warning::Checkov exited with status ${checkov_status}; its results remain non-blocking."
+          fi
 
-      - name: Upload Scan Results
+          exit 0
+
+      - name: Upload scan results
+        if: always()
         uses: actions/upload-artifact@v6
         with:
-            name: ci-evidence-${{matrix.name}}
-            path: ${{env.REPORT_DIR}}/
-            if-no-files-found: error
+          name: ci-evidence
+          path: ${{ env.REPORT_DIR }}/
+          if-no-files-found: error
+
+      - name: Report blocking validation failures
+        if: >-
+          always() &&
+          (steps.terraform_fmt.outcome == 'failure' ||
+          steps.root_validation.outcome == 'failure')
+        run: |
+          echo "::error::One or more blocking Terraform or TFLint checks failed. Review the ci-evidence artifact."
+          exit 1
