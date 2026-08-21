@@ -563,6 +563,21 @@ resource "aws_kms_alias" "ecr" {
   target_key_id = aws_kms_key.ecr.arn
 }
 
+### ECR KMS KEY POLICY DOCUMENT
+data "aws_iam_policy_document" "ecr_kms" {
+  statement {
+    sid = "EnableIAMPermissions"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
+      ]
+    }
+  }
+}
+
 # CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
