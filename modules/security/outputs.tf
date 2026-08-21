@@ -43,7 +43,10 @@ output "ecr_cmk_arn" {
   value = aws_kms_key.ecr.arn
 }
 
-
+output "ecr_cmk_alias_arn" {
+  description = "ARN of the CMK used for ECR encryption's alias"
+  value = aws_kms_alias.ecr.arn
+}
 
 ##################################
 # TAMPER DETECTION MODULE OUTPUTS
