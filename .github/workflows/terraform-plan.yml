@@ -16,6 +16,11 @@ on:
           - control-plane-organizations
           - security-operations-security-services
   pull_request:
+    types:
+      - opened
+      - ready_for_review
+      - reopened
+      - synchronize
   push:
     branches:
       - main
@@ -26,6 +31,7 @@ permissions:
 
 jobs:
   terraform-plan:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
 
     strategy:
@@ -52,8 +58,8 @@ jobs:
             working_directory: ./bootstrap/security_operations/security_services
 
     concurrency:
-      group: terraform-plan-${{ github.head_ref || github.ref_name }}-${{ matrix.environment }}
-      cancel-in-progress: false
+      group: terraform-plan-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}-${{ matrix.environment }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
     environment: ${{ matrix.github_environment }}
 
