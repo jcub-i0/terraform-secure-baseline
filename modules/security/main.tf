@@ -545,6 +545,22 @@ resource "aws_kms_alias" "backup_vault" {
   target_key_id = aws_kms_key.backup_vault.arn
 }
 
+## ECR KMS KEY
+resource "aws_kms_key" "ecr" {
+  description             = "CMK for ECR"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  lifecycle {
+    prevent_destroy = false # CHANGE THIS IN PROD
+  }
+}
+
+resource "aws_kms_alias" "ecr" {
+  name = "alias/${var.name_prefix}/ecr-cmk"
+  target_key_id = aws_kms_key.ecr.arn
+}
+
 # CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"
