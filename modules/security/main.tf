@@ -557,7 +557,7 @@ resource "aws_kms_key" "ecr" {
 }
 
 resource "aws_kms_alias" "ecr" {
-  name = "alias/${var.name_prefix}/ecr-cmk"
+  name          = "alias/${var.name_prefix}/ecr-cmk"
   target_key_id = aws_kms_key.ecr.arn
 }
 
