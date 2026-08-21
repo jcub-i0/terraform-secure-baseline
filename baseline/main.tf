@@ -282,6 +282,15 @@ module "security_dashboard" {
   ]
 }
 
+module "ecr" {
+  source = "../modules/ecr"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+
+  kms_key_arn = module.security.ecr_cmk_arn
+}
+
 module "backup" {
   source = "../modules/backup"
 
