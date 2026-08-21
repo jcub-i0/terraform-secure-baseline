@@ -29,7 +29,7 @@ variable "kms_key_arn" {
 }
 
 variable "repositories" {
-  type = set(string)
-  description = "Private ECR repository suffixes"
-  default = []
+  description = "Private ECR repositories keyed by repository name."
+  type        = map(object({}))
+  default     = {}
 }
