@@ -69,6 +69,8 @@ Creates Interface VPC Endpoints for the following AWS services:
 | `sns` | SNS API access |
 | `sqs` | SQS API access |
 | `ec2` | EC2 API access |
+| `ecr.api` | Amazon ECR API access |
+| `ecr.dkr` | Amazon ECR Docker Registry access |
 | `events` | EventBridge API access |
 | `securityhub` | Security Hub API access |
 | `lambda` | Lambda API access |
@@ -83,6 +85,10 @@ resource "aws_vpc_endpoint" "interface"
 The module uses `for_each` over the endpoint service list, so each service receives its own Interface Endpoint.
 
 Private DNS is enabled for all Interface Endpoints.
+
+Private ECR image pulls for the planned Fargate runtime use the `ecr.api` and
+`ecr.dkr` Interface Endpoints. Image layers are retrieved through the existing
+S3 Gateway Endpoint.
 
 ---
 
@@ -375,7 +381,7 @@ aws ec2 describe-vpc-endpoints \
 Expected:
 
 - The S3 Gateway Endpoint exists.
-- Interface Endpoints exist for the configured AWS services, including `sqs` and `guardduty-data`.
+- Interface Endpoints exist for the configured AWS services, including `sqs`, `ecr.api`, `ecr.dkr`, and `guardduty-data`.
 - Endpoint state is `available`.
 - Interface Endpoints have private DNS enabled.
 - Terraform-managed Interface Endpoints are placed only in the dedicated endpoint private subnets.

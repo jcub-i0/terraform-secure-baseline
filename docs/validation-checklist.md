@@ -521,7 +521,7 @@ These scripts validate:
 
 - AWS account identity and expected account ID
 - Terraform outputs and effective environment settings
-- VPC, subnets, route tables, NAT Gateway, and Network Firewall expectations
+- VPC, subnets, route tables, NAT Gateway, and Network Firewall expectations, including an exact order-independent comparison of the live stateful domain rule-group targets with Terraform output `effective_allowed_egress_domains`. Terraform owns allowlist composition; `validate-networking.sh` does not reconstruct it. The effective set must be empty when Network Firewall is not instantiated.
 - VPC endpoint placement, state, route table associations, and endpoint security group paths
 - CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, and alarms
 - workload-local AWS Config, Inspector, and AWS Backup state plus GuardDuty, Security Hub CSPM, and Security Hub V2 ownership/administrator relationships based on effective Terraform outputs
@@ -1309,12 +1309,18 @@ logs
 kms
 secretsmanager
 ec2
+ecr.api
+ecr.dkr
 events
 sns
 securityhub
 lambda
 s3
 ```
+
+For the planned Fargate runtime, private ECR pulls use the `ecr.api` and
+`ecr.dkr` Interface Endpoints, while image layers use the existing S3 Gateway
+Endpoint.
 
 ---
 

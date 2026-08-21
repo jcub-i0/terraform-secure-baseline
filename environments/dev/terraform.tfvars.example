@@ -8,6 +8,10 @@ primary_region = "us-east-1"
 
 deployment_profile = "development"
 
+# Add only explicitly reviewed application domains. Platform-required Ubuntu
+# domains remain module-owned and must not be repeated here.
+allowed_egress_domains = []
+
 secops_emails = [
   "jeffrey.williams@gmail.com"
 ]

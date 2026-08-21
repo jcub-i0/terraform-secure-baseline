@@ -432,12 +432,18 @@ The current Interface Endpoint set includes:
 - AWS Config
 - SNS
 - EC2
+- Amazon ECR API (`ecr.api`)
+- Amazon ECR Docker Registry (`ecr.dkr`)
 - EventBridge
 - Security Hub
 - Lambda
 - GuardDuty Runtime Monitoring (`guardduty-data`)
 
 Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
+
+Private ECR image pulls for the planned Fargate runtime use the `ecr.api` and
+`ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway
+Endpoint.
 
 The `guardduty-data` endpoint is intentionally Terraform-managed and participates in the compute readiness dependency so Runtime Monitoring does not need to create an unmanaged endpoint after EC2 appears. This also keeps endpoint placement and destroy ordering inside the Terraform graph.
 

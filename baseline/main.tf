@@ -255,6 +255,7 @@ module "firewall" {
   vpc_id      = module.networking.vpc_id
 
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+  allowed_egress_domains    = local.effective_allowed_egress_domains
 
   firewall_private_subnet_ids_map = module.networking.firewall_private_subnet_ids_map
   logs_cmk_arn                    = module.security.logs_cmk_arn
@@ -279,6 +280,15 @@ module "security_dashboard" {
   depends_on = [
     module.security
   ]
+}
+
+module "ecr" {
+  source = "../modules/ecr"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+
+  kms_key_arn = module.security.ecr_cmk_arn
 }
 
 module "backup" {

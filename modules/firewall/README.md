@@ -88,7 +88,17 @@ The rule group uses a **generated allowlist** based on:
 - TLS SNI
 - HTTP host headers
 
-Example allowed domains include Ubuntu package repositories required for secure OS patching.
+The effective allowlist is the union of:
+
+- Module-owned platform-required domains for Ubuntu package repositories and
+  secure OS patching.
+- Environment-approved application domains supplied through
+  `allowed_egress_domains`.
+
+The application set defaults to empty. Callers do not repeat platform domains,
+and the module contains no customer-specific defaults. AWS Network Firewall
+domain-list syntax is preserved: an exact name matches that name, while an
+initial dot matches the name and its subdomains.
 
 Example:
 ```text
@@ -96,7 +106,10 @@ Example:
 .security.ubuntu.com
 .ubuntu.com
 ```
-This allows necessary system updates while preventing access to arbitrary external domains.
+This allows necessary system updates and explicitly reviewed application
+dependencies while preventing access to arbitrary external domains. The input
+only changes the Network Firewall allowlist when that firewall is instantiated;
+it does not alter routing or create an internet path for `vpc_endpoints_only`.
 
 ---
 
@@ -239,7 +252,9 @@ This module prioritizes:
 ✔ **Minimal operational complexity**
 ✔ **Strong outbound control without breaking workloads**
 
-The domain allowlist begins with only the **minimum required domains for system updates** and can be extended as necessary.
+The domain allowlist always retains the **minimum required domains for system
+updates**. Environment owners can add application domains explicitly, with an
+empty default preserving the platform-only behavior.
 
 ---
 

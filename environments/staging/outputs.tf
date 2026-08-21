@@ -13,6 +13,41 @@ output "centralized_logs_bucket_name" {
   value       = module.baseline.centralized_logs_bucket_name
 }
 
+output "rds_address" {
+  description = "DNS address of the RDS instance"
+  value       = module.baseline.rds_address
+}
+
+output "rds_endpoint" {
+  description = "Connection endpoint of the RDS instance in address:port form"
+  value       = module.baseline.rds_endpoint
+}
+
+output "rds_port" {
+  description = "Port on which the RDS instance accepts connections"
+  value       = module.baseline.rds_port
+}
+
+output "rds_database_name" {
+  description = "Initial database name configured on the RDS instance"
+  value       = module.baseline.rds_database_name
+}
+
+output "rds_master_username" {
+  description = "Master username configured on the RDS instance"
+  value       = module.baseline.rds_master_username
+}
+
+output "rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master password"
+  value       = module.baseline.rds_master_secret_arn
+}
+
+output "data_sg_id" {
+  description = "ID of the RDS/data security group"
+  value       = module.baseline.data_sg_id
+}
+
 output "lambda_cmk_arn" {
   description = "ARN of the 'staging' env's CMK used to encrypt Lambda functions"
   value       = module.baseline.lambda_cmk_arn
@@ -46,6 +81,11 @@ output "egress_mode" {
 output "effective_egress_mode" {
   description = "Effective egress mode after resolving deployment_profile and egress_mode"
   value       = module.baseline.effective_egress_mode
+}
+
+output "effective_allowed_egress_domains" {
+  description = "Effective Network Firewall domain targets; empty when Network Firewall is not instantiated"
+  value       = module.baseline.effective_allowed_egress_domains
 }
 
 output "effective_cloudwatch_retention_days" {

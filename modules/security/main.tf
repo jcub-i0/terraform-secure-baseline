@@ -88,6 +88,8 @@ resource "aws_securityhub_product_subscription" "inspector" {
 }
 
 # KMS
+data "aws_partition" "current" {}
+
 ## KMS KEY FOR LOGS
 resource "aws_kms_key" "logs" {
   description             = "CMK for centralized logging (CloudTrail, Config, Flow Logs)"
@@ -543,6 +545,41 @@ resource "aws_kms_key" "backup_vault" {
 resource "aws_kms_alias" "backup_vault" {
   name          = "alias/${var.name_prefix}/backup-cmk"
   target_key_id = aws_kms_key.backup_vault.arn
+}
+
+## ECR KMS KEY
+resource "aws_kms_key" "ecr" {
+  description             = "CMK for ECR"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  policy                  = data.aws_iam_policy_document.ecr_kms.json
+
+  lifecycle {
+    prevent_destroy = false # CHANGE THIS IN PROD
+  }
+}
+
+resource "aws_kms_alias" "ecr" {
+  name          = "alias/${var.name_prefix}/ecr-cmk"
+  target_key_id = aws_kms_key.ecr.arn
+}
+
+### ECR KMS KEY POLICY DOCUMENT
+data "aws_iam_policy_document" "ecr_kms" {
+  statement {
+    sid    = "EnableIAMPermissions"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
+      ]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
 }
 
 # CONFIG BASELINE MODULE

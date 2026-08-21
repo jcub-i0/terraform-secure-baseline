@@ -16,6 +16,8 @@ locals {
     "sns",
     "sqs",
     "ec2",
+    "ecr.api",
+    "ecr.dkr",
     "events",
     "securityhub",
     "lambda",
