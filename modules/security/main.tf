@@ -88,6 +88,8 @@ resource "aws_securityhub_product_subscription" "inspector" {
 }
 
 # KMS
+data "aws_partition" "current" {}
+
 ## KMS KEY FOR LOGS
 resource "aws_kms_key" "logs" {
   description             = "CMK for centralized logging (CloudTrail, Config, Flow Logs)"
