@@ -11,7 +11,7 @@ resource "aws_ecr_repository" "repositories" {
   }
 
   tags = {
-    Name        = each.value
+    Name        = "${var.name_prefix}-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
