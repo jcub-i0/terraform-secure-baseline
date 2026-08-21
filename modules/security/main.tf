@@ -566,7 +566,7 @@ resource "aws_kms_alias" "ecr" {
 ### ECR KMS KEY POLICY DOCUMENT
 data "aws_iam_policy_document" "ecr_kms" {
   statement {
-    sid = "EnableIAMPermissions"
+    sid    = "EnableIAMPermissions"
     effect = "Allow"
 
     principals {
@@ -576,7 +576,7 @@ data "aws_iam_policy_document" "ecr_kms" {
       ]
     }
 
-    actions = ["kms:*"]
+    actions   = ["kms:*"]
     resources = ["*"]
   }
 }
