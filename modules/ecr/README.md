@@ -53,7 +53,11 @@ The module intentionally does not expose configuration for force deletion, tag m
 
 Every repository is encrypted with the required customer-managed KMS key from `kms_key_arn`. ECR encryption configuration is immutable after repository creation, so repositories use KMS encryption from their first creation.
 
-This module consumes the key but does not create or manage it. B7 integration will add an ECR-specific customer-managed key under `modules/security` and pass its ARN into this module.
+This module consumes the key but does not create or manage it. The dedicated
+ECR customer-managed key and alias are owned by `modules/security` as
+`aws_kms_key.ecr` and `aws_kms_alias.ecr`. `baseline/main.tf` passes
+`module.security.ecr_cmk_arn` to this module. ECR must receive the key ARN, not
+the alias ARN.
 
 ## Tag Immutability
 
@@ -83,21 +87,22 @@ Repository force deletion and lifecycle cleanup are separate concerns. The 30-da
 
 The module configures neither repository basic scanning nor registry enhanced scanning. Amazon Inspector ownership remains in `modules/security`.
 
-B7 integration must ensure that `ECR` is included in the effective Inspector resource types whenever ECR repositories are enabled. This module intentionally does not create `image_scanning_configuration`, `aws_ecr_registry_scanning_configuration`, or any other parallel scanning ownership.
+Future repository enablement must ensure that `ECR` is included in the effective Inspector resource types whenever ECR repositories are enabled. This module intentionally does not create `image_scanning_configuration`, `aws_ecr_registry_scanning_configuration`, or any other parallel scanning ownership.
 
 ## Repository Policies and IAM
 
 The module does not create an `aws_ecr_repository_policy`. Repositories are workload-local, and same-account image pull and publishing permissions belong to later IAM and release integration. No cross-account image model is currently approved.
 
-## Current Integration Note
+## Current Integration Status
 
-The current repository resource declares the standard `Name`, `Environment`,
-and `Terraform` tags. Before baseline integration, the `Name` tag expression in
-`main.tf` must be reconciled with the current `map(object({}))` input: it is
-currently assigned from the empty repository object rather than from the
-rendered repository name. AWS resource tags require string values. This README
-does not redefine that Terraform behavior, and B7 must not integrate the module
-until the expression is corrected and validated.
+The repository resource declares the standard `Name`, `Environment`, and
+`Terraform` tags. Its `Name` tag is the rendered repository name:
+`${var.name_prefix}-${each.key}`.
+
+`baseline/main.tf` instantiates this module and supplies the ECR CMK key ARN.
+It does not currently pass `repositories`, so the module receives its `{}`
+default and creates no repositories. The workload environment roots do not yet
+expose repository configuration or repository outputs.
 
 ## Outputs
 
@@ -127,6 +132,9 @@ It does not own:
 - Inspector or registry-level scanning configuration
 - GuardDuty or containment
 - KMS key creation
-- Baseline or workload-environment integration
+- Workload-environment repository configuration or output propagation
 
-B7 will provide KMS, Inspector, baseline, and environment integration. B8 will add live ECR validation within the existing workload baseline validation layer.
+The security-owned KMS key and baseline module call are present. Repository
+configuration propagation, effective Inspector ECR activation, and live ECR
+validation remain future integration work within the existing workload
+baseline validation layer.
