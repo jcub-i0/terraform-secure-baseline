@@ -124,4 +124,9 @@ locals {
     ? var.inspector_enabled
     : !local.is_minimal_profile
   )
+
+  effective_inspector_resource_types = distinct(concat(
+    var.inspector_resource_types,
+    length(var.repositories) > 0 ? ["ECR"] : [],
+  ))
 }
