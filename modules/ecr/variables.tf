@@ -47,10 +47,10 @@ variable "ecs_security_policy_services" {
   description = "ECS service security-policy inputs keyed by service name"
 
   type = map(object({
-    task_sg_id = string
+    task_sg_id     = string
     container_port = number
 
-    alb_sg_id = optional(string)
+    alb_sg_id       = optional(string)
     database_access = optional(bool, false)
   }))
 
