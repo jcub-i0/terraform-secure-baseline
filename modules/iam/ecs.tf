@@ -52,6 +52,8 @@ resource "aws_iam_role" "ecs_task_roles" {
 }
 
 data "aws_iam_policy_document" "ecs_task_execution_policies" {
+  for_each = var.ecs_iam_services
+
   statement {
     sid       = "AllowECRAuthorization"
     effect    = "Allow"
