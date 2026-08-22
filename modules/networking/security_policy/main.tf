@@ -211,3 +211,19 @@ resource "aws_security_group_rule" "db_ingress_from_ecs_tasks" {
   source_security_group_id = each.value.task_sg_id
   description = "ECS tasks to DB"
 }
+
+resource "aws_security_group_rule" "ecs_tasks_ingress_from_alb" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if service.alb_sg_id != null
+  }
+
+  type = "ingress"
+  security_group_id = each.value.task_sg_id
+  from_port = each.value.container_port
+  to_port = each.value.container_port
+  protocol = "tcp"
+  source_security_group_id = each.value.alb_sg_id
+  description = "ALB to ECS tasks"
+}
