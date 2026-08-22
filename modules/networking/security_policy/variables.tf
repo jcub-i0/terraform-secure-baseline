@@ -30,7 +30,6 @@ variable "quarantine_sg_id" {
   type = string
 }
 
-
 variable "ecs_security_policy_services" {
   description = "ECS service security-policy inputs keyed by service name"
 
