@@ -179,3 +179,19 @@ resource "aws_security_group_rule" "ecs_tasks_egress_to_internet_https" {
   cidr_blocks       = ["0.0.0.0/0"]
   description       = "ECS task HTTPS egress through configured egress path"
 }
+
+resource "aws_security_group_rule" "ecs_tasks_egress_to_db" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if service.database_access
+  }
+
+  type = "egress"
+  security_group_id = each.value.task_sg_id
+  from_port = 443
+  to_port = 443
+  protocol = "tcp"
+  source_security_group_id = var.data_sg_id
+  description = "ECS tasks to DB"
+}
