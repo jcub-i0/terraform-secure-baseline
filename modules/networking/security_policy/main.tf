@@ -203,13 +203,13 @@ resource "aws_security_group_rule" "db_ingress_from_ecs_tasks" {
     if service.database_access
   }
 
-  type = "ingress"
-  security_group_id = var.data_sg_id
-  from_port = var.db_port
-  to_port = var.db_port
-  protocol = "tcp"
+  type                     = "ingress"
+  security_group_id        = var.data_sg_id
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
   source_security_group_id = each.value.task_sg_id
-  description = "ECS tasks to DB"
+  description              = "ECS tasks to DB"
 }
 
 resource "aws_security_group_rule" "ecs_tasks_ingress_from_alb" {
@@ -219,13 +219,13 @@ resource "aws_security_group_rule" "ecs_tasks_ingress_from_alb" {
     if service.alb_sg_id != null
   }
 
-  type = "ingress"
-  security_group_id = each.value.task_sg_id
-  from_port = each.value.container_port
-  to_port = each.value.container_port
-  protocol = "tcp"
+  type                     = "ingress"
+  security_group_id        = each.value.task_sg_id
+  from_port                = each.value.container_port
+  to_port                  = each.value.container_port
+  protocol                 = "tcp"
   source_security_group_id = each.value.alb_sg_id
-  description = "ALB to ECS tasks"
+  description              = "ALB to ECS tasks"
 }
 
 resource "aws_security_group_rule" "alb_egress_to_ecs_tasks" {
@@ -235,11 +235,11 @@ resource "aws_security_group_rule" "alb_egress_to_ecs_tasks" {
     if service.alb_sg_id != null
   }
 
-  type = "egress"
-  security_group_id = each.value.alb_sg_id
-  from_port = each.value.container_port
-  to_port = each.value.container_port
-  protocol = "tcp"
+  type                     = "egress"
+  security_group_id        = each.value.alb_sg_id
+  from_port                = each.value.container_port
+  to_port                  = each.value.container_port
+  protocol                 = "tcp"
   source_security_group_id = each.value.task_sg_id
-  description = "ALB to ECS tasks"
+  description              = "ALB to ECS tasks"
 }
