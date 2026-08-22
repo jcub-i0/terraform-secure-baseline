@@ -289,7 +289,7 @@ module "ecr" {
   name_prefix = local.name_prefix
   environment = var.environment
 
-  kms_key_arn = module.security.ecr_cmk_arn
+  kms_key_arn  = module.security.ecr_cmk_arn
   repositories = var.repositories
 }
 
