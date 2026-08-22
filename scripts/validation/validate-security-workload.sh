@@ -359,6 +359,7 @@ INSPECTOR_EC2_STATUS="unknown"
 INSPECTOR_ECR_STATUS="unknown"
 INSPECTOR_LAMBDA_STATUS="unknown"
 INSPECTOR_LAMBDA_CODE_STATUS="unknown"
+INSPECTOR_CODE_REPOSITORY_STATUS="unknown"
 
 if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
   if [[ "$EFFECTIVE_INSPECTOR_RESOURCE_TYPE_COUNT" -eq 0 ]]; then
@@ -397,6 +398,11 @@ if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
       jq -r '.accounts[0].resourceState.lambdaCode.status // "unknown"'
   )"
 
+  INSPECTOR_CODE_REPOSITORY_STATUS="$(
+    echo "$INSPECTOR_ACCOUNT_STATUS_JSON" |
+      jq -r '.accounts[0].resourceState.codeRepository.status // "unknown"'
+  )"
+
   if [[ "$INSPECTOR_ACCOUNT_STATUS" == "ENABLED" ]]; then
     success "Inspector account status is ENABLED"
   else
@@ -424,7 +430,8 @@ if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
       fi
     else
       if [[ "$actual_status" == "ENABLED" ]]; then
-        warn "Inspector ${resource_type} scanning is ENABLED but is not listed in effective_inspector_resource_types"
+        echo "$INSPECTOR_ACCOUNT_STATUS_JSON" | jq .
+        fail "Inspector ${resource_type} scanning is ENABLED but is not listed in effective_inspector_resource_types"
       else
         success "Inspector ${resource_type} scanning is not enabled, as expected"
       fi
@@ -435,6 +442,7 @@ if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
   validate_inspector_resource_status "ECR" "$INSPECTOR_ECR_STATUS"
   validate_inspector_resource_status "LAMBDA" "$INSPECTOR_LAMBDA_STATUS"
   validate_inspector_resource_status "LAMBDA_CODE" "$INSPECTOR_LAMBDA_CODE_STATUS"
+  validate_inspector_resource_status "CODE_REPOSITORY" "$INSPECTOR_CODE_REPOSITORY_STATUS"
 
   info "Inspector expected resource types: $EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON"
 else
@@ -605,6 +613,7 @@ Inspector EC2 status:               ${INSPECTOR_EC2_STATUS}
 Inspector ECR status:               ${INSPECTOR_ECR_STATUS}
 Inspector Lambda status:            ${INSPECTOR_LAMBDA_STATUS}
 Inspector Lambda code status:       ${INSPECTOR_LAMBDA_CODE_STATUS}
+Inspector code repository status:   ${INSPECTOR_CODE_REPOSITORY_STATUS}
 
 AWS Config recorder count:          ${CONFIG_RECORDER_COUNT}
 AWS Config delivery channel count:  ${CONFIG_DELIVERY_CHANNEL_COUNT}
