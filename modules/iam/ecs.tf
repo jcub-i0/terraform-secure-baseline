@@ -53,36 +53,36 @@ resource "aws_iam_role" "ecs_task_roles" {
 
 data "aws_iam_policy_document" "ecs_task_execution_policies" {
   statement {
-    sid = "AllowECRAuthorization"
-    effect = "Allow"
-    actions = ["ecr:GetAuthorizationToken"]
+    sid       = "AllowECRAuthorization"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
     resources = ["*"]
   }
 
   statement {
-    sid = "AllowECRImagePulls"
+    sid    = "AllowECRImagePulls"
     effect = "Allow"
 
     actions = [
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
     ]
 
     resources = each.value.ecr_repository_arns
   }
 
   statement {
-    sid = "AllowCloudWatchLogWrites"
+    sid    = "AllowCloudWatchLogWrites"
     effect = "Allow"
 
     actions = [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
     ]
 
     resources = [
-        for arn in each.value.log_group_arns : "${arn}:*"
+      for arn in each.value.log_group_arns : "${arn}:*"
     ]
   }
 }
