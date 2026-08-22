@@ -74,3 +74,14 @@ output "ecs_task_execution_roles" {
     }
   }
 }
+
+output "ecs_task_roles" {
+  description = "ECS application task roles keyed by service name"
+
+  value = {
+    for service_name, role in aws_iam_role.ecs_task_roles : service_name => {
+      arn = role.arn
+      name = role.name
+    }
+  }
+}
