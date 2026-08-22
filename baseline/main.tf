@@ -44,6 +44,7 @@ module "security_policy" {
   interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
   db_port                    = var.db_port
   quarantine_sg_id           = module.compute.quarantine_sg_id
+  s3_prefix_list_id = module.vpc_endpoints.s3_prefix_list_id
 }
 
 module "compute" {
