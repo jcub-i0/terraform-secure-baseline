@@ -171,11 +171,11 @@ resource "aws_security_group_rule" "ecs_tasks_egress_to_internet_https" {
     if var.egress_mode != "vpc_endpoints_only"
   }
 
-  type = "egress"
+  type              = "egress"
   security_group_id = each.value.task_sg_id
-  from_port = 443
-  to_port = 443
-  protocol = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-  description = "ECS task HTTPS egress through configured egress path"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "ECS task HTTPS egress through configured egress path"
 }
