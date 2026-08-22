@@ -56,3 +56,18 @@ variable "ecs_security_policy_services" {
 
   default = {}
 }
+
+variable "s3_prefix_list_id" {
+  description = "AWS-managed S3 prefix list ID used for private S3 access"
+  type = string
+  default = null
+
+  validation {
+    condition = (
+      length(var.ecs_security_policy_services) == 0 ||
+      var.s3_prefix_list_id != null
+    )
+
+    error_message = "s3_prefix_list_id must be provided when ECS security-policy services are configured."
+  }
+}
