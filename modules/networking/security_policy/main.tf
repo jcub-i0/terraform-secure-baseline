@@ -195,3 +195,19 @@ resource "aws_security_group_rule" "ecs_tasks_egress_to_db" {
   source_security_group_id = var.data_sg_id
   description              = "ECS tasks to DB"
 }
+
+resource "aws_security_group_rule" "db_ingress_from_ecs_tasks" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if service.database_access
+  }
+
+  type = "ingress"
+  security_group_id = var.data_sg_id
+  from_port = var.db_port
+  to_port = var.db_port
+  protocol = "tcp"
+  source_security_group_id = each.value.task_sg_id
+  description = "ECS tasks to DB"
+}
