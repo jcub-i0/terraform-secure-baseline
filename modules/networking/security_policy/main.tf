@@ -151,3 +151,15 @@ resource "aws_security_group_rule" "endpoints_ingress_from_ecs_tasks" {
   source_security_group_id = each.value.task_sg_id
   description              = "ECS tasks to Interface VPC Endpoints over HTTPS"
 }
+
+resource "aws_security_group_rule" "ecs_tasks_egress_to_s3" {
+  for_each = var.ecs_security_policy_services
+
+  type = "egress"
+  security_group_id = each.value.task_sg_id
+  from_port = 443
+  to_port = 443
+  protocol = "tcp"
+  prefix_list_ids = [var.s3_prefix_list_id]
+  description = "ECS tasks to S3 over HTTPS"
+}
