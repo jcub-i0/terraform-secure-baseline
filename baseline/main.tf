@@ -290,6 +290,7 @@ module "ecr" {
   environment = var.environment
 
   kms_key_arn = module.security.ecr_cmk_arn
+  repositories = var.repositories
 }
 
 module "backup" {
