@@ -79,11 +79,11 @@ variable "ecs_iam_services" {
 
   type = map(object({
     ecr_repository_arns = set(string)
-    log_group_arns = set(string)
+    log_group_arns      = set(string)
 
-    execution_secret_arns = optional(set(string), [])
+    execution_secret_arns        = optional(set(string), [])
     execution_ssm_parameter_arms = optional(set(string), [])
-    execution_kms_key_arns = optional(set(string), [])
+    execution_kms_key_arns       = optional(set(string), [])
   }))
 
   default = {}
