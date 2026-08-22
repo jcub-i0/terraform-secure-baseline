@@ -90,7 +90,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
 resource "aws_iam_role_policy" "ecs_task_exeuction_policies" {
   for_each = var.ecs_iam_services
 
-  name = "${var.name_prefix}-${each.key}-ecs-execution"
-  role = aws_iam_role.ecs_task_execution_roles[each.key].id
+  name   = "${var.name_prefix}-${each.key}-ecs-execution"
+  role   = aws_iam_role.ecs_task_execution_roles[each.key].id
   policy = data.aws_iam_policy_document.ecs_task_execution_policies[each.key].json
 }
