@@ -46,6 +46,7 @@ VALIDATION_SCRIPTS=(
   "validate-env.sh"
   "validate-networking.sh"
   "validate-vpc-endpoints.sh"
+  "validate-ecr.sh"
   "validate-logging.sh"
   "validate-security-workload.sh"
   "validate-kms.sh"
