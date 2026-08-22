@@ -47,9 +47,8 @@ variable "ecs_security_policy_services" {
   description = "ECS service security-policy inputs keyed by service name"
 
   type = map(object({
-    task_sg_id     = string
-    container_port = number
-
+    task_sg_id      = string
+    container_port  = number
     alb_sg_id       = optional(string)
     database_access = optional(bool, false)
   }))
@@ -59,8 +58,8 @@ variable "ecs_security_policy_services" {
 
 variable "s3_prefix_list_id" {
   description = "AWS-managed S3 prefix list ID used for private S3 access"
-  type = string
-  default = null
+  type        = string
+  default     = null
 
   validation {
     condition = (
