@@ -69,7 +69,7 @@ output "ecs_task_execution_roles" {
 
   value = {
     for service_name, role in aws_iam_role.ecs_task_execution_roles : service_name => {
-      arn = role.arn
+      arn  = role.arn
       name = role.name
     }
   }
@@ -80,7 +80,7 @@ output "ecs_task_roles" {
 
   value = {
     for service_name, role in aws_iam_role.ecs_task_roles : service_name => {
-      arn = role.arn
+      arn  = role.arn
       name = role.name
     }
   }
