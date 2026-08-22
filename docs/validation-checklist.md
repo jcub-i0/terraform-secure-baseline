@@ -484,6 +484,7 @@ Pass `NAME_PREFIX` explicitly only when the deployed resource prefix does not fo
 validate-env.sh
 validate-networking.sh
 validate-vpc-endpoints.sh
+validate-ecr.sh
 validate-logging.sh
 validate-security-workload.sh
 validate-kms.sh
@@ -504,6 +505,7 @@ Examples:
 ```bash
 ./scripts/validation/validate-networking.sh dev
 ./scripts/validation/validate-vpc-endpoints.sh dev
+./scripts/validation/validate-ecr.sh dev
 ./scripts/validation/validate-logging.sh dev
 ./scripts/validation/validate-security-workload.sh dev
 ./scripts/validation/validate-kms.sh dev
@@ -522,7 +524,8 @@ These scripts validate:
 - AWS account identity and expected account ID
 - Terraform outputs and effective environment settings
 - VPC, subnets, route tables, NAT Gateway, and Network Firewall expectations, including an exact order-independent comparison of the live stateful domain rule-group targets with Terraform output `effective_allowed_egress_domains`. Terraform owns allowlist composition; `validate-networking.sh` does not reconstruct it. The effective set must be empty when Network Firewall is not instantiated.
-- VPC endpoint placement, state, route table associations, and endpoint security group paths
+- canonical VPC endpoint inventory, state, VPC, private DNS, exact endpoint-private subnet and Interface Endpoint SG placement, and exact S3 Gateway Endpoint coverage of endpoint, compute, and serverless private route tables
+- ECR repository identity, immutable tags, KMS encryption presence, and exact 30-day untagged-only lifecycle cleanup, using `ecr_repositories` as the inventory
 - CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, and alarms
 - workload-local AWS Config, Inspector, and AWS Backup state plus GuardDuty, Security Hub CSPM, and Security Hub V2 ownership/administrator relationships based on effective Terraform outputs
 - KMS aliases, CMKs, key state, key manager, and rotation status
@@ -538,8 +541,8 @@ These scripts validate:
 A successful run should end with:
 
 ```text
-Validation scripts passed:  14/14
-Validation scripts failed:  0/14
+Validation scripts passed:  15/15
+Validation scripts failed:  0/15
 ```
 
 ## Automated Control-Plane Validation
@@ -1322,6 +1325,30 @@ For the planned Fargate runtime, private ECR pulls use the `ecr.api` and
 `ecr.dkr` Interface Endpoints, while image layers use the existing S3 Gateway
 Endpoint.
 
+The automated validator treats the Interface Endpoint inventory as
+platform-owned and non-overridable. It requires exact endpoint-private subnet
+and shared Interface Endpoint SG placement for every Interface Endpoint,
+requires private DNS, and requires the S3 Gateway Endpoint route-table set to
+equal the union of endpoint-private, compute-private, and serverless-private
+route tables.
+
+## Validate ECR Prerequisites
+
+```bash
+./scripts/validation/validate-ecr.sh <dev|staging|prod>
+```
+
+The validator reads `ecr_repositories` from the workload root. An empty `{}` is
+a valid configuration and passes without a live ECR query. Configured
+repositories must match their Terraform name, ARN, and registry ID; use
+`IMMUTABLE` tags; use KMS encryption with a configured key; and have exactly
+one lifecycle rule that expires only untagged images older than 30 days.
+
+The workload-root output contract does not currently expose the ECR CMK ARN.
+The validator therefore proves KMS encryption and key presence, but cannot
+compare the live key to an authoritative expected ARN. It does not reconstruct
+that ARN from the key alias or naming convention.
+
 ---
 
 ## Validate Endpoint Private Subnets
@@ -1720,14 +1747,28 @@ aws inspector2 batch-get-account-status \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --account-ids "${ACCOUNT_ID}" \
-  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
+  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,ECR:resourceState.ecr.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status,CodeRepository:resourceState.codeRepository.status}' \
   --output table
 ```
 
 Expected:
 
-- If `effective_inspector_enabled = true`, Inspector status matches the configured resource types.
+- If `effective_inspector_enabled = true`, Inspector status exactly matches
+  `effective_inspector_resource_types`, including EC2, ECR, Lambda, Lambda code,
+  and code-repository scanning.
 - If disabled by profile or override, Inspector may report disabled resource states.
+
+The validator uses the effective Terraform output and does not infer ECR from
+the repository map. The current baseline and workload-root output expressions
+return the raw `inspector_resource_types` input rather than
+`local.effective_inspector_resource_types`. Until that Terraform output defect
+is corrected, the validator cannot prove B7's automatic ECR addition for a
+non-empty repository map.
+
+ECS IAM and ECS SG/security-policy live assertions remain deferred because the
+current workload roots expose no ECS service identity, role map, or SG readiness
+map and the corresponding service maps are `{}`. ECR repository keys are not
+used as substitutes for ECS service identities.
 
 ---
 
@@ -1754,6 +1795,7 @@ lambda
 ebs
 backup_vault
 secrets_manager
+ecr
 ```
 
 Note:

@@ -7,6 +7,7 @@ The `iam` module provisions IAM roles, instance profiles, and policies required 
 This module includes IAM resources for:
 
 - EC2 instance management
+- Per-service ECS task execution and application task role scaffolding
 - Lambda security automation
 - CloudTrail delivery to CloudWatch Logs
 - VPC Flow Logs delivery to CloudWatch Logs
@@ -29,6 +30,7 @@ This module does **not** manage IAM Identity Center users, groups, permission se
 | File | Purpose |
 |---|---|
 | `ec2.tf` | EC2 instance role and instance profile |
+| `ecs.tf` | Per-service ECS task execution roles, task roles, and execution policies |
 | `lambda.tf` | Lambda execution roles and policies |
 | `logging.tf` | CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs delivery roles |
 | `config.tf` | AWS Config service-linked role and remediation role |
@@ -67,6 +69,57 @@ Attached AWS-managed policies:
 | `CloudWatchAgentServerPolicy` | Allows the CloudWatch Agent to publish logs and metrics |
 
 The instance profile output is consumed by the `compute` module so EC2 instances can inherit the role.
+
+---
+
+## `ecs.tf`
+
+The `ecs.tf` file creates separate ECS task execution and application task
+roles for every key in `var.ecs_iam_services`:
+
+- `aws_iam_role.ecs_task_execution_roles`
+- `aws_iam_role.ecs_task_roles`
+- `data.aws_iam_policy_document.ecs_task_execution_policies`
+- An inline `aws_iam_role_policy` attaching each custom execution policy
+
+Both role types trust `ecs-tasks.amazonaws.com`. The shared trust document also
+requires the configured account through `aws:SourceAccount` and restricts
+`aws:SourceArn` to ECS resources in the configured Region and account.
+
+Role pairs are keyed by the ECS service key. Their AWS names are:
+
+```text
+<name_prefix>-<service-key>-ecs-execution
+<name_prefix>-<service-key>-ecs-task
+```
+
+The custom execution policy currently permits:
+
+- `ecr:GetAuthorizationToken` against `*`, as required by that ECR API
+- `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, and
+  `ecr:BatchGetImage` against only the service's declared repository ARNs
+- `logs:CreateLogStream` and `logs:PutLogEvents` against stream ARNs beneath
+  only the service's declared log-group ARNs
+
+The module does not attach the AWS-managed
+`AmazonECSTaskExecutionRolePolicy`. It grants neither role `iam:PassRole`, and
+the execution role has no direct permission on the ECR encryption CMK. The
+application task role initially has no attached application policy, so it does
+not provide broad runtime authority.
+
+The variable also declares optional execution secret, SSM parameter, and KMS
+ARN sets, but `ecs.tf` does not currently consume them. They therefore grant no
+permissions. The intended SSM field name is
+`execution_ssm_parameter_arns`; the current Terraform declaration contains a
+spelling defect in that field and requires human review before it is wired to a
+caller. The inline execution-policy resource label also contains a spelling
+defect; this does not change its AWS behavior but should be corrected in a
+future Terraform change rather than documented as the desired naming
+convention.
+
+`ecs_iam_services` defaults to `{}`, and the current baseline module call does
+not pass it. Consequently, this scaffolding currently creates no ECS IAM role
+pairs in the workload environments.
 
 ---
 
@@ -494,6 +547,25 @@ Expected output:
 | `threat_intel_api_keys_arn` | ARN of the Secrets Manager secret containing threat intelligence API keys | Yes |
 | `lambda_ip_enrichment_log_group_arn` | ARN of the IP Enrichment Lambda CloudWatch Log Group | Yes |
 | `break_glass_trusted_principal_arns` | List of trusted IAM principal ARNs allowed to assume the break-glass role with MFA | Yes |
+| `ecs_iam_services` | ECS execution-role inputs keyed by service; defaults to `{}` | No |
+
+The intended service object is:
+
+```hcl
+map(object({
+  ecr_repository_arns            = set(string)
+  log_group_arns                 = set(string)
+  execution_secret_arns          = optional(set(string), [])
+  execution_ssm_parameter_arns   = optional(set(string), [])
+  execution_kms_key_arns         = optional(set(string), [])
+}))
+```
+
+Only `ecr_repository_arns` and `log_group_arns` are currently enforced by the
+generated policy. The optional secret, SSM parameter, and KMS fields are
+reserved scaffolding and do not yet grant access. As noted above, the current
+Terraform declaration's SSM field spelling must be corrected before callers
+can use the intended interface.
 
 ---
 
@@ -517,6 +589,8 @@ Expected output:
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
 | `logs_cmk_decrypt_policy_name` | Name of the logs CMK decrypt policy |
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
+| `ecs_task_execution_roles` | Map of ECS task execution role ARN and name objects keyed by service |
+| `ecs_task_roles` | Map of ECS application task role ARN and name objects keyed by service |
 
 ---
 
@@ -555,6 +629,12 @@ This module call wires IAM roles and policies to the rest of the baseline, inclu
 ---
 
 ## Validation
+
+The current workload baseline does not pass `ecs_iam_services`, and the
+existing IAM validator does not yet validate ECS role pairs or their policies.
+Static Terraform validation covers the scaffolding; live ECS IAM validation is
+deferred to the existing workload validation layer when service integration is
+added.
 
 ### Confirm IAM Roles Exist
 
@@ -1009,6 +1089,11 @@ Check:
 ## Security Notes
 
 - EC2 instances use IAM instance profiles instead of static credentials.
+- ECS task execution and application task roles are separate and keyed per
+  service.
+- ECS application task roles initially carry no broad application permissions.
+- ECS execution policies are custom and resource-scoped for repository pulls
+  and log writes; the AWS-managed ECS execution policy is not attached.
 - Lambda automation roles are separated by function.
 - Lambda roles use AWS-managed baseline execution policies plus focused custom permissions.
 - Logging delivery roles are service-specific.

@@ -126,3 +126,120 @@ resource "aws_security_group_rule" "lambda_rollback_egress_to_endpoints" {
   source_security_group_id = var.interface_endpoints_sg_id
   description              = "Lambda EC2 Rollback to VPC Endpoints over HTTPS"
 }
+
+## ECS TASK SG RULES
+resource "aws_security_group_rule" "ecs_tasks_egress_to_endpoints" {
+  for_each = var.ecs_security_policy_services
+
+  type                     = "egress"
+  security_group_id        = each.value.task_sg_id
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = var.interface_endpoints_sg_id
+  description              = "ECS tasks to Interface VPC Endpoints over HTTPS"
+}
+
+resource "aws_security_group_rule" "endpoints_ingress_from_ecs_tasks" {
+  for_each = var.ecs_security_policy_services
+
+  type                     = "ingress"
+  security_group_id        = var.interface_endpoints_sg_id
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = each.value.task_sg_id
+  description              = "ECS tasks to Interface VPC Endpoints over HTTPS"
+}
+
+resource "aws_security_group_rule" "ecs_tasks_egress_to_s3" {
+  for_each = var.ecs_security_policy_services
+
+  type              = "egress"
+  security_group_id = each.value.task_sg_id
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  prefix_list_ids   = [var.s3_prefix_list_id]
+  description       = "ECS tasks to S3 over HTTPS"
+}
+
+resource "aws_security_group_rule" "ecs_tasks_egress_to_internet_https" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if var.egress_mode != "vpc_endpoints_only"
+  }
+
+  type              = "egress"
+  security_group_id = each.value.task_sg_id
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "ECS task HTTPS egress through configured egress path"
+}
+
+resource "aws_security_group_rule" "ecs_tasks_egress_to_db" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if service.database_access
+  }
+
+  type                     = "egress"
+  security_group_id        = each.value.task_sg_id
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
+  source_security_group_id = var.data_sg_id
+  description              = "ECS tasks to DB"
+}
+
+resource "aws_security_group_rule" "db_ingress_from_ecs_tasks" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if service.database_access
+  }
+
+  type                     = "ingress"
+  security_group_id        = var.data_sg_id
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
+  source_security_group_id = each.value.task_sg_id
+  description              = "ECS tasks to DB"
+}
+
+resource "aws_security_group_rule" "ecs_tasks_ingress_from_alb" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if service.alb_sg_id != null
+  }
+
+  type                     = "ingress"
+  security_group_id        = each.value.task_sg_id
+  from_port                = each.value.container_port
+  to_port                  = each.value.container_port
+  protocol                 = "tcp"
+  source_security_group_id = each.value.alb_sg_id
+  description              = "ALB to ECS tasks"
+}
+
+resource "aws_security_group_rule" "alb_egress_to_ecs_tasks" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if service.alb_sg_id != null
+  }
+
+  type                     = "egress"
+  security_group_id        = each.value.alb_sg_id
+  from_port                = each.value.container_port
+  to_port                  = each.value.container_port
+  protocol                 = "tcp"
+  source_security_group_id = each.value.task_sg_id
+  description              = "ALB to ECS tasks"
+}

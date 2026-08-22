@@ -320,3 +320,18 @@ variable "manage_guardduty_locally" {
   type        = bool
   default     = true
 }
+
+variable "repositories" {
+  description = "Private ECR repositories keyed by repository name."
+  type        = map(object({}))
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for repository_name in keys(var.repositories) :
+      can(regex("^[a-z0-9]+([._-][a-z0-9]+)*$", repository_name))
+    ])
+
+    error_message = "Repository names must use lowercase ECR repository-name syntax."
+  }
+}

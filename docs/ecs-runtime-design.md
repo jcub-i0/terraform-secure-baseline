@@ -38,8 +38,8 @@ are created by this document.
 `baseline/main.tf`. Its sibling module calls currently include
 `module.networking`, `module.security_policy`, `module.compute`,
 `module.storage`, `module.iam`, `module.security`, `module.automation`,
-`module.vpc_endpoints`, and `module.firewall`. Each environment root delegates
-to that composition through `module.baseline`; for example,
+`module.vpc_endpoints`, `module.firewall`, and `module.ecr`. Each environment
+root delegates to that composition through `module.baseline`; for example,
 `environments/dev/main.tf` declares `module "baseline"` with source
 `../../baseline`.
 
@@ -152,49 +152,59 @@ service-level option.
 
 ### `modules/ecr`
 
-**APPROVED V1.8.0 DESIGN — owns:**
+**CURRENT REPOSITORY FACT — owns:**
 
-- A stable map of private ECR repositories.
+- Private ECR repositories created by `aws_ecr_repository.repositories`.
 - Repository encryption configuration.
 - Tag immutability.
-- Repository lifecycle policies.
-- Repository policies required for approved publishers and consumers.
-- Repository tags and stable repository identifiers.
+- The 30-day untagged-image lifecycle policy created by
+  `aws_ecr_lifecycle_policy.untagged_cleanup`.
+- Repository tags and resource-backed metadata outputs.
 
-**APPROVED V1.8.0 DESIGN — explicitly does not own:**
+**CURRENT REPOSITORY FACT — explicitly does not own:**
 
 - Application source, Docker builds, tests, image publishing, or digest
   promotion.
 - ECS clusters, task definitions, or services.
 - Account-level Amazon Inspector enablement or ownership.
 - Selection of the image digest deployed by an ECS service.
+- KMS key creation, repository resource policies, or repository/registry
+  scanning configuration.
 
-Key inputs are expected to include `name_prefix`, `environment`, repository map,
-encryption settings, lifecycle settings, mutability policy, and narrowly scoped
-publisher/consumer principals. Repository map keys must be stable and
-environment-local.
+`modules/ecr/variables.tf` defines `name_prefix`, `environment`, the required
+customer-managed key ARN `kms_key_arn`, and `repositories` as
+`map(object({}))` with default `{}`. Repository map keys are the repository-name
+component and the stable Terraform `for_each` identity; there is no separate
+`name_suffix` field. For example, key `application` renders
+`${var.name_prefix}-application`.
 
-Key outputs are expected to include repository ARN, name, URL, and registry ID
-by stable repository key. Outputs must not attempt to resolve a latest image or
-mutable tag.
+`modules/ecr/outputs.tf` exports one `repositories` map keyed by the same
+repository names. Each resource-backed entry contains `arn`, `name`,
+`repository_url`, and `registry_id`. It does not resolve or output an image tag
+or digest.
 
-Dependencies are the AWS account/Region, platform naming and tagging, and any
-selected KMS key. ECR does not depend on the ECS cluster or services.
+All repositories use `image_tag_mutability = "IMMUTABLE"` and KMS encryption
+with the actual CMK ARN supplied by `module.security.ecr_cmk_arn`; the ECR alias
+ARN is not used for repository encryption. `modules/security/main.tf` owns the
+dedicated `aws_kms_key.ecr` and `aws_kms_alias.ecr` resources.
 
-Expected lifecycle/cardinality is N repositories per environment. Repository
-destruction and lifecycle defaults must be environment/profile aware. Creating
-repository infrastructure and deploying a service may be separate saved-plan
-operations: the repository can be created, an application image can then be
-published, and a later reviewed plan can enable a service with the chosen
-digest.
+The current ephemeral development/test posture sets
+`force_delete = true # CHANGE THIS IN PROD` and does not configure
+`prevent_destroy`. This permits routine environment teardown even when a
+repository contains development images. Persistent production use must
+reconsider that destruction behavior.
 
-ECR lifecycle behavior must not delete a digest that may still be referenced by
-an active Terraform-managed task definition or ECS service. The initial
-lifecycle policy should therefore focus on untagged and non-release build
-artifacts. Immutable release-tagged images used for deployment must be retained
-for as long as an active or otherwise deployable Terraform-managed revision can
-reference them. More sophisticated historical release-retention policy is
-deferred.
+The lifecycle policy expires only untagged images older than 30 days and never
+matches tagged release images. Any digest that is active or remains deployable
+by Terraform must retain at least one immutable release tag; release automation
+must not remove the final such tag. Lifecycle cleanup is independent of
+`force_delete` and is not a prerequisite for `terraform destroy`. More
+sophisticated historical release retention remains deferred.
+
+`baseline/main.tf` instantiates `module.ecr` and supplies the security-owned key
+ARN, but it does not pass `repositories`. The `{}` default therefore creates no
+repositories, and the environment roots do not yet expose repository
+configuration or repository metadata outputs.
 
 ### `modules/ecs_cluster`
 
@@ -340,22 +350,26 @@ shared ALB.
 
 **CURRENT REPOSITORY FACT:** `baseline/main.tf` is the integration layer that
 wires networking, policy, compute, storage, IAM, security, automation,
-monitoring, endpoints, and firewall outputs into sibling modules.
+monitoring, endpoints, firewall, and ECR resources into sibling modules. It
+already instantiates `module.ecr` with `module.security.ecr_cmk_arn`, propagates
+the RDS consumer outputs, and passes the effective firewall domain set. It does
+not yet pass repository definitions or ECS IAM service definitions.
 
 **APPROVED V1.8.0 DESIGN:** The baseline will:
 
-- Accept the environment ECS runtime configuration, stable ECR repository map,
-  stable `ecs_services` map, and environment-approved egress domain sets.
+- Accept the remaining environment ECS runtime configuration, repository map,
+  and stable `ecs_services` map.
 - Instantiate one `modules/ecs_cluster`.
-- Instantiate `modules/ecr` for N repository definitions.
+- Pass N repository definitions to the existing `module.ecr` call.
 - Instantiate zero or one `modules/application_load_balancer` based on whether
   ingress is enabled.
 - Instantiate `modules/ecs_service` with `for_each` over stable enabled service
   keys.
 - Pass task and ALB SG IDs to `modules/networking/security_policy` and feed
   resulting rule IDs back to each ECS service readiness input.
-- Export non-secret cluster, repository, ALB, service, and RDS connection
-  metadata needed by operators and validation.
+- Export non-secret cluster, repository, ALB, and service metadata needed by
+  operators and validation; the approved RDS consumer metadata is already
+  propagated.
 
 ECS infrastructure remains in the existing workload environment Terraform
 state; no additional environment state or validation layer is introduced.
@@ -424,12 +438,13 @@ conflated with, the EC2 quarantine or evidence workflows.
 **CURRENT REPOSITORY FACT:** `local.interface_endpoints` in
 `modules/vpc_endpoints/main.tf` currently includes private endpoints for AWS
 services such as STS, CloudWatch Logs, SSM, Secrets Manager, KMS, SNS, SQS,
-EventBridge, Security Hub, Lambda, and `guardduty-data`. The module also creates
-`aws_vpc_endpoint.s3`, and `baseline/main.tf` attaches that S3 gateway endpoint
-to endpoint, compute, and serverless route tables.
+EventBridge, Security Hub, Lambda, `ecr.api`, `ecr.dkr`, and
+`guardduty-data`. The module also creates `aws_vpc_endpoint.s3`, and
+`baseline/main.tf` attaches that S3 gateway endpoint to endpoint, compute, and
+serverless route tables. The ECR API and registry paths therefore use Interface
+Endpoints, while image layers use the existing S3 Gateway Endpoint.
 
-**APPROVED V1.8.0 DESIGN:** Add the `ecr.api` and `ecr.dkr` interface endpoints.
-Existing S3 gateway endpoint behavior remains. The endpoint SG will receive
+**APPROVED V1.8.0 DESIGN:** The endpoint SG will receive
 TCP/443 ingress from authorized ECS task SGs through the security-policy module.
 ECR image layers continue to use the S3 Gateway Endpoint, with task SG egress to
 the AWS-managed S3 prefix list controlled by the security-policy module.
@@ -448,18 +463,35 @@ policies, attachments, and profiles. For example, `modules/iam/ec2.tf` owns
 `modules/iam/lambda.tf` owns the automation Lambda roles. Consumer modules
 receive profile names or role ARNs through `baseline/main.tf`.
 
-**APPROVED V1.8.0 DESIGN:** `modules/iam` will own separate least-privilege role
-pairs per service definition:
+**CURRENT REPOSITORY FACT:** `modules/iam/ecs.tf` defines separate role pairs
+per key in `var.ecs_iam_services` through
+`aws_iam_role.ecs_task_execution_roles` and
+`aws_iam_role.ecs_task_roles`. Both use
+`data.aws_iam_policy_document.ecs_tasks_assume_role`, which trusts
+`ecs-tasks.amazonaws.com` with source-account and regional ECS source-ARN
+conditions.
 
-- The **task execution role** permits ECR image pull, CloudWatch Logs delivery,
-  retrieval of only the Secrets Manager or Parameter Store references embedded
-  in the task definition, and only required KMS decrypt operations.
-- The **application task role** contains only permissions intentionally exposed
-  to application code through typed capability declarations.
+The custom inline execution policy currently permits ECR authorization,
+repository-scoped ECR image-pull actions, and log-group-scoped CloudWatch Logs
+stream creation and writes. It does not attach
+`AmazonECSTaskExecutionRolePolicy`, grant `iam:PassRole`, or grant direct access
+to the ECR encryption CMK. The application task role is created without an
+application policy and therefore initially carries no broad runtime authority.
 
-Both roles use ECS task trust, but their policies remain separate. The task role
-does not inherit image-pull or task-definition secret permissions merely because
-the execution role has them. Baseline-managed roles are the default.
+`modules/iam/variables.tf` defines `ecs_iam_services` with required
+`ecr_repository_arns` and `log_group_arns` sets plus optional execution secret,
+SSM parameter, and KMS ARN sets. The optional sets are not yet consumed by
+`modules/iam/ecs.tf` and grant no permissions. The intended SSM field name is
+`execution_ssm_parameter_arns`; the current variable declaration contains a
+spelling defect that must be corrected before caller wiring. The map defaults
+to `{}`, and `baseline/main.tf` does not currently pass it, so no ECS role pair
+is created by the workload roots yet. `modules/iam/outputs.tf` exposes
+`ecs_task_execution_roles` and `ecs_task_roles` maps containing each role's ARN
+and name.
+
+**APPROVED V1.8.0 DESIGN:** The task role must not inherit image-pull or
+task-definition secret permissions merely because the execution role has them.
+Only explicitly approved application capabilities may be added to it.
 
 The primary generic interface must not accept unrestricted arbitrary IAM policy
 JSON. Typed capabilities identify allowed actions and exact resource ARNs.
@@ -476,10 +508,9 @@ topic, writing logs, and using the existing failure destination.
 **CURRENT REPOSITORY FACT:** `modules/storage/main.tf` owns
 `aws_db_instance.main`, `aws_db_subnet_group.data`, `aws_security_group.data`,
 and `aws_secretsmanager_secret.rds_master`. The secret value is written using a
-write-only secret version and is not exported. `modules/storage/outputs.tf`
-currently exports only centralized-log bucket metadata and `data_sg_id`.
-
-**APPROVED V1.8.0 DESIGN:** Storage will add non-secret consumer outputs for:
+write-only secret version and is not exported. `modules/storage/outputs.tf`,
+`baseline/outputs.tf`, and each environment `outputs.tf` now export the
+approved non-secret consumer metadata:
 
 - RDS address.
 - RDS endpoint.
@@ -489,8 +520,8 @@ currently exports only centralized-log bucket metadata and `data_sg_id`.
 - Master secret ARN.
 - Data security-group ID.
 
-Outputs must never expose a password, secret value, or rendered connection
-string containing credentials.
+These outputs expose no password, secret value, or rendered connection string
+containing credentials.
 
 The generic runtime may consume arbitrary, explicitly approved Secrets Manager
 references. Merely declaring database network access does not grant the task
@@ -502,17 +533,17 @@ owned by the initial ECS runtime.
 
 ### `modules/firewall`
 
-**CURRENT REPOSITORY FACT:** `aws_networkfirewall_rule_group.stateful_domains`
-in `modules/firewall/main.tf` currently uses a strict allowlist whose `targets`
-are embedded Ubuntu-related domains. `baseline/locals.tf` selects
-`network_firewall` as the production deployment-profile default and preserves
-`vpc_endpoints_only` as a supported fail-closed mode.
-
-**APPROVED V1.8.0 DESIGN:** The firewall module will accept a reviewed
-environment-level application egress domain allowlist. Production firewall
-policy must no longer be limited to hard-coded Ubuntu domains. Platform-required
-defaults may remain platform-specific, but customer/application domains must not
-be embedded as reusable module defaults.
+**CURRENT REPOSITORY FACT:** Each environment exposes
+`allowed_egress_domains` and passes it to the baseline. `baseline/locals.tf`
+keeps the Ubuntu platform domains in
+`local.platform_required_egress_domains` and computes
+`local.effective_allowed_egress_domains` as their union with the approved
+environment set only when the effective mode is `network_firewall`; otherwise
+the effective set is empty. `baseline/main.tf` passes that final set to
+`modules/firewall`, whose `aws_networkfirewall_rule_group.stateful_domains`
+uses it directly. `baseline/outputs.tf` and the environment roots expose the
+resource-backed `effective_allowed_egress_domains` set when the firewall exists
+and an empty set otherwise. `vpc_endpoints_only` remains fail closed.
 
 Services declare which environment-approved egress sets they require. The
 domain values themselves are approved at the environment boundary so they are
@@ -530,6 +561,8 @@ incompatible declaration rather than silently create a route or broad SG rule.
 `modules/security`. `aws_inspector2_enabler.main` in
 `modules/security/main.tf` receives `inspector_resource_types`, whose accepted
 values in `baseline/variables.tf` include `ECR`; the current default is `EC2`.
+The same module now owns `aws_kms_key.ecr` and `aws_kms_alias.ecr`, and exports
+their ARNs through `ecr_cmk_arn` and `ecr_cmk_alias_arn`.
 
 **APPROVED V1.8.0 DESIGN:** Inspector ownership remains in `modules/security`.
 `modules/ecr` must not enable or separately own account-level Inspector. When
@@ -619,20 +652,31 @@ operation.
 
 ### `scripts/validation`
 
-**CURRENT REPOSITORY FACT:** `scripts/validation/validate-baseline.sh` currently
-orchestrates 14 workload validators through its `VALIDATION_SCRIPTS` array.
+**CURRENT REPOSITORY FACT:** `scripts/validation/validate-baseline.sh` now
+orchestrates 15 workload validators through its `VALIDATION_SCRIPTS` array.
 `scripts/validation/export-baseline.sh` mirrors those scripts to produce
-workload-baseline evidence. `validate-security-workload.sh` already reads
-`effective_inspector_resource_types`, queries `INSPECTOR_ECR_STATUS`, and calls
-`validate_inspector_resource_status "ECR"`.
+workload-baseline evidence. `validate-ecr.sh` uses `ecr_repositories` as its
+authoritative inventory and passes cleanly for `{}`. For configured
+repositories it validates identity, immutability, KMS encryption presence, and
+the exact untagged-only lifecycle policy. `validate-vpc-endpoints.sh` validates
+the canonical endpoint inventory, private DNS, exact endpoint-private subnet
+and SG placement, and exact S3 route-table coverage.
+
+`validate-security-workload.sh` reads `effective_inspector_resource_types` and
+performs an exact comparison with live Inspector resource states. It does not
+reconstruct the repository-to-ECR composition rule. The current baseline and
+environment output expressions expose the raw Inspector input instead of
+`local.effective_inspector_resource_types`; automatic ECR inclusion therefore
+cannot be proven from the workload-root contract until that Terraform defect is
+corrected.
 
 **APPROVED V1.8.0 DESIGN:** ECS, ECR, and ALB validation extend the existing
 workload baseline validation layer. No fifth validation layer is created. The
-current count of 14 validators is not a permanent contract.
+current validator count is not a permanent contract.
 
-Anticipated validators are `validate-ecr.sh`, `validate-ecs.sh`, and
-`validate-alb.sh`. Their exact split may be refined, but together the workload
-layer must prove at least:
+Future runtime validators include `validate-ecs.sh` and `validate-alb.sh`.
+Their exact split may be refined, but together the workload layer must prove at
+least:
 
 - Expected repositories exist with intended encryption, immutability, policy,
   safe digest retention lifecycle, and Inspector ECR posture.

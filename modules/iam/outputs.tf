@@ -63,3 +63,25 @@ output "logs_cmk_decrypt_policy_name" {
 output "break_glass_admin_role_arn" {
   value = aws_iam_role.break_glass_admin.arn
 }
+
+output "ecs_task_execution_roles" {
+  description = "ECS task execution roles keyed by service name"
+
+  value = {
+    for service_name, role in aws_iam_role.ecs_task_execution_roles : service_name => {
+      arn  = role.arn
+      name = role.name
+    }
+  }
+}
+
+output "ecs_task_roles" {
+  description = "ECS application task roles keyed by service name"
+
+  value = {
+    for service_name, role in aws_iam_role.ecs_task_roles : service_name => {
+      arn  = role.arn
+      name = role.name
+    }
+  }
+}

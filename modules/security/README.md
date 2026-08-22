@@ -32,7 +32,7 @@ It supports:
 - Security Hub V2 enablement either locally or through an inherited Organizations policy
 - Vulnerability scanning through Inspector
 - SSM document sharing hardening
-- KMS-backed encryption for logs, Lambda, EBS, Secrets Manager, and AWS Backup
+- KMS-backed encryption for logs, Lambda, EBS, Secrets Manager, ECR, and AWS Backup
 - AWS Config baseline deployment through the `config_baseline` child module
 - Security service tamper detection through the `tamper_detection` child module
 
@@ -230,6 +230,7 @@ The current key set includes:
 | EBS CMK | EBS volume and snapshot encryption |
 | Lambda CMK | Lambda environment variable encryption |
 | Secrets Manager CMK | Secrets Manager secret encryption |
+| ECR CMK | ECR repository encryption |
 | Backup Vault CMK | AWS Backup vault encryption |
 
 Each key has rotation enabled.
@@ -395,6 +396,35 @@ The key policy allows the AWS Backup service to use the key for backup vault ope
 
 ---
 
+### ECR CMK
+
+Creates the ECR KMS key:
+
+```hcl
+resource "aws_kms_key" "ecr"
+```
+
+Alias:
+
+```hcl
+resource "aws_kms_alias" "ecr"
+```
+
+Alias name:
+
+```text
+alias/<name_prefix>/ecr-cmk
+```
+
+The baseline passes `ecr_cmk_arn`, the actual key ARN, to `modules/ecr` for
+repository encryption. The alias ARN is exported as metadata but is not used
+as the ECR repository encryption key reference. The key has rotation enabled
+and currently uses `prevent_destroy = false # CHANGE THIS IN PROD` for the
+repository's ephemeral development/test teardown model. Persistent production
+usage must reconsider that destruction posture.
+
+---
+
 ## Child Modules
 
 This module calls two child modules:
@@ -518,6 +548,8 @@ This is because IAM/global resource recording can require additional AWS Config 
 | `secrets_manager_cmk_alias_arn` | ARN of the Secrets Manager KMS alias |
 | `backup_vault_cmk_arn` | ARN of the AWS Backup vault KMS CMK |
 | `backup_vault_cmk_alias_arn` | ARN of the AWS Backup vault KMS alias |
+| `ecr_cmk_arn` | ARN of the ECR repository KMS CMK |
+| `ecr_cmk_alias_arn` | ARN of the ECR KMS alias |
 | `tamper_detection_rule_name` | Name of the tamper detection EventBridge rule from the child module |
 | `tamper_detection_rule_arn` | ARN of the tamper detection EventBridge rule from the child module |
 
@@ -572,6 +604,7 @@ Outputs from this module are used by:
 | `lambda_cmk_arn` | Automation Lambda functions |
 | `secrets_manager_cmk_arn` | Storage and automation secrets |
 | `backup_vault_cmk_arn` | Backup module |
+| `ecr_cmk_arn` | ECR module |
 | `tamper_detection_rule_arn` | Monitoring module SNS topic policy |
 
 ### Inputs from Other Modules
@@ -756,6 +789,7 @@ Expected aliases include:
 - `alias/<name_prefix>/lambda-cmk`
 - `alias/<name_prefix>/secrets-cmk`
 - `alias/<name_prefix>/backup-cmk`
+- `alias/<name_prefix>/ecr-cmk`
 
 ---
 
@@ -781,6 +815,7 @@ Repeat for:
 - Lambda CMK
 - Secrets Manager CMK
 - Backup Vault CMK
+- ECR CMK
 
 ---
 
@@ -821,6 +856,7 @@ Disabling or scheduling deletion for one of these keys can break:
 - Secrets Manager secret access
 - EBS volume access
 - Backup vault recovery
+- ECR repository access
 
 ---
 
@@ -1112,5 +1148,7 @@ This module follows:
 - The Lambda CMK is consumed by automation Lambda functions.
 - The Secrets Manager CMK is consumed by secrets created outside this module.
 - The Backup Vault CMK is consumed by the backup module.
+- The ECR CMK key ARN is consumed by the ECR module; the alias ARN is not used
+  for repository encryption.
 - The tamper detection rule ARN should be passed to the monitoring module so SNS publishing can be permitted.
 - The `config_baseline` and `tamper_detection` child modules have their own README files and should be referenced for detailed behavior.

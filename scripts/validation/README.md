@@ -334,6 +334,7 @@ Run once per deployed workload environment:
 validate-env.sh
 validate-networking.sh
 validate-vpc-endpoints.sh
+validate-ecr.sh
 validate-logging.sh
 validate-security-workload.sh
 validate-kms.sh
@@ -350,8 +351,8 @@ validate-iam.sh
 A successful run should end with:
 
 ```text
-Validation scripts passed:  14/14
-Validation scripts failed:  0/14
+Validation scripts passed:  15/15
+Validation scripts failed:  0/15
 ```
 
 ---
@@ -365,6 +366,7 @@ Examples:
 ```bash
 ./scripts/validation/validate-networking.sh dev
 ./scripts/validation/validate-vpc-endpoints.sh dev
+./scripts/validation/validate-ecr.sh dev
 ./scripts/validation/validate-logging.sh dev
 ./scripts/validation/validate-security-workload.sh dev
 ./scripts/validation/validate-kms.sh dev
@@ -385,6 +387,51 @@ Use individual scripts when validating a specific area after a targeted change.
 `validate-networking.sh` reads `effective_egress_mode` and `effective_allowed_egress_domains` from the selected workload environment's Terraform outputs. Terraform owns composition of the effective Network Firewall allowlist; the script does not recreate platform and caller domain-union logic.
 
 When the effective mode is `network_firewall`, the script describes the live `${NAME_PREFIX}-egress-stateful-domains` stateful rule group and performs an order-independent, exact set comparison between its domain targets and `effective_allowed_egress_domains`. Missing or unexpected live domains fail validation. For `nat_only` and `vpc_endpoints_only`, the effective domain output must be empty and the script does not query a domain rule group. Supplying `allowed_egress_domains` does not create connectivity in those modes.
+
+### ECR validation
+
+`validate-ecr.sh` treats the workload-root `ecr_repositories` output as the
+authoritative repository inventory. When it is `{}`, the validator reports that
+no repositories are configured and exits successfully without querying live
+ECR.
+
+For every configured repository, it compares the live name, ARN, and registry
+ID with the Terraform output; requires immutable tags and KMS encryption with a
+configured key; and requires exactly the approved lifecycle rule that expires
+only untagged images older than 30 days. Tagged-image expiration fails
+validation. The root output does not currently expose `ecr_cmk_arn`, so the
+validator cannot prove exact equality between the configured live KMS key and
+the security-owned ECR CMK; it reports that limitation rather than deriving a
+key ARN from naming.
+
+### VPC endpoint hardening
+
+`validate-vpc-endpoints.sh` validates the non-overridable platform Interface
+Endpoint inventory, including `ecr.api`, `ecr.dkr`, and `guardduty-data`. It
+also requires every Interface Endpoint to be available, in the expected VPC,
+private-DNS enabled, attached to the exact endpoint-private subnet set, and
+attached to exactly the shared Interface Endpoint SG. The S3 Gateway Endpoint
+must have the exact union of endpoint-private, compute-private, and
+serverless-private route-table associations.
+
+### Inspector effective resource types
+
+`validate-security-workload.sh` uses
+`effective_inspector_resource_types` as its only expected Inspector resource
+set and fails for both missing and unexpectedly enabled live scan types,
+including EC2, ECR, Lambda, Lambda code, and code repositories. It does not
+reconstruct the repository-to-ECR composition policy. The current workload
+output propagation returns the raw Inspector input instead of
+`local.effective_inspector_resource_types`; therefore automatic ECR inclusion
+cannot be proven from the root output until that Terraform output defect is
+corrected.
+
+### Deferred ECS IAM and security-policy validation
+
+ECS IAM and ECS security-policy live checks remain deferred. The current roots
+expose neither configured ECS service identities nor the resulting role and SG
+readiness maps, and both service maps are currently empty. Repository keys are
+not treated as ECS service keys.
 
 ---
 
@@ -640,6 +687,7 @@ Current baseline logs include:
 validate-env.log
 validate-networking.log
 validate-vpc-endpoints.log
+validate-ecr.log
 validate-logging.log
 validate-security-workload.log
 validate-kms.log

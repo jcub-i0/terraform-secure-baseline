@@ -44,6 +44,7 @@ module "security_policy" {
   interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
   db_port                    = var.db_port
   quarantine_sg_id           = module.compute.quarantine_sg_id
+  s3_prefix_list_id          = module.vpc_endpoints.s3_prefix_list_id
 }
 
 module "compute" {
@@ -133,7 +134,7 @@ module "security" {
   guardduty_features              = var.guardduty_features
   enable_rules                    = local.effective_enable_rules
   inspector_enabled               = local.effective_inspector_enabled
-  inspector_resource_types        = var.inspector_resource_types
+  inspector_resource_types        = local.effective_inspector_resource_types
 
   enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
@@ -288,7 +289,8 @@ module "ecr" {
   name_prefix = local.name_prefix
   environment = var.environment
 
-  kms_key_arn = module.security.ecr_cmk_arn
+  kms_key_arn  = module.security.ecr_cmk_arn
+  repositories = var.repositories
 }
 
 module "backup" {

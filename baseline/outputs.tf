@@ -119,7 +119,7 @@ output "effective_inspector_enabled" {
 
 output "effective_inspector_resource_types" {
   description = "Amazon Inspector resource types enabled after profile and override resolution."
-  value       = local.effective_inspector_enabled ? var.inspector_resource_types : []
+  value       = local.effective_inspector_enabled ? local.effective_inspector_resource_types : []
 }
 
 output "db_port" {
@@ -140,4 +140,9 @@ output "effective_manage_securityhub_v2_locally" {
 output "effective_manage_guardduty_locally" {
   description = "Whether GuardDuty resources are managed locally by Terraform in this workload account"
   value       = var.manage_guardduty_locally
+}
+
+output "ecr_repositories" {
+  description = "Managed ECR repository metadata keyed by repository name"
+  value       = module.ecr.repositories
 }
