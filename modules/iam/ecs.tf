@@ -50,3 +50,39 @@ resource "aws_iam_role" "ecs_task_roles" {
     Terraform   = "true"
   }
 }
+
+data "aws_iam_policy_document" "ecs_task_execution_policies" {
+  statement {
+    sid = "AllowECRAuthorization"
+    effect = "Allow"
+    actions = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "AllowECRImagePulls"
+    effect = "Allow"
+
+    actions = [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+    ]
+
+    resources = each.value.ecr_repository_arns
+  }
+
+  statement {
+    sid = "AllowCloudWatchLogWrites"
+    effect = "Allow"
+
+    actions = [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+    ]
+
+    resources = [
+        for arn in each.value.log_group_arns : "${arn}:*"
+    ]
+  }
+}
