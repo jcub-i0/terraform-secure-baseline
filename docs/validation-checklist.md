@@ -1754,6 +1754,7 @@ lambda
 ebs
 backup_vault
 secrets_manager
+ecr
 ```
 
 Note:
