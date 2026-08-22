@@ -163,3 +163,19 @@ resource "aws_security_group_rule" "ecs_tasks_egress_to_s3" {
   prefix_list_ids   = [var.s3_prefix_list_id]
   description       = "ECS tasks to S3 over HTTPS"
 }
+
+resource "aws_security_group_rule" "ecs_tasks_egress_to_internet_https" {
+  for_each = {
+    for service_name, service in var.ecs_security_policy_services :
+    service_name => service
+    if var.egress_mode != "vpc_endpoints_only"
+  }
+
+  type = "egress"
+  security_group_id = each.value.task_sg_id
+  from_port = 443
+  to_port = 443
+  protocol = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+  description = "ECS task HTTPS egress through configured egress path"
+}
