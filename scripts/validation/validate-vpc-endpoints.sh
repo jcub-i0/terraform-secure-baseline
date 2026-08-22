@@ -9,9 +9,10 @@
 # - Endpoint private subnets exist
 # - Endpoint private route tables exist and have no default route
 # - Interface VPC Endpoints exist and are available
-# - Interface VPC Endpoints are deployed into endpoint private subnets
+# - Interface VPC Endpoints have the canonical service inventory, private DNS,
+#   exact endpoint-private subnet placement, and the expected endpoint SG
 # - S3 Gateway Endpoint exists
-# - S3 Gateway Endpoint is associated with expected private route tables
+# - S3 Gateway Endpoint has the exact expected private route-table associations
 #
 # Usage:
 #   ./scripts/validation/validate-vpc-endpoints.sh dev
@@ -33,9 +34,28 @@ CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
-# Space-separated list so callers can override this later if the module becomes configurable.
-EXPECTED_INTERFACE_ENDPOINT_SERVICES="${EXPECTED_INTERFACE_ENDPOINT_SERVICES:-sts sqs logs ssm ssmmessages secretsmanager kms config sns ec2 ecr.api ecr.dkr events securityhub lambda guardduty-data}"
+# This inventory is platform-owned by modules/vpc_endpoints and is intentionally
+# not caller-overridable.
+readonly EXPECTED_INTERFACE_ENDPOINT_SERVICES=(
+  sts
+  sqs
+  logs
+  ssm
+  ssmmessages
+  secretsmanager
+  kms
+  config
+  sns
+  ec2
+  ecr.api
+  ecr.dkr
+  events
+  securityhub
+  lambda
+  guardduty-data
+)
 
 export AWS_PAGER=""
 
@@ -177,7 +197,7 @@ fi
 
 ENDPOINT_SUBNET_IDS_JSON="$(
   echo "$ENDPOINT_SUBNETS_JSON" |
-    jq '[.Subnets[].SubnetId]'
+    jq '[.Subnets[].SubnetId] | sort | unique'
 )"
 
 PUBLIC_IP_MAPPING_COUNT="$(
@@ -239,6 +259,25 @@ fi
 
 section "Checking Interface VPC Endpoints"
 
+INTERFACE_ENDPOINT_SGS_JSON="$(
+  aws ec2 describe-security-groups \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-VPC-Endpoints-SG" \
+    --output json
+)"
+
+INTERFACE_ENDPOINT_SG_COUNT="$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq '.SecurityGroups | length')"
+
+if [[ "$INTERFACE_ENDPOINT_SG_COUNT" -ne 1 ]]; then
+  echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq '[.SecurityGroups[] | {group_id: .GroupId, group_name: .GroupName}]'
+  fail "Expected exactly one Interface Endpoint security group, found ${INTERFACE_ENDPOINT_SG_COUNT}."
+fi
+
+INTERFACE_ENDPOINT_SG_ID="$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq -r '.SecurityGroups[0].GroupId')"
+success "Resolved Interface Endpoint security group: ${INTERFACE_ENDPOINT_SG_ID}"
+
 INTERFACE_ENDPOINTS_JSON="$(
   aws ec2 describe-vpc-endpoints \
     "${aws_args[@]}" \
@@ -272,47 +311,115 @@ else
   fail "One or more Interface VPC Endpoints are not available."
 fi
 
-INTERFACE_ENDPOINTS_OUTSIDE_ENDPOINT_SUBNETS="$(
+WRONG_VPC_INTERFACE_ENDPOINT_COUNT="$(
   echo "$INTERFACE_ENDPOINTS_JSON" |
-    jq --argjson allowed "$ENDPOINT_SUBNET_IDS_JSON" '
+    jq --arg vpc_id "$VPC_ID" '[.VpcEndpoints[] | select(.VpcId != $vpc_id)] | length'
+)"
+
+if [[ "$WRONG_VPC_INTERFACE_ENDPOINT_COUNT" -eq 0 ]]; then
+  success "All Interface VPC Endpoints belong to the expected VPC"
+else
+  echo "$INTERFACE_ENDPOINTS_JSON" | jq --arg vpc_id "$VPC_ID" '[.VpcEndpoints[] | select(.VpcId != $vpc_id) | {endpoint_id: .VpcEndpointId, service_name: .ServiceName, vpc_id: .VpcId}]'
+  fail "One or more Interface VPC Endpoints belong to an unexpected VPC."
+fi
+
+PRIVATE_DNS_DISABLED_INTERFACE_ENDPOINT_COUNT="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq '[.VpcEndpoints[] | select(.PrivateDnsEnabled != true)] | length'
+)"
+
+if [[ "$PRIVATE_DNS_DISABLED_INTERFACE_ENDPOINT_COUNT" -eq 0 ]]; then
+  success "Private DNS is enabled on every Interface VPC Endpoint"
+else
+  echo "$INTERFACE_ENDPOINTS_JSON" | jq '[.VpcEndpoints[] | select(.PrivateDnsEnabled != true) | {endpoint_id: .VpcEndpointId, service_name: .ServiceName, private_dns_enabled: .PrivateDnsEnabled}]'
+  fail "One or more Interface VPC Endpoints do not have private DNS enabled."
+fi
+
+INTERFACE_ENDPOINT_SUBNET_MISMATCH_COUNT="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq --argjson expected "$ENDPOINT_SUBNET_IDS_JSON" '
       [
         .VpcEndpoints[]
         | {
             service_name: .ServiceName,
             endpoint_id: .VpcEndpointId,
-            subnet_ids: .SubnetIds,
-            unexpected_subnet_ids: ([.SubnetIds[]] - $allowed)
+            subnet_ids: ([.SubnetIds[]] | sort | unique),
+            missing_subnet_ids: ($expected - ([.SubnetIds[]] | sort | unique)),
+            unexpected_subnet_ids: (([.SubnetIds[]] | sort | unique) - $expected)
           }
-        | select((.unexpected_subnet_ids | length) > 0)
+        | select(
+            (.missing_subnet_ids | length) > 0
+            or (.unexpected_subnet_ids | length) > 0
+          )
       ]
       | length
     '
 )"
 
-if [[ "$INTERFACE_ENDPOINTS_OUTSIDE_ENDPOINT_SUBNETS" -eq 0 ]]; then
-  success "Interface VPC Endpoints are deployed only into endpoint private subnets"
+if [[ "$INTERFACE_ENDPOINT_SUBNET_MISMATCH_COUNT" -eq 0 ]]; then
+  success "Every Interface VPC Endpoint uses the exact endpoint-private subnet set"
 else
   echo "$INTERFACE_ENDPOINTS_JSON" |
-    jq --argjson allowed "$ENDPOINT_SUBNET_IDS_JSON" '
+    jq --argjson expected "$ENDPOINT_SUBNET_IDS_JSON" '
       [
         .VpcEndpoints[]
         | {
             service_name: .ServiceName,
             endpoint_id: .VpcEndpointId,
-            subnet_ids: .SubnetIds,
-            unexpected_subnet_ids: ([.SubnetIds[]] - $allowed)
+            subnet_ids: ([.SubnetIds[]] | sort | unique),
+            missing_subnet_ids: ($expected - ([.SubnetIds[]] | sort | unique)),
+            unexpected_subnet_ids: (([.SubnetIds[]] | sort | unique) - $expected)
           }
-        | select((.unexpected_subnet_ids | length) > 0)
+        | select(
+            (.missing_subnet_ids | length) > 0
+            or (.unexpected_subnet_ids | length) > 0
+          )
       ]
     '
-  fail "One or more Interface VPC Endpoints are not deployed exclusively into endpoint private subnets."
+  fail "One or more Interface VPC Endpoints do not use the exact endpoint-private subnet set."
+fi
+
+INTERFACE_ENDPOINT_SG_MISMATCH_COUNT="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq --arg expected_sg_id "$INTERFACE_ENDPOINT_SG_ID" '
+      [
+        .VpcEndpoints[]
+        | {
+            service_name: .ServiceName,
+            endpoint_id: .VpcEndpointId,
+            security_group_ids: ([.Groups[].GroupId] | sort | unique)
+          }
+        | select(.security_group_ids != [$expected_sg_id])
+      ]
+      | length
+    '
+)"
+
+if [[ "$INTERFACE_ENDPOINT_SG_MISMATCH_COUNT" -eq 0 ]]; then
+  success "Every Interface VPC Endpoint uses exactly the Interface Endpoint security group"
+else
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq --arg expected_sg_id "$INTERFACE_ENDPOINT_SG_ID" '
+      [
+        .VpcEndpoints[]
+        | {
+            service_name: .ServiceName,
+            endpoint_id: .VpcEndpointId,
+            expected_security_group_ids: [$expected_sg_id],
+            actual_security_group_ids: ([.Groups[].GroupId] | sort | unique)
+          }
+        | select(.actual_security_group_ids != .expected_security_group_ids)
+      ]
+    '
+  fail "One or more Interface VPC Endpoints do not use exactly the expected Interface Endpoint security group."
 fi
 
 section "Checking expected Interface VPC Endpoint services"
 
 MISSING_INTERFACE_SERVICES=()
+DUPLICATE_INTERFACE_SERVICES=()
 
-for short_service_name in $EXPECTED_INTERFACE_ENDPOINT_SERVICES; do
+for short_service_name in "${EXPECTED_INTERFACE_ENDPOINT_SERVICES[@]}"; do
   full_service_name="com.amazonaws.${AWS_REGION}.${short_service_name}"
 
   matching_count="$(
@@ -320,8 +427,10 @@ for short_service_name in $EXPECTED_INTERFACE_ENDPOINT_SERVICES; do
       jq --arg service "$full_service_name" '[.VpcEndpoints[] | select(.ServiceName == $service)] | length'
   )"
   
-  if [[ "$matching_count" -gt 0 ]]; then
+  if [[ "$matching_count" -eq 1 ]]; then
     success "Interface endpoint exists: $short_service_name"
+  elif [[ "$matching_count" -gt 1 ]]; then
+    DUPLICATE_INTERFACE_SERVICES+=("$short_service_name")
   else
     MISSING_INTERFACE_SERVICES+=("$short_service_name")
   fi
@@ -332,6 +441,40 @@ if [[ "${#MISSING_INTERFACE_SERVICES[@]}" -gt 0 ]]; then
   printf ' %s' "${MISSING_INTERFACE_SERVICES[@]}" >&2
   printf '\n' >&2
   exit 1
+fi
+
+if [[ "${#DUPLICATE_INTERFACE_SERVICES[@]}" -gt 0 ]]; then
+  printf '[FAIL] Duplicate Interface VPC Endpoints found for services:' >&2
+  printf ' %s' "${DUPLICATE_INTERFACE_SERVICES[@]}" >&2
+  printf '\n' >&2
+  exit 1
+fi
+
+EXPECTED_INTERFACE_SERVICES_JSON="$(
+  printf '%s\n' "${EXPECTED_INTERFACE_ENDPOINT_SERVICES[@]}" |
+    jq -R . |
+    jq -s 'sort | unique'
+)"
+
+ACTUAL_INTERFACE_SERVICES_JSON="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq --arg prefix "com.amazonaws.${AWS_REGION}." '
+      [.VpcEndpoints[].ServiceName | ltrimstr($prefix)] | sort | unique
+    '
+)"
+
+UNEXPECTED_INTERFACE_SERVICES_JSON="$(
+  jq -n \
+    --argjson expected "$EXPECTED_INTERFACE_SERVICES_JSON" \
+    --argjson actual "$ACTUAL_INTERFACE_SERVICES_JSON" \
+    '$actual - $expected'
+)"
+
+if [[ "$(echo "$UNEXPECTED_INTERFACE_SERVICES_JSON" | jq 'length')" -eq 0 ]]; then
+  success "Interface VPC Endpoint service inventory exactly matches the platform-owned set"
+else
+  echo "$UNEXPECTED_INTERFACE_SERVICES_JSON" | jq '{unexpected_interface_endpoint_services: .}'
+  fail "Unexpected Interface VPC Endpoint services are present."
 fi
 
 section "Checking S3 Gateway VPC Endpoint"
@@ -348,10 +491,10 @@ S3_ENDPOINTS_JSON="$(
 
 S3_ENDPOINT_COUNT="$(echo "$S3_ENDPOINTS_JSON" | jq '.VpcEndpoints | length')"
 
-if [[ "$S3_ENDPOINT_COUNT" -gt 0 ]]; then
-  success "S3 Gateway VPC Endpoint exists"
+if [[ "$S3_ENDPOINT_COUNT" -eq 1 ]]; then
+  success "Exactly one S3 Gateway VPC Endpoint exists"
 else
-  fail "S3 Gateway VPC Endpoint not found."
+  fail "Expected exactly one S3 Gateway VPC Endpoint, found ${S3_ENDPOINT_COUNT}."
 fi
 
 S3_ENDPOINT_STATE="$(
@@ -403,6 +546,7 @@ SERVERLESS_ROUTE_TABLES_JSON="$(
 
 COMPUTE_RT_IDS_JSON="$(echo "$COMPUTE_ROUTE_TABLES_JSON" | jq '[.RouteTables[].RouteTableId]')"
 SERVERLESS_RT_IDS_JSON="$(echo "$SERVERLESS_ROUTE_TABLES_JSON" | jq '[.RouteTables[].RouteTableId]')"
+ENDPOINT_RT_IDS_JSON="$(echo "$ENDPOINT_ROUTE_TABLES_JSON" | jq '[.RouteTables[].RouteTableId]')"
 
 COMPUTE_RT_COUNT="$(echo "$COMPUTE_RT_IDS_JSON" | jq 'length')"
 SERVERLESS_RT_COUNT="$(echo "$SERVERLESS_RT_IDS_JSON" | jq 'length')"
@@ -428,25 +572,33 @@ else
   fail "S3 Gateway Endpoint is missing one or more compute private route table associations."
 fi
 
-if [[ "$SERVERLESS_RT_COUNT" -gt 0 ]]; then
-  MISSING_SERVERLESS_S3_ASSOCIATIONS="$(
-    jq -n \
-      --argjson expected "$SERVERLESS_RT_IDS_JSON" \
-      --argjson actual "$S3_ROUTE_TABLE_IDS_JSON" \
-      '$expected - $actual | length'
-  )"
+if [[ "$SERVERLESS_RT_COUNT" -eq 0 ]]; then
+  fail "No serverless private route tables found for S3 Gateway Endpoint coverage check."
+fi
 
-  if [[ "$MISSING_SERVERLESS_S3_ASSOCIATIONS" -eq 0 ]]; then
-    success "S3 Gateway Endpoint is associated with all serverless private route tables"
-  else
-    jq -n \
-      --argjson expected "$SERVERLESS_RT_IDS_JSON" \
-      --argjson actual "$S3_ROUTE_TABLE_IDS_JSON" \
-      '{missing_serverless_route_table_ids: ($expected - $actual)}'
-    fail "S3 Gateway Endpoint is missing one or more serverless private route table associations."
-  fi
+EXPECTED_S3_ROUTE_TABLE_IDS_JSON="$(
+  jq -n \
+    --argjson endpoint "$ENDPOINT_RT_IDS_JSON" \
+    --argjson compute "$COMPUTE_RT_IDS_JSON" \
+    --argjson serverless "$SERVERLESS_RT_IDS_JSON" \
+    '$endpoint + $compute + $serverless | sort | unique'
+)"
+
+NORMALIZED_S3_ROUTE_TABLE_IDS_JSON="$(echo "$S3_ROUTE_TABLE_IDS_JSON" | jq 'sort | unique')"
+
+S3_ROUTE_TABLE_SET_DIFFERENCE_JSON="$(
+  jq -n \
+    --argjson expected "$EXPECTED_S3_ROUTE_TABLE_IDS_JSON" \
+    --argjson actual "$NORMALIZED_S3_ROUTE_TABLE_IDS_JSON" \
+    '{missing_route_table_ids: ($expected - $actual), unexpected_route_table_ids: ($actual - $expected)}'
+)"
+
+if echo "$S3_ROUTE_TABLE_SET_DIFFERENCE_JSON" |
+  jq -e '(.missing_route_table_ids | length) == 0 and (.unexpected_route_table_ids | length) == 0' >/dev/null; then
+  success "S3 Gateway Endpoint route-table associations exactly match endpoint, compute, and serverless private route tables"
 else
-  warn "No serverless private route tables found. Skipping serverless S3 Gateway coverage check."
+  echo "$S3_ROUTE_TABLE_SET_DIFFERENCE_JSON" | jq .
+  fail "S3 Gateway Endpoint route-table associations do not exactly match the expected private route-table set."
 fi
 
 section "VPC Endpoints Summary"
@@ -462,6 +614,7 @@ effective_egress_mode:                ${EFFECTIVE_EGRESS_MODE}
 Endpoint private subnets:             ${ENDPOINT_SUBNET_COUNT}
 Endpoint private route tables:        ${ENDPOINT_RT_COUNT}
 Interface VPC Endpoints:              ${INTERFACE_ENDPOINT_COUNT}
+Interface Endpoint security group:    ${INTERFACE_ENDPOINT_SG_ID}
 S3 Gateway Endpoint count:            ${S3_ENDPOINT_COUNT}
 S3 Gateway route table associations:  ${S3_ROUTE_TABLE_COUNT}
 Compute private route tables:         ${COMPUTE_RT_COUNT}
