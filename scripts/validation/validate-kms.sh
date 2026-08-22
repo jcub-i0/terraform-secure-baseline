@@ -12,6 +12,7 @@
 #   - lambda
 #   - ebs
 #   - secrets manager
+#   - ecr
 # - Backup CMK alias is validated only when effective_backup_enabled=true
 # - Matching KMS keys are enabled
 # - Key rotation status is checked and reported
@@ -296,6 +297,7 @@ validate_alias_and_key "logs" "logs" "true"
 validate_alias_and_key "lambda" "lambda" "true"
 validate_alias_and_key "ebs" "ebs" "true"
 validate_alias_and_key "secrets manager" "secrets" "true"
+validate_alias_and_key "ecr" "ecr" "true"
 
 # Backup is profile/override dependent.
 if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
