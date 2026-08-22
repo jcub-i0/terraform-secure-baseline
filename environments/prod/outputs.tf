@@ -140,5 +140,5 @@ output "effective_manage_guardduty_locally" {
 
 output "ecr_repositories" {
   description = "Managed ECR repository metadata keyed by repository name"
-  value       = module.ecr.repositories
+  value       = module.baseline.repositories
 }
