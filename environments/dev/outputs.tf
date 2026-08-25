@@ -145,5 +145,5 @@ output "ecr_repositories" {
 
 output "application_load_balancer" {
   description = "Shared ECS Application Load Balancer metadata; null when no ALB services are configured"
-  value = module.baseline.application_load_balancer
+  value       = module.baseline.application_load_balancer
 }
