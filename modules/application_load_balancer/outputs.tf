@@ -20,6 +20,7 @@ output "https_listener_arn" {
 
 output "target_groups" {
   description = "Target group metadata keyed by ECS service name"
+
   value = {
     for service_name, target_group in aws_lb_target_group.target_groups : service_name => {
       arn  = target_group.arn
