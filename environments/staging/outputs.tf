@@ -142,3 +142,8 @@ output "ecr_repositories" {
   description = "Managed ECR repository metadata keyed by repository name"
   value       = module.baseline.ecr_repositories
 }
+
+output "application_load_balancer" {
+  description = "Shared ECS Application Load Balancer metadata; null when no ALB services are configured"
+  value = module.baseline.application_load_balancer
+}
