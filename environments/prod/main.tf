@@ -26,4 +26,5 @@ module "baseline" {
   manage_guardduty_locally           = var.manage_guardduty_locally
   manage_securityhub_v2_locally      = var.manage_securityhub_v2_locally
   repositories                       = var.repositories
+  container_insights = var.container_insights
 }
