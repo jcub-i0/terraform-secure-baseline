@@ -47,3 +47,21 @@ resource "aws_lb" "load_balancer" {
     }
   }
 }
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.load_balancer.arn
+  port = 443
+  protocol = "HTTPS"
+  ssl_policy = var.ssl_policy
+  certificate_arn = var.certificate_arn
+
+  default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "application/json"
+      message_body = "{\"error\":\"not_found\"}"
+      status_code = "404"
+    }
+  }
+}
