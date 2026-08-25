@@ -356,6 +356,18 @@ variable "alb_certificate_arn" {
   description = "ACM certificate ARN used by the shared ECS Application Load Balancer."
   type        = string
   default     = null
+
+  validation {
+    condition = (
+      var.alb_certificate_arn == null ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):acm:[a-z0-9-]+:[0-9]{12}:certificate/[A-Za-z0-9-]+$",
+        var.alb_certificate_arn
+      ))
+    )
+
+    error_message = "alb_certificate_arn must be a valid ACM certificate ARN"
+  }
 }
 
 variable "alb_ingress_cidrs" {
