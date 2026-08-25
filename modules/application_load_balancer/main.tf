@@ -21,8 +21,8 @@ resource "aws_security_group_rule" "https_ingress" {
 }
 
 resource "aws_lb" "load_balancer" {
-  name = "${var.name_prefix}-alb"
-  internal = false
+  name               = "${var.name_prefix}-alb"
+  internal           = false
   load_balancer_type = "application"
 
   security_groups = [
@@ -35,14 +35,14 @@ resource "aws_lb" "load_balancer" {
   drop_invalid_header_fields = true
 
   tags = {
-    Name = "${var.name_prefix}-alb"
+    Name        = "${var.name_prefix}-alb"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 
   lifecycle {
     precondition {
-      condition = length("${var.name_prefix}-alb") <= 32
+      condition     = length("${var.name_prefix}-alb") <= 32
       error_message = "The complete Application Load Balancer name must not exceed 32 characters."
     }
   }
