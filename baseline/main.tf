@@ -298,7 +298,7 @@ module "ecs_cluster" {
 
   name_prefix = local.name_prefix
   environment = var.environment
-  
+
   container_insights = var.container_insights
 }
 
