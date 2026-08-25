@@ -293,6 +293,15 @@ module "ecr" {
   repositories = var.repositories
 }
 
+module "ecs_cluster" {
+  source = "../modules/ecs_cluster"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+  
+  container_insights = var.container_insights
+}
+
 module "backup" {
   source = "../modules/backup"
 
