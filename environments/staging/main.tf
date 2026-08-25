@@ -27,8 +27,8 @@ module "baseline" {
   manage_securityhub_v2_locally      = var.manage_securityhub_v2_locally
   repositories                       = var.repositories
   container_insights                 = var.container_insights
-  alb_certificate_arn = var.alb_certificate_arn
-  alb_ingress_cidrs = var.alb_ingress_cidrs
-  alb_services = var.alb_services
-  alb_ssl_policy = var.alb_ssl_policy
+  alb_certificate_arn                = var.alb_certificate_arn
+  alb_ingress_cidrs                  = var.alb_ingress_cidrs
+  alb_services                       = var.alb_services
+  alb_ssl_policy                     = var.alb_ssl_policy
 }
