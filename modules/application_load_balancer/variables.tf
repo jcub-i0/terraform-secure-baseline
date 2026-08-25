@@ -23,7 +23,7 @@ variable "certificate_arn" {
 }
 
 variable "ingress_cidrs" {
-  description = "IPv4 CIDR blocks allowed to reach teh HTTPS listener"
+  description = "IPv4 CIDR blocks allowed to reach the HTTPS listener"
   type        = set(string)
 }
 
