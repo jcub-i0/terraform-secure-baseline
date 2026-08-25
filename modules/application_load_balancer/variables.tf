@@ -37,10 +37,10 @@ variable "services" {
   description = "ALB target groups and HTTPS routing rules keyed by ECS service name"
 
   type = map(object({
-    container_port = number
-    priority = number
-    host_headers = optional(set(string), [])
-    path_patterns = optional(set(string), [])
+    container_port    = number
+    priority          = number
+    host_headers      = optional(set(string), [])
+    path_patterns     = optional(set(string), [])
     health_check_path = optional(string, "/health")
   }))
 
@@ -48,8 +48,8 @@ variable "services" {
 
   validation {
     condition = alltrue([
-        for service in values(var.services) :
-        service.container_port >= 1 && service.container_port <= 65535
+      for service in values(var.services) :
+      service.container_port >= 1 && service.container_port <= 65535
     ])
 
     error_message = "Each service container_port must be between 1 and 65535."
@@ -57,8 +57,8 @@ variable "services" {
 
   validation {
     condition = alltrue([
-        for service in values(var.services) :
-        service.priority >= 1 && service.priority <= 50000
+      for service in values(var.services) :
+      service.priority >= 1 && service.priority <= 50000
     ])
 
     error_message = "Each service listener-rule priority must be between 1 and 50000."
@@ -66,7 +66,7 @@ variable "services" {
 
   validation {
     condition = length(distinct([
-        for service in values(var.services) : service.priority
+      for service in values(var.services) : service.priority
     ])) == length(var.services)
 
     error_message = "Each service must use a unique listener-rule priority."
@@ -74,8 +74,8 @@ variable "services" {
 
   validation {
     condition = alltrue([
-        for service in values(var.services) :
-        length(service.host_headers) > 0 || length(service.path_patterns) > 0
+      for service in values(var.services) :
+      length(service.host_headers) > 0 || length(service.path_patterns) > 0
     ])
 
     error_message = "Each ALB service msut define at least one host_headers or path_patterns routing condition."
