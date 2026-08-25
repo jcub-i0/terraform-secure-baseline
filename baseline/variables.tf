@@ -357,26 +357,26 @@ variable "alb_certificate_arn" {
   type        = string
   default     = null
 
-validation {
-  condition = (
-    var.alb_certificate_arn == null
-    || can(regex(
-      "^arn:(aws|aws-us-gov|aws-cn):acm:[a-z0-9-]+:[0-9]{12}:certificate/[A-Za-z0-9-]+$",
-      var.alb_certificate_arn
-    ))
-  )
+  validation {
+    condition = (
+      var.alb_certificate_arn == null
+      || can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):acm:[a-z0-9-]+:[0-9]{12}:certificate/[A-Za-z0-9-]+$",
+        var.alb_certificate_arn
+      ))
+    )
 
-  error_message = "alb_certificate_arn must be a valid ACM certificate ARN."
-}
+    error_message = "alb_certificate_arn must be a valid ACM certificate ARN."
+  }
 
-validation {
-  condition = (
-    length(var.alb_services) == 0
-    || var.alb_certificate_arn != null
-  )
+  validation {
+    condition = (
+      length(var.alb_services) == 0
+      || var.alb_certificate_arn != null
+    )
 
-  error_message = "alb_certificate_arn must be provided when alb_services is non-empty."
-}
+    error_message = "alb_certificate_arn must be provided when alb_services is non-empty."
+  }
 }
 
 variable "alb_ingress_cidrs" {
