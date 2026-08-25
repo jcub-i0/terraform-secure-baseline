@@ -100,10 +100,10 @@ resource "aws_lb_listener_rule" "service_routes" {
   for_each = var.services
 
   listener_arn = aws_lb_listener.https.arn
-  priority = each.value.priority
+  priority     = each.value.priority
 
   action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.target_groups[each.key].arn
   }
 
