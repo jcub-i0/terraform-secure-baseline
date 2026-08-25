@@ -213,3 +213,19 @@ variable "repositories" {
     error_message = "Repository names must use lowercase ECR repository-name syntax."
   }
 }
+
+variable "container_insights" {
+  description = "CloudWatch Container Insights mode for the ECS cluster"
+  type        = string
+  default     = "enhanced"
+
+  validation {
+    condition = contains([
+      "enhanced",
+      "enabled",
+      "disabled",
+    ], var.container_insights)
+
+    error_message = "container_insights must be enhanced, enabled, or disabled."
+  }
+}
