@@ -19,3 +19,31 @@ resource "aws_security_group_rule" "https_ingress" {
   cidr_blocks       = var.ingress_cidrs
   description       = "Allow HTTPS ingress to the Application Load Balancer"
 }
+
+resource "aws_lb" "load_balancer" {
+  name = "${var.name_prefix}-alb"
+  internal = false
+  load_balancer_type = "application"
+
+  security_groups = [
+    aws_security_group.load_balancer.id,
+  ]
+
+  subnets = var.public_subnet_ids
+
+  enable_deletion_protection = false # CHANGE THIS IN PROD
+  drop_invalid_header_fields = true
+
+  tags = {
+    Name = "${var.name_prefix}-alb"
+    Environment = var.environment
+    Terraform = "true"
+  }
+
+  lifecycle {
+    precondition {
+      condition = length("${var.name_prefix}-alb") <= 32
+      error_message = "The complete Application Load Balancer name must not exceed 32 characters."
+    }
+  }
+}
