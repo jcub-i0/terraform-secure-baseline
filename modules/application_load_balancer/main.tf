@@ -95,3 +95,35 @@ resource "aws_lb_target_group" "target_groups" {
     }
   }
 }
+
+resource "aws_lb_listener_rule" "service_routes" {
+  for_each = var.services
+
+  listener_arn = aws_lb_listener.https.arn
+  priority = each.value.priority
+
+  action {
+    type = "forward"
+    target_group_arn = aws_lb_target_group.target_groups[each.key].arn
+  }
+
+  dynamic "condition" {
+    for_each = length(each.value.host_headers) > 0 ? [1] : []
+
+    content {
+      host_header {
+        values = each.value.host_headers
+      }
+    }
+  }
+
+  dynamic "condition" {
+    for_each = length(each.value.path_patterns) > 0 ? [1] : []
+
+    content {
+      path_pattern {
+        values = each.value.path_patterns
+      }
+    }
+  }
+}
