@@ -15,6 +15,11 @@ variable "vpc_id" {
 variable "public_subnet_ids" {
   description = "Public subnet IDs used by the Internet-facing Application Load Balancer"
   type        = set(string)
+
+  validation {
+    condition = length(var.public_subnet_ids) >= 2
+    error_message = "public_subnet_ids must contain at least two public subnet IDs"
+  }
 }
 
 variable "certificate_arn" {
