@@ -17,7 +17,7 @@ variable "public_subnet_ids" {
   type        = set(string)
 
   validation {
-    condition = length(var.public_subnet_ids) >= 2
+    condition     = length(var.public_subnet_ids) >= 2
     error_message = "public_subnet_ids must contain at least two public subnet IDs"
   }
 }
