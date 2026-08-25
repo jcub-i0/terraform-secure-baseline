@@ -34,7 +34,7 @@ variable "ssl_policy" {
 }
 
 variable "services" {
-  description = "ALB target groups and HTTPS routing rules keyed by ECS service name"
+  description = "ALB target groups and HTTPS routing rules keyed by ECS service name."
 
   type = map(object({
     container_port    = number
@@ -78,6 +78,6 @@ variable "services" {
       length(service.host_headers) > 0 || length(service.path_patterns) > 0
     ])
 
-    error_message = "Each ALB service msut define at least one host_headers or path_patterns routing condition."
+    error_message = "Each ALB service must define at least one host_headers or path_patterns routing condition."
   }
 }
