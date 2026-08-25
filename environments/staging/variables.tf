@@ -229,3 +229,35 @@ variable "container_insights" {
     error_message = "container_insights must be enhanced, enabled, or disabled."
   }
 }
+
+variable "alb_certificate_arn" {
+  description = "ACM certificate ARN used by the shared ECS Application Load Balancer."
+  type        = string
+  default     = null
+}
+
+variable "alb_ingress_cidrs" {
+  description = "IPv4 CIDR blocks allowed to reach the shared ECS Application Load Balancer over HTTPS."
+  type        = set(string)
+  default     = []
+}
+
+variable "alb_ssl_policy" {
+  description = "TLS security policy used by the shared ECS Application Load Balancer HTTPS listener."
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+}
+
+variable "alb_services" {
+  description = "ALB target groups and HTTPS routing rules keyed by ECS service name."
+
+  type = map(object({
+    container_port    = number
+    priority          = number
+    host_headers      = optional(set(string), [])
+    path_patterns     = optional(set(string), [])
+    health_check_path = optional(string, "/health")
+  }))
+
+  default = {}
+}
