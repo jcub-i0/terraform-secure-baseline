@@ -59,4 +59,32 @@ variable "services" {
   }))
 
   default = {}
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      can(regex("@sha256:[0-9a-f]{64}$", service.image))
+    ])
+
+    error_message = "Every ECS service image must be pinned to a SHA-256 digest using repository@sha256:<64 hex characters>."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      service.container_port >= 1 &&
+      service.container_port <= 65535
+    ])
+
+    error_message = "Each ECS service container_port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      contains(["X86_64", "ARM64"], service.cpu_architecture)
+    ])
+
+    error_message = "Each ECS service cpu_architecture must be X86_64 or ARM64."
+  }
 }
