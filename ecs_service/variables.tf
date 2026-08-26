@@ -42,14 +42,14 @@ variable "services" {
   description = "ECS/Fargate services keyed by stable service name"
 
   type = map(object({
-    image = string
+    image          = string
     container_port = number
-    cpu = number
-    memory = number
-    desired_count = optional(number, 1)
+    cpu            = number
+    memory         = number
+    desired_count  = optional(number, 1)
 
     execution_role_arn = string
-    task_role_arn = string
+    task_role_arn      = string
 
     target_group_arn = optional(string)
 
