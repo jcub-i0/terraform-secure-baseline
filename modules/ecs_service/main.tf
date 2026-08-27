@@ -36,7 +36,7 @@ resource "aws_ecs_task_definition" "task_definitions" {
 resource "aws_cloudwatch_log_group" "service_logs" {
   for_each = var.services
 
-  name              = "/ecs/${var.name_prefix}-${each.key}"
+  name              = "/ecs/${var.name_prefix}/${each.key}"
   retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
