@@ -91,5 +91,5 @@ variable "services" {
 
 variable "logs_cmk_arn" {
   description = "ARN of the customer-managed KMS key used to encrypt ECS CloudWatch log groups"
-  type = string
+  type        = string
 }
