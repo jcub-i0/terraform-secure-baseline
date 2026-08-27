@@ -56,7 +56,7 @@ variable "services" {
     cpu_architecture = optional(string, "X86_64")
 
     environment_variables = optional(map(string), {})
-    secrets = optional(map(string), {})
+    secrets               = optional(map(string), {})
   }))
 
   default = {}
