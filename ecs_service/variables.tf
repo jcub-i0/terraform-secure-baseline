@@ -88,3 +88,8 @@ variable "services" {
     error_message = "Each ECS service cpu_architecture must be X86_64 or ARM64."
   }
 }
+
+variable "logs_cmk_arn" {
+  description = "ARN of the customer-managed KMS key used to encrypt ECS CloudWatch log groups"
+  type = string
+}
