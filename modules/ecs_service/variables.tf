@@ -87,6 +87,15 @@ variable "services" {
 
     error_message = "Each ECS service cpu_architecture must be X86_64 or ARM64."
   }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      service.desired_count >= 0
+    ])
+
+    error_message = "Each ECS service desired_count must be zero or greater."
+  }
 }
 
 variable "logs_cmk_arn" {
