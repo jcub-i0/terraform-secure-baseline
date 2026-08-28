@@ -172,7 +172,7 @@ variable "security_policy_rule_ids" {
 
   validation {
     condition = alltrue([
-      for service_name in keys(vars.services) :
+      for service_name in keys(var.services) :
       contains(keys(var.security_policy_rule_ids), service_name)
     ])
 
