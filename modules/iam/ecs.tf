@@ -89,7 +89,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
   }
 }
 
-resource "aws_iam_role_policy" "ecs_task_execuction_policies" {
+resource "aws_iam_role_policy" "ecs_task_execution_policies" {
   for_each = var.ecs_iam_services
 
   name   = "${var.name_prefix}-${each.key}-ecs-execution"
