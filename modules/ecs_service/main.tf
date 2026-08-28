@@ -127,6 +127,17 @@ resource "aws_ecs_service" "services" {
     }
   }
 
+  lifecycle {
+    precondition {
+      condition = try(
+        length(var.execution_policy_ids[each.key]) > 0,
+        false
+      )
+
+      error_message = "An ECS execution-policy readiness ID must be provided for each configured ECS service."
+    }
+  }
+
   tags = {
     Name        = "${var.name_prefix}-${each.key}"
     Environment = var.environment
