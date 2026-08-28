@@ -404,3 +404,54 @@ variable "alb_services" {
 
   default = {}
 }
+
+variable "ecs_services" {
+  description = "ECS/Fargate workload services keyed by stable service name"
+
+  type = map(object({
+    repository_name = string
+    image_digest = string
+
+    container_port = number
+    cpu = number
+    memory = number
+    desired_count = optional(number, 1)
+
+    cpu_architecture = optional(string, "X86_64")
+
+    database_access = optional(bool, false)
+
+    environment_variables = optional(map(string), {})
+
+    secrets_manager_secrets = optional(map(string), {})
+    ssm_parameters = optional(map(string), {})
+    execution_kms_key_arns = optional(set(string), {})
+
+    ingress = optional(object({
+      priority = number
+      host_headers = optional(set(string), [])
+      path_patterns = optional(set(string), [])
+      health_check_path = optional(string, "/health")
+    }), null)
+  }))
+  
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      can(regex("^[a-z0-9]+([._-][a-z0-9]+)*$", service.repository_name))
+    ])
+
+    error_message = "Each ECS service repository_name must use lowercase ECR repository-name syntax."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      can(regex("^sha256:[0-9a-f]{64}$", service.image_digest))
+    ])
+
+    error_message = "Each ECS service image_digest must be a SHA-256 digest in sha256:<64 hexadecimal characters> format."
+  }
+}
