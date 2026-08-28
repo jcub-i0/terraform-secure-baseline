@@ -30,5 +30,5 @@ module "baseline" {
   alb_certificate_arn                = var.alb_certificate_arn
   alb_ingress_cidrs                  = var.alb_ingress_cidrs
   alb_ssl_policy                     = var.alb_ssl_policy
-  ecs_services = var.ecs_services
+  ecs_services                       = var.ecs_services
 }
