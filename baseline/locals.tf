@@ -212,6 +212,20 @@ locals {
     }
   }
 
+  ecs_security_policy_rule_ids = {
+    for service_name, rules in module.security_policy.ecs_sg_rule_ids :
+    service_name => toset(compact([
+      rules.endpoints_ingress,
+      rules.endpoints_egress,
+      rules.s3_egress,
+      rules.internet_https_egress,
+      rules.db_egress,
+      rules.db_ingress,
+      rules.alb_ingress,
+      rules.alb_egress,
+    ]))
+  }
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
