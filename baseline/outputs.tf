@@ -150,7 +150,7 @@ output "ecr_repositories" {
 output "application_load_balancer" {
   description = "Shared ECS Application Load Balancer metadata; null when no ALB services are configured"
 
-  value = length(var.alb_services) > 0 ? {
+  value = length(local.ecs_alb_services) > 0 ? {
     arn                = module.application_load_balancer[0].load_balancer_arn
     dns_name           = module.application_load_balancer[0].dns_name
     security_group_id  = module.application_load_balancer[0].security_group_id
