@@ -172,12 +172,12 @@ locals {
       image = "${module.ecr.repositories[service.repository_name].repository_url}@${service.image_digest}"
 
       container_port = service.container_port
-      cpu = service.cpu
-      memory = service.memory
-      desired_count = service.desired_count
+      cpu            = service.cpu
+      memory         = service.memory
+      desired_count  = service.desired_count
 
       execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
-      task_role_arn = module.iam.ecs_task_roles[service_name].arn
+      task_role_arn      = module.iam.ecs_task_roles[service_name].arn
 
       target_group_arn = (
         service.ingress != null
