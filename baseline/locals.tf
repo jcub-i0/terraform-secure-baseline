@@ -196,6 +196,22 @@ locals {
     }
   }
 
+  ecs_security_policy_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      task_sg_id = module.ecs_service.task_security_group_ids[service_name]
+      container_port = service.container_port
+
+      alb_sg_id = (
+        service.ingress != null
+        ? module.application_load_balancer[0].security_group_id
+        : null
+      )
+
+      database_access = service.database_access
+    }
+  }
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
