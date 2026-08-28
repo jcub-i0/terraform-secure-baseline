@@ -391,20 +391,6 @@ variable "alb_ssl_policy" {
   default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
 }
 
-variable "alb_services" {
-  description = "ALB target groups and HTTPS routing rules keyed by ECS service name."
-
-  type = map(object({
-    container_port    = number
-    priority          = number
-    host_headers      = optional(set(string), [])
-    path_patterns     = optional(set(string), [])
-    health_check_path = optional(string, "/health")
-  }))
-
-  default = {}
-}
-
 variable "ecs_services" {
   description = "ECS/Fargate workload services keyed by stable service name"
 
