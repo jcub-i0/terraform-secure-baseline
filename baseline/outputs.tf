@@ -167,3 +167,8 @@ output "ecs_cluster" {
     name = module.ecs_cluster.cluster_name
   }
 }
+
+output "ecs_services" {
+  description = "ECS service metadata keyed by service name."
+  value       = module.ecs_service.services
+}
