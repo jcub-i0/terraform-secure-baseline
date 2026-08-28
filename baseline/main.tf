@@ -47,6 +47,8 @@ module "security_policy" {
   db_port                    = var.db_port
   quarantine_sg_id           = module.compute.quarantine_sg_id
   s3_prefix_list_id          = module.vpc_endpoints.s3_prefix_list_id
+
+  ecs_security_policy_services = local.ecs_security_policy_services
 }
 
 module "compute" {
