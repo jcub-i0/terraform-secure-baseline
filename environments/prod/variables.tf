@@ -247,3 +247,36 @@ variable "alb_ssl_policy" {
   type        = string
   default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
 }
+
+variable "ecs_services" {
+  description = "ECS/Fargate workload services keyed by stable service name."
+
+  type = map(object({
+    repository_name = string
+    image_digest    = string
+
+    container_port = number
+    cpu            = number
+    memory         = number
+    desired_count  = optional(number, 1)
+
+    cpu_architecture = optional(string, "X86_64")
+
+    database_access = optional(bool, false)
+
+    environment_variables = optional(map(string), {})
+
+    secrets_manager_secrets = optional(map(string), {})
+    ssm_parameters          = optional(map(string), {})
+    execution_kms_key_arns  = optional(set(string), [])
+
+    ingress = optional(object({
+      priority          = number
+      host_headers      = optional(set(string), [])
+      path_patterns     = optional(set(string), [])
+      health_check_path = optional(string, "/health")
+    }), null)
+  }))
+
+  default = {}
+}
