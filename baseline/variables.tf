@@ -371,11 +371,14 @@ variable "alb_certificate_arn" {
 
   validation {
     condition = (
-      length(var.ecs_services) == 0
+      alltrue([
+        for service in values(var.ecs_services) :
+        service.ingress == null
+      ])
       || var.alb_certificate_arn != null
     )
 
-    error_message = "alb_certificate_arn must be provided when alb_services is non-empty."
+    error_message = "alb_certificate_arn must be provided when any ECS service configures ingress."
   }
 }
 
