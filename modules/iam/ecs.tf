@@ -92,7 +92,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
     for_each = length(each.value.execution_secret_arns) > 0 ? [1] : []
 
     content {
-      sid = "AllowSecretsManagerRead"
+      sid    = "AllowSecretsManagerRead"
       effect = "Allow"
 
       actions = [
@@ -107,7 +107,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
     for_each = length(each.value.execution_ssm_parameter_arns) > 0 ? [1] : []
 
     content {
-      sid = "AllowSSMParameterRead"
+      sid    = "AllowSSMParameterRead"
       effect = "Allow"
 
       actions = [
@@ -122,7 +122,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
     for_each = length(each.value.execution_kms_key_arns) > 0 ? [1] : []
 
     content {
-      sid = "AllowExecutionKMSDecrypt"
+      sid    = "AllowExecutionKMSDecrypt"
       effect = "Allow"
 
       actions = [
