@@ -184,22 +184,50 @@ Persistent production use must reconsider ALB deletion protection before deploym
 
 ## Conditional Baseline Integration
 
-The baseline instantiates this module only when the ALB service map is non-empty.
+The baseline derives this module's service configuration from the canonical `ecs_services` map.
+
+Only ECS services with a non-null `ingress` configuration are included in the derived ALB service map.
 
 Conceptually:
 
 ```text
-alb_services = {}
+ecs_services = {}
     -> no ALB resources
 
-alb_services != {}
+ecs_services contains no services with ingress
+    -> no ALB resources
+
+ecs_services contains one or more services with ingress
     -> one shared ALB
     -> one HTTPS listener
-    -> one target group per configured service
-    -> one listener rule per configured service
+    -> one target group per ingress-enabled service
+    -> one listener rule per ingress-enabled service
 ```
 
-This avoids creating and paying for an idle ALB when no ingress-enabled ECS workloads exist.
+For example:
+
+```hcl
+ecs_services = {
+  api = {
+    # ...
+
+    ingress = {
+      priority     = 100
+      host_headers = ["api.example.com"]
+    }
+  }
+
+  worker = {
+    # ...
+
+    ingress = null
+  }
+}
+```
+
+In this example, only `api` is included in the ALB routing configuration. The `worker` service does not receive a target group or listener rule.
+
+This avoids requiring callers to maintain a separate ALB service map and prevents creation of an idle ALB when no ingress-enabled ECS workloads exist.
 
 ## Tags
 
