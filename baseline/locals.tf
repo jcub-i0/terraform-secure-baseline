@@ -181,7 +181,7 @@ locals {
 
       target_group_arn = (
         service.ingress != null
-        ? module.module.application_load_balancer[0].target_groups[service_name].arn
+        ? module.application_load_balancer[0].target_groups[service_name].arn
         : null
       )
 
