@@ -455,4 +455,16 @@ variable "ecs_services" {
 
     error_message = "Each ECS service image_digest must be a SHA-256 digest in sha256:<64 hexadecimal characters> format."
   }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      length(setintersection(
+        toset(keys(service.secrets_manager_secrets)),
+        toset(keys(service.ssm_parameters)),
+      )) == 0
+    ])
+
+    error_message = "An ECS service secret name cannot be defined in both secrets_manager_secrets and ssm_parameters."
+  }
 }
