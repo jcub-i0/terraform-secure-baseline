@@ -172,3 +172,13 @@ output "ecs_services" {
   description = "ECS service metadata keyed by service name."
   value       = module.ecs_service.services
 }
+
+output "ecs_task_definition_arns" {
+  description = "ECS task definition ARNs keyed by service name"
+  value = module.ecs_service.task_definition_arns
+}
+
+output "ecs_task_security_group_ids" {
+  description = "ECS task Security Group IDs keyed by service name"
+  value = module.ecs_service.task_security_group_ids
+}
