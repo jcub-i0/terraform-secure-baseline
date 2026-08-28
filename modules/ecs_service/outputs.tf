@@ -24,7 +24,7 @@ output "task_definition_arns" {
 
   value = {
     for service_name, task_definition in aws_ecs_task_definition.task_definitions :
-    service_name => task_definitions.arn
+    service_name => task_definition.arn
   }
 }
 
