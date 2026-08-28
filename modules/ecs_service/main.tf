@@ -67,7 +67,6 @@ resource "aws_ecs_task_definition" "task_definitions" {
           awslogs-stream-prefix = "ecs"
 
           mode            = "non-blocking"
-          max-buffer-size = "25m"
         }
       }
     }
