@@ -182,3 +182,8 @@ output "ecs_task_security_group_ids" {
   description = "ECS task Security Group IDs keyed by service name"
   value = module.ecs_service.task_security_group_ids
 }
+
+output "ecs_log_groups" {
+  description = "ECS CloudWatch log-group metadata keyed by service name"
+  value = module.ecs_service.log_groups
+}
