@@ -149,3 +149,9 @@ variable "logs_cmk_arn" {
   description = "ARN of the customer-managed KMS key used to encrypt ECS CloudWatch log groups"
   type        = string
 }
+
+variable "execution_policy_ids" {
+  description = "ECS task execution IAM policy IDs keyed by service name, used as service launch-readiness dependencies"
+  type = map(string)
+  default = {}
+}
