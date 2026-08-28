@@ -96,24 +96,24 @@ resource "aws_cloudwatch_log_group" "service_logs" {
 resource "aws_ecs_service" "services" {
   for_each = var.services
 
-  name = "${var.name_prefix}-${each.key}"
-  cluster = var.cluster_arn
+  name            = "${var.name_prefix}-${each.key}"
+  cluster         = var.cluster_arn
   task_definition = aws_ecs_task_definition.task_definitions[each.key].arn
-  desired_count = each.value.desired_count
+  desired_count   = each.value.desired_count
 
-  launch_type = "FARGATE"
+  launch_type      = "FARGATE"
   platform_version = var.platform_version
 
   force_delete = true # CHANGE THIS IN PROD
 
   network_configuration {
-    subnets = var.compute_private_subnet_ids
-    security_groups = [aws_security_group.task_security_groups[each.key].id]
+    subnets          = var.compute_private_subnet_ids
+    security_groups  = [aws_security_group.task_security_groups[each.key].id]
     assign_public_ip = false
   }
 
   deployment_circuit_breaker {
-    enable = true
+    enable   = true
     rollback = true
   }
 
@@ -122,14 +122,14 @@ resource "aws_ecs_service" "services" {
 
     content {
       target_group_arn = load_balancer.value
-      container_name = each.key
-      container_port = each.value.container_port
+      container_name   = each.key
+      container_port   = each.value.container_port
     }
   }
 
   tags = {
-    Name = "${var.name_prefix}-${each.key}"
+    Name        = "${var.name_prefix}-${each.key}"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
