@@ -71,6 +71,12 @@ resource "aws_ecs_task_definition" "task_definitions" {
       }
     }
   ])
+
+  tags = {
+    Name = "${var.name_prefix}-${each.key}"
+    Environment = var.environment
+    Terraform = "true"
+  }
 }
 
 resource "aws_cloudwatch_log_group" "service_logs" {
