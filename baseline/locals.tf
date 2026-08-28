@@ -199,7 +199,7 @@ locals {
   ecs_security_policy_services = {
     for service_name, service in var.ecs_services :
     service_name => {
-      task_sg_id = module.ecs_service.task_security_group_ids[service_name]
+      task_sg_id     = module.ecs_service.task_security_group_ids[service_name]
       container_port = service.container_port
 
       alb_sg_id = (

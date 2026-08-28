@@ -311,11 +311,11 @@ module "ecs_cluster" {
 module "ecs_service" {
   source = "../modules/ecs_service"
 
-  name_prefix = local.name_prefix
-  environment = var.environment
+  name_prefix    = local.name_prefix
+  environment    = var.environment
   primary_region = var.primary_region
 
-  vpc_id = module.networking.vpc_id
+  vpc_id      = module.networking.vpc_id
   cluster_arn = module.ecs_cluster.cluster_arn
 
   compute_private_subnet_ids = toset(
@@ -323,7 +323,7 @@ module "ecs_service" {
   )
 
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
-  logs_cmk_arn = module.security.logs_cmk_arn
+  logs_cmk_arn              = module.security.logs_cmk_arn
 
   services = local.ecs_runtime_services
 
