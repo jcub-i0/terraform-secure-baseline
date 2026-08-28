@@ -129,7 +129,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
         "kms:Decrypt",
       ]
 
-      resources = each.value.execution_kms_key.arns
+      resources = each.value.execution_kms_key_arns
     }
   }
 }
