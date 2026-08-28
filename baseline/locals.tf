@@ -143,6 +143,29 @@ locals {
     service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/ecs/${local.name_prefix}/${service_name}"
   }
 
+  ecs_iam_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      ecr_repository_arns = toset([
+        module.ecr.repositories[service.repository_name].arn
+      ])
+
+      log_group_arns = toset([
+        local.ecs_log_group_arns[service_name]
+      ])
+
+      execution_secret_arns = toset(
+        values(service.secrets_manager_secrets)
+      )
+
+      execution_ssm_parameter_arns = toset(
+        values(service.ssm_parameters)
+      )
+
+      execution_kms_key_arns = service.execution_kms_key_arns
+    }
+  }
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
