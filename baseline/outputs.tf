@@ -158,3 +158,12 @@ output "application_load_balancer" {
     target_groups      = module.application_load_balancer[0].target_groups
   } : null
 }
+
+output "ecs_cluster" {
+  description = "ECS cluster metadata"
+
+  value = {
+    arn = module.ecs_cluster.cluster_arn
+    name = module.ecs_cluster.cluster_name
+  }
+}
