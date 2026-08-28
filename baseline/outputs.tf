@@ -187,3 +187,13 @@ output "ecs_log_groups" {
   description = "ECS CloudWatch log-group metadata keyed by service name"
   value       = module.ecs_service.log_groups
 }
+
+output "ecs_task_execution_roles" {
+  description = "ECS task execution roles keyed by service name"
+  value = module.iam.ecs_task_execution_roles
+}
+
+output "ecs_task_roles" {
+  description = "ECS application task roles keyed by service name"
+  value = module.iam.ecs_task_roles
+}
