@@ -166,6 +166,36 @@ locals {
     }
   }
 
+  ecs_runtime_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      image = "${module.ecr.repositories[service.repository_name].repository_url}@${service.image_digest}"
+
+      container_port = service.container_port
+      cpu = service.cpu
+      memory = service.memory
+      desired_count = service.desired_count
+
+      execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
+      task_role_arn = module.iam.ecs_task_roles[service_name].arn
+
+      target_group_arn = (
+        service.ingress != null
+        ? module.module.application_load_balancer[0].target_groups[service_name].arn
+        : null
+      )
+
+      cpu_architecture = service.cpu_architecture
+
+      environment_variables = service.environment_variables
+
+      secrets = merge(
+        service.secrets_manager_secrets,
+        service.ssm_parameters,
+      )
+    }
+  }
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
