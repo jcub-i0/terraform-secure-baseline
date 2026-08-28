@@ -66,7 +66,7 @@ resource "aws_ecs_task_definition" "task_definitions" {
           awslogs-region        = var.primary_region
           awslogs-stream-prefix = "ecs"
 
-          mode            = "non-blocking"
+          mode = "non-blocking"
         }
       }
     }
