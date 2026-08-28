@@ -308,6 +308,30 @@ module "ecs_cluster" {
   container_insights = var.container_insights
 }
 
+module "ecs_service" {
+  source = "../modules/ecs_service"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+  primary_region = var.primary_region
+
+  vpc_id = module.networking.vpc_id
+  cluster_arn = module.ecs_cluster.cluster_arn
+
+  compute_private_subnet_ids = toset(
+    module.networking.compute_private_subnet_ids_list
+  )
+
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+  logs_cmk_arn = module.security.logs_cmk_arn
+
+  services = local.ecs_runtime_services
+
+  execution_policy_ids = module.iam.ecs_task_execution_policy_ids
+
+  security_policy_rule_ids = local.ecs_security_policy_rule_ids
+}
+
 module "application_load_balancer" {
   count  = length(local.ecs_alb_services) > 0 ? 1 : 0
   source = "../modules/application_load_balancer"
