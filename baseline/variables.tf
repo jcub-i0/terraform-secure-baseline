@@ -371,7 +371,7 @@ variable "alb_certificate_arn" {
 
   validation {
     condition = (
-      length(var.alb_services) == 0
+      length(var.ecs_services) == 0
       || var.alb_certificate_arn != null
     )
 
