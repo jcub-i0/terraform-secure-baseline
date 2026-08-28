@@ -169,4 +169,13 @@ variable "security_policy_rule_ids" {
   description = "Cross-component Security Group rule IDs keyed by service name, used as service launch-readiness dependencies"
   type        = map(set(string))
   default     = {}
+
+  validation {
+    condition = alltrue([
+      for service_name in keys(vars.services) :
+      contains(keys(var.security_policy_rule_ids), service_name)
+    ])
+
+    error_message = "security_policy_rule_ids must contain an entry for every configured ECS service."
+  }
 }
