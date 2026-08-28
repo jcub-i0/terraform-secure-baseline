@@ -154,6 +154,15 @@ variable "execution_policy_ids" {
   description = "ECS task execution IAM policy IDs keyed by service name, used as service launch-readiness dependencies"
   type        = map(string)
   default     = {}
+
+  validation {
+    condition = alltrue([
+      for service_name in keys(var.services) :
+      contains(keys(var.execution_policy_ids), service_name)
+    ])
+
+    error_message = "execution_policy_ids must contain an entry for every configured ECS service."
+  }
 }
 
 variable "security_policy_rule_ids" {
