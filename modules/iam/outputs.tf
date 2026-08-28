@@ -75,6 +75,15 @@ output "ecs_task_execution_roles" {
   }
 }
 
+output "ecs_task_execution_policy_ids" {
+  description = "ECS task execution inline-policy IDs keyed by service name"
+
+  value = {
+    for service_name, policy in aws_iam_role_policy.ecs_task_execution_policies :
+    service_name => policy.id
+  }
+}
+
 output "ecs_task_roles" {
   description = "ECS application task roles keyed by service name"
 
