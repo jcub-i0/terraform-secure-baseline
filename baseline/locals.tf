@@ -144,6 +144,6 @@ locals {
 
   effective_inspector_resource_types = distinct(concat(
     var.inspector_resource_types,
-    length(var.repositories) > 0 ? ["ECR"] : [],
+    length(local.effective_repositories) > 0 ? ["ECR"] : [],
   ))
 }
