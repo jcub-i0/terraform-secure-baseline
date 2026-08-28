@@ -9,6 +9,8 @@
 # without explicit written permission.                                  
 # ==================================================================== 
 
+data "aws_partition" "current" {}
+
 ###############
 # MODULE CALLS
 ###############
