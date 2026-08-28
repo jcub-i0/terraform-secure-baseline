@@ -152,6 +152,6 @@ variable "logs_cmk_arn" {
 
 variable "execution_policy_ids" {
   description = "ECS task execution IAM policy IDs keyed by service name, used as service launch-readiness dependencies"
-  type = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
 }
