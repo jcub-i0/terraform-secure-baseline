@@ -303,7 +303,7 @@ module "ecs_cluster" {
 }
 
 module "application_load_balancer" {
-  count  = length(var.alb_services) > 0 ? 1 : 0
+  count  = length(local.ecs_alb_services) > 0 ? 1 : 0
   source = "../modules/application_load_balancer"
 
   name_prefix = local.name_prefix
