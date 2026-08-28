@@ -23,7 +23,7 @@ output "task_definition_arns" {
   description = "ECS task definition ARNs keyed by service name"
 
   value = {
-    for service_name, task_definition in aws_ecs_task_definitions.task_definitions :
+    for service_name, task_definition in aws_ecs_task_definition.task_definitions :
     service_name => task_definitions.arn
   }
 }
