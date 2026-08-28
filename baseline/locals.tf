@@ -126,6 +126,18 @@ locals {
     local.ecs_required_repositories,
   )
 
+  ecs_alb_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      container_port = service.container_port
+      priority = service.ingress.priority
+      host_headers = service.ingress.host_headers
+      path_patterns = service.ingress.path_patterns
+      health_check_path = service.ingress.health_check_path
+    }
+    if service.ingress != null
+  }
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
