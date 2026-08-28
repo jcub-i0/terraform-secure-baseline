@@ -34,8 +34,8 @@ output "services" {
   value = {
     for service_name, service in aws_ecs_service.services :
     service_name => {
-        arn = service.id
-        name = service.name
+      arn  = service.id
+      name = service.name
     }
   }
 }
