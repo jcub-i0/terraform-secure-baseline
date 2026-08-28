@@ -97,6 +97,52 @@ variable "services" {
 
     error_message = "Each ECS service desired_count must be zero or greater."
   }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      (
+        service.cpu == 250 &&
+        contains([512, 1024, 2048], service.memory)
+      ) ||
+      (
+        service.cpu == 512 &&
+        contains([1024, 2048, 3072, 4096], service.memory)
+      ) ||
+      (
+        service.cpu == 1024 &&
+        service.memory >= 2048 &&
+        service.memory <= 8192 &&
+        service.memory % 1024 == 0
+      ) ||
+      (
+        service.cpu == 2048 &&
+        service.memory >= 4096 &&
+        service.memory <= 16384 &&
+        service.memory % 1024 == 0
+      ) ||
+      (
+        service.cpu == 4096 &&
+        service.memory >= 8192 &&
+        service.memory <= 30720 &&
+        service.memory % 1024 == 0
+      ) ||
+      (
+        service.cpu == 8192 &&
+        service.memory >= 16384 &&
+        service.memory <= 61440 &&
+        service.memory % 4096 == 0
+      ) ||
+      (
+        service.cpu == 16384 &&
+        service.memory >= 32768 &&
+        service.memory <= 122880 &&
+        service.memory % 8192 == 0
+      )
+    ])
+
+    error_message = "Each ECS service must use a valid AWS Fargate CPU and memory combination."
+  }
 }
 
 variable "logs_cmk_arn" {
