@@ -316,7 +316,7 @@ module "application_load_balancer" {
   ingress_cidrs   = var.alb_ingress_cidrs
   ssl_policy      = var.alb_ssl_policy
 
-  services = var.alb_services
+  services = local.ecs_alb_services
 }
 
 module "backup" {
