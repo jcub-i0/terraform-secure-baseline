@@ -137,16 +137,10 @@ resource "aws_ecs_service" "services" {
     }
   }
 
-  lifecycle {
-    precondition {
-      condition = try(
-        length(var.execution_policy_ids[each.key]) > 0,
-        false
-      )
-
-      error_message = "An ECS execution-policy readiness ID must be provided for each configured ECS service."
-    }
-  }
+  depends_on = [
+    terraform_data.ecs_execution_policy_ready,
+    terraform_data.ecs_security_policy_ready,
+  ]
 
   tags = {
     Name        = "${var.name_prefix}-${each.key}"
