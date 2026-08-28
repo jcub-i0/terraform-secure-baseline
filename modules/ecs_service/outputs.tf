@@ -13,15 +13,15 @@ output "log_groups" {
   value = {
     for service_name, log_group in aws_cloudwatch_log_group.service_logs :
     service_name => {
-        arn = log_group.arn
-        name = log_group.name
+      arn  = log_group.arn
+      name = log_group.name
     }
   }
 }
 
 output "task_definition_arns" {
   description = "ECS task definition ARNs keyed by service name"
-  
+
   value = {
     for service_name, task_definition in aws_ecs_task_definitions.task_definitions :
     service_name => task_definitions.arn
