@@ -163,7 +163,7 @@ output "ecs_cluster" {
   description = "ECS cluster metadata"
 
   value = {
-    arn = module.ecs_cluster.cluster_arn
+    arn  = module.ecs_cluster.cluster_arn
     name = module.ecs_cluster.cluster_name
   }
 }
@@ -175,15 +175,15 @@ output "ecs_services" {
 
 output "ecs_task_definition_arns" {
   description = "ECS task definition ARNs keyed by service name"
-  value = module.ecs_service.task_definition_arns
+  value       = module.ecs_service.task_definition_arns
 }
 
 output "ecs_task_security_group_ids" {
   description = "ECS task Security Group IDs keyed by service name"
-  value = module.ecs_service.task_security_group_ids
+  value       = module.ecs_service.task_security_group_ids
 }
 
 output "ecs_log_groups" {
   description = "ECS CloudWatch log-group metadata keyed by service name"
-  value = module.ecs_service.log_groups
+  value       = module.ecs_service.log_groups
 }
