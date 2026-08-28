@@ -102,7 +102,7 @@ variable "services" {
     condition = alltrue([
       for service in values(var.services) :
       (
-        service.cpu == 250 &&
+        service.cpu == 256 &&
         contains([512, 1024, 2048], service.memory)
       ) ||
       (
