@@ -122,8 +122,8 @@ locals {
   }
 
   effective_repositories = merge(
-      var.repositories,
-      local.ecs_required_repositories,
+    var.repositories,
+    local.ecs_required_repositories,
   )
 
   # ---------------------------------------------------------------------------
