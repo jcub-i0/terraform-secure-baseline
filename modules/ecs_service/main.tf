@@ -93,6 +93,16 @@ resource "aws_cloudwatch_log_group" "service_logs" {
   }
 }
 
+## ECS task execution IAM policy IDs that must exist before ECS services launch
+resource "terraform_data" "ecs_execution_policy_ready" {
+  input = var.execution_policy_ids
+}
+
+## ECS Security Group rule IDs that must exist before ECS services launch
+resource "terraform_data" "ecs_security_policy_ready" {
+  input = var.security_policy_rule_ids
+}
+
 resource "aws_ecs_service" "services" {
   for_each = var.services
 
