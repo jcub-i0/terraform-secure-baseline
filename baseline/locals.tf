@@ -110,6 +110,23 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
+  # ECS
+  # ---------------------------------------------------------------------------
+
+  ecs_required_repositories = {
+    for repository_name in toset([
+      for service in values(var.ecs_services) :
+      service.repository_name
+    ]) :
+    repository_name => {}
+  }
+
+  effective_repositories = merge(
+      var.repositories,
+      local.ecs_required_repositories,
+  )
+
+  # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
 
