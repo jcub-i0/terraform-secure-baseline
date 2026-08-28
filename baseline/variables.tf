@@ -410,12 +410,12 @@ variable "ecs_services" {
 
   type = map(object({
     repository_name = string
-    image_digest = string
+    image_digest    = string
 
     container_port = number
-    cpu = number
-    memory = number
-    desired_count = optional(number, 1)
+    cpu            = number
+    memory         = number
+    desired_count  = optional(number, 1)
 
     cpu_architecture = optional(string, "X86_64")
 
@@ -424,17 +424,17 @@ variable "ecs_services" {
     environment_variables = optional(map(string), {})
 
     secrets_manager_secrets = optional(map(string), {})
-    ssm_parameters = optional(map(string), {})
-    execution_kms_key_arns = optional(set(string), {})
+    ssm_parameters          = optional(map(string), {})
+    execution_kms_key_arns  = optional(set(string), {})
 
     ingress = optional(object({
-      priority = number
-      host_headers = optional(set(string), [])
-      path_patterns = optional(set(string), [])
+      priority          = number
+      host_headers      = optional(set(string), [])
+      path_patterns     = optional(set(string), [])
       health_check_path = optional(string, "/health")
     }), null)
   }))
-  
+
   default = {}
 
   validation {
