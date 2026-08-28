@@ -138,6 +138,11 @@ locals {
     if service.ingress != null
   }
 
+  ecs_log_group_arns = {
+    for service_name in keys(var.ecs_services) :
+    service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/ecs/${local.name_prefix}/${service_name}"
+  }
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
