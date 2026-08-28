@@ -155,3 +155,9 @@ variable "execution_policy_ids" {
   type        = map(string)
   default     = {}
 }
+
+variable "security_policy_rule_ids" {
+  description = "Cross-component Security Group rule IDs keyed by service name, used as service launch-readiness dependencies"
+  type = map(set(string))
+  default = {}
+}
