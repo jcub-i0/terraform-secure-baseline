@@ -27,3 +27,15 @@ output "task_definition_arns" {
     service_name => task_definitions.arn
   }
 }
+
+output "services" {
+  description = "ECS service metadata keyed by service name"
+
+  value = {
+    for service_name, service in aws_ecs_service.services :
+    service_name => {
+        arn = service.id
+        name = service.name
+    }
+  }
+}
