@@ -441,6 +441,11 @@ while IFS= read -r service_name; do
   expected_platform_version="$(echo "$expected_service_json" | jq -r '.platform_version')"
   expected_task_definition_arn="$(echo "$TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
   expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
+  database_access="$(
+    echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+      jq -r --arg service "$service_name" '.[$service].database_access'
+  )"
+  
   expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
   expected_log_group_name="$(echo "$expected_log_group_json" | jq -r '.name')"
   expected_log_group_arn="$(echo "$expected_log_group_json" | jq -r '.arn')"
