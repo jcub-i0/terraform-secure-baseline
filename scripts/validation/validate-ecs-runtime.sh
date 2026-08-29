@@ -625,21 +625,27 @@ while IFS= read -r service_name; do
   fi
 
   internet_https_present="false"
+  
   if sg_has_ipv4_cidr_rule "$task_sg_json" egress "0.0.0.0/0" 443; then
     internet_https_present="true"
   fi
+
   if [[ "$EFFECTIVE_EGRESS_MODE" == "vpc_endpoints_only" && "$internet_https_present" == "true" ]]; then
     fail "Task SG has generic HTTPS internet egress in vpc_endpoints_only mode: ${service_name}"
   fi
+
   if [[ "$EFFECTIVE_EGRESS_MODE" != "vpc_endpoints_only" && "$internet_https_present" != "true" ]]; then
     fail "Task SG lacks HTTPS application egress required by effective egress mode ${EFFECTIVE_EGRESS_MODE}: ${service_name}"
   fi
 
   has_target_group="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r --arg service "$service_name" 'if type == "object" and (.target_groups | has($service)) then "true" else "false" end')"
   live_load_balancers_json="$(echo "$service_response_json" | jq -c '.services[0].loadBalancers // []')"
+
   if [[ "$has_target_group" == "true" ]]; then
+
     expected_target_group_arn="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r --arg service "$service_name" '.target_groups[$service].arn')"
     SERVICE_TARGET_GROUP_ARNS["$service_name"]="$expected_target_group_arn"
+
     if ! echo "$live_load_balancers_json" |
       jq -e --arg arn "$expected_target_group_arn" --arg name "$service_name" --argjson port "$container_port" '
         length == 1
@@ -650,10 +656,12 @@ while IFS= read -r service_name; do
       echo "$live_load_balancers_json" | jq .
       fail "ECS service ALB attachment does not match Terraform target group: ${service_name}"
     fi
+
     if [[ -z "$ALB_SECURITY_GROUP_ID" ]] ||
       ! sg_has_group_rule "$task_sg_json" ingress "$ALB_SECURITY_GROUP_ID" "$container_port"; then
       fail "Task SG lacks ALB ingress on the primary container port: ${service_name}"
     fi
+
   elif [[ "$(echo "$live_load_balancers_json" | jq 'length')" -ne 0 ]]; then
     fail "ECS service has an unexpected load-balancer attachment: ${service_name}"
   fi
