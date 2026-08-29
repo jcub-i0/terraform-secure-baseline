@@ -438,7 +438,7 @@ while IFS= read -r service_name; do
           and .rolloutState == "COMPLETED"
         )
       ' >/dev/null; then
-    echo "$service_response_json" | jq '.services[0] | {serviceArn, serviceName, clusterArn, status, taskDefinition, launchType, platformVersion, deploymentConfiguration}'
+    echo "$service_response_json" | jq '.services[0] | {serviceArn, serviceName, clusterArn, status, taskDefinition, launchType, platformVersion, desiredCount, runningCount, pendingCount, deployments, deploymentConfiguration}'
     fail "ECS service identity, Fargate settings, or deployment safeguards are invalid: ${service_name} (expected platform version ${expected_platform_version})"
   fi
 
