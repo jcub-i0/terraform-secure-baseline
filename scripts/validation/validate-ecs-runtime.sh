@@ -174,6 +174,7 @@ fi
 
 ECS_CLUSTER_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_cluster)"
 ECS_SERVICES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_services)"
+ECS_SERVICE_CONFIGURATION_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_service_configuration)"
 TASK_DEFINITION_ARNS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_definition_arns)"
 TASK_SECURITY_GROUP_IDS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_security_group_ids)"
 ECS_LOG_GROUPS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_log_groups)"
@@ -181,7 +182,16 @@ ECS_EXECUTION_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_executio
 ECS_TASK_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_roles)"
 ECR_REPOSITORIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecr_repositories)"
 
-for output_name in vpc_id name_prefix s3_prefix_list_id effective_egress_mode effective_cloudwatch_retention_days; do
+for output_name in \
+  vpc_id \
+  name_prefix \
+  s3_prefix_list_id \
+  effective_egress_mode \
+  effective_cloudwatch_retention_days \
+  logs_cmk_arn \
+  data_sg_id \
+  rds_port; do
+  
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output: ${output_name}"
   fi
