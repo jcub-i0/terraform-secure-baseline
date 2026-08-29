@@ -408,7 +408,7 @@ while IFS= read -r service_name; do
     jq -e \
       --arg arn "$expected_service_arn" \
       --arg name "$expected_service_name" \
-      --arg name "$platform_version" \
+      --arg platform_version "$expected_platform_version" \
       --arg cluster_arn "$EXPECTED_CLUSTER_ARN" \
       --arg task_definition_arn "$expected_task_definition_arn" '
         .services[0].serviceArn == $arn
