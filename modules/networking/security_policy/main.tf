@@ -216,7 +216,7 @@ resource "aws_security_group_rule" "ecs_tasks_ingress_from_alb" {
   for_each = {
     for service_name, service in var.ecs_security_policy_services :
     service_name => service
-    if service.alb_sg_id != null
+    if service.alb_access
   }
 
   type                     = "ingress"
@@ -232,7 +232,7 @@ resource "aws_security_group_rule" "alb_egress_to_ecs_tasks" {
   for_each = {
     for service_name, service in var.ecs_security_policy_services :
     service_name => service
-    if service.alb_sg_id != null
+    if service.alb_access
   }
 
   type                     = "egress"
