@@ -36,6 +36,7 @@ output "services" {
     service_name => {
       arn  = service.arn
       name = service.name
+      platform_version = service.platform_version
     }
   }
 }
