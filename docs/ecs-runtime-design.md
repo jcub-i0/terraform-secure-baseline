@@ -653,7 +653,7 @@ operation.
 ### `scripts/validation`
 
 **CURRENT REPOSITORY FACT:** `scripts/validation/validate-baseline.sh` now
-orchestrates 15 workload validators through its `VALIDATION_SCRIPTS` array.
+orchestrates 16 workload validators through its `VALIDATION_SCRIPTS` array.
 `scripts/validation/export-baseline.sh` mirrors those scripts to produce
 workload-baseline evidence. `validate-ecr.sh` uses `ecr_repositories` as its
 authoritative inventory and passes cleanly for `{}`. For configured
@@ -664,19 +664,21 @@ and SG placement, and exact S3 route-table coverage.
 
 `validate-security-workload.sh` reads `effective_inspector_resource_types` and
 performs an exact comparison with live Inspector resource states. It does not
-reconstruct the repository-to-ECR composition rule. The current baseline and
-environment output expressions expose the raw Inspector input instead of
-`local.effective_inspector_resource_types`; automatic ECR inclusion therefore
-cannot be proven from the workload-root contract until that Terraform defect is
-corrected.
+reconstruct the repository-to-ECR composition rule. The baseline and workload
+roots expose `local.effective_inspector_resource_types`, making that effective
+set authoritative for validation.
+
+`validate-ecs-runtime.sh` validates the shared cluster and, when services are
+configured, Fargate service, task-definition, digest-pinned image, logging,
+task-SG, and conditional ALB runtime relationships. `validate-iam.sh` owns the
+per-service ECS trust and execution-policy checks. An empty `ecs_services = {}`
+validates the environment cluster and skips per-service resources cleanly.
 
 **APPROVED V1.8.0 DESIGN:** ECS, ECR, and ALB validation extend the existing
 workload baseline validation layer. No fifth validation layer is created. The
 current validator count is not a permanent contract.
 
-Future runtime validators include `validate-ecs.sh` and `validate-alb.sh`.
-Their exact split may be refined, but together the workload layer must prove at
-least:
+The workload validation contract includes:
 
 - Expected repositories exist with intended encryption, immutability, policy,
   safe digest retention lifecycle, and Inspector ECR posture.
@@ -702,6 +704,12 @@ least:
 The validators must remain read-only and query live AWS state, following the
 purpose documented in `scripts/validation/README.md` and the existing evidence
 export pattern.
+
+Exact comparisons remain deferred where the workload-root contract does not
+expose authoritative expected values: configurable Container Insights, the
+logging CMK identity, ALB certificate/TLS/routing inputs, database-access
+intent, execution-time KMS intent, and SG readiness IDs. Validation reports
+these limits rather than duplicating the canonical Terraform composition.
 
 ## Security-group and launch-readiness contract
 
