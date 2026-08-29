@@ -409,6 +409,18 @@ if [[ "$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq '.SecurityGroups | length')" -
   fail "Expected exactly one shared Interface Endpoint security group"
 fi
 
+DATA_SG_JSON="$(
+  aws ec2 describe-security-groups \
+    "${aws_args[@]}" \
+    --group-ids "$DATA_SG_ID" \
+    --output json
+)"
+
+if [[ "$(echo "$DATA_SG_JSON" | jq '.SecurityGroups | length')" -ne 1 ]] ||
+  [[ "$(echo "$DATA_SG_JSON" | jq -r '.SecurityGroups[0].VpcId')" != "$VPC_ID" ]]; then
+  fail "Database security group is missing or belongs to the wrong VPC"
+fi
+
 INTERFACE_ENDPOINT_SG_ID="$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq -r '.SecurityGroups[0].GroupId')"
 
 ALB_SECURITY_GROUP_ID=""
