@@ -60,7 +60,7 @@ output "secrets_manager_cmk_arn" {
 
 output "logs_cmk_arn" {
   description = "ARN of the CMK used to encrypt workload CloudWatch Logs"
-  value = module.security.logs_cmk_arn
+  value       = module.security.logs_cmk_arn
 }
 
 output "logs_cmk_decrypt_policy_name" {
@@ -156,11 +156,11 @@ output "application_load_balancer" {
   description = "Shared ECS Application Load Balancer metadata; null when no ALB services are configured"
 
   value = length(local.ecs_alb_services) > 0 ? {
-    arn                = module.application_load_balancer[0].load_balancer_arn
-    dns_name           = module.application_load_balancer[0].dns_name
-    security_group_id  = module.application_load_balancer[0].security_group_id
-    https_listener     = module.application_load_balancer[0].https_listener
-    target_groups      = module.application_load_balancer[0].target_groups
+    arn               = module.application_load_balancer[0].load_balancer_arn
+    dns_name          = module.application_load_balancer[0].dns_name
+    security_group_id = module.application_load_balancer[0].security_group_id
+    https_listener    = module.application_load_balancer[0].https_listener
+    target_groups     = module.application_load_balancer[0].target_groups
   } : null
 }
 
