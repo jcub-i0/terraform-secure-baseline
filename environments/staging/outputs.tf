@@ -187,3 +187,8 @@ output "s3_prefix_list_id" {
   description = "AWS-managed S3 prefix list ID associated with the workload S3 Gateway Endpoint."
   value       = module.baseline.s3_prefix_list_id
 }
+
+output "ecs_service_configuration" {
+  description = "Validator-relevant ECS service configuration keyed by service name."
+  value       = module.baseline.ecs_service_configuration
+}
