@@ -208,6 +208,7 @@ locals {
         : null
       )
 
+      alb_access      = service.ingress != null
       database_access = service.database_access
     }
   }
