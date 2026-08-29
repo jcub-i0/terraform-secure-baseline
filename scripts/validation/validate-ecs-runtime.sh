@@ -757,8 +757,6 @@ while IFS= read -r service_name; do
   success "ECS service is healthy at steady state and runtime-critical task SG relationships are valid: ${service_name}"
 done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 
-warn "Database-access intent and SG readiness IDs are not exposed by workload-root outputs; conditional database rules and readiness-resource identity are deferred"
-
 section "Validating conditional shared Application Load Balancer"
 
 if [[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]]; then
