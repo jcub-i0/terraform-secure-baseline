@@ -191,7 +191,7 @@ for output_name in \
   logs_cmk_arn \
   data_sg_id \
   rds_port; do
-  
+
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output: ${output_name}"
   fi
@@ -201,6 +201,9 @@ VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
 S3_PREFIX_LIST_ID="$(get_terraform_output_value "$OUTPUTS_JSON" s3_prefix_list_id)"
 EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
 EFFECTIVE_CLOUDWATCH_RETENTION_DAYS="$(get_terraform_output_value "$OUTPUTS_JSON" effective_cloudwatch_retention_days)"
+LOGS_CMK_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" logs_cmk_arn)"
+DATA_SG_ID="$(get_terraform_output_value "$OUTPUTS_JSON" data_sg_id)"
+RDS_PORT="$(get_terraform_output_value "$OUTPUTS_JSON" rds_port)"
 
 APPLICATION_LOAD_BALANCER_JSON="$(
   echo "$OUTPUTS_JSON" |
