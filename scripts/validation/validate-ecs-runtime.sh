@@ -810,14 +810,16 @@ else
 
   if ! echo "$listeners_response_json" |
     jq -e \
-      --arg listener_arn "$EXPECTED_ALB_LISTENER_ARN" '
+      --arg listener_arn "$EXPECTED_ALB_LISTENER_ARN" \
+      --arg certificate_arn "$EXPECTED_ALB_CERTIFICATE_ARN" \
+      --arg ssl_policy "$EXPECTED_ALB_SSL_POLICY" '
         (.Listeners | length) == 1
         and .Listeners[0].ListenerArn == $listener_arn
         and .Listeners[0].Port == 443
         and .Listeners[0].Protocol == "HTTPS"
-        and (.Listeners[0].Certificates | length) > 0
-        and (.Listeners[0].SslPolicy | type) == "string"
-        and (.Listeners[0].SslPolicy | length) > 0
+        and (.Listeners[0].Certificates | length) == 1
+        and .Listeners[0].Certificates[0].CertificateArn == $certificate_arn
+        and .Listeners[0].SslPolicy == $ssl_policy
         and (.Listeners[0].DefaultActions | length) == 1
         and .Listeners[0].DefaultActions[0].Type == "fixed-response"
         and .Listeners[0].DefaultActions[0].FixedResponseConfig.StatusCode == "404"
