@@ -210,7 +210,7 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
       type == "object"
       and (.arn | type == "string" and length > 0)
       and (.security_group_id | type == "string" and length > 0)
-      and (.https_listener_arn | type == "string" and length > 0)
+      and (.https_listener.arn | type == "string" and length > 0)
       and (.target_groups | type == "object" and length > 0)
     ' >/dev/null; then
     fail "application_load_balancer output is not null and lacks required runtime metadata"
@@ -659,7 +659,7 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]]; then
 else
   EXPECTED_ALB_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.arn')"
   EXPECTED_ALB_DNS_NAME="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.dns_name')"
-  EXPECTED_ALB_LISTENER_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.https_listener_arn')"
+  EXPECTED_ALB_LISTENER_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.https_listener.arn')"
 
   alb_response_json="$(
     aws elbv2 describe-load-balancers \
