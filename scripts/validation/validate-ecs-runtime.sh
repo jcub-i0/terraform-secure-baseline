@@ -422,7 +422,7 @@ while IFS= read -r service_name; do
         and .services[0].deploymentConfiguration.deploymentCircuitBreaker.rollback == true
       ' >/dev/null; then
     echo "$service_response_json" | jq '.services[0] | {serviceArn, serviceName, clusterArn, status, taskDefinition, launchType, platformVersion, deploymentConfiguration}'
-    fail "ECS service identity, Fargate settings, or deployment safeguards are invalid: ${service_name}"
+    fail "ECS service identity, Fargate settings, or deployment safeguards are invalid: ${service_name} (expected platform version ${expected_platform_version})"
   fi
 
   service_subnet_ids_json="$(echo "$service_response_json" | jq -c '[.services[0].networkConfiguration.awsvpcConfiguration.subnets[]?] | sort | unique')"
