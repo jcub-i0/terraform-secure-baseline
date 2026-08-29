@@ -675,7 +675,6 @@ while IFS= read -r service_name; do
 done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 
 warn "Database-access intent and SG readiness IDs are not exposed by workload-root outputs; conditional database rules and readiness-resource identity are deferred"
-warn "The workload-root output contract does not expose the logging CMK ARN; exact log-group KMS-key equality is deferred"
 
 section "Validating conditional shared Application Load Balancer"
 
