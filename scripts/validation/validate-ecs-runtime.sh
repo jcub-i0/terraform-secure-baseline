@@ -677,6 +677,29 @@ while IFS= read -r service_name; do
     fail "Task security group is missing or belongs to the wrong VPC: ${service_name}"
   fi
 
+  if [[ "$database_access" == "true" ]]; then
+    if ! sg_has_group_rule "$task_sg_json" egress "$DATA_SG_ID" "$RDS_PORT"; then
+      fail "Task SG lacks database egress required by database_access=true: ${service_name}"
+    fi
+
+    if ! sg_has_group_rule "$DATA_SG_JSON" ingress "$expected_task_sg_id" "$RDS_PORT"; then
+      fail "Database SG lacks ingress from task SG required by database_access=true: ${service_name}"
+    fi
+
+    success "Database SG relationships match database_access=true: ${service_name}"
+
+  else
+    if sg_has_group_reference "$task_sg_json" egress "$DATA_SG_ID"; then
+      fail "Task SG unexpectedly references database SG while database_access=false: ${service_name}"
+    fi
+
+    if sg_has_group_reference "$DATA_SG_JSON" ingress "$expected_task_sg_id"; then
+      fail "Database SG unexpectedly allows task SG while database_access=false: ${service_name}"
+    fi
+
+    success "No database SG relationships exist for database_access=false: ${service_name}"
+  fi
+
   if ! sg_has_group_rule "$task_sg_json" egress "$INTERFACE_ENDPOINT_SG_ID" 443; then
     fail "Task SG lacks HTTPS egress to the Interface Endpoint SG: ${service_name}"
   fi
