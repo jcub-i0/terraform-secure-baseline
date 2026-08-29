@@ -248,7 +248,7 @@ The module exposes:
 | `security_group_id` | Security group ID of the Application Load Balancer. |
 | `load_balancer_arn` | ARN of the Application Load Balancer. |
 | `dns_name` | DNS name assigned to the Application Load Balancer. |
-| `https_listener_arn` | ARN of the HTTPS listener. |
+| `https_listener` | HTTPS listener metadata, including ARN, certificate ARN, and SSL policy. |
 | `target_groups` | Target-group metadata keyed by ECS service name. |
 
 The `target_groups` output is intended to be consumed by later ECS service integration.
