@@ -825,7 +825,7 @@ else
         and .Listeners[0].DefaultActions[0].FixedResponseConfig.StatusCode == "404"
       ' >/dev/null; then
     echo "$listeners_response_json" | jq '.Listeners'
-    fail "ALB must have exactly one HTTPS listener with a certificate and fixed 404 default action"
+    fail "ALB HTTPS listener ARN, certificate, TLS policy, or fixed 404 default action does not match Terraform"
   fi
 
   warn "The workload-root output contract does not expose expected ALB certificate ARN or TLS policy; presence is validated but exact identity is deferred"
