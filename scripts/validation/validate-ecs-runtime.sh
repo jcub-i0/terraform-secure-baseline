@@ -104,6 +104,27 @@ sg_has_group_rule() {
       ' >/dev/null
 }
 
+sg_has_group_reference() {
+  local sg_json="$1"
+  local direction="$2"
+  local source_or_destination_sg_id="$3"
+  local permissions_field="IpPermissions"
+
+  if [[ "$direction" == "egress" ]]; then
+    permissions_field="IpPermissionsEgress"
+  fi
+
+  echo "$sg_json" |
+    jq -e \
+      --arg field "$permissions_field" \
+      --arg group_id "$source_or_destination_sg_id" '
+        .SecurityGroups[0][$field]
+        | any(
+            any(.UserIdGroupPairs[]?; .GroupId == $group_id)
+          )
+      ' >/dev/null
+}
+
 sg_has_prefix_list_rule() {
   local sg_json="$1"
   local prefix_list_id="$2"
