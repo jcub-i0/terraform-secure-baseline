@@ -285,6 +285,28 @@ require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_LOG_GROUPS_JSON" "log groups"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_EXECUTION_ROLES_JSON" "task execution roles"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_TASK_ROLES_JSON" "task roles"
 
+if ! echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+  jq -e '
+    all(.[];
+      type == "object"
+      and (.database_access | type) == "boolean"
+    )
+  ' >/dev/null; then
+  fail "ecs_service_configuration must contain boolean database_access for every ECS service"
+fi
+
+if [[ -z "$LOGS_CMK_ARN" ]]; then
+  fail "logs_cmk_arn is empty"
+fi
+
+if [[ -z "$DATA_SG_ID" ]]; then
+  fail "data_sg_id is empty"
+fi
+
+if ! [[ "$RDS_PORT" =~ ^[0-9]+$ ]] || ((RDS_PORT < 1 || RDS_PORT > 65535)); then
+  fail "rds_port is not a valid TCP port: ${RDS_PORT}"
+fi
+
 ECS_SERVICE_COUNT="$(echo "$ECS_SERVICES_JSON" | jq 'length')"
 info "Configured ECS services: ${ECS_SERVICE_COUNT}"
 
