@@ -22,9 +22,9 @@ output "https_listener" {
   description = "HTTPS listener metadata"
 
   value = {
-    arn = aws_lb_listener.https.arn
+    arn             = aws_lb_listener.https.arn
     certificate_arn = aws_lb_listener.https.certificate_arn
-    ssl_policy = aws_lb_listener.https.ssl_policy
+    ssl_policy      = aws_lb_listener.https.ssl_policy
   }
 }
 
