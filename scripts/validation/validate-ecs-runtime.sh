@@ -648,11 +648,14 @@ warn "Database-access intent and SG readiness IDs are not exposed by workload-ro
 warn "The workload-root output contract does not expose the logging CMK ARN; exact log-group KMS-key equality is deferred"
 
 section "Validating conditional shared Application Load Balancer"
+
 if [[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]]; then
   if [[ "${#SERVICE_TARGET_GROUP_ARNS[@]}" -ne 0 ]]; then
     fail "Service target groups were detected while application_load_balancer output is null"
   fi
+
   success "No ALB is configured; ALB validation skipped"
+
 else
   EXPECTED_ALB_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.arn')"
   EXPECTED_ALB_DNS_NAME="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.dns_name')"
@@ -664,6 +667,7 @@ else
       --load-balancer-arns "$EXPECTED_ALB_ARN" \
       --output json
   )"
+
   if ! echo "$alb_response_json" |
     jq -e \
       --arg arn "$EXPECTED_ALB_ARN" \
@@ -691,11 +695,14 @@ else
         "Name=tag:Name,Values=${NAME_PREFIX}-Public-*" \
       --output json
   )"
+
   expected_public_subnets_json="$(echo "$PUBLIC_SUBNETS_JSON" | jq -c '[.Subnets[].SubnetId] | sort | unique')"
   actual_alb_subnets_json="$(echo "$alb_response_json" | jq -c '[.LoadBalancers[0].AvailabilityZones[].SubnetId] | sort | unique')"
+
   if [[ "$(echo "$expected_public_subnets_json" | jq 'length')" -eq 0 ]]; then
     fail "No public subnets were resolved for ALB placement validation"
   fi
+
   if [[ "$expected_public_subnets_json" != "$actual_alb_subnets_json" ]]; then
     fail "Shared ALB does not use the exact public subnet set"
   fi
@@ -706,10 +713,12 @@ else
       --group-ids "$ALB_SECURITY_GROUP_ID" \
       --output json
   )"
+
   if [[ "$(echo "$alb_sg_json" | jq -r '.SecurityGroups[0].VpcId // empty')" != "$VPC_ID" ]] ||
     ! echo "$alb_sg_json" | jq -e '.SecurityGroups | length == 1' >/dev/null; then
     fail "ALB security group is missing or belongs to the wrong VPC"
   fi
+
   if ! echo "$alb_sg_json" |
     jq -e '.SecurityGroups[0].IpPermissions | any(.IpProtocol == "tcp" and .FromPort == 443 and .ToPort == 443 and (.IpRanges | length) > 0)' >/dev/null; then
     fail "ALB SG lacks CIDR-based HTTPS ingress"
@@ -721,6 +730,7 @@ else
       --load-balancer-arn "$EXPECTED_ALB_ARN" \
       --output json
   )"
+
   if ! echo "$listeners_response_json" |
     jq -e \
       --arg listener_arn "$EXPECTED_ALB_LISTENER_ARN" '
@@ -738,6 +748,7 @@ else
     echo "$listeners_response_json" | jq '.Listeners'
     fail "ALB must have exactly one HTTPS listener with a certificate and fixed 404 default action"
   fi
+
   warn "The workload-root output contract does not expose expected ALB certificate ARN or TLS policy; presence is validated but exact identity is deferred"
 
   rules_response_json="$(
@@ -757,6 +768,7 @@ else
         --target-group-arns "$expected_target_group_arn" \
         --output json
     )"
+
     if ! echo "$target_group_response_json" |
       jq -e \
         --arg arn "$expected_target_group_arn" \
@@ -796,10 +808,13 @@ else
     if ! sg_has_group_rule "$alb_sg_json" egress "$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')" "${SERVICE_CONTAINER_PORTS[$service_name]}"; then
       fail "ALB SG lacks egress to task SG on the service container port: ${service_name}"
     fi
+
     success "ALB target group, listener rule, and SG relationship are valid: ${service_name}"
+
   done < <(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.target_groups | keys[]')
 
   success "Shared Application Load Balancer runtime is valid"
+
 fi
 
 section "ECS Runtime Summary"
@@ -815,4 +830,5 @@ Application Load Balancer present: $([[ "$APPLICATION_LOAD_BALANCER_JSON" == "nu
 SUMMARY
 
 section "Validation Result"
+
 success "ECS runtime validation completed successfully for: ${ENV_NAME}"
