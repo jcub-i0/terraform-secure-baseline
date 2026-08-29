@@ -594,8 +594,13 @@ while IFS= read -r service_name; do
     fail "CloudWatch log-group retention does not match effective_cloudwatch_retention_days: ${service_name}"
   fi
 
-  if [[ -z "$(echo "$live_log_group_json" | jq -r '.kmsKeyId // empty')" ]]; then
-    fail "CloudWatch log group is not KMS encrypted: ${service_name}"
+  live_log_group_kms_key_arn="$(
+    echo "$live_log_group_json" |
+      jq -r '.kmsKeyId // empty'
+  )"
+
+  if [[ "$live_log_group_kms_key_arn" != "$LOGS_CMK_ARN" ]]; then
+    fail "CloudWatch log-group KMS key does not match Terraform logs CMK: ${service_name} expected=${LOGS_CMK_ARN} actual=${live_log_group_kms_key_arn:-<missing>}"
   fi
 
   success "Task definition image, port, awslogs configuration, and log group are valid: ${service_name}"
@@ -625,7 +630,7 @@ while IFS= read -r service_name; do
   fi
 
   internet_https_present="false"
-  
+
   if sg_has_ipv4_cidr_rule "$task_sg_json" egress "0.0.0.0/0" 443; then
     internet_https_present="true"
   fi
