@@ -18,6 +18,16 @@ output "https_listener_arn" {
   value       = aws_lb_listener.https.arn
 }
 
+output "https_listener" {
+  description = "HTTPS listener metadata"
+
+  value = {
+    arn = aws_lb_listener.https.arn
+    certificate_arn = aws_lb_listener.https.certificate_arn
+    ssl_policy = aws_lb_listener.https.ssl_policy
+  }
+}
+
 output "target_groups" {
   description = "Target group metadata keyed by ECS service name"
 
