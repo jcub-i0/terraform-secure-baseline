@@ -37,6 +37,7 @@ variable "ecs_security_policy_services" {
     task_sg_id      = string
     container_port  = number
     alb_sg_id       = optional(string)
+    alb_access = optional(bool, false)
     database_access = optional(bool, false)
   }))
 
