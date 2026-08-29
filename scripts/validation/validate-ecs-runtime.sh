@@ -258,6 +258,7 @@ if ! echo "$ECS_CLUSTER_JSON" |
 fi
 
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_DEFINITION_ARNS_JSON" "task definition ARNs"
+require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_SERVICE_CONFIGURATION_JSON" "ECS service configuration"
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_SECURITY_GROUP_IDS_JSON" "task security groups"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_LOG_GROUPS_JSON" "log groups"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_EXECUTION_ROLES_JSON" "task execution roles"
