@@ -445,7 +445,7 @@ while IFS= read -r service_name; do
     echo "$ECS_SERVICE_CONFIGURATION_JSON" |
       jq -r --arg service "$service_name" '.[$service].database_access'
   )"
-  
+
   expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
   expected_log_group_name="$(echo "$expected_log_group_json" | jq -r '.name')"
   expected_log_group_arn="$(echo "$expected_log_group_json" | jq -r '.arn')"
@@ -727,6 +727,16 @@ else
   EXPECTED_ALB_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.arn')"
   EXPECTED_ALB_DNS_NAME="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.dns_name')"
   EXPECTED_ALB_LISTENER_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.https_listener.arn')"
+
+  EXPECTED_ALB_CERTIFICATE_ARN="$(
+    echo "$APPLICATION_LOAD_BALANCER_JSON" |
+      jq -r '.https_listener.certificate_arn'
+  )"
+
+  EXPECTED_ALB_SSL_POLICY="$(
+    echo "$APPLICATION_LOAD_BALANCER_JSON" |
+      jq -r '.https_listener.ssl_policy'
+  )"
 
   alb_response_json="$(
     aws elbv2 describe-load-balancers \
