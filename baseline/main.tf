@@ -9,6 +9,8 @@
 # without explicit written permission.                                  
 # ==================================================================== 
 
+data "aws_partition" "current" {}
+
 ###############
 # MODULE CALLS
 ###############
@@ -45,6 +47,8 @@ module "security_policy" {
   db_port                    = var.db_port
   quarantine_sg_id           = module.compute.quarantine_sg_id
   s3_prefix_list_id          = module.vpc_endpoints.s3_prefix_list_id
+
+  ecs_security_policy_services = local.ecs_security_policy_services
 }
 
 module "compute" {
@@ -116,6 +120,8 @@ module "iam" {
   lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
   lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
   lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
+
+  ecs_iam_services = local.ecs_iam_services
 }
 
 module "security" {
@@ -290,7 +296,57 @@ module "ecr" {
   environment = var.environment
 
   kms_key_arn  = module.security.ecr_cmk_arn
-  repositories = var.repositories
+  repositories = local.effective_repositories
+}
+
+module "ecs_cluster" {
+  source = "../modules/ecs_cluster"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+
+  container_insights = var.container_insights
+}
+
+module "ecs_service" {
+  source = "../modules/ecs_service"
+
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  primary_region = var.primary_region
+
+  vpc_id      = module.networking.vpc_id
+  cluster_arn = module.ecs_cluster.cluster_arn
+
+  compute_private_subnet_ids = toset(
+    module.networking.compute_private_subnet_ids_list
+  )
+
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+  logs_cmk_arn              = module.security.logs_cmk_arn
+
+  services = local.ecs_runtime_services
+
+  execution_policy_ids = module.iam.ecs_task_execution_policy_ids
+
+  security_policy_rule_ids = local.ecs_security_policy_rule_ids
+}
+
+module "application_load_balancer" {
+  count  = length(local.ecs_alb_services) > 0 ? 1 : 0
+  source = "../modules/application_load_balancer"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+
+  vpc_id            = module.networking.vpc_id
+  public_subnet_ids = toset(module.networking.public_subnet_ids_list)
+
+  certificate_arn = var.alb_certificate_arn
+  ingress_cidrs   = var.alb_ingress_cidrs
+  ssl_policy      = var.alb_ssl_policy
+
+  services = local.ecs_alb_services
 }
 
 module "backup" {

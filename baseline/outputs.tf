@@ -146,3 +146,54 @@ output "ecr_repositories" {
   description = "Managed ECR repository metadata keyed by repository name"
   value       = module.ecr.repositories
 }
+
+output "application_load_balancer" {
+  description = "Shared ECS Application Load Balancer metadata; null when no ALB services are configured"
+
+  value = length(local.ecs_alb_services) > 0 ? {
+    arn                = module.application_load_balancer[0].load_balancer_arn
+    dns_name           = module.application_load_balancer[0].dns_name
+    security_group_id  = module.application_load_balancer[0].security_group_id
+    https_listener_arn = module.application_load_balancer[0].https_listener_arn
+    target_groups      = module.application_load_balancer[0].target_groups
+  } : null
+}
+
+output "ecs_cluster" {
+  description = "ECS cluster metadata"
+
+  value = {
+    arn  = module.ecs_cluster.cluster_arn
+    name = module.ecs_cluster.cluster_name
+  }
+}
+
+output "ecs_services" {
+  description = "ECS service metadata keyed by service name"
+  value       = module.ecs_service.services
+}
+
+output "ecs_task_definition_arns" {
+  description = "ECS task definition ARNs keyed by service name"
+  value       = module.ecs_service.task_definition_arns
+}
+
+output "ecs_task_security_group_ids" {
+  description = "ECS task Security Group IDs keyed by service name"
+  value       = module.ecs_service.task_security_group_ids
+}
+
+output "ecs_log_groups" {
+  description = "ECS CloudWatch log-group metadata keyed by service name"
+  value       = module.ecs_service.log_groups
+}
+
+output "ecs_task_execution_roles" {
+  description = "ECS task execution roles keyed by service name"
+  value       = module.iam.ecs_task_execution_roles
+}
+
+output "ecs_task_roles" {
+  description = "ECS application task roles keyed by service name"
+  value       = module.iam.ecs_task_roles
+}

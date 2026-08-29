@@ -110,6 +110,123 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
+  # ECS
+  # ---------------------------------------------------------------------------
+
+  ecs_required_repositories = {
+    for repository_name in toset([
+      for service in values(var.ecs_services) :
+      service.repository_name
+    ]) :
+    repository_name => {}
+  }
+
+  effective_repositories = merge(
+    var.repositories,
+    local.ecs_required_repositories,
+  )
+
+  ecs_alb_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      container_port    = service.container_port
+      priority          = service.ingress.priority
+      host_headers      = service.ingress.host_headers
+      path_patterns     = service.ingress.path_patterns
+      health_check_path = service.ingress.health_check_path
+    }
+    if service.ingress != null
+  }
+
+  ecs_log_group_arns = {
+    for service_name in keys(var.ecs_services) :
+    service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/ecs/${local.name_prefix}/${service_name}"
+  }
+
+  ecs_iam_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      ecr_repository_arns = toset([
+        module.ecr.repositories[service.repository_name].arn
+      ])
+
+      log_group_arns = toset([
+        local.ecs_log_group_arns[service_name]
+      ])
+
+      execution_secret_arns = toset(
+        values(service.secrets_manager_secrets)
+      )
+
+      execution_ssm_parameter_arns = toset(
+        values(service.ssm_parameters)
+      )
+
+      execution_kms_key_arns = service.execution_kms_key_arns
+    }
+  }
+
+  ecs_runtime_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      image = "${module.ecr.repositories[service.repository_name].repository_url}@${service.image_digest}"
+
+      container_port = service.container_port
+      cpu            = service.cpu
+      memory         = service.memory
+      desired_count  = service.desired_count
+
+      execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
+      task_role_arn      = module.iam.ecs_task_roles[service_name].arn
+
+      target_group_arn = (
+        service.ingress != null
+        ? module.application_load_balancer[0].target_groups[service_name].arn
+        : null
+      )
+
+      cpu_architecture = service.cpu_architecture
+
+      environment_variables = service.environment_variables
+
+      secrets = merge(
+        service.secrets_manager_secrets,
+        service.ssm_parameters,
+      )
+    }
+  }
+
+  ecs_security_policy_services = {
+    for service_name, service in var.ecs_services :
+    service_name => {
+      task_sg_id     = module.ecs_service.task_security_group_ids[service_name]
+      container_port = service.container_port
+
+      alb_sg_id = (
+        service.ingress != null
+        ? module.application_load_balancer[0].security_group_id
+        : null
+      )
+
+      database_access = service.database_access
+    }
+  }
+
+  ecs_security_policy_rule_ids = {
+    for service_name, rules in module.security_policy.ecs_sg_rule_ids :
+    service_name => toset(compact([
+      rules.endpoints_ingress,
+      rules.endpoints_egress,
+      rules.s3_egress,
+      rules.internet_https_egress,
+      rules.db_egress,
+      rules.db_ingress,
+      rules.alb_ingress,
+      rules.alb_egress,
+    ]))
+  }
+
+  # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
 
@@ -127,6 +244,6 @@ locals {
 
   effective_inspector_resource_types = distinct(concat(
     var.inspector_resource_types,
-    length(var.repositories) > 0 ? ["ECR"] : [],
+    length(local.effective_repositories) > 0 ? ["ECR"] : [],
   ))
 }

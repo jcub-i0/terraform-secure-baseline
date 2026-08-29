@@ -335,3 +335,151 @@ variable "repositories" {
     error_message = "Repository names must use lowercase ECR repository-name syntax."
   }
 }
+
+variable "container_insights" {
+  description = "CloudWatch Container Insights mode for the ECS cluster"
+  type        = string
+  default     = "enhanced"
+
+  validation {
+    condition = contains([
+      "enhanced",
+      "enabled",
+      "disabled",
+    ], var.container_insights)
+
+    error_message = "container_insights must be enhanced, enabled, or disabled."
+  }
+}
+
+variable "alb_certificate_arn" {
+  description = "ACM certificate ARN used by the shared ECS Application Load Balancer."
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      var.alb_certificate_arn == null
+      || can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):acm:[a-z0-9-]+:[0-9]{12}:certificate/[A-Za-z0-9-]+$",
+        var.alb_certificate_arn
+      ))
+    )
+
+    error_message = "alb_certificate_arn must be a valid ACM certificate ARN."
+  }
+
+  validation {
+    condition = (
+      alltrue([
+        for service in values(var.ecs_services) :
+        service.ingress == null
+      ])
+      || var.alb_certificate_arn != null
+    )
+
+    error_message = "alb_certificate_arn must be provided when any ECS service configures ingress."
+  }
+}
+
+variable "alb_ingress_cidrs" {
+  description = "IPv4 CIDR blocks allowed to reach the shared ECS Application Load Balancer over HTTPS."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = (
+      alltrue([
+        for service in values(var.ecs_services) :
+        service.ingress == null
+      ])
+      || length(var.alb_ingress_cidrs) > 0
+    )
+
+    error_message = "alb_ingress_cidrs must contain at least one CIDR when any ECS service configures ingress."
+  }
+}
+
+variable "alb_ssl_policy" {
+  description = "TLS security policy used by the shared ECS Application Load Balancer HTTPS listener."
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+}
+
+variable "ecs_services" {
+  description = "ECS/Fargate workload services keyed by stable service name"
+
+  type = map(object({
+    repository_name = string
+    image_digest    = string
+
+    container_port = number
+    cpu            = number
+    memory         = number
+    desired_count  = optional(number, 1)
+
+    cpu_architecture = optional(string, "X86_64")
+
+    database_access = optional(bool, false)
+
+    environment_variables = optional(map(string), {})
+
+    secrets_manager_secrets = optional(map(string), {})
+    ssm_parameters          = optional(map(string), {})
+    execution_kms_key_arns  = optional(set(string), [])
+
+    ingress = optional(object({
+      priority          = number
+      host_headers      = optional(set(string), [])
+      path_patterns     = optional(set(string), [])
+      health_check_path = optional(string, "/health")
+    }), null)
+  }))
+
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      can(regex("^[a-z0-9]+([._-][a-z0-9]+)*$", service.repository_name))
+    ])
+
+    error_message = "Each ECS service repository_name must use lowercase ECR repository-name syntax."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      can(regex("^sha256:[0-9a-f]{64}$", service.image_digest))
+    ])
+
+    error_message = "Each ECS service image_digest must be a SHA-256 digest in sha256:<64 hexadecimal characters> format."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      length(setintersection(
+        toset(keys(service.secrets_manager_secrets)),
+        toset(keys(service.ssm_parameters)),
+      )) == 0
+    ])
+
+    error_message = "An ECS service secret name cannot be defined in both secrets_manager_secrets and ssm_parameters."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      length(setintersection(
+        toset(keys(service.environment_variables)),
+        setunion(
+          toset(keys(service.secrets_manager_secrets)),
+          toset(keys(service.ssm_parameters)),
+        ),
+      )) == 0
+    ])
+
+    error_message = "An ECS service environment variable name cannot also be defined as a Secrets Manager secret or SSM parameter."
+  }
+}

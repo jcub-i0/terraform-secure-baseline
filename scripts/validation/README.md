@@ -345,14 +345,15 @@ validate-eventbridge.sh
 validate-lambda.sh
 validate-ssm.sh
 validate-compute.sh
+validate-ecs-runtime.sh
 validate-iam.sh
 ```
 
 A successful run should end with:
 
 ```text
-Validation scripts passed:  15/15
-Validation scripts failed:  0/15
+Validation scripts passed:  16/16
+Validation scripts failed:  0/16
 ```
 
 ---
@@ -377,6 +378,7 @@ Examples:
 ./scripts/validation/validate-lambda.sh dev
 ./scripts/validation/validate-ssm.sh dev
 ./scripts/validation/validate-compute.sh dev
+./scripts/validation/validate-ecs-runtime.sh dev
 ./scripts/validation/validate-iam.sh dev
 ```
 
@@ -420,18 +422,33 @@ serverless-private route-table associations.
 `effective_inspector_resource_types` as its only expected Inspector resource
 set and fails for both missing and unexpectedly enabled live scan types,
 including EC2, ECR, Lambda, Lambda code, and code repositories. It does not
-reconstruct the repository-to-ECR composition policy. The current workload
-output propagation returns the raw Inspector input instead of
-`local.effective_inspector_resource_types`; therefore automatic ECR inclusion
-cannot be proven from the root output until that Terraform output defect is
-corrected.
+reconstruct the repository-to-ECR composition policy.
 
-### Deferred ECS IAM and security-policy validation
+### ECS runtime and IAM validation
 
-ECS IAM and ECS security-policy live checks remain deferred. The current roots
-expose neither configured ECS service identities nor the resulting role and SG
-readiness maps, and both service maps are currently empty. Repository keys are
-not treated as ECS service keys.
+`validate-ecs-runtime.sh` uses the workload-root ECS output maps as the
+authoritative service inventory. It always validates the environment ECS
+cluster. When `ecs_services = {}`, it confirms that the live service inventory
+is empty, requires the ALB output to be `null`, and skips per-service checks.
+
+For configured services it validates Fargate service placement and deployment
+safeguards; task-definition platform, role, container, digest-pinned ECR image,
+port, and `awslogs` settings; Terraform-owned log-group retention and KMS
+presence; task-SG endpoint, S3 prefix-list, and egress-mode relationships; and
+conditional ALB service attachments, target groups, listener rules, fixed 404
+default action, and ALB/task SG relationships.
+
+`validate-iam.sh` owns the ECS IAM assertions. For each service it validates
+the separate execution and task roles, ECS task trust restrictions, the custom
+repository- and log-group-scoped execution policy, optional ARN-identifiable
+Secrets Manager and SSM permissions, absence of managed-policy attachments and
+`iam:PassRole`, and an initially policy-free application task role.
+
+The current workload-root contract does not expose the configured Container
+Insights value, logging CMK ARN, ALB certificate/TLS/routing inputs,
+`database_access`, `execution_kms_key_arns`, or SG readiness IDs. Validators
+report these exact-comparison limits rather than reconstructing Terraform
+configuration. Repository keys are never treated as ECS service identities.
 
 ---
 
@@ -698,6 +715,7 @@ validate-eventbridge.log
 validate-lambda.log
 validate-ssm.log
 validate-compute.log
+validate-ecs-runtime.log
 validate-iam.log
 ```
 

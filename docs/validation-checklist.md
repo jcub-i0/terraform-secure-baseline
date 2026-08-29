@@ -495,6 +495,7 @@ validate-eventbridge.sh
 validate-lambda.sh
 validate-ssm.sh
 validate-compute.sh
+validate-ecs-runtime.sh
 validate-iam.sh
 ```
 
@@ -516,6 +517,7 @@ Examples:
 ./scripts/validation/validate-lambda.sh dev
 ./scripts/validation/validate-ssm.sh dev
 ./scripts/validation/validate-compute.sh dev
+./scripts/validation/validate-ecs-runtime.sh dev
 ./scripts/validation/validate-iam.sh dev
 ```
 
@@ -536,13 +538,14 @@ These scripts validate:
 - Lambda functions, runtime, state, execution role, timeout, memory, KMS config, VPC config, environment variables, resource policies, and EventBridge permissions
 - SSM managed instance registration, online status, associations, maintenance windows, and patch baseline visibility
 - EC2 compute instances, private placement, public IP absence, IMDSv2, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption
-- IAM roles, service trust policies, key service roles, GitHub OIDC roles where present, break-glass MFA conditions, and shared log access policies
+- ECS cluster identity and state; Fargate service placement and deployment safeguards; task-definition platform, separate role, digest-pinned ECR image, port, and `awslogs` contracts; Terraform-owned application log groups; runtime task-SG relationships; and conditional shared-ALB state
+- IAM roles, service trust policies, key service roles, GitHub OIDC roles where present, break-glass MFA conditions, shared log access policies, and per-service ECS task/execution role separation and least-privilege execution-policy scope
 
 A successful run should end with:
 
 ```text
-Validation scripts passed:  15/15
-Validation scripts failed:  0/15
+Validation scripts passed:  16/16
+Validation scripts failed:  0/16
 ```
 
 ## Automated Control-Plane Validation
@@ -1349,6 +1352,45 @@ The validator therefore proves KMS encryption and key presence, but cannot
 compare the live key to an authoritative expected ARN. It does not reconstruct
 that ARN from the key alias or naming convention.
 
+## Validate ECS/Fargate Runtime
+
+```bash
+./scripts/validation/validate-ecs-runtime.sh <dev|staging|prod>
+```
+
+The validator uses `ecs_cluster`, `ecs_services`, task-definition, task-SG,
+log-group, role, ECR, and conditional ALB workload-root outputs as its
+authoritative inventory. An empty `ecs_services = {}` is valid: the
+environment-level cluster is still validated, the exact live ECS service
+inventory must be empty, and per-service and ALB resource checks are skipped.
+
+Configured services must be active Fargate services in the compute-private
+subnets, use only their task SG, disable public IP assignment, pin platform
+version `1.4.0`, and enable deployment circuit breaking with rollback. Their
+active task definitions must use Fargate/`awsvpc`, Linux, a supported CPU
+architecture, separate output-backed roles, an `@sha256:` image belonging to
+an output-backed ECR repository, a matching TCP port mapping, and the exact
+Terraform-managed `awslogs` contract. Log groups must match the output name and
+ARN, use the effective retention period, and have a KMS key.
+
+The same validator checks the always-required task-SG paths to the Interface
+Endpoint SG and S3 managed prefix list, the effective-mode application HTTPS
+egress rule, and conditional ALB attachments. When an ALB output exists, it
+checks the internet-facing application ALB, public subnets, single HTTPS
+listener, fixed 404 default, `ip` target groups, meaningful forwarding rules,
+and both ALB/task SG directions.
+
+ECS IAM assertions remain in `validate-iam.sh`. It checks task/execution role
+identity and restricted ECS trust, custom execution-policy ECR/log scope,
+optional ARN-identifiable secret/parameter scope, absence of `iam:PassRole`,
+and an initially policy-free task role.
+
+Exact comparison remains deferred for values not exposed by current workload
+outputs: configurable Container Insights, the logging CMK identity, ALB
+certificate/TLS/routing inputs, database-access intent, execution-time KMS
+intent, and SG readiness IDs. The validators do not reconstruct those values
+from names or duplicate the canonical `ecs_services` composition.
+
 ---
 
 ## Validate Endpoint Private Subnets
@@ -1759,16 +1801,15 @@ Expected:
 - If disabled by profile or override, Inspector may report disabled resource states.
 
 The validator uses the effective Terraform output and does not infer ECR from
-the repository map. The current baseline and workload-root output expressions
-return the raw `inspector_resource_types` input rather than
-`local.effective_inspector_resource_types`. Until that Terraform output defect
-is corrected, the validator cannot prove B7's automatic ECR addition for a
-non-empty repository map.
+the repository map. The baseline and workload roots propagate
+`local.effective_inspector_resource_types`, so automatic ECR inclusion is
+validated through that authoritative effective output.
 
-ECS IAM and ECS SG/security-policy live assertions remain deferred because the
-current workload roots expose no ECS service identity, role map, or SG readiness
-map and the corresponding service maps are `{}`. ECR repository keys are not
-used as substitutes for ECS service identities.
+ECS runtime service identities, role maps, task SGs, and conditional ALB
+metadata are validated by `validate-ecs-runtime.sh` and `validate-iam.sh`.
+Database-rule intent and SG readiness IDs remain deferred because those values
+are not exposed at the workload root. ECR repository keys are not used as
+substitutes for ECS service identities.
 
 ---
 

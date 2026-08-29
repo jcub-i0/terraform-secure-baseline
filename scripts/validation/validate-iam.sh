@@ -212,6 +212,64 @@ trust_has_mfa_condition() {
       ' >/dev/null
 }
 
+policy_statement_allows_exact_resources() {
+    local policy_json="$1"
+    local expected_actions_json="$2"
+    local expected_resources_json="$3"
+
+    echo "$policy_json" |
+      jq -e \
+        --argjson expected_actions "$expected_actions_json" \
+        --argjson expected_resources "$expected_resources_json" '
+          .Statement
+          | if type == "array" then . else [.] end
+          | any(
+              .Effect == "Allow"
+              and ((.Action | if type == "array" then . else [.] end) | sort) == ($expected_actions | sort)
+              and ((.Resource | if type == "array" then . else [.] end) | sort) == ($expected_resources | sort)
+            )
+        ' >/dev/null
+}
+
+policy_contains_action() {
+    local policy_json="$1"
+    local action="$2"
+
+    echo "$policy_json" |
+      jq -e --arg action "$action" '
+        .Statement
+        | if type == "array" then . else [.] end
+        | any((.Action | if type == "array" then . else [.] end) | index($action) != null)
+      ' >/dev/null
+}
+
+validate_ecs_task_trust() {
+    local role_json="$1"
+    local role_name="$2"
+    local expected_source_arn="$3"
+
+    if ! echo "$role_json" |
+      jq -e \
+        --arg account_id "$ACCOUNT_ID" \
+        --arg source_arn "$expected_source_arn" '
+          .Role.AssumeRolePolicyDocument.Statement
+          | if type == "array" then . else [.] end
+          | any(
+              .Effect == "Allow"
+              and ((.Action | if type == "array" then . else [.] end) | index("sts:AssumeRole") != null)
+              and (
+                .Principal.Service == "ecs-tasks.amazonaws.com"
+                or ((.Principal.Service | type) == "array" and (.Principal.Service | index("ecs-tasks.amazonaws.com") != null))
+              )
+              and .Condition.StringEquals["aws:SourceAccount"] == $account_id
+              and .Condition.ArnLike["aws:SourceArn"] == $source_arn
+            )
+        ' >/dev/null; then
+      echo "$role_json" | jq '.Role.AssumeRolePolicyDocument'
+      fail "ECS role trust is missing its service, SourceAccount, or SourceArn restriction: ${role_name}"
+    fi
+}
+
 managed_policy_exists_by_name() {
     local policy_name="$1"
 
@@ -435,6 +493,168 @@ else
   warn "Terraform output logs_cmk_decrypt_policy_name not found. Skipping shared logs CMK decrypt policy check."
 fi
 
+section "Validating per-service ECS IAM roles and policies"
+
+for output_name in ecs_services ecs_task_definition_arns ecs_log_groups ecs_task_execution_roles ecs_task_roles ecr_repositories; do
+  if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
+    fail "Missing required Terraform output for ECS IAM validation: ${output_name}"
+  fi
+done
+
+ECS_SERVICES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_services.value')"
+ECS_TASK_DEFINITION_ARNS_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_task_definition_arns.value')"
+ECS_LOG_GROUPS_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_log_groups.value')"
+ECS_EXECUTION_ROLES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_task_execution_roles.value')"
+ECS_TASK_ROLES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_task_roles.value')"
+ECR_REPOSITORIES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecr_repositories.value')"
+
+for output_name in \
+  ECS_SERVICES_JSON \
+  ECS_TASK_DEFINITION_ARNS_JSON \
+  ECS_LOG_GROUPS_JSON \
+  ECS_EXECUTION_ROLES_JSON \
+  ECS_TASK_ROLES_JSON \
+  ECR_REPOSITORIES_JSON; do
+  if ! echo "${!output_name}" | jq -e 'type == "object"' >/dev/null; then
+    fail "Terraform ECS IAM output is not an object: ${output_name}"
+  fi
+done
+
+ECS_SERVICE_KEYS_JSON="$(echo "$ECS_SERVICES_JSON" | jq -c 'keys | sort')"
+for output_name in \
+  ECS_TASK_DEFINITION_ARNS_JSON \
+  ECS_LOG_GROUPS_JSON \
+  ECS_EXECUTION_ROLES_JSON \
+  ECS_TASK_ROLES_JSON; do
+  actual_keys_json="$(echo "${!output_name}" | jq -c 'keys | sort')"
+  if [[ "$actual_keys_json" != "$ECS_SERVICE_KEYS_JSON" ]]; then
+    jq -n \
+      --arg output "$output_name" \
+      --argjson expected "$ECS_SERVICE_KEYS_JSON" \
+      --argjson actual "$actual_keys_json" \
+      '{output: $output, expected_service_keys: $expected, actual_keys: $actual}'
+    fail "ECS IAM-related Terraform output keys do not match ecs_services"
+  fi
+done
+
+ECS_IAM_SERVICE_COUNT="$(echo "$ECS_SERVICES_JSON" | jq 'length')"
+if [[ "$ECS_IAM_SERVICE_COUNT" -eq 0 ]]; then
+  success "No ECS services are configured; per-service ECS IAM validation skipped"
+else
+  while IFS= read -r service_name; do
+    execution_role_json="$(echo "$ECS_EXECUTION_ROLES_JSON" | jq -c --arg service "$service_name" '.[$service]')"
+    task_role_json="$(echo "$ECS_TASK_ROLES_JSON" | jq -c --arg service "$service_name" '.[$service]')"
+    execution_role_name="$(echo "$execution_role_json" | jq -r '.name')"
+    execution_role_arn="$(echo "$execution_role_json" | jq -r '.arn')"
+    task_role_name="$(echo "$task_role_json" | jq -r '.name')"
+    task_role_arn="$(echo "$task_role_json" | jq -r '.arn')"
+    partition="$(echo "$execution_role_arn" | cut -d: -f2)"
+    expected_source_arn="arn:${partition}:ecs:${AWS_REGION}:${ACCOUNT_ID}:*"
+
+    live_execution_role_json="$(get_role_json "$execution_role_name")"
+    live_task_role_json="$(get_role_json "$task_role_name")"
+
+    if [[ "$(echo "$live_execution_role_json" | jq -r '.Role.Arn')" != "$execution_role_arn" ]]; then
+      fail "ECS task execution role ARN does not match Terraform output: ${service_name}"
+    fi
+    if [[ "$(echo "$live_task_role_json" | jq -r '.Role.Arn')" != "$task_role_arn" ]]; then
+      fail "ECS task role ARN does not match Terraform output: ${service_name}"
+    fi
+
+    validate_ecs_task_trust "$live_execution_role_json" "$execution_role_name" "$expected_source_arn"
+    validate_ecs_task_trust "$live_task_role_json" "$task_role_name" "$expected_source_arn"
+
+    execution_managed_count="$(aws iam list-attached-role-policies "${aws_args[@]}" --role-name "$execution_role_name" --query 'AttachedPolicies | length(@)' --output text)"
+    task_managed_count="$(aws iam list-attached-role-policies "${aws_args[@]}" --role-name "$task_role_name" --query 'AttachedPolicies | length(@)' --output text)"
+    execution_policy_names_json="$(aws iam list-role-policies "${aws_args[@]}" --role-name "$execution_role_name" --output json | jq -c '.PolicyNames | sort')"
+    task_policy_names_json="$(aws iam list-role-policies "${aws_args[@]}" --role-name "$task_role_name" --output json | jq -c '.PolicyNames | sort')"
+
+    if [[ "$execution_managed_count" -ne 0 ]] || [[ "$task_managed_count" -ne 0 ]]; then
+      fail "ECS task/execution roles must not have AWS or customer managed policy attachments: ${service_name}"
+    fi
+    if [[ "$execution_policy_names_json" != "[\"${execution_role_name}\"]" ]]; then
+      fail "ECS task execution role must have exactly its custom inline execution policy: ${service_name}"
+    fi
+    if [[ "$task_policy_names_json" != "[]" ]]; then
+      fail "ECS application task role must initially have no inline policies: ${service_name}"
+    fi
+
+    execution_policy_json="$(
+      aws iam get-role-policy \
+        "${aws_args[@]}" \
+        --role-name "$execution_role_name" \
+        --policy-name "$execution_role_name" \
+        --output json |
+        jq -c '.PolicyDocument'
+    )"
+
+    if policy_contains_action "$execution_policy_json" "iam:PassRole"; then
+      fail "ECS task execution role grants iam:PassRole: ${service_name}"
+    fi
+
+    task_definition_arn="$(echo "$ECS_TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
+    task_definition_json="$(aws ecs describe-task-definition "${aws_args[@]}" --task-definition "$task_definition_arn" --output json)"
+    primary_container_json="$(echo "$task_definition_json" | jq -c --arg service "$service_name" '[.taskDefinition.containerDefinitions[] | select(.name == $service)] | if length == 1 then .[0] else null end')"
+    if [[ "$primary_container_json" == "null" ]]; then
+      fail "Cannot resolve the primary ECS container for IAM scope validation: ${service_name}"
+    fi
+
+    image_reference="$(echo "$primary_container_json" | jq -r '.image // empty')"
+    image_repository_url="${image_reference%@sha256:*}"
+    expected_ecr_arns_json="$(echo "$ECR_REPOSITORIES_JSON" | jq -c --arg url "$image_repository_url" '[to_entries[] | select(.value.repository_url == $url) | .value.arn] | sort | unique')"
+    if [[ "$(echo "$expected_ecr_arns_json" | jq 'length')" -ne 1 ]]; then
+      fail "Cannot resolve exactly one ECR repository ARN for the ECS execution policy: ${service_name}"
+    fi
+
+    expected_log_group_arn="$(echo "$ECS_LOG_GROUPS_JSON" | jq -r --arg service "$service_name" '.[$service].arn | rtrimstr(":*")')"
+    expected_log_resources_json="$(jq -nc --arg arn "${expected_log_group_arn}:*" '[$arn]')"
+
+    if ! policy_statement_allows_exact_resources "$execution_policy_json" '["ecr:GetAuthorizationToken"]' '["*"]'; then
+      fail "ECS execution policy lacks exact ecr:GetAuthorizationToken wildcard-resource permission: ${service_name}"
+    fi
+    if ! policy_statement_allows_exact_resources \
+      "$execution_policy_json" \
+      '["ecr:BatchCheckLayerAvailability","ecr:GetDownloadUrlForLayer","ecr:BatchGetImage"]' \
+      "$expected_ecr_arns_json"; then
+      fail "ECS execution policy ECR pull permissions are not scoped to the task image repository: ${service_name}"
+    fi
+    if ! policy_statement_allows_exact_resources \
+      "$execution_policy_json" \
+      '["logs:CreateLogStream","logs:PutLogEvents"]' \
+      "$expected_log_resources_json"; then
+      fail "ECS execution policy log permissions are not scoped to the service log group: ${service_name}"
+    fi
+
+    expected_secret_arns_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select(test("^arn:[^:]+:secretsmanager:"))] | sort | unique')"
+    expected_ssm_arns_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select(test("^arn:[^:]+:ssm:"))] | sort | unique')"
+    ambiguous_secret_references_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select((test("^arn:[^:]+:(secretsmanager|ssm):") | not))] | sort | unique')"
+
+    if [[ "$(echo "$expected_secret_arns_json" | jq 'length')" -gt 0 ]] &&
+      ! policy_statement_allows_exact_resources "$execution_policy_json" '["secretsmanager:GetSecretValue"]' "$expected_secret_arns_json"; then
+      fail "ECS execution policy Secrets Manager permissions do not match task-definition references: ${service_name}"
+    fi
+    if [[ "$(echo "$expected_ssm_arns_json" | jq 'length')" -gt 0 ]] &&
+      ! policy_statement_allows_exact_resources "$execution_policy_json" '["ssm:GetParameters"]' "$expected_ssm_arns_json"; then
+      fail "ECS execution policy SSM permissions do not match task-definition references: ${service_name}"
+    fi
+    if [[ "$(echo "$ambiguous_secret_references_json" | jq 'length')" -gt 0 ]]; then
+      warn "Secret references without service-identifying ARNs cannot be classified from workload outputs: ${service_name}"
+    fi
+
+    if policy_contains_action "$execution_policy_json" "kms:Decrypt"; then
+      kms_resources_json="$(echo "$execution_policy_json" | jq -c '[.Statement[]? | select((.Action | if type == "array" then . else [.] end) | index("kms:Decrypt") != null) | .Resource | if type == "array" then .[] else . end] | sort | unique')"
+      if echo "$kms_resources_json" | jq -e 'index("*") != null or length == 0' >/dev/null; then
+        fail "ECS execution-policy kms:Decrypt permission is missing resource scope: ${service_name}"
+      fi
+      info "kms:Decrypt is resource-scoped for ${service_name}; exact expected KMS keys are not exposed by workload outputs"
+    fi
+
+    success "ECS IAM trust, execution-policy scope, empty task-role authority, and PassRole absence are valid: ${service_name}"
+  done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
+fi
+
+warn "execution_kms_key_arns is not exposed by the workload-root output contract; exact optional kms:Decrypt key equality is deferred"
+
 section "IAM Summary"
 
 cat <<SUMMARY
@@ -450,6 +670,7 @@ GitHub apply role present:    ${GITHUB_APPLY_PRESENT}
 
 Logs S3 policy output:        ${LOGS_S3_READONLY_POLICY_NAME:-<missing>}
 Logs CMK policy output:       ${LOGS_CMK_DECRYPT_POLICY_NAME:-<missing>}
+ECS services validated:       ${ECS_IAM_SERVICE_COUNT}
 SUMMARY
 
 section "Validation Result"

@@ -57,6 +57,7 @@ VALIDATION_SCRIPTS=(
   "validate-lambda.sh"
   "validate-ssm.sh"
   "validate-compute.sh"
+  "validate-ecs-runtime.sh"
   "validate-iam.sh"
 )
 

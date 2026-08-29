@@ -87,9 +87,54 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
       for arn in each.value.log_group_arns : "${arn}:*"
     ]
   }
+
+  dynamic "statement" {
+    for_each = length(each.value.execution_secret_arns) > 0 ? [1] : []
+
+    content {
+      sid    = "AllowSecretsManagerRead"
+      effect = "Allow"
+
+      actions = [
+        "secretsmanager:GetSecretValue",
+      ]
+
+      resources = each.value.execution_secret_arns
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(each.value.execution_ssm_parameter_arns) > 0 ? [1] : []
+
+    content {
+      sid    = "AllowSSMParameterRead"
+      effect = "Allow"
+
+      actions = [
+        "ssm:GetParameters",
+      ]
+
+      resources = each.value.execution_ssm_parameter_arns
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(each.value.execution_kms_key_arns) > 0 ? [1] : []
+
+    content {
+      sid    = "AllowExecutionKMSDecrypt"
+      effect = "Allow"
+
+      actions = [
+        "kms:Decrypt",
+      ]
+
+      resources = each.value.execution_kms_key_arns
+    }
+  }
 }
 
-resource "aws_iam_role_policy" "ecs_task_exeuction_policies" {
+resource "aws_iam_role_policy" "ecs_task_execution_policies" {
   for_each = var.ecs_iam_services
 
   name   = "${var.name_prefix}-${each.key}-ecs-execution"
