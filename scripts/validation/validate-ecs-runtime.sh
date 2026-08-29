@@ -381,6 +381,7 @@ while IFS= read -r service_name; do
   expected_service_json="$(echo "$ECS_SERVICES_JSON" | jq -c --arg service "$service_name" '.[$service]')"
   expected_service_arn="$(echo "$expected_service_json" | jq -r '.arn')"
   expected_service_name="$(echo "$expected_service_json" | jq -r '.name')"
+  expected_platform_version="$(echo "$expected_service_json" | jq -r '.platform_version')"
   expected_task_definition_arn="$(echo "$TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
   expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
   expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
@@ -415,7 +416,7 @@ while IFS= read -r service_name; do
         and .services[0].status == "ACTIVE"
         and .services[0].taskDefinition == $task_definition_arn
         and .services[0].launchType == "FARGATE"
-        and .services[0].platformVersion == "1.4.0"
+        and .services[0].platformVersion == $platform_version
         and .services[0].deploymentConfiguration.deploymentCircuitBreaker.enable == true
         and .services[0].deploymentConfiguration.deploymentCircuitBreaker.rollback == true
       ' >/dev/null; then
