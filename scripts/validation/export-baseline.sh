@@ -53,6 +53,7 @@ VALIDATION_SCRIPTS=(
   "validate-lambda.sh"
   "validate-ssm.sh"
   "validate-compute.sh"
+  "validate-ecs-runtime.sh"
   "validate-iam.sh"
 )
 
@@ -71,6 +72,7 @@ declare -A VALIDATION_AREAS=(
   ["validate-lambda.sh"]="Lambda"
   ["validate-ssm.sh"]="SSM"
   ["validate-compute.sh"]="Compute"
+  ["validate-ecs-runtime.sh"]="ECS Runtime"
   ["validate-iam.sh"]="IAM"
 )
 
