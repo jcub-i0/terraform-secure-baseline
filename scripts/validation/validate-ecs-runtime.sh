@@ -210,7 +210,10 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
       type == "object"
       and (.arn | type == "string" and length > 0)
       and (.security_group_id | type == "string" and length > 0)
+      and (.https_listener | type == "object")
       and (.https_listener.arn | type == "string" and length > 0)
+      and (.https_listener.certificate_arn | type == "string" and length > 0)
+      and (.https_listener.ssl_policy | type == "string" and length > 0)
       and (.target_groups | type == "object" and length > 0)
     ' >/dev/null; then
     fail "application_load_balancer output is not null and lacks required runtime metadata"
