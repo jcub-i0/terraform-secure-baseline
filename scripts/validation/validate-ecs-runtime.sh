@@ -428,6 +428,15 @@ while IFS= read -r service_name; do
         and .services[0].platformVersion == $platform_version
         and .services[0].deploymentConfiguration.deploymentCircuitBreaker.enable == true
         and .services[0].deploymentConfiguration.deploymentCircuitBreaker.rollback == true
+
+        and .services[0].runningCount == .services[0].desiredCount
+        and .services[0].pendingCount == 0
+
+        and any(
+          .services[0].deployments[]?;
+          .status == "PRIMARY"
+          and .rolloutState == "COMPLETED"
+        )
       ' >/dev/null; then
     echo "$service_response_json" | jq '.services[0] | {serviceArn, serviceName, clusterArn, status, taskDefinition, launchType, platformVersion, deploymentConfiguration}'
     fail "ECS service identity, Fargate settings, or deployment safeguards are invalid: ${service_name} (expected platform version ${expected_platform_version})"
@@ -632,7 +641,7 @@ while IFS= read -r service_name; do
     fail "ECS service has an unexpected load-balancer attachment: ${service_name}"
   fi
 
-  success "ECS service and runtime-critical task SG relationships are valid: ${service_name}"
+  success "ECS service is healthy at steady state and runtime-critical task SG relationships are valid: ${service_name}"
 done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 
 warn "Database-access intent and SG readiness IDs are not exposed by workload-root outputs; conditional database rules and readiness-resource identity are deferred"
