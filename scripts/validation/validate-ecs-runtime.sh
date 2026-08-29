@@ -174,13 +174,14 @@ ECS_EXECUTION_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_executio
 ECS_TASK_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_roles)"
 ECR_REPOSITORIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecr_repositories)"
 
-for output_name in vpc_id name_prefix effective_egress_mode effective_cloudwatch_retention_days; do
+for output_name in vpc_id name_prefix s3_prefix_list_id effective_egress_mode effective_cloudwatch_retention_days; do
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output: ${output_name}"
   fi
 done
 
 VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
+S3_PREFIX_LIST_ID="$(get_terraform_output_value "$OUTPUTS_JSON" s3_prefix_list_id)"
 EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
 EFFECTIVE_CLOUDWATCH_RETENTION_DAYS="$(get_terraform_output_value "$OUTPUTS_JSON" effective_cloudwatch_retention_days)"
 
@@ -345,27 +346,12 @@ INTERFACE_ENDPOINT_SGS_JSON="$(
       "Name=tag:Name,Values=${NAME_PREFIX}-VPC-Endpoints-SG" \
     --output json
 )"
+
 if [[ "$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq '.SecurityGroups | length')" -ne 1 ]]; then
   fail "Expected exactly one shared Interface Endpoint security group"
 fi
-INTERFACE_ENDPOINT_SG_ID="$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq -r '.SecurityGroups[0].GroupId')"
 
-S3_ENDPOINTS_JSON="$(
-  aws ec2 describe-vpc-endpoints \
-    "${aws_args[@]}" \
-    --filters \
-      "Name=vpc-id,Values=${VPC_ID}" \
-      "Name=service-name,Values=com.amazonaws.${AWS_REGION}.s3" \
-      "Name=vpc-endpoint-type,Values=Gateway" \
-    --output json
-)"
-if [[ "$(echo "$S3_ENDPOINTS_JSON" | jq '.VpcEndpoints | length')" -ne 1 ]]; then
-  fail "Expected exactly one S3 Gateway Endpoint for ECS task egress validation"
-fi
-S3_PREFIX_LIST_ID="$(echo "$S3_ENDPOINTS_JSON" | jq -r '.VpcEndpoints[0].PrefixListId // empty')"
-if [[ -z "$S3_PREFIX_LIST_ID" ]]; then
-  fail "S3 Gateway Endpoint did not expose a prefix-list ID"
-fi
+INTERFACE_ENDPOINT_SG_ID="$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq -r '.SecurityGroups[0].GroupId')"
 
 ALB_SECURITY_GROUP_ID=""
 if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
