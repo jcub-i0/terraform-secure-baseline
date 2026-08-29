@@ -243,6 +243,7 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
     jq -e '
       type == "object"
       and (.arn | type == "string" and length > 0)
+      and (.dns_name | type == "string" and length > 0)
       and (.security_group_id | type == "string" and length > 0)
       and (.https_listener | type == "object")
       and (.https_listener.arn | type == "string" and length > 0)
