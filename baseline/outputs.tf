@@ -155,7 +155,7 @@ output "application_load_balancer" {
     dns_name           = module.application_load_balancer[0].dns_name
     security_group_id  = module.application_load_balancer[0].security_group_id
     https_listener_arn = module.application_load_balancer[0].https_listener_arn
-    https_listener = module.application_load_balancer[0].https_listener
+    https_listener     = module.application_load_balancer[0].https_listener
     target_groups      = module.application_load_balancer[0].target_groups
   } : null
 }
