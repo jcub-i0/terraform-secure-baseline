@@ -27,9 +27,11 @@ fi
 require_env_name "$ENV_NAME"
 
 aws_args=()
+
 if [[ -n "$AWS_PROFILE" ]]; then
   aws_args+=(--profile "$AWS_PROFILE")
 fi
+
 if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
@@ -44,6 +46,7 @@ json_object_output() {
   fi
 
   value="$(echo "$outputs_json" | jq -c --arg name "$output_name" '.[$name].value')"
+
   if ! echo "$value" | jq -e 'type == "object"' >/dev/null; then
     fail "Terraform output ${output_name} must be an object"
   fi
@@ -149,18 +152,22 @@ sg_has_ipv4_cidr_rule() {
 section "${CLOUD_NAME} ECS Runtime Validation"
 
 section "Checking required local commands"
+
 require_command aws
 require_command terraform
 require_command jq
 require_command git
+
 success "Required commands are available"
 
 section "Resolving repository paths and Terraform outputs"
+
 REPO_ROOT="$(get_repo_root)"
 ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
 require_directory "$ENV_DIR"
 
 OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
+
 if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
   fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
 fi
@@ -174,13 +181,14 @@ ECS_EXECUTION_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_executio
 ECS_TASK_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_roles)"
 ECR_REPOSITORIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecr_repositories)"
 
-for output_name in vpc_id name_prefix effective_egress_mode effective_cloudwatch_retention_days; do
+for output_name in vpc_id name_prefix s3_prefix_list_id effective_egress_mode effective_cloudwatch_retention_days; do
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output: ${output_name}"
   fi
 done
 
 VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
+S3_PREFIX_LIST_ID="$(get_terraform_output_value "$OUTPUTS_JSON" s3_prefix_list_id)"
 EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
 EFFECTIVE_CLOUDWATCH_RETENTION_DAYS="$(get_terraform_output_value "$OUTPUTS_JSON" effective_cloudwatch_retention_days)"
 
@@ -243,17 +251,22 @@ ECS_SERVICE_COUNT="$(echo "$ECS_SERVICES_JSON" | jq 'length')"
 info "Configured ECS services: ${ECS_SERVICE_COUNT}"
 
 section "Checking AWS caller identity"
+
 ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
 CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+
 if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
   fail "Unable to resolve AWS account ID"
 fi
+
 if [[ -n "$EXPECTED_ACCOUNT_ID" && "$ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]]; then
   fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACCOUNT_ID}"
 fi
+
 success "AWS credentials are valid: ${CALLER_ARN}"
 
 section "Validating environment ECS cluster"
+
 EXPECTED_CLUSTER_ARN="$(echo "$ECS_CLUSTER_JSON" | jq -r '.arn')"
 EXPECTED_CLUSTER_NAME="$(echo "$ECS_CLUSTER_JSON" | jq -r '.name')"
 
@@ -281,6 +294,7 @@ if ! echo "$CLUSTER_RESPONSE_JSON" |
   echo "$CLUSTER_RESPONSE_JSON" | jq '.clusters[0] | {clusterArn, clusterName, status}'
   fail "Live ECS cluster identity or status does not match Terraform output"
 fi
+
 success "ECS cluster exists, matches Terraform output, and is ACTIVE"
 
 CONTAINER_INSIGHTS_LIVE_VALUE="$(
@@ -288,6 +302,7 @@ CONTAINER_INSIGHTS_LIVE_VALUE="$(
     jq -r '.clusters[0].settings[]? | select(.name == "containerInsights") | .value' |
     head -n 1
 )"
+
 info "Live Container Insights setting: ${CONTAINER_INSIGHTS_LIVE_VALUE:-<not returned>}"
 warn "The workload-root output contract does not expose the configured Container Insights value; exact comparison is deferred"
 
@@ -298,6 +313,7 @@ LIVE_SERVICE_ARNS_JSON="$(
     --output json |
     jq -c '[.serviceArns[]?] | sort | unique'
 )"
+
 EXPECTED_SERVICE_ARNS_JSON="$(echo "$ECS_SERVICES_JSON" | jq -c '[.[].arn] | sort | unique')"
 
 SERVICE_INVENTORY_DIFFERENCE_JSON="$(
@@ -307,11 +323,13 @@ SERVICE_INVENTORY_DIFFERENCE_JSON="$(
       {missing_service_arns: ($expected - $actual), unexpected_service_arns: ($actual - $expected)}
     '
 )"
+
 if ! echo "$SERVICE_INVENTORY_DIFFERENCE_JSON" |
   jq -e '(.missing_service_arns | length) == 0 and (.unexpected_service_arns | length) == 0' >/dev/null; then
   echo "$SERVICE_INVENTORY_DIFFERENCE_JSON" | jq .
   fail "Live ECS service inventory does not exactly match ecs_services output"
 fi
+
 success "Live ECS service inventory exactly matches Terraform output"
 
 if [[ "$ECS_SERVICE_COUNT" -eq 0 ]]; then
@@ -324,6 +342,7 @@ if [[ "$ECS_SERVICE_COUNT" -eq 0 ]]; then
 fi
 
 section "Resolving accepted live networking identities"
+
 COMPUTE_SUBNETS_JSON="$(
   aws ec2 describe-subnets \
     "${aws_args[@]}" \
@@ -332,7 +351,9 @@ COMPUTE_SUBNETS_JSON="$(
       "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-*" \
     --output json
 )"
+
 COMPUTE_SUBNET_IDS_JSON="$(echo "$COMPUTE_SUBNETS_JSON" | jq -c '[.Subnets[].SubnetId] | sort | unique')"
+
 if [[ "$(echo "$COMPUTE_SUBNET_IDS_JSON" | jq 'length')" -eq 0 ]]; then
   fail "No compute-private subnets were resolved for ECS service placement validation"
 fi
@@ -345,29 +366,15 @@ INTERFACE_ENDPOINT_SGS_JSON="$(
       "Name=tag:Name,Values=${NAME_PREFIX}-VPC-Endpoints-SG" \
     --output json
 )"
+
 if [[ "$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq '.SecurityGroups | length')" -ne 1 ]]; then
   fail "Expected exactly one shared Interface Endpoint security group"
 fi
+
 INTERFACE_ENDPOINT_SG_ID="$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq -r '.SecurityGroups[0].GroupId')"
 
-S3_ENDPOINTS_JSON="$(
-  aws ec2 describe-vpc-endpoints \
-    "${aws_args[@]}" \
-    --filters \
-      "Name=vpc-id,Values=${VPC_ID}" \
-      "Name=service-name,Values=com.amazonaws.${AWS_REGION}.s3" \
-      "Name=vpc-endpoint-type,Values=Gateway" \
-    --output json
-)"
-if [[ "$(echo "$S3_ENDPOINTS_JSON" | jq '.VpcEndpoints | length')" -ne 1 ]]; then
-  fail "Expected exactly one S3 Gateway Endpoint for ECS task egress validation"
-fi
-S3_PREFIX_LIST_ID="$(echo "$S3_ENDPOINTS_JSON" | jq -r '.VpcEndpoints[0].PrefixListId // empty')"
-if [[ -z "$S3_PREFIX_LIST_ID" ]]; then
-  fail "S3 Gateway Endpoint did not expose a prefix-list ID"
-fi
-
 ALB_SECURITY_GROUP_ID=""
+
 if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
   ALB_SECURITY_GROUP_ID="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.security_group_id // empty')"
 fi
@@ -399,6 +406,7 @@ while IFS= read -r service_name; do
       --services "$expected_service_arn" \
       --output json
   )"
+
   if [[ "$(echo "$service_response_json" | jq '.services | length')" -ne 1 ]]; then
     echo "$service_response_json" | jq .
     fail "Expected ECS service was not returned: ${service_name}"
@@ -420,8 +428,17 @@ while IFS= read -r service_name; do
         and .services[0].platformVersion == $platform_version
         and .services[0].deploymentConfiguration.deploymentCircuitBreaker.enable == true
         and .services[0].deploymentConfiguration.deploymentCircuitBreaker.rollback == true
+
+        and .services[0].runningCount == .services[0].desiredCount
+        and .services[0].pendingCount == 0
+
+        and any(
+          .services[0].deployments[]?;
+          .status == "PRIMARY"
+          and .rolloutState == "COMPLETED"
+        )
       ' >/dev/null; then
-    echo "$service_response_json" | jq '.services[0] | {serviceArn, serviceName, clusterArn, status, taskDefinition, launchType, platformVersion, deploymentConfiguration}'
+    echo "$service_response_json" | jq '.services[0] | {serviceArn, serviceName, clusterArn, status, taskDefinition, launchType, platformVersion, desiredCount, runningCount, pendingCount, deployments, deploymentConfiguration}'
     fail "ECS service identity, Fargate settings, or deployment safeguards are invalid: ${service_name} (expected platform version ${expected_platform_version})"
   fi
 
@@ -433,10 +450,12 @@ while IFS= read -r service_name; do
     jq -n --argjson expected "$COMPUTE_SUBNET_IDS_JSON" --argjson actual "$service_subnet_ids_json" '{expected_compute_subnets: $expected, actual_service_subnets: $actual}'
     fail "ECS service does not use the exact compute-private subnet set: ${service_name}"
   fi
+
   if [[ "$service_sg_ids_json" != "[\"${expected_task_sg_id}\"]" ]]; then
     jq -n --arg expected "$expected_task_sg_id" --argjson actual "$service_sg_ids_json" '{expected_task_sg: $expected, actual_service_sgs: $actual}'
     fail "ECS service does not use exactly its Terraform task SG: ${service_name}"
   fi
+
   if [[ "$assign_public_ip" != "DISABLED" ]]; then
     fail "ECS service assignPublicIp is ${assign_public_ip:-<missing>}, expected DISABLED: ${service_name}"
   fi
@@ -486,19 +505,23 @@ while IFS= read -r service_name; do
   )"
 
   image_reference="$(echo "$primary_container_json" | jq -r '.image // empty')"
+
   if ! [[ "$image_reference" =~ ^.+@sha256:[0-9a-f]{64}$ ]]; then
     fail "Task definition image is not digest pinned: ${service_name} image=${image_reference:-<missing>}"
   fi
+
   image_repository_url="${image_reference%@sha256:*}"
   repository_match_count="$(
     echo "$ECR_REPOSITORIES_JSON" |
       jq --arg url "$image_repository_url" '[to_entries[] | select(.value.repository_url == $url)] | length'
   )"
+
   if [[ "$repository_match_count" -ne 1 ]]; then
     fail "Task image repository URL does not match exactly one ecr_repositories output: ${service_name}"
   fi
 
   port_mappings_json="$(echo "$primary_container_json" | jq -c '.portMappings // []')"
+
   if ! echo "$port_mappings_json" |
     jq -e '
       length == 1
@@ -510,6 +533,7 @@ while IFS= read -r service_name; do
     echo "$port_mappings_json" | jq .
     fail "Primary container port mapping is invalid for awsvpc: ${service_name}"
   fi
+
   container_port="$(echo "$port_mappings_json" | jq -r '.[0].containerPort')"
   SERVICE_CONTAINER_PORTS["$service_name"]="$container_port"
 
@@ -534,22 +558,29 @@ while IFS= read -r service_name; do
       --log-group-name-prefix "$expected_log_group_name" \
       --output json
   )"
+
   live_log_group_json="$(echo "$log_groups_response_json" | jq -c --arg name "$expected_log_group_name" '[.logGroups[] | select(.logGroupName == $name)]')"
+  
   if [[ "$(echo "$live_log_group_json" | jq 'length')" -ne 1 ]]; then
     fail "Expected ECS CloudWatch log group was not found: ${expected_log_group_name}"
   fi
+
   live_log_group_json="$(echo "$live_log_group_json" | jq -c '.[0]')"
   live_log_group_arn="$(echo "$live_log_group_json" | jq -r '.arn // empty | rtrimstr(":*")')"
   normalized_expected_log_group_arn="$(jq -nr --arg arn "$expected_log_group_arn" '$arn | rtrimstr(":*")')"
+
   if [[ "$live_log_group_arn" != "$normalized_expected_log_group_arn" ]]; then
     fail "CloudWatch log-group ARN does not match Terraform output: ${service_name}"
   fi
+
   if [[ "$(echo "$live_log_group_json" | jq -r '.retentionInDays // 0')" -ne "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" ]]; then
     fail "CloudWatch log-group retention does not match effective_cloudwatch_retention_days: ${service_name}"
   fi
+
   if [[ -z "$(echo "$live_log_group_json" | jq -r '.kmsKeyId // empty')" ]]; then
     fail "CloudWatch log group is not KMS encrypted: ${service_name}"
   fi
+
   success "Task definition image, port, awslogs configuration, and log group are valid: ${service_name}"
 
   task_sg_json="$(
@@ -558,16 +589,20 @@ while IFS= read -r service_name; do
       --group-ids "$expected_task_sg_id" \
       --output json
   )"
+
   if [[ "$(echo "$task_sg_json" | jq '.SecurityGroups | length')" -ne 1 ]] ||
     [[ "$(echo "$task_sg_json" | jq -r '.SecurityGroups[0].VpcId')" != "$VPC_ID" ]]; then
     fail "Task security group is missing or belongs to the wrong VPC: ${service_name}"
   fi
+
   if ! sg_has_group_rule "$task_sg_json" egress "$INTERFACE_ENDPOINT_SG_ID" 443; then
     fail "Task SG lacks HTTPS egress to the Interface Endpoint SG: ${service_name}"
   fi
+
   if ! sg_has_group_rule "$INTERFACE_ENDPOINT_SGS_JSON" ingress "$expected_task_sg_id" 443; then
     fail "Interface Endpoint SG lacks HTTPS ingress from task SG: ${service_name}"
   fi
+
   if ! sg_has_prefix_list_rule "$task_sg_json" "$S3_PREFIX_LIST_ID" 443; then
     fail "Task SG lacks HTTPS egress to the S3 managed prefix list: ${service_name}"
   fi
@@ -606,18 +641,21 @@ while IFS= read -r service_name; do
     fail "ECS service has an unexpected load-balancer attachment: ${service_name}"
   fi
 
-  success "ECS service and runtime-critical task SG relationships are valid: ${service_name}"
+  success "ECS service is healthy at steady state and runtime-critical task SG relationships are valid: ${service_name}"
 done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 
 warn "Database-access intent and SG readiness IDs are not exposed by workload-root outputs; conditional database rules and readiness-resource identity are deferred"
 warn "The workload-root output contract does not expose the logging CMK ARN; exact log-group KMS-key equality is deferred"
 
 section "Validating conditional shared Application Load Balancer"
+
 if [[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]]; then
   if [[ "${#SERVICE_TARGET_GROUP_ARNS[@]}" -ne 0 ]]; then
     fail "Service target groups were detected while application_load_balancer output is null"
   fi
+
   success "No ALB is configured; ALB validation skipped"
+
 else
   EXPECTED_ALB_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.arn')"
   EXPECTED_ALB_DNS_NAME="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.dns_name')"
@@ -629,6 +667,7 @@ else
       --load-balancer-arns "$EXPECTED_ALB_ARN" \
       --output json
   )"
+
   if ! echo "$alb_response_json" |
     jq -e \
       --arg arn "$EXPECTED_ALB_ARN" \
@@ -656,11 +695,14 @@ else
         "Name=tag:Name,Values=${NAME_PREFIX}-Public-*" \
       --output json
   )"
+
   expected_public_subnets_json="$(echo "$PUBLIC_SUBNETS_JSON" | jq -c '[.Subnets[].SubnetId] | sort | unique')"
   actual_alb_subnets_json="$(echo "$alb_response_json" | jq -c '[.LoadBalancers[0].AvailabilityZones[].SubnetId] | sort | unique')"
+
   if [[ "$(echo "$expected_public_subnets_json" | jq 'length')" -eq 0 ]]; then
     fail "No public subnets were resolved for ALB placement validation"
   fi
+
   if [[ "$expected_public_subnets_json" != "$actual_alb_subnets_json" ]]; then
     fail "Shared ALB does not use the exact public subnet set"
   fi
@@ -671,10 +713,12 @@ else
       --group-ids "$ALB_SECURITY_GROUP_ID" \
       --output json
   )"
+
   if [[ "$(echo "$alb_sg_json" | jq -r '.SecurityGroups[0].VpcId // empty')" != "$VPC_ID" ]] ||
     ! echo "$alb_sg_json" | jq -e '.SecurityGroups | length == 1' >/dev/null; then
     fail "ALB security group is missing or belongs to the wrong VPC"
   fi
+
   if ! echo "$alb_sg_json" |
     jq -e '.SecurityGroups[0].IpPermissions | any(.IpProtocol == "tcp" and .FromPort == 443 and .ToPort == 443 and (.IpRanges | length) > 0)' >/dev/null; then
     fail "ALB SG lacks CIDR-based HTTPS ingress"
@@ -686,6 +730,7 @@ else
       --load-balancer-arn "$EXPECTED_ALB_ARN" \
       --output json
   )"
+
   if ! echo "$listeners_response_json" |
     jq -e \
       --arg listener_arn "$EXPECTED_ALB_LISTENER_ARN" '
@@ -703,6 +748,7 @@ else
     echo "$listeners_response_json" | jq '.Listeners'
     fail "ALB must have exactly one HTTPS listener with a certificate and fixed 404 default action"
   fi
+
   warn "The workload-root output contract does not expose expected ALB certificate ARN or TLS policy; presence is validated but exact identity is deferred"
 
   rules_response_json="$(
@@ -722,6 +768,7 @@ else
         --target-group-arns "$expected_target_group_arn" \
         --output json
     )"
+
     if ! echo "$target_group_response_json" |
       jq -e \
         --arg arn "$expected_target_group_arn" \
@@ -761,10 +808,13 @@ else
     if ! sg_has_group_rule "$alb_sg_json" egress "$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')" "${SERVICE_CONTAINER_PORTS[$service_name]}"; then
       fail "ALB SG lacks egress to task SG on the service container port: ${service_name}"
     fi
+
     success "ALB target group, listener rule, and SG relationship are valid: ${service_name}"
+
   done < <(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.target_groups | keys[]')
 
   success "Shared Application Load Balancer runtime is valid"
+
 fi
 
 section "ECS Runtime Summary"
@@ -780,4 +830,5 @@ Application Load Balancer present: $([[ "$APPLICATION_LOAD_BALANCER_JSON" == "nu
 SUMMARY
 
 section "Validation Result"
+
 success "ECS runtime validation completed successfully for: ${ENV_NAME}"

@@ -182,3 +182,8 @@ output "ecs_task_roles" {
   description = "ECS application task roles keyed by service name."
   value       = module.baseline.ecs_task_roles
 }
+
+output "s3_prefix_list_id" {
+  description = "AWS-managed S3 prefix list ID associated with the workload S3 Gateway Endpoint."
+  value       = module.baseline.s3_prefix_list_id
+}
