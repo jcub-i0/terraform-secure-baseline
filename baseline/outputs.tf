@@ -176,7 +176,7 @@ output "ecs_services" {
 
 output "ecs_service_configuration" {
   description = "Validator-relevant ECS service configuration keyed by service name"
-  
+
   value = {
     for service_name, service in var.ecs_services : service_name => {
       database_access = service.database_access
