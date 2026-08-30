@@ -203,8 +203,11 @@ while IFS= read -r repository_entry; do
     fail "Repository ${expected_name} uses KMS encryption but has no configured KMS key"
   fi
 
-  success "Repository uses KMS encryption with a configured key: ${expected_name}"
-  warn "The workload-root output contract does not expose the expected ECR CMK ARN; exact live KMS-key equality cannot be validated"
+  if [[ "$kms_key" != "$EXPECTED_ECR_CMK_ARN" ]]; then
+    fail "Repository ${expected_name} KMS key does not match Terraform ECR CMK: expected=${EXPECTED_ECR_CMK_ARN} actual=${kms_key}"
+  fi
+
+  success "Repository KMS key exactly matches Terraform ECR CMK: ${expected_name}"
 
   if ! lifecycle_policy_response_json="$(
     aws ecr get-lifecycle-policy \
