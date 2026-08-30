@@ -256,7 +256,7 @@ AWS region:                     ${AWS_REGION}
 AWS account ID:                 ${ACCOUNT_ID}
 Configured repositories:        ${ECR_REPOSITORY_COUNT}
 Validated repositories:         ${VALIDATED_REPOSITORY_COUNT}
-Expected ECR CMK output:        <not exposed>
+Expected ECR CMK ARN:           ${EXPECTED_ECR_CMK_ARN}
 SUMMARY
 
 section "Validation Result"
