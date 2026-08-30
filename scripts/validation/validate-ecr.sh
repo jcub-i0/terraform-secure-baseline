@@ -112,6 +112,16 @@ if [[ "$ECR_REPOSITORY_COUNT" -eq 0 ]]; then
   exit 0
 fi
 
+if ! terraform_output_exists "$OUTPUTS_JSON" ecr_cmk_arn; then
+  fail "Missing required Terraform output: ecr_cmk_arn"
+fi
+
+EXPECTED_ECR_CMK_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" ecr_cmk_arn)"
+
+if [[ -z "$EXPECTED_ECR_CMK_ARN" ]]; then
+  fail "ecr_cmk_arn is empty"
+fi
+
 section "Checking AWS caller identity"
 
 ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
