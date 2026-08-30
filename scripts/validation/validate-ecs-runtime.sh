@@ -250,7 +250,6 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
       and (.https_listener.certificate_arn | type == "string" and length > 0)
       and (.https_listener.ssl_policy | type == "string" and length > 0)
       and (.target_groups | type == "object" and length > 0)
-      and (.container_insights | type == "string" and length > 0)
     ' >/dev/null; then
     fail "application_load_balancer output is not null and lacks required runtime metadata"
   fi
@@ -274,10 +273,13 @@ if ! [[ "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
 fi
 
 if ! echo "$ECS_CLUSTER_JSON" |
-  jq -e '.arn | type == "string" and length > 0' >/dev/null ||
-  ! echo "$ECS_CLUSTER_JSON" |
-    jq -e '.name | type == "string" and length > 0' >/dev/null; then
-  fail "ecs_cluster output must contain non-empty arn and name values"
+  jq -e '
+    type == "object"
+    and (.arn | type == "string" and length > 0)
+    and (.name | type == "string" and length > 0)
+    and (.container_insights | type == "string" and length > 0)
+  ' >/dev/null; then
+  fail "ecs_cluster output must contain non-empty arn, name, and container_insights values"
 fi
 
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_DEFINITION_ARNS_JSON" "task definition ARNs"
