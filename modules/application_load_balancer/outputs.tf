@@ -13,9 +13,14 @@ output "dns_name" {
   value       = aws_lb.load_balancer.dns_name
 }
 
-output "https_listener_arn" {
-  description = "ARN of the HTTPS listener"
-  value       = aws_lb_listener.https.arn
+output "https_listener" {
+  description = "HTTPS listener metadata"
+
+  value = {
+    arn             = aws_lb_listener.https.arn
+    certificate_arn = aws_lb_listener.https.certificate_arn
+    ssl_policy      = aws_lb_listener.https.ssl_policy
+  }
 }
 
 output "target_groups" {

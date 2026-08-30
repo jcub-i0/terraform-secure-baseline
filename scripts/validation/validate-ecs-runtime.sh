@@ -104,6 +104,27 @@ sg_has_group_rule() {
       ' >/dev/null
 }
 
+sg_has_group_reference() {
+  local sg_json="$1"
+  local direction="$2"
+  local source_or_destination_sg_id="$3"
+  local permissions_field="IpPermissions"
+
+  if [[ "$direction" == "egress" ]]; then
+    permissions_field="IpPermissionsEgress"
+  fi
+
+  echo "$sg_json" |
+    jq -e \
+      --arg field "$permissions_field" \
+      --arg group_id "$source_or_destination_sg_id" '
+        .SecurityGroups[0][$field]
+        | any(
+            any(.UserIdGroupPairs[]?; .GroupId == $group_id)
+          )
+      ' >/dev/null
+}
+
 sg_has_prefix_list_rule() {
   local sg_json="$1"
   local prefix_list_id="$2"
@@ -174,6 +195,7 @@ fi
 
 ECS_CLUSTER_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_cluster)"
 ECS_SERVICES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_services)"
+ECS_SERVICE_CONFIGURATION_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_service_configuration)"
 TASK_DEFINITION_ARNS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_definition_arns)"
 TASK_SECURITY_GROUP_IDS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_security_group_ids)"
 ECS_LOG_GROUPS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_log_groups)"
@@ -181,7 +203,16 @@ ECS_EXECUTION_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_executio
 ECS_TASK_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_roles)"
 ECR_REPOSITORIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecr_repositories)"
 
-for output_name in vpc_id name_prefix s3_prefix_list_id effective_egress_mode effective_cloudwatch_retention_days; do
+for output_name in \
+  vpc_id \
+  name_prefix \
+  s3_prefix_list_id \
+  effective_egress_mode \
+  effective_cloudwatch_retention_days \
+  logs_cmk_arn \
+  data_sg_id \
+  rds_port; do
+
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output: ${output_name}"
   fi
@@ -191,6 +222,9 @@ VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
 S3_PREFIX_LIST_ID="$(get_terraform_output_value "$OUTPUTS_JSON" s3_prefix_list_id)"
 EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
 EFFECTIVE_CLOUDWATCH_RETENTION_DAYS="$(get_terraform_output_value "$OUTPUTS_JSON" effective_cloudwatch_retention_days)"
+LOGS_CMK_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" logs_cmk_arn)"
+DATA_SG_ID="$(get_terraform_output_value "$OUTPUTS_JSON" data_sg_id)"
+RDS_PORT="$(get_terraform_output_value "$OUTPUTS_JSON" rds_port)"
 
 APPLICATION_LOAD_BALANCER_JSON="$(
   echo "$OUTPUTS_JSON" |
@@ -209,8 +243,12 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
     jq -e '
       type == "object"
       and (.arn | type == "string" and length > 0)
+      and (.dns_name | type == "string" and length > 0)
       and (.security_group_id | type == "string" and length > 0)
-      and (.https_listener_arn | type == "string" and length > 0)
+      and (.https_listener | type == "object")
+      and (.https_listener.arn | type == "string" and length > 0)
+      and (.https_listener.certificate_arn | type == "string" and length > 0)
+      and (.https_listener.ssl_policy | type == "string" and length > 0)
       and (.target_groups | type == "object" and length > 0)
     ' >/dev/null; then
     fail "application_load_balancer output is not null and lacks required runtime metadata"
@@ -235,17 +273,43 @@ if ! [[ "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
 fi
 
 if ! echo "$ECS_CLUSTER_JSON" |
-  jq -e '.arn | type == "string" and length > 0' >/dev/null ||
-  ! echo "$ECS_CLUSTER_JSON" |
-    jq -e '.name | type == "string" and length > 0' >/dev/null; then
-  fail "ecs_cluster output must contain non-empty arn and name values"
+  jq -e '
+    type == "object"
+    and (.arn | type == "string" and length > 0)
+    and (.name | type == "string" and length > 0)
+    and (.container_insights | type == "string" and length > 0)
+  ' >/dev/null; then
+  fail "ecs_cluster output must contain non-empty arn, name, and container_insights values"
 fi
 
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_DEFINITION_ARNS_JSON" "task definition ARNs"
+require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_SERVICE_CONFIGURATION_JSON" "ECS service configuration"
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_SECURITY_GROUP_IDS_JSON" "task security groups"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_LOG_GROUPS_JSON" "log groups"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_EXECUTION_ROLES_JSON" "task execution roles"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_TASK_ROLES_JSON" "task roles"
+
+if ! echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+  jq -e '
+    all(.[];
+      type == "object"
+      and (.database_access | type) == "boolean"
+    )
+  ' >/dev/null; then
+  fail "ecs_service_configuration must contain boolean database_access for every ECS service"
+fi
+
+if [[ -z "$LOGS_CMK_ARN" ]]; then
+  fail "logs_cmk_arn is empty"
+fi
+
+if [[ -z "$DATA_SG_ID" ]]; then
+  fail "data_sg_id is empty"
+fi
+
+if ! [[ "$RDS_PORT" =~ ^[0-9]+$ ]] || ((RDS_PORT < 1 || RDS_PORT > 65535)); then
+  fail "rds_port is not a valid TCP port: ${RDS_PORT}"
+fi
 
 ECS_SERVICE_COUNT="$(echo "$ECS_SERVICES_JSON" | jq 'length')"
 info "Configured ECS services: ${ECS_SERVICE_COUNT}"
@@ -303,8 +367,16 @@ CONTAINER_INSIGHTS_LIVE_VALUE="$(
     head -n 1
 )"
 
-info "Live Container Insights setting: ${CONTAINER_INSIGHTS_LIVE_VALUE:-<not returned>}"
-warn "The workload-root output contract does not expose the configured Container Insights value; exact comparison is deferred"
+EXPECTED_CONTAINER_INSIGHTS="$(
+  echo "$ECS_CLUSTER_JSON" |
+    jq -r '.container_insights'
+)"
+
+if [[ "$CONTAINER_INSIGHTS_LIVE_VALUE" != "$EXPECTED_CONTAINER_INSIGHTS" ]]; then
+  fail "ECS Container Insights setting does not match Terraform: expected=${EXPECTED_CONTAINER_INSIGHTS} actual=${CONTAINER_INSIGHTS_LIVE_VALUE:-<missing>}"
+fi
+
+success "ECS Container Insights setting matches Terraform: ${EXPECTED_CONTAINER_INSIGHTS}"
 
 LIVE_SERVICE_ARNS_JSON="$(
   aws ecs list-services \
@@ -371,6 +443,18 @@ if [[ "$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq '.SecurityGroups | length')" -
   fail "Expected exactly one shared Interface Endpoint security group"
 fi
 
+DATA_SG_JSON="$(
+  aws ec2 describe-security-groups \
+    "${aws_args[@]}" \
+    --group-ids "$DATA_SG_ID" \
+    --output json
+)"
+
+if [[ "$(echo "$DATA_SG_JSON" | jq '.SecurityGroups | length')" -ne 1 ]] ||
+  [[ "$(echo "$DATA_SG_JSON" | jq -r '.SecurityGroups[0].VpcId')" != "$VPC_ID" ]]; then
+  fail "Database security group is missing or belongs to the wrong VPC"
+fi
+
 INTERFACE_ENDPOINT_SG_ID="$(echo "$INTERFACE_ENDPOINT_SGS_JSON" | jq -r '.SecurityGroups[0].GroupId')"
 
 ALB_SECURITY_GROUP_ID=""
@@ -391,6 +475,11 @@ while IFS= read -r service_name; do
   expected_platform_version="$(echo "$expected_service_json" | jq -r '.platform_version')"
   expected_task_definition_arn="$(echo "$TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
   expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
+  database_access="$(
+    echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+      jq -r --arg service "$service_name" '.[$service].database_access'
+  )"
+
   expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
   expected_log_group_name="$(echo "$expected_log_group_json" | jq -r '.name')"
   expected_log_group_arn="$(echo "$expected_log_group_json" | jq -r '.arn')"
@@ -577,8 +666,13 @@ while IFS= read -r service_name; do
     fail "CloudWatch log-group retention does not match effective_cloudwatch_retention_days: ${service_name}"
   fi
 
-  if [[ -z "$(echo "$live_log_group_json" | jq -r '.kmsKeyId // empty')" ]]; then
-    fail "CloudWatch log group is not KMS encrypted: ${service_name}"
+  live_log_group_kms_key_arn="$(
+    echo "$live_log_group_json" |
+      jq -r '.kmsKeyId // empty'
+  )"
+
+  if [[ "$live_log_group_kms_key_arn" != "$LOGS_CMK_ARN" ]]; then
+    fail "CloudWatch log-group KMS key does not match Terraform logs CMK: ${service_name} expected=${LOGS_CMK_ARN} actual=${live_log_group_kms_key_arn:-<missing>}"
   fi
 
   success "Task definition image, port, awslogs configuration, and log group are valid: ${service_name}"
@@ -595,6 +689,29 @@ while IFS= read -r service_name; do
     fail "Task security group is missing or belongs to the wrong VPC: ${service_name}"
   fi
 
+  if [[ "$database_access" == "true" ]]; then
+    if ! sg_has_group_rule "$task_sg_json" egress "$DATA_SG_ID" "$RDS_PORT"; then
+      fail "Task SG lacks database egress required by database_access=true: ${service_name}"
+    fi
+
+    if ! sg_has_group_rule "$DATA_SG_JSON" ingress "$expected_task_sg_id" "$RDS_PORT"; then
+      fail "Database SG lacks ingress from task SG required by database_access=true: ${service_name}"
+    fi
+
+    success "Database SG relationships match database_access=true: ${service_name}"
+
+  else
+    if sg_has_group_reference "$task_sg_json" egress "$DATA_SG_ID"; then
+      fail "Task SG unexpectedly references database SG while database_access=false: ${service_name}"
+    fi
+
+    if sg_has_group_reference "$DATA_SG_JSON" ingress "$expected_task_sg_id"; then
+      fail "Database SG unexpectedly allows task SG while database_access=false: ${service_name}"
+    fi
+
+    success "No database SG relationships exist for database_access=false: ${service_name}"
+  fi
+
   if ! sg_has_group_rule "$task_sg_json" egress "$INTERFACE_ENDPOINT_SG_ID" 443; then
     fail "Task SG lacks HTTPS egress to the Interface Endpoint SG: ${service_name}"
   fi
@@ -608,21 +725,27 @@ while IFS= read -r service_name; do
   fi
 
   internet_https_present="false"
+
   if sg_has_ipv4_cidr_rule "$task_sg_json" egress "0.0.0.0/0" 443; then
     internet_https_present="true"
   fi
+
   if [[ "$EFFECTIVE_EGRESS_MODE" == "vpc_endpoints_only" && "$internet_https_present" == "true" ]]; then
     fail "Task SG has generic HTTPS internet egress in vpc_endpoints_only mode: ${service_name}"
   fi
+
   if [[ "$EFFECTIVE_EGRESS_MODE" != "vpc_endpoints_only" && "$internet_https_present" != "true" ]]; then
     fail "Task SG lacks HTTPS application egress required by effective egress mode ${EFFECTIVE_EGRESS_MODE}: ${service_name}"
   fi
 
   has_target_group="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r --arg service "$service_name" 'if type == "object" and (.target_groups | has($service)) then "true" else "false" end')"
   live_load_balancers_json="$(echo "$service_response_json" | jq -c '.services[0].loadBalancers // []')"
+
   if [[ "$has_target_group" == "true" ]]; then
+
     expected_target_group_arn="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r --arg service "$service_name" '.target_groups[$service].arn')"
     SERVICE_TARGET_GROUP_ARNS["$service_name"]="$expected_target_group_arn"
+
     if ! echo "$live_load_balancers_json" |
       jq -e --arg arn "$expected_target_group_arn" --arg name "$service_name" --argjson port "$container_port" '
         length == 1
@@ -633,19 +756,18 @@ while IFS= read -r service_name; do
       echo "$live_load_balancers_json" | jq .
       fail "ECS service ALB attachment does not match Terraform target group: ${service_name}"
     fi
+
     if [[ -z "$ALB_SECURITY_GROUP_ID" ]] ||
       ! sg_has_group_rule "$task_sg_json" ingress "$ALB_SECURITY_GROUP_ID" "$container_port"; then
       fail "Task SG lacks ALB ingress on the primary container port: ${service_name}"
     fi
+
   elif [[ "$(echo "$live_load_balancers_json" | jq 'length')" -ne 0 ]]; then
     fail "ECS service has an unexpected load-balancer attachment: ${service_name}"
   fi
 
   success "ECS service is healthy at steady state and runtime-critical task SG relationships are valid: ${service_name}"
 done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
-
-warn "Database-access intent and SG readiness IDs are not exposed by workload-root outputs; conditional database rules and readiness-resource identity are deferred"
-warn "The workload-root output contract does not expose the logging CMK ARN; exact log-group KMS-key equality is deferred"
 
 section "Validating conditional shared Application Load Balancer"
 
@@ -659,7 +781,17 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]]; then
 else
   EXPECTED_ALB_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.arn')"
   EXPECTED_ALB_DNS_NAME="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.dns_name')"
-  EXPECTED_ALB_LISTENER_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.https_listener_arn')"
+  EXPECTED_ALB_LISTENER_ARN="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.https_listener.arn')"
+
+  EXPECTED_ALB_CERTIFICATE_ARN="$(
+    echo "$APPLICATION_LOAD_BALANCER_JSON" |
+      jq -r '.https_listener.certificate_arn'
+  )"
+
+  EXPECTED_ALB_SSL_POLICY="$(
+    echo "$APPLICATION_LOAD_BALANCER_JSON" |
+      jq -r '.https_listener.ssl_policy'
+  )"
 
   alb_response_json="$(
     aws elbv2 describe-load-balancers \
@@ -733,23 +865,23 @@ else
 
   if ! echo "$listeners_response_json" |
     jq -e \
-      --arg listener_arn "$EXPECTED_ALB_LISTENER_ARN" '
+      --arg listener_arn "$EXPECTED_ALB_LISTENER_ARN" \
+      --arg certificate_arn "$EXPECTED_ALB_CERTIFICATE_ARN" \
+      --arg ssl_policy "$EXPECTED_ALB_SSL_POLICY" '
         (.Listeners | length) == 1
         and .Listeners[0].ListenerArn == $listener_arn
         and .Listeners[0].Port == 443
         and .Listeners[0].Protocol == "HTTPS"
-        and (.Listeners[0].Certificates | length) > 0
-        and (.Listeners[0].SslPolicy | type) == "string"
-        and (.Listeners[0].SslPolicy | length) > 0
+        and (.Listeners[0].Certificates | length) == 1
+        and .Listeners[0].Certificates[0].CertificateArn == $certificate_arn
+        and .Listeners[0].SslPolicy == $ssl_policy
         and (.Listeners[0].DefaultActions | length) == 1
         and .Listeners[0].DefaultActions[0].Type == "fixed-response"
         and .Listeners[0].DefaultActions[0].FixedResponseConfig.StatusCode == "404"
       ' >/dev/null; then
     echo "$listeners_response_json" | jq '.Listeners'
-    fail "ALB must have exactly one HTTPS listener with a certificate and fixed 404 default action"
+    fail "ALB HTTPS listener ARN, certificate, TLS policy, or fixed 404 default action does not match Terraform"
   fi
-
-  warn "The workload-root output contract does not expose expected ALB certificate ARN or TLS policy; presence is validated but exact identity is deferred"
 
   rules_response_json="$(
     aws elbv2 describe-rules \

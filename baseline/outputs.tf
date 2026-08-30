@@ -58,6 +58,11 @@ output "secrets_manager_cmk_arn" {
   value       = module.security.secrets_manager_cmk_arn
 }
 
+output "logs_cmk_arn" {
+  description = "ARN of the CMK used to encrypt workload CloudWatch Logs"
+  value       = module.security.logs_cmk_arn
+}
+
 output "logs_cmk_decrypt_policy_name" {
   description = "'Name' attribute of the 'Logs CMK Decrypt Policy' resource"
   value       = module.iam.logs_cmk_decrypt_policy_name
@@ -151,11 +156,11 @@ output "application_load_balancer" {
   description = "Shared ECS Application Load Balancer metadata; null when no ALB services are configured"
 
   value = length(local.ecs_alb_services) > 0 ? {
-    arn                = module.application_load_balancer[0].load_balancer_arn
-    dns_name           = module.application_load_balancer[0].dns_name
-    security_group_id  = module.application_load_balancer[0].security_group_id
-    https_listener_arn = module.application_load_balancer[0].https_listener_arn
-    target_groups      = module.application_load_balancer[0].target_groups
+    arn               = module.application_load_balancer[0].load_balancer_arn
+    dns_name          = module.application_load_balancer[0].dns_name
+    security_group_id = module.application_load_balancer[0].security_group_id
+    https_listener    = module.application_load_balancer[0].https_listener
+    target_groups     = module.application_load_balancer[0].target_groups
   } : null
 }
 
@@ -163,14 +168,25 @@ output "ecs_cluster" {
   description = "ECS cluster metadata"
 
   value = {
-    arn  = module.ecs_cluster.cluster_arn
-    name = module.ecs_cluster.cluster_name
+    arn                = module.ecs_cluster.cluster_arn
+    name               = module.ecs_cluster.cluster_name
+    container_insights = module.ecs_cluster.container_insights
   }
 }
 
 output "ecs_services" {
   description = "ECS service metadata keyed by service name"
   value       = module.ecs_service.services
+}
+
+output "ecs_service_configuration" {
+  description = "Validator-relevant ECS service configuration keyed by service name"
+
+  value = {
+    for service_name, service in var.ecs_services : service_name => {
+      database_access = service.database_access
+    }
+  }
 }
 
 output "ecs_task_definition_arns" {
