@@ -250,6 +250,7 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
       and (.https_listener.certificate_arn | type == "string" and length > 0)
       and (.https_listener.ssl_policy | type == "string" and length > 0)
       and (.target_groups | type == "object" and length > 0)
+      and (.container_insights | type == "string" and length > 0)
     ' >/dev/null; then
     fail "application_load_balancer output is not null and lacks required runtime metadata"
   fi
@@ -364,8 +365,16 @@ CONTAINER_INSIGHTS_LIVE_VALUE="$(
     head -n 1
 )"
 
-info "Live Container Insights setting: ${CONTAINER_INSIGHTS_LIVE_VALUE:-<not returned>}"
-warn "The workload-root output contract does not expose the configured Container Insights value; exact comparison is deferred"
+EXPECTED_CONTAINER_INSIGHTS="$(
+  echo "$ECS_CLUSTER_JSON" |
+    jq -r '.container_insights'
+)"
+
+if [[ "$CONTAINER_INSIGHTS_LIVE_VALUE" != "$EXPECTED_CONTAINER_INSIGHTS" ]]; then
+  fail "ECS Container Insights setting does not match Terraform: expected=${EXPECTED_CONTAINER_INSIGHTS} actual=${CONTAINER_INSIGHTS_LIVE_VALUE:-<missing>}"
+fi
+
+success "ECS Container Insights setting matches Terraform: ${EXPECTED_CONTAINER_INSIGHTS}"
 
 LIVE_SERVICE_ARNS_JSON="$(
   aws ecs list-services \
