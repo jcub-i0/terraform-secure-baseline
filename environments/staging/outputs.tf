@@ -197,3 +197,8 @@ output "logs_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt workload CloudWatch Logs."
   value       = module.baseline.logs_cmk_arn
 }
+
+output "ecr_cmk_arn" {
+  description = "ARN of the KMS CMK used to encrypt workload ECR repositories."
+  value       = module.baseline.ecr_cmk_arn
+}

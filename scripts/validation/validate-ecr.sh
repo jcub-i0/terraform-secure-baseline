@@ -112,6 +112,16 @@ if [[ "$ECR_REPOSITORY_COUNT" -eq 0 ]]; then
   exit 0
 fi
 
+if ! terraform_output_exists "$OUTPUTS_JSON" ecr_cmk_arn; then
+  fail "Missing required Terraform output: ecr_cmk_arn"
+fi
+
+EXPECTED_ECR_CMK_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" ecr_cmk_arn)"
+
+if [[ -z "$EXPECTED_ECR_CMK_ARN" ]]; then
+  fail "ecr_cmk_arn is empty"
+fi
+
 section "Checking AWS caller identity"
 
 ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
@@ -193,8 +203,11 @@ while IFS= read -r repository_entry; do
     fail "Repository ${expected_name} uses KMS encryption but has no configured KMS key"
   fi
 
-  success "Repository uses KMS encryption with a configured key: ${expected_name}"
-  warn "The workload-root output contract does not expose the expected ECR CMK ARN; exact live KMS-key equality cannot be validated"
+  if [[ "$kms_key" != "$EXPECTED_ECR_CMK_ARN" ]]; then
+    fail "Repository ${expected_name} KMS key does not match Terraform ECR CMK: expected=${EXPECTED_ECR_CMK_ARN} actual=${kms_key}"
+  fi
+
+  success "Repository KMS key exactly matches Terraform ECR CMK: ${expected_name}"
 
   if ! lifecycle_policy_response_json="$(
     aws ecr get-lifecycle-policy \
@@ -243,7 +256,7 @@ AWS region:                     ${AWS_REGION}
 AWS account ID:                 ${ACCOUNT_ID}
 Configured repositories:        ${ECR_REPOSITORY_COUNT}
 Validated repositories:         ${VALIDATED_REPOSITORY_COUNT}
-Expected ECR CMK output:        <not exposed>
+Expected ECR CMK ARN:           ${EXPECTED_ECR_CMK_ARN}
 SUMMARY
 
 section "Validation Result"
