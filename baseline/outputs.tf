@@ -170,6 +170,7 @@ output "ecs_cluster" {
   value = {
     arn  = module.ecs_cluster.cluster_arn
     name = module.ecs_cluster.cluster_name
+    container_insights = module.ecs_cluster.container_insights
   }
 }
 
