@@ -152,6 +152,11 @@ output "ecr_repositories" {
   value       = module.ecr.repositories
 }
 
+output "ecr_cmk_arn" {
+  description = "ARN of the KMS CMK used to encrypt workload ECR repositories"
+  value       = module.security.ecr_cmk_arn
+}
+
 output "application_load_balancer" {
   description = "Shared ECS Application Load Balancer metadata; null when no ALB services are configured"
 
