@@ -368,6 +368,13 @@ data "aws_iam_policy_document" "github_image_publisher" {
   }
 }
 
+resource "aws_iam_policy" "github_image_publisher" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  name = "${var.name_prefix}-github-image-publisher-policy"
+  policy = data.aws_iam_policy_document.image_publisher[0].json
+}
+
 ## GitHub-Image-Publisher role
 resource "aws_iam_role" "github_image_publisher" {
   count = var.enable_image_publisher_role_github ? 1 : 0
@@ -379,6 +386,6 @@ resource "aws_iam_role" "github_image_publisher" {
 resource "aws_iam_role_policy_attachment" "github_image_publisher_attachment" {
   count = var.enable_image_publisher_role_github ? 1 : 0
 
-  role       = aws_iam_role.github_image_publisher.arn
-  policy_arn = data.aws_iam_policy_document.github_image_publisher.arn
+  role       = aws_iam_role.github_image_publisher[0].arn
+  policy_arn = aws_iam_policy.github_image_publisher[0].arn
 }
