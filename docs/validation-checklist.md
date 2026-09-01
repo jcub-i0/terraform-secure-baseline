@@ -527,7 +527,7 @@ These scripts validate:
 - Terraform outputs and effective environment settings
 - VPC, subnets, route tables, NAT Gateway, and Network Firewall expectations, including an exact order-independent comparison of the live stateful domain rule-group targets with Terraform output `effective_allowed_egress_domains`. Terraform owns allowlist composition; `validate-networking.sh` does not reconstruct it. The effective set must be empty when Network Firewall is not instantiated.
 - canonical VPC endpoint inventory, state, VPC, private DNS, exact endpoint-private subnet and Interface Endpoint SG placement, and exact S3 Gateway Endpoint coverage of endpoint, compute, and serverless private route tables
-- ECR repository identity, immutable tags, KMS encryption presence, and exact 30-day untagged-only lifecycle cleanup, using `ecr_repositories` as the inventory
+- ECR repository identity, immutable tags, exact `ecr_cmk_arn` encryption, and exact 30-day untagged-only lifecycle cleanup, using `ecr_repositories` as the inventory
 - CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, and alarms
 - workload-local AWS Config, Inspector, and AWS Backup state plus GuardDuty, Security Hub CSPM, and Security Hub V2 ownership/administrator relationships based on effective Terraform outputs
 - KMS aliases, CMKs, key state, key manager, and rotation status
@@ -1324,7 +1324,7 @@ lambda
 s3
 ```
 
-For the planned Fargate runtime, private ECR pulls use the `ecr.api` and
+For the implemented Fargate runtime, private ECR pulls use the `ecr.api` and
 `ecr.dkr` Interface Endpoints, while image layers use the existing S3 Gateway
 Endpoint.
 
@@ -1344,13 +1344,10 @@ route tables.
 The validator reads `ecr_repositories` from the workload root. An empty `{}` is
 a valid configuration and passes without a live ECR query. Configured
 repositories must match their Terraform name, ARN, and registry ID; use
-`IMMUTABLE` tags; use KMS encryption with a configured key; and have exactly
-one lifecycle rule that expires only untagged images older than 30 days.
-
-The workload-root output contract does not currently expose the ECR CMK ARN.
-The validator therefore proves KMS encryption and key presence, but cannot
-compare the live key to an authoritative expected ARN. It does not reconstruct
-that ARN from the key alias or naming convention.
+`IMMUTABLE` tags; use KMS encryption with a live key exactly equal to the
+workload-root `ecr_cmk_arn`; and have exactly one lifecycle rule that expires
+only untagged images older than 30 days. `validate-kms.sh` separately owns KMS
+alias/key inventory, key-state, customer-managed, and rotation checks.
 
 ## Validate ECS/Fargate Runtime
 
@@ -1365,31 +1362,39 @@ environment-level cluster is still validated, the exact live ECS service
 inventory must be empty, and per-service and ALB resource checks are skipped.
 
 Configured services must be active Fargate services in the compute-private
-subnets, use only their task SG, disable public IP assignment, pin platform
-version `1.4.0`, and enable deployment circuit breaking with rollback. Their
-active task definitions must use Fargate/`awsvpc`, Linux, a supported CPU
-architecture, separate output-backed roles, an `@sha256:` image belonging to
-an output-backed ECR repository, a matching TCP port mapping, and the exact
-Terraform-managed `awslogs` contract. Log groups must match the output name and
-ARN, use the effective retention period, and have a KMS key.
+subnets, use only their task SG, disable public IP assignment, match the
+resource-backed `platform_version`, and enable deployment circuit breaking with
+rollback. Desired and running counts must match, pending count must be zero,
+and the primary deployment rollout must be `COMPLETED`. Active task definitions
+must use Fargate/`awsvpc`, Linux, a supported CPU architecture, separate
+output-backed roles, and exactly one essential container named for the service.
+That container must use an `@sha256:` image belonging to an output-backed ECR
+repository, a matching TCP port mapping, and the exact Terraform-managed
+`awslogs` contract. Log groups must match the output name and ARN, use the
+effective retention period, and use the exact workload-root `logs_cmk_arn`.
 
 The same validator checks the always-required task-SG paths to the Interface
 Endpoint SG and S3 managed prefix list, the effective-mode application HTTPS
-egress rule, and conditional ALB attachments. When an ALB output exists, it
-checks the internet-facing application ALB, public subnets, single HTTPS
-listener, fixed 404 default, `ip` target groups, meaningful forwarding rules,
-and both ALB/task SG directions.
+egress rule, database SG presence or absence from
+`ecs_service_configuration[*].database_access`, and conditional ALB
+attachments. The expected S3 prefix list comes from the resource-backed
+`s3_prefix_list_id`, not from `describe-vpc-endpoints`. When an ALB output
+exists, the validator checks the internet-facing application ALB, public
+subnets, SG, exact `https_listener` ARN/certificate/TLS policy, fixed 404
+default, `ip` target groups, meaningful forwarding rules, and both ALB/task SG
+directions.
 
 ECS IAM assertions remain in `validate-iam.sh`. It checks task/execution role
 identity and restricted ECS trust, custom execution-policy ECR/log scope,
 optional ARN-identifiable secret/parameter scope, absence of `iam:PassRole`,
 and an initially policy-free task role.
 
-Exact comparison remains deferred for values not exposed by current workload
-outputs: configurable Container Insights, the logging CMK identity, ALB
-certificate/TLS/routing inputs, database-access intent, execution-time KMS
-intent, and SG readiness IDs. The validators do not reconstruct those values
-from names or duplicate the canonical `ecs_services` composition.
+The live Container Insights setting is compared with
+`ecs_cluster.container_insights`. Internal IAM/security readiness IDs remain
+internal and are not required as workload-root outputs. Exact execution-time
+KMS intent remains outside the current validator-facing output contract;
+`validate-iam.sh` requires any live `kms:Decrypt` statement to remain
+resource-scoped without reconstructing the expected key set.
 
 ---
 
@@ -1807,9 +1812,11 @@ validated through that authoritative effective output.
 
 ECS runtime service identities, role maps, task SGs, and conditional ALB
 metadata are validated by `validate-ecs-runtime.sh` and `validate-iam.sh`.
-Database-rule intent and SG readiness IDs remain deferred because those values
-are not exposed at the workload root. ECR repository keys are not used as
-substitutes for ECS service identities.
+The runtime validator uses workload-root `ecs_service_configuration` to prove
+database SG relationships are present when `database_access = true` and absent
+when it is false. IAM and security-policy readiness IDs remain internal
+dependency inputs rather than public validator outputs. ECR repository keys are
+not used as substitutes for ECS service identities.
 
 ---
 
