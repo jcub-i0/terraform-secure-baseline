@@ -29,6 +29,15 @@ locals {
   )
 }
 
+## Build subject strings dynamically for GitHub-Image-Publisher role
+locals {
+  environment_image_publish_github = "${var.environment}-image-publish"
+
+  image_publisher_oidc_subjects_github = [
+    "repo:${var.owner_github}/${var.repo_github}:environment:${local.environment_image_publish_github}"
+  ]
+}
+
 # GitHub OIDC provider
 resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
