@@ -230,6 +230,7 @@ validation-results/<env>/baseline/<timestamp>/
 ├── validate-env.log
 ├── validate-networking.log
 ├── validate-vpc-endpoints.log
+├── validate-ecr.log
 ├── validate-logging.log
 ├── validate-security-workload.log
 ├── validate-kms.log
@@ -240,6 +241,7 @@ validation-results/<env>/baseline/<timestamp>/
 ├── validate-lambda.log
 ├── validate-ssm.log
 ├── validate-compute.log
+├── validate-ecs-runtime.log
 └── validate-iam.log
 ```
 
@@ -248,6 +250,7 @@ validation-results/<env>/baseline/<timestamp>/
 | Environment | `validate-env.sh` | `<PASS/FAIL/Not Run>` | `validate-env.log` | `<notes>` |
 | Networking | `validate-networking.sh` | `<PASS/FAIL/Not Run>` | `validate-networking.log` | `<notes>` |
 | VPC Endpoints | `validate-vpc-endpoints.sh` | `<PASS/FAIL/Not Run>` | `validate-vpc-endpoints.log` | `<notes>` |
+| ECR | `validate-ecr.sh` | `<PASS/FAIL/Not Run>` | `validate-ecr.log` | `<notes>` |
 | Logging | `validate-logging.sh` | `<PASS/FAIL/Not Run>` | `validate-logging.log` | `<notes>` |
 | Workload Security | `validate-security-workload.sh` | `<PASS/FAIL/Not Run>` | `validate-security-workload.log` | `<notes>` |
 | KMS | `validate-kms.sh` | `<PASS/FAIL/Not Run>` | `validate-kms.log` | `<notes>` |
@@ -258,9 +261,10 @@ validation-results/<env>/baseline/<timestamp>/
 | Lambda | `validate-lambda.sh` | `<PASS/FAIL/Not Run>` | `validate-lambda.log` | `<notes>` |
 | SSM | `validate-ssm.sh` | `<PASS/FAIL/Not Run>` | `validate-ssm.log` | `<notes>` |
 | Compute | `validate-compute.sh` | `<PASS/FAIL/Not Run>` | `validate-compute.log` | `<notes>` |
+| ECS Runtime | `validate-ecs-runtime.sh` | `<PASS/FAIL/Not Run>` | `validate-ecs-runtime.log` | `<notes>` |
 | IAM | `validate-iam.sh` | `<PASS/FAIL/Not Run>` | `validate-iam.log` | `<notes>` |
 
-Current successful workload baseline exports contain 14 of 14 passing scripts. The report should use the generated package as the source of truth if the suite changes later.
+The current workload baseline export contains 16 validators. The generated package and `summary.json` remain the source of truth for each evidence run.
 
 ---
 

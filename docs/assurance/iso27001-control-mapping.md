@@ -834,6 +834,7 @@ The baseline uses KMS-backed encryption for:
 - Secrets Manager
 - SNS topics
 - CloudWatch Logs
+- ECR repositories
 - Terraform state
 
 ### ISO 27001 Alignment

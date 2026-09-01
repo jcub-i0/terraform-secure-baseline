@@ -291,6 +291,7 @@ Common endpoints may include:
 - KMS
 - Secrets Manager
 - EC2
+- ECR API and Docker Registry
 - S3
 - GuardDuty data (`guardduty-data`) for Runtime Monitoring
 
@@ -433,6 +434,7 @@ The baseline captures security-relevant activity using:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
+- ECS application logs
 
 CloudTrail is configured to send logs to protected storage.
 
@@ -840,6 +842,7 @@ The baseline uses KMS-backed encryption for resources such as:
 - Secrets Manager
 - SNS topics
 - CloudWatch Logs
+- ECR repositories
 
 ### SOC 2 Alignment
 
@@ -958,7 +961,11 @@ validation-results/<env>/bootstrap/<timestamp>/
 validation-results/<env>/baseline/<timestamp>/
 ```
 
-Useful generated artifacts include `summary.md`, `summary.json`, and the supporting validation logs. Current workload baseline evidence includes `validate-security-workload.log`; centralized-security evidence includes `validate-security-operations.log`.
+Useful generated artifacts include `summary.md`, `summary.json`, and the
+supporting validation logs. Current workload baseline evidence includes
+`validate-ecr.log`, `validate-ecs-runtime.log`, and
+`validate-security-workload.log`; centralized-security evidence includes
+`validate-security-operations.log`.
 
 ## Terraform / CI/CD Evidence
 

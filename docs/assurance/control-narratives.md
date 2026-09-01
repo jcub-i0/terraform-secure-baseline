@@ -373,10 +373,11 @@ Examples may include:
 - KMS
 - Secrets Manager
 - EC2
+- ECR API and Docker Registry
 - S3
 - GuardDuty data (`guardduty-data`) for Runtime Monitoring
 
-The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources.
+The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources. Fargate image pulls use the ECR Interface Endpoints and the existing S3 Gateway Endpoint without assigning public task IPs.
 
 ## Security Impact
 
@@ -404,6 +405,7 @@ The baseline captures logs and activity from:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
+- ECS application logs
 
 Logs are stored in protected locations with controls such as:
 
@@ -633,6 +635,7 @@ The baseline uses KMS-backed encryption for resources such as:
 - Secrets Manager
 - SNS topics
 - CloudWatch Logs
+- ECR repositories
 
 The centralized logging bucket also supports:
 
