@@ -96,8 +96,8 @@ variable "environment_apply_github" {
 # GitHub-Image-Publisher role-related variables
 variable "enable_image_publisher_role_github" {
   description = "Enable the GitHub Image Publisher role"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "lambda_cmk_arn" {
