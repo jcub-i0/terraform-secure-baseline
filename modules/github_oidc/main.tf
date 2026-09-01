@@ -315,3 +315,32 @@ resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
   role       = aws_iam_role.github_apply[0].name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
+
+# GitHub-Image-Publisher resources
+## GitHub-Image-Publisher trust policy
+data "aws_iam_policy_document" "image_publisher_oidc_assume_role" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values = ["sts:amazonaws.com"]
+    }
+
+    condition {
+      test = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = local.image_publisher_oidc_subjects_github
+    }
+  }
+}
+
