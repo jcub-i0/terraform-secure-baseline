@@ -330,7 +330,7 @@ data "aws_iam_policy_document" "image_publisher_oidc_assume_role" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values   = local.image_publisher_oidc_subjects_github
     }
