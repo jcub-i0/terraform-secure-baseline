@@ -2,17 +2,14 @@
 # GITHUB OIDC MODULE
 #####################
 
-## Build subject strings dynamically for GitHub-Plan role
+## Build GitHub OIDC subject strings dynamically
 locals {
-  environment_plan_github = "${var.environment}-plan"
-
+  # GitHub-Plan role
   plan_oidc_subjects_github = [
-    "repo:${var.owner_github}/${var.repo_github}:environment:${local.environment_plan_github}"
+    "repo:${var.owner_github}/${var.repo_github}:environment:${var.environment}-plan"
   ]
-}
 
-## Build subject strings dynamically for GitHub-Apply role
-locals {
+  # GitHub-Apply role
   apply_branch_subjects_github = [
     for branch in var.branches_apply_github :
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
@@ -23,18 +20,14 @@ locals {
   ] : []
 
   apply_oidc_subjects_github = (
-    var.environment_apply_github != null ?
-    local.apply_environment_subjects_github :
-    local.apply_branch_subjects_github
+    var.environment_apply_github != null
+    ? local.apply_environment_subjects_github
+    : local.apply_branch_subjects_github
   )
-}
 
-## Build subject strings dynamically for GitHub-Image-Publisher role
-locals {
-  environment_image_publish_github = "${var.environment}-image-publish"
-
+  # GitHub-Image-Publisher role
   image_publisher_oidc_subjects_github = [
-    "repo:${var.owner_github}/${var.repo_github}:environment:${local.environment_image_publish_github}"
+    "repo:${var.owner_github}/${var.repo_github}:environment:${var.environment}-image-publish"
   ]
 }
 
