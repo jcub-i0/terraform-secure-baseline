@@ -355,7 +355,7 @@ data "aws_iam_policy_document" "github_image_publisher" {
   }
 
   statement {
-    sid = "EcrImagePublication"
+    sid    = "EcrImagePublication"
     effect = "Allow"
 
     actions = [
