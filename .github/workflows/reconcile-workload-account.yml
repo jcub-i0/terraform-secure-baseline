@@ -109,6 +109,8 @@ jobs:
       TF_VAR_enable_apply_role_github: "true"
       TF_VAR_branches_apply_github: ${{ vars.BRANCHES_APPLY_GITHUB || '["main"]' }}
       TF_VAR_environment_apply_github: ${{ inputs.environment }}
+      TF_VAR_enable_image_publisher_role_github: "true"
+      TF_VAR_branches_image_publisher_github: ${{ vars.BRANCHES_IMAGE_PUBLISHER_GITHUB || '["main"]' }}
 
     steps:
       - name: Checkout
