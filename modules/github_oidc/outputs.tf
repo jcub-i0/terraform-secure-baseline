@@ -1,5 +1,5 @@
 output "plan_role_github_arn" {
-  description = "ARN of the GitHub OIDC Terraform plan role"
+  description = "ARN of the GitHub OIDC Terraform apply role"
   value       = aws_iam_role.github_plan.arn
 }
 
