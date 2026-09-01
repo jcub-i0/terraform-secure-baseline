@@ -399,12 +399,10 @@ ECR.
 
 For every configured repository, it compares the live name, ARN, and registry
 ID with the Terraform output; requires immutable tags and KMS encryption with a
-configured key; and requires exactly the approved lifecycle rule that expires
+configured key; requires the live repository KMS key to equal the workload-root
+`ecr_cmk_arn`; and requires exactly the approved lifecycle rule that expires
 only untagged images older than 30 days. Tagged-image expiration fails
-validation. The root output does not currently expose `ecr_cmk_arn`, so the
-validator cannot prove exact equality between the configured live KMS key and
-the security-owned ECR CMK; it reports that limitation rather than deriving a
-key ARN from naming.
+validation.
 
 ### VPC endpoint hardening
 
@@ -431,12 +429,20 @@ authoritative service inventory. It always validates the environment ECS
 cluster. When `ecs_services = {}`, it confirms that the live service inventory
 is empty, requires the ALB output to be `null`, and skips per-service checks.
 
-For configured services it validates Fargate service placement and deployment
-safeguards; task-definition platform, role, container, digest-pinned ECR image,
-port, and `awslogs` settings; Terraform-owned log-group retention and KMS
-presence; task-SG endpoint, S3 prefix-list, and egress-mode relationships; and
-conditional ALB service attachments, target groups, listener rules, fixed 404
-default action, and ALB/task SG relationships.
+For configured services it validates Fargate service placement, the
+resource-backed platform version, deployment circuit breaker and rollback,
+desired/running/pending steady state, and a completed primary rollout. It also
+validates the task-definition platform and separate roles; exactly one
+essential service container; a digest-pinned image from an output-backed ECR
+repository; port and `awslogs` settings; exact log-group identity, retention,
+and `logs_cmk_arn`; task-SG endpoint, resource-backed S3 prefix-list,
+database-access, and egress-mode relationships; and conditional ALB service
+attachments and ALB/task SG relationships.
+
+When an ALB is present, the validator compares the resource-backed ALB,
+listener, ACM certificate, TLS policy, and target-group metadata with live AWS.
+It also requires public-subnet placement, the fixed 404 default, `ip` target
+groups, and meaningful forwarding listener rules.
 
 `validate-iam.sh` owns the ECS IAM assertions. For each service it validates
 the separate execution and task roles, ECS task trust restrictions, the custom
@@ -444,11 +450,14 @@ repository- and log-group-scoped execution policy, optional ARN-identifiable
 Secrets Manager and SSM permissions, absence of managed-policy attachments and
 `iam:PassRole`, and an initially policy-free application task role.
 
-The current workload-root contract does not expose the configured Container
-Insights value, logging CMK ARN, ALB certificate/TLS/routing inputs,
-`database_access`, `execution_kms_key_arns`, or SG readiness IDs. Validators
-report these exact-comparison limits rather than reconstructing Terraform
-configuration. Repository keys are never treated as ECS service identities.
+The runtime validator compares the live cluster Container Insights setting with
+`ecs_cluster.container_insights`, database rule presence/absence with
+`ecs_service_configuration`, and live service/logging/ALB settings with their
+resource-backed outputs. Internal SG readiness IDs remain intentionally
+internal. `execution_kms_key_arns` is not currently a workload-root validator
+output, so `validate-iam.sh` proves that any live `kms:Decrypt` statement is
+resource-scoped but does not reconstruct an exact expected key set. Repository
+keys are never treated as ECS service identities.
 
 ---
 
