@@ -114,7 +114,7 @@ protocol    = "HTTP"
 
 The `ip` target type is required for the Fargate/`awsvpc` runtime model because ECS tasks register their task ENI IP addresses rather than EC2 instance IDs.
 
-The ECS service module later consumes the target-group ARN and is responsible for attaching the service to that target group.
+The ECS service module consumes the target-group ARN and attaches the service to that target group.
 
 ## Health Checks
 
@@ -139,6 +139,11 @@ The health-check path can be overridden per service through `health_check_path`.
 This module owns the Application Load Balancer security-group object.
 
 It also owns public HTTPS ingress into that security group from `ingress_cidrs`.
+
+`ingress_cidrs` is an environment-level set on the shared ALB SG. It therefore
+represents the client CIDR union for every ingress-enabled service; the current
+module does not implement per-service source-IP isolation. Service separation
+is provided by explicit host-header and/or path-pattern listener conditions.
 
 The module intentionally does **not** create broad ALB egress.
 
@@ -251,7 +256,7 @@ The module exposes:
 | `https_listener` | HTTPS listener metadata, including ARN, certificate ARN, and SSL policy. |
 | `target_groups` | Target-group metadata keyed by ECS service name. |
 
-The `target_groups` output is intended to be consumed by later ECS service integration.
+The `target_groups` output is consumed by baseline when deriving ECS service runtime inputs.
 
 Example shape:
 
@@ -292,7 +297,7 @@ This module does **not** own:
 - Cross-component ALB-to-task security-group rules
 - Application deployment orchestration
 
-Those responsibilities belong to other modules or later runtime integration work.
+Those responsibilities belong to other modules or the baseline integration layer.
 
 ## Runtime Model
 
@@ -353,14 +358,22 @@ module "application_load_balancer" {
 }
 ```
 
-## Deferred Runtime Integration
+## Runtime Integration
 
-Later v1.8.0 runtime work will connect the module's target groups and ALB security-group metadata to:
+The current baseline connects the module's target groups and ALB security-group metadata to:
 
 - ECS/Fargate services
 - ECS task security groups
 - Cross-component security-policy rules
 - Runtime service definitions
-- Workload DNS configuration where applicable
+
+Workload DNS configuration remains outside the module and current runtime
+scope.
+
+`baseline/locals.tf` derives a plan-time-known `alb_access` boolean from whether
+the canonical service has non-null `ingress`. The security-policy module uses
+that semantic value for `for_each` filtering. It does not filter on whether the
+resource-derived ALB security-group ID is non-null, because that value is
+unknown during planning.
 
 The module intentionally remains independent of ECS service implementation details.
