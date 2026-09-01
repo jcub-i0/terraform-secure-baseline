@@ -322,24 +322,24 @@ data "aws_iam_policy_document" "image_publisher_oidc_assume_role" {
   count = var.enable_image_publisher_role_github ? 1 : 0
 
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
     principals {
-      type = "Federated"
+      type        = "Federated"
       identifiers = [aws_iam_openid_connect_provider.github.arn]
     }
 
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:aud"
-      values = ["sts:amazonaws.com"]
+      values   = ["sts:amazonaws.com"]
     }
 
     condition {
-      test = "StringLike"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values = local.image_publisher_oidc_subjects_github
+      values   = local.image_publisher_oidc_subjects_github
     }
   }
 }
