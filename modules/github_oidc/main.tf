@@ -372,7 +372,7 @@ resource "aws_iam_policy" "github_image_publisher" {
   count = var.enable_image_publisher_role_github ? 1 : 0
 
   name   = "${var.name_prefix}-github-image-publisher-policy"
-  policy = data.aws_iam_policy_document.image_publisher[0].json
+  policy = data.aws_iam_policy_document.github_image_publisher[0].json
 }
 
 ## GitHub-Image-Publisher role
