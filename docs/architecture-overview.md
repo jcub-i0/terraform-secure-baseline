@@ -171,6 +171,8 @@ Environment stacks can include:
 - VPC endpoints
 - Dedicated VPC endpoint subnets
 - EC2 workloads
+- One shared ECS cluster and optional long-running ECS/Fargate application services
+- KMS-encrypted ECR repositories and a conditional shared HTTPS Application Load Balancer
 - S3 buckets
 - KMS keys
 - CloudTrail
@@ -217,6 +219,72 @@ compute_security_policy_ready                      |
 The security-policy readiness object covers endpoint, database, and conditional public HTTPS security-group rule IDs. The endpoint readiness object requires Terraform-managed Interface VPC Endpoints to exist before EC2 launches.
 
 The endpoint set includes `guardduty-data`. Creating that endpoint before eligible EC2 instances allows GuardDuty Runtime Monitoring to use the Terraform-managed endpoint instead of introducing a GuardDuty-managed endpoint and security group outside the workload dependency graph.
+
+## ECS/Fargate Application Runtime
+
+EC2 remains supported as the host-based workload pattern. ECS/Fargate is the preferred modern SaaS/application runtime and is implemented through four sibling modules:
+
+```text
+modules/ecr
+modules/ecs_cluster
+modules/application_load_balancer
+modules/ecs_service
+```
+
+Each workload environment owns one ECS cluster. Operators configure one canonical `ecs_services` map; the baseline derives the required ECR repositories, per-service IAM role inputs, optional ALB routing, cross-component security policy, and ECS runtime configuration.
+
+```text
+public subnets
+  -> zero or one shared internet-facing ALB
+  -> HTTPS :443, explicit listener rules, fixed 404 default
+  -> ip target groups
+
+compute_private subnets
+  -> Fargate tasks using awsvpc
+  -> exactly one task SG per service
+  -> assign_public_ip = false
+
+endpoint_private subnets
+  -> ecr.api and ecr.dkr Interface Endpoints
+
+S3 Gateway Endpoint
+  -> private ECR image-layer retrieval through its resource-backed prefix list
+```
+
+Task definitions use Linux and `X86_64` or `ARM64`, and services use the resource-backed Fargate platform version emitted by Terraform. Every service currently has exactly one essential container named for the stable service key. Its image is constructed from the managed repository URL and a reviewed digest:
+
+```text
+<repository_url>@sha256:<64 hexadecimal characters>
+```
+
+Terraform creates repositories and runtime infrastructure but does not build or push application images. For a first service, establish the environment/ECR foundation, publish the image outside Terraform, resolve the authoritative digest, and then review/apply the service plan containing that digest. Earlier staged live testing used multiple applies to prove intermediate states; this is not a separate foundation/runtime state architecture.
+
+Service launch uses resource-level readiness rather than broad module dependencies:
+
+```text
+IAM execution policy IDs
+  -> terraform_data.ecs_execution_policy_ready
+
+security-policy rule IDs
+  -> terraform_data.ecs_security_policy_ready
+
+both
+  -> aws_ecs_service.services
+```
+
+The task SG is created before the cross-component rules so the security-policy module can reference it. The ECS service alone waits for completed readiness checkpoints.
+
+Security-group object ownership remains with the resource-owning modules:
+
+| Object | Owner |
+|---|---|
+| ALB SG | `modules/application_load_balancer` |
+| ECS task SG | `modules/ecs_service` |
+| RDS/data SG | `modules/storage` |
+| Interface Endpoint SG | `modules/vpc_endpoints` |
+| Cross-component rules | `modules/networking/security_policy` |
+
+Every ECS task SG has TCP/443 relationships with the Interface Endpoint SG and the AWS-managed S3 prefix list. Database and ALB rules are created only when the canonical service declares those capabilities. The ALB security-policy filter uses the plan-time-known `alb_access` semantic derived from non-null service ingress; it does not filter on the resource-derived ALB SG ID, which is unknown during planning.
 
 These readiness checks do not prove that routes, NAT Gateway, Network Firewall, DNS, or package repositories are healthy. At first boot, Ubuntu package sources are rewritten to HTTPS, APT is forced over IPv4, transient failures are retried, any repository-refresh error fails provisioning, and a noninteractive distribution upgrade runs before required packages are installed. User-data changes replace the instance.
 
@@ -441,7 +509,7 @@ The current Interface Endpoint set includes:
 
 Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-Private ECR image pulls for the planned Fargate runtime use the `ecr.api` and
+Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and
 `ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway
 Endpoint.
 
