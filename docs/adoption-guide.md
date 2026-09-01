@@ -176,6 +176,8 @@ Deploying this baseline provides a production-aligned AWS security foundation wi
 - NAT Gateway egress, when required
 - Dedicated private subnets for Interface VPC Endpoints
 - VPC endpoints
+- A preferred ECS/Fargate application runtime with one shared cluster per environment
+- KMS-encrypted ECR repositories, digest-pinned task definitions, per-service IAM/task SGs, and an optional shared HTTPS ALB
 - Centralized logging
 - KMS-backed encryption
 - CloudTrail
@@ -297,6 +299,7 @@ This baseline is a good fit if your team:
 - Is preparing for audit or customer security review
 - Wants clear cost/security profiles for dev, staging, and prod
 - Has at least one engineer comfortable operating AWS and Terraform
+- Runs modern long-lived Linux application services on ECS/Fargate, or retains the supported EC2 workload pattern
 
 ---
 
@@ -310,7 +313,7 @@ This baseline may still work, but will require more customization if your team:
 - Already has a central networking account
 - Already has a SIEM/logging pipeline
 - Requires multi-region failover
-- Uses containers or Kubernetes as the primary workload platform
+- Uses Kubernetes or another container orchestrator instead of the implemented ECS/Fargate runtime
 - Requires a different centralized security-services ownership model
 - Requires custom egress paths or proxy-based internet access
 - Requires additional VPC endpoints beyond the default endpoint set
@@ -363,6 +366,8 @@ Key decisions:
 - Who receives security notifications?
 - Which deployment profile should each environment use?
 - Which egress mode should each environment use?
+- Will the workload use EC2, ECS/Fargate, or both?
+- Which immutable ECR digest and optional ALB ingress rules will each ECS service use?
 
 ### Terraform Variable Templates
 
@@ -400,6 +405,7 @@ Workload accounts should host:
 
 - Dev, staging, and prod baseline infrastructure and workload GitHub OIDC resources
 - workload-local Config, Inspector, logging, remediation, and response automation
+- workload-local ECR, ECS/Fargate, ALB, IAM, and security-policy resources configured through the canonical `ecs_services` map
 
 ---
 
@@ -464,6 +470,8 @@ The GitHub deployment path generates and publishes the plan before requesting
 approval, then applies the exact saved plan after the protected environment is
 approved. Reconciliation follows the same model and runs strict workload
 bootstrap validation after apply.
+
+For the first ECS service, Terraform first ensures the workload foundation and ECR repository exist. Build and push the application image outside Terraform, resolve the authoritative ECR `sha256` digest, and then review/apply the service plan containing that digest. Explicit repositories and repositories derived from `ecs_services` are merged by repository key, so a repository created first through `repositories` can later be retained solely through a service reference without replacement. ECS infrastructure remains in the workload environment state; the architecture does not split foundation and runtime state.
 
 For local reconciliation across separate review and apply invocations, use
 `--plan-file` followed by `--apply-plan`. The one-step `--apply` mode reviews
@@ -542,6 +550,7 @@ Common customization areas include:
 - GuardDuty organization protection-plan settings
 - AWS Config rules
 - VPC endpoint coverage
+- Canonical `ecs_services` definitions, immutable image digests, and optional shared-ALB routing
 - Backup retention
 - Patch windows
 - Tags
@@ -953,9 +962,10 @@ Common extension areas include:
 - Adding additional AWS Config rules
 - Adding additional VPC endpoint services
 - Adding additional Lambda responders
+- Adding ECS task-role capabilities through reviewed typed interfaces
 - Adding support for alternative CI/CD providers
 - Adding more granular Identity Center roles
-- Adding container or Kubernetes workload patterns
+- Adding Kubernetes or other workload patterns beyond the supported EC2 and ECS/Fargate runtimes
 - Adding multi-region disaster recovery patterns
 - Adding additional deployment profiles or profile-controlled services
 - Adding additional egress modes or proxy-based egress support
