@@ -27,7 +27,7 @@ module "github_oidc" {
   environment_apply_github = var.environment_apply_github
 
   enable_image_publisher_role_github = var.enable_image_publisher_role_github
-  branches_image_publisher_github = var.branches_apply_github
+  branches_image_publisher_github    = var.branches_apply_github
 
   lambda_cmk_arn          = var.lambda_cmk_arn
   secrets_manager_cmk_arn = var.secrets_manager_cmk_arn
