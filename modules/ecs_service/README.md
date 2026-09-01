@@ -383,6 +383,7 @@ Each entry contains:
 ```text
 arn
 name
+platform_version
 ```
 
 ### `task_definition_arns`
@@ -479,9 +480,9 @@ When `services` is empty:
 
 This allows ECS runtime capability to be wired into the baseline without requiring every workload environment to run ECS services.
 
-## Deferred Integration
+## Baseline Integration
 
-Baseline/runtime integration is responsible for supplying:
+The current baseline supplies:
 
 - ECS cluster ARN
 - Compute-private subnet IDs
@@ -493,4 +494,7 @@ Baseline/runtime integration is responsible for supplying:
 - Security-policy readiness rule IDs
 - Service image digests and runtime configuration
 
-Runtime validation is handled separately by the workload baseline validation layer.
+Runtime validation is handled by `scripts/validation/validate-ecs-runtime.sh`
+inside the existing workload baseline validation layer. The validator uses the
+resource-backed `platform_version` output rather than hard-coding the module's
+current `1.4.0` default.
