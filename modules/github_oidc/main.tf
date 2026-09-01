@@ -386,6 +386,6 @@ resource "aws_iam_role" "github_image_publisher" {
 resource "aws_iam_role_policy_attachment" "github_image_publisher_attachment" {
   count = var.enable_image_publisher_role_github ? 1 : 0
 
-  role       = aws_iam_role.github_image_publisher[0].arn
+  role       = aws_iam_role.github_image_publisher[0].name
   policy_arn = aws_iam_policy.github_image_publisher[0].arn
 }
