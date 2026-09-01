@@ -176,6 +176,12 @@ Default enabled resource types:
 EC2
 ```
 
+At the baseline integration layer, `local.effective_inspector_resource_types`
+adds `ECR` whenever the effective ECR repository set is non-empty. With no
+explicit or ECS-derived repositories, the default remains `EC2` only.
+`validate-security-workload.sh` compares live Inspector state with the
+effective workload-root output rather than reconstructing this policy.
+
 Lambda scan types are disabled by default.
 
 This baseline encrypts Lambda environment variables with a customer-managed KMS key. Amazon Inspector Lambda standard scanning and Lambda code scanning do not support Lambda functions encrypted with customer-managed keys. Enabling Lambda scan types in this baseline can also generate expected `kms:Decrypt` `AccessDenied` events from the Inspector service-linked role against the Lambda CMK.
@@ -574,7 +580,7 @@ module "security" {
   guardduty_features              = var.guardduty_features
   enable_rules                    = local.effective_enable_rules
   inspector_enabled               = local.effective_inspector_enabled
-  inspector_resource_types        = var.inspector_resource_types
+  inspector_resource_types        = local.effective_inspector_resource_types
 
   enable_config               = local.effective_enable_config
   config_role_arn             = module.iam.config_role_arn
