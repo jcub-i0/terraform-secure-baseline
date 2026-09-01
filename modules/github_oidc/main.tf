@@ -344,6 +344,37 @@ data "aws_iam_policy_document" "image_publisher_oidc_assume_role" {
   }
 }
 
+data "aws_iam_policy_document" "github_image_publisher" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  statement {
+    sid       = "EcrAuthorization"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "EcrImagePublication"
+    effect = "Allow"
+
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
+      "ecr:DescribeRepositories",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart"
+    ]
+
+    resources = [
+      "arn:aws:ecr:${var.primary_region}:${var.account_id}:repository/${var.name_prefix}-*"
+    ]
+  }
+}
+
 ## GitHub-Image-Publisher role
 resource "aws_iam_role" "github_image_publisher" {
   count = var.enable_image_publisher_role_github ? 1 : 0
