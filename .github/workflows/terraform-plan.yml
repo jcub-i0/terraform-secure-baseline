@@ -81,6 +81,8 @@ jobs:
       TF_VAR_securityhub_cspm_account_policies: ${{ vars.SECURITYHUB_CSPM_ACCOUNT_POLICIES }}
       TF_VAR_enable_guardduty_organization_configuration: ${{ vars.ENABLE_GUARDDUTY_ORGANIZATION_CONFIGURATION }}
       TF_VAR_enable_securityhub_v2_organization_policy: ${{ vars.ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY }}
+      TF_VAR_enable_image_publisher_role_github: "true"
+      TF_VAR_branches_image_publisher_github: ${{ vars.BRANCHES_IMAGE_PUBLISHER_GITHUB || '["main"]' }}
 
     steps:
       - name: Checkout
