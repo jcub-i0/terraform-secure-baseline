@@ -27,7 +27,7 @@ locals {
 
   # GitHub-Image-Publisher role
   image_publisher_oidc_subjects_github = [
-    "repo:${var.owner_github}/${var.repo_github}:environment:${var.environment}-image-publish"
+    "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/main"
   ]
 }
 
