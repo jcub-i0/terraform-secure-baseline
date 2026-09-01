@@ -7,3 +7,8 @@ output "apply_role_github_arn" {
   description = "ARN of the GitHub OIDC Terraform apply role"
   value       = try(module.github_oidc[0].apply_role_github_arn, null)
 }
+
+output "image_publisher_role_github_arn" {
+  description = "ARN of the GitHub OIDC image publisher role"
+  value       = try(module.github_oidc[0].image_publisher_role_github_arn, null)
+}
