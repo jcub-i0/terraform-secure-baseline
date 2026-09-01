@@ -348,6 +348,6 @@ data "aws_iam_policy_document" "image_publisher_oidc_assume_role" {
 resource "aws_iam_role" "github_image_publisher" {
   count = var.enable_image_publisher_role_github ? 1 : 0
 
-  name = "${var.name_prefix}-github-image-publisher-role"
+  name               = "${var.name_prefix}-github-image-publisher-role"
   assume_role_policy = data.aws_iam_policy_document.image_publisher_oidc_assume_rolej[0].json
 }
