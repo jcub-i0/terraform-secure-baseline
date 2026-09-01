@@ -26,7 +26,6 @@ locals {
   )
 
   # GitHub-Image-Publisher role
-# GitHub-Image-Publisher role
   image_publisher_oidc_subjects_github = [
     for branch in var.branches_image_publisher_github :
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
