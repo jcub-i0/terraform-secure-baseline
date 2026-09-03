@@ -394,10 +394,12 @@ Operational and security records are protected using:
 
 - KMS encryption
 - S3 versioning
-- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
 - Centralized log storage
+
+The current ephemeral development/test storage configuration has Object Lock
+disabled; it is a production-hardening item rather than an active control.
 
 ### ISO 27001 Alignment
 
@@ -687,7 +689,6 @@ Logs are stored with protections such as:
 
 - KMS encryption
 - S3 versioning
-- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
 
@@ -1015,7 +1016,7 @@ Security Hub / GuardDuty findings
 | A.5.24-A.5.27 Incident management | Detection, alerting, isolation, rollback, logs |
 | A.5.28 Evidence | Centralized logs, Security Hub, CloudTrail, Config |
 | A.5.30 ICT readiness | Backup, Terraform rebuildability, logging, rollback |
-| A.5.33 Records | Protected logs, Object Lock, retention |
+| A.5.33 Records | Protected logs and retention controls; Object Lock remains a production-hardening item |
 | A.5.34 PII | Encryption, private networking, access control, monitoring |
 | A.8.2 Privileged access | Identity Center, break-glass monitoring, least privilege |
 | A.8.3 Information access restriction | IAM, KMS, S3 policies, network controls |

@@ -318,8 +318,11 @@ The baseline uses S3 security controls such as:
 - Bucket policies
 - Encryption
 - Versioning
-- Object Lock for log storage
+- Lifecycle retention
 - AWS Config monitoring
+
+Object Lock is disabled in the current ephemeral development/test storage
+configuration and is therefore not claimed as an implemented control.
 
 ### SOC 2 Alignment
 
@@ -434,7 +437,10 @@ The baseline captures security-relevant activity using:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
-- ECS application logs
+- ECS container stdout/stderr routed through the `awslogs` driver
+
+Application-specific audit and security-event content depends on the
+application emitting those events to its configured streams.
 
 CloudTrail is configured to send logs to protected storage.
 
@@ -460,7 +466,6 @@ Operational logs are protected using controls such as:
 
 - KMS encryption
 - S3 versioning
-- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
 
@@ -474,7 +479,9 @@ Operational logs are protected using controls such as:
 
 Logs are treated as security evidence.
 
-Encryption, versioning, and Object Lock help protect log integrity and support forensic readiness.
+Encryption, versioning, restricted bucket policies, and retention controls
+support log integrity and forensic readiness. The current storage module does
+not enable Object Lock.
 
 ---
 
@@ -694,7 +701,10 @@ Alerts may include:
 
 ### Narrative
 
-SNS alerts provide near real-time notification of important security activity and support operational escalation.
+SNS provides an event-driven notification path for important security activity
+and supports operational escalation. Delivery is asynchronous and depends on
+the upstream event source, EventBridge/SNS delivery, and the configured
+subscription endpoint.
 
 ---
 
@@ -798,7 +808,9 @@ Examples include:
 
 ### Narrative
 
-Critical monitoring controls are protected through real-time detection of unauthorized or suspicious changes.
+Configured CloudTrail events for selected security-service changes are matched
+by EventBridge and routed to SNS. This is a detective alerting control; it does
+not prevent the change or guarantee immediate delivery.
 
 ---
 
@@ -885,7 +897,6 @@ Centralized logs are stored with:
 
 - KMS encryption
 - Versioning
-- Object Lock
 - Lifecycle policies
 - Restricted bucket access
 
