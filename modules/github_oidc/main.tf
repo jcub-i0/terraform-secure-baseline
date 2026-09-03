@@ -327,7 +327,7 @@ data "aws_iam_policy_document" "image_publisher_oidc_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts:amazonaws.com"]
+      values   = ["sts.amazonaws.com"]
     }
 
     condition {
