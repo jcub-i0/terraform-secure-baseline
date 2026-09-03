@@ -283,25 +283,29 @@ module "compute" {
 
 ---
 
-## Traffic Summary
+## Security-group rule summary
 
-| Source | Destination | Port | Purpose | Condition |
-|---|---|---:|---|---|
-| Compute SG | Interface Endpoints SG | 443 | Private AWS service access | Always |
-| EC2 Isolation Lambda SG | Interface Endpoints SG | 443 | Private AWS API access | Always |
-| EC2 Rollback Lambda SG | Interface Endpoints SG | 443 | Private AWS API access | Always |
-| Interface Endpoints SG | `0.0.0.0/0` | 443 | Endpoint ENI communication with AWS services | Always |
-| Compute SG | Data SG | `db_port` | Database access | Always |
-| Data SG | Compute SG | `db_port` | Database ingress from compute | Always |
-| Compute SG | `0.0.0.0/0` | 443 | HTTPS through configured egress path | Not `vpc_endpoints_only` |
-| ECS task SG | Interface Endpoints SG | 443 | Private AWS service access | Per configured ECS service |
-| Interface Endpoints SG | ECS task SG | 443 | Return path for private AWS service access | Per configured ECS service |
-| ECS task SG | S3 managed prefix list | 443 | ECR image layers and private S3 access | Per configured ECS service |
-| ECS task SG | `0.0.0.0/0` | 443 | HTTPS through configured egress path | Not `vpc_endpoints_only` |
-| ECS task SG | Data SG | `db_port` | Database access | `database_access = true` |
-| Data SG | ECS task SG | `db_port` | Database ingress | `database_access = true` |
-| ALB SG | ECS task SG | Service port | Ingress forwarding | `alb_access = true` |
-| ECS task SG | ALB SG | Service port | Target traffic relationship | `alb_access = true` |
+The table describes where Terraform attaches each rule. An ingress rule on a
+destination SG is not a reverse traffic flow; security groups are stateful.
+
+| Rule attached to | Type | Peer or destination | Port | Condition |
+|---|---|---|---:|---|
+| Interface Endpoints SG | Ingress | Compute SG | 443 | Always |
+| Interface Endpoints SG | Ingress | EC2 Isolation Lambda SG | 443 | Always |
+| Interface Endpoints SG | Ingress | EC2 Rollback Lambda SG | 443 | Always |
+| Interface Endpoints SG | Egress | `0.0.0.0/0` | 443 | Always |
+| Compute SG | Egress | Interface Endpoints SG | 443 | Always |
+| Compute SG | Egress | Data SG | `db_port` | Always |
+| Data SG | Ingress | Compute SG | `db_port` | Always |
+| Compute SG | Egress | `0.0.0.0/0` | 443 | Not `vpc_endpoints_only` |
+| ECS task SG | Egress | Interface Endpoints SG | 443 | Per configured ECS service |
+| Interface Endpoints SG | Ingress | ECS task SG | 443 | Per configured ECS service |
+| ECS task SG | Egress | S3 managed prefix list | 443 | Per configured ECS service |
+| ECS task SG | Egress | `0.0.0.0/0` | 443 | Not `vpc_endpoints_only` |
+| ECS task SG | Egress | Data SG | `db_port` | `database_access = true` |
+| Data SG | Ingress | ECS task SG | `db_port` | `database_access = true` |
+| ECS task SG | Ingress | ALB SG | Service port | `alb_access = true` |
+| ALB SG | Egress | ECS task SG | Service port | `alb_access = true` |
 
 ---
 
