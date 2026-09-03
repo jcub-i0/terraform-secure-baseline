@@ -154,10 +154,10 @@ Update `bootstrap/backend.tf`:
 terraform {
   backend "s3" {
     bucket  = "<tf_state_bucket_name>"
-    key     = "tf-state-bootstrap"
+    key     = "control-plane/state.tfstate"
     region  = "<primary_region>"
     encrypt = true
-    dynamodb_table = "<tf_state_lock_table_name>"
+    use_lockfile = true
   }
 }
 ```
