@@ -1118,4 +1118,4 @@ Check:
 - The `backup` module consumes the AWS Backup role ARN.
 - The `patch_management` module consumes the maintenance window role ARN.
 - Shared policy names may be passed to IAM Identity Center for customer-managed policy attachment.
-- The existing Break-Glass section was preserved closely and adjusted only for the module’s current role naming pattern. :contentReference[oaicite:0]{index=0}
+- The existing Break-Glass section is retained using the module's current role naming pattern.
