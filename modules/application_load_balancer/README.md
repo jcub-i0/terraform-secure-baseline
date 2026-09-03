@@ -143,7 +143,8 @@ It also owns public HTTPS ingress into that security group from `ingress_cidrs`.
 `ingress_cidrs` is an environment-level set on the shared ALB SG. It therefore
 represents the client CIDR union for every ingress-enabled service; the current
 module does not implement per-service source-IP isolation. Service separation
-is provided by explicit host-header and/or path-pattern listener conditions.
+at the listener is routing separation through explicit host-header and/or
+path-pattern conditions, not a per-service authorization boundary.
 
 The module intentionally does **not** create broad ALB egress.
 
