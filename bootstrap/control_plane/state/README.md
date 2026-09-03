@@ -153,11 +153,11 @@ Update `bootstrap/backend.tf`:
 ```hcl
 terraform {
   backend "s3" {
-    bucket  = "<tf_state_bucket_name>"
-    key     = "control-plane/state.tfstate"
-    region  = "<primary_region>"
-    encrypt = true
-    use_lockfile = true
+    bucket        = "<tf_state_bucket_name>"
+    key           = "control-plane/state.tfstate"
+    region        = "<primary_region>"
+    encrypt       = true
+    use_lockfile  = true
   }
 }
 ```
