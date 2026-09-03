@@ -248,7 +248,8 @@ endpoint_private subnets
   -> ecr.api and ecr.dkr Interface Endpoints
 
 S3 Gateway Endpoint
-  -> private ECR image-layer retrieval through its resource-backed prefix list
+  -> private ECR image-layer retrieval through associated route tables
+  -> resource-backed prefix-list ID used by restrictive task SG rules
 ```
 
 Task definitions use Linux and `X86_64` or `ARM64`, and services use the resource-backed Fargate platform version emitted by Terraform. Every service currently has exactly one essential container named for the stable service key. Its image is constructed from the managed repository URL and a reviewed digest:
