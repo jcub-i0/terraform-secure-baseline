@@ -68,7 +68,6 @@ module "github_oidc" {
 | Name | Description |
 |------|-------------|
 | `tf_state_bucket_cmk_arn` | CMK for state bucket ARN |
-| `tf_state_lock_table_arn` | DynamoDB lock table ARN |
 | `lambda_cmk_arn` | CMK for Lambda encryption ARN |
 | `secrets_manager_cmk_arn` | CMK for Secrets Manager ARN |
 | `branches_plan_github` | List of branches allowed to assume the `github_plan` role |

@@ -88,8 +88,6 @@ After deployment:
 | `tf_state_bucket_arn` | Name of the state S3 bucket |
 | `tf_state_bucket_name` | ARN of the state S3 bucket |
 | `tf_state_bucket_cmk_arn` | ARN of the KMS key |
-| `tf_state_lock_table_arn` | ARN of the DynamoDB state lock table |
-| `tf_state_lock_table_name` | Name of the DynamoDB state lock table |
 
 ---
 
@@ -147,8 +145,6 @@ After apply, note the following outputs:
 - `tf_state_bucket_name`
 - `tf_state_bucket_arn`
 - `tf_state_bucket_cmk_arn`
-- `tf_state_lock_table_name`
-- `tf_state_lock_table_arn`
 
 ### Step 4: Configure backend for `bootstrap` and `baseline` stacks
 
