@@ -162,16 +162,16 @@ terraform {
 }
 ```
 
-Update `baseline/backend.tf`:
+Update `/environments/prod/backend.tf`:
 
 ```hcl
 terraform {
   backend "s3" {
-    bucket  = "<tf_state_bucket_name>"
-    key     = "tf-state-baseline"
-    region  = "<primary_region>"
-    encrypt = true
-    dynamodb_table = "<tf_state_lock_table_name>"
+    bucket       = "tf-secure-baseline-dev-state"
+    key          = "baseline/prod.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 ```

@@ -148,7 +148,7 @@ After apply, note the following outputs:
 
 ### Step 4: Configure backend for `bootstrap` and `baseline` stacks
 
-Update `bootstrap/backend.tf`:
+Update `bootstrap/staging/backend.tf`:
 
 ```hcl
 terraform {
@@ -162,16 +162,16 @@ terraform {
 }
 ```
 
-Update `baseline/backend.tf`:
+Update `environments/staging/backend.tf`:
 
 ```hcl
 terraform {
   backend "s3" {
-    bucket  = "<tf_state_bucket_name>"
-    key     = "tf-state-baseline"
-    region  = "<primary_region>"
-    encrypt = true
-    dynamodb_table = "<tf_state_lock_table_name>"
+    bucket       = "tf-secure-baseline-dev-state"
+    key          = "baseline/staging.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 ```
