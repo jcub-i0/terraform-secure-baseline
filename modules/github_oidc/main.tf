@@ -2,17 +2,14 @@
 # GITHUB OIDC MODULE
 #####################
 
-## Build subject strings dynamically for GitHub-Plan role
+## Build GitHub OIDC subject strings dynamically
 locals {
-  environment_plan_github = "${var.environment}-plan"
-
+  # GitHub-Plan role
   plan_oidc_subjects_github = [
-    "repo:${var.owner_github}/${var.repo_github}:environment:${local.environment_plan_github}"
+    "repo:${var.owner_github}/${var.repo_github}:environment:${var.environment}-plan"
   ]
-}
 
-## Build subject strings dynamically for GitHub-Apply role
-locals {
+  # GitHub-Apply role
   apply_branch_subjects_github = [
     for branch in var.branches_apply_github :
     "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
@@ -23,10 +20,16 @@ locals {
   ] : []
 
   apply_oidc_subjects_github = (
-    var.environment_apply_github != null ?
-    local.apply_environment_subjects_github :
-    local.apply_branch_subjects_github
+    var.environment_apply_github != null
+    ? local.apply_environment_subjects_github
+    : local.apply_branch_subjects_github
   )
+
+  # GitHub-Image-Publisher role
+  image_publisher_oidc_subjects_github = [
+    for branch in var.branches_image_publisher_github :
+    "repo:${var.owner_github}/${var.repo_github}:ref:refs/heads/${branch}"
+  ]
 }
 
 # GitHub OIDC provider
@@ -305,4 +308,85 @@ resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
 
   role       = aws_iam_role.github_apply[0].name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
+# GitHub-Image-Publisher resources
+## GitHub-Image-Publisher trust policy
+data "aws_iam_policy_document" "image_publisher_oidc_assume_role" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts:amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = local.image_publisher_oidc_subjects_github
+    }
+  }
+}
+
+data "aws_iam_policy_document" "github_image_publisher" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  statement {
+    sid       = "EcrAuthorization"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "EcrImagePublication"
+    effect = "Allow"
+
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
+      "ecr:DescribeRepositories",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart"
+    ]
+
+    resources = [
+      "arn:aws:ecr:${var.primary_region}:${var.account_id}:repository/${var.name_prefix}-*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "github_image_publisher" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  name   = "${var.name_prefix}-github-image-publisher-policy"
+  policy = data.aws_iam_policy_document.github_image_publisher[0].json
+}
+
+## GitHub-Image-Publisher role
+resource "aws_iam_role" "github_image_publisher" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  name               = "${var.name_prefix}-github-image-publisher-role"
+  assume_role_policy = data.aws_iam_policy_document.image_publisher_oidc_assume_role[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "github_image_publisher_attachment" {
+  count = var.enable_image_publisher_role_github ? 1 : 0
+
+  role       = aws_iam_role.github_image_publisher[0].name
+  policy_arn = aws_iam_policy.github_image_publisher[0].arn
 }

@@ -373,10 +373,11 @@ Examples may include:
 - KMS
 - Secrets Manager
 - EC2
+- ECR API and Docker Registry
 - S3
 - GuardDuty data (`guardduty-data`) for Runtime Monitoring
 
-The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources.
+The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources. Fargate image pulls use the ECR Interface Endpoints and the existing S3 Gateway Endpoint without assigning public task IPs.
 
 ## Security Impact
 
@@ -404,14 +405,21 @@ The baseline captures logs and activity from:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
+- ECS container stdout/stderr routed through the `awslogs` driver
+
+Applications remain responsible for emitting application-specific audit and
+security events to their configured output streams.
 
 Logs are stored in protected locations with controls such as:
 
 - KMS encryption
 - S3 versioning
-- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
+
+The current ephemeral development/test configuration has S3 Object Lock
+disabled. Object Lock is a production-hardening decision that must be made at
+bucket creation; it is not an implemented current control.
 
 ## Security Impact
 
@@ -633,12 +641,15 @@ The baseline uses KMS-backed encryption for resources such as:
 - Secrets Manager
 - SNS topics
 - CloudWatch Logs
+- ECR repositories
 
-The centralized logging bucket also supports:
+The centralized logging bucket currently uses:
 
 - Versioning
-- Object Lock
 - Lifecycle retention
+
+Object Lock is disabled in the current ephemeral development/test posture and
+must not be represented as an active protection.
 
 ## Security Impact
 

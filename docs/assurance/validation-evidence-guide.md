@@ -265,6 +265,7 @@ The automated workload baseline validation suite checks deployed workload enviro
 | Environment | Required local tooling, repository paths, Terraform outputs, environment values, and account context |
 | Networking | VPC, private subnet routing, NAT Gateway behavior, Network Firewall behavior, and egress-mode expectations |
 | VPC Endpoints | Interface endpoint existence, endpoint subnet placement, S3 Gateway Endpoint route table associations, and endpoint availability |
+| ECR | Repository identity, immutable tags, exact ECR CMK use, and untagged-only lifecycle policy |
 | Logging | CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, alarms, retention settings, and log delivery paths |
 | Security Services | GuardDuty, Security Hub, AWS Config, Inspector, and profile-aware service expectations |
 | KMS | Expected KMS aliases, key state, key manager, and rotation status |
@@ -275,7 +276,8 @@ The automated workload baseline validation suite checks deployed workload enviro
 | Lambda | Lambda functions, runtime, execution role, timeout, memory, KMS configuration, VPC configuration, environment variables, and invoke permissions |
 | SSM | Managed instance registration, online status, associations, maintenance windows, and patch baseline visibility |
 | Compute | EC2 instance placement, public IP absence, IMDSv2 enforcement, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption |
-| IAM | IAM roles, service trust policies, GitHub OIDC roles where present, break-glass MFA conditions, and shared log access policies |
+| ECS Runtime | Cluster state and Container Insights, Fargate service steady state, task definitions, digest-pinned images, exact logging encryption, task networking/security policy, and conditional ALB relationships |
+| IAM | IAM roles, service trust policies, per-service ECS execution/task role separation and policy scope, GitHub OIDC roles where present, break-glass MFA conditions, and shared log access policies |
 
 ---
 

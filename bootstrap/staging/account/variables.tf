@@ -93,6 +93,19 @@ variable "environment_apply_github" {
   default     = null
 }
 
+# GitHub-Image-Publisher role-related variables
+variable "enable_image_publisher_role_github" {
+  description = "Enable the GitHub Image Publisher role"
+  type        = bool
+  default     = false
+}
+
+variable "branches_image_publisher_github" {
+  description = "Git branches allowed to assume the GitHub Image Publisher role"
+  type        = list(string)
+  default     = ["main"]
+}
+
 variable "lambda_cmk_arn" {
   description = "ARN of the CMK used to encrypt Lambda functions"
   type        = string

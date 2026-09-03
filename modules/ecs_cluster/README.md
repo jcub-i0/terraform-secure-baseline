@@ -4,7 +4,7 @@
 
 The `ecs_cluster` module creates one Amazon ECS cluster for a workload environment.
 
-It provides the shared cluster-level substrate for future ECS/Fargate services while keeping service-specific concerns in separate modules.
+It provides the shared cluster-level substrate for the workload's ECS/Fargate services while keeping service-specific concerns in separate modules.
 
 ## Resources Created
 
@@ -72,8 +72,9 @@ The module exposes:
 |---|---|
 | `cluster_arn` | ARN of the ECS cluster. |
 | `cluster_name` | Name of the ECS cluster. |
+| `container_insights` | Resource-backed Container Insights setting configured on the cluster. |
 
-These outputs are intended for later consumption by ECS service/runtime modules.
+Baseline exposes all three values through the workload-root `ecs_cluster` object. The runtime validator compares the live cluster setting with the resource-backed `container_insights` value.
 
 ## Ownership Boundary
 
@@ -104,7 +105,7 @@ It does **not** own:
 - ECS Exec configuration
 - Capacity-provider strategies
 
-Those responsibilities belong to other modules or later runtime integration work.
+Those responsibilities belong to other modules or the baseline integration layer.
 
 ## Runtime Model
 
@@ -137,9 +138,9 @@ module "ecs_cluster" {
 }
 ```
 
-## Deferred Runtime Integration
+## Runtime Integration
 
-Later v1.8.0 runtime work will connect this cluster to:
+The baseline connects this cluster to:
 
 - ECS/Fargate services
 - Per-service task definitions
@@ -149,4 +150,4 @@ Later v1.8.0 runtime work will connect this cluster to:
 - Optional Application Load Balancer integration
 - Digest-pinned ECR images
 
-The cluster module intentionally remains independent of those service-specific resources.
+The cluster module intentionally remains independent of those service-specific resources. One cluster exists even when `ecs_services = {}`; an empty service map creates no task definitions or services.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `ecr` module creates a stable map of private Amazon Elastic Container Registry repositories for a workload environment. It provides repository infrastructure for future container runtimes without building, publishing, or selecting container images.
+The `ecr` module creates a stable map of private Amazon Elastic Container Registry repositories for a workload environment. It supplies repository infrastructure to the implemented ECS/Fargate runtime without building, publishing, or selecting container images.
 
 ## Resources Created
 
@@ -61,7 +61,7 @@ the alias ARN.
 
 ## Tag Immutability
 
-All repositories use `image_tag_mutability = "IMMUTABLE"`. Existing tags cannot be reassigned to different image digests. The module does not resolve tags or select deployment digests; future Terraform-managed deployments will use reviewed, digest-pinned image references.
+All repositories use `image_tag_mutability = "IMMUTABLE"`. Existing tags cannot be reassigned to different image digests. The module does not resolve tags or select deployment digests; Terraform-managed ECS deployments use reviewed, digest-pinned image references.
 
 ## Lifecycle Policy and Release-Tag Invariant
 
@@ -87,11 +87,11 @@ Repository force deletion and lifecycle cleanup are separate concerns. The 30-da
 
 The module configures neither repository basic scanning nor registry enhanced scanning. Amazon Inspector ownership remains in `modules/security`.
 
-Future repository enablement must ensure that `ECR` is included in the effective Inspector resource types whenever ECR repositories are enabled. This module intentionally does not create `image_scanning_configuration`, `aws_ecr_registry_scanning_configuration`, or any other parallel scanning ownership.
+Baseline adds `ECR` to `effective_inspector_resource_types` whenever the effective repository set is non-empty. This module intentionally does not create `image_scanning_configuration`, `aws_ecr_registry_scanning_configuration`, or any other parallel scanning ownership.
 
 ## Repository Policies and IAM
 
-The module does not create an `aws_ecr_repository_policy`. Repositories are workload-local, and same-account image pull and publishing permissions belong to later IAM and release integration. No cross-account image model is currently approved.
+The module does not create an `aws_ecr_repository_policy`. Repositories are workload-local. Same-account ECS pull permissions are owned by `modules/iam`; image-publishing authority belongs to the application delivery workflow rather than this module. No cross-account image model is currently approved.
 
 ## Current Integration Status
 
@@ -99,10 +99,22 @@ The repository resource declares the standard `Name`, `Environment`, and
 `Terraform` tags. Its `Name` tag is the rendered repository name:
 `${var.name_prefix}-${each.key}`.
 
-`baseline/main.tf` instantiates this module and supplies the ECR CMK key ARN.
-It does not currently pass `repositories`, so the module receives its `{}`
-default and creates no repositories. The workload environment roots do not yet
-expose repository configuration or repository outputs.
+Each workload root passes `repositories` to baseline. Baseline merges those
+explicit keys with repository keys required by the canonical `ecs_services`
+map and passes the effective set to this module. It also supplies the dedicated
+security-owned ECR CMK key ARN. Workload roots expose `ecr_repositories` and
+`ecr_cmk_arn` for consumers and validation.
+
+This supports a staged first image without permanent duplication:
+
+```hcl
+repositories = { test = {} }
+ecs_services = {}
+```
+
+After an image is published, `repositories` may return to `{}` while an
+`ecs_services` entry references `repository_name = "test"`. Because both paths
+use the same repository map key, Terraform retains the existing repository.
 
 ## Outputs
 
@@ -132,9 +144,10 @@ It does not own:
 - Inspector or registry-level scanning configuration
 - GuardDuty or containment
 - KMS key creation
-- Workload-environment repository configuration or output propagation
+- Application release sequencing or high-frequency deployment automation
 
-The security-owned KMS key and baseline module call are present. Repository
-configuration propagation, effective Inspector ECR activation, and live ECR
-validation remain future integration work within the existing workload
-baseline validation layer.
+`validate-ecr.sh` uses the workload-root repository output as its authoritative
+inventory and passes cleanly for `{}`. For configured repositories it validates
+identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved
+untagged-only lifecycle policy. `validate-security-workload.sh` separately
+checks the Terraform-computed effective Inspector resource types.

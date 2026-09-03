@@ -767,6 +767,92 @@ effective_manage_securityhub_v2_locally
 
 These outputs confirm how profile defaults and explicit overrides resolved for the environment. In the centralized deployment, the three `effective_manage_*_locally` security-service outputs should be `false`.
 
+### Optional ECS/Fargate Application Runtime
+
+EC2 remains supported. For modern long-running SaaS services, configure the canonical environment-level `ecs_services` map. Baseline derives the required ECR, IAM, ALB, security-policy, and ECS-runtime inputs; do not maintain separate operator-facing service maps.
+
+The first-service lifecycle is:
+
+```text
+1. Apply the workload foundation so the environment and required ECR repository exist.
+2. Build, test, and push the application image outside Terraform.
+3. Resolve the authoritative ECR sha256 digest.
+4. Add/update ecs_services with that digest, review the saved plan, and apply that exact plan.
+```
+
+Terraform does not build or publish container images. The earlier multi-apply live-test sequence proved intermediate states; it is not an architectural requirement and does not create a separate foundation/runtime Terraform state.
+
+A repository may be established explicitly before its first image is published:
+
+```hcl
+repositories = {
+  test = {}
+}
+
+ecs_services = {}
+```
+
+After publishing the image, the same repository key can be derived from the service without replacement:
+
+```hcl
+repositories = {}
+
+ecs_services = {
+  test = {
+    repository_name = "test"
+    image_digest    = "sha256:<64-lowercase-hex-characters>"
+    container_port  = 8080
+    cpu             = 256
+    memory          = 512
+
+    desired_count   = 1
+    cpu_architecture = "X86_64"
+    database_access = false
+
+    environment_variables   = {}
+    secrets_manager_secrets = {}
+    ssm_parameters          = {}
+    execution_kms_key_arns  = []
+
+    ingress = null
+  }
+}
+```
+
+`desired_count`, `cpu_architecture`, `database_access`, the three environment/secret/KMS collections, and `ingress` have defaults in the variable schema; they are expanded above to make the runtime contract visible. Images are deployed only as:
+
+```text
+<repository_url>@sha256:<digest>
+```
+
+When ingress is configured, also provide `alb_certificate_arn` and at least one `alb_ingress_cidrs` entry. Each ingress service supplies a unique listener-rule `priority`, one or both of `host_headers` and `path_patterns`, and an optional `health_check_path` defaulting to `/health`. The shared ALB uses HTTPS only and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` unless `alb_ssl_policy` is explicitly changed.
+
+Fargate tasks use Linux, `awsvpc`, compute-private subnets, and no public IP. The default CPU architecture is `X86_64`; `ARM64` is also accepted. The ECS service module currently defaults the resource-backed platform version to `1.4.0`.
+
+After deployment, the non-secret workload output contract includes:
+
+```text
+ecr_repositories
+ecr_cmk_arn
+ecs_cluster
+ecs_services
+ecs_service_configuration
+ecs_task_definition_arns
+ecs_task_security_group_ids
+ecs_log_groups
+ecs_task_execution_roles
+ecs_task_roles
+application_load_balancer
+logs_cmk_arn
+s3_prefix_list_id
+```
+
+`application_load_balancer` is `null` when no service configures ingress. When
+present, its `https_listener` object contains the resource-backed listener ARN,
+certificate ARN, and TLS policy used by runtime validation.
+
+The immediate v1.8.0 follow-up is an application delivery workflow that automates short-lived OIDC authentication, image build/push, authoritative digest resolution, exact saved-plan approval/application, convergence, and ECR/IAM/ECS validation. That workflow is not implemented yet.
+
 ---
 
 # Phase 11 - Reconcile Environment Account Stacks (Skip if not using `GitHub OIDC`)
@@ -955,8 +1041,10 @@ Recommended validation order:
 11. Confirm the S3 Gateway Endpoint is associated with the expected private route tables.
 12. Confirm workload-local AWS Config and Inspector are active where expected by profile.
 13. Confirm centralized Security Hub CSPM policy associations and effective Security Hub V2 workload policies are healthy after workload deployment.
-14. Confirm SNS subscriptions are confirmed.
-15. Run Lambda tests:
+14. Run the full 16-validator workload baseline suite, including `validate-ecr.sh`, `validate-ecs-runtime.sh`, and the ECS-aware `validate-iam.sh`; empty repository/service maps are valid and the environment cluster is still checked.
+15. When ECS services are configured, confirm they reach steady state with digest-pinned images, private task networking, exact logging encryption, and any declared database/ALB relationships.
+16. Confirm SNS subscriptions are confirmed.
+17. Run Lambda tests:
     - `docs/lambda_tests/ec2_isolation.md`
     - `docs/lambda_tests/ec2_rollback.md`
     - `docs/lambda_tests/ip_enrichment.md`

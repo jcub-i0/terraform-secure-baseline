@@ -24,6 +24,7 @@ This supports:
 
 - Private EC2 management through Systems Manager
 - Private access to CloudWatch Logs
+- Private access to Amazon ECR APIs and Docker Registry endpoints
 - Private access to KMS
 - Private access to Secrets Manager
 - Private access to Security Hub
@@ -86,9 +87,9 @@ The module uses `for_each` over the endpoint service list, so each service recei
 
 Private DNS is enabled for all Interface Endpoints.
 
-Private ECR image pulls for the planned Fargate runtime use the `ecr.api` and
-`ecr.dkr` Interface Endpoints. Image layers are retrieved through the existing
-S3 Gateway Endpoint.
+Private ECR image pulls for the implemented Fargate runtime use the `ecr.api`
+and `ecr.dkr` Interface Endpoints. Image layers are retrieved through the
+existing S3 Gateway Endpoint.
 
 ---
 
@@ -264,6 +265,7 @@ The active Interface Endpoint resources use `endpoint_private_subnet_ids_map`; t
 |---|---|
 | `interface_endpoints_sg_id` | Security group ID for the Interface VPC Endpoints |
 | `interface_endpoint_ids` | Map of Interface Endpoint service names to VPC Endpoint IDs |
+| `s3_prefix_list_id` | Resource-backed AWS-managed S3 prefix-list ID from `aws_vpc_endpoint.s3.prefix_list_id` |
 
 ---
 
@@ -299,9 +301,14 @@ The endpoint security group output should be passed into the networking `securit
 ```hcl
 interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
 interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
+s3_prefix_list_id         = module.vpc_endpoints.s3_prefix_list_id
 ```
 
-The first connection allows the networking layer to own endpoint traffic rules. The second preserves the EC2 launch dependency on the actual Interface Endpoint resources.
+The first connection allows the networking layer to own endpoint traffic
+rules. The second preserves the EC2 launch dependency on the actual Interface
+Endpoint resources. The prefix-list output gives ECS security-policy and
+runtime validation the exact S3 identity configured by Terraform rather than
+inferring it from the live endpoint description response.
 
 ---
 
@@ -338,6 +345,8 @@ S3 is created as a Gateway Endpoint instead of an Interface Endpoint.
 This is appropriate because S3 Gateway Endpoints integrate directly with route tables and allow private S3 access without creating endpoint ENIs.
 
 The root baseline stack passes in the route tables that should receive S3 Gateway Endpoint access.
+Those route tables include compute-private route tables used by Fargate tasks,
+so ECR image-layer retrieval stays on the gateway endpoint path.
 
 ---
 
@@ -515,6 +524,7 @@ Expected:
 - HTTPS ingress from the compute security group
 - HTTPS ingress from the EC2 Isolation Lambda security group
 - HTTPS ingress from the EC2 Rollback Lambda security group
+- HTTPS ingress from each configured ECS task security group
 
 ---
 

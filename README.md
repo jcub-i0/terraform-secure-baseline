@@ -12,6 +12,10 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 **Current tagged release:** `v1.7.0` — centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance through a dedicated `security-operations` account, with corresponding CI planning and validation evidence.
 
+**Current development theme:** unreleased `v1.8.0 — Secure Container
+Workloads`; the core ECS/Fargate runtime and its validation are implemented on
+`main`.
+
 It provides a secure, multi-account cloud foundation with:
 
 - A centralized AWS Organizations and identity control plane
@@ -62,6 +66,9 @@ Key capabilities include:
 - Encrypted S3, KMS, SNS, SQS, CloudWatch, Lambda, EBS, and backup resources
 - First-boot Ubuntu package updates and scheduled SSM patching
 - Dependency-aware EC2 launch ordering for security-policy rules and Interface VPC Endpoints
+- A shared-per-environment ECS cluster and generic long-running Fargate services using digest-pinned ECR images
+- Conditional shared HTTPS Application Load Balancers with explicit host/path routing and fail-closed defaults
+- Per-service least-privilege ECS IAM roles, task security groups, encrypted application log groups, and resource-granular launch readiness
 - Layer-specific validation evidence export with Markdown, JSON, and per-script logs
 
 ---
@@ -153,10 +160,13 @@ control-plane -> security-operations -> bootstrap-workloads -> workloads
 │   └── prod
 │
 ├── modules
+│   ├── application_load_balancer
 │   ├── automation
 │   ├── backup
 │   ├── compute
 │   ├── ecr
+│   ├── ecs_cluster
+│   ├── ecs_service
 │   ├── firewall
 │   ├── github_oidc
 │   ├── iam
@@ -236,6 +246,16 @@ vpc_endpoints.interface_endpoint_ids ──┘
 ```
 
 This avoids broad module dependencies while ensuring required security-group rules and Terraform-managed Interface Endpoints—including `guardduty-data`—exist before eligible instances launch. Route, NAT Gateway, Network Firewall, DNS, and external repository health remain separate runtime dependencies.
+
+ECS services use the same resource-granular principle without introducing a module dependency cycle:
+
+```text
+IAM execution policy IDs ───────────────┐
+                                       ├──> aws_ecs_service.services
+security-policy rule IDs ──────────────┘
+```
+
+`modules/ecs_service` records those IDs in `terraform_data` readiness resources. Only service launch depends on the checkpoints; task security groups remain independently creatable so `modules/networking/security_policy` can attach cross-component rules.
 
 ### Configurable Cost/Security Profiles
 
@@ -325,6 +345,7 @@ Each workload environment includes the applicable profile-driven combination of:
 - Network Firewall and/or NAT Gateway egress
 - Terraform-managed VPC endpoints, including `guardduty-data`
 - EC2 workloads with first-boot updates and readiness gating
+- One shared ECS cluster, optional digest-pinned Fargate services, ECR repositories, and a conditional shared HTTPS ALB
 - S3 and purpose-specific KMS keys
 - CloudTrail, CloudWatch, and centralized log delivery
 - AWS Config and Config remediation when enabled
@@ -604,13 +625,13 @@ validation-results/security-operations/security-services/<timestamp>/
 
 ### Workload Baseline Validation
 
-`validate-baseline.sh` currently runs 14 workload validators covering environment identity, networking, VPC endpoints, logging, workload security realization, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, Compute, and IAM.
+`validate-baseline.sh` currently runs 16 workload validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security realization, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
 A successful run ends with:
 
 ```text
-Validation scripts passed:  14/14
-Validation scripts failed:  0/14
+Validation scripts passed:  16/16
+Validation scripts failed:  0/16
 ```
 
 ### Validation Reporting
@@ -741,7 +762,23 @@ For detailed release history, see `CHANGELOG.md`.
 
 ## Future Roadmap
 
-Potential future improvements include:
+The immediate unreleased v1.8.0 milestone is an application image build, publish, and deployment workflow. Terraform does not build or push images. The intended delivery path is:
+
+```text
+application source + Dockerfile
+  -> short-lived AWS/OIDC authentication
+  -> build and push image to ECR
+  -> resolve the authoritative sha256 digest
+  -> Terraform Plan with that digest
+  -> checksum/metadata/reviewer approval
+  -> Apply the exact reviewed plan
+  -> wait for ECS convergence
+  -> run ECR, IAM, and ECS validation
+```
+
+Subsequent v1.8.0 work is expected to cover ECS Service Auto Scaling, GuardDuty Fargate Runtime Monitoring, fail-closed task-level containment, a ReconoSense reference deployment, and release readiness. GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE` today.
+
+Other potential improvements include:
 
 - Expand dashboarding and visual evidence outputs
 - Add configurable VPC endpoint service lists
@@ -749,7 +786,7 @@ Potential future improvements include:
 - Add a deliberate Service Control Policy strategy and Terraform implementation
 - Evaluate multi-region centralized security and evidence patterns
 - Add optional platform Apply automation for centralized security with stronger approval boundaries
-- Add additional workload examples or a small synthetic SaaS workload using fake data
+- Add additional workload examples using fake data
 
 ---
 
@@ -768,9 +805,9 @@ This project is intended for:
 
 ## Summary
 
-`tf-secure-baseline` is a deployable AWS security foundation for sensitive workloads.
+`tf-secure-baseline` is a deployable AWS security foundation and generic application-hosting baseline for sensitive workloads.
 
-It combines five-account isolation, centralized Organizations and Identity Center governance, a dedicated security-operations administration layer, private-first networking, configurable egress, centralized Security Hub/GuardDuty governance, workload-local remediation, dependency-safe EC2 launch, durable alerting, fail-closed automated response, protected Terraform CI/CD, and layered validation evidence into a reusable Terraform platform.
+It combines five-account isolation, centralized Organizations and Identity Center governance, a dedicated security-operations administration layer, private-first networking, configurable egress, centralized Security Hub/GuardDuty governance, workload-local remediation, supported EC2 hosting, a preferred digest-pinned ECS/Fargate runtime, durable alerting, fail-closed automated response, protected Terraform CI/CD, and layered validation evidence into a reusable Terraform platform.
 
 The goal is to provide a secure-by-default foundation that can be adapted, extended, and used as the starting point for production SaaS environments without representing the infrastructure alone as a complete compliance program.
 

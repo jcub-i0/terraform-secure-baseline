@@ -109,6 +109,8 @@ jobs:
       TF_VAR_enable_apply_role_github: "true"
       TF_VAR_branches_apply_github: ${{ vars.BRANCHES_APPLY_GITHUB || '["main"]' }}
       TF_VAR_environment_apply_github: ${{ inputs.environment }}
+      TF_VAR_enable_image_publisher_role_github: "true"
+      TF_VAR_branches_image_publisher_github: ${{ vars.BRANCHES_IMAGE_PUBLISHER_GITHUB || '["main"]' }}
 
     steps:
       - name: Checkout
@@ -168,6 +170,12 @@ jobs:
           if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
             <<< "${TF_VAR_branches_apply_github}" >/dev/null; then
             echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' \
+            <<< "${TF_VAR_branches_image_publisher_github}" >/dev/null; then
+            echo "::error::BRANCHES_IMAGE_PUBLISHER_GITHUB must be a non-empty JSON array of non-empty strings."
             exit 1
           fi
 

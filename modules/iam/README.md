@@ -107,19 +107,16 @@ the execution role has no direct permission on the ECR encryption CMK. The
 application task role initially has no attached application policy, so it does
 not provide broad runtime authority.
 
-The variable also declares optional execution secret, SSM parameter, and KMS
-ARN sets, but `ecs.tf` does not currently consume them. They therefore grant no
-permissions. The intended SSM field name is
-`execution_ssm_parameter_arns`; the current Terraform declaration contains a
-spelling defect in that field and requires human review before it is wired to a
-caller. The inline execution-policy resource label also contains a spelling
-defect; this does not change its AWS behavior but should be corrected in a
-future Terraform change rather than documented as the desired naming
-convention.
+The optional execution secret, SSM parameter, and KMS ARN sets are consumed by
+dynamic least-privilege statements. When non-empty they grant, respectively,
+`secretsmanager:GetSecretValue`, `ssm:GetParameters`, or `kms:Decrypt` against
+only the declared ARNs. The field name is
+`execution_ssm_parameter_arns`, and the inline policy resource is
+`aws_iam_role_policy.ecs_task_execution_policies`.
 
-`ecs_iam_services` defaults to `{}`, and the current baseline module call does
-not pass it. Consequently, this scaffolding currently creates no ECS IAM role
-pairs in the workload environments.
+`ecs_iam_services` defaults to `{}`. Baseline derives and passes one entry per
+canonical `ecs_services` key, so role pairs are absent only when no ECS service
+is configured.
 
 ---
 
@@ -561,11 +558,9 @@ map(object({
 }))
 ```
 
-Only `ecr_repository_arns` and `log_group_arns` are currently enforced by the
-generated policy. The optional secret, SSM parameter, and KMS fields are
-reserved scaffolding and do not yet grant access. As noted above, the current
-Terraform declaration's SSM field spelling must be corrected before callers
-can use the intended interface.
+All fields are consumed by the generated policy. ECR and log-group permissions
+are always present for each configured service; secret, SSM parameter, and KMS
+statements are emitted only when their corresponding sets are non-empty.
 
 ---
 
@@ -590,6 +585,7 @@ can use the intended interface.
 | `logs_cmk_decrypt_policy_name` | Name of the logs CMK decrypt policy |
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
 | `ecs_task_execution_roles` | Map of ECS task execution role ARN and name objects keyed by service |
+| `ecs_task_execution_policy_ids` | Map of inline execution-policy IDs keyed by service for resource-granular launch readiness |
 | `ecs_task_roles` | Map of ECS application task role ARN and name objects keyed by service |
 
 ---
@@ -621,6 +617,8 @@ module "iam" {
   lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
   secrets_manager_cmk_arn            = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
+
+  ecs_iam_services = local.ecs_iam_services
 }
 ```
 
@@ -630,11 +628,13 @@ This module call wires IAM roles and policies to the rest of the baseline, inclu
 
 ## Validation
 
-The current workload baseline does not pass `ecs_iam_services`, and the
-existing IAM validator does not yet validate ECS role pairs or their policies.
-Static Terraform validation covers the scaffolding; live ECS IAM validation is
-deferred to the existing workload validation layer when service integration is
-added.
+The current workload baseline derives `ecs_iam_services` from the canonical
+service map and passes it to this module. `validate-iam.sh` validates each
+configured execution/task role pair, ECS trust restrictions, custom execution
+policy scope, optional ARN-identifiable secret/parameter permissions, absence
+of managed-policy attachments and `iam:PassRole`, and the initially policy-free
+application task role. Runtime identity relationships are also checked through
+resource-backed workload outputs by `validate-ecs-runtime.sh`.
 
 ### Confirm IAM Roles Exist
 
@@ -1118,4 +1118,4 @@ Check:
 - The `backup` module consumes the AWS Backup role ARN.
 - The `patch_management` module consumes the maintenance window role ARN.
 - Shared policy names may be passed to IAM Identity Center for customer-managed policy attachment.
-- The existing Break-Glass section was preserved closely and adjusted only for the module’s current role naming pattern. :contentReference[oaicite:0]{index=0}
+- The existing Break-Glass section is retained using the module's current role naming pattern.

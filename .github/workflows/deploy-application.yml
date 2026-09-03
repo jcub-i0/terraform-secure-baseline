@@ -1,0 +1,425 @@
+name: Deploy Application
+
+run-name: Publish application image - ${{ inputs.environment }} - ${{ inputs.service }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Workload environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+      service:
+        description: "Canonical ECS service name"
+        required: true
+        type: string
+
+      repository_name:
+        description: "Terraform ECR repository key"
+        required: true
+        type: string
+
+      build_context:
+        description: "Application build context relative to the repository root"
+        required: true
+        type: string
+
+      dockerfile:
+        description: "Dockerfile path relative to the build context"
+        required: true
+        default: "Dockerfile"
+        type: string
+
+      image_tag:
+        description: "Optional immutable image tag; blank uses sha-<commit>"
+        required: false
+        default: ""
+        type: string
+
+      platform:
+        description: "Container platform"
+        required: true
+        default: "linux/amd64"
+        type: choice
+        options:
+          - linux/amd64
+          - linux/arm64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-application-${{ inputs.environment }}-${{ inputs.service }}
+  cancel-in-progress: false
+
+env:
+  AWS_PAGER: ""
+
+jobs:
+  resolve-config:
+    name: Resolve ${{ inputs.environment }} publication configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # This job only reads target-specific GitHub Environment variables.
+    # The actual OIDC publisher job below intentionally has no environment.
+    environment: ${{ format('{0}-plan', inputs.environment) }}
+
+    permissions:
+      contents: read
+
+    outputs:
+      account_id: ${{ steps.config.outputs.account_id }}
+      primary_region: ${{ steps.config.outputs.primary_region }}
+      cloud_name: ${{ steps.config.outputs.cloud_name }}
+      publisher_role_arn: ${{ steps.config.outputs.publisher_role_arn }}
+
+    steps:
+      - name: Resolve and validate publication configuration
+        id: config
+        shell: bash
+        env:
+          ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+          PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
+          CLOUD_NAME: ${{ vars.CLOUD_NAME }}
+          IMAGE_PUBLISHER_ROLE_GITHUB_ARN: ${{ vars.IMAGE_PUBLISHER_ROLE_GITHUB_ARN }}
+          BRANCHES_IMAGE_PUBLISHER_GITHUB: ${{ vars.BRANCHES_IMAGE_PUBLISHER_GITHUB || '["main"]' }}
+        run: |
+          set -euo pipefail
+
+          required_settings=(
+            ACCOUNT_ID
+            PRIMARY_REGION
+            CLOUD_NAME
+            IMAGE_PUBLISHER_ROLE_GITHUB_ARN
+            BRANCHES_IMAGE_PUBLISHER_GITHUB
+          )
+
+          for setting_name in "${required_settings[@]}"; do
+            if [[ -z "${!setting_name:-}" ]]; then
+              echo "::error::${setting_name} is not configured in the selected Plan environment."
+              exit 1
+            fi
+          done
+
+          if [[ ! "${ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::ACCOUNT_ID must contain exactly 12 digits."
+            exit 1
+          fi
+
+          if [[ ! "${IMAGE_PUBLISHER_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+            echo "::error::IMAGE_PUBLISHER_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+
+          if [[ "${BASH_REMATCH[1]}" != "${ACCOUNT_ID}" ]]; then
+            echo "::error::IMAGE_PUBLISHER_ROLE_GITHUB_ARN belongs to account ${BASH_REMATCH[1]}, expected ${ACCOUNT_ID}."
+            exit 1
+          fi
+
+          if ! jq -e \
+            'type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' \
+            <<< "${BRANCHES_IMAGE_PUBLISHER_GITHUB}" >/dev/null; then
+            echo "::error::BRANCHES_IMAGE_PUBLISHER_GITHUB must be a non-empty JSON array of non-empty strings."
+            exit 1
+          fi
+
+          if [[ "${GITHUB_REF_TYPE}" != "branch" ]]; then
+            echo "::error::Application image publication must run from a branch."
+            exit 1
+          fi
+
+          if ! jq -e \
+            --arg branch "${GITHUB_REF_NAME}" \
+            'index($branch) != null' \
+            <<< "${BRANCHES_IMAGE_PUBLISHER_GITHUB}" >/dev/null; then
+            echo "::error::Branch ${GITHUB_REF_NAME} is not authorized to publish application images for ${{ inputs.environment }}."
+            exit 1
+          fi
+
+          {
+            echo "account_id=${ACCOUNT_ID}"
+            echo "primary_region=${PRIMARY_REGION}"
+            echo "cloud_name=${CLOUD_NAME}"
+            echo "publisher_role_arn=${IMAGE_PUBLISHER_ROLE_GITHUB_ARN}"
+          } >> "${GITHUB_OUTPUT}"
+
+  publish-image:
+    name: Publish ${{ inputs.service }} image
+    needs: resolve-config
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # IMPORTANT:
+    # Do not add `environment:` to this job.
+    #
+    # The Image Publisher IAM role trusts branch-based GitHub OIDC subjects:
+    #
+    # repo:<owner>/<repo>:ref:refs/heads/<branch>
+    #
+    # Assigning a GitHub Environment to this job would change the OIDC
+    # subject to an environment-based subject and break that trust contract.
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      image_tag: ${{ steps.verify-metadata.outputs.image_tag }}
+      image_digest: ${{ steps.verify-metadata.outputs.image_digest }}
+      digest_image_uri: ${{ steps.verify-metadata.outputs.digest_image_uri }}
+      ecr_repository_name: ${{ steps.verify-metadata.outputs.ecr_repository_name }}
+
+    env:
+      AWS_REGION: ${{ needs.resolve-config.outputs.primary_region }}
+      AWS_DEFAULT_REGION: ${{ needs.resolve-config.outputs.primary_region }}
+      EXPECTED_ACCOUNT_ID: ${{ needs.resolve-config.outputs.account_id }}
+      CLOUD_NAME: ${{ needs.resolve-config.outputs.cloud_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve runtime paths
+        shell: bash
+        run: |
+            set -euo pipefail
+
+            echo "METADATA_FILE=${RUNNER_TEMP}/application-image-metadata.json" >> "${GITHUB_ENV}"
+
+      - name: Validate build inputs
+        shell: bash
+        env:
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${BUILD_CONTEXT}" ]]; then
+            echo "::error::build_context must not be empty."
+            exit 1
+          fi
+
+          if [[ "${BUILD_CONTEXT}" = /* ]]; then
+            echo "::error::build_context must be relative to the repository root."
+            exit 1
+          fi
+
+          RESOLVED_BUILD_CONTEXT="$(
+            realpath -e "${GITHUB_WORKSPACE}/${BUILD_CONTEXT}"
+          )"
+
+          case "${RESOLVED_BUILD_CONTEXT}" in
+            "${GITHUB_WORKSPACE}"|"${GITHUB_WORKSPACE}"/*)
+              ;;
+            *)
+              echo "::error::build_context resolves outside the checked-out repository."
+              exit 1
+              ;;
+          esac
+
+          if [[ ! -d "${RESOLVED_BUILD_CONTEXT}" ]]; then
+            echo "::error::Build context does not exist: ${RESOLVED_BUILD_CONTEXT}"
+            exit 1
+          fi
+
+          if [[ "${DOCKERFILE}" = /* ]]; then
+            echo "::error::dockerfile must be relative to the build context."
+            exit 1
+          fi
+
+          if [[ ! -f "${RESOLVED_BUILD_CONTEXT}/${DOCKERFILE}" ]]; then
+            echo "::error::Dockerfile does not exist: ${RESOLVED_BUILD_CONTEXT}/${DOCKERFILE}"
+            exit 1
+          fi
+
+          echo "BUILD_CONTEXT_RESOLVED=${RESOLVED_BUILD_CONTEXT}" >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ needs.resolve-config.outputs.publisher_role_arn }}
+          aws-region: ${{ needs.resolve-config.outputs.primary_region }}
+
+      - name: Verify AWS publisher identity
+        shell: bash
+        env:
+          EXPECTED_ROLE_ARN: ${{ needs.resolve-config.outputs.publisher_role_arn }}
+        run: |
+          set -euo pipefail
+
+          ACTIVE_ACCOUNT_ID="$(
+            aws sts get-caller-identity \
+              --query Account \
+              --output text
+          )"
+
+          CALLER_ARN="$(
+            aws sts get-caller-identity \
+              --query Arn \
+              --output text
+          )"
+
+          if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
+            echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
+            exit 1
+          fi
+
+          EXPECTED_ROLE_NAME="${EXPECTED_ROLE_ARN##*/}"
+
+          if [[ "${CALLER_ARN}" != *":assumed-role/${EXPECTED_ROLE_NAME}/"* ]]; then
+            echo "::error::AWS caller is not the expected Image Publisher role."
+            echo "::error::Expected role: ${EXPECTED_ROLE_ARN}"
+            echo "::error::Caller ARN: ${CALLER_ARN}"
+            exit 1
+          fi
+
+          echo "[PASS] AWS Image Publisher identity verified"
+          echo "AWS account: ${ACTIVE_ACCOUNT_ID}"
+          echo "Caller ARN: ${CALLER_ARN}"
+
+      - name: Publish application image
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          SERVICE: ${{ inputs.service }}
+          REPOSITORY_NAME: ${{ inputs.repository_name }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          set -euo pipefail
+
+          DEPLOY_ARGS=(
+            publish
+            --environment "${TARGET_ENVIRONMENT}"
+            --service "${SERVICE}"
+            --repository-name "${REPOSITORY_NAME}"
+            --build-context "${BUILD_CONTEXT_RESOLVED}"
+            --dockerfile "${DOCKERFILE}"
+            --platform "${PLATFORM}"
+            --cloud-name "${CLOUD_NAME}"
+            --region "${AWS_REGION}"
+            --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+            --metadata-file "${METADATA_FILE}"
+          )
+
+          if [[ -n "${IMAGE_TAG}" ]]; then
+            DEPLOY_ARGS+=(
+              --image-tag "${IMAGE_TAG}"
+            )
+          fi
+
+          ./scripts/deployment/deploy-application.sh \
+            "${DEPLOY_ARGS[@]}"
+
+      - name: Verify publication metadata
+        id: verify-metadata
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          SERVICE: ${{ inputs.service }}
+          REPOSITORY_NAME: ${{ inputs.repository_name }}
+        run: |
+          set -euo pipefail
+
+          test -s "${METADATA_FILE}"
+
+          if ! jq -e \
+            --arg environment "${TARGET_ENVIRONMENT}" \
+            --arg service "${SERVICE}" \
+            --arg repository_key "${REPOSITORY_NAME}" \
+            --arg registry_id "${EXPECTED_ACCOUNT_ID}" \
+            --arg aws_region "${AWS_REGION}" \
+            '
+              .environment == $environment and
+              .service == $service and
+              .repository_key == $repository_key and
+              .registry_id == $registry_id and
+              .aws_region == $aws_region and
+              (.image_tag | type == "string" and length > 0) and
+              (.image_digest | test("^sha256:[0-9a-f]{64}$")) and
+              (.digest_image_uri | type == "string" and length > 0)
+            ' \
+            "${METADATA_FILE}" >/dev/null; then
+            jq . "${METADATA_FILE}"
+            echo "::error::Application image metadata failed validation."
+            exit 1
+          fi
+
+          IMAGE_TAG="$(
+            jq -r '.image_tag' "${METADATA_FILE}"
+          )"
+
+          IMAGE_DIGEST="$(
+            jq -r '.image_digest' "${METADATA_FILE}"
+          )"
+
+          ECR_REPOSITORY_NAME="$(
+            jq -r '.ecr_repository_name' "${METADATA_FILE}"
+          )"
+
+          DIGEST_IMAGE_URI="$(
+            jq -r '.digest_image_uri' "${METADATA_FILE}"
+          )"
+
+          AWS_DIGEST="$(
+            aws ecr describe-images \
+              --repository-name "${ECR_REPOSITORY_NAME}" \
+              --image-ids "imageTag=${IMAGE_TAG}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text
+          )"
+
+          if [[ "${IMAGE_DIGEST}" != "${AWS_DIGEST}" ]]; then
+            echo "::error::Publication metadata digest does not match authoritative ECR digest."
+            echo "::error::Metadata: ${IMAGE_DIGEST}"
+            echo "::error::ECR:      ${AWS_DIGEST}"
+            exit 1
+          fi
+
+          {
+            echo "image_tag=${IMAGE_TAG}"
+            echo "image_digest=${IMAGE_DIGEST}"
+            echo "ecr_repository_name=${ECR_REPOSITORY_NAME}"
+            echo "digest_image_uri=${DIGEST_IMAGE_URI}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "[PASS] Publication metadata matches authoritative ECR digest"
+
+      - name: Publish image summary
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Application Image Publication"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Service: \`${{ inputs.service }}\`"
+            echo "- Repository: \`${{ steps.verify-metadata.outputs.ecr_repository_name }}\`"
+            echo "- Image tag: \`${{ steps.verify-metadata.outputs.image_tag }}\`"
+            echo "- Image digest: \`${{ steps.verify-metadata.outputs.image_digest }}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- AWS account: \`${EXPECTED_ACCOUNT_ID}\`"
+            echo "- AWS Region: \`${AWS_REGION}\`"
+            echo
+            echo "The published image has not been selected for ECS deployment."
+            echo "A Terraform plan must explicitly select the digest before deployment."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload publication metadata
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+            name: application-image-${{ inputs.environment }}-${{ inputs.service }}-${{ github.run_id }}-${{ github.run_attempt }}
+            path: ${{ runner.temp }}/application-image-metadata.json
+            if-no-files-found: error
+            retention-days: 30

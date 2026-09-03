@@ -156,7 +156,6 @@ module "github_oidc" {
 
   tf_state_bucket_arn     = var.tf_state_bucket_arn
   tf_state_bucket_cmk_arn = var.tf_state_bucket_cmk_arn
-  tf_state_lock_table_arn = var.tf_state_lock_table_arn
 
   primary_region           = var.primary_region
   account_id               = data.aws_caller_identity.current.account_id
@@ -186,7 +185,6 @@ module "github_oidc" {
 | `branches_apply_github` | Branches allowed to assume the GitHub-Apply role |
 | `tf_state_bucket_arn` | ARN of the Terraform state bucket |
 | `tf_state_bucket_cmk_arn` | ARN of the CMK for the tfstate S3 bucket |
-| `tf_state_lock_table_arn` | ARN of the DynamoDB table used for Terraform state locking |
 | `lambda_cmk_arn` | Lambda CMK (optional on first apply) |
 | `secrets_manager_cmk_arn` | Secrets CMK (optional on first apply) |
 

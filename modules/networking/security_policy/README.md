@@ -6,11 +6,12 @@ The `security_policy` module centrally manages security group rules for the
 workload environment.
 
 This module does **not** create security groups. It receives security group IDs
-from the compute, data, automation, and VPC endpoint layers and attaches the
-approved rules between them.
+from the compute, ECS service, ALB, data, automation, and VPC endpoint layers
+and attaches the approved rules between them.
 
-The module also exports the compute-related security group rule IDs that must
-exist before EC2 instances launch.
+The module exports both the compute rule IDs that must exist before EC2
+instances launch and per-service ECS rule IDs used by the ECS service launch
+readiness checkpoint.
 
 ---
 
@@ -24,6 +25,10 @@ The module centralizes network access policy for:
 - Database ingress from compute
 - Conditional compute HTTPS egress through the configured egress path
 - Resource-level dependency readiness for compute EC2 instances
+- ECS task access to Interface Endpoints and the S3 Gateway Endpoint path
+- Conditional ECS task access to RDS and the shared ALB
+- Egress-mode-aware ECS application HTTPS egress
+- Resource-level dependency readiness for ECS services
 
 Keeping these rules in one module makes traffic policy easier to review and
 avoids scattering security group rules across compute, storage, automation, and
@@ -71,6 +76,25 @@ security group on `var.db_port`.
 Allows the EC2 Isolation and EC2 Rollback Lambda security groups to reach
 Interface VPC Endpoints over TCP/443.
 
+### ECS Task Rules
+
+For every entry in `ecs_security_policy_services`, the module creates:
+
+- task SG egress to the Interface Endpoint SG over TCP/443;
+- Interface Endpoint SG ingress from the task SG over TCP/443; and
+- task SG egress to the S3 managed prefix list over TCP/443.
+
+The S3 rule is independent of the Interface Endpoint relationship. ECR API and
+registry traffic uses the `ecr.api` and `ecr.dkr` Interface Endpoints, while ECR
+image layers use the existing S3 Gateway Endpoint.
+
+General task HTTPS egress to `0.0.0.0/0` exists only when the effective egress
+mode is `nat_only` or `network_firewall`. Database rules exist only when
+`database_access = true`. ALB-to-task rules exist only when `alb_access = true`.
+Baseline derives `alb_access` from the plan-time-known fact that service ingress
+is configured; filtering must not depend on the resource-derived `alb_sg_id`,
+which is unknown during planning.
+
 ---
 
 ## Conditional Egress Behavior
@@ -81,13 +105,14 @@ The `compute_egress_to_internet_https` rule uses:
 count = var.egress_mode == "vpc_endpoints_only" ? 0 : 1
 ```
 
-Behavior by mode:
+The per-service `ecs_tasks_egress_to_internet_https` collection applies the
+same condition. Behavior by mode is:
 
-| Egress mode | General compute TCP/443 egress |
-|---|---|
-| `network_firewall` | Created |
-| `nat_only` | Created |
-| `vpc_endpoints_only` | Not created |
+| Egress mode | General compute TCP/443 | General ECS task TCP/443 |
+|---|---|---|
+| `network_firewall` | Created | Created per service |
+| `nat_only` | Created | Created per service |
+| `vpc_endpoints_only` | Not created | Not created |
 
 The rule permits HTTPS traffic at the security group layer. The actual egress
 path is controlled by the networking architecture:
@@ -102,13 +127,16 @@ path is controlled by the networking architecture:
 
 | Name | Type | Description | Required |
 |---|---|---|---:|
-| `egress_mode` | `string` | Effective egress mode controlling conditional compute HTTPS egress | Yes |
+| `egress_mode` | `string` | Effective egress mode controlling conditional compute and ECS HTTPS egress | Yes |
 | `compute_sg_id` | `string` | Security group ID for EC2 compute instances | Yes |
 | `data_sg_id` | `string` | Security group ID for the database or data layer | Yes |
 | `lambda_ec2_isolation_sg_id` | `string` | Security group ID for the EC2 Isolation Lambda | Yes |
 | `lambda_ec2_rollback_sg_id` | `string` | Security group ID for the EC2 Rollback Lambda | Yes |
 | `interface_endpoints_sg_id` | `string` | Security group ID for Interface VPC Endpoints | Yes |
 | `db_port` | `string` | Database port allowed between compute and data resources | Yes |
+| `quarantine_sg_id` | `string` | EC2 quarantine security group ID | Yes |
+| `ecs_security_policy_services` | `map(object(...))` | Per-service task SG, port, optional ALB SG, and database/ALB intent | No; default `{}` |
+| `s3_prefix_list_id` | `string` | Resource-backed prefix-list ID from `aws_vpc_endpoint.s3.prefix_list_id`; required when ECS services are present | Conditional |
 
 Expected `egress_mode` values:
 
@@ -158,6 +186,29 @@ Output shape:
 `compute_egress_to_internet_https` is `null` when `egress_mode` is
 `vpc_endpoints_only`, because the conditional rule has `count = 0`.
 
+### `ecs_sg_rule_ids`
+
+Exports a map keyed by the same canonical ECS service names. Each entry
+contains the Interface Endpoint ingress/egress IDs, S3 egress ID, and nullable
+internet, database, and ALB rule IDs:
+
+```hcl
+{
+  endpoints_ingress     = string
+  endpoints_egress      = string
+  s3_egress             = string
+  internet_https_egress = string | null
+  db_egress             = string | null
+  db_ingress            = string | null
+  alb_ingress            = string | null
+  alb_egress             = string | null
+}
+```
+
+Baseline compacts the applicable IDs into one set per service and passes that
+map to `modules/ecs_service`. These IDs remain an internal resource-granular
+readiness interface; they are not required workload-root outputs.
+
 ### Dependency-Readiness Purpose
 
 The baseline passes this output directly into the compute module:
@@ -179,6 +230,20 @@ This resource-level dependency chain allows the compute security group to be
 created before the security-policy rules while preventing EC2 instances from
 launching until those rules exist.
 
+ECS uses the same resource-granular pattern:
+
+```text
+ECS task SG
+  -> security_policy ECS rules
+  -> terraform_data.ecs_security_policy_ready
+  -> aws_ecs_service.services
+```
+
+The task SG can be created without consuming its own downstream readiness
+output. Only ECS task launch depends on completed rule IDs. Broad module-level
+`depends_on` relationships between `ecs_service` and `security_policy` would
+create a cycle and must not replace this graph.
+
 The object proves security-group rule readiness only. It does not prove route,
 NAT Gateway, Network Firewall, DNS, or package-repository availability.
 
@@ -198,6 +263,10 @@ module "security_policy" {
   lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
   interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
   db_port                    = var.db_port
+  quarantine_sg_id           = module.compute.quarantine_sg_id
+
+  ecs_security_policy_services = local.ecs_security_policy_services
+  s3_prefix_list_id            = module.vpc_endpoints.s3_prefix_list_id
 }
 ```
 
@@ -214,17 +283,29 @@ module "compute" {
 
 ---
 
-## Traffic Summary
+## Security-group rule summary
 
-| Source | Destination | Port | Purpose | Condition |
-|---|---|---:|---|---|
-| Compute SG | Interface Endpoints SG | 443 | Private AWS service access | Always |
-| EC2 Isolation Lambda SG | Interface Endpoints SG | 443 | Private AWS API access | Always |
-| EC2 Rollback Lambda SG | Interface Endpoints SG | 443 | Private AWS API access | Always |
-| Interface Endpoints SG | `0.0.0.0/0` | 443 | Endpoint ENI communication with AWS services | Always |
-| Compute SG | Data SG | `db_port` | Database access | Always |
-| Data SG | Compute SG | `db_port` | Database ingress from compute | Always |
-| Compute SG | `0.0.0.0/0` | 443 | HTTPS through configured egress path | Not `vpc_endpoints_only` |
+The table describes where Terraform attaches each rule. An ingress rule on a
+destination SG is not a reverse traffic flow; security groups are stateful.
+
+| Rule attached to | Type | Peer or destination | Port | Condition |
+|---|---|---|---:|---|
+| Interface Endpoints SG | Ingress | Compute SG | 443 | Always |
+| Interface Endpoints SG | Ingress | EC2 Isolation Lambda SG | 443 | Always |
+| Interface Endpoints SG | Ingress | EC2 Rollback Lambda SG | 443 | Always |
+| Interface Endpoints SG | Egress | `0.0.0.0/0` | 443 | Always |
+| Compute SG | Egress | Interface Endpoints SG | 443 | Always |
+| Compute SG | Egress | Data SG | `db_port` | Always |
+| Data SG | Ingress | Compute SG | `db_port` | Always |
+| Compute SG | Egress | `0.0.0.0/0` | 443 | Not `vpc_endpoints_only` |
+| ECS task SG | Egress | Interface Endpoints SG | 443 | Per configured ECS service |
+| Interface Endpoints SG | Ingress | ECS task SG | 443 | Per configured ECS service |
+| ECS task SG | Egress | S3 managed prefix list | 443 | Per configured ECS service |
+| ECS task SG | Egress | `0.0.0.0/0` | 443 | Not `vpc_endpoints_only` |
+| ECS task SG | Egress | Data SG | `db_port` | `database_access = true` |
+| Data SG | Ingress | ECS task SG | `db_port` | `database_access = true` |
+| ECS task SG | Ingress | ALB SG | Service port | `alb_access = true` |
+| ALB SG | Egress | ECS task SG | Service port | `alb_access = true` |
 
 ---
 
@@ -288,6 +369,8 @@ The exact state address may include additional parent module prefixes.
   configured.
 - Lambda automation security groups are granted only TCP/443 access to Interface
   VPC Endpoints.
+- ECS service intent is derived from the canonical `ecs_services` map; operators
+  do not maintain a separate security-policy service map.
 - The readiness output exposes resource IDs for dependency ordering; it does not
   grant additional network access.
 
@@ -295,10 +378,12 @@ The exact state address may include additional parent module prefixes.
 
 ## Notes
 
-- Deploy this module after the referenced compute, data, automation, and
-  Interface Endpoint security groups exist.
+- Deploy this module after the referenced compute, ECS task, ALB, data,
+  automation, and Interface Endpoint security groups exist.
 - Security groups are created by other modules; this module attaches rules to
   them.
 - The baseline passes `compute_sg_rule_ids` directly from this module into
   `compute` to delay EC2 instance creation until required rules exist.
+- The baseline passes normalized `ecs_sg_rule_ids` to `ecs_service` to delay
+  task launch until the applicable rules exist.
 - Keep the output and compute input attribute name `compute_egress_to_internet_https` consistent.

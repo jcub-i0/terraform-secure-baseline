@@ -384,7 +384,7 @@ This keeps endpoint ENIs separate from compute, data, serverless, firewall, and 
 
 The S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-Private ECR image pulls for the planned Fargate runtime use the `ecr.api` and
+Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and
 `ecr.dkr` Interface Endpoints, while ECR image layers use the existing S3
 Gateway Endpoint.
 
@@ -592,10 +592,25 @@ Modules support clear boundaries such as:
 - Storage
 - VPC endpoints
 - Compute
+- ECR
+- ECS cluster
+- ECS services
+- Application Load Balancer
 
 This makes the platform easier to understand, test, and adapt.
 
 The goal is not maximum abstraction. The goal is a secure and maintainable baseline.
+
+EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2-only; the preferred modern application runtime is split across `modules/ecr`, `modules/ecs_cluster`, `modules/application_load_balancer`, and `modules/ecs_service` according to resource ownership.
+
+Operators maintain one canonical `ecs_services` map. Baseline derives narrower ECR, IAM, ALB, security-policy, and runtime inputs rather than requiring parallel service inventories. Terraform owns the runtime infrastructure and consumes the reviewed digest, while the application/release process owns builds, image publication, and digest selection. Deployed images use a resource-backed ECR repository URL plus an immutable `sha256` digest present in the reviewed saved plan.
+
+When an output represents what Terraform actually configured on an AWS
+resource, validators should consume a resource-backed output instead of
+re-deriving names or policy in Bash. Current examples include firewall domain
+targets, ECR repository metadata and CMK identity, ECS platform version and
+Container Insights, ALB listener metadata, the S3 Gateway Endpoint prefix-list
+ID, and the workload logs CMK ARN.
 
 ---
 

@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased — v1.8.0 Secure Container Workloads
+
+The v1.8.0 work merged to `main` adds a generic secure ECS/Fargate application-runtime capability while retaining EC2 as a supported host-based workload pattern. The core runtime through C5 has been implemented and live-tested; v1.8.0 has not been released or tagged.
+
+### Added
+
+- Added separate reusable `modules/ecr`, `modules/ecs_cluster`, `modules/application_load_balancer`, and `modules/ecs_service` modules rather than combining ECS with the EC2-only `modules/compute`.
+- Added one shared ECS cluster per workload environment with configurable Container Insights and an `enhanced` default.
+- Added the canonical environment-level `ecs_services` map. Baseline derives the narrower ECR, IAM, ALB, security-policy, and ECS-runtime maps instead of requiring operators to maintain parallel service inventories.
+- Added digest-pinned Fargate task definitions using Linux, `awsvpc`, compute-private subnets, no public task IP, per-service execution/task roles, Terraform-owned KMS-encrypted log groups, deployment circuit breaking, and automatic rollback.
+- Added a conditional shared internet-facing HTTPS ALB with explicit host/path listener rules, `ip` target groups, a fixed 404 default action, a caller-supplied ACM certificate, and the default TLS policy `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09`.
+- Added per-service task security groups and cross-component ECS rules under `modules/networking/security_policy`, including Interface Endpoint, S3 managed prefix-list, optional database, optional ALB, and egress-mode-aware HTTPS relationships.
+- Added resource-granular ECS launch readiness through `terraform_data.ecs_execution_policy_ready` and `terraform_data.ecs_security_policy_ready` without module-level dependency cycles.
+- Added private ECR connectivity through `ecr.api`, `ecr.dkr`, and the existing S3 Gateway Endpoint path.
+- Added KMS-encrypted immutable ECR repositories, 30-day untagged-only lifecycle cleanup, effective repository derivation from explicit repositories plus ECS requirements, and exact non-secret repository metadata outputs.
+- Added separate least-privilege ECS task execution and application task roles per service. Execution policies scope ECR pulls, CloudWatch Logs, declared Secrets Manager/SSM references, and optional execution-time KMS decrypt permissions; task roles initially carry no broad application permissions.
+- Added non-secret RDS consumer outputs and validator-facing resource-backed outputs for ECS platform version, Container Insights, ECR/logging CMKs, database-access intent, ALB HTTPS listener metadata, and the S3 managed prefix-list ID.
+- Added `validate-ecr.sh` and `validate-ecs-runtime.sh`; the existing IAM validator now validates ECS role trust and policy separation. The workload baseline layer now contains 16 validators and remains one of the existing four validation/evidence layers.
+
+### Changed
+
+- ECS/Fargate is now the preferred modern SaaS/application runtime; EC2 remains supported and `modules/compute` remains EC2-only.
+- ECR repositories required by `ecs_services` are merged with explicitly configured repositories. A repository can be created first through `repositories` and later retained under the same map key when it becomes service-derived.
+- Network Firewall domain targets are now the Terraform-owned union of platform-required and environment-approved application domains when Network Firewall is active.
+- Runtime validation now compares resource-backed expected values with live AWS state for ECR CMK identity, ECS log-group CMK identity, Container Insights, Fargate platform version, database SG intent, ALB listener/certificate/TLS metadata, and S3 prefix-list identity.
+- Application source, Docker builds, tests, image publication, digest promotion, schema migrations, and release sequencing remain outside Terraform ownership. ECS infrastructure remains in the existing workload environment state.
+
+### Validation
+
+- Core ECS/Fargate runtime and validation were exercised against live workload infrastructure before merge.
+- `validate-ecs-runtime.sh` verifies cluster state, exact service inventory, service steady state and completed primary rollout, Fargate networking, one essential service container, immutable image references, logging, task security policy, conditional database access, and conditional ALB relationships.
+- Empty `repositories = {}` and `ecs_services = {}` configurations remain valid; the environment ECS cluster still exists while per-service runtime resources and the ALB are absent.
+
+### Next
+
+- The immediate next milestone is an application image build/publish/deployment workflow using short-lived OIDC credentials, authoritative ECR digest resolution, exact saved-plan review/application, ECS convergence, and ECR/IAM/ECS validation.
+- Later v1.8.0 work is expected to add ECS Service Auto Scaling, GuardDuty Fargate Runtime Monitoring, fail-closed task-level containment, a ReconoSense reference deployment, and release-readiness documentation/tagging.
+- GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`; the operational ECS runtime does not itself enable central Fargate agent management.
+
 ## v1.7.0
 
 This update introduces a dedicated `security-operations` administration layer and centralizes Security Hub CSPM, GuardDuty, and Security Hub V2 governance while preserving workload-local configuration, detection, remediation, and response responsibilities.
@@ -110,8 +149,8 @@ This update introduces a dedicated `security-operations` administration layer an
 - Control-plane evidence validates Organizations topology, strict account placement, delegated-administrator prerequisites, and Identity Center assignments.
 - Security Operations evidence validates centralized Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 delegated-administrator state.
 - Workload bootstrap evidence validates state/OIDC readiness and current workload CMK references.
-- Workload baseline evidence validates 14 workload control areas, including workload security realization and VPC endpoints.
-- Current security-operations and production workload evidence runs complete successfully with `1/1` and `14/14` validation scripts passing respectively.
+- Workload baseline evidence validates workload-local control areas, including workload security realization and VPC endpoints.
+- Security-operations and production workload evidence runs completed successfully for the released validator inventories.
 
 ### Notes
 
@@ -610,7 +649,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 
 - The automated validation suite is intentionally read-only and does not perform live isolation, rollback, tamper, break-glass, GitHub Actions, Identity Center, or destroy workflow tests.
 - Live workflow validation remains manual and should only be run in approved environments.
-- A successful full workload validation run should report `14/14` validation scripts passed.
+- A successful full workload validation run should report every script in that release's validator inventory as passed.
 
 ## v1.1.1
 
