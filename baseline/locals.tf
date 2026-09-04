@@ -121,7 +121,7 @@ locals {
 
   ecs_required_repositories = {
     for repository_name in toset([
-      for service in values(local.deployable_ecs_services) :
+      for service in values(var.ecs_services) :
       service.repository_name
     ]) :
     repository_name => {}
