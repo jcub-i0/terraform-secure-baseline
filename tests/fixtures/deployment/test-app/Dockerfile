@@ -1,3 +1,5 @@
 FROM public.ecr.aws/docker/library/alpine:3.22
 
-CMD ["busybox", "httpd", "-f", "-p", "8080"]
+RUN apk add --no-cache busybox-extras
+
+CMD ["busybox-extras", "httpd", "-f", "-p", "8080"]
