@@ -113,6 +113,12 @@ locals {
   # ECS
   # ---------------------------------------------------------------------------
 
+  deployable_ecs_services = {
+    for service_name, service in var.ecs_services :
+    service_name => service
+    if service.image_digest != null
+  }
+
   ecs_required_repositories = {
     for repository_name in toset([
       for service in values(var.ecs_services) :
