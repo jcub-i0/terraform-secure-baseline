@@ -121,7 +121,7 @@ locals {
 
   ecs_required_repositories = {
     for repository_name in toset([
-      for service in values(var.ecs_services) :
+      for service in values(local.deployable_ecs_services) :
       service.repository_name
     ]) :
     repository_name => {}
@@ -133,7 +133,7 @@ locals {
   )
 
   ecs_alb_services = {
-    for service_name, service in var.ecs_services :
+    for service_name, service in local.deployable_ecs_services :
     service_name => {
       container_port    = service.container_port
       priority          = service.ingress.priority
@@ -145,12 +145,12 @@ locals {
   }
 
   ecs_log_group_arns = {
-    for service_name in keys(var.ecs_services) :
+    for service_name in keys(local.deployable_ecs_services) :
     service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/ecs/${local.name_prefix}/${service_name}"
   }
 
   ecs_iam_services = {
-    for service_name, service in var.ecs_services :
+    for service_name, service in local.deployable_ecs_services :
     service_name => {
       ecr_repository_arns = toset([
         module.ecr.repositories[service.repository_name].arn
@@ -173,7 +173,7 @@ locals {
   }
 
   ecs_runtime_services = {
-    for service_name, service in var.ecs_services :
+    for service_name, service in local.deployable_ecs_services :
     service_name => {
       image = "${module.ecr.repositories[service.repository_name].repository_url}@${service.image_digest}"
 
@@ -203,7 +203,7 @@ locals {
   }
 
   ecs_security_policy_services = {
-    for service_name, service in var.ecs_services :
+    for service_name, service in local.deployable_ecs_services :
     service_name => {
       task_sg_id     = module.ecs_service.task_security_group_ids[service_name]
       container_port = service.container_port
