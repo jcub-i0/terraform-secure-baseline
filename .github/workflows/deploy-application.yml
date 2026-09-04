@@ -86,6 +86,63 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [[ ! "${SERVICE}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+            echo "::error::service must use lowercase letters and numbers separated only by periods, underscores, or hyphens."
+            exit 1
+          fi
+
+          CONFIG_FILE="${GITHUB_WORKSPACE}/environments/${TARGET_ENVIRONMENT}/container-workloads.auto.tfvars.json"
+
+          if [[ ! -f "${CONFIG_FILE}" ]]; then
+            echo "::error::Canonical workload configuration does not exist: ${CONFIG_FILE}"
+            exit 1
+          fi
+
+          if ! jq -e . "${CONFIG_FILE}" >/dev/null; then
+            echo "::error::Canonical workload configuration is not valid JSON."
+            exit 1
+          fi
+
+          if ! jq -e \
+            --arg service "${SERVICE}" \
+            '.ecs_services | type == "object" and has($service)' \
+            "${CONFIG_FILE}" >/dev/null; then
+            echo "::error::ECS service ${SERVICE} is not registered in ${CONFIG_FILE}."
+            exit 1
+          fi
+
+          REPOSITORY_NAME="$(
+            jq -r \
+              --arg service "${SERVICE}" \
+              '.ecs_services[$service].repository_name // empty' \
+              "${CONFIG_FILE}"
+          )"
+
+          CPU_ARCHITECTURE="$(
+            jq -r \
+              --arg service "${SERVICE}" \
+              '.ecs_services[$service].cpu_architecture // "X86_64"' \
+              "${CONFIG_FILE}"
+          )"
+
+          if [[ ! "${REPOSITORY_NAME}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+            echo "::error::Registered ECS service ${SERVICE} has an invalid repository_name."
+            exit 1
+          fi
+
+          case "${CPU_ARCHITECTURE}" in
+            X86_64)
+              PLATFORM="linux/amd64"
+              ;;
+            ARM64)
+              PLATFORM="linux/arm64"
+              ;;
+            *)
+              echo "::error::Registered ECS service ${SERVICE} has unsupported cpu_architecture: ${CPU_ARCHITECTURE}"
+              exit 1
+              ;;
+          esac
+
           required_settings=(
             ACCOUNT_ID
             PRIMARY_REGION
