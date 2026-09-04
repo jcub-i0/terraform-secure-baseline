@@ -71,7 +71,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        
+
       - name: Resolve and validate publication configuration
         id: config
         shell: bash
@@ -81,6 +81,8 @@ jobs:
           CLOUD_NAME: ${{ vars.CLOUD_NAME }}
           IMAGE_PUBLISHER_ROLE_GITHUB_ARN: ${{ vars.IMAGE_PUBLISHER_ROLE_GITHUB_ARN }}
           BRANCHES_IMAGE_PUBLISHER_GITHUB: ${{ vars.BRANCHES_IMAGE_PUBLISHER_GITHUB || '["main"]' }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          SERVICE: ${{ inputs.service }}
         run: |
           set -euo pipefail
 
