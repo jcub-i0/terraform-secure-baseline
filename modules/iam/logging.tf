@@ -71,7 +71,6 @@ data "aws_iam_policy_document" "flowlogs" {
     sid    = "AllowFlowLogsWriteToCloudWatchLogs"
     effect = "Allow"
     actions = [
-      "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
       "logs:DescribeLogGroups",
