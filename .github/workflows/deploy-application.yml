@@ -69,6 +69,9 @@ jobs:
       platform: ${{ steps.config.outputs.platform }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
       - name: Resolve and validate publication configuration
         id: config
         shell: bash
