@@ -7,7 +7,7 @@ fail() {
 }
 
 success() {
-  printf '[PASS] %s/n' "$*"
+  printf '[PASS] %s\n' "$*"
 }
 
 usage() {
