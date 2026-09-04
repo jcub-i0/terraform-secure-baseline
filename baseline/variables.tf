@@ -373,12 +373,12 @@ variable "alb_certificate_arn" {
     condition = (
       alltrue([
         for service in values(var.ecs_services) :
-        service.ingress == null
+        service.image_digest == null || service.ingress == null
       ])
       || var.alb_certificate_arn != null
     )
 
-    error_message = "alb_certificate_arn must be provided when any ECS service configures ingress."
+    error_message = "alb_certificate_arn must be provided when any deployable ECS service configures ingress."
   }
 }
 
@@ -391,12 +391,12 @@ variable "alb_ingress_cidrs" {
     condition = (
       alltrue([
         for service in values(var.ecs_services) :
-        service.ingress == null
+        service.image_digest == null || service.ingress == null
       ])
       || length(var.alb_ingress_cidrs) > 0
     )
 
-    error_message = "alb_ingress_cidrs must contain at least one CIDR when any ECS service configures ingress."
+    error_message = "alb_ingress_cidrs must contain at least one CIDR when any deployable ECS service configures ingress."
   }
 }
 
