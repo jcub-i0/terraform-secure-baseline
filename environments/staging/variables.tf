@@ -253,7 +253,7 @@ variable "ecs_services" {
 
   type = map(object({
     repository_name = string
-    image_digest    = string
+    image_digest    = optional(string)
 
     container_port = number
     cpu            = number

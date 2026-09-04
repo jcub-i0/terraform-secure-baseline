@@ -373,12 +373,12 @@ variable "alb_certificate_arn" {
     condition = (
       alltrue([
         for service in values(var.ecs_services) :
-        service.ingress == null
+        service.image_digest == null || service.ingress == null
       ])
       || var.alb_certificate_arn != null
     )
 
-    error_message = "alb_certificate_arn must be provided when any ECS service configures ingress."
+    error_message = "alb_certificate_arn must be provided when any deployable ECS service configures ingress."
   }
 }
 
@@ -391,12 +391,12 @@ variable "alb_ingress_cidrs" {
     condition = (
       alltrue([
         for service in values(var.ecs_services) :
-        service.ingress == null
+        service.image_digest == null || service.ingress == null
       ])
       || length(var.alb_ingress_cidrs) > 0
     )
 
-    error_message = "alb_ingress_cidrs must contain at least one CIDR when any ECS service configures ingress."
+    error_message = "alb_ingress_cidrs must contain at least one CIDR when any deployable ECS service configures ingress."
   }
 }
 
@@ -411,7 +411,7 @@ variable "ecs_services" {
 
   type = map(object({
     repository_name = string
-    image_digest    = string
+    image_digest    = optional(string)
 
     container_port = number
     cpu            = number
@@ -450,10 +450,11 @@ variable "ecs_services" {
   validation {
     condition = alltrue([
       for service in values(var.ecs_services) :
+      service.image_digest == null ||
       can(regex("^sha256:[0-9a-f]{64}$", service.image_digest))
     ])
 
-    error_message = "Each ECS service image_digest must be a SHA-256 digest in sha256:<64 hexadecimal characters> format."
+    error_message = "Each ECS service image_digest must be null or a SHA-256 digest in sha256:<64 hexadecimal characters> format."
   }
 
   validation {
