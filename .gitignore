@@ -133,3 +133,8 @@ validation-results/
 ##################################################################
 # Generated after initial state-stack deployment
 bootstrap/*/state/backend.tf
+
+##################################################################
+# Non-sensitive container workload configuration
+##################################################################
+!environments/*/container-workloads.auto.tfvars.json
