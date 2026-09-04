@@ -198,7 +198,15 @@ jobs:
             echo "primary_region=${PRIMARY_REGION}"
             echo "cloud_name=${CLOUD_NAME}"
             echo "publisher_role_arn=${IMAGE_PUBLISHER_ROLE_GITHUB_ARN}"
+            echo "repository_name=${REPOSITORY_NAME}"
+            echo "platform=${PLATFORM}"
           } >> "${GITHUB_OUTPUT}"
+
+          echo "[PASS] Registered ECS service configuration resolved"
+          echo "Service: ${SERVICE}"
+          echo "Repository key: ${REPOSITORY_NAME}"
+          echo "CPU architecture: ${CPU_ARCHITECTURE}"
+          echo "Container platform: ${PLATFORM}"
 
   publish-image:
     name: Publish ${{ inputs.service }} image
