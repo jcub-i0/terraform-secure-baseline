@@ -65,6 +65,8 @@ jobs:
       primary_region: ${{ steps.config.outputs.primary_region }}
       cloud_name: ${{ steps.config.outputs.cloud_name }}
       publisher_role_arn: ${{ steps.config.outputs.publisher_role_arn }}
+      repository_name: ${{ steps.config.outputs.repository_name }}
+      platform: ${{ steps.config.outputs.platform }}
 
     steps:
       - name: Resolve and validate publication configuration
