@@ -20,11 +20,6 @@ on:
         required: true
         type: string
 
-      repository_name:
-        description: "Terraform ECR repository key"
-        required: true
-        type: string
-
       build_context:
         description: "Application build context relative to the repository root"
         required: true
@@ -41,15 +36,6 @@ on:
         required: false
         default: ""
         type: string
-
-      platform:
-        description: "Container platform"
-        required: true
-        default: "linux/amd64"
-        type: choice
-        options:
-          - linux/amd64
-          - linux/arm64
 
 permissions:
   contents: read
@@ -79,8 +65,13 @@ jobs:
       primary_region: ${{ steps.config.outputs.primary_region }}
       cloud_name: ${{ steps.config.outputs.cloud_name }}
       publisher_role_arn: ${{ steps.config.outputs.publisher_role_arn }}
+      repository_name: ${{ steps.config.outputs.repository_name }}
+      platform: ${{ steps.config.outputs.platform }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Resolve and validate publication configuration
         id: config
         shell: bash
@@ -90,8 +81,67 @@ jobs:
           CLOUD_NAME: ${{ vars.CLOUD_NAME }}
           IMAGE_PUBLISHER_ROLE_GITHUB_ARN: ${{ vars.IMAGE_PUBLISHER_ROLE_GITHUB_ARN }}
           BRANCHES_IMAGE_PUBLISHER_GITHUB: ${{ vars.BRANCHES_IMAGE_PUBLISHER_GITHUB || '["main"]' }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          SERVICE: ${{ inputs.service }}
         run: |
           set -euo pipefail
+
+          if [[ ! "${SERVICE}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+            echo "::error::service must use lowercase letters and numbers separated only by periods, underscores, or hyphens."
+            exit 1
+          fi
+
+          CONFIG_FILE="${GITHUB_WORKSPACE}/environments/${TARGET_ENVIRONMENT}/container-workloads.auto.tfvars.json"
+
+          if [[ ! -f "${CONFIG_FILE}" ]]; then
+            echo "::error::Canonical workload configuration does not exist: ${CONFIG_FILE}"
+            exit 1
+          fi
+
+          if ! jq -e . "${CONFIG_FILE}" >/dev/null; then
+            echo "::error::Canonical workload configuration is not valid JSON."
+            exit 1
+          fi
+
+          if ! jq -e \
+            --arg service "${SERVICE}" \
+            '.ecs_services | type == "object" and has($service)' \
+            "${CONFIG_FILE}" >/dev/null; then
+            echo "::error::ECS service ${SERVICE} is not registered in ${CONFIG_FILE}."
+            exit 1
+          fi
+
+          REPOSITORY_NAME="$(
+            jq -r \
+              --arg service "${SERVICE}" \
+              '.ecs_services[$service].repository_name // empty' \
+              "${CONFIG_FILE}"
+          )"
+
+          CPU_ARCHITECTURE="$(
+            jq -r \
+              --arg service "${SERVICE}" \
+              '.ecs_services[$service].cpu_architecture // "X86_64"' \
+              "${CONFIG_FILE}"
+          )"
+
+          if [[ ! "${REPOSITORY_NAME}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+            echo "::error::Registered ECS service ${SERVICE} has an invalid repository_name."
+            exit 1
+          fi
+
+          case "${CPU_ARCHITECTURE}" in
+            X86_64)
+              PLATFORM="linux/amd64"
+              ;;
+            ARM64)
+              PLATFORM="linux/arm64"
+              ;;
+            *)
+              echo "::error::Registered ECS service ${SERVICE} has unsupported cpu_architecture: ${CPU_ARCHITECTURE}"
+              exit 1
+              ;;
+          esac
 
           required_settings=(
             ACCOUNT_ID
@@ -148,7 +198,15 @@ jobs:
             echo "primary_region=${PRIMARY_REGION}"
             echo "cloud_name=${CLOUD_NAME}"
             echo "publisher_role_arn=${IMAGE_PUBLISHER_ROLE_GITHUB_ARN}"
+            echo "repository_name=${REPOSITORY_NAME}"
+            echo "platform=${PLATFORM}"
           } >> "${GITHUB_OUTPUT}"
+
+          echo "[PASS] Registered ECS service configuration resolved"
+          echo "Service: ${SERVICE}"
+          echo "Repository key: ${REPOSITORY_NAME}"
+          echo "CPU architecture: ${CPU_ARCHITECTURE}"
+          echo "Container platform: ${PLATFORM}"
 
   publish-image:
     name: Publish ${{ inputs.service }} image
@@ -289,10 +347,10 @@ jobs:
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           SERVICE: ${{ inputs.service }}
-          REPOSITORY_NAME: ${{ inputs.repository_name }}
+          REPOSITORY_NAME: ${{ needs.resolve-config.outputs.repository_name }}
           DOCKERFILE: ${{ inputs.dockerfile }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          PLATFORM: ${{ inputs.platform }}
+          PLATFORM: ${{ needs.resolve-config.outputs.platform }}
         run: |
           set -euo pipefail
 
@@ -325,7 +383,7 @@ jobs:
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           SERVICE: ${{ inputs.service }}
-          REPOSITORY_NAME: ${{ inputs.repository_name }}
+          REPOSITORY_NAME: ${{ needs.resolve-config.outputs.repository_name }}
         run: |
           set -euo pipefail
 
