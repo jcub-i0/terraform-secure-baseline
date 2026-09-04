@@ -205,7 +205,6 @@ Allows VPC Flow Logs to publish to the Flow Logs CloudWatch Log Group.
 
 Primary actions include:
 
-- `logs:CreateLogGroup`
 - `logs:CreateLogStream`
 - `logs:PutLogEvents`
 - `logs:DescribeLogGroups`
