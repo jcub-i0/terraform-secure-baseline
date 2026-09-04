@@ -450,10 +450,11 @@ variable "ecs_services" {
   validation {
     condition = alltrue([
       for service in values(var.ecs_services) :
+      service.image_digest == null ||
       can(regex("^sha256:[0-9a-f]{64}$", service.image_digest))
     ])
 
-    error_message = "Each ECS service image_digest must be a SHA-256 digest in sha256:<64 hexadecimal characters> format."
+    error_message = "Each ECS service image_digest must be null or a SHA-256 digest in sha256:<64 hexadecimal characters> format."
   }
 
   validation {
