@@ -383,7 +383,7 @@ jobs:
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment }}
           SERVICE: ${{ inputs.service }}
-          REPOSITORY_NAME: ${{ inputs.repository_name }}
+          REPOSITORY_NAME: ${{ needs.resolve-config.outputs.repository_name }}
         run: |
           set -euo pipefail
 
