@@ -502,6 +502,12 @@ for output_name in ecs_services ecs_service_configuration ecs_task_definition_ar
 done
 
 ECS_SERVICES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_services.value')"
+
+ECS_SERVICE_CONFIGURATION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.ecs_service_configuration.value'
+)"
+
 ECS_TASK_DEFINITION_ARNS_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_task_definition_arns.value')"
 ECS_LOG_GROUPS_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_log_groups.value')"
 ECS_EXECUTION_ROLES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_task_execution_roles.value')"
