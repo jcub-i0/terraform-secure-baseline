@@ -553,7 +553,7 @@ map(object({
   log_group_arns                 = set(string)
   execution_secret_arns          = optional(set(string), [])
   execution_ssm_parameter_arns   = optional(set(string), [])
-  execution_kms_key_arns         = optional(set(string), [])
+  task_execution_kms_key_arns         = optional(set(string), [])
 }))
 ```
 

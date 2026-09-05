@@ -454,7 +454,7 @@ The runtime validator compares the live cluster Container Insights setting with
 `ecs_cluster.container_insights`, database rule presence/absence with
 `ecs_service_configuration`, and live service/logging/ALB settings with their
 resource-backed outputs. Internal SG readiness IDs remain intentionally
-internal. `execution_kms_key_arns` is not currently a workload-root validator
+internal. `task_execution_kms_key_arns` is not currently a workload-root validator
 output, so `validate-iam.sh` proves that any live `kms:Decrypt` statement is
 resource-scoped but does not reconstruct an exact expected key set. Repository
 keys are never treated as ECS service identities.

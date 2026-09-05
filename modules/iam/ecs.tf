@@ -119,7 +119,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
   }
 
   dynamic "statement" {
-    for_each = length(each.value.execution_kms_key_arns) > 0 ? [1] : []
+    for_each = length(each.value.task_execution_kms_key_arns) > 0 ? [1] : []
 
     content {
       sid    = "AllowExecutionKMSDecrypt"
@@ -129,7 +129,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
         "kms:Decrypt",
       ]
 
-      resources = each.value.execution_kms_key_arns
+      resources = each.value.task_execution_kms_key_arns
     }
   }
 }

@@ -168,7 +168,7 @@ locals {
         values(service.ssm_parameters)
       )
 
-      execution_kms_key_arns = service.execution_kms_key_arns
+      task_execution_kms_key_arns = service.task_execution_kms_key_arns
     }
   }
 

@@ -192,7 +192,7 @@ output "ecs_service_configuration" {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
       database_access = service.database_access
-      execution_kms_key_arns = sort(tolist(service.execution_kms_key_arns))
+      task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
     }
   }
 }

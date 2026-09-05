@@ -812,7 +812,7 @@ ecs_services = {
     environment_variables   = {}
     secrets_manager_secrets = {}
     ssm_parameters          = {}
-    execution_kms_key_arns  = []
+    task_execution_kms_key_arns  = []
 
     ingress = null
   }

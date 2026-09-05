@@ -672,7 +672,7 @@ else
       echo "$ECS_SERVICE_CONFIGURATION_JSON" |
         jq -c \
           --arg service "$service_name" \
-          '.[$service].execution_kms_key_arns | sort | unique'
+          '.[$service].task_execution_kms_key_arns | sort | unique'
     )"
 
     if ! echo "$expected_kms_key_arns_json" |
@@ -684,7 +684,7 @@ else
         )
       ' >/dev/null; then
       echo "$expected_kms_key_arns_json" | jq .
-      fail "execution_kms_key_arns output is invalid: ${service_name}"
+      fail "task_execution_kms_key_arns output is invalid: ${service_name}"
     fi
 
     if [[ "$(echo "$expected_kms_key_arns_json" | jq 'length')" -gt 0 ]]; then
@@ -699,11 +699,11 @@ else
             | index("kms:Decrypt") != null
           )'
 
-        fail "ECS execution-policy kms:Decrypt resources do not exactly match execution_kms_key_arns: ${service_name}"
+        fail "ECS execution-policy kms:Decrypt resources do not exactly match task_execution_kms_key_arns: ${service_name}"
       fi
     else
       if policy_contains_action "$execution_policy_json" "kms:Decrypt"; then
-        fail "ECS execution policy grants kms:Decrypt when execution_kms_key_arns is empty: ${service_name}"
+        fail "ECS execution policy grants kms:Decrypt when task_execution_kms_key_arns is empty: ${service_name}"
       fi
     fi
 
