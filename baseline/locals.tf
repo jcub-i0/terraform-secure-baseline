@@ -146,7 +146,7 @@ locals {
 
   ecs_log_group_arns = {
     for service_name in keys(local.deployable_ecs_services) :
-    service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/ecs/${local.name_prefix}/${service_name}"
+    service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/aws/ecs/${local.name_prefix}/${service_name}"
   }
 
   ecs_iam_services = {
