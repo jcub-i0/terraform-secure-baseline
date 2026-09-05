@@ -424,9 +424,9 @@ variable "ecs_services" {
 
     environment_variables = optional(map(string), {})
 
-    secrets_manager_secrets = optional(map(string), {})
-    ssm_parameters          = optional(map(string), {})
-    task_execution_kms_key_arns  = optional(set(string), [])
+    secrets_manager_secrets     = optional(map(string), {})
+    ssm_parameters              = optional(map(string), {})
+    task_execution_kms_key_arns = optional(set(string), [])
 
     ingress = optional(object({
       priority          = number
