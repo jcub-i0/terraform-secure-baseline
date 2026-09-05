@@ -298,8 +298,6 @@ if ! echo "$ECS_CLUSTER_JSON" |
   fail "ecs_cluster output contains invalid cluster or Container Insights log-group metadata"
 fi
 
-success "ECS Container Insights setting matches Terraform: ${EXPECTED_CONTAINER_INSIGHTS}"
-
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_DEFINITION_ARNS_JSON" "task definition ARNs"
 require_same_map_keys "$ECS_SERVICES_JSON" "$ECS_SERVICE_CONFIGURATION_JSON" "ECS service configuration"
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_SECURITY_GROUP_IDS_JSON" "task security groups"
