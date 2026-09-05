@@ -9,6 +9,10 @@ resource "aws_ecs_cluster" "cluster" {
     value = var.container_insights
   }
 
+  depends_on = [
+    aws_cloudwatch_log_group.container_insights_performance
+  ]
+
   tags = {
     Name        = "${var.name_prefix}-ecs"
     Environment = var.environment
