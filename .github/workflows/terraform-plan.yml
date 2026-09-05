@@ -178,6 +178,20 @@ jobs:
             exit 1
           fi
 
+          if [[ -z "${TF_VAR_deployment_profile:-}" ]]; then
+            echo "::error::DEPLOYMENT_PROFILE is not configured for this workload Plan environment."
+            exit 1
+          fi
+
+          case "${TF_VAR_deployment_profile}" in
+            production|development|minimal)
+              ;;
+            *)
+              echo "::error::DEPLOYMENT_PROFILE must be production, development, or minimal."
+              exit 1
+              ;;
+          esac
+
       - name: Terraform Init
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         working-directory: ${{ matrix.working_directory }}
