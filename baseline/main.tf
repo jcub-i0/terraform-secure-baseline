@@ -306,6 +306,8 @@ module "ecs_cluster" {
   environment = var.environment
 
   container_insights = var.container_insights
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+  logs_cmk_arn = module.security.logs_cmk_arn
 }
 
 module "ecs_service" {
