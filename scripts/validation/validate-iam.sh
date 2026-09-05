@@ -439,6 +439,7 @@ if [[ "$GITHUB_PLAN_PRESENT" == "true" ]]; then
 
   if echo "$GITHUB_PLAN_ROLE_JSON" | jq -e '.Role.AssumeRolePolicyDocument.Statement | tostring | contains("token.actions.githubusercontent.com")' >/dev/null; then
     success "GitHub plan role trust references GitHub OIDC provider"
+
   else
     echo "$GITHUB_PLAN_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
     warn "GitHub plan role exists but trust policy does not appear to reference token.actions.githubusercontent.com"
@@ -450,6 +451,7 @@ if [[ "$GITHUB_APPLY_PRESENT" == "true" ]]; then
 
   if echo "$GITHUB_APPLY_ROLE_JSON" | jq -e '.Role.AssumeRolePolicyDocument.Statement | tostring | contains("token.actions.githubusercontent.com")' >/dev/null; then
     success "GitHub apply role trust references GitHub OIDC provider"
+
   else
     echo "$GITHUB_APPLY_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
     warn "GitHub apply role exists but trust policy does not appear to reference token.actions.githubusercontent.com"
@@ -470,9 +472,11 @@ if terraform_output_exists "$OUTPUTS_JSON" logs_s3_readonly_policy_name; then
   if [[ -n "$LOGS_S3_POLICY_ARN" && "$LOGS_S3_POLICY_ARN" != "None" ]]; then
     success "Shared IAM policy exists: $LOGS_S3_READONLY_POLICY_NAME"
     info "Policy ARN: $LOGS_S3_POLICY_ARN"
+
   else
     fail "Terraform output logs_s3_readonly_policy_name exists, but IAM policy was not found: $LOGS_S3_READONLY_POLICY_NAME"
   fi
+
 else
   warn "Terraform output logs_s3_readonly_policy_name not found. Skipping shared logs S3 policy check."
 fi
@@ -486,22 +490,31 @@ if terraform_output_exists "$OUTPUTS_JSON" logs_cmk_decrypt_policy_name; then
   if [[ -n "$LOGS_CMK_POLICY_ARN" && "$LOGS_CMK_POLICY_ARN" != "None" ]]; then
     success "Shared IAM policy exists: $LOGS_CMK_DECRYPT_POLICY_NAME"
     info "Policy ARN: $LOGS_CMK_POLICY_ARN"
+
   else
     fail "Terraform output logs_cmk_decrypt_policy_name exists, but IAM policy was not found: $LOGS_CMK_DECRYPT_POLICY_NAME"
   fi
+
 else
   warn "Terraform output logs_cmk_decrypt_policy_name not found. Skipping shared logs CMK decrypt policy check."
 fi
 
 section "Validating per-service ECS IAM roles and policies"
 
-for output_name in ecs_services ecs_task_definition_arns ecs_log_groups ecs_task_execution_roles ecs_task_roles ecr_repositories; do
+for output_name in ecs_services ecs_service_configuration ecs_task_definition_arns ecs_log_groups ecs_task_execution_roles ecs_task_roles ecr_repositories; do
+ 
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output for ECS IAM validation: ${output_name}"
   fi
 done
 
 ECS_SERVICES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_services.value')"
+
+ECS_SERVICE_CONFIGURATION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.ecs_service_configuration.value'
+)"
+
 ECS_TASK_DEFINITION_ARNS_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_task_definition_arns.value')"
 ECS_LOG_GROUPS_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_log_groups.value')"
 ECS_EXECUTION_ROLES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_task_execution_roles.value')"
@@ -510,23 +523,28 @@ ECR_REPOSITORIES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecr_repositories.value')
 
 for output_name in \
   ECS_SERVICES_JSON \
+  ECS_SERVICE_CONFIGURATION_JSON \
   ECS_TASK_DEFINITION_ARNS_JSON \
   ECS_LOG_GROUPS_JSON \
   ECS_EXECUTION_ROLES_JSON \
   ECS_TASK_ROLES_JSON \
   ECR_REPOSITORIES_JSON; do
+  
   if ! echo "${!output_name}" | jq -e 'type == "object"' >/dev/null; then
     fail "Terraform ECS IAM output is not an object: ${output_name}"
   fi
 done
 
 ECS_SERVICE_KEYS_JSON="$(echo "$ECS_SERVICES_JSON" | jq -c 'keys | sort')"
+
 for output_name in \
+  ECS_SERVICE_CONFIGURATION_JSON \
   ECS_TASK_DEFINITION_ARNS_JSON \
   ECS_LOG_GROUPS_JSON \
   ECS_EXECUTION_ROLES_JSON \
   ECS_TASK_ROLES_JSON; do
   actual_keys_json="$(echo "${!output_name}" | jq -c 'keys | sort')"
+
   if [[ "$actual_keys_json" != "$ECS_SERVICE_KEYS_JSON" ]]; then
     jq -n \
       --arg output "$output_name" \
@@ -538,8 +556,10 @@ for output_name in \
 done
 
 ECS_IAM_SERVICE_COUNT="$(echo "$ECS_SERVICES_JSON" | jq 'length')"
+
 if [[ "$ECS_IAM_SERVICE_COUNT" -eq 0 ]]; then
   success "No ECS services are configured; per-service ECS IAM validation skipped"
+
 else
   while IFS= read -r service_name; do
     execution_role_json="$(echo "$ECS_EXECUTION_ROLES_JSON" | jq -c --arg service "$service_name" '.[$service]')"
@@ -557,6 +577,7 @@ else
     if [[ "$(echo "$live_execution_role_json" | jq -r '.Role.Arn')" != "$execution_role_arn" ]]; then
       fail "ECS task execution role ARN does not match Terraform output: ${service_name}"
     fi
+    
     if [[ "$(echo "$live_task_role_json" | jq -r '.Role.Arn')" != "$task_role_arn" ]]; then
       fail "ECS task role ARN does not match Terraform output: ${service_name}"
     fi
@@ -595,6 +616,7 @@ else
     task_definition_arn="$(echo "$ECS_TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
     task_definition_json="$(aws ecs describe-task-definition "${aws_args[@]}" --task-definition "$task_definition_arn" --output json)"
     primary_container_json="$(echo "$task_definition_json" | jq -c --arg service "$service_name" '[.taskDefinition.containerDefinitions[] | select(.name == $service)] | if length == 1 then .[0] else null end')"
+  
     if [[ "$primary_container_json" == "null" ]]; then
       fail "Cannot resolve the primary ECS container for IAM scope validation: ${service_name}"
     fi
@@ -602,6 +624,7 @@ else
     image_reference="$(echo "$primary_container_json" | jq -r '.image // empty')"
     image_repository_url="${image_reference%@sha256:*}"
     expected_ecr_arns_json="$(echo "$ECR_REPOSITORIES_JSON" | jq -c --arg url "$image_repository_url" '[to_entries[] | select(.value.repository_url == $url) | .value.arn] | sort | unique')"
+   
     if [[ "$(echo "$expected_ecr_arns_json" | jq 'length')" -ne 1 ]]; then
       fail "Cannot resolve exactly one ECR repository ARN for the ECS execution policy: ${service_name}"
     fi
@@ -612,12 +635,14 @@ else
     if ! policy_statement_allows_exact_resources "$execution_policy_json" '["ecr:GetAuthorizationToken"]' '["*"]'; then
       fail "ECS execution policy lacks exact ecr:GetAuthorizationToken wildcard-resource permission: ${service_name}"
     fi
+
     if ! policy_statement_allows_exact_resources \
       "$execution_policy_json" \
       '["ecr:BatchCheckLayerAvailability","ecr:GetDownloadUrlForLayer","ecr:BatchGetImage"]' \
       "$expected_ecr_arns_json"; then
       fail "ECS execution policy ECR pull permissions are not scoped to the task image repository: ${service_name}"
     fi
+
     if ! policy_statement_allows_exact_resources \
       "$execution_policy_json" \
       '["logs:CreateLogStream","logs:PutLogEvents"]' \
@@ -633,27 +658,59 @@ else
       ! policy_statement_allows_exact_resources "$execution_policy_json" '["secretsmanager:GetSecretValue"]' "$expected_secret_arns_json"; then
       fail "ECS execution policy Secrets Manager permissions do not match task-definition references: ${service_name}"
     fi
+
     if [[ "$(echo "$expected_ssm_arns_json" | jq 'length')" -gt 0 ]] &&
       ! policy_statement_allows_exact_resources "$execution_policy_json" '["ssm:GetParameters"]' "$expected_ssm_arns_json"; then
       fail "ECS execution policy SSM permissions do not match task-definition references: ${service_name}"
     fi
+
     if [[ "$(echo "$ambiguous_secret_references_json" | jq 'length')" -gt 0 ]]; then
       warn "Secret references without service-identifying ARNs cannot be classified from workload outputs: ${service_name}"
     fi
 
-    if policy_contains_action "$execution_policy_json" "kms:Decrypt"; then
-      kms_resources_json="$(echo "$execution_policy_json" | jq -c '[.Statement[]? | select((.Action | if type == "array" then . else [.] end) | index("kms:Decrypt") != null) | .Resource | if type == "array" then .[] else . end] | sort | unique')"
-      if echo "$kms_resources_json" | jq -e 'index("*") != null or length == 0' >/dev/null; then
-        fail "ECS execution-policy kms:Decrypt permission is missing resource scope: ${service_name}"
+    expected_kms_key_arns_json="$(
+      echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+        jq -c \
+          --arg service "$service_name" \
+          '.[$service].task_execution_kms_key_arns | sort | unique'
+    )"
+
+    if ! echo "$expected_kms_key_arns_json" |
+      jq -e '
+        type == "array"
+        and all(.[];
+          type == "string"
+          and test("^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/.+$")
+        )
+      ' >/dev/null; then
+      echo "$expected_kms_key_arns_json" | jq .
+      fail "task_execution_kms_key_arns output is invalid: ${service_name}"
+    fi
+
+    if [[ "$(echo "$expected_kms_key_arns_json" | jq 'length')" -gt 0 ]]; then
+      if ! policy_statement_allows_exact_resources \
+        "$execution_policy_json" \
+        '["kms:Decrypt"]' \
+        "$expected_kms_key_arns_json"; then
+
+        echo "$execution_policy_json" |
+          jq '.Statement[]? | select(
+            (.Action | if type == "array" then . else [.] end)
+            | index("kms:Decrypt") != null
+          )'
+
+        fail "ECS execution-policy kms:Decrypt resources do not exactly match task_execution_kms_key_arns: ${service_name}"
       fi
-      info "kms:Decrypt is resource-scoped for ${service_name}; exact expected KMS keys are not exposed by workload outputs"
+      
+    else
+      if policy_contains_action "$execution_policy_json" "kms:Decrypt"; then
+        fail "ECS execution policy grants kms:Decrypt when task_execution_kms_key_arns is empty: ${service_name}"
+      fi
     fi
 
     success "ECS IAM trust, execution-policy scope, empty task-role authority, and PassRole absence are valid: ${service_name}"
   done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 fi
-
-warn "execution_kms_key_arns is not exposed by the workload-root output contract; exact optional kms:Decrypt key equality is deferred"
 
 section "IAM Summary"
 

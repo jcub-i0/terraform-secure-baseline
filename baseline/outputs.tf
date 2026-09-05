@@ -173,9 +173,10 @@ output "ecs_cluster" {
   description = "ECS cluster metadata"
 
   value = {
-    arn                = module.ecs_cluster.cluster_arn
-    name               = module.ecs_cluster.cluster_name
-    container_insights = module.ecs_cluster.container_insights
+    arn                          = module.ecs_cluster.cluster_arn
+    name                         = module.ecs_cluster.cluster_name
+    container_insights           = module.ecs_cluster.container_insights
+    container_insights_log_group = module.ecs_cluster.container_insights_log_group
   }
 }
 
@@ -191,6 +192,7 @@ output "ecs_service_configuration" {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
       database_access = service.database_access
+      task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
     }
   }
 }

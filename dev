@@ -1,0 +1,109 @@
+
+================================================================================
+tf-secure-baseline IAM Validation
+================================================================================
+
+================================================================================
+Checking required local commands
+================================================================================
+[PASS] aws CLI found
+[PASS] terraform found
+[PASS] jq found
+[PASS] git found
+
+================================================================================
+Resolving repository paths and Terraform outputs
+================================================================================
+[INFO] Repository root: /home/jcub/terraform-secure-baseline
+[INFO] Environment: dev
+[INFO] Environment dir: /home/jcub/terraform-secure-baseline/environments/dev
+[INFO] Name prefix: tf-secure-baseline-dev
+[INFO] AWS_PROFILE: dev
+[INFO] AWS_REGION: us-east-1
+[PASS] Environment directory exists
+[PASS] Terraform outputs are readable
+
+================================================================================
+Checking AWS caller identity
+================================================================================
+[PASS] AWS credentials are valid
+[INFO] AWS account ID: 955775177042
+[INFO] AWS caller ARN: arn:aws:iam::955775177042:user/baseline-admin
+
+================================================================================
+Validating expected IAM roles
+================================================================================
+[PASS] IAM role exists: tf-secure-baseline-dev-ec2_compute_role
+[PASS] IAM role exists: tf-secure-baseline-dev-lambda-ec2-isolation
+[PASS] IAM role exists: tf-secure-baseline-dev-lambda-ec2-rollback
+[PASS] IAM role exists: tf-secure-baseline-dev-lambda-ip-enrichment
+[PASS] IAM role exists: tf-secure-baseline-dev-cloudtrail-cloudwatch-role
+[PASS] IAM role exists: tf-secure-baseline-dev-VpcFlowLogsRole
+[PASS] IAM role exists: tf-secure-baseline-dev-CloudWatchLogsToFirehose
+[PASS] IAM role exists: tf-secure-baseline-dev-FirehoseFlowLogsRole
+[PASS] IAM role exists: tf-secure-baseline-dev-ConfigRemediationRole
+[PASS] IAM role exists: tf-secure-baseline-dev-backup-role
+[PASS] IAM role exists: tf-secure-baseline-dev-patch-mw-role
+[PASS] IAM role exists: tf-secure-baseline-dev-EventBridgePutEventsToSecopsBus
+[PASS] IAM role exists: tf-secure-baseline-dev-BreakGlass-Admin
+
+================================================================================
+Validating service trust policies
+================================================================================
+[PASS] Trust policy for tf-secure-baseline-dev-ec2_compute_role includes service principal: ec2.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-lambda-ec2-isolation includes service principal: lambda.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-lambda-ec2-rollback includes service principal: lambda.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-lambda-ip-enrichment includes service principal: lambda.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-cloudtrail-cloudwatch-role includes service principal: cloudtrail.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-VpcFlowLogsRole includes service principal: vpc-flow-logs.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-FirehoseFlowLogsRole includes service principal: firehose.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-CloudWatchLogsToFirehose includes service principal: logs.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-ConfigRemediationRole includes service principal: ssm.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-backup-role includes service principal: backup.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-patch-mw-role includes service principal: ssm.amazonaws.com
+[PASS] Trust policy for tf-secure-baseline-dev-EventBridgePutEventsToSecopsBus includes service principal: events.amazonaws.com
+
+================================================================================
+Validating break-glass role trust policy
+================================================================================
+[PASS] Break-glass role trust policy includes an AWS principal
+[PASS] Break-glass role trust policy includes MFA condition
+
+================================================================================
+Checking role policy attachments
+================================================================================
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-ec2_compute_role attached=2 inline=0
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-lambda-ec2-isolation attached=4 inline=0
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-lambda-ec2-rollback attached=4 inline=0
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-lambda-ip-enrichment attached=3 inline=0
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-cloudtrail-cloudwatch-role attached=0 inline=1
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-VpcFlowLogsRole attached=0 inline=1
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-CloudWatchLogsToFirehose attached=0 inline=1
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-FirehoseFlowLogsRole attached=0 inline=1
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-ConfigRemediationRole attached=1 inline=1
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-backup-role attached=2 inline=0
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-patch-mw-role attached=1 inline=0
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-EventBridgePutEventsToSecopsBus attached=0 inline=1
+[PASS] IAM role has attached or inline policies: tf-secure-baseline-dev-BreakGlass-Admin attached=1 inline=0
+
+================================================================================
+Checking optional GitHub OIDC roles
+================================================================================
+[PASS] Optional IAM role exists: tf-secure-baseline-dev-github-plan-role
+[PASS] Optional IAM role exists: tf-secure-baseline-dev-github-apply-role
+[PASS] GitHub plan role trust references GitHub OIDC provider
+[PASS] GitHub apply role trust references GitHub OIDC provider
+
+================================================================================
+Checking shared IAM policies from Terraform outputs
+================================================================================
+[INFO] Resolved logs_s3_readonly_policy_name: tf-secure-baseline-dev-CentralizedLogsS3ReadOnly
+[PASS] Shared IAM policy exists: tf-secure-baseline-dev-CentralizedLogsS3ReadOnly
+[INFO] Policy ARN: arn:aws:iam::955775177042:policy/tf-secure-baseline-dev-CentralizedLogsS3ReadOnly
+[INFO] Resolved logs_cmk_decrypt_policy_name: tf-secure-baseline-dev-LogsKmsDecrypt
+[PASS] Shared IAM policy exists: tf-secure-baseline-dev-LogsKmsDecrypt
+[INFO] Policy ARN: arn:aws:iam::955775177042:policy/tf-secure-baseline-dev-LogsKmsDecrypt
+
+================================================================================
+Validating per-service ECS IAM roles and policies
+================================================================================

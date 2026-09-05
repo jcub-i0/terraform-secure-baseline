@@ -23,3 +23,13 @@ variable "container_insights" {
     error_message = "container_insights must be enhanced, enabled, or disabled."
   }
 }
+
+variable "cloudwatch_retention_days" {
+  description = "CloudWatch Logs retention period for the ECS Container Insights performance log group"
+  type        = number
+}
+
+variable "logs_cmk_arn" {
+  description = "ARN of the customer-managed KMS key used to encrypt the ECS Container Insights performance log group"
+  type        = string
+}

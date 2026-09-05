@@ -83,7 +83,7 @@ variable "ecs_iam_services" {
 
     execution_secret_arns        = optional(set(string), [])
     execution_ssm_parameter_arns = optional(set(string), [])
-    execution_kms_key_arns       = optional(set(string), [])
+    task_execution_kms_key_arns       = optional(set(string), [])
   }))
 
   default = {}
