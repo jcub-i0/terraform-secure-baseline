@@ -469,8 +469,8 @@ jobs:
             echo "- AWS account: \`${EXPECTED_ACCOUNT_ID}\`"
             echo "- AWS Region: \`${AWS_REGION}\`"
             echo
-            echo "The published image has not been selected for ECS deployment."
-            echo "A Terraform plan must explicitly select the digest before deployment."
+            echo "The published image has not been deployed."
+            echo "A release PR will select this authoritative digest in the canonical Terraform configuration."
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload publication metadata
