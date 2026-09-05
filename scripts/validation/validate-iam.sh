@@ -495,7 +495,7 @@ fi
 
 section "Validating per-service ECS IAM roles and policies"
 
-for output_name in ecs_services ecs_task_definition_arns ecs_log_groups ecs_task_execution_roles ecs_task_roles ecr_repositories; do
+for output_name in ecs_services ecs_service_configuration ecs_task_definition_arns ecs_log_groups ecs_task_execution_roles ecs_task_roles ecr_repositories; do
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output for ECS IAM validation: ${output_name}"
   fi
