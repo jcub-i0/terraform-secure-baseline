@@ -394,6 +394,106 @@ fi
 
 success "ECS Container Insights setting matches Terraform: ${EXPECTED_CONTAINER_INSIGHTS}"
 
+EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_JSON="$(
+  echo "$ECS_CLUSTER_JSON" |
+    jq -c '.container_insights_log_group'
+)"
+
+if [[ "$EXPECTED_CONTAINER_INSIGHTS" == "disabled" ]]; then
+  if [[ "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_JSON" != "null" ]]; then
+    fail "Container Insights is disabled but Terraform exposes a managed performance log group"
+  fi
+
+  success "Container Insights performance log group is absent as expected when disabled"
+else
+  EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_NAME="$(
+    echo "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_JSON" |
+      jq -r '.name'
+  )"
+
+  EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_ARN="$(
+    echo "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_JSON" |
+      jq -r '.arn'
+  )"
+
+  EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_RETENTION="$(
+    echo "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_JSON" |
+      jq -r '.retention_in_days'
+  )"
+
+  EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_KMS_KEY_ARN="$(
+    echo "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_JSON" |
+      jq -r '.kms_key_id'
+  )"
+
+  if [[ "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_RETENTION" -ne "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" ]]; then
+    fail "Container Insights log-group Terraform retention does not match effective_cloudwatch_retention_days"
+  fi
+
+  if [[ "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_KMS_KEY_ARN" != "$LOGS_CMK_ARN" ]]; then
+    fail "Container Insights log-group Terraform KMS key does not match logs_cmk_arn"
+  fi
+
+  container_insights_log_groups_response_json="$(
+    aws logs describe-log-groups \
+      "${aws_args[@]}" \
+      --log-group-name-prefix "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_NAME" \
+      --output json
+  )"
+
+  live_container_insights_log_group_json="$(
+    echo "$container_insights_log_groups_response_json" |
+      jq -c \
+        --arg name "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_NAME" \
+        '[.logGroups[]? | select(.logGroupName == $name)]'
+  )"
+
+  if [[ "$(echo "$live_container_insights_log_group_json" | jq 'length')" -ne 1 ]]; then
+    echo "$live_container_insights_log_group_json" | jq .
+    fail "Expected exactly one Container Insights performance log group"
+  fi
+
+  live_container_insights_log_group_json="$(
+    echo "$live_container_insights_log_group_json" |
+      jq -c '.[0]'
+  )"
+
+  LIVE_CONTAINER_INSIGHTS_LOG_GROUP_ARN="$(
+    echo "$live_container_insights_log_group_json" |
+      jq -r '.arn // empty | rtrimstr(":*")'
+  )"
+
+  NORMALIZED_EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_ARN="$(
+    jq -nr \
+      --arg arn "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_ARN" \
+      '$arn | rtrimstr(":*")'
+  )"
+
+  if [[ "$LIVE_CONTAINER_INSIGHTS_LOG_GROUP_ARN" != "$NORMALIZED_EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_ARN" ]]; then
+    fail "Container Insights performance log-group ARN does not match Terraform output"
+  fi
+
+  LIVE_CONTAINER_INSIGHTS_RETENTION="$(
+    echo "$live_container_insights_log_group_json" |
+      jq -r '.retentionInDays // 0'
+  )"
+
+  if [[ "$LIVE_CONTAINER_INSIGHTS_RETENTION" -ne "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_RETENTION" ]]; then
+    fail "Container Insights performance log-group retention does not match Terraform"
+  fi
+
+  LIVE_CONTAINER_INSIGHTS_KMS_KEY_ARN="$(
+    echo "$live_container_insights_log_group_json" |
+      jq -r '.kmsKeyId // empty'
+  )"
+
+  if [[ "$LIVE_CONTAINER_INSIGHTS_KMS_KEY_ARN" != "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_KMS_KEY_ARN" ]]; then
+    fail "Container Insights performance log-group KMS key does not match Terraform"
+  fi
+
+  success "Container Insights performance log group retention and KMS encryption match Terraform"
+fi
+
 LIVE_SERVICE_ARNS_JSON="$(
   aws ecs list-services \
     "${aws_args[@]}" \
