@@ -278,8 +278,24 @@ if ! echo "$ECS_CLUSTER_JSON" |
     and (.arn | type == "string" and length > 0)
     and (.name | type == "string" and length > 0)
     and (.container_insights | type == "string" and length > 0)
+    and has("container_insights_log_group")
+    and (
+      (
+        .container_insights == "disabled"
+        and .container_insights_log_group == null
+      )
+      or
+      (
+        .container_insights != "disabled"
+        and (.container_insights_log_group | type == "object")
+        and (.container_insights_log_group.arn | type == "string" and length > 0)
+        and (.container_insights_log_group.name | type == "string" and length > 0)
+        and (.container_insights_log_group.retention_in_days | type == "number")
+        and (.container_insights_log_group.kms_key_id | type == "string" and length > 0)
+      )
+    )
   ' >/dev/null; then
-  fail "ecs_cluster output must contain non-empty arn, name, and container_insights values"
+  fail "ecs_cluster output contains invalid cluster or Container Insights log-group metadata"
 fi
 
 require_same_map_keys "$ECS_SERVICES_JSON" "$TASK_DEFINITION_ARNS_JSON" "task definition ARNs"
