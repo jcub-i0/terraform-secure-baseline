@@ -701,6 +701,7 @@ else
 
         fail "ECS execution-policy kms:Decrypt resources do not exactly match task_execution_kms_key_arns: ${service_name}"
       fi
+      
     else
       if policy_contains_action "$execution_policy_json" "kms:Decrypt"; then
         fail "ECS execution policy grants kms:Decrypt when task_execution_kms_key_arns is empty: ${service_name}"
