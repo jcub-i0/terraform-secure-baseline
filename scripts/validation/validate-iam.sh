@@ -528,6 +528,7 @@ for output_name in \
 done
 
 ECS_SERVICE_KEYS_JSON="$(echo "$ECS_SERVICES_JSON" | jq -c 'keys | sort')"
+
 for output_name in \
   ECS_SERVICE_CONFIGURATION_JSON \
   ECS_TASK_DEFINITION_ARNS_JSON \
