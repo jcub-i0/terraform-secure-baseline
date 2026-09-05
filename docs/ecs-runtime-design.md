@@ -257,7 +257,7 @@ Persistent production use must reconsider the destruction posture.
 `modules/ecs_service` owns one deterministic log group per service:
 
 ```text
-/ecs/${name_prefix}/${service_name}
+/aws/ecs/${var.name_prefix}/${service_name}
 ```
 
 Retention uses `effective_cloudwatch_retention_days`. Encryption uses the

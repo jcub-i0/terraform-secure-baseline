@@ -174,7 +174,7 @@ This module does not place ECS tasks in public subnets and does not assign publi
 Each service receives a deterministic CloudWatch Logs log group:
 
 ```text
-/ecs/${name_prefix}/${service_name}
+/aws/ecs/${var.name_prefix}/${service_name}
 ```
 
 The log group:
