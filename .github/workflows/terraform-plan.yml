@@ -67,6 +67,7 @@ jobs:
       TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
       TF_VAR_environment: ${{ vars.ENVIRONMENT }}
       TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
+      TF_VAR_deployment_profile: ${{ vars.DEPLOYMENT_PROFILE }}
       TF_VAR_identity_center_workloads: ${{ vars.IDENTITY_CENTER_WORKLOADS }}
       TF_VAR_identity_center_secops: ${{ vars.IDENTITY_CENTER_SECOPS }}
       TF_VAR_abuseipdb_api_key: ${{ secrets.ABUSEIPDB_API_KEY }}
@@ -176,6 +177,20 @@ jobs:
             echo "::error::ISOLATION_ALLOWED must be exactly true or false."
             exit 1
           fi
+
+          if [[ -z "${TF_VAR_deployment_profile:-}" ]]; then
+            echo "::error::DEPLOYMENT_PROFILE is not configured for this workload Plan environment."
+            exit 1
+          fi
+
+          case "${TF_VAR_deployment_profile}" in
+            production|development|minimal)
+              ;;
+            *)
+              echo "::error::DEPLOYMENT_PROFILE must be production, development, or minimal."
+              exit 1
+              ;;
+          esac
 
       - name: Terraform Init
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment

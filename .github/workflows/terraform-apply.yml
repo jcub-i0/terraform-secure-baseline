@@ -83,6 +83,7 @@ jobs:
                     TF_STATE_BUCKET_ARN
                     TF_STATE_BUCKET_CMK_ARN
                     TF_VAR_isolation_allowed
+                    TF_VAR_deployment_profile
                   )
 
                   for setting_name in "${required_settings[@]}"; do
@@ -96,6 +97,15 @@ jobs:
                     echo "::error::ISOLATION_ALLOWED must be exactly true or false."
                     exit 1
                   fi
+
+                  case "${TF_VAR_deployment_profile}" in
+                    production|development|minimal)
+                      ;;
+                    *)
+                      echo "::error::DEPLOYMENT_PROFILE must be production, development, or minimal."
+                      exit 1
+                      ;;
+                  esac
 
                   EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 
