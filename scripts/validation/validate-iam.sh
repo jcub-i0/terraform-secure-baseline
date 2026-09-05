@@ -439,7 +439,7 @@ if [[ "$GITHUB_PLAN_PRESENT" == "true" ]]; then
 
   if echo "$GITHUB_PLAN_ROLE_JSON" | jq -e '.Role.AssumeRolePolicyDocument.Statement | tostring | contains("token.actions.githubusercontent.com")' >/dev/null; then
     success "GitHub plan role trust references GitHub OIDC provider"
-    
+
   else
     echo "$GITHUB_PLAN_ROLE_JSON" | jq '.Role.AssumeRolePolicyDocument'
     warn "GitHub plan role exists but trust policy does not appear to reference token.actions.githubusercontent.com"
@@ -710,8 +710,6 @@ else
     success "ECS IAM trust, execution-policy scope, empty task-role authority, and PassRole absence are valid: ${service_name}"
   done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 fi
-
-warn "execution_kms_key_arns is not exposed by the workload-root output contract; exact optional kms:Decrypt key equality is deferred"
 
 section "IAM Summary"
 
