@@ -305,9 +305,9 @@ module "ecs_cluster" {
   name_prefix = local.name_prefix
   environment = var.environment
 
-  container_insights = var.container_insights
+  container_insights        = var.container_insights
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
-  logs_cmk_arn = module.security.logs_cmk_arn
+  logs_cmk_arn              = module.security.logs_cmk_arn
 }
 
 module "ecs_service" {
