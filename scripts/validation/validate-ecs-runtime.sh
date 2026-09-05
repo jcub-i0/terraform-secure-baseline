@@ -405,6 +405,7 @@ if [[ "$EXPECTED_CONTAINER_INSIGHTS" == "disabled" ]]; then
   fi
 
   success "Container Insights performance log group is absent as expected when disabled"
+  
 else
   EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_NAME="$(
     echo "$EXPECTED_CONTAINER_INSIGHTS_LOG_GROUP_JSON" |
