@@ -491,8 +491,8 @@ jobs:
     timeout-minutes: 10
 
     # IMPORTANT:
-    # This job mutates GitHub repository configuraiton only.
-    # It must not recieve AWS credentials or GitHub OIDC authority.
+    # This job mutates GitHub repository configuration only.
+    # It must not receive AWS credentials or GitHub OIDC authority.
     permissions:
       contents: write
       pull-requests: write
@@ -575,10 +575,10 @@ jobs:
           git add "${EXPECTED_FILE}"
 
           git commit \
-            -m "chore(release): deploy ${SERVICE} to ${TARGET_ENVIRONMNET}"
+            -m "chore(release): deploy ${SERVICE} to ${TARGET_ENVIRONMENT}"
 
           git push \
-            --set-upstream origin
+            --set-upstream origin \
             "${RELEASE_BRANCH}"
 
           echo "release_branch=${RELEASE_BRANCH}" >> "${GITHUB_OUTPUT}"
