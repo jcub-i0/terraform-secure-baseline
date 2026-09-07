@@ -10,9 +10,7 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 `tf-secure-baseline` is a Terraform-driven AWS security baseline designed for organizations running applications that handle PII or other sensitive data.
 
-**Current tagged release:** `v1.7.0` — centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance through a dedicated `security-operations` account, with corresponding CI planning and validation evidence.
-
-**Current development theme:** unreleased `v1.8.0 — Secure Container Workloads`; the ECS/Fargate runtime, application image-publication and digest-promotion workflow, and validation are implemented on `main`. The work is in release-readiness and documentation review; it has not been tagged.
+**Current release:** `v1.8.0 — Secure Container Workloads` — generic secure ECS/Fargate runtime support, immutable ECR image deployment, application publication and digest-promotion automation, protected exact-plan deployment, and integrated workload validation.
 
 It provides a secure, multi-account cloud foundation with:
 
@@ -641,7 +639,7 @@ Validation scripts passed:  16/16
 Validation scripts failed:  0/16
 ```
 
-The final v1.8.0 development exercise completed with all 16 workload validators passing and a subsequent converged Terraform plan reporting no changes. This is technical-control and audit-readiness evidence, not a SOC 2 or ISO 27001 certification.
+The v1.8.0 release validation exercise completed with all 16 workload validators passing and a subsequent converged Terraform plan reporting no changes. This is technical-control and audit-readiness evidence, not a SOC 2 or ISO 27001 certification.
 
 ### Validation Reporting
 
@@ -748,9 +746,23 @@ Each reusable module and major bootstrap substack also carries local documentati
 
 ## Release Status and Highlights
 
-### Current Tagged Release: `v1.7.0`
+### Current Release: `v1.8.0`
 
-`v1.7.0` adds the dedicated `security-operations` administration layer and completes the centralized-security architecture:
+`v1.8.0 — Secure Container Workloads` adds the generic ECS/Fargate application runtime and release path on top of the existing secure AWS baseline. Key release outcomes include:
+
+- Canonical `ecs_services` configuration with registered-but-unreleased services through nullable `image_digest`
+- KMS-encrypted immutable ECR repositories and exact digest-pinned Fargate task images
+- Shared ECS cluster, generic long-running Fargate services, and optional shared HTTPS ALB
+- Separate least-privilege ECS task execution and application task roles
+- Terraform-owned ECS application logs and Container Insights performance logging
+- Branch-trusted GitHub OIDC image publication and authoritative ECR digest resolution
+- Automated one-field release PR generation
+- Protected exact saved-plan Terraform Apply semantics
+- 16-validator workload baseline coverage including ECR and ECS runtime validation
+
+### Previous Release: `v1.7.0`
+
+`v1.7.0` added the dedicated `security-operations` administration layer and completed the centralized-security architecture:
 
 - Security Hub CSPM CENTRAL configuration with workload policies and finding aggregation
 - GuardDuty delegated administration, organization enrollment, protection plans, and Runtime Monitoring
@@ -762,7 +774,7 @@ Each reusable module and major bootstrap substack also carries local documentati
 - Five-account Organizations / Identity Center documentation and validation
 - Four-layer validation and evidence architecture
 
-### Previous Release: `v1.6.0`
+### Earlier Release: `v1.6.0`
 
 `v1.6.0` hardened EC2 launch ordering, first-boot patching, and automated isolation.
 
