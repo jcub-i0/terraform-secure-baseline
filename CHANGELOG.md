@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased — v1.8.0 Secure Container Workloads
+## v1.8.0 — Secure Container Workloads
 
-The v1.8.0 work on `main` adds a generic secure ECS/Fargate application-runtime and release path while retaining EC2 as a supported host-based workload pattern. The runtime, image-publication workflow, digest-promotion workflow, and workload validation are implemented and live-tested; v1.8.0 has not been released or tagged.
+v1.8.0 adds a generic secure ECS/Fargate application runtime and release path while retaining EC2 as a supported host-based workload pattern. The runtime, image-publication workflow, digest-promotion workflow, protected exact-plan deployment path, and workload validation are implemented and live-tested.
 
 ### Added
 
