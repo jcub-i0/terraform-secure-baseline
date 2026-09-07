@@ -189,7 +189,7 @@ REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
 
 | Value | Behavior |
 |---|---|
-| `true` | Missing, mismatched, colliding, or unreadable state-stack backend evidence fails validation. Use this for v1.4.0 release validation and client-facing evidence. |
+| `true` | Missing, mismatched, colliding, or unreadable state-stack backend evidence fails validation. Use this for release-readiness and client-facing evidence. |
 | `false` | The same checks run as warnings. Use only during migration or troubleshooting. |
 
 The workload bootstrap and control-plane GitHub evidence workflows default this setting to `true`.
@@ -356,6 +356,8 @@ Validation scripts passed:  16/16
 Validation scripts failed:  0/16
 ```
 
+The final v1.8.0 development release exercise completed with all 16 workload validators passing, followed by a converged Terraform plan with no changes. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
+
 ---
 
 ## Individual Workload Validation Scripts
@@ -392,72 +394,31 @@ When the effective mode is `network_firewall`, the script describes the live `${
 
 ### ECR validation
 
-`validate-ecr.sh` treats the workload-root `ecr_repositories` output as the
-authoritative repository inventory. When it is `{}`, the validator reports that
-no repositories are configured and exits successfully without querying live
-ECR.
+`validate-ecr.sh` treats the workload-root `ecr_repositories` output as the authoritative repository inventory. When it is `{}`, the validator reports that no repositories are configured and exits successfully without querying live ECR.
 
-For every configured repository, it compares the live name, ARN, and registry
-ID with the Terraform output; requires immutable tags and KMS encryption with a
-configured key; requires the live repository KMS key to equal the workload-root
-`ecr_cmk_arn`; and requires exactly the approved lifecycle rule that expires
-only untagged images older than 30 days. Tagged-image expiration fails
-validation.
+For every configured repository, it compares the live name, ARN, and registry ID with the Terraform output; requires immutable tags and KMS encryption with a configured key; requires the live repository KMS key to equal the workload-root `ecr_cmk_arn`; and requires exactly the approved lifecycle rule that expires only untagged images older than 30 days. Tagged-image expiration fails validation.
 
 ### VPC endpoint hardening
 
-`validate-vpc-endpoints.sh` validates the non-overridable platform Interface
-Endpoint inventory, including `ecr.api`, `ecr.dkr`, and `guardduty-data`. It
-also requires every Interface Endpoint to be available, in the expected VPC,
-private-DNS enabled, attached to the exact endpoint-private subnet set, and
-attached to exactly the shared Interface Endpoint SG. The S3 Gateway Endpoint
-must have the exact union of endpoint-private, compute-private, and
-serverless-private route-table associations.
+`validate-vpc-endpoints.sh` validates the non-overridable platform Interface Endpoint inventory, including `ecr.api`, `ecr.dkr`, and `guardduty-data`. It also requires every Interface Endpoint to be available, in the expected VPC, private-DNS enabled, attached to the exact endpoint-private subnet set, and attached to exactly the shared Interface Endpoint SG. The S3 Gateway Endpoint must have the exact union of endpoint-private, compute-private, and serverless-private route-table associations.
 
 ### Inspector effective resource types
 
-`validate-security-workload.sh` uses
-`effective_inspector_resource_types` as its only expected Inspector resource
-set and fails for both missing and unexpectedly enabled live scan types,
-including EC2, ECR, Lambda, Lambda code, and code repositories. It does not
-reconstruct the repository-to-ECR composition policy.
+`validate-security-workload.sh` uses `effective_inspector_resource_types` as its only expected Inspector resource set and fails for both missing and unexpectedly enabled live scan types, including EC2, ECR, Lambda, Lambda code, and code repositories. It does not reconstruct the repository-to-ECR composition policy.
 
 ### ECS runtime and IAM validation
 
-`validate-ecs-runtime.sh` uses the workload-root ECS output maps as the
-authoritative service inventory. It always validates the environment ECS
-cluster. When `ecs_services = {}`, it confirms that the live service inventory
-is empty, requires the ALB output to be `null`, and skips per-service checks.
+`validate-ecs-runtime.sh` uses the workload-root ECS output maps as the authoritative service inventory. It always validates the environment ECS cluster. When `ecs_services = {}`, it confirms that the live service inventory is empty, requires the ALB output to be `null`, and skips per-service checks.
 
-For configured services it validates Fargate service placement, the
-resource-backed platform version, deployment circuit breaker and rollback,
-desired/running/pending steady state, and a completed primary rollout. It also
-validates the task-definition platform and separate roles; exactly one
-essential service container; a digest-pinned image from an output-backed ECR
-repository; port and `awslogs` settings; exact log-group identity, retention,
-and `logs_cmk_arn`; task-SG endpoint, resource-backed S3 prefix-list,
-database-access, and egress-mode relationships; and conditional ALB service
-attachments and ALB/task SG relationships.
+For configured services it validates Fargate service placement, the resource-backed platform version, deployment circuit breaker and rollback, desired/running/pending steady state, and a completed primary rollout. It also validates the task-definition platform and separate roles; exactly one essential service container; a digest-pinned image from an output-backed ECR repository; port and `awslogs` settings; exact log-group identity, retention, and `logs_cmk_arn`; task-SG endpoint, resource-backed S3 prefix-list, database-access, and egress-mode relationships; and conditional ALB service attachments and ALB/task SG relationships.
 
-When an ALB is present, the validator compares the resource-backed ALB,
-listener, ACM certificate, TLS policy, and target-group metadata with live AWS.
-It also requires public-subnet placement, the fixed 404 default, `ip` target
-groups, and meaningful forwarding listener rules.
+The environment cluster check also validates the Terraform-owned Container Insights performance log group when Container Insights is enabled: exact name and ARN, effective retention, and exact `logs_cmk_arn`. When Container Insights is disabled, the resource-backed log-group output must be `null`.
 
-`validate-iam.sh` owns the ECS IAM assertions. For each service it validates
-the separate execution and task roles, ECS task trust restrictions, the custom
-repository- and log-group-scoped execution policy, optional ARN-identifiable
-Secrets Manager and SSM permissions, absence of managed-policy attachments and
-`iam:PassRole`, and an initially policy-free application task role.
+When an ALB is present, the validator compares the resource-backed ALB, listener, ACM certificate, TLS policy, and target-group metadata with live AWS. It also requires public-subnet placement, the fixed 404 default, `ip` target groups, and meaningful forwarding listener rules.
 
-The runtime validator compares the live cluster Container Insights setting with
-`ecs_cluster.container_insights`, database rule presence/absence with
-`ecs_service_configuration`, and live service/logging/ALB settings with their
-resource-backed outputs. Internal SG readiness IDs remain intentionally
-internal. `task_execution_kms_key_arns` is not currently a workload-root validator
-output, so `validate-iam.sh` proves that any live `kms:Decrypt` statement is
-resource-scoped but does not reconstruct an exact expected key set. Repository
-keys are never treated as ECS service identities.
+`validate-iam.sh` owns the ECS IAM assertions. For each service it validates the separate execution and task roles, ECS task trust restrictions, the custom repository- and log-group-scoped execution policy, optional ARN-identifiable Secrets Manager and SSM permissions, absence of managed-policy attachments and `iam:PassRole`, and an initially policy-free application task role. It compares the live execution-policy `kms:Decrypt` resources exactly with `ecs_service_configuration[*].task_execution_kms_key_arns`; an empty expected set requires the decrypt action to be absent.
+
+The runtime validator compares the live cluster Container Insights setting with `ecs_cluster.container_insights`, database rule presence/absence with `ecs_service_configuration`, and live service/logging/ALB settings with their resource-backed outputs. Internal SG readiness IDs remain intentionally internal. Repository keys are never treated as ECS service identities. A registered canonical service whose `image_digest` is null is not present in the deployable runtime output maps and therefore does not require live per-service resources.
 
 ---
 
