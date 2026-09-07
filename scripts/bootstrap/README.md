@@ -65,113 +65,22 @@ Verification confirms that:
 
 ## Workload Account Reconciliation
 
-Use `reconcile-workload-account.sh` after applying `environments/<env>` when
-GitHub OIDC and the workload GitHub Apply role are enabled. The helper reads
-the current workload-created Lambda and Secrets Manager CMK outputs and
-reconciles those permissions into `bootstrap/<env>/account`.
+Use `reconcile-workload-account.sh` after applying `environments/<env>` when GitHub OIDC is enabled. The helper resolves current workload-created Lambda and Secrets Manager CMKs, validates account/region/repository context, and produces or applies a reviewable `bootstrap/<env>/account` plan.
 
-Supported targets:
+Current workload account reconciliation must preserve the three workload GitHub OIDC authorities when enabled: Plan, Apply, and Image Publisher. The GitHub reconciliation workflow explicitly passes:
 
 ```text
-dev
-staging
-prod
+TF_VAR_enable_image_publisher_role_github=true
+TF_VAR_branches_image_publisher_github=<BRANCHES_IMAGE_PUBLISHER_GITHUB or ["main"]>
 ```
 
-The script uses Terraform's normal variable-loading behavior for the account
-stack, including `terraform.tfvars`, `*.auto.tfvars`, exported `TF_VAR_*`
-variables, defaults, and optional `--var` or `--var-file` arguments. It
-automatically supplies the current `lambda_cmk_arn` and
-`secrets_manager_cmk_arn` values from `environments/<env>`.
+This prevents normal account-stack reconciliation from deleting the publisher role and keeps its exact branch trust synchronized with the approved branch list. The reconciled account output includes `image_publisher_role_github_arn` when the role is enabled.
 
-### Plan-Only Review
+The reconciliation workflow remains plan-first: its Plan job publishes a saved account-stack plan, and the protected Apply job verifies and applies that exact artifact. Local use may also retain a plan with `--plan-file` and later apply it with `--apply-plan`.
 
-Without `--apply`, the helper generates and displays a plan but does not apply
-it:
+The strict post-apply bootstrap validator currently validates the GitHub OIDC provider and Plan/Apply role/state/CMK contract. It does **not** yet perform equivalent automated verification of the Image Publisher role's branch trust and ECR policy, so those publisher properties remain part of manual release/client review.
 
-```bash
-AWS_PROFILE=dev \
-EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh dev
-```
-
-That default plan is stored in a temporary directory and removed when the
-script exits.
-
-### Durable Exact-Plan Handoff
-
-Use `--plan-file` when the reviewed plan must be retained and applied in a
-later invocation:
-
-```bash
-RECONCILIATION_PLAN="/tmp/tf-secure-baseline-dev-account-reconciliation.tfplan"
-
-AWS_PROFILE=dev \
-EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh dev \
-  --plan-file="${RECONCILIATION_PLAN}"
-```
-
-Apply that exact saved file with:
-
-```bash
-AWS_PROFILE=dev \
-EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh dev \
-  --apply-plan="${RECONCILIATION_PLAN}"
-```
-
-`--apply-plan` implies apply mode and does not generate a replacement plan. It
-cannot be combined with `--plan-file`, `--var`, or `--var-file`, because the
-saved plan already contains its resolved inputs.
-
-### One-Step Apply
-
-The existing one-step mode remains available:
-
-```bash
-AWS_PROFILE=dev \
-EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-./scripts/bootstrap/reconcile-workload-account.sh dev --apply
-```
-
-This mode generates a plan, displays it, asks the operator to type `apply`,
-and applies that plan within the same invocation. Use `--auto-approve` only in
-approved automation.
-
-### GitHub OIDC Behavior
-
-The `Reconcile Workload Account` workflow uses the durable plan options:
-
-- the Plan job runs `--plan-file`;
-- the protected Apply job downloads the artifact and runs `--apply-plan`;
-- strict bootstrap validation runs after apply.
-
-The workflow supports `plan-only` and `plan-and-apply`. Plan jobs use the
-matching `*-plan` GitHub environment and Plan role. Apply jobs use the
-protected workload environment and Apply role.
-
-When `AWS_PROFILE` is not set, the script and post-apply validation use the
-AWS default credential provider chain. This allows GitHub OIDC temporary
-credentials to work without attempting to load an empty AWS CLI profile.
-Local operators can continue setting `AWS_PROFILE` normally.
-
-The reconciliation helper:
-
-- validates the active AWS identity and backend regions;
-- initializes the workload and account Terraform roots;
-- resolves and validates the workload-created CMKs;
-- validates the account stack's resolved Terraform inputs from the saved plan;
-- requires GitHub OIDC and the GitHub Apply role to remain enabled;
-- applies the plan generated in the current invocation with `--apply`;
-- applies an existing exact saved plan with `--apply-plan`; and
-- runs strict bootstrap validation after apply unless `--skip-validation` is used.
-
-The script requires `jq` in addition to Terraform, the AWS CLI, Git, and the
-standard shell utilities checked at runtime.
-
-Saved Terraform plan files may contain sensitive configuration values. Store
-them securely and remove them after the apply and validation complete.
+Supported workload targets are `dev`, `staging`, and `prod`. See each `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md` for the role-specific inputs and outputs.
 
 ## Repository Behavior
 

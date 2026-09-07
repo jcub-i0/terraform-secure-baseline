@@ -291,7 +291,6 @@ Common endpoints may include:
 - KMS
 - Secrets Manager
 - EC2
-- ECR API and Docker Registry
 - S3
 - GuardDuty data (`guardduty-data`) for Runtime Monitoring
 
@@ -318,11 +317,8 @@ The baseline uses S3 security controls such as:
 - Bucket policies
 - Encryption
 - Versioning
-- Lifecycle retention
+- Object Lock for log storage
 - AWS Config monitoring
-
-Object Lock is disabled in the current ephemeral development/test storage
-configuration and is therefore not claimed as an implemented control.
 
 ### SOC 2 Alignment
 
@@ -342,65 +338,35 @@ S3 controls reduce the likelihood of accidental public exposure and help protect
 
 ### Baseline Control
 
-GitHub Actions authenticates to AWS using OIDC.
-
-No long-lived AWS access keys are required for CI/CD workflows.
-
-Each environment can have separate roles for:
-
-- Terraform plan
-- Terraform apply
-- Terraform destroy
-
-Example mapping:
-
-```text
-dev-plan        -> dev GitHub-Plan role
-dev             -> dev GitHub-Apply role
-
-staging-plan    -> staging GitHub-Plan role
-staging         -> staging GitHub-Apply role
-
-prod-plan       -> prod GitHub-Plan role
-prod            -> prod GitHub-Apply role
-```
+GitHub Actions authenticates to AWS using OIDC rather than long-lived AWS access keys. Workload accounts separate Plan, Apply, and Image Publisher IAM authorities. The Image Publisher role is trusted only from configured repository branches and is limited to ECR publication/query operations. The release/PR job has GitHub repository write permission but no AWS credentials or OIDC token.
 
 ### SOC 2 Alignment
 
 - CC6.1 - Logical access is restricted.
 - CC6.2 - Credentials and privileges are managed.
-- CC6.3 - Access is authorized based on responsibility.
-- CC8.1 - Infrastructure changes are controlled.
+- CC6.3 - Access is authorized according to role responsibilities.
+- CC8.1 - Changes are subject to controlled, reviewable workflows.
 
 ### Narrative
 
-OIDC reduces risk from static credentials and allows GitHub workflows to assume AWS roles only when trust conditions are satisfied.
-
-This improves CI/CD security and supports auditable infrastructure change activity.
-
----
+Short-lived OIDC sessions reduce credential exposure. Separating AWS image-publication authority from repository mutation and protected infrastructure Apply authority reduces the blast radius of a compromised workflow and provides clearer evidence of what selected a deployment digest.
 
 ## Separation of Plan and Apply Roles
 
 ### Baseline Control
 
-Plan and apply roles are separated.
+Workload Terraform separates Plan and Apply roles. The standalone Terraform Plan workflow provides informational/review plans, while `Terraform Apply` creates its own saved binary plan, readable plan, metadata, and checksum before protected approval. The protected Apply job verifies and applies that exact artifact without replanning.
 
-Plan roles are intended for lower-risk read/plan operations.
-
-Apply roles are used for create, update, and destroy operations.
+Application release adds another separation: `Deploy Application` publishes an image and creates a one-field digest release PR, but merge and Terraform Apply remain separate reviewed actions.
 
 ### SOC 2 Alignment
 
-- CC6.1 - Access is restricted.
-- CC6.3 - Access is granted according to responsibility.
-- CC8.1 - Changes are managed and controlled.
+- CC6.3 - Privileged access follows role responsibilities.
+- CC8.1 - Infrastructure changes are authorized, reviewed, and traceable.
 
 ### Narrative
 
-Separating plan and apply access supports least privilege and helps distinguish between read-only change visibility and actual infrastructure modification.
-
----
+The separation between plan, approval, exact-plan apply, image publication, and release-PR mutation supports controlled change execution and reduces the possibility that the approved change differs from the applied change.
 
 ## Control Plane Account Stack Isolation
 
@@ -437,10 +403,8 @@ The baseline captures security-relevant activity using:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
-- ECS container stdout/stderr routed through the `awslogs` driver
-
-Application-specific audit and security-event content depends on the
-application emitting those events to its configured streams.
+- ECS service application logs
+- ECS Container Insights performance logs when enabled
 
 CloudTrail is configured to send logs to protected storage.
 
@@ -466,8 +430,11 @@ Operational logs are protected using controls such as:
 
 - KMS encryption
 - S3 versioning
+- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
+
+ECS service application logs are Terraform-owned under `/aws/ecs/<name-prefix>/<service>`, and the ECS cluster owns its Container Insights performance log group when enabled. Runtime validation verifies effective retention and exact workload logs-CMK encryption for these ECS log paths.
 
 ### SOC 2 Alignment
 
@@ -479,9 +446,7 @@ Operational logs are protected using controls such as:
 
 Logs are treated as security evidence.
 
-Encryption, versioning, restricted bucket policies, and retention controls
-support log integrity and forensic readiness. The current storage module does
-not enable Object Lock.
+Encryption, versioning, and Object Lock help protect log integrity and support forensic readiness.
 
 ---
 
@@ -701,10 +666,7 @@ Alerts may include:
 
 ### Narrative
 
-SNS provides an event-driven notification path for important security activity
-and supports operational escalation. Delivery is asynchronous and depends on
-the upstream event source, EventBridge/SNS delivery, and the configured
-subscription endpoint.
+SNS alerts provide near real-time notification of important security activity and support operational escalation.
 
 ---
 
@@ -739,26 +701,17 @@ When paired with GitHub workflows and approval processes, it supports auditable 
 
 ### Baseline Control
 
-GitHub Actions workflows support Terraform plan, apply, and destroy operations.
+Terraform changes are managed through source-controlled configuration and GitHub Actions. For workload application releases, `Deploy Application` resolves the authoritative ECR digest and a separate release job updates only the selected canonical service digest in `container-workloads.auto.tfvars.json`. The resulting pull request is reviewable before merge.
 
-Plan workflows provide change visibility.
-
-Apply workflows execute approved changes.
-
-Destroy workflows include Identity Center cleanup logic to prevent IAM dependency conflicts.
+After merge, infrastructure deployment is a separate `Terraform Apply` run whose internal Plan job produces the exact saved artifact later verified/applied after protected approval. Image publication alone does not deploy infrastructure.
 
 ### SOC 2 Alignment
 
-- CC8.1 - Changes are managed through defined processes.
-- CC6.1 - Infrastructure modification access is restricted.
+- CC8.1 - Changes are authorized, designed, tested, approved, and implemented in a controlled manner.
 
 ### Narrative
 
-CI/CD workflows help standardize how infrastructure changes are evaluated and applied.
-
-Environment-scoped roles and GitHub environments support controlled deployment behavior.
-
----
+The release history, publication metadata, one-field digest PR, saved-plan metadata/checksum, protected approval, and post-deployment validation create a traceable technical evidence chain for application-runtime changes.
 
 ## AWS Config Baseline
 
@@ -808,9 +761,7 @@ Examples include:
 
 ### Narrative
 
-Configured CloudTrail events for selected security-service changes are matched
-by EventBridge and routed to SNS. This is a detective alerting control; it does
-not prevent the change or guarantee immediate delivery.
+Critical monitoring controls are protected through real-time detection of unauthorized or suspicious changes.
 
 ---
 
@@ -854,7 +805,6 @@ The baseline uses KMS-backed encryption for resources such as:
 - Secrets Manager
 - SNS topics
 - CloudWatch Logs
-- ECR repositories
 
 ### SOC 2 Alignment
 
@@ -897,6 +847,7 @@ Centralized logs are stored with:
 
 - KMS encryption
 - Versioning
+- Object Lock
 - Lifecycle policies
 - Restricted bucket access
 
@@ -972,15 +923,13 @@ validation-results/<env>/bootstrap/<timestamp>/
 validation-results/<env>/baseline/<timestamp>/
 ```
 
-Useful generated artifacts include `summary.md`, `summary.json`, and the
-supporting validation logs. Current workload baseline evidence includes
-`validate-ecr.log`, `validate-ecs-runtime.log`, and
-`validate-security-workload.log`; centralized-security evidence includes
-`validate-security-operations.log`.
+Useful generated artifacts include `summary.md`, `summary.json`, and the supporting validation logs. Current workload baseline evidence includes `validate-security-workload.log`; centralized-security evidence includes `validate-security-operations.log`.
 
 ## Terraform / CI/CD Evidence
 
 ```text
+application image-publication metadata and authoritative ECR digest
+release PR showing the selected one-field image_digest change
 Terraform plans and apply logs
 GitHub Actions workflow history
 GitHub OIDC role and trust-policy configuration

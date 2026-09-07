@@ -383,7 +383,6 @@ Each entry contains:
 ```text
 arn
 name
-platform_version
 ```
 
 ### `task_definition_arns`
@@ -399,6 +398,7 @@ Each entry contains:
 ```text
 arn
 name
+platform_version
 ```
 
 ## Ownership Boundary
@@ -480,6 +480,8 @@ When `services` is empty:
 
 This allows ECS runtime capability to be wired into the baseline without requiring every workload environment to run ECS services.
 
+Baseline passes only deployable canonical services to this module. A canonical `ecs_services` entry with `image_digest = null` is registered but unreleased: its derived ECR repository remains, while this module receives no entry for it and therefore creates no per-service runtime resources. Selecting a valid exact digest materializes the service from the same canonical entry.
+
 ## Baseline Integration
 
 The current baseline supplies:
@@ -492,9 +494,6 @@ The current baseline supplies:
 - Optional ALB target-group ARN
 - Execution-policy readiness IDs
 - Security-policy readiness rule IDs
-- Service image digests and runtime configuration
+- Digest-pinned service image references and runtime configuration
 
-Runtime validation is handled by `scripts/validation/validate-ecs-runtime.sh`
-inside the existing workload baseline validation layer. The validator uses the
-resource-backed `platform_version` output rather than hard-coding the module's
-current `1.4.0` default.
+Runtime validation is handled by `scripts/validation/validate-ecs-runtime.sh` inside the existing workload baseline validation layer. The validator uses the resource-backed `platform_version` output rather than hard-coding the module's current `1.4.0` default.

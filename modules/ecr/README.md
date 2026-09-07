@@ -11,13 +11,9 @@ For every repository key in `repositories`, the module creates:
 - One `aws_ecr_repository.repositories` instance
 - One `aws_ecr_lifecycle_policy.untagged_cleanup` instance
 
-Repository names use `${name_prefix}-${repository_key}`. The repository key is
-both the stable Terraform `for_each` identity and the environment-local portion
-of the rendered AWS repository name.
+Repository names use `${name_prefix}-${repository_key}`. The repository key is both the stable Terraform `for_each` identity and the environment-local portion of the rendered AWS repository name.
 
-Repository keys must use lowercase letters and numbers separated only by
-periods, underscores, or hyphens. The complete rendered name must not exceed
-256 characters.
+Repository keys must use lowercase letters and numbers separated only by periods, underscores, or hyphens. The complete rendered name must not exceed 256 characters.
 
 ## Inputs
 
@@ -42,10 +38,7 @@ With `name_prefix = "secure-baseline-development"`, this example creates:
 - `secure-baseline-development-application`
 - `secure-baseline-development-worker`
 
-The values are currently empty objects, so each repository's identity and name
-come entirely from its map key. No per-repository settings are exposed. Adding,
-removing, or renaming a map key changes the corresponding repository instance
-and AWS repository name.
+The values are currently empty objects, so each repository's identity and name come entirely from its map key. No per-repository settings are exposed. Adding, removing, or renaming a map key changes the corresponding repository instance and AWS repository name.
 
 The module intentionally does not expose configuration for force deletion, tag mutability, encryption type, image scanning, repository policies, lifecycle retention, image references, or arbitrary caller tags. Those settings are platform-owned or deferred.
 
@@ -53,11 +46,7 @@ The module intentionally does not expose configuration for force deletion, tag m
 
 Every repository is encrypted with the required customer-managed KMS key from `kms_key_arn`. ECR encryption configuration is immutable after repository creation, so repositories use KMS encryption from their first creation.
 
-This module consumes the key but does not create or manage it. The dedicated
-ECR customer-managed key and alias are owned by `modules/security` as
-`aws_kms_key.ecr` and `aws_kms_alias.ecr`. `baseline/main.tf` passes
-`module.security.ecr_cmk_arn` to this module. ECR must receive the key ARN, not
-the alias ARN.
+This module consumes the key but does not create or manage it. The dedicated ECR customer-managed key and alias are owned by `modules/security` as `aws_kms_key.ecr` and `aws_kms_alias.ecr`. `baseline/main.tf` passes `module.security.ecr_cmk_arn` to this module. ECR must receive the key ARN, not the alias ARN.
 
 ## Tag Immutability
 
@@ -67,9 +56,9 @@ All repositories use `image_tag_mutability = "IMMUTABLE"`. Existing tags cannot 
 
 The lifecycle policy expires only untagged images older than 30 days. It does not match or expire tagged images and does not assume an application-specific release-tag convention.
 
-Any image digest that is active or remains deployable by Terraform **MUST retain at least one immutable release tag**. Release, build, and publishing automation **MUST NOT remove the final release tag** from a digest while that digest remains active or deployable.
+Any image digest that remains active or deployable **MUST retain at least one tag** so it is not eligible for the untagged-image lifecycle policy. Publication or cleanup automation must not leave an active/deployable digest untagged.
 
-Tag immutability prevents tag reassignment, but it does not prevent deletion of a tag or an untagged image. Preserving the final release tag is therefore part of the v1.8.0 platform contract. Sophisticated historical release retention is deferred.
+Tag immutability prevents tag reassignment, but it does not prevent deletion of a tag or an untagged image. Any digest that remains active or deployable must retain at least one tag so it is not eligible for the untagged-image lifecycle policy. Sophisticated historical release retention is deferred.
 
 ## Development/Test Destruction Posture
 
@@ -95,32 +84,24 @@ The module does not create an `aws_ecr_repository_policy`. Repositories are work
 
 ## Current Integration Status
 
-The repository resource declares the standard `Name`, `Environment`, and
-`Terraform` tags. Its `Name` tag is the rendered repository name:
-`${var.name_prefix}-${each.key}`.
+The repository resource declares the standard `Name`, `Environment`, and `Terraform` tags. Its `Name` tag is the rendered repository name: `${var.name_prefix}-${each.key}`.
 
-Each workload root passes `repositories` to baseline. Baseline merges those
-explicit keys with repository keys required by the canonical `ecs_services`
-map and passes the effective set to this module. It also supplies the dedicated
-security-owned ECR CMK key ARN. Workload roots expose `ecr_repositories` and
-`ecr_cmk_arn` for consumers and validation.
+Each workload root passes `repositories` to baseline. Baseline merges those explicit keys with repository keys required by the canonical `ecs_services` map and passes the effective set to this module. It also supplies the dedicated security-owned ECR CMK key ARN. Workload roots expose `ecr_repositories` and `ecr_cmk_arn` for consumers and validation.
 
-This supports a staged first image without permanent duplication:
+Every registered canonical service contributes its `repository_name` even when `image_digest = null`. This lets Terraform create the repository while keeping the task definition, ECS service, per-service roles, task SG, and runtime log group absent until an immutable digest is selected.
+
+Explicit repositories still support initial repository provisioning without permanent duplication:
 
 ```hcl
 repositories = { test = {} }
 ecs_services = {}
 ```
 
-After an image is published, `repositories` may return to `{}` while an
-`ecs_services` entry references `repository_name = "test"`. Because both paths
-use the same repository map key, Terraform retains the existing repository.
+After an `ecs_services` entry references `repository_name = "test"`, `repositories` may return to `{}` before or after image publication. Because both paths use the same repository map key, Terraform retains the existing repository.
 
 ## Outputs
 
-The `repositories` output is keyed by the same repository keys as the input
-map. Values come from `aws_ecr_repository.repositories`, and each entry
-contains:
+The `repositories` output is keyed by the same repository keys as the input map. Values come from `aws_ecr_repository.repositories`, and each entry contains:
 
 - `arn`
 - `name`
@@ -144,10 +125,8 @@ It does not own:
 - Inspector or registry-level scanning configuration
 - GuardDuty or containment
 - KMS key creation
-- Application release sequencing or high-frequency deployment automation
+- Application release sequencing or deployment workflow behavior
 
-`validate-ecr.sh` uses the workload-root repository output as its authoritative
-inventory and passes cleanly for `{}`. For configured repositories it validates
-identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved
-untagged-only lifecycle policy. `validate-security-workload.sh` separately
-checks the Terraform-computed effective Inspector resource types.
+The implemented `Deploy Application` workflow owns that separate boundary: it publishes an image through the image-publisher role, resolves the authoritative ECR digest, and opens a release PR. It does not change this module's ownership or make Terraform build or push images.
+
+`validate-ecr.sh` uses the workload-root repository output as its authoritative inventory and passes cleanly for `{}`. For configured repositories it validates identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved untagged-only lifecycle policy. `validate-security-workload.sh` separately checks the Terraform-computed effective Inspector resource types.

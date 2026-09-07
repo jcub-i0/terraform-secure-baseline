@@ -179,7 +179,7 @@ Access rights are structured through:
 
 - IAM Identity Center permission sets
 - Environment-specific group assignments
-- Separate plan/apply GitHub roles
+- Separate GitHub Plan, Apply, and Image Publisher roles
 - Separate SecOps roles
 - Least-privilege Lambda execution roles
 - Optional customer-managed policy attachments by environment
@@ -189,6 +189,8 @@ Access rights are structured through:
 A.5.18 expects access rights to be provisioned, reviewed, modified, and removed according to access control policies.
 
 ### Narrative
+
+The workload CI/CD model separates Plan, protected Apply, and branch-trusted Image Publisher AWS roles. Application release PR mutation is performed by a separate job with no AWS credentials, reducing unnecessary privilege concentration.
 
 The baseline supports structured AWS access rights through permission sets and role-based assignments.
 
@@ -354,6 +356,8 @@ A.5.28 addresses identification, collection, acquisition, and preservation of ev
 
 ### Narrative
 
+For ECS application releases, supporting technical evidence can include image-publication metadata, the authoritative ECR digest, the one-field release PR, saved Terraform plan metadata/checksum, protected Apply history, and post-deployment workload validation.
+
 Centralized, encrypted, versioned, and object-locked logging supports preservation of technical evidence.
 
 Organizations must still define evidence handling procedures and chain-of-custody expectations.
@@ -394,12 +398,10 @@ Operational and security records are protected using:
 
 - KMS encryption
 - S3 versioning
+- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
 - Centralized log storage
-
-The current ephemeral development/test storage configuration has Object Lock
-disabled; it is a production-hardening item rather than an active control.
 
 ### ISO 27001 Alignment
 
@@ -684,11 +686,14 @@ The baseline captures logs from:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
+- ECS service application logs
+- ECS Container Insights performance logs when enabled
 
 Logs are stored with protections such as:
 
 - KMS encryption
 - S3 versioning
+- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
 
@@ -697,6 +702,8 @@ Logs are stored with protections such as:
 A.8.15 addresses producing, storing, protecting, and analyzing logs.
 
 ### Narrative
+
+The container runtime adds Terraform-owned ECS application log groups under `/aws/ecs/<name-prefix>/<service>` and a Terraform-owned Container Insights performance log group when enabled. The runtime validator checks effective retention and exact workload logs-CMK encryption.
 
 Logging supports investigation, monitoring, and evidence preservation.
 
@@ -835,7 +842,6 @@ The baseline uses KMS-backed encryption for:
 - Secrets Manager
 - SNS topics
 - CloudWatch Logs
-- ECR repositories
 - Terraform state
 
 ### ISO 27001 Alignment
@@ -1016,7 +1022,7 @@ Security Hub / GuardDuty findings
 | A.5.24-A.5.27 Incident management | Detection, alerting, isolation, rollback, logs |
 | A.5.28 Evidence | Centralized logs, Security Hub, CloudTrail, Config |
 | A.5.30 ICT readiness | Backup, Terraform rebuildability, logging, rollback |
-| A.5.33 Records | Protected logs and retention controls; Object Lock remains a production-hardening item |
+| A.5.33 Records | Protected logs, Object Lock, retention |
 | A.5.34 PII | Encryption, private networking, access control, monitoring |
 | A.8.2 Privileged access | Identity Center, break-glass monitoring, least privilege |
 | A.8.3 Information access restriction | IAM, KMS, S3 policies, network controls |

@@ -177,45 +177,19 @@ This supports:
 
 ## Control Intent
 
-Allow GitHub Actions to deploy infrastructure without using long-lived AWS access keys.
+Use short-lived, narrowly scoped CI/CD identities and preserve separation between planning, infrastructure application, image publication, and source-control release mutation.
 
 ## Implementation
 
-The baseline uses GitHub OIDC to allow GitHub Actions workflows to assume AWS IAM roles.
+GitHub Actions authenticates to AWS using OIDC rather than long-lived access keys. Workload accounts separate Plan and Apply roles, and v1.8.0 adds a dedicated branch-trusted Image Publisher role whose AWS permissions are limited to ECR publication/query operations.
 
-Each environment can have separate roles for:
+Application publication further separates authority at the job level: the publisher job receives AWS OIDC authority and repository read access, while the release/PR job receives repository write permissions but no AWS credentials or OIDC token. The release job updates only the selected `ecs_services.<service>.image_digest` in tracked workload configuration.
 
-- Terraform plan
-- Terraform apply
-- Terraform destroy
-
-Example role mapping:
-
-```text
-dev-plan        -> GitHub-Plan role in dev account
-dev             -> GitHub-Apply role in dev account
-
-staging-plan    -> GitHub-Plan role in staging account
-staging         -> GitHub-Apply role in staging account
-
-prod-plan       -> GitHub-Plan role in prod account
-prod            -> GitHub-Apply role in prod account
-```
-
-OIDC trust conditions restrict which GitHub repository, branch, or GitHub environment can assume the roles.
+Workload infrastructure deployment remains plan-before-approval. `terraform-apply.yml` creates its own saved binary plan, readable plan, metadata, and checksum before protected approval; the Apply job verifies and applies that exact artifact without replanning. The standalone Terraform Plan workflow is informational and is not the source of the Apply artifact.
 
 ## Security Impact
 
-This reduces risk from:
-
-- Long-lived AWS access keys
-- Leaked CI/CD credentials
-- Shared machine users
-- Manual key rotation gaps
-
-It also improves auditability because CI/CD activity is tied to assumed roles and CloudTrail events.
-
----
+This model reduces exposure to static credentials, limits the blast radius of any one CI job, preserves a reviewable chain from image digest to release PR to exact Terraform plan, and supports separation of duties between artifact publication and infrastructure deployment.
 
 # Human Access Management
 
@@ -373,11 +347,10 @@ Examples may include:
 - KMS
 - Secrets Manager
 - EC2
-- ECR API and Docker Registry
 - S3
 - GuardDuty data (`guardduty-data`) for Runtime Monitoring
 
-The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources. Fargate image pulls use the ECR Interface Endpoints and the existing S3 Gateway Endpoint without assigning public task IPs.
+The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources.
 
 ## Security Impact
 
@@ -405,21 +378,18 @@ The baseline captures logs and activity from:
 - VPC Flow Logs
 - CloudWatch Logs
 - Lambda logs
-- ECS container stdout/stderr routed through the `awslogs` driver
-
-Applications remain responsible for emitting application-specific audit and
-security events to their configured output streams.
+- ECS service application logs under `/aws/ecs/<name-prefix>/<service>`
+- ECS Container Insights performance logs when enabled
 
 Logs are stored in protected locations with controls such as:
 
 - KMS encryption
 - S3 versioning
+- Object Lock
 - Restricted bucket policies
 - Lifecycle retention
 
-The current ephemeral development/test configuration has S3 Object Lock
-disabled. Object Lock is a production-hardening decision that must be made at
-bucket creation; it is not an implemented current control.
+ECS runtime validation verifies the effective CloudWatch retention period and exact workload logs-CMK encryption for the Terraform-owned service and Container Insights log groups.
 
 ## Security Impact
 
@@ -641,15 +611,12 @@ The baseline uses KMS-backed encryption for resources such as:
 - Secrets Manager
 - SNS topics
 - CloudWatch Logs
-- ECR repositories
 
-The centralized logging bucket currently uses:
+The centralized logging bucket also supports:
 
 - Versioning
+- Object Lock
 - Lifecycle retention
-
-Object Lock is disabled in the current ephemeral development/test posture and
-must not be represented as an active protection.
 
 ## Security Impact
 

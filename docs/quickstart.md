@@ -509,19 +509,24 @@ The generated active `bootstrap/<env>/state/backend.tf` files are ignored by Git
 
 # Phase 8 - Deploy Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
-Each environment `account` stack creates the `GitHub OIDC` roles used by GitHub Actions for that environment.
+Each workload `account` stack creates the GitHub OIDC execution roles used by GitHub Actions for that environment. When image publication is enabled, the stack creates three distinct authorities: a Plan role, an Apply role, and an Image Publisher role.
 
-By default, the `account` stack's `enable_github_oidc` variable is set to `false` to promote simplicity during initial deployments. If you wish to enable `GitHub OIDC`, set `enable_github_oidc` to `true`, along with other variables that `enable_github_oidc` depends on.
+The roles are intentionally separated:
 
-For more information regarding the `account` stack and `GitHub OIDC` integration, refer to the `README.md` documents located at `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
+| Role | Primary purpose | Trust model |
+|---|---|---|
+| Plan role | Read/plan Terraform changes and evidence | Repository/branch or pull-request conditions used by the Plan path |
+| Apply role | Apply reviewed workload plans | Protected GitHub Environment for the workload |
+| Image Publisher role | Publish/query application images in the environment ECR registry | Exact branch-based GitHub OIDC subjects |
 
-Run these commands from the repository root.
+The Image Publisher role is not an application deployment role. It does not receive broad ECS, IAM, Terraform state, or administrator permissions.
+
+Run the account stack from the repository root for each workload environment:
 
 ## Dev
 
 ```bash
 export AWS_PROFILE=dev
-
 terraform -chdir=bootstrap/dev/account init
 terraform -chdir=bootstrap/dev/account apply
 ```
@@ -530,7 +535,6 @@ terraform -chdir=bootstrap/dev/account apply
 
 ```bash
 export AWS_PROFILE=staging
-
 terraform -chdir=bootstrap/staging/account init
 terraform -chdir=bootstrap/staging/account apply
 ```
@@ -539,34 +543,25 @@ terraform -chdir=bootstrap/staging/account apply
 
 ```bash
 export AWS_PROFILE=prod
-
 terraform -chdir=bootstrap/prod/account init
 terraform -chdir=bootstrap/prod/account apply
 ```
 
-Record the outputs from each account stack:
+Record the role outputs:
 
 ```text
 plan_role_github_arn
 apply_role_github_arn
+image_publisher_role_github_arn
 ```
 
-Add these to the appropriate GitHub environment variables:
+The Plan and Apply role ARNs belong in the corresponding GitHub Environments. The Image Publisher role ARN belongs in the matching `*-plan` environment because `Deploy Application` uses that environment only to resolve configuration before its publisher job assumes the branch-trusted role.
 
-| GitHub Environment | Role Variable |
-|-------------------|---------------|
-| `dev-plan` | `PLAN_ROLE_GITHUB_ARN` |
-| `dev` | `APPLY_ROLE_GITHUB_ARN` |
-| `staging-plan` | `PLAN_ROLE_GITHUB_ARN` |
-| `staging` | `APPLY_ROLE_GITHUB_ARN` |
-| `prod-plan` | `PLAN_ROLE_GITHUB_ARN` |
-| `prod` | `APPLY_ROLE_GITHUB_ARN` |
-
----
+For more detail, see `bootstrap/<env>/account/README.md` and `modules/github_oidc/README.md`.
 
 # Phase 9 - Configure GitHub Environment Variables (Skip if not using `GitHub OIDC`)
 
-Workload deployment uses paired GitHub environments:
+Workload Terraform uses paired GitHub Environments for Plan and Apply:
 
 | Plan environment | Apply environment |
 |---|---|
@@ -574,106 +569,37 @@ Workload deployment uses paired GitHub environments:
 | `staging-plan` | `staging` |
 | `prod-plan` | `prod` |
 
-Centralized security planning and evidence use:
+Centralized security planning/evidence uses `security-operations-plan`.
 
-```text
-security-operations-plan
-```
+At minimum, each workload `*-plan` environment must provide the values required by the workload plan path, including `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, `PLAN_ROLE_GITHUB_ARN`, `DEPLOYMENT_PROFILE`, and the other Terraform inputs used by that environment. `DEPLOYMENT_PROFILE` is required and must resolve to one of `production`, `development`, or `minimal`; the Plan path fails closed when it is missing or invalid.
 
-Configure its `PLAN_ROLE_GITHUB_ARN`, `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, and `ENVIRONMENT=security-operations`, plus the centralized security Terraform inputs used by the security-services Plan job:
+Each protected Apply environment provides the Apply-specific values including `APPLY_ROLE_GITHUB_ARN`. Shared values such as `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, `TF_STATE_BUCKET_ARN`, and `TF_STATE_BUCKET_CMK_ARN` must remain synchronized across each Plan/Apply pair.
 
-```text
-ENABLE_SECURITYHUB_ORGANIZATION_CONFIGURATION=true
-SECURITYHUB_CSPM_ACCOUNT_POLICIES=<JSON policy map>
-ENABLE_GUARDDUTY_ORGANIZATION_CONFIGURATION=true
-ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY=true
-```
-
-The GuardDuty organization feature map remains defined in Terraform unless you intentionally choose to override it.
-
-The Plan environment runs before approval and exposes the Plan role. The Apply
-environment should use required reviewers and exposes the Apply role only after
-approval.
-
-Configure the account-specific expected ID in both members of each pair:
-
-```text
-ACCOUNT_ID
-```
-
-For example, `dev-plan` and `dev` must both contain the `dev` AWS account ID.
-This generic `ACCOUNT_ID` is used by workflow safety checks. It is separate
-from the Terraform input variables `ACCOUNT_ID_DEV`, `ACCOUNT_ID_STAGING`, and
-`ACCOUNT_ID_PROD`, which may still be required by the workload configuration.
-
-Common variables may include:
+For application image publication, configure these variables in the matching workload `*-plan` environment:
 
 ```text
 ACCOUNT_ID
 PRIMARY_REGION
 CLOUD_NAME
-TF_STATE_BUCKET_ARN
-TF_STATE_BUCKET_CMK_ARN
-BUCKET_ADMIN_PRINCIPALS
-ACCOUNT_ID_DEV
-ACCOUNT_ID_STAGING
-ACCOUNT_ID_PROD
-SECOPS_EMAILS
-BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS
-DEPLOYMENT_PROFILE
-EGRESS_MODE
-BRANCHES_PLAN_GITHUB
-ALLOW_PULL_REQUESTS_PLAN_GITHUB
-BRANCHES_APPLY_GITHUB
+IMAGE_PUBLISHER_ROLE_GITHUB_ARN
+BRANCHES_IMAGE_PUBLISHER_GITHUB
 ```
 
-Workload Plan environments also require an explicit automatic-isolation decision:
+`BRANCHES_IMAGE_PUBLISHER_GITHUB` is a JSON array of allowed branch names, for example:
 
-| GitHub Plan environment | `ISOLATION_ALLOWED` |
-|---|---|
-| `dev-plan` | `true` |
-| `staging-plan` | `false` |
-| `prod-plan` | `false` |
-
-Plan workflows reject missing values and values other than exactly `true` or `false`. The protected Apply job consumes the reviewed saved plan, so it does not need to re-resolve this setting. Terraform Destroy uses `false` when the setting is absent.
-
-Role-specific variables:
-
-| Environment type | Required role variable |
-|---|---|
-| `*-plan` | `PLAN_ROLE_GITHUB_ARN` |
-| Apply environment | `APPLY_ROLE_GITHUB_ARN` |
-
-The Apply environment also requires:
-
-```text
-STATE_STACK_BACKEND_KEY
+```json
+["main"]
 ```
 
-`STATE_STACK_BACKEND_KEY` is used when the reconciliation Apply job
-materializes the ignored state-stack `backend.tf` before strict post-apply
-validation.
+The `Deploy Application` publisher job deliberately does **not** declare a GitHub `environment:`. The Image Publisher IAM trust policy uses branch-based OIDC subjects such as `repo:<owner>/<repo>:ref:refs/heads/main`; attaching a GitHub Environment to that job would change the OIDC subject and break the trust contract.
 
-Secrets may include:
+The release/PR job is a separate authority. It receives GitHub repository write permissions (`contents: write` and `pull-requests: write`) but no AWS credentials and no `id-token`. The repository must allow GitHub Actions to create pull requests if automatic release-PR creation is desired.
 
-```text
-ABUSEIPDB_API_KEY
-```
+Workload Plan environments also require an explicit `ISOLATION_ALLOWED` value of exactly `true` or `false`. The current policy is `true` for `dev-plan` and `false` for `staging-plan` and `prod-plan`. The protected Apply job consumes the reviewed saved plan and does not re-resolve this input.
 
-Values used by both jobs—especially `ACCOUNT_ID`, `PRIMARY_REGION`,
-`CLOUD_NAME`, and the Terraform state bucket and CMK ARNs—must match across
-each Plan/Apply pair. The workflows validate the expected AWS account, but
-operators should also keep all shared configuration synchronized.
+The Apply environment also requires `STATE_STACK_BACKEND_KEY` when workload-account reconciliation materializes the state-stack backend for strict post-apply validation.
 
-Recommended environment defaults:
-
-| Environment | `deployment_profile` | `egress_mode` | `isolation_allowed` |
-|---|---|---|---:|
-| `dev` | `development` | `auto` | `true` |
-| `staging` | `development` or `production` | `auto` | `false` |
-| `prod` | `production` | `auto` | `false` |
-
----
+Secrets may include `ABUSEIPDB_API_KEY`. Keep all account IDs, role ARNs, region values, state settings, and deployment-profile choices aligned with the target environment.
 
 # Phase 10 - Deploy Environment Baseline
 
@@ -683,8 +609,7 @@ After setting necessary variables for the workload environments (see `environmen
 
 You can deploy through GitHub Actions once OIDC roles and GitHub environment variables are configured or you can deploy locally if not.
 
-When the `Terraform Apply` workflow is used, it does not immediately run
-`terraform apply`. It first:
+When the `Terraform Apply` workflow is used, it does not immediately run `terraform apply`. It first:
 
 1. runs the Plan job through `<env>-plan` and the Plan role;
 2. publishes the readable plan and uploads the saved plan artifact;
@@ -692,8 +617,7 @@ When the `Terraform Apply` workflow is used, it does not immediately run
 4. verifies the plan metadata and checksum; and
 5. applies the exact saved plan through the Apply role.
 
-The optional `reconcile_workload_account` input starts the plan-first
-reconciliation workflow after a successful baseline apply.
+The optional `reconcile_workload_account` input starts the plan-first reconciliation workflow after a successful baseline apply.
 
 Before applying, review the environment's profile settings:
 
@@ -736,8 +660,7 @@ terraform -chdir=environments/prod plan
 terraform -chdir=environments/prod apply
 ```
 
-Record environment outputs needed by the
-`bootstrap/control_plane/identity_center` stack, such as:
+Record environment outputs needed by the `bootstrap/control_plane/identity_center` stack, such as:
 
 ```text
 logs_s3_readonly_policy_name
@@ -745,9 +668,7 @@ logs_cmk_decrypt_policy_name
 secops_event_bus_arn
 ```
 
-If using GitHub OIDC, the account reconciliation helper later reads
-`lambda_cmk_arn` and `secrets_manager_cmk_arn` directly from the workload
-Terraform state. Those CMK values do not need to be copied manually.
+If using GitHub OIDC, the account reconciliation helper later reads `lambda_cmk_arn` and `secrets_manager_cmk_arn` directly from the workload Terraform state. Those CMK values do not need to be copied manually.
 
 Also confirm the effective profile outputs:
 
@@ -769,97 +690,72 @@ These outputs confirm how profile defaults and explicit overrides resolved for t
 
 ### Optional ECS/Fargate Application Runtime
 
-EC2 remains supported. For modern long-running SaaS services, configure the canonical environment-level `ecs_services` map. Baseline derives the required ECR, IAM, ALB, security-policy, and ECS-runtime inputs; do not maintain separate operator-facing service maps.
-
-The first-service lifecycle is:
+EC2 remains supported. For modern long-running SaaS services, use the canonical tracked workload configuration:
 
 ```text
-1. Apply the workload foundation so the environment and required ECR repository exist.
-2. Build, test, and push the application image outside Terraform.
-3. Resolve the authoritative ECR sha256 digest.
-4. Add/update ecs_services with that digest, review the saved plan, and apply that exact plan.
+environments/<env>/container-workloads.auto.tfvars.json
 ```
 
-Terraform does not build or publish container images. The earlier multi-apply live-test sequence proved intermediate states; it is not an architectural requirement and does not create a separate foundation/runtime Terraform state.
+Operators maintain one `ecs_services` map. Baseline derives the narrower ECR, IAM, ALB, security-policy, and ECS-runtime inputs; do not create a second operator-maintained service inventory.
 
-A repository may be established explicitly before its first image is published:
+A service can be **registered but unreleased** by setting its digest to `null`:
 
-```hcl
-repositories = {
-  test = {}
-}
-
-ecs_services = {}
-```
-
-After publishing the image, the same repository key can be derived from the service without replacement:
-
-```hcl
-repositories = {}
-
-ecs_services = {
-  test = {
-    repository_name = "test"
-    image_digest    = "sha256:<64-lowercase-hex-characters>"
-    container_port  = 8080
-    cpu             = 256
-    memory          = 512
-
-    desired_count   = 1
-    cpu_architecture = "X86_64"
-    database_access = false
-
-    environment_variables   = {}
-    secrets_manager_secrets = {}
-    ssm_parameters          = {}
-    task_execution_kms_key_arns  = []
-
-    ingress = null
+```json
+{
+  "repositories": {},
+  "ecs_services": {
+    "api": {
+      "repository_name": "api",
+      "image_digest": null,
+      "container_port": 8080,
+      "cpu": 256,
+      "memory": 512
+    }
   }
 }
 ```
 
-`desired_count`, `cpu_architecture`, `database_access`, the three environment/secret/KMS collections, and `ingress` have defaults in the variable schema; they are expanded above to make the runtime contract visible. Images are deployed only as:
+With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, or application log group is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
+
+The normal application release lifecycle is:
+
+```text
+registered ecs_services entry (image_digest = null or previous digest)
+  -> Deploy Application
+  -> resolve repository + platform from tracked canonical config
+  -> build image
+  -> push to ECR with the dedicated Image Publisher OIDC role
+  -> resolve and re-check authoritative ECR sha256 digest
+  -> release/PR job updates only ecs_services.<service>.image_digest
+  -> automated release PR
+  -> human review and merge
+  -> run Terraform Apply separately
+  -> internal Apply-workflow Plan creates the saved binary plan
+  -> protected approval
+  -> verify checksum/metadata and apply the exact reviewed plan
+  -> ECS convergence
+  -> workload validation/evidence
+```
+
+`Deploy Application` does **not** merge the release PR, invoke Terraform Apply, wait for ECS convergence, or run the workload evidence workflow. Those remain separate reviewed stages.
+
+Terraform never builds or pushes application images. The deployed task definition uses only an immutable digest reference:
 
 ```text
 <repository_url>@sha256:<digest>
 ```
 
-When ingress is configured, also provide `alb_certificate_arn` and at least one `alb_ingress_cidrs` entry. Each ingress service supplies a unique listener-rule `priority`, one or both of `host_headers` and `path_patterns`, and an optional `health_check_path` defaulting to `/health`. The shared ALB uses HTTPS only and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` unless `alb_ssl_policy` is explicitly changed.
+The publisher job has AWS OIDC/ECR authority and only `contents: read`. The release/PR job has GitHub repository write authority but no AWS credentials or OIDC token. This keeps image publication authority separate from source-control mutation authority.
 
-Fargate tasks use Linux, `awsvpc`, compute-private subnets, and no public IP. The default CPU architecture is `X86_64`; `ARM64` is also accepted. The ECS service module currently defaults the resource-backed platform version to `1.4.0`.
+Build contexts supplied to `Deploy Application` must resolve inside the checked-out repository. See `scripts/deployment/README.md` for the workflow inputs, metadata contract, safety checks, local script usage, and release-PR behavior.
 
-After deployment, the non-secret workload output contract includes:
+For a deployable service, Fargate tasks run in compute-private subnets with `awsvpc`, no public IP, per-service task security groups, separate task execution/application task roles, deployment circuit breaking, and automatic rollback. Per-service application log groups use `/aws/ecs/<name-prefix>/<service>`. The cluster module owns `/aws/ecs/containerinsights/<cluster-name>/performance` when Container Insights is enabled; both log types use the effective CloudWatch retention policy and workload logs CMK where applicable.
 
-```text
-ecr_repositories
-ecr_cmk_arn
-ecs_cluster
-ecs_services
-ecs_service_configuration
-ecs_task_definition_arns
-ecs_task_security_group_ids
-ecs_log_groups
-ecs_task_execution_roles
-ecs_task_roles
-application_load_balancer
-logs_cmk_arn
-s3_prefix_list_id
-```
-
-`application_load_balancer` is `null` when no service configures ingress. When
-present, its `https_listener` object contains the resource-backed listener ARN,
-certificate ARN, and TLS policy used by runtime validation.
-
-The immediate v1.8.0 follow-up is an application delivery workflow that automates short-lived OIDC authentication, image build/push, authoritative digest resolution, exact saved-plan approval/application, convergence, and ECR/IAM/ECS validation. That workflow is not implemented yet.
-
----
+When ingress is configured, also provide `alb_certificate_arn` and at least one `alb_ingress_cidrs` value. Each deployable ingress service supplies a unique listener-rule priority and at least one host-header or path-pattern condition. The shared ALB is HTTPS-only and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` unless explicitly overridden.
 
 # Phase 11 - Reconcile Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
-After successfully applying each environment baseline, reconcile the current
-workload-created Lambda and Secrets Manager CMK permissions into
-`bootstrap/<env>/account`.
+After successfully applying each environment baseline, reconcile the current workload-created Lambda and Secrets Manager CMK permissions into `bootstrap/<env>/account`.
 
 ## GitHub Actions
 
@@ -870,31 +766,19 @@ plan-only
 plan-and-apply
 ```
 
-`plan-only` generates the reconciliation plan, publishes the readable output,
-and uploads the saved plan artifact without starting an Apply job.
+`plan-only` generates the reconciliation plan, publishes the readable output, and uploads the saved plan artifact without starting an Apply job.
 
-`plan-and-apply` generates the plan first, then pauses on the protected
-`dev`, `staging`, or `prod` environment. After approval, the Apply job
-downloads and verifies the exact saved plan, applies it through the GitHub
-Apply role, and runs strict workload bootstrap validation.
+`plan-and-apply` generates the plan first, then pauses on the protected `dev`, `staging`, or `prod` environment. After approval, the Apply job downloads and verifies the exact saved plan, applies it through the GitHub Apply role, and runs strict workload bootstrap validation.
 
-The plan is generated through the matching `*-plan` environment. Both the
-Plan and Apply environments must contain the same generic `ACCOUNT_ID` for the
-target AWS account.
+The plan is generated through the matching `*-plan` environment. Both the Plan and Apply environments must contain the same generic `ACCOUNT_ID` for the target AWS account.
 
-The `Terraform Apply` workflow can invoke `plan-and-apply` automatically when
-its `reconcile_workload_account` input is selected.
+The `Terraform Apply` workflow can invoke `plan-and-apply` automatically when its `reconcile_workload_account` input is selected.
 
 ## Local Execution
 
-The helper uses Terraform's normal variable-loading behavior for the account
-stack, including `terraform.tfvars`, `*.auto.tfvars`, exported `TF_VAR_*`
-variables, defaults, and optional `--var` or `--var-file` arguments. It
-overrides only `lambda_cmk_arn` and `secrets_manager_cmk_arn` with the current
-workload outputs.
+The helper uses Terraform's normal variable-loading behavior for the account stack, including `terraform.tfvars`, `*.auto.tfvars`, exported `TF_VAR_*` variables, defaults, and optional `--var` or `--var-file` arguments. It overrides only `lambda_cmk_arn` and `secrets_manager_cmk_arn` with the current workload outputs.
 
-For an exact plan review across two local invocations, save the plan explicitly
-with `--plan-file`, then apply that same file with `--apply-plan`.
+For an exact plan review across two local invocations, save the plan explicitly with `--plan-file`, then apply that same file with `--apply-plan`.
 
 ### Dev
 
@@ -944,20 +828,11 @@ EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
   --apply-plan="${PROD_RECONCILIATION_PLAN}"
 ```
 
-The simpler `--apply` mode remains available. It generates a plan, displays it,
-asks for confirmation, and applies that plan within the same invocation. A
-separate earlier plan-only run is not reused unless `--plan-file` and
-`--apply-plan` are used.
+The simpler `--apply` mode remains available. It generates a plan, displays it, asks for confirmation, and applies that plan within the same invocation. A separate earlier plan-only run is not reused unless `--plan-file` and `--apply-plan` are used.
 
-Use `--var-file <path>` when account inputs are stored in a custom variable
-file that Terraform would not auto-load. Relative paths are resolved from the
-selected `bootstrap/<env>/account` directory. Do not combine `--apply-plan`
-with `--var` or `--var-file`; the reviewed saved plan already contains the
-resolved input values.
+Use `--var-file <path>` when account inputs are stored in a custom variable file that Terraform would not auto-load. Relative paths are resolved from the selected `bootstrap/<env>/account` directory. Do not combine `--apply-plan` with `--var` or `--var-file`; the reviewed saved plan already contains the resolved input values.
 
-Saved Terraform plan files may contain sensitive configuration values. Store
-local plan files securely and remove them after the apply and validation
-complete.
+Saved Terraform plan files may contain sensitive configuration values. Store local plan files securely and remove them after the apply and validation complete.
 
 ---
 
@@ -1075,8 +950,7 @@ control-plane -> security-operations -> bootstrap-workloads -> workloads
 
 ## GitHub Actions
 
-After GitHub OIDC roles and environment variables are configured, CI/CD can
-manage normal plan/apply/destroy operations.
+After GitHub OIDC roles and environment variables are configured, CI/CD can manage normal plan/apply/destroy operations.
 
 Expected workflows:
 
@@ -1084,39 +958,25 @@ Expected workflows:
 |---------|---------|
 | Terraform Static Analysis | Runs static Terraform validation and scanning |
 | Docs Validation | Runs documentation linting and link checks |
-| Terraform Plan | Runs independent plans for workload, selected control-plane, and security-operations security-services stacks |
-| Terraform Apply | Generates and publishes a workload plan, waits for protected-environment approval, then applies the exact saved plan |
+| Terraform Plan | Runs independent informational/review plans for workload, selected control-plane, and security-operations security-services stacks; this plan is not consumed by Terraform Apply |
+| Terraform Apply | Generates its own saved binary workload plan, readable plan, metadata, and checksum; waits for protected-environment approval; verifies and applies that exact plan without replanning |
+| Deploy Application | Builds/publishes an application image with the dedicated Image Publisher role, resolves the authoritative digest, and creates a one-field release PR; it does not run Terraform Apply |
 | Reconcile Workload Account | Runs `plan-only` or generates a reconciliation plan, waits for approval, applies the exact saved plan, and runs strict bootstrap validation |
 | Terraform Destroy | Cleans up Identity Center attachments, then destroys the selected workload environment |
 | Workload Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
-| Workload Baseline Evidence | Exports the 14-script workload baseline evidence package |
+| Workload Baseline Evidence | Exports the 16-script workload baseline evidence package |
 | Control-Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
 | Security Operations Evidence | Validates centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance from `security-operations-plan` |
 
-The standalone `Terraform Plan` workflow remains useful for pull requests,
-pushes, and independent review. `Terraform Apply` generates its own plan in the
-same workflow run so the protected Apply job can consume the exact artifact
-that was presented for approval.
+The standalone `Terraform Plan` workflow remains useful for pull requests, pushes, and independent review. `Terraform Apply` generates its own plan in the same workflow run so the protected Apply job can consume the exact artifact that was presented for approval.
 
-Workload Plan jobs use `dev-plan`, `staging-plan`, or `prod-plan`; Apply jobs use the
-matching protected `dev`, `staging`, or `prod` environment. The standalone Plan workflow also uses `control-plane-plan` and `security-operations-plan` for their supported stacks. Configure
-`ACCOUNT_ID` in both members of each pair and configure `ISOLATION_ALLOWED` in
-the workload Plan environment. The workflows validate the role ARN account,
-the active AWS caller account, the expected account stored in saved-plan
-metadata, and the isolation value before planning.
+Workload Plan jobs use `dev-plan`, `staging-plan`, or `prod-plan`; Apply jobs use the matching protected `dev`, `staging`, or `prod` environment. The standalone Plan workflow also uses `control-plane-plan` and `security-operations-plan` for their supported stacks. Configure `ACCOUNT_ID` in both members of each pair and configure `ISOLATION_ALLOWED` in the workload Plan environment. The workflows validate the role ARN account, the active AWS caller account, the expected account stored in saved-plan metadata, and the isolation value before planning.
 
-Saved binary plans are short-lived artifacts because Terraform plans can
-contain sensitive values. Keep repository and workflow-run access limited to
-trusted operators.
+Saved binary plans are short-lived artifacts because Terraform plans can contain sensitive values. Keep repository and workflow-run access limited to trusted operators.
 
-The destroy workflow first updates the Identity Center stack to remove
-environment-specific policy attachments before destroying the workload
-environment. This prevents IAM delete conflicts caused by Identity
-Center-managed roles still attaching baseline-created IAM policies.
+The destroy workflow first updates the Identity Center stack to remove environment-specific policy attachments before destroying the workload environment. This prevents IAM delete conflicts caused by Identity Center-managed roles still attaching baseline-created IAM policies.
 
-Evidence workflows use the read-only GitHub Plan roles. On clean runners, they
-materialize the ignored runtime state-stack backend before initializing the
-state stack. The evidence workflows require remote state by default.
+Evidence workflows use the read-only GitHub Plan roles. On clean runners, they materialize the ignored runtime state-stack backend before initializing the state stack. The evidence workflows require remote state by default.
 
 ---
 

@@ -438,48 +438,28 @@ Use `minimal` only when the lack of general internet access is acceptable.
 
 ## Phase 4 - Deploy the Baseline
 
-Follow:
+Follow `docs/quickstart.md` for the full deployment sequence. At a high level: bootstrap/control-plane and security-operations foundations first, then workload state/account stacks, then workload environments, reconciliation, Identity Center, and the four validation/evidence layers.
+
+For ECS/Fargate applications, register each service in the tracked canonical `environments/<env>/container-workloads.auto.tfvars.json`. A new service may use `image_digest = null` so Terraform can create/retain its required ECR repository without creating the runtime before an image exists.
+
+Application release then follows the implemented workflow:
 
 ```text
-docs/quickstart.md
+registered service
+  -> Deploy Application
+  -> branch-trusted Image Publisher role builds/pushes image
+  -> authoritative ECR digest
+  -> separate GitHub-only release job updates one digest
+  -> release PR
+  -> human review/merge
+  -> separate protected Terraform Apply
+  -> ECS convergence
+  -> separate validation/evidence
 ```
 
-Recommended deployment order:
+Terraform does not build or push images. `Deploy Application` does not automatically merge the release PR, invoke Terraform Apply, or run evidence. This separation keeps application artifact publication, source-control mutation, infrastructure approval, and validation independently reviewable.
 
-```text
-1. Bootstrap the control-plane state and account stacks
-2. Deploy bootstrap/control_plane/organizations
-3. Bootstrap security-operations state and account stacks
-4. Deploy bootstrap/security_operations/security_services
-5. Bootstrap each workload state and account stack
-6. Deploy environments/<env> locally or through the plan-first Terraform Apply workflow
-7. Reconcile each workload account when GitHub OIDC is enabled
-8. Deploy or re-apply bootstrap/control_plane/identity_center
-9. Run control-plane, security-operations, workload bootstrap, and workload baseline validation/evidence
-```
-
-The architectural sequence is therefore:
-
-```text
-control-plane -> security-operations -> bootstrap-workloads -> workloads
-```
-
-The control plane establishes organization structure and delegated-administrator prerequisites before the security-operations stack configures centralized services. Workload baselines then defer local Security Hub CSPM, GuardDuty, and Security Hub V2 ownership to that central model.
-
-The GitHub deployment path generates and publishes the plan before requesting
-approval, then applies the exact saved plan after the protected environment is
-approved. Reconciliation follows the same model and runs strict workload
-bootstrap validation after apply.
-
-For the first ECS service, Terraform first ensures the workload foundation and ECR repository exist. Build and push the application image outside Terraform, resolve the authoritative ECR `sha256` digest, and then review/apply the service plan containing that digest. Explicit repositories and repositories derived from `ecs_services` are merged by repository key, so a repository created first through `repositories` can later be retained solely through a service reference without replacement. ECS infrastructure remains in the workload environment state; the architecture does not split foundation and runtime state.
-
-For local reconciliation across separate review and apply invocations, use
-`--plan-file` followed by `--apply-plan`. The one-step `--apply` mode reviews
-and applies a plan within the same invocation.
-
-Deploy `dev` first before deploying `staging` or `prod`.
-
----
+Deploy `dev` first and prove the full path before extending the same service/application configuration to staging or production.
 
 ## Phase 5 - Validate Controls
 
@@ -635,20 +615,20 @@ Before adopting this baseline, answer the following questions:
 
 ### CI/CD Strategy
 
-- Will GitHub Actions manage Terraform?
+- Will GitHub Actions manage Terraform and application image publication?
 - Which paired Plan/Apply environments are required?
-- Will `dev-plan`, `staging-plan`, and `prod-plan` run without approval so plans exist before deployment review?
-- Is `security-operations-plan` configured for security-services planning and read-only evidence?
-- Who can approve the protected `dev`, `staging`, and `prod` Apply environments?
-- Are plan and apply roles separated in both GitHub OIDC trust and IAM permissions?
-- Is the same `ACCOUNT_ID` configured in both members of each environment pair?
-- Are shared region, naming, and state-backend values synchronized across each pair?
-- Is `ISOLATION_ALLOWED` explicitly configured as `true` or `false` in each workload Plan environment?
-- Will Apply workflows use exact saved plans rather than generating a new plan after approval?
-- How long should sensitive saved-plan artifacts be retained?
+- Who can approve the protected workload Apply environments?
+- Is `DEPLOYMENT_PROFILE` configured in every workload Plan path and synchronized with the intended environment posture?
+- Which branches may assume each environment's Image Publisher role through `BRANCHES_IMAGE_PUBLISHER_GITHUB`?
+- Is the repository configured to allow GitHub Actions to create release pull requests?
+- Are Plan, Apply, and Image Publisher AWS authorities separated by IAM role and trust policy?
+- Is the release/PR job kept free of AWS credentials while the publisher job is kept free of repository write permission?
+- Will application build contexts reside inside the checked-out repository as required by `Deploy Application`?
+- Are release PRs reviewed before merge?
+- Will workload Apply use its internally generated saved binary plan rather than the standalone Plan workflow output?
+- Are exact saved-plan metadata/checksum checks and protected approvals retained?
+- Are application deployment and validation/evidence treated as separate post-merge stages?
 - Are static AWS keys prohibited for CI/CD?
-
----
 
 ### Deployment Profile Strategy
 
@@ -749,52 +729,23 @@ The existence of `backend.tf` alone is not proof of migration. The remote S3 obj
 
 ### GitHub OIDC Roles
 
-GitHub OIDC roles are critical CI/CD access components.
-
-Use separate Plan and Apply GitHub environments and roles:
+GitHub OIDC roles are critical CI/CD access components. Workload environments use separate Plan and Apply roles, and v1.8.0 adds a dedicated Image Publisher role per workload account.
 
 ```text
-dev-plan        -> dev Plan role
-dev             -> dev Apply role
-
-staging-plan    -> staging Plan role
-staging         -> staging Apply role
-
-prod-plan       -> prod Plan role
-prod            -> prod Apply role
-
-security-operations-plan -> security-operations Plan role
+<env>-plan / Plan role
+<env>      / protected Apply role
+allowed branch / Image Publisher role
 ```
 
-Workload Plan environments should normally run without required deployment approval.
-Workload Apply environments should enforce the intended reviewer and branch
-protections. Using the same protected environment for both jobs would cause
-the Plan job to wait for approval before a plan exists.
+The Image Publisher role is deliberately narrow: ECR publication/query authority only, with exact branch-based trust. The `Deploy Application` publisher job must not declare a GitHub Environment because environment-based OIDC subjects differ from the branch-based trust contract.
 
-`security-operations-plan` is used by the security-services Terraform Plan matrix entry and the read-only security-operations evidence workflow. The general-purpose Terraform Apply and Destroy workflows remain workload-scoped, so centralized security services are not part of routine workload lifecycle automation.
+The release/PR job has the opposite authority boundary: GitHub `contents: write` and `pull-requests: write`, but no AWS credentials and no `id-token`. This prevents a single job from simultaneously holding AWS image-publishing authority and repository mutation authority.
 
-Configure the generic `ACCOUNT_ID` in both members of each pair. Workflows
-should validate that:
+The standalone Terraform Plan workflow and Terraform Apply's internal Plan job are distinct. The protected Apply job consumes only the saved plan produced inside the same Apply workflow run, after checksum/metadata verification.
 
-- the role ARN belongs to the expected account;
-- the active OIDC caller is operating in that account; and
-- the saved-plan metadata matches the expected account and workflow context.
+Current automated workload bootstrap validation proves the Plan/Apply roles and their state/KMS relationships. It does not yet provide equivalent automated proof of the Image Publisher role's branch trust and ECR policy; include those checks in release/client review unless the bootstrap validator is extended later.
 
-Keep shared values such as `PRIMARY_REGION`, `CLOUD_NAME`,
-`TF_STATE_BUCKET_ARN`, and `TF_STATE_BUCKET_CMK_ARN` synchronized across each
-pair. Role-specific values should remain scoped to the appropriate environment.
-
-The baseline and reconciliation Apply workflows should publish the plan first,
-store the exact plan as a short-lived artifact, and apply only that artifact
-after approval. Treat binary Terraform plans as sensitive because they may
-contain configuration values that are not visible in redacted terminal output.
-
-The `account` substacks should be modified carefully. Do not destroy account
-stacks before destroying the baseline stacks they manage.
-
-The `control-plane` account stack should generally be treated as
-manual/local-only because it creates the roles GitHub uses to access the
-control plane.
+Modify workload account stacks carefully and reconcile them when required. Do not destroy account/OIDC stacks before the infrastructure that depends on their roles.
 
 ### IAM Identity Center
 
@@ -924,7 +875,10 @@ Before using this baseline for production workloads, confirm:
 - Terraform state resources are protected.
 - Every state stack has been migrated and passes `migrate-state-stack.sh --verify-only`.
 - Release evidence requires remotely readable state stacks.
-- GitHub OIDC roles are working.
+- GitHub OIDC Plan, Apply, and Image Publisher roles are working, with the publisher role restricted to approved branches and ECR publication/query authority.
+- GitHub Actions is permitted to create release PRs if `Deploy Application` automation is used.
+- A registered-but-unreleased ECS service can retain its ECR repository with `image_digest = null` without creating runtime resources.
+- The application release path has been proven through image publication, authoritative digest resolution, one-field release PR, protected exact-plan Apply, ECS steady state, and workload validation.
 - GitHub environments have appropriate protections.
 - IAM Identity Center groups are assigned correctly.
 - Break-glass access is documented and tested.

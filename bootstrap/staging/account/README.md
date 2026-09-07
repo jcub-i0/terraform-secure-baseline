@@ -9,6 +9,7 @@ It deploys:
 - GitHub OIDC provider
 - `GitHub-Plan` role
 - `GitHub-Apply` role
+- Optional `GitHub-Image-Publisher` role
 - Supporting IAM policies for Terraform state access and CI/CD operations
 
 This stack is intentionally separated from the main Terraform baseline to prevent Terraform from destroying the IAM roles it is actively using during CI/CD workflows.
@@ -41,11 +42,11 @@ AWS IAM OIDC Provider
     |
     | sts:AssumeRoleWithWebIdentity
     v
-GitHub-Plan / GitHub-Apply IAM Roles
+GitHub-Plan / GitHub-Apply / Image-Publisher IAM Roles
     |
-    | Terraform permissions
+    | Role-specific Terraform or ECR permissions
     v
-Target Terraform Stack
+Target Terraform Stack or ECR Repositories
 ```
 
 The roles created by this stack are used by GitHub Actions to run Terraform workflows without long-lived AWS credentials.
@@ -74,70 +75,29 @@ Typical responsibilities:
 - Create, update, and destroy AWS resources
 - Access required KMS keys for encrypted Terraform-managed resources
 
+#### `GitHub-Image-Publisher` Role
+
+Used only by the `Deploy Application` workflow's AWS publication job.
+
+- Trusts explicitly configured repository branches through GitHub OIDC
+- Obtains ECR authorization and publishes/queries images in repositories matching the workload name prefix
+- Has no broad Terraform state, ECS, IAM, or administration authority
+- Is separate from the release/PR job, which has GitHub write permissions but no AWS credentials or OIDC token
+
 ---
 
 ## Deployment Order
 
 ### Initial Setup
 
-The following steps assume the `state` stack has already been deployed.
+1. Deploy the workload state stack and complete its S3 backend migration.
+2. Apply this account stack with GitHub OIDC enabled. Record `plan_role_github_arn`, `apply_role_github_arn`, and, when enabled, `image_publisher_role_github_arn`.
+3. Configure the matching GitHub Plan/Apply environments. Store the image publisher ARN as `IMAGE_PUBLISHER_ROLE_GITHUB_ARN` in `<env>-plan`, together with `BRANCHES_IMAGE_PUBLISHER_GITHUB`.
+4. Include the Apply role in the appropriate `bucket_admin_principals` configuration before the workload stack must manage protected bucket controls.
+5. Deploy `environments/<env>` locally or through the plan-first `Terraform Apply` workflow.
+6. Reconcile the account stack after workload deployment with `scripts/bootstrap/reconcile-workload-account.sh <env>` or the `Reconcile Workload Account` workflow. Reconciliation resolves the current workload Lambda/Secrets Manager CMKs and preserves the enabled Image Publisher role and branch allowlist.
 
-Refer to the ../state/README.md file for `state` stack setup.
-
-1. Deploy the `account` stack
-> For the control plane, `<env>` is `control_plane`
-```bash
-cd /bootstrap/<env>/account
-terraform init
-terraform apply
-```
-> Note the  following output:
-> `apply_role_github_arn`
-
-2. Add the apply role to bucket admin principals
-
-Add the `apply_role_github_arn` output value to the `bucket_admin_principals` variable for the relevant `state`/`baseline` stack.
-
-Example:
-
-```bash
-export TF_VAR_bucket_admin_principals=["arn:aws:iam::<account_id>:root","arn:aws:iam::<account_id>:role/tf-secure-baseline-<env>-github-apply-role"]
-```
-
-This allows the GitHub apply role to manage protected Terraform-managed resources that require elevated administrative access.
-
-3. Deploy the baseline stack
-
-After the required variables are set, deploy the `baseline` stack for the environment.
-
-```bash
-cd ../../../baseline/
-terraform apply
-```
-
-The baseline stack may output additional KMS key ARNs required by the GitHub OIDC roles, such as:
-
-```text
-lambda_cmk_arn
-secrets_manager_cmk_arn
-```
-
-4. Pass `baseline`-created CMK ARNs back into the account stack
-
-Define the `lambda_cmk_arn` and `secrets_manager_cmk_arn` variables
-
-```bash
-TF_VAR_lambda_cmk_arn="<lambda_cmk_arn>"
-TF_VAR_secrets_manager_cmk_arn="<secrets_manager_cmk_arn"
-```
-
-5. Re-apply `account` stack
-
-> For the control plane, `<env>` is `control_plane`
-```bash
-cd ../bootstrap/<env>/account/
-terraform apply
-```
+Prefer reconciliation over manually copying workload-created CMK outputs back into this stack. The reconciliation workflow uses an exact saved account-stack plan and runs strict bootstrap validation after Apply.
 
 ## Usage
 
@@ -163,6 +123,9 @@ module "github_oidc" {
   branches_apply_github    = var.branches_apply_github
   environment_apply_github = var.environment_apply_github
 
+  enable_image_publisher_role_github = var.enable_image_publisher_role_github
+  branches_image_publisher_github    = var.branches_image_publisher_github
+
   lambda_cmk_arn          = var.lambda_cmk_arn
   secrets_manager_cmk_arn = var.secrets_manager_cmk_arn
 }
@@ -183,6 +146,8 @@ module "github_oidc" {
 | `enable_apply_role_github` | Enable the GitHub-Apply role |
 | `environment_apply_github` | GitHub environment allowed to assume the GitHub-Apply role |
 | `branches_apply_github` | Branches allowed to assume the GitHub-Apply role |
+| `enable_image_publisher_role_github` | Enable the GitHub image-publisher role |
+| `branches_image_publisher_github` | Branches allowed to assume the GitHub image-publisher role |
 | `tf_state_bucket_arn` | ARN of the Terraform state bucket |
 | `tf_state_bucket_cmk_arn` | ARN of the CMK for the tfstate S3 bucket |
 | `lambda_cmk_arn` | Lambda CMK (optional on first apply) |
@@ -194,6 +159,7 @@ module "github_oidc" {
 |------|-------------|
 | `plan_role_github_arn` | `GitHub-Plan` role ARN |
 | `apply_role_github_arn` | `GitHub-Apply` role ARN |
+| `image_publisher_role_github_arn` | `GitHub-Image-Publisher` role ARN when enabled |
 
 ---
 
@@ -228,6 +194,8 @@ GitHub environment: prod           -> GitHub-Apply role in prod account
 GitHub environment: control-plane-plan -> GitHub-Plan role in bootstrap account
 GitHub environment: control-plane      -> GitHub-Apply role in bootstrap account
 ```
+
+For workload application publication, store `image_publisher_role_github_arn` as `IMAGE_PUBLISHER_ROLE_GITHUB_ARN` in the matching `<env>-plan` GitHub Environment. Also configure `BRANCHES_IMAGE_PUBLISHER_GITHUB` there as a non-empty JSON branch array matching this stack's trust input. The workflow's configuration-resolution job reads those variables from `<env>-plan`; the AWS publisher job itself intentionally has no GitHub Environment because its OIDC subject is branch based.
 
 For `environment/<env>` stacks, GitHub Actions can safely use these roles to manage baseline infrastructure.
 
@@ -264,6 +232,7 @@ Only update this stack when changing:
 - GitHub repository or organization
 - GitHub OIDC trust conditions
 - Plan or apply role permissions
+- Image-publisher role permissions or authorized branches
 - Terraform state access permissions
 - GitHub environment names
 - Optional KMS permissions required by baseline-created resources

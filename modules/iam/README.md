@@ -74,17 +74,14 @@ The instance profile output is consumed by the `compute` module so EC2 instances
 
 ## `ecs.tf`
 
-The `ecs.tf` file creates separate ECS task execution and application task
-roles for every key in `var.ecs_iam_services`:
+The `ecs.tf` file creates separate ECS task execution and application task roles for every key in `var.ecs_iam_services`:
 
 - `aws_iam_role.ecs_task_execution_roles`
 - `aws_iam_role.ecs_task_roles`
 - `data.aws_iam_policy_document.ecs_task_execution_policies`
 - An inline `aws_iam_role_policy` attaching each custom execution policy
 
-Both role types trust `ecs-tasks.amazonaws.com`. The shared trust document also
-requires the configured account through `aws:SourceAccount` and restricts
-`aws:SourceArn` to ECS resources in the configured Region and account.
+Both role types trust `ecs-tasks.amazonaws.com`. The shared trust document also requires the configured account through `aws:SourceAccount` and restricts `aws:SourceArn` to ECS resources in the configured Region and account.
 
 Role pairs are keyed by the ECS service key. Their AWS names are:
 
@@ -96,27 +93,14 @@ Role pairs are keyed by the ECS service key. Their AWS names are:
 The custom execution policy currently permits:
 
 - `ecr:GetAuthorizationToken` against `*`, as required by that ECR API
-- `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, and
-  `ecr:BatchGetImage` against only the service's declared repository ARNs
-- `logs:CreateLogStream` and `logs:PutLogEvents` against stream ARNs beneath
-  only the service's declared log-group ARNs
+- `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, and `ecr:BatchGetImage` against only the service's declared repository ARNs
+- `logs:CreateLogStream` and `logs:PutLogEvents` against stream ARNs beneath only the service's declared log-group ARNs
 
-The module does not attach the AWS-managed
-`AmazonECSTaskExecutionRolePolicy`. It grants neither role `iam:PassRole`, and
-the execution role has no direct permission on the ECR encryption CMK. The
-application task role initially has no attached application policy, so it does
-not provide broad runtime authority.
+The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. It grants neither role `iam:PassRole`, and the execution role has no direct permission on the ECR encryption CMK. The application task role initially has no attached application policy, so it does not provide broad runtime authority.
 
-The optional execution secret, SSM parameter, and KMS ARN sets are consumed by
-dynamic least-privilege statements. When non-empty they grant, respectively,
-`secretsmanager:GetSecretValue`, `ssm:GetParameters`, or `kms:Decrypt` against
-only the declared ARNs. The field name is
-`execution_ssm_parameter_arns`, and the inline policy resource is
-`aws_iam_role_policy.ecs_task_execution_policies`.
+The optional execution secret, SSM parameter, and KMS ARN sets are consumed by dynamic least-privilege statements. When non-empty they grant, respectively, `secretsmanager:GetSecretValue`, `ssm:GetParameters`, or `kms:Decrypt` against only the declared ARNs. `task_execution_kms_key_arns` applies to task-startup authority on the execution role, not application authority on the task role. An empty set creates no `kms:Decrypt` statement; a populated set grants exactly the declared keys. The SSM field is `execution_ssm_parameter_arns`, and the inline policy resource is `aws_iam_role_policy.ecs_task_execution_policies`.
 
-`ecs_iam_services` defaults to `{}`. Baseline derives and passes one entry per
-canonical `ecs_services` key, so role pairs are absent only when no ECS service
-is configured.
+`ecs_iam_services` defaults to `{}`. Baseline derives and passes one entry per deployable canonical service. A registered service with `image_digest = null` does not receive a role pair until an exact digest is selected.
 
 ---
 
@@ -553,13 +537,11 @@ map(object({
   log_group_arns                 = set(string)
   execution_secret_arns          = optional(set(string), [])
   execution_ssm_parameter_arns   = optional(set(string), [])
-  task_execution_kms_key_arns         = optional(set(string), [])
+  task_execution_kms_key_arns    = optional(set(string), [])
 }))
 ```
 
-All fields are consumed by the generated policy. ECR and log-group permissions
-are always present for each configured service; secret, SSM parameter, and KMS
-statements are emitted only when their corresponding sets are non-empty.
+All fields are consumed by the generated policy. ECR and log-group permissions are always present for each configured service; secret, SSM parameter, and KMS statements are emitted only when their corresponding sets are non-empty.
 
 ---
 
@@ -627,13 +609,7 @@ This module call wires IAM roles and policies to the rest of the baseline, inclu
 
 ## Validation
 
-The current workload baseline derives `ecs_iam_services` from the canonical
-service map and passes it to this module. `validate-iam.sh` validates each
-configured execution/task role pair, ECS trust restrictions, custom execution
-policy scope, optional ARN-identifiable secret/parameter permissions, absence
-of managed-policy attachments and `iam:PassRole`, and the initially policy-free
-application task role. Runtime identity relationships are also checked through
-resource-backed workload outputs by `validate-ecs-runtime.sh`.
+The current workload baseline derives `ecs_iam_services` from the canonical service map and passes it to this module. `validate-iam.sh` validates each configured execution/task role pair, ECS trust restrictions, custom execution policy scope, optional ARN-identifiable secret/parameter permissions, absence of managed-policy attachments and `iam:PassRole`, and the initially policy-free application task role. It also compares the live `kms:Decrypt` resource set exactly with `ecs_service_configuration[*].task_execution_kms_key_arns` and rejects decrypt permission when that set is empty. Runtime identity relationships are also checked through resource-backed workload outputs by `validate-ecs-runtime.sh`.
 
 ### Confirm IAM Roles Exist
 
@@ -1088,11 +1064,9 @@ Check:
 ## Security Notes
 
 - EC2 instances use IAM instance profiles instead of static credentials.
-- ECS task execution and application task roles are separate and keyed per
-  service.
+- ECS task execution and application task roles are separate and keyed per service.
 - ECS application task roles initially carry no broad application permissions.
-- ECS execution policies are custom and resource-scoped for repository pulls
-  and log writes; the AWS-managed ECS execution policy is not attached.
+- ECS execution policies are custom and resource-scoped for repository pulls and log writes; the AWS-managed ECS execution policy is not attached.
 - Lambda automation roles are separated by function.
 - Lambda roles use AWS-managed baseline execution policies plus focused custom permissions.
 - Logging delivery roles are service-specific.

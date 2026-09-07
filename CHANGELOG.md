@@ -1,15 +1,17 @@
 # Changelog
 
-## Unreleased — v1.8.0 Secure Container Workloads
+## v1.8.0 — Secure Container Workloads
 
-The v1.8.0 work merged to `main` adds a generic secure ECS/Fargate application-runtime capability while retaining EC2 as a supported host-based workload pattern. The core runtime through C5 has been implemented and live-tested; v1.8.0 has not been released or tagged.
+v1.8.0 adds a generic secure ECS/Fargate application runtime and release path while retaining EC2 as a supported host-based workload pattern. The runtime, image-publication workflow, digest-promotion workflow, protected exact-plan deployment path, and workload validation are implemented and live-tested.
 
 ### Added
 
 - Added separate reusable `modules/ecr`, `modules/ecs_cluster`, `modules/application_load_balancer`, and `modules/ecs_service` modules rather than combining ECS with the EC2-only `modules/compute`.
 - Added one shared ECS cluster per workload environment with configurable Container Insights and an `enhanced` default.
 - Added the canonical environment-level `ecs_services` map. Baseline derives the narrower ECR, IAM, ALB, security-policy, and ECS-runtime maps instead of requiring operators to maintain parallel service inventories.
+- Added registered-but-unreleased services through nullable `ecs_services.<service>.image_digest`. A null digest preserves the required ECR repository while withholding the task definition, service, per-service IAM roles, task security group, and runtime log group until an exact digest is selected.
 - Added digest-pinned Fargate task definitions using Linux, `awsvpc`, compute-private subnets, no public task IP, per-service execution/task roles, Terraform-owned KMS-encrypted log groups, deployment circuit breaking, and automatic rollback.
+- Added Terraform-owned ECS service log groups under `/aws/ecs/<name-prefix>/<service>` and a cluster-owned Container Insights performance log group under `/aws/ecs/containerinsights/<cluster-name>/performance`, both using effective retention and the workload logs CMK.
 - Added a conditional shared internet-facing HTTPS ALB with explicit host/path listener rules, `ip` target groups, a fixed 404 default action, a caller-supplied ACM certificate, and the default TLS policy `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09`.
 - Added per-service task security groups and cross-component ECS rules under `modules/networking/security_policy`, including Interface Endpoint, S3 managed prefix-list, optional database, optional ALB, and egress-mode-aware HTTPS relationships.
 - Added resource-granular ECS launch readiness through `terraform_data.ecs_execution_policy_ready` and `terraform_data.ecs_security_policy_ready` without module-level dependency cycles.
@@ -18,26 +20,34 @@ The v1.8.0 work merged to `main` adds a generic secure ECS/Fargate application-r
 - Added separate least-privilege ECS task execution and application task roles per service. Execution policies scope ECR pulls, CloudWatch Logs, declared Secrets Manager/SSM references, and optional execution-time KMS decrypt permissions; task roles initially carry no broad application permissions.
 - Added non-secret RDS consumer outputs and validator-facing resource-backed outputs for ECS platform version, Container Insights, ECR/logging CMKs, database-access intent, ALB HTTPS listener metadata, and the S3 managed prefix-list ID.
 - Added `validate-ecr.sh` and `validate-ecs-runtime.sh`; the existing IAM validator now validates ECS role trust and policy separation. The workload baseline layer now contains 16 validators and remains one of the existing four validation/evidence layers.
+- Added `scripts/deployment/deploy-application.sh` and `update-application-digest.sh`, plus the `Deploy Application` workflow, for platform-aware Docker builds, ECR publication, authoritative digest resolution, and one-field release-PR generation.
+- Added an optional, environment-specific GitHub OIDC image-publisher role with branch-scoped trust and ECR-only publication/query authority. The AWS publisher job and GitHub release-PR job use separate credentials and permissions.
 
 ### Changed
 
 - ECS/Fargate is now the preferred modern SaaS/application runtime; EC2 remains supported and `modules/compute` remains EC2-only.
 - ECR repositories required by `ecs_services` are merged with explicitly configured repositories. A repository can be created first through `repositories` and later retained under the same map key when it becomes service-derived.
+- Application releases now use tracked `environments/<env>/container-workloads.auto.tfvars.json` files and change only the selected service's `image_digest`; Terraform continues to own runtime materialization and never builds or pushes images.
 - Network Firewall domain targets are now the Terraform-owned union of platform-required and environment-approved application domains when Network Firewall is active.
-- Runtime validation now compares resource-backed expected values with live AWS state for ECR CMK identity, ECS log-group CMK identity, Container Insights, Fargate platform version, database SG intent, ALB listener/certificate/TLS metadata, and S3 prefix-list identity.
+- Standardized ECS application log-group names as `/aws/ecs/<name-prefix>/<service>` and finalized the optional task-startup KMS field name as `task_execution_kms_key_arns`.
+- Runtime and IAM validation now compare resource-backed expected values with live AWS state for ECR CMK identity, ECS and Container Insights log-group CMK identity and retention, Container Insights configuration, Fargate platform version, task-execution KMS scope, database SG intent, ALB listener/certificate/TLS metadata, and S3 prefix-list identity.
+- Workload Terraform Plan and Apply paths now require a valid `DEPLOYMENT_PROFILE`. The standalone Plan workflow remains informational, while the self-contained Apply workflow generates, records, checksums, obtains approval for, verifies, and applies its own exact saved binary plan without replanning.
 - Application source, Docker builds, tests, image publication, digest promotion, schema migrations, and release sequencing remain outside Terraform ownership. ECS infrastructure remains in the existing workload environment state.
 
 ### Validation
 
-- Core ECS/Fargate runtime and validation were exercised against live workload infrastructure before merge.
+- The application publication and release-PR path, protected exact-saved-plan Apply, and ECS/Fargate runtime were exercised against live development workload infrastructure.
 - `validate-ecs-runtime.sh` verifies cluster state, exact service inventory, service steady state and completed primary rollout, Fargate networking, one essential service container, immutable image references, logging, task security policy, conditional database access, and conditional ALB relationships.
+- `validate-iam.sh` verifies exact optional `task_execution_kms_key_arns` scope and rejects `kms:Decrypt` when the configured set is empty.
+- `validate-logging.sh` verifies that matching workload CloudWatch groups with explicit retention use the effective retention period.
 - Empty `repositories = {}` and `ecs_services = {}` configurations remain valid; the environment ECS cluster still exists while per-service runtime resources and the ALB are absent.
+- Final development workload validation completed successfully with all 16 workload validators passing, followed by a converged Terraform plan with no changes.
 
-### Next
+### Deferred / Future
 
-- The immediate next milestone is an application image build/publish/deployment workflow using short-lived OIDC credentials, authoritative ECR digest resolution, exact saved-plan review/application, ECS convergence, and ECR/IAM/ECS validation.
-- Later v1.8.0 work is expected to add ECS Service Auto Scaling, GuardDuty Fargate Runtime Monitoring, fail-closed task-level containment, a ReconoSense reference deployment, and release-readiness documentation/tagging.
-- GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`; the operational ECS runtime does not itself enable central Fargate agent management.
+- ECS Service Auto Scaling, GuardDuty Fargate agent management, ECS task-level containment, and the ReconoSense reference deployment are post-v1.8.0 work, not release blockers.
+- GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`; operating the ECS runtime does not itself enable central Fargate agent management.
+- Scheduled/run-to-completion tasks, migration-task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, and application database-user lifecycle remain future design work.
 
 ## v1.7.0
 
@@ -164,8 +174,7 @@ This update introduces a dedicated `security-operations` administration layer an
 
 ## v1.6.0
 
-This update hardens EC2 provisioning, boot-time vulnerability remediation, and
-automated isolation after testing the Amazon Inspector remediation path against fresh development deployments.
+This update hardens EC2 provisioning, boot-time vulnerability remediation, and automated isolation after testing the Amazon Inspector remediation path against fresh development deployments.
 
 ### Added
 
@@ -178,101 +187,53 @@ automated isolation after testing the Amazon Inspector remediation path against 
     bootstrap packages; and
   - records relevant package versions and reboot-required state in the instance
     bootstrap log.
-- Added `user_data_replace_on_change = true` so EC2 instances are replaced when
-  their bootstrap configuration changes.
-- Added a compute security-policy readiness object from the standalone
-  `security_policy` module and passed it directly into `compute`.
-- Added a `terraform_data` dependency bridge so EC2 instances wait for required
-  security-group rules, including public HTTPS egress when enabled, before
-  launching and executing cloud-init.
-- Added explicit EC2 isolation eligibility checks for configured severity,
-  finding workflow and record state, valid EC2 resource IDs, instance state,
-  duplicate resources, and already-isolated instances.
-- Added explicit `ISOLATION_ALLOWED` Boolean validation to workload Plan paths;
-  Terraform Destroy uses a safe `false` fallback when the setting is absent.
+- Added `user_data_replace_on_change = true` so EC2 instances are replaced when their bootstrap configuration changes.
+- Added a compute security-policy readiness object from the standalone `security_policy` module and passed it directly into `compute`.
+- Added a `terraform_data` dependency bridge so EC2 instances wait for required security-group rules, including public HTTPS egress when enabled, before launching and executing cloud-init.
+- Added explicit EC2 isolation eligibility checks for configured severity, finding workflow and record state, valid EC2 resource IDs, instance state, duplicate resources, and already-isolated instances.
+- Added explicit `ISOLATION_ALLOWED` Boolean validation to workload Plan paths; Terraform Destroy uses a safe `false` fallback when the setting is absent.
 
 ### Changed
 
-- Changed compute bootstrap handling to use a literal shell script instead of a
-  Terraform template when no Terraform interpolation is required.
-- Changed environment-root `isolation_allowed` defaults to `false` so automatic
-  isolation requires an explicit environment-level decision.
-- Configured development to opt into automatic isolation while staging and
-  production remain opted out.
-- Changed automatic EC2 isolation to default to `CRITICAL` findings while still
-  allowing the accepted severity set to be configured by the Lambda
-  environment.
-- Changed EC2 auto-isolation authorization to require
-  `IsolationAllowed=true` explicitly after trimming whitespace and normalizing
-  case.
-- Changed the isolation workflow to require `NEW`, `ACTIVE` findings and
-  `running` or `stopped` instances before containment.
-- Changed the isolation workflow to request and tag attached EBS snapshots only
-  after all eligibility checks pass and before replacing security groups.
-- Changed the isolation workflow to preserve the Terraform-managed
-  `IsolationAllowed` policy tag instead of changing it after isolation.
-- Changed EC2 lifecycle handling so Terraform ignores runtime quarantine
-  security-group replacement and Lambda-managed incident-response tags while
-  an instance is isolated.
-- Changed provisioning dependencies so the compute security group can still be
-  created early for security-policy rules while only the EC2 instances wait for
-  the completed rules.
-- Updated the automation module README and root README to document managed
-  Lambda packaging, clean-runner saved-plan deployment, and the current EC2
-  isolation safeguards.
+- Changed compute bootstrap handling to use a literal shell script instead of a Terraform template when no Terraform interpolation is required.
+- Changed environment-root `isolation_allowed` defaults to `false` so automatic isolation requires an explicit environment-level decision.
+- Configured development to opt into automatic isolation while staging and production remain opted out.
+- Changed automatic EC2 isolation to default to `CRITICAL` findings while still allowing the accepted severity set to be configured by the Lambda environment.
+- Changed EC2 auto-isolation authorization to require `IsolationAllowed=true` explicitly after trimming whitespace and normalizing case.
+- Changed the isolation workflow to require `NEW`, `ACTIVE` findings and `running` or `stopped` instances before containment.
+- Changed the isolation workflow to request and tag attached EBS snapshots only after all eligibility checks pass and before replacing security groups.
+- Changed the isolation workflow to preserve the Terraform-managed `IsolationAllowed` policy tag instead of changing it after isolation.
+- Changed EC2 lifecycle handling so Terraform ignores runtime quarantine security-group replacement and Lambda-managed incident-response tags while an instance is isolated.
+- Changed provisioning dependencies so the compute security group can still be created early for security-policy rules while only the EC2 instances wait for the completed rules.
+- Updated the automation module README and root README to document managed Lambda packaging, clean-runner saved-plan deployment, and the current EC2 isolation safeguards.
 
 ### Fixed
 
-- Fixed a fresh-deployment race where EC2 cloud-init could execute before
-  required compute security-group rules, including public HTTPS egress when
-  enabled, were ready, causing Ubuntu repository connections to time out.
-- Fixed bootstrap behavior that allowed `apt-get update` repository failures to
-  fall back to stale package indexes, report `0 upgraded`, and incorrectly
-  complete successfully with vulnerable AMI package versions still installed.
-- Fixed Terraform template parsing failures caused by Bash/dpkg expressions
-  such as `${binary:Package}` being interpreted as Terraform interpolation.
-- Fixed the risk of a later Terraform apply restoring the normal compute
-  security group or removing active Lambda isolation evidence.
+- Fixed a fresh-deployment race where EC2 cloud-init could execute before required compute security-group rules, including public HTTPS egress when enabled, were ready, causing Ubuntu repository connections to time out.
+- Fixed bootstrap behavior that allowed `apt-get update` repository failures to fall back to stale package indexes, report `0 upgraded`, and incorrectly complete successfully with vulnerable AMI package versions still installed.
+- Fixed Terraform template parsing failures caused by Bash/dpkg expressions such as `${binary:Package}` being interpreted as Terraform interpolation.
+- Fixed the risk of a later Terraform apply restoring the normal compute security group or removing active Lambda isolation evidence.
 
 ### Security
 
-- Added deterministic boot-time installation of available Ubuntu security
-  updates before instances enter normal service.
-- Made isolation authorization fail closed unless the environment explicitly
-  enables isolation and the instance has `IsolationAllowed=true`.
-- Limited automatic isolation to `CRITICAL` findings by default and required
-  eligible finding, instance, and current-isolation state before containment.
-- Required pre-isolation EBS snapshot requests to succeed before security-group
-  replacement proceeds.
-- Preserved policy ownership of `IsolationAllowed` in Terraform while retaining
-  Lambda-owned evidence tags for isolation status, finding ID, timestamp, and
-  original security groups.
-- Prevented normal Terraform reconciliation from silently reversing an active
-  quarantine action.
-- Added explicit workflow validation so workload plans accept only
-  `ISOLATION_ALLOWED=true` or `ISOLATION_ALLOWED=false`.
+- Added deterministic boot-time installation of available Ubuntu security updates before instances enter normal service.
+- Made isolation authorization fail closed unless the environment explicitly enables isolation and the instance has `IsolationAllowed=true`.
+- Limited automatic isolation to `CRITICAL` findings by default and required eligible finding, instance, and current-isolation state before containment.
+- Required pre-isolation EBS snapshot requests to succeed before security-group replacement proceeds.
+- Preserved policy ownership of `IsolationAllowed` in Terraform while retaining Lambda-owned evidence tags for isolation status, finding ID, timestamp, and original security groups.
+- Prevented normal Terraform reconciliation from silently reversing an active quarantine action.
+- Added explicit workflow validation so workload plans accept only `ISOLATION_ALLOWED=true` or `ISOLATION_ALLOWED=false`.
 
 ### Notes
 
-- The existing weekly SSM Patch Manager maintenance window remains the ongoing
-  patching control; boot-time patching provides the initial remediation layer
-  for newly launched instances.
-- Development deployments continue to use the `nat_only` egress mode. Testing
-  confirmed that the completed NAT, Internet Gateway, route-table,
-  security-group, and NACL path was healthy; the launch-time failure was
-  addressed by waiting for required compute security-group rules.
-- Configure `ISOLATION_ALLOWED` in workload Plan GitHub Environments. The
-  current deployment policy enables it for development and disables it for
-  staging and production.
-- Managed Lambda archive resources shipped in `v1.5.0` but were omitted from
-  the original changelog entry; the `v1.5.0` history below now records them.
+- The existing weekly SSM Patch Manager maintenance window remains the ongoing patching control; boot-time patching provides the initial remediation layer for newly launched instances.
+- Development deployments continue to use the `nat_only` egress mode. Testing confirmed that the completed NAT, Internet Gateway, route-table, security-group, and NACL path was healthy; the launch-time failure was addressed by waiting for required compute security-group rules.
+- Configure `ISOLATION_ALLOWED` in workload Plan GitHub Environments. The current deployment policy enables it for development and disables it for staging and production.
+- Managed Lambda archive resources shipped in `v1.5.0` but were omitted from the original changelog entry; the `v1.5.0` history below now records them.
 
 ## v1.5.0
 
-This release completes the workload CI/CD integration (for now) by moving baseline and
-workload-account changes to a plan-before-approval model with exact saved-plan
-application, protected GitHub environments, and stronger AWS account safety
-validation.
+This release completes the workload CI/CD integration (for now) by moving baseline and workload-account changes to a plan-before-approval model with exact saved-plan application, protected GitHub environments, and stronger AWS account safety validation.
 
 ### Added
 
@@ -284,127 +245,79 @@ validation.
     a short-lived artifact;
   - waits for approval on the protected workload Apply environment; and
   - downloads, verifies, and applies the exact saved plan after approval.
-- Added optional post-baseline workload-account reconciliation to the
-  `Terraform Apply` workflow.
+- Added optional post-baseline workload-account reconciliation to the `Terraform Apply` workflow.
 - Added plan-first `Reconcile Workload Account` workflow modes:
   - `plan-only`;
   - `plan-and-apply`.
-- Added protected Apply-job approval and exact saved-plan handoff to workload
-  account reconciliation.
-- Added `--plan-file <path>` to
-  `scripts/bootstrap/reconcile-workload-account.sh` for retaining a generated
-  reconciliation plan after the script exits.
-- Added `--apply-plan <path>` to
-  `scripts/bootstrap/reconcile-workload-account.sh` for applying an existing
-  reviewed plan without generating a replacement plan.
+- Added protected Apply-job approval and exact saved-plan handoff to workload account reconciliation.
+- Added `--plan-file <path>` to `scripts/bootstrap/reconcile-workload-account.sh` for retaining a generated reconciliation plan after the script exits.
+- Added `--apply-plan <path>` to `scripts/bootstrap/reconcile-workload-account.sh` for applying an existing reviewed plan without generating a replacement plan.
 - Added Plan and Apply job validation for:
   - required 12-digit `ACCOUNT_ID`;
   - configured IAM role ARN account ownership; and
   - active AWS caller account identity.
-- Added saved-plan checksum and metadata verification before baseline and
-  reconciliation Apply jobs.
-- Added expected AWS account information to the baseline saved-plan metadata
-  so the protected Apply job can verify that the reviewed plan belongs to the
-  configured workload account.
-- Added managed `archive_file` resources for the EC2 Isolation, EC2 Rollback,
-  and IP Enrichment Lambda deployment packages.
+- Added saved-plan checksum and metadata verification before baseline and reconciliation Apply jobs.
+- Added expected AWS account information to the baseline saved-plan metadata so the protected Apply job can verify that the reviewed plan belongs to the configured workload account.
+- Added managed `archive_file` resources for the EC2 Isolation, EC2 Rollback, and IP Enrichment Lambda deployment packages.
 
 ### Changed
 
-- Changed workload deployment sequencing so the Terraform plan is generated
-  before the reviewer is asked to approve the Apply job.
+- Changed workload deployment sequencing so the Terraform plan is generated before the reviewer is asked to approve the Apply job.
 - Standardized workload CI/CD around paired GitHub environments:
   - `dev-plan` / `dev`;
   - `staging-plan` / `staging`;
   - `prod-plan` / `prod`.
-- Changed the protected `dev`, `staging`, and `prod` environments to guard only
-  the privileged Apply jobs, while the matching `*-plan` environments provide
-  the Plan roles and allow plans to complete before approval.
-- Changed workload reconciliation automation to apply the exact reviewed
-  account-stack plan after approval instead of regenerating the plan in the
-  Apply job.
-- Preserved the existing one-step reconciliation `--apply` mode while adding a
-  durable two-invocation review path through `--plan-file` and `--apply-plan`.
-- Changed GitHub OIDC execution so an unset `AWS_PROFILE` uses the AWS default
-  credential provider chain instead of attempting to load an empty AWS CLI
-  profile.
-- Updated the root README, quickstart, validation checklist, adoption guide,
-  and bootstrap-script README for the v1.5.0 plan-before-apply model.
-- Changed Lambda packaging from plan-time archive data sources to managed
-  Terraform resources so the protected Apply runner can create required ZIP
-  files while applying the exact reviewed saved plan.
+- Changed the protected `dev`, `staging`, and `prod` environments to guard only the privileged Apply jobs, while the matching `*-plan` environments provide the Plan roles and allow plans to complete before approval.
+- Changed workload reconciliation automation to apply the exact reviewed account-stack plan after approval instead of regenerating the plan in the Apply job.
+- Preserved the existing one-step reconciliation `--apply` mode while adding a durable two-invocation review path through `--plan-file` and `--apply-plan`.
+- Changed GitHub OIDC execution so an unset `AWS_PROFILE` uses the AWS default credential provider chain instead of attempting to load an empty AWS CLI profile.
+- Updated the root README, quickstart, validation checklist, adoption guide, and bootstrap-script README for the v1.5.0 plan-before-apply model.
+- Changed Lambda packaging from plan-time archive data sources to managed Terraform resources so the protected Apply runner can create required ZIP files while applying the exact reviewed saved plan.
 
 ### Fixed
 
-- Fixed saved-plan artifact upload failures caused by storing plan files in the
-  hidden `.terraform-plan-artifact` directory, which
-  `actions/upload-artifact` ignored by default.
-- Fixed strict post-reconciliation validation under GitHub OIDC by omitting
-  `AWS_PROFILE` when no profile is configured instead of exporting
-  `AWS_PROFILE=""`.
-- Fixed fresh-runner Terraform Apply failures where Lambda ZIP files created on
-  the separate Plan runner were unavailable during exact saved-plan Apply.
+- Fixed saved-plan artifact upload failures caused by storing plan files in the hidden `.terraform-plan-artifact` directory, which `actions/upload-artifact` ignored by default.
+- Fixed strict post-reconciliation validation under GitHub OIDC by omitting `AWS_PROFILE` when no profile is configured instead of exporting `AWS_PROFILE=""`.
+- Fixed fresh-runner Terraform Apply failures where Lambda ZIP files created on the separate Plan runner were unavailable during exact saved-plan Apply.
 
 ### Security
 
-- Reduced blind-approval risk by ensuring reviewers can inspect Terraform plan
-  output before approving a deployment.
-- Reduced plan substitution and time-of-check/time-of-use risk by applying the
-  exact saved plan produced before approval.
-- Added account-bound role and caller validation to reduce the risk of planning
-  or applying against the wrong AWS account.
-- Kept Plan and Apply OIDC trust paths separated through distinct GitHub
-  environments and IAM roles.
-- Limited saved Terraform plan artifacts to short retention because binary plan
-  files may contain sensitive configuration values.
+- Reduced blind-approval risk by ensuring reviewers can inspect Terraform plan output before approving a deployment.
+- Reduced plan substitution and time-of-check/time-of-use risk by applying the exact saved plan produced before approval.
+- Added account-bound role and caller validation to reduce the risk of planning or applying against the wrong AWS account.
+- Kept Plan and Apply OIDC trust paths separated through distinct GitHub environments and IAM roles.
+- Limited saved Terraform plan artifacts to short retention because binary plan files may contain sensitive configuration values.
 
 ### Notes
 
-- Configure the same workload `ACCOUNT_ID` in both members of each GitHub
-  environment pair, such as `dev-plan` and `dev`.
-- Configure `PLAN_ROLE_GITHUB_ARN` in the `*-plan` environment and
-  `APPLY_ROLE_GITHUB_ARN` in the matching protected Apply environment.
-- Keep shared values such as `PRIMARY_REGION`, `CLOUD_NAME`,
-  `TF_STATE_BUCKET_ARN`, and `TF_STATE_BUCKET_CMK_ARN` synchronized across each
-  Plan/Apply environment pair.
-- The standalone Terraform Plan workflow remains useful for pull requests,
-  pushes, and independent review. The Terraform Apply workflow generates its
-  own saved plan so the approved Apply job consumes an artifact from the same
-  workflow run.
-- The reconciliation helper continues to run strict workload bootstrap
-  validation after apply unless `--skip-validation` is explicitly used.
-- Generated Lambda ZIP files are Terraform-managed build artifacts and are not
-  manually maintained or committed as source files.
+- Configure the same workload `ACCOUNT_ID` in both members of each GitHub environment pair, such as `dev-plan` and `dev`.
+- Configure `PLAN_ROLE_GITHUB_ARN` in the `*-plan` environment and `APPLY_ROLE_GITHUB_ARN` in the matching protected Apply environment.
+- Keep shared values such as `PRIMARY_REGION`, `CLOUD_NAME`, `TF_STATE_BUCKET_ARN`, and `TF_STATE_BUCKET_CMK_ARN` synchronized across each Plan/Apply environment pair.
+- The standalone Terraform Plan workflow remains useful for pull requests, pushes, and independent review. The Terraform Apply workflow generates its own saved plan so the approved Apply job consumes an artifact from the same workflow run.
+- The reconciliation helper continues to run strict workload bootstrap validation after apply unless `--skip-validation` is explicitly used.
+- Generated Lambda ZIP files are Terraform-managed build artifacts and are not manually maintained or committed as source files.
 
 ## v1.4.2
 
 ### Added
 
-- Added `scripts/bootstrap/reconcile-workload-account.sh` to resolve current
-  workload Lambda and Secrets Manager CMK outputs, safely reconcile them into
-  the workload GitHub Apply role, and run strict post-apply bootstrap
-  validation.
+- Added `scripts/bootstrap/reconcile-workload-account.sh` to resolve current workload Lambda and Secrets Manager CMK outputs, safely reconcile them into the workload GitHub Apply role, and run strict post-apply bootstrap validation.
 
 ### Changed
 
-- Updated deployment and validation guidance to use
-  `scripts/bootstrap/reconcile-workload-account.sh <env>` instead of manually
-  copying workload CMK outputs and re-applying `bootstrap/<env>/account`.
+- Updated deployment and validation guidance to use `scripts/bootstrap/reconcile-workload-account.sh <env>` instead of manually copying workload CMK outputs and re-applying `bootstrap/<env>/account`.
 
 ## v1.4.1
 
 ### Changed
 
-- Replaced tracked runtime `terraform.tfvars` files with
-  `terraform.tfvars.example` templates.
-- Updated GitHub Actions to provide required Terraform values through workflow
-  matrices, GitHub variables, and secrets.
+- Replaced tracked runtime `terraform.tfvars` files with `terraform.tfvars.example` templates.
+- Updated GitHub Actions to provide required Terraform values through workflow matrices, GitHub variables, and secrets.
 - Updated onboarding instructions for creating ignored local variable files.
 
 ### Security
 
-- Added Git ignore coverage for runtime Terraform variable files to reduce the
-  risk of committing client-specific or sensitive configuration.
+- Added Git ignore coverage for runtime Terraform variable files to reduce the risk of committing client-specific or sensitive configuration.
 
 ## v1.4.0
 
