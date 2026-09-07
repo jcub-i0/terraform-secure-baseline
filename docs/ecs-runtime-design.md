@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-`v1.8.0 — Secure Container Workloads` is implemented and live-proven on `main`; `v1.7.0` remains the latest tagged release until the v1.8.0 tag is created. This document describes the current ECS/Fargate runtime architecture, ownership boundaries, application release lifecycle, and validation contract.
+This document describes the implemented `v1.8.0 — Secure Container Workloads` ECS/Fargate runtime architecture, ownership boundaries, application release lifecycle, and validation contract.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
