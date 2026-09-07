@@ -298,11 +298,7 @@ For strict workload CMK and remote-state evidence, the expected deployment seque
 7. Run validate-bootstrap.sh or export-bootstrap.sh with REQUIRE_STATE_STACK_REMOTE=true and the default strict CMK behavior.
 ```
 
-For GitHub Actions, select `plan-and-apply` in the `Reconcile Workload Account`
-workflow. The Plan job runs through `<env>-plan`, publishes the plan, and
-uploads the saved artifact. The Apply job waits on the protected `<env>`
-environment, verifies the artifact and expected account, applies the exact
-plan, and runs strict bootstrap validation.
+For GitHub Actions, select `plan-and-apply` in the `Reconcile Workload Account` workflow. The Plan job runs through `<env>-plan`, publishes the plan, and uploads the saved artifact. The Apply job waits on the protected `<env>` environment, verifies the artifact and expected account, applies the exact plan, and runs strict bootstrap validation.
 
 For a two-step local exact-plan review:
 
@@ -320,15 +316,9 @@ EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
   --apply-plan="${RECONCILIATION_PLAN}"
 ```
 
-The one-step `--apply` mode generates, displays, confirms, and applies a saved
-plan within the same invocation. It does not reuse a plan from a previous
-plan-only invocation unless that plan was retained with `--plan-file`.
+The one-step `--apply` mode generates, displays, confirms, and applies a saved plan within the same invocation. It does not reuse a plan from a previous plan-only invocation unless that plan was retained with `--plan-file`.
 
-The reconciliation helper reads `lambda_cmk_arn` and
-`secrets_manager_cmk_arn` directly from the workload Terraform state,
-validates the resolved account-stack inputs from the saved plan, applies the
-current or explicitly supplied saved plan, and runs strict bootstrap
-validation after apply unless `--skip-validation` is used.
+The reconciliation helper reads `lambda_cmk_arn` and `secrets_manager_cmk_arn` directly from the workload Terraform state, validates the resolved account-stack inputs from the saved plan, applies the current or explicitly supplied saved plan, and runs strict bootstrap validation after apply unless `--skip-validation` is used.
 
 ### GitHub Workflow Usage
 
@@ -340,12 +330,9 @@ staging-plan / staging
 prod-plan / prod
 ```
 
-The `*-plan` environment allows the plan to complete before approval. The
-protected Apply environment is used only for the job that applies the reviewed
-plan.
+The `*-plan` environment allows the plan to complete before approval. The protected Apply environment is used only for the job that applies the reviewed plan.
 
-Configure the same generic `ACCOUNT_ID` in both members of each pair. The
-Plan and Apply jobs validate:
+Configure the same generic `ACCOUNT_ID` in both members of each pair. The Plan and Apply jobs validate:
 
 - `ACCOUNT_ID` is present and contains exactly 12 digits;
 - the configured Plan or Apply role ARN belongs to that account;
@@ -363,9 +350,7 @@ prod-plan     ISOLATION_ALLOWED=false
 
 Apply uses the reviewed saved plan and does not re-resolve this variable. Destroy uses a safe `false` fallback when the value is absent.
 
-`Terraform Apply` publishes and uploads its own saved baseline plan, waits for
-approval, then applies that exact artifact. Its optional reconciliation input
-invokes `Reconcile Workload Account` with `plan-and-apply`.
+`Terraform Apply` publishes and uploads its own saved baseline plan, waits for approval, then applies that exact artifact. Its optional reconciliation input invokes `Reconcile Workload Account` with `plan-and-apply`.
 
 `Reconcile Workload Account` supports:
 
@@ -379,8 +364,7 @@ The workload bootstrap evidence workflow remains read-only. It:
 3. runs the exporter with `REQUIRE_STATE_STACK_REMOTE=true` by default; and
 4. uploads the generated validation package as a GitHub Actions artifact.
 
-For a manual run from a fresh checkout of an already-migrated environment,
-materialize and verify the state backend before initializing the other roots:
+For a manual run from a fresh checkout of an already-migrated environment, materialize and verify the state backend before initializing the other roots:
 
 ```bash
 cp \
@@ -402,11 +386,9 @@ REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
 ```
 
-Repeat with the matching profile, account ID, and environment name for
-`staging` and `prod`.
+Repeat with the matching profile, account ID, and environment name for `staging` and `prod`.
 
-To generate workload bootstrap evidence, run `export-bootstrap.sh` after the
-same initialization:
+To generate workload bootstrap evidence, run `export-bootstrap.sh` after the same initialization:
 
 ```bash
 AWS_PROFILE=dev \
@@ -826,64 +808,44 @@ Expected:
 
 ## Purpose
 
-Confirm that GitHub OIDC roles exist for each environment if GitHub OIDC is enabled.
+Confirm workload GitHub OIDC roles exist and that their authority boundaries match the intended workflow model.
 
-Each environment may include:
+Each workload account may include:
 
 - GitHub Plan role
 - GitHub Apply role
+- GitHub Image Publisher role
 
 ## Check IAM Roles
 
 ```bash
-aws iam list-roles \
-  --profile "${AWS_PROFILE}" \
-  --query "Roles[?contains(RoleName, 'github')].[RoleName, Arn]" \
+aws iam list-roles \\
+  --profile "${AWS_PROFILE}" \\
+  --query "Roles[?contains(RoleName, 'github')].[RoleName, Arn]" \\
   --output table
 ```
 
 ## Expected Outcome
 
-Environment accounts should show roles similar to:
+A workload account with all three capabilities enabled should show roles similar to:
 
 ```text
 tf-secure-baseline-dev-github-plan-role
 tf-secure-baseline-dev-github-apply-role
+tf-secure-baseline-dev-github-image-publisher-role
 ```
 
-Control plane should show roles similar to:
+The Image Publisher role must use branch-based GitHub OIDC trust for the configured `BRANCHES_IMAGE_PUBLISHER_GITHUB` values. Its AWS policy should be limited to ECR publication/query operations for the intended repositories, except for the registry-wide `ecr:GetAuthorizationToken` action.
 
-```text
-tf-secure-baseline-control-plane-github-plan-role
-tf-secure-baseline-control-plane-github-apply-role
-```
+**Current automation boundary:** `validate-bootstrap.sh` validates the workload GitHub OIDC provider and Plan/Apply role trust/state/KMS relationships, but it does not yet provide equivalent automated validation of the Image Publisher role's branch trust and ECR policy. Treat the publisher checks above as a manual/release-review requirement unless that validator is extended.
 
 ## GitHub Workflow Validation
 
-Run the workload `Terraform Apply` workflow with a non-production environment.
+For `Terraform Apply`, confirm the internal Plan job publishes a readable plan plus saved binary plan, metadata, and checksum before protected approval. Confirm the Apply job verifies and applies that exact artifact without replanning. The standalone `Terraform Plan` workflow is not the source of the Apply artifact.
 
-Expected:
+For `Deploy Application`, confirm the publisher job uses the expected Image Publisher role, runs only from an authorized branch, has no repository write permission, publishes the image, and re-checks the authoritative ECR digest. Confirm the separate release/PR job has repository write authority but no AWS credentials or OIDC token and changes only `ecs_services.<service>.image_digest` in the tracked workload configuration.
 
-- The Plan job targets `<env>-plan` and assumes the Plan role.
-- Workflow setting validation confirms `ACCOUNT_ID`, the Plan role ARN account, and the active AWS caller account.
-- The readable Terraform plan is visible before the Apply approval.
-- A saved binary plan, checksum, readable plan, and metadata are uploaded as a short-lived artifact.
-- The Apply job targets the protected `<env>` environment and waits for its approval rules.
-- After approval, the Apply job assumes the Apply role, validates the active account, verifies the artifact checksum and metadata, and applies the exact saved plan.
-- The Apply job does not generate a replacement plan after approval.
-
-Run `Reconcile Workload Account` with `plan-only`, then with
-`plan-and-apply` in an approved non-production environment.
-
-Expected:
-
-- `plan-only` publishes the reconciliation plan and stops without applying.
-- `plan-and-apply` generates a fresh plan before approval.
-- The protected Apply job downloads and applies the exact reviewed reconciliation plan.
-- Strict workload bootstrap validation runs after reconciliation.
-- GitHub OIDC operation succeeds without requiring an AWS CLI profile.
-
----
+After the release PR is merged, run `Terraform Apply` separately, confirm ECS reaches steady state, and run workload validation/evidence separately.
 
 # 4. Validate Control Plane
 
@@ -1319,21 +1281,17 @@ ecr.api
 ecr.dkr
 events
 sns
+sqs
+config
 securityhub
 lambda
+guardduty-data
 s3
 ```
 
-For the implemented Fargate runtime, private ECR pulls use the `ecr.api` and
-`ecr.dkr` Interface Endpoints, while image layers use the existing S3 Gateway
-Endpoint.
+For the implemented Fargate runtime, private ECR pulls use the `ecr.api` and `ecr.dkr` Interface Endpoints, while image layers use the existing S3 Gateway Endpoint.
 
-The automated validator treats the Interface Endpoint inventory as
-platform-owned and non-overridable. It requires exact endpoint-private subnet
-and shared Interface Endpoint SG placement for every Interface Endpoint,
-requires private DNS, and requires the S3 Gateway Endpoint route-table set to
-equal the union of endpoint-private, compute-private, and serverless-private
-route tables.
+The automated validator treats the Interface Endpoint inventory as platform-owned and non-overridable. It requires exact endpoint-private subnet and shared Interface Endpoint SG placement for every Interface Endpoint, requires private DNS, and requires the S3 Gateway Endpoint route-table set to equal the union of endpoint-private, compute-private, and serverless-private route tables.
 
 ## Validate ECR Prerequisites
 
@@ -1341,13 +1299,7 @@ route tables.
 ./scripts/validation/validate-ecr.sh <dev|staging|prod>
 ```
 
-The validator reads `ecr_repositories` from the workload root. An empty `{}` is
-a valid configuration and passes without a live ECR query. Configured
-repositories must match their Terraform name, ARN, and registry ID; use
-`IMMUTABLE` tags; use KMS encryption with a live key exactly equal to the
-workload-root `ecr_cmk_arn`; and have exactly one lifecycle rule that expires
-only untagged images older than 30 days. `validate-kms.sh` separately owns KMS
-alias/key inventory, key-state, customer-managed, and rotation checks.
+The validator reads `ecr_repositories` from the workload root. An empty `{}` is a valid configuration and passes without a live ECR query. Configured repositories must match their Terraform name, ARN, and registry ID; use `IMMUTABLE` tags; use KMS encryption with a live key exactly equal to the workload-root `ecr_cmk_arn`; and have exactly one lifecycle rule that expires only untagged images older than 30 days. `validate-kms.sh` separately owns KMS alias/key inventory, key-state, customer-managed, and rotation checks.
 
 ## Validate ECS/Fargate Runtime
 
@@ -1355,48 +1307,34 @@ alias/key inventory, key-state, customer-managed, and rotation checks.
 ./scripts/validation/validate-ecs-runtime.sh <dev|staging|prod>
 ```
 
-The validator uses `ecs_cluster`, `ecs_services`, task-definition, task-SG,
-log-group, role, ECR, and conditional ALB workload-root outputs as its
-authoritative inventory. An empty `ecs_services = {}` is valid: the
-environment-level cluster is still validated, the exact live ECS service
-inventory must be empty, and per-service and ALB resource checks are skipped.
+The validator uses resource-backed workload outputs as the authoritative expected state. Empty `ecs_services = {}` is valid; the environment cluster is still validated and per-service/ALB checks are skipped.
 
-Configured services must be active Fargate services in the compute-private
-subnets, use only their task SG, disable public IP assignment, match the
-resource-backed `platform_version`, and enable deployment circuit breaking with
-rollback. Desired and running counts must match, pending count must be zero,
-and the primary deployment rollout must be `COMPLETED`. Active task definitions
-must use Fargate/`awsvpc`, Linux, a supported CPU architecture, separate
-output-backed roles, and exactly one essential container named for the service.
-That container must use an `@sha256:` image belonging to an output-backed ECR
-repository, a matching TCP port mapping, and the exact Terraform-managed
-`awslogs` contract. Log groups must match the output name and ARN, use the
-effective retention period, and use the exact workload-root `logs_cmk_arn`.
+For deployable services, validation covers Fargate launch type, compute-private placement, no public IP, exact task security group, resource-backed platform version, deployment circuit breaker/rollback, service steady state, completed primary rollout, separate task/execution roles, one essential service container, digest-pinned ECR image, TCP port mapping, and exact `awslogs` configuration.
 
-The same validator checks the always-required task-SG paths to the Interface
-Endpoint SG and S3 managed prefix list, the effective-mode application HTTPS
-egress rule, database SG presence or absence from
-`ecs_service_configuration[*].database_access`, and conditional ALB
-attachments. The expected S3 prefix list comes from the resource-backed
-`s3_prefix_list_id`, not from `describe-vpc-endpoints`. When an ALB output
-exists, the validator checks the internet-facing application ALB, public
-subnets, SG, exact `https_listener` ARN/certificate/TLS policy, fixed 404
-default, `ip` target groups, meaningful forwarding rules, and both ALB/task SG
-directions.
+Per-service application log groups must match the Terraform output, use `/aws/ecs/<name-prefix>/<service>`, use the effective retention period, and use the exact workload `logs_cmk_arn`.
 
-ECS IAM assertions remain in `validate-iam.sh`. It checks task/execution role
-identity and restricted ECS trust, custom execution-policy ECR/log scope,
-optional ARN-identifiable secret/parameter scope, absence of `iam:PassRole`,
-and an initially policy-free task role.
+Cluster validation also checks the exact Container Insights setting and, when enabled, the Terraform-owned performance log group `/aws/ecs/containerinsights/<cluster-name>/performance`, including exact resource identity, retention, and KMS encryption.
 
-The live Container Insights setting is compared with
-`ecs_cluster.container_insights`. Internal IAM/security readiness IDs remain
-internal and are not required as workload-root outputs. Exact execution-time
-KMS intent remains outside the current validator-facing output contract;
-`validate-iam.sh` requires any live `kms:Decrypt` statement to remain
-resource-scoped without reconstructing the expected key set.
+The same validator checks task-SG relationships to Interface Endpoints and the S3 prefix list, effective-mode HTTPS egress, database SG presence/absence, and conditional shared-ALB relationships.
 
----
+ECS IAM assertions remain in `validate-iam.sh`. It verifies restricted task/execution trust, scoped execution-policy ECR/log/secret/parameter permissions, absence of `iam:PassRole`, initially empty application task-role authority, and exact `task_execution_kms_key_arns` behavior. If the configured KMS-key set is empty, the execution policy must not grant `kms:Decrypt`; if populated, live policy resources must match the configured set exactly.
+
+## Validate Application Publication and Release PR
+
+For a controlled non-production service, verify the implemented release path:
+
+- the service exists in `environments/<env>/container-workloads.auto.tfvars.json`;
+- `image_digest = null` is accepted for a registered-but-unreleased service and the service-required ECR repository remains present;
+- `Deploy Application` resolves repository/platform from tracked canonical configuration;
+- the publisher job assumes the expected branch-trusted Image Publisher role;
+- the image digest recorded in publication metadata matches the authoritative ECR digest;
+- the release/PR job has no AWS credentials and changes only the selected service digest;
+- the generated release PR is reviewed and merged by an authorized human;
+- `Terraform Apply` is invoked separately and applies its own exact reviewed saved plan;
+- the ECS service converges to steady state; and
+- workload baseline validation/evidence is run separately after convergence.
+
+Successful image publication alone is not proof of application deployment.
 
 ## Validate Endpoint Private Subnets
 
@@ -1800,23 +1738,12 @@ aws inspector2 batch-get-account-status \
 
 Expected:
 
-- If `effective_inspector_enabled = true`, Inspector status exactly matches
-  `effective_inspector_resource_types`, including EC2, ECR, Lambda, Lambda code,
-  and code-repository scanning.
+- If `effective_inspector_enabled = true`, Inspector status exactly matches `effective_inspector_resource_types`, including EC2, ECR, Lambda, Lambda code, and code-repository scanning.
 - If disabled by profile or override, Inspector may report disabled resource states.
 
-The validator uses the effective Terraform output and does not infer ECR from
-the repository map. The baseline and workload roots propagate
-`local.effective_inspector_resource_types`, so automatic ECR inclusion is
-validated through that authoritative effective output.
+The validator uses the effective Terraform output and does not infer ECR from the repository map. The baseline and workload roots propagate `local.effective_inspector_resource_types`, so automatic ECR inclusion is validated through that authoritative effective output.
 
-ECS runtime service identities, role maps, task SGs, and conditional ALB
-metadata are validated by `validate-ecs-runtime.sh` and `validate-iam.sh`.
-The runtime validator uses workload-root `ecs_service_configuration` to prove
-database SG relationships are present when `database_access = true` and absent
-when it is false. IAM and security-policy readiness IDs remain internal
-dependency inputs rather than public validator outputs. ECR repository keys are
-not used as substitutes for ECS service identities.
+ECS runtime service identities, role maps, task SGs, and conditional ALB metadata are validated by `validate-ecs-runtime.sh` and `validate-iam.sh`. The runtime validator uses workload-root `ecs_service_configuration` to prove database SG relationships are present when `database_access = true` and absent when it is false. IAM and security-policy readiness IDs remain internal dependency inputs rather than public validator outputs. ECR repository keys are not used as substitutes for ECS service identities.
 
 ---
 
@@ -2505,8 +2432,7 @@ Expected:
 
 ## Purpose
 
-Confirm that CI/CD workflows operate successfully and preserve the
-plan-before-approval boundary.
+Confirm that CI/CD workflows operate successfully and preserve the plan-before-approval boundary.
 
 Run or review the following workflows:
 
@@ -2781,9 +2707,7 @@ EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
   --apply-plan="${RECONCILIATION_PLAN}"
 ```
 
-For GitHub failures before OIDC configuration, confirm `ACCOUNT_ID` exists in
-both `<env>-plan` and `<env>` and contains the same 12-digit workload account
-ID.
+For GitHub failures before OIDC configuration, confirm `ACCOUNT_ID` exists in both `<env>-plan` and `<env>` and contains the same 12-digit workload account ID.
 
 If reconciliation cannot be completed yet, run validation temporarily with:
 
