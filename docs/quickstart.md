@@ -523,7 +523,7 @@ The Image Publisher role is not an application deployment role. It does not rece
 
 Run the account stack from the repository root for each workload environment:
 
-### Dev
+## Dev
 
 ```bash
 export AWS_PROFILE=dev
@@ -531,7 +531,7 @@ terraform -chdir=bootstrap/dev/account init
 terraform -chdir=bootstrap/dev/account apply
 ```
 
-### Staging
+## Staging
 
 ```bash
 export AWS_PROFILE=staging
@@ -539,7 +539,7 @@ terraform -chdir=bootstrap/staging/account init
 terraform -chdir=bootstrap/staging/account apply
 ```
 
-### Prod
+## Prod
 
 ```bash
 export AWS_PROFILE=prod
