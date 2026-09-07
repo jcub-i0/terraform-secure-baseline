@@ -8,28 +8,24 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 ## Overview
 
-`tf-secure-baseline` is a Terraform-driven AWS security baseline designed for organizations running applications that handle PII or other sensitive data.
+`tf-secure-baseline` is a Terraform-driven AWS security and application-hosting baseline for organizations running workloads that handle PII or other sensitive data.
 
-**Current release:** `v1.8.0 — Secure Container Workloads` — generic secure ECS/Fargate runtime support, immutable ECR image deployment, application publication and digest-promotion automation, protected exact-plan deployment, and integrated workload validation.
+**Current release:** `v1.8.0 — Secure Container Workloads` — generic ECS/Fargate runtime support, immutable ECR image deployment, application publication and digest promotion, protected exact-plan Terraform deployment, and integrated workload validation.
 
-It provides a secure, multi-account cloud foundation with:
+The platform provides:
 
-- A centralized AWS Organizations and identity control plane
-- A dedicated security-operations delegated-administrator account
-- Environment isolation across `dev`, `staging`, and `prod`
-- Secure-by-default networking and private AWS service access
-- Configurable deployment profiles and egress modes
-- Centralized logging, monitoring, and alert routing
-- Centralized Security Hub CSPM and GuardDuty organization governance
-- Security Hub V2 workload enablement through AWS Organizations policy
-- Automated detection and response with fail-closed EC2 isolation
-- Durable SNS/SQS notification paths and DLQs for failed delivery
-- GitHub OIDC-based plan-before-approval CI/CD
-- Exact reviewed-plan application through protected workload Apply environments
+- Five-account AWS separation across `control-plane`, `security-operations`, `dev`, `staging`, and `prod`
+- AWS Organizations and IAM Identity Center governance
+- Dedicated centralized security administration
+- Private-first workload networking with configurable egress
+- Centralized logging, monitoring, threat detection, and alerting
+- Workload-local AWS Config, Inspector, remediation, and response automation
+- EC2 as a supported host-based runtime
+- ECS/Fargate as the preferred modern application runtime
+- GitHub OIDC-based CI/CD without long-lived AWS access keys
+- Exact reviewed-plan Terraform application through protected environments
 - Four-layer read-only validation and evidence export
-- SOC 2 / ISO 27001-aligned technical safeguards to support audit readiness
-
-This project is intended for SaaS companies, startups, and engineering teams that need a repeatable AWS security foundation without building every security control from scratch.
+- SOC 2 / ISO 27001-aligned technical safeguards that support audit readiness
 
 > This baseline supports SOC 2 and ISO 27001 readiness, but it does not replace an organization’s full compliance program, ISMS, policies, risk management process, or formal audit requirements.
 
@@ -37,50 +33,47 @@ This project is intended for SaaS companies, startups, and engineering teams tha
 
 ## What This Project Provides
 
-This repository deploys a production-aligned AWS security baseline using Terraform.
+### Governance and identity
 
-Key capabilities include:
-
-- Five-account architecture: `control-plane`, `security-operations`, `dev`, `staging`, and `prod`
 - AWS Organizations OU separation for `Security`, `Workloads/NonProd`, and `Workloads/Prod`
-- IAM Identity Center access management, including dedicated `SecOps-Administrator` access for security operations
-- GitHub Actions OIDC federation without long-lived CI/CD access keys
-- Private-first VPC networking with dedicated Interface Endpoint subnets
-- Configurable deployment profiles for production, development, and minimal deployments
-- Configurable egress modes for Network Firewall, NAT-only, or VPC-endpoints-only operation
-- AWS Network Firewall egress inspection when enabled
-- Private AWS service access through Terraform-managed VPC endpoints
-- Centralized CloudTrail, Config, and VPC Flow Log storage
-- Centralized Security Hub CSPM configuration policies and finding aggregation
-- Centralized GuardDuty member enrollment and protection-plan governance
-- GuardDuty Runtime Monitoring with Terraform-owned `guardduty-data` VPC endpoints
-- Security Hub V2 organization policy governance for workload accounts
-- Workload-local AWS Config, Inspector, remediation, and incident-response automation
-- Event-driven EC2 isolation, controlled rollback, IP enrichment, tamper detection, and break-glass monitoring
-- SQS-backed security and compliance notification queues
-- EventBridge target DLQs and workflow-specific automation DLQs
-- Encrypted S3, KMS, SNS, SQS, CloudWatch, Lambda, EBS, and backup resources
-- First-boot Ubuntu package updates and scheduled SSM patching
-- Dependency-aware EC2 launch ordering for security-policy rules and Interface VPC Endpoints
-- A shared-per-environment ECS cluster and generic long-running Fargate services using digest-pinned ECR images
-- Conditional shared HTTPS Application Load Balancers with explicit host/path routing and fail-closed defaults
-- Per-service least-privilege ECS IAM roles, task security groups, encrypted application log groups, and resource-granular launch readiness
-- Registered-but-unreleased ECS services whose repositories exist before an immutable image digest is selected
-- Short-lived GitHub OIDC image publication, authoritative ECR digest resolution, and one-field automated release PRs
-- Layer-specific validation evidence export with Markdown, JSON, and per-script logs
+- Centralized IAM Identity Center access management
+- Dedicated `SecOps-Administrator` access for security operations
+- Environment-specific workload access boundaries
+- GitHub Actions OIDC federation for Terraform and application publication
+
+### Networking and data protection
+
+- Segmented VPC networking across public, compute-private, data-private, serverless-private, firewall-private, and endpoint-private subnet tiers
+- `network_firewall`, `nat_only`, and `vpc_endpoints_only` egress modes
+- AWS Network Firewall inspection when enabled
+- Terraform-managed VPC endpoints for private AWS service access
+- KMS-backed encryption across state, logs, messaging, application resources, and backups
+- Protected S3 storage for Terraform state and operational evidence
+
+### Security operations
+
+- Centralized Security Hub CSPM and GuardDuty governance
+- Security Hub V2 organization policy governance
+- Workload-local AWS Config, Inspector, remediation, and supporting controls
+- EC2 isolation, rollback, IP enrichment, tamper detection, and break-glass monitoring
+- SNS/SQS alerting and DLQ-backed failure retention
+
+### Application runtimes
+
+- EC2 hosting with dependency-safe first boot and scheduled patching
+- One ECS cluster per workload environment
+- Generic long-running Fargate services using digest-pinned ECR images
+- Conditional shared HTTPS Application Load Balancer
+- Separate task execution and application task IAM roles
+- Per-service task security groups and encrypted logs
+- Terraform-owned Container Insights performance logging
+- Registered-but-unreleased ECS services whose ECR repositories can exist before an image digest is selected
 
 ---
 
 ## Target Use Case
 
-This baseline is designed for:
-
-- SaaS companies handling PII
-- Teams preparing for SOC 2 or ISO 27001
-- Organizations that need secure AWS account separation
-- Cloud security teams building reusable landing-zone patterns
-- Startups that need production-ready security architecture early
-- Consultants implementing secure AWS foundations for clients
+This baseline is designed for SaaS companies handling sensitive data, teams preparing for SOC 2 or ISO 27001, cloud security and platform teams building reusable AWS foundations, startups that need production-aligned controls early, and consultants implementing secure client environments.
 
 ---
 
@@ -110,15 +103,13 @@ Workloads OU
     └── prod
 ```
 
-Each state stack is initialized and applied locally first because it creates the S3 bucket and KMS key that will store its own Terraform state. After those resources exist, `scripts/bootstrap/migrate-state-stack.sh` materializes the ignored active `backend.tf` from the tracked `backend.tf.migrated.example`, migrates the local state into S3, and verifies that the remote state is readable.
-
 The platform separates three Terraform ownership domains:
 
-- The **control plane** owns organization structure, account placement, trusted service access, delegated-administrator registration, Identity Center, and management-account prerequisites.
-- The **security-operations layer** owns delegated-administrator-side Security Hub CSPM, GuardDuty, and Security Hub V2 organization policy configuration.
-- The **workload environments** own workload networking, compute, logging, AWS Config, Inspector, remediation, automation, storage, backup, patching, and supporting controls while deferring centrally governed service ownership.
-
-GitHub Actions uses OIDC-based Plan roles for workload, control-plane, and supported security-operations planning/evidence paths. Protected workload Apply environments continue to use exact saved-plan application. The generic workload Apply and Destroy workflows intentionally do not operate the centralized security layer.
+| Domain | Primary responsibilities |
+|---|---|
+| Control plane | Organizations structure, account placement, trusted-service access, delegated-administrator registration, IAM Identity Center, and management-account prerequisites |
+| Security operations | Delegated-administrator-side Security Hub CSPM, GuardDuty, and Security Hub V2 organization policy configuration |
+| Workload environments | Networking, EC2, ECS/Fargate, ECR, logging, AWS Config, Inspector, remediation, automation, storage, backup, patching, and workload IAM |
 
 Architectural deployment order:
 
@@ -126,451 +117,205 @@ Architectural deployment order:
 control-plane -> security-operations -> bootstrap-workloads -> workloads
 ```
 
----
-
-## Repository Structure
-
-```text
-.
-├── bootstrap
-│   ├── control_plane
-│   │   ├── account
-│   │   ├── identity_center
-│   │   ├── organizations
-│   │   └── state
-│   ├── security_operations
-│   │   ├── account
-│   │   ├── security_services
-│   │   └── state
-│   ├── dev
-│   │   ├── account
-│   │   └── state
-│   ├── staging
-│   │   ├── account
-│   │   └── state
-│   └── prod
-│       ├── account
-│       └── state
-│
-├── environments
-│   ├── dev
-│   ├── staging
-│   └── prod
-│
-├── modules
-│   ├── application_load_balancer
-│   ├── automation
-│   ├── backup
-│   ├── compute
-│   ├── ecr
-│   ├── ecs_cluster
-│   ├── ecs_service
-│   ├── firewall
-│   ├── github_oidc
-│   ├── iam
-│   ├── identity_center
-│   ├── logging
-│   ├── monitoring
-│   ├── networking
-│   │   └── security_policy
-│   ├── patch_management
-│   ├── security
-│   │   ├── config_baseline
-│   │   └── tamper_detection
-│   ├── security_dashboard
-│   ├── state
-│   ├── storage
-│   └── vpc_endpoints
-│
-├── docs
-│   ├── architecture-overview.md
-│   ├── design-principles.md
-│   ├── quickstart.md
-│   ├── adoption-guide.md
-│   ├── validation-checklist.md
-│   ├── assurance
-│   └── lambda_tests
-│
-├── scripts
-│   ├── bootstrap
-│   │   ├── migrate-state-stack.sh
-│   │   └── reconcile-workload-account.sh
-│   ├── deployment
-│   │   ├── deploy-application.sh
-│   │   ├── update-application-digest.sh
-│   │   └── README.md
-│   └── validation
-│       ├── export-baseline.sh
-│       ├── export-bootstrap.sh
-│       ├── export-control-plane.sh
-│       ├── export-security-operations.sh
-│       ├── validate-baseline.sh
-│       ├── validate-bootstrap.sh
-│       ├── validate-control-plane.sh
-│       ├── validate-security-operations.sh
-│       ├── validate-security-workload.sh
-│       └── validate-*.sh
-│
-├── .github/workflows
-├── CHANGELOG.md
-├── LICENSE
-├── README.md
-└── SECURITY.md
-```
+The generic workload Apply and Destroy workflows intentionally do not operate the centralized security layer because that layer has organization-wide blast radius.
 
 ---
-
-## Terraform Variable Templates
-
-Terraform roots that require local configuration include a tracked `terraform.tfvars.example` template. Terraform does not automatically load files ending in `.example`, so copy the applicable template before running Terraform locally:
-
-```bash
-cp environments/dev/terraform.tfvars.example \
-  environments/dev/terraform.tfvars
-```
-
-Review the copied file and replace example values with the correct deployment-specific configuration. Runtime `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its deployment values separately through workflow matrices, GitHub variables, and GitHub secrets rather than loading the example files.
 
 ## Core Design Principles
 
-### Private-First Infrastructure
+### Private-first infrastructure
 
-Compute workloads are deployed in private subnets by default. Internet-bound egress follows an explicitly selected Network Firewall, NAT-only, or no-default-route path, while supported AWS service traffic can remain private through VPC endpoints.
+Compute workloads are placed in private subnets by default. Internet-bound egress follows an explicitly selected Network Firewall, NAT-only, or no-default-route path, while supported AWS service traffic can remain private through VPC endpoints.
 
-### Dependency-Safe First Boot
+### Explicit ownership boundaries
 
-EC2 instances wait on two resource-level readiness checkpoints before launch:
+Organization prerequisites, centralized security administration, and workload-local resources are owned by distinct Terraform roots. The same Security Hub, GuardDuty, or Security Hub V2 resource is not intentionally managed from multiple states.
 
-```text
-security_policy.compute_sg_rule_ids ───┐
-                                      ├──> aws_instance.ec2
-vpc_endpoints.interface_endpoint_ids ──┘
-```
+### No long-lived CI/CD credentials
 
-This avoids broad module dependencies while ensuring required security-group rules and Terraform-managed Interface Endpoints—including `guardduty-data`—exist before eligible instances launch. Route, NAT Gateway, Network Firewall, DNS, and external repository health remain separate runtime dependencies.
+GitHub Actions authenticates to AWS using OIDC. Plan, Apply, image-publication, and repository-write responsibilities use distinct trust boundaries where required.
 
-ECS services use the same resource-granular principle without introducing a module dependency cycle:
+### Exact reviewed-plan application
 
-```text
-IAM execution policy IDs ──────────────┐
-                                       ├──> aws_ecs_service.services
-security-policy rule IDs ──────────────┘
-```
+The protected workload Apply workflow generates its own saved Terraform plan, readable output, metadata, and checksum before approval. The Apply job verifies and applies that exact binary plan without replanning.
 
-`modules/ecs_service` records those IDs in `terraform_data` readiness resources. Only service launch depends on the checkpoints; task security groups remain independently creatable so `modules/networking/security_policy` can attach cross-component rules.
+### Resource-granular readiness
 
-### Configurable Cost/Security Profiles
+EC2 and ECS/Fargate launch paths wait on the specific security-policy, IAM, and endpoint resources they require instead of relying on broad module-level dependencies.
 
-Deployment profiles provide production, development, and minimal defaults while allowing explicit egress and service overrides where supported.
+### Single canonical ECS service interface
 
-### Multi-Account Isolation
-
-The platform separates responsibilities across:
-
-```text
-control-plane
-security-operations
-dev
-staging
-prod
-```
-
-This reduces workload blast radius and places organization management, centralized security administration, and workload execution in distinct account boundaries.
-
-### Explicit Central-Security Ownership
-
-The management account owns organization prerequisites. The security-operations account owns delegated-administrator configuration. Workload accounts retain workload-local controls and deterministic remediation.
-
-This avoids duplicating the same Security Hub, GuardDuty, or Security Hub V2 ownership in multiple Terraform states.
-
-### No Long-Lived CI/CD Credentials
-
-GitHub Actions authenticates to AWS using OIDC. Plan and Apply trust paths remain separated where privileged workload deployment is supported.
-
-### Centralized Human Access
-
-IAM Identity Center manages workforce access. Workload accounts receive environment-specific Operator access, while the security-operations account uses a distinct required Administrator persona.
-
-### Event-Driven Security Automation
-
-EventBridge and Lambda support EC2 isolation, rollback, IP enrichment, tamper detection, and break-glass alerts. Critical delivery paths use retries and DLQs so failed events are retained for investigation.
-
----
-
-## Major Components
-
-### Control Plane
-
-Located at:
-
-```text
-bootstrap/control_plane
-```
-
-| Substack | Purpose |
-|---|---|
-| `state` | Creates the control-plane state bucket and CMK, then migrates its own state to S3 |
-| `account` | Creates control-plane GitHub OIDC execution roles |
-| `organizations` | Owns Organizations structure, account placement, central-security prerequisites, and delegated-administrator registration |
-| `identity_center` | Manages workforce groups, permission sets, and account assignments across workload and security-operations accounts |
-
-### Security Operations
-
-Located at:
-
-```text
-bootstrap/security_operations
-```
-
-| Substack | Purpose |
-|---|---|
-| `state` | Creates and protects the security-operations Terraform backend |
-| `account` | Creates security-operations GitHub OIDC roles |
-| `security_services` | Manages centralized Security Hub CSPM, GuardDuty, and Security Hub V2 delegated-administrator configuration |
-
-See `bootstrap/security_operations/README.md` for the ownership boundary and lifecycle.
-
-### Environment Stacks
-
-Located at:
-
-```text
-environments/dev
-environments/staging
-environments/prod
-```
-
-Each workload environment includes the applicable profile-driven combination of:
-
-- VPC, subnet, and route-table segmentation
-- Dedicated Interface Endpoint subnets
-- Network Firewall and/or NAT Gateway egress
-- Terraform-managed VPC endpoints, including `guardduty-data`
-- EC2 workloads with first-boot updates and readiness gating
-- One shared ECS cluster, optional digest-pinned Fargate services, ECR repositories, and a conditional shared HTTPS ALB
-- S3 and purpose-specific KMS keys
-- CloudTrail, CloudWatch, and centralized log delivery
-- AWS Config and Config remediation when enabled
-- Amazon Inspector when enabled
-- Workload Security Hub/GuardDuty integration that defers local ownership under central governance
-- Lambda/EventBridge security automation
-- SNS/SQS notification and failure-retention paths
-- Backup and patch-management resources
-- IAM service roles and access policies
-
-### Modules
-
-Reusable Terraform modules live under `modules/`. Each module contains its own README describing its inputs, outputs, ownership, and behavior.
+Operators maintain one `ecs_services` map. Baseline derives narrower ECR, IAM, ALB, security-policy, and runtime maps from it.
 
 ---
 
 ## Deployment Profiles and Egress Modes
 
-The baseline supports deployment profiles that set default cost/security behavior per environment.
-
-| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention | Intended use |
+| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | Log retention | Intended use |
 |---|---|---:|---:|---:|---:|---|
 | `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
 | `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
 | `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
 
-The profile sets defaults only. Explicit variables can override profile defaults.
+Explicit egress behavior:
 
-For example:
-
-```hcl
-deployment_profile = "development"
-egress_mode        = "network_firewall"
-```
-
-The baseline also supports explicit egress modes:
-
-| `egress_mode` | Network Firewall | NAT Gateway | Compute private default route |
+| `egress_mode` | Network Firewall | NAT Gateway | Compute-private default route |
 |---|---:|---:|---|
 | `network_firewall` | Yes | Yes | Network Firewall endpoint |
 | `nat_only` | No | Yes | NAT Gateway |
 | `vpc_endpoints_only` | No | No | No default route |
 
-When `egress_mode = "auto"`, the effective egress mode is selected from `deployment_profile`.
+When `egress_mode = "auto"`, the effective mode is selected from `deployment_profile`.
 
-Important:
-
-When `egress_mode = "vpc_endpoints_only"`, Network Firewall and NAT Gateways are not deployed, compute private subnets do not receive a default internet route, and the general compute TCP/443 egress rule is not created. This mode is intended for AWS-private testing or workloads that do not require external package repositories or third-party internet access. EC2 user data package installation and Patch Manager operations against public Ubuntu repositories require an approved package mirror or another explicitly provided path.
+`vpc_endpoints_only` is intended for AWS-private testing or workloads that do not require general internet access. Public package repositories and third-party services require another explicitly approved path.
 
 ---
 
-## Security Services
+## Security Architecture
 
-The baseline combines centralized governance with workload-local security controls.
+The baseline combines centralized security governance with workload-local enforcement.
 
-| Service / Capability | Primary Terraform ownership | Purpose |
+| Service / capability | Primary Terraform ownership | Purpose |
 |---|---|---|
-| Security Hub CSPM | `security_operations/security_services` | Central configuration policies, standards, findings aggregation, workload associations |
+| Security Hub CSPM | `security_operations/security_services` | Central policy, standards, finding aggregation, workload associations |
 | GuardDuty | `security_operations/security_services` | Organization enrollment, protection plans, Runtime Monitoring |
-| Security Hub V2 | control-plane prerequisites + security-operations policy | Workload enablement through `SECURITYHUB_POLICY` |
-| AWS Config | workload | Configuration recording, evaluation, and remediation support |
-| Inspector | workload | Vulnerability scanning |
-| CloudTrail / CloudWatch | workload | API activity, logs, metrics, and alarms |
-| EventBridge / Lambda | workload | Detection routing and deterministic response automation |
-| SNS / SQS | workload | Alert delivery, retention, and DLQs |
-| KMS | workload and bootstrap layers | Encryption key management |
-| IAM Identity Center | control plane | Centralized workforce access |
-| AWS Backup / SSM Patch Manager | workload | Recovery and patch-management foundations |
+| Security Hub V2 | Control-plane prerequisites + security-operations policy | Workload enablement through `SECURITYHUB_POLICY` |
+| AWS Config / Inspector | Workload | Configuration monitoring, remediation support, vulnerability scanning |
+| CloudTrail / CloudWatch | Workload | API activity, logs, metrics, and alarms |
+| EventBridge / Lambda | Workload | Detection routing and deterministic response automation |
+| SNS / SQS | Workload | Alert delivery, retention, and failure paths |
+| IAM Identity Center | Control plane | Centralized workforce access |
+| AWS Backup / SSM Patch Manager | Workload | Recovery and patch-management foundations |
 
-Central Security Hub CSPM configuration uses configuration policies associated with the workload accounts. Central GuardDuty configuration manages organization membership and supported features, including Runtime Monitoring with EC2 agent management. Security Hub V2 is enabled for workload accounts through an Organizations policy attached to the `Workloads` OU.
+Central Security Hub CSPM and GuardDuty governance reduce account-level drift while workload Terraform retains AWS Config, Inspector, remediation, logging, and incident-response responsibilities.
 
-Workload Terraform exposes explicit ownership flags so standalone uses can manage Security Hub/GuardDuty locally while the centrally governed `dev`, `staging`, and `prod` roots defer those account-level resources.
+The workload VPC endpoint layer pre-creates `guardduty-data` so Runtime Monitoring does not introduce unmanaged workload networking.
 
-### GuardDuty Runtime Monitoring and VPC Endpoint Ownership
-
-The workload VPC endpoint module pre-creates the regional `guardduty-data` Interface Endpoint. This keeps the endpoint in Terraform ownership instead of allowing GuardDuty to create an unmanaged endpoint when Runtime Monitoring enrolls eligible EC2 instances.
-
-Compute receives the Interface Endpoint ID map and waits for those endpoints before EC2 launch. This sequencing reduces drift and avoids teardown dependencies on GuardDuty-created VPC resources.
-
-### EC2 Vulnerability Remediation and Patching
-
-Amazon Inspector package vulnerabilities may appear as Security Hub findings. The baseline addresses stale operating-system package findings through two complementary controls:
-
-1. **First-boot update:** Ubuntu package sources are rewritten to HTTPS, APT is forced over IPv4, transient failures are retried, incomplete metadata refreshes fail provisioning, and a noninteractive distribution upgrade runs before required packages are installed.
-2. **Ongoing patching:** SSM Patch Manager targets instances by `PatchGroup` tag and applies baseline-approved patches on a schedule.
-
-Selecting the latest Ubuntu AMI alone does not guarantee every installed package is current at launch. First-boot update closes the image-publication gap, while Patch Manager handles later maintenance.
+EC2 remains supported with fail-closed isolation authorization, first-boot package updating, scheduled SSM patching, controlled rollback, and Terraform lifecycle handling that does not silently undo active quarantine.
 
 ---
 
-## Automation Workflows
+## Secure Container Workloads
 
-The baseline includes several security automation workflows.
+`v1.8.0 — Secure Container Workloads` adds a generic ECS/Fargate runtime without replacing the existing EC2 path.
 
-### EC2 Isolation
-
-The EventBridge rule receives new HIGH- and CRITICAL-severity Security Hub findings involving EC2 instances. The Lambda function then applies additional fail-closed eligibility checks before changing the instance.
-
-Default behavior:
-
-- Automatic isolation defaults to `CRITICAL` findings only.
-- `AUTO_ISOLATION_SEVERITIES` can explicitly enable additional severities, such as `HIGH,CRITICAL`.
-- The finding must be `ACTIVE` with workflow status `NEW`.
-- The resource must be an EC2 instance in the `running` or `stopped` state.
-- The instance must explicitly have `IsolationAllowed=true`.
-- Already-isolated instances and duplicate instance references in the same invocation are skipped.
-
-For an eligible instance, the workflow:
-
-1. records the existing security groups;
-2. requests tagged snapshots for attached EBS volumes;
-3. fails closed if snapshot creation fails;
-4. replaces the existing security groups with the quarantine security group;
-5. adds isolation and recovery metadata tags; and
-6. sends an SNS notification when a topic is configured.
-
-The explicit `IsolationAllowed=true` requirement prevents a matching finding from isolating an instance unless the workload has opted into automatic response. The reusable defaults are `false`; the current environment policy enables isolation for development and disables it for staging and production.
-
-Terraform also ignores automation-managed changes to the instance security group attachments and isolation metadata tags. A routine `terraform apply` therefore does not automatically reattach the normal compute security group or remove the recovery context from an isolated instance.
-
-### EC2 Rollback
-
-Triggered manually through a controlled EventBridge event on the custom SecOps event bus.
-
-This allows a SecOps operator to restore previously isolated EC2 instances after review and approval without granting operators broad direct EC2 modification access.
-
-### IP Threat Enrichment
-
-Enriches IP-related Security Hub findings using the configured threat intelligence source and sends the results to SNS. The function intentionally runs outside a VPC so it can reach the external API without requiring NAT.
-
-### Lambda Deployment Packaging
-
-The automation module packages its three Lambda source files with managed Terraform `archive_file` resources:
+The runtime is composed from:
 
 ```text
-lambda/ec2_isolation.py  -> lambda/ec2_isolation.zip
-lambda/ec2_rollback.py   -> lambda/ec2_rollback.zip
-lambda/ip_enrichment.py  -> lambda/ip_enrichment.zip
+modules/ecr
+modules/ecs_cluster
+modules/application_load_balancer
+modules/ecs_service
 ```
 
-The ZIP files are generated build outputs rather than manually maintained source artifacts. The Lambda functions depend directly on the matching archive resources, so Terraform creates each package before creating or updating the function.
+A canonical service can be registered with:
 
-This resource-based packaging is required by the plan-before-approval workflow. Plan and Apply run on separate GitHub Actions runners, and the protected Apply job can execute the archive-resource operations contained in the reviewed saved plan. No Lambda filename list or ZIP-copying logic is required in the workflow. Adding a future Lambda should remain encapsulated within the Terraform module.
+```hcl
+image_digest = null
+```
 
-### Tamper Detection
+That state is **registered but unreleased**: the required ECR repository can exist while the task definition, ECS service, per-service runtime IAM, task security group, runtime log group, and optional ALB attachment remain absent.
 
-Detects attempts to disable, delete, or modify critical security services such as:
+Selecting a valid digest materializes the deployable runtime from the same service entry.
 
-- CloudTrail
-- GuardDuty
-- Security Hub
-- AWS Config
-- KMS
+Deployable images use exact immutable references:
 
-### Break-Glass Monitoring
+```text
+<repository_url>@sha256:<digest>
+```
 
-Detects use of the break-glass administrator role and sends a high-priority alert.
+Fargate tasks run in compute-private subnets with `awsvpc` and no public IP. Per-service logs use:
 
-### Notification and Failure Retention
+```text
+/aws/ecs/<name-prefix>/<service>
+```
 
-Security and compliance notifications use encrypted SNS and SQS resources so alerts can be delivered to humans while also being retained for operational review.
+Container Insights performance logs use:
 
-Key paths include:
+```text
+/aws/ecs/containerinsights/<cluster-name>/performance
+```
 
-- Compliance notifications: compliance SNS topic to compliance SQS queue
-- Security notifications: security notifications SNS topic to security notifications SQS queue
-- Security notification queue failures: security notifications SQS queue to security notifications DLQ
-- EventBridge-to-SNS delivery failures: shared security notifications EventBridge DLQ
-- Automation workflow failures: dedicated EC2 Isolation, EC2 Rollback, and IP Enrichment DLQs
+Both logging paths are Terraform-owned and use the effective workload retention policy and logs CMK.
 
-The DLQs are terminal failure-retention queues. They are intended for SecOps review, troubleshooting, and manual replay or remediation where appropriate.
+See [`docs/ecs-runtime-design.md`](docs/ecs-runtime-design.md) for the full runtime contract.
 
-### CI/CD
+---
 
-GitHub Actions uses OIDC to assume account-specific AWS IAM roles without storing long-lived AWS access keys.
+## CI/CD and Application Releases
 
-Current workflows include:
+GitHub Actions uses OIDC to assume account-specific AWS roles without storing long-lived AWS access keys.
+
+Core workflows include:
 
 - `Deploy Application`
 - `Terraform Plan`
 - `Terraform Apply`
 - `Reconcile Workload Account`
 - `Terraform Destroy`
-- `Terraform Static Analysis`
-- `Docs Validation`
-- `Lint PR`
-- `Workload Bootstrap Evidence Export`
-- `Workload Baseline Evidence Export`
-- `Control-Plane Evidence Export`
-- `Export Security Operations Evidence`
+- Static analysis and documentation validation
+- Workload, control-plane, and security-operations evidence export
 
-The standalone `Terraform Plan` workflow produces informational/review CI plans; its output is not consumed by Apply. The self-contained `Terraform Apply` workflow uses its own Plan role and `<env>-plan` environment to generate a readable plan, binary plan, metadata, and SHA-256 checksum. Its protected Apply job downloads and verifies that artifact, then applies the exact saved binary plan without replanning. Both workload plan paths require a valid `DEPLOYMENT_PROFILE` and fail closed when it is missing or invalid.
+### Terraform Plan and Apply
 
-Application publication is a separate, two-authority path. The `Deploy Application` workflow reads the registered service from `environments/<env>/container-workloads.auto.tfvars.json`, builds and publishes the image through a branch-trusted, environment-specific GitHub OIDC image publisher role, and resolves the authoritative ECR digest. A separate job has GitHub repository write access but no AWS credentials or OIDC token; it changes only `ecs_services.<service>.image_digest` and opens a release PR. Review and merge of that PR precede the protected `Terraform Apply` workflow.
+The standalone `Terraform Plan` workflow is informational and does not produce the artifact consumed by Apply.
 
-The standalone `Terraform Plan` workflow also covers selected control-plane roots and `bootstrap/security_operations/security_services`. The security-operations Plan and evidence jobs use the `security-operations-plan` GitHub Environment.
-
-The generic workload Apply and Destroy workflows intentionally exclude `bootstrap/security_operations/*`. Centralized security configuration has organization-wide blast radius and should use a deliberately protected platform change path rather than the workload lifecycle.
-
-Layer-specific evidence workflows use Plan roles and read-only validators. On clean runners they materialize ignored state-stack backend files when required before Terraform initialization.
-
-## Deployment Order
-
-At a high level:
+The self-contained `Terraform Apply` workflow follows:
 
 ```text
-control-plane -> security-operations -> bootstrap-workloads -> workloads
+internal Plan job
+  -> readable plan
+  -> binary saved plan
+  -> metadata + checksum
+  -> protected approval
+  -> verify exact artifact
+  -> apply exact binary plan
 ```
 
-Recommended sequence:
+Workload Plan/Apply paths require a valid `DEPLOYMENT_PROFILE` and fail closed when it is missing or invalid.
 
-1. Bootstrap and migrate `bootstrap/control_plane/state`.
+### Application publication
+
+Application publication is separate from Terraform infrastructure deployment:
+
+```text
+application source + Dockerfile
+  -> branch-trusted GitHub OIDC image publisher
+  -> build and push image to ECR
+  -> resolve authoritative sha256 digest
+  -> separate repository-write job
+  -> update only ecs_services.<service>.image_digest
+  -> release PR
+  -> human review and merge
+  -> protected Terraform Apply
+  -> ECS convergence
+  -> validation
+```
+
+The image-publisher job has AWS/ECR authority but not repository-write authority. The release-PR job has repository-write authority but no AWS credentials or OIDC token.
+
+Terraform never builds or pushes application images.
+
+See [`scripts/deployment/README.md`](scripts/deployment/README.md) for detailed operator behavior.
+
+---
+
+## Deployment Overview
+
+Recommended high-level sequence:
+
+1. Bootstrap and migrate the control-plane state stack.
 2. Deploy the control-plane account and Organizations stacks.
-3. Bootstrap and migrate `bootstrap/security_operations/state`.
-4. Deploy `bootstrap/security_operations/account` and `security_services`.
+3. Bootstrap and migrate the security-operations state stack.
+4. Deploy the security-operations account and centralized security-services stack.
 5. Bootstrap and migrate each workload state stack and deploy its account/OIDC stack.
-6. Deploy `environments/<env>` through the local or plan-first workload path.
+6. Deploy `environments/<env>` through the local or protected plan-first path.
 7. Reconcile workload account-stack permissions when GitHub OIDC is enabled.
-8. Deploy or re-apply control-plane IAM Identity Center assignments.
-9. Run control-plane, security-operations, workload bootstrap, and workload baseline evidence workflows.
+8. Deploy or re-apply IAM Identity Center assignments.
+9. Run the applicable validation and evidence workflows.
 10. Complete approved live/manual security tests and destroy-safety review.
 
-Supported state migration targets are:
+Supported state migration targets:
 
 ```text
 control-plane
@@ -580,13 +325,13 @@ staging
 prod
 ```
 
-Detailed instructions are in `docs/quickstart.md` and `scripts/bootstrap/README.md`.
+For detailed deployment instructions, use [`docs/quickstart.md`](docs/quickstart.md).
 
 ---
 
-## Validation
+## Validation and Evidence
 
-The repository uses four read-only validation layers with matching evidence exporters:
+The repository uses four read-only validation layers:
 
 | Layer | Validator | Evidence exporter |
 |---|---|---|
@@ -595,233 +340,133 @@ The repository uses four read-only validation layers with matching evidence expo
 | Workload bootstrap | `validate-bootstrap.sh <env>` | `export-bootstrap.sh <env>` |
 | Workload baseline | `validate-baseline.sh <env>` | `export-baseline.sh <env>` |
 
-### Control-Plane Validation
+The workload baseline suite contains 16 validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
-Validates the management-account control plane, including remote state, GitHub OIDC, Organizations topology/account placement, centralized-security prerequisites, and IAM Identity Center groups, permission sets, and account assignments.
+The v1.8.0 release validation exercise completed with all 16 workload validators passing, followed by a converged Terraform plan with no changes.
 
-The validator consumes the consolidated Identity Center configuration objects:
-
-```text
-IDENTITY_CENTER_WORKLOADS
-IDENTITY_CENTER_SECOPS
-```
-
-### Security Operations Validation
-
-Validates delegated-administrator-side centralized security configuration from the `security-operations` account:
-
-```bash
-AWS_PROFILE=security-operations \
-AWS_REGION=us-east-1 \
-./scripts/validation/validate-security-operations.sh
-```
-
-Coverage includes Security Hub CSPM administrator state, CENTRAL configuration, configuration-policy associations, GuardDuty organization features and Runtime Monitoring, Security Hub V2 organization policy attachment, and effective workload policy state.
-
-The corresponding evidence package is written beneath:
-
-```text
-validation-results/security-operations/security-services/<timestamp>/
-```
-
-### Workload Bootstrap Validation
-
-`validate-bootstrap.sh` verifies workload state/backend security and GitHub OIDC execution-plane resources. Strict workload CMK checks ensure the workload Apply role references current Lambda and Secrets Manager CMKs after reconciliation.
-
-### Workload Baseline Validation
-
-`validate-baseline.sh` currently runs 16 workload validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security realization, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
-
-A successful run ends with:
-
-```text
-Validation scripts passed:  16/16
-Validation scripts failed:  0/16
-```
-
-The v1.8.0 release validation exercise completed with all 16 workload validators passing and a subsequent converged Terraform plan reporting no changes. This is technical-control and audit-readiness evidence, not a SOC 2 or ISO 27001 certification.
-
-### Validation Reporting
-
-Generated packages include `summary.md`, `summary.json`, and the relevant validation logs. Evidence workflows use GitHub OIDC Plan roles and are intentionally read-only.
-
-Cross-layer validation is kept separate by ownership. For example, Security Operations evidence does not replace full Organizations topology validation, and workload evidence does not replace delegated-administrator validation.
-
-Live EC2 isolation/rollback, IP enrichment, end-user SSO login, tamper detection, break-glass assumption, and destroy-safety review remain separate approved tests where applicable.
+Generated evidence includes Markdown, JSON, and per-validator logs. These results provide technical-control and audit-readiness evidence; they are not SOC 2 or ISO 27001 certification.
 
 Detailed guidance:
 
-```text
-scripts/validation/README.md
-docs/validation-checklist.md
-docs/assurance/validation-evidence-guide.md
-docs/assurance/validation-report-template.md
-```
+- [`scripts/validation/README.md`](scripts/validation/README.md)
+- [`docs/validation-checklist.md`](docs/validation-checklist.md)
+- [`docs/assurance/validation-evidence-guide.md`](docs/assurance/validation-evidence-guide.md)
+- [`docs/assurance/validation-report-template.md`](docs/assurance/validation-report-template.md)
+
+Live EC2 isolation/rollback, IP enrichment, IAM Identity Center end-user login, tamper simulation, break-glass assumption, and destroy-safety testing remain separately controlled activities.
 
 ---
 
 ## State Management
 
-Terraform state is separated by account and Terraform root. State bootstrap stacks use a two-phase lifecycle:
+Terraform state is separated by account and Terraform root.
+
+State bootstrap stacks follow a two-phase lifecycle:
 
 ```text
-1. Initial local apply creates the state S3 bucket and CMK.
-2. migrate-state-stack.sh materializes backend.tf, migrates state to S3,
-   and verifies terraform state pull.
+1. Initial local apply creates the S3 state bucket and KMS CMK.
+2. migrate-state-stack.sh migrates the state into that protected S3 backend.
 ```
 
-Tracked `backend.tf.migrated.example` files document the intended post-migration configuration. Active state-stack `backend.tf` files are ignored by Git.
+Remote-backed roots use Terraform S3 native locking with:
 
-Representative state object separation includes:
-
-```text
-control-plane/state.tfstate
-control-plane/account.tfstate
-control-plane/organizations.tfstate
-control-plane/identity-center.tfstate
-
-security-operations/state.tfstate
-security-operations/account.tfstate
-security-operation/security-services.tfstate
-
-bootstrap/state/dev.tfstate
-bootstrap/dev.tfstate
-baseline/dev.tfstate
+```hcl
+use_lockfile = true
 ```
 
-Staging and production follow the same workload pattern. All remote-backed stacks use S3 native state locking with `use_lockfile = true`.
+Tracked `backend.tf.migrated.example` files document intended post-migration configuration, while active state-stack `backend.tf` files are ignored by Git.
 
-A state stack must never destroy the bucket that contains its own active state. Before intentional state-stack teardown, migrate that state to an independent backend or local state and retain an external backup.
+A state stack must never destroy the bucket containing its own active state. Intentional teardown requires moving that state to an independent backend or local state and retaining an external backup first.
+
+See [`scripts/bootstrap/README.md`](scripts/bootstrap/README.md) for migration and reconciliation details.
 
 ---
 
 ## Cost Considerations
 
-This baseline supports multiple cost/security profiles.
+Major cost drivers can include AWS Network Firewall, NAT Gateways, Interface VPC Endpoints, CloudWatch, AWS Config, Inspector, Security Hub/GuardDuty features, Backup, ECS/Fargate workloads, and Application Load Balancers.
 
-The full production-style baseline uses AWS Network Firewall for centralized egress inspection. AWS Network Firewall provides strong security controls, but it can increase cost, especially when deployed across multiple environments and Availability Zones.
+Recommended defaults:
 
-Recommended usage:
+- `production` for production or sensitive workloads
+- `development` for lower-cost development/testing
+- `minimal` for private AWS-only testing without general internet access
 
-- Use `deployment_profile = "production"` for production or sensitive workloads.
-- Use `deployment_profile = "development"` for lower-cost development/testing environments.
-- Use `deployment_profile = "minimal"` for private AWS-only testing where general internet access is not required.
-- Review NAT Gateway, Network Firewall, VPC endpoint, CloudWatch, logging, SNS/SQS, Inspector, AWS Config, and Backup costs regularly.
+Review environment-specific usage and AWS pricing before treating the default profiles as a fixed cost model.
 
-Cost-sensitive behavior includes:
+---
 
-| Setting | Production | Development | Minimal |
-|---|---:|---:|---:|
-| Network Firewall | Enabled | Disabled by default | Disabled |
-| NAT Gateway | Enabled | Enabled | Disabled |
-| AWS Config | Enabled | Enabled | Disabled by default |
-| Inspector | Enabled | Enabled | Disabled |
-| AWS Backup | Enabled | Disabled | Disabled |
-| CloudWatch retention | 90 days | 30 days | 14 days |
+## Repository Layout
 
-The exact behavior can be overridden with explicit variables where supported.
+```text
+bootstrap/       account, state, Organizations, Identity Center, and security-operations roots
+environments/    dev, staging, and prod workload roots
+modules/         reusable infrastructure modules
+scripts/         bootstrap, deployment, and validation tooling
+docs/            architecture, adoption, validation, assurance, and runtime design
+.github/         CI/CD, static-analysis, and evidence workflows
+```
 
 ---
 
 ## Documentation
 
-Important system-level documentation includes:
-
 | Document | Purpose |
 |---|---|
-| `docs/quickstart.md` | End-to-end deployment guide |
-| `docs/architecture-overview.md` | Architecture and ownership boundaries |
-| `docs/design-principles.md` | Design rationale and tradeoffs |
-| `docs/adoption-guide.md` | Guidance for adapting the baseline |
-| `docs/validation-checklist.md` | Post-deployment validation checklist |
-| `docs/assurance/` | Evidence guidance and SOC 2 / ISO 27001-aligned mappings |
-| `bootstrap/control_plane/README.md` | Control-plane responsibilities and lifecycle |
-| `bootstrap/security_operations/README.md` | Central security responsibilities and lifecycle |
-| `scripts/validation/README.md` | Validation layers, usage, and safety boundaries |
-| `scripts/deployment/README.md` | Application image publication and digest-promotion workflow |
-
-Each reusable module and major bootstrap substack also carries local documentation.
+| [`docs/quickstart.md`](docs/quickstart.md) | End-to-end deployment guide |
+| [`docs/architecture-overview.md`](docs/architecture-overview.md) | Architecture and ownership boundaries |
+| [`docs/design-principles.md`](docs/design-principles.md) | Design rationale and tradeoffs |
+| [`docs/adoption-guide.md`](docs/adoption-guide.md) | Guidance for adapting the baseline |
+| [`docs/ecs-runtime-design.md`](docs/ecs-runtime-design.md) | ECS/Fargate runtime and release architecture |
+| [`docs/validation-checklist.md`](docs/validation-checklist.md) | Post-deployment validation checklist |
+| [`docs/assurance/`](docs/assurance/) | Evidence guidance and SOC 2 / ISO 27001-aligned mappings |
+| [`scripts/bootstrap/README.md`](scripts/bootstrap/README.md) | State migration and workload-account reconciliation |
+| [`scripts/deployment/README.md`](scripts/deployment/README.md) | Application publication and digest promotion |
+| [`scripts/validation/README.md`](scripts/validation/README.md) | Validation layers, usage, and safety boundaries |
+| [`bootstrap/control_plane/README.md`](bootstrap/control_plane/README.md) | Control-plane responsibilities |
+| [`bootstrap/security_operations/README.md`](bootstrap/security_operations/README.md) | Central-security responsibilities |
 
 ---
 
-## Release Status and Highlights
+## Release Highlights
 
 ### Current Release: `v1.8.0`
 
-`v1.8.0 — Secure Container Workloads` adds the generic ECS/Fargate application runtime and release path on top of the existing secure AWS baseline. Key release outcomes include:
+`v1.8.0 — Secure Container Workloads` adds:
 
-- Canonical `ecs_services` configuration with registered-but-unreleased services through nullable `image_digest`
-- KMS-encrypted immutable ECR repositories and exact digest-pinned Fargate task images
-- Shared ECS cluster, generic long-running Fargate services, and optional shared HTTPS ALB
-- Separate least-privilege ECS task execution and application task roles
-- Terraform-owned ECS application logs and Container Insights performance logging
-- Branch-trusted GitHub OIDC image publication and authoritative ECR digest resolution
+- Canonical `ecs_services` configuration with nullable `image_digest`
+- KMS-encrypted immutable ECR repositories
+- Exact digest-pinned Fargate task images
+- Shared ECS cluster and optional shared HTTPS ALB
+- Separate least-privilege task execution and application task roles
+- Terraform-owned application and Container Insights logging
+- GitHub OIDC image publication and authoritative ECR digest resolution
 - Automated one-field release PR generation
-- Protected exact saved-plan Terraform Apply semantics
+- Protected exact saved-plan Terraform Apply
 - 16-validator workload baseline coverage including ECR and ECS runtime validation
 
 ### Previous Release: `v1.7.0`
 
-`v1.7.0` added the dedicated `security-operations` administration layer and completed the centralized-security architecture:
+`v1.7.0` introduced the dedicated `security-operations` administration layer and centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance.
 
-- Security Hub CSPM CENTRAL configuration with workload policies and finding aggregation
-- GuardDuty delegated administration, organization enrollment, protection plans, and Runtime Monitoring
-- Security Hub V2 organization-policy governance for the `Workloads` OU
-- Security-operations state and GitHub OIDC bootstrap roots
-- Terraform Plan coverage for the security-services stack
-- A dedicated Security Operations validation/evidence workflow
-- Terraform-owned `guardduty-data` Interface Endpoints and endpoint-before-compute ordering
-- Five-account Organizations / Identity Center documentation and validation
-- Four-layer validation and evidence architecture
+For complete release history, see [`CHANGELOG.md`](CHANGELOG.md).
 
-### Earlier Release: `v1.6.0`
-
-`v1.6.0` hardened EC2 launch ordering, first-boot patching, and automated isolation.
-
-Key release outcomes included dependency-safe security-policy readiness, fail-closed isolation authorization, pre-quarantine snapshots, `user_data_replace_on_change`, and stronger first-boot Ubuntu patching behavior.
-
-For detailed release history, see `CHANGELOG.md`.
-
-## v1.8.0 Application Release Path
-
-The implemented application delivery path is:
-
-```text
-application source + Dockerfile
-  -> short-lived AWS/OIDC authentication
-  -> build and push image to ECR
-  -> resolve the authoritative sha256 digest
-  -> update only the registered service image_digest in a release PR
-  -> informational Terraform Plan on the PR
-  -> human review and merge
-  -> Terraform Apply creates its own saved plan, checksum, and metadata
-  -> protected approval
-  -> verify and apply that exact reviewed plan
-  -> wait for ECS convergence
-  -> run ECR, IAM, and ECS validation
-```
-
-Terraform does not build or push images. A service may be registered with `image_digest = null`; its ECR repository exists, but per-service runtime resources are withheld until the release PR selects a valid digest. See `scripts/deployment/README.md` for the operator and permission boundaries.
+---
 
 ## Future Roadmap
 
-ECS Service Auto Scaling, GuardDuty Fargate agent management, fail-closed task-level containment, and a ReconoSense reference deployment are post-v1.8.0 work rather than release blockers. GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE` today.
+Post-v1.8.0 work includes:
 
-Other potential improvements include:
+- ECS Service Auto Scaling
+- GuardDuty Fargate agent management
+- Fail-closed ECS task-level containment/remediation
+- ReconoSense reference deployment
 
-- Expand dashboarding and visual evidence outputs
-- Add configurable VPC endpoint service lists
-- Add additional deployment profile-controlled services
-- Add a deliberate Service Control Policy strategy and Terraform implementation
-- Evaluate multi-region centralized security and evidence patterns
-- Add optional platform Apply automation for centralized security with stronger approval boundaries
-- Add additional workload examples using fake data
+Other potential improvements include expanded dashboarding and visual evidence, configurable VPC endpoint service lists, additional deployment-profile-controlled services, a deliberate Service Control Policy strategy, multi-region centralized security/evidence patterns, and additional synthetic workload examples.
 
 ---
 
 ## Intended Audience
-
-This project is intended for:
 
 - Cloud security engineers
 - DevSecOps engineers
@@ -836,9 +481,9 @@ This project is intended for:
 
 `tf-secure-baseline` is a deployable AWS security foundation and generic application-hosting baseline for sensitive workloads.
 
-It combines five-account isolation, centralized Organizations and Identity Center governance, a dedicated security-operations administration layer, private-first networking, configurable egress, centralized Security Hub/GuardDuty governance, workload-local remediation, supported EC2 hosting, a preferred digest-pinned ECS/Fargate runtime, durable alerting, fail-closed automated response, protected Terraform CI/CD, and layered validation evidence into a reusable Terraform platform.
+It combines five-account isolation, Organizations and Identity Center governance, centralized security administration, private-first networking, configurable egress, Security Hub/GuardDuty governance, workload-local remediation, supported EC2 hosting, digest-pinned ECS/Fargate workloads, durable alerting, protected Terraform CI/CD, and layered validation evidence into a reusable Terraform platform.
 
-The goal is to provide a secure-by-default foundation that can be adapted, extended, and used as the starting point for production SaaS environments without representing the infrastructure alone as a complete compliance program.
+The goal is to provide a secure-by-default foundation that can be adapted and extended without representing the infrastructure alone as a complete compliance program.
 
 ---
 
