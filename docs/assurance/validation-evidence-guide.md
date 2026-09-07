@@ -213,6 +213,10 @@ Workload bootstrap validation is handled separately from workload baseline valid
 | State Access Policies | Confirms GitHub roles reference the state bucket, state objects including `.tflock` objects, and the state CMK |
 | Workload CMK Policy Access | Confirms the GitHub Apply role references current workload-created Lambda and Secrets Manager CMK ARNs |
 
+### Image Publisher Validation Boundary
+
+The workload bootstrap validator currently proves the OIDC provider and Plan/Apply role contract, including state/KMS access, but does not yet fully validate the v1.8.0 Image Publisher role's branch trust and ECR publication policy. For release/client evidence, review the publisher role, `BRANCHES_IMAGE_PUBLISHER_GITHUB`, and repository-scoped ECR permissions manually unless the bootstrap validator is extended later.
+
 ### Remote State Stack Evidence
 
 `validate-bootstrap.sh`, `validate-control-plane.sh`, and their exporters use:
@@ -223,7 +227,7 @@ REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
 
 | Value | Evidence Meaning |
 |---|---|
-| `true` | A missing, mismatched, or unreadable state-stack S3 backend fails validation. Use this for v1.4.0 release validation and client-facing evidence. |
+| `true` | A missing, mismatched, or unreadable state-stack S3 backend fails validation. Use this for release-readiness and client-facing evidence. |
 | `false` | The remote-state checks still run, but migration findings are warnings. This is useful only during transition or troubleshooting. |
 
 The GitHub bootstrap and control-plane evidence workflows default this input to `true`. On clean runners, the workflows also initialize the state-stack backend before running the exporter.
@@ -258,28 +262,11 @@ Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/
 
 ## What Automated Workload Baseline Validation Covers
 
-The automated workload baseline validation suite checks deployed workload environments across the following areas.
+The automated workload baseline suite currently runs 16 read-only validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
-| Area | Coverage Summary |
-|---|---|
-| Environment | Required local tooling, repository paths, Terraform outputs, environment values, and account context |
-| Networking | VPC, private subnet routing, NAT Gateway behavior, Network Firewall behavior, and egress-mode expectations |
-| VPC Endpoints | Interface endpoint existence, endpoint subnet placement, S3 Gateway Endpoint route table associations, and endpoint availability |
-| ECR | Repository identity, immutable tags, exact ECR CMK use, and untagged-only lifecycle policy |
-| Logging | CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, alarms, retention settings, and log delivery paths |
-| Security Services | GuardDuty, Security Hub, AWS Config, Inspector, and profile-aware service expectations |
-| KMS | Expected KMS aliases, key state, key manager, and rotation status |
-| Backup | Backup vaults, plans, selections, schedules, retention, resources, recent jobs, and recovery point visibility |
-| SNS | SNS topics, subscriptions, pending confirmations, and encryption configuration |
-| SQS | SQS queues, queue policies, SNS delivery paths, encryption, dead-letter queue status, and message counts |
-| EventBridge | Default-bus and SecOps-bus rules, targets, rule state, target DLQs, retry policies, and rollback rule coverage |
-| Lambda | Lambda functions, runtime, execution role, timeout, memory, KMS configuration, VPC configuration, environment variables, and invoke permissions |
-| SSM | Managed instance registration, online status, associations, maintenance windows, and patch baseline visibility |
-| Compute | EC2 instance placement, public IP absence, IMDSv2 enforcement, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption |
-| ECS Runtime | Cluster state and Container Insights, Fargate service steady state, task definitions, digest-pinned images, exact logging encryption, task networking/security policy, and conditional ALB relationships |
-| IAM | IAM roles, service trust policies, per-service ECS execution/task role separation and policy scope, GitHub OIDC roles where present, break-glass MFA conditions, and shared log access policies |
+For v1.8.0 ECS/Fargate, the evidence set includes exact ECR repository/KMS/lifecycle checks; ECS cluster and service inventory; service steady state; digest-pinned task definitions; Terraform-owned service log groups; exact Container Insights setting and performance-log identity/retention/KMS encryption; runtime task-security-policy relationships; conditional ALB/database relationships; and per-service IAM task/execution separation including exact `task_execution_kms_key_arns` behavior.
 
----
+The final development workload validation completed with all 16 workload validators passing. Treat the generated `summary.md`, `summary.json`, and per-script logs as the authoritative record for a particular run rather than relying only on release-note prose.
 
 ## What Automated Control-Plane Validation Covers
 
@@ -326,6 +313,14 @@ Coverage includes:
 This layer intentionally does not prove the complete AWS Organizations topology; that belongs to control-plane validation. It also does not prove workload-local Config, Inspector, Backup, networking, compute, or remediation state; those belong to workload validation.
 
 ---
+
+## Application Release Evidence
+
+`Deploy Application` produces a technical chain that can supplement workload infrastructure evidence. Useful artifacts include publication metadata, the authoritative ECR digest re-check, workflow run identity, the generated release branch/PR, and the one-field `image_digest` change.
+
+After the release PR is merged, collect the separate `Terraform Apply` run showing the internal saved plan, checksum/metadata verification, protected approval, and exact-plan apply. Follow that with ECS convergence and the workload baseline evidence package. Do not treat successful image publication by itself as proof that the application was deployed.
+
+The publisher job and release/PR job intentionally hold different authorities: AWS OIDC/ECR publication versus GitHub repository mutation. Preserving that evidence helps demonstrate the intended separation of duties.
 
 ## What Automated Validation Does Not Cover
 
