@@ -6,7 +6,7 @@ The `application_load_balancer` module creates the shared Application Load Balan
 
 It owns the public-facing ALB, its security group, HTTPS listener, per-service target groups, and HTTPS listener rules. ECS services consume the target groups created by this module but remain owned by `modules/ecs_service`.
 
-The module is intended to be instantiated only when one or more ingress-enabled ECS services are configured.
+The module is intended to be instantiated only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it.
 
 ## Resources Created
 
@@ -140,11 +140,7 @@ This module owns the Application Load Balancer security-group object.
 
 It also owns public HTTPS ingress into that security group from `ingress_cidrs`.
 
-`ingress_cidrs` is an environment-level set on the shared ALB SG. It therefore
-represents the client CIDR union for every ingress-enabled service; the current
-module does not implement per-service source-IP isolation. Service separation
-at the listener is routing separation through explicit host-header and/or
-path-pattern conditions, not a per-service authorization boundary.
+`ingress_cidrs` is an environment-level set on the shared ALB SG. It therefore represents the client CIDR union for every ingress-enabled service; the current module does not implement per-service source-IP isolation. Service separation at the listener is routing separation through explicit host-header and/or path-pattern conditions, not a per-service authorization boundary.
 
 The module intentionally does **not** create broad ALB egress.
 
@@ -192,7 +188,7 @@ Persistent production use must reconsider ALB deletion protection before deploym
 
 The baseline derives this module's service configuration from the canonical `ecs_services` map.
 
-Only ECS services with a non-null `ingress` configuration are included in the derived ALB service map.
+Only deployable ECS services with both a selected image digest and non-null `ingress` configuration are included in the derived ALB service map. A registered service with `image_digest = null` does not create an ALB target group or listener rule, even when its canonical ingress configuration is already present.
 
 Conceptually:
 
@@ -203,7 +199,7 @@ ecs_services = {}
 ecs_services contains no services with ingress
     -> no ALB resources
 
-ecs_services contains one or more services with ingress
+ecs_services contains one or more deployable services with ingress
     -> one shared ALB
     -> one HTTPS listener
     -> one target group per ingress-enabled service
@@ -231,7 +227,7 @@ ecs_services = {
 }
 ```
 
-In this example, only `api` is included in the ALB routing configuration. The `worker` service does not receive a target group or listener rule.
+In this example, only a digest-selected `api` is included in the ALB routing configuration. The `worker` service does not receive a target group or listener rule. A null digest would also exclude either service from ALB materialization.
 
 This avoids requiring callers to maintain a separate ALB service map and prevents creation of an idle ALB when no ingress-enabled ECS workloads exist.
 
@@ -368,13 +364,8 @@ The current baseline connects the module's target groups and ALB security-group 
 - Cross-component security-policy rules
 - Runtime service definitions
 
-Workload DNS configuration remains outside the module and current runtime
-scope.
+Workload DNS configuration remains outside the module and current runtime scope.
 
-`baseline/locals.tf` derives a plan-time-known `alb_access` boolean from whether
-the canonical service has non-null `ingress`. The security-policy module uses
-that semantic value for `for_each` filtering. It does not filter on whether the
-resource-derived ALB security-group ID is non-null, because that value is
-unknown during planning.
+`baseline/locals.tf` derives a plan-time-known `alb_access` boolean from whether the canonical service has non-null `ingress`. The security-policy module uses that semantic value for `for_each` filtering. It does not filter on whether the resource-derived ALB security-group ID is non-null, because that value is unknown during planning.
 
 The module intentionally remains independent of ECS service implementation details.
