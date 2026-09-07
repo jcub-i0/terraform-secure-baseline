@@ -12,9 +12,7 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 **Current tagged release:** `v1.7.0` — centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance through a dedicated `security-operations` account, with corresponding CI planning and validation evidence.
 
-**Current development theme:** unreleased `v1.8.0 — Secure Container
-Workloads`; the core ECS/Fargate runtime and its validation are implemented on
-`main`.
+**Current development theme:** unreleased `v1.8.0 — Secure Container Workloads`; the ECS/Fargate runtime, application image-publication and digest-promotion workflow, and validation are implemented on `main`. The work is in release-readiness and documentation review; it has not been tagged.
 
 It provides a secure, multi-account cloud foundation with:
 
@@ -69,6 +67,8 @@ Key capabilities include:
 - A shared-per-environment ECS cluster and generic long-running Fargate services using digest-pinned ECR images
 - Conditional shared HTTPS Application Load Balancers with explicit host/path routing and fail-closed defaults
 - Per-service least-privilege ECS IAM roles, task security groups, encrypted application log groups, and resource-granular launch readiness
+- Registered-but-unreleased ECS services whose repositories exist before an immutable image digest is selected
+- Short-lived GitHub OIDC image publication, authoritative ECR digest resolution, and one-field automated release PRs
 - Layer-specific validation evidence export with Markdown, JSON, and per-script logs
 
 ---
@@ -197,6 +197,10 @@ control-plane -> security-operations -> bootstrap-workloads -> workloads
 │   ├── bootstrap
 │   │   ├── migrate-state-stack.sh
 │   │   └── reconcile-workload-account.sh
+│   ├── deployment
+│   │   ├── deploy-application.sh
+│   │   ├── update-application-digest.sh
+│   │   └── README.md
 │   └── validation
 │       ├── export-baseline.sh
 │       ├── export-bootstrap.sh
@@ -250,7 +254,7 @@ This avoids broad module dependencies while ensuring required security-group rul
 ECS services use the same resource-granular principle without introducing a module dependency cycle:
 
 ```text
-IAM execution policy IDs ───────────────┐
+IAM execution policy IDs ──────────────┐
                                        ├──> aws_ecs_service.services
 security-policy rule IDs ──────────────┘
 ```
@@ -524,6 +528,7 @@ GitHub Actions uses OIDC to assume account-specific AWS IAM roles without storin
 
 Current workflows include:
 
+- `Deploy Application`
 - `Terraform Plan`
 - `Terraform Apply`
 - `Reconcile Workload Account`
@@ -536,7 +541,9 @@ Current workflows include:
 - `Control-Plane Evidence Export`
 - `Export Security Operations Evidence`
 
-Workload deployment follows the plan-before-approval model: a Plan role generates a readable and saved plan, the protected Apply environment waits for approval, and the Apply role verifies and applies that exact artifact without replanning.
+The standalone `Terraform Plan` workflow produces informational/review CI plans; its output is not consumed by Apply. The self-contained `Terraform Apply` workflow uses its own Plan role and `<env>-plan` environment to generate a readable plan, binary plan, metadata, and SHA-256 checksum. Its protected Apply job downloads and verifies that artifact, then applies the exact saved binary plan without replanning. Both workload plan paths require a valid `DEPLOYMENT_PROFILE` and fail closed when it is missing or invalid.
+
+Application publication is a separate, two-authority path. The `Deploy Application` workflow reads the registered service from `environments/<env>/container-workloads.auto.tfvars.json`, builds and publishes the image through a branch-trusted, environment-specific GitHub OIDC image publisher role, and resolves the authoritative ECR digest. A separate job has GitHub repository write access but no AWS credentials or OIDC token; it changes only `ecs_services.<service>.image_digest` and opens a release PR. Review and merge of that PR precede the protected `Terraform Apply` workflow.
 
 The standalone `Terraform Plan` workflow also covers selected control-plane roots and `bootstrap/security_operations/security_services`. The security-operations Plan and evidence jobs use the `security-operations-plan` GitHub Environment.
 
@@ -633,6 +640,8 @@ A successful run ends with:
 Validation scripts passed:  16/16
 Validation scripts failed:  0/16
 ```
+
+The final v1.8.0 development exercise completed with all 16 workload validators passing and a subsequent converged Terraform plan reporting no changes. This is technical-control and audit-readiness evidence, not a SOC 2 or ISO 27001 certification.
 
 ### Validation Reporting
 
@@ -731,6 +740,7 @@ Important system-level documentation includes:
 | `bootstrap/control_plane/README.md` | Control-plane responsibilities and lifecycle |
 | `bootstrap/security_operations/README.md` | Central security responsibilities and lifecycle |
 | `scripts/validation/README.md` | Validation layers, usage, and safety boundaries |
+| `scripts/deployment/README.md` | Application image publication and digest-promotion workflow |
 
 Each reusable module and major bootstrap substack also carries local documentation.
 
@@ -760,23 +770,30 @@ Key release outcomes included dependency-safe security-policy readiness, fail-cl
 
 For detailed release history, see `CHANGELOG.md`.
 
-## Future Roadmap
+## v1.8.0 Application Release Path
 
-The immediate unreleased v1.8.0 milestone is an application image build, publish, and deployment workflow. Terraform does not build or push images. The intended delivery path is:
+The implemented application delivery path is:
 
 ```text
 application source + Dockerfile
   -> short-lived AWS/OIDC authentication
   -> build and push image to ECR
   -> resolve the authoritative sha256 digest
-  -> Terraform Plan with that digest
-  -> checksum/metadata/reviewer approval
-  -> Apply the exact reviewed plan
+  -> update only the registered service image_digest in a release PR
+  -> informational Terraform Plan on the PR
+  -> human review and merge
+  -> Terraform Apply creates its own saved plan, checksum, and metadata
+  -> protected approval
+  -> verify and apply that exact reviewed plan
   -> wait for ECS convergence
   -> run ECR, IAM, and ECS validation
 ```
 
-Subsequent v1.8.0 work is expected to cover ECS Service Auto Scaling, GuardDuty Fargate Runtime Monitoring, fail-closed task-level containment, a ReconoSense reference deployment, and release readiness. GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE` today.
+Terraform does not build or push images. A service may be registered with `image_digest = null`; its ECR repository exists, but per-service runtime resources are withheld until the release PR selects a valid digest. See `scripts/deployment/README.md` for the operator and permission boundaries.
+
+## Future Roadmap
+
+ECS Service Auto Scaling, GuardDuty Fargate agent management, fail-closed task-level containment, and a ReconoSense reference deployment are post-v1.8.0 work rather than release blockers. GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE` today.
 
 Other potential improvements include:
 
@@ -819,5 +836,4 @@ Copyright © 2026 Jacob Molland.
 
 This project is licensed under the Apache License 2.0.
 
-Terraform Secure Baseline is developed and maintained under the Nano Nexus
-Consulting brand, operated by Nano Nexus Holdings LLC. See [LICENSE](LICENSE) for details.
+Terraform Secure Baseline is developed and maintained under the Nano Nexus Consulting brand, operated by Nano Nexus Holdings LLC. See [LICENSE](LICENSE) for details.
