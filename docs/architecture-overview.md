@@ -222,74 +222,39 @@ The endpoint set includes `guardduty-data`. Creating that endpoint before eligib
 
 ## ECS/Fargate Application Runtime
 
-EC2 remains supported as the host-based workload pattern. ECS/Fargate is the preferred modern SaaS/application runtime and is implemented through four sibling modules:
+EC2 remains supported as the host-based workload pattern. ECS/Fargate is the preferred modern SaaS/application runtime and is composed from `modules/ecr`, `modules/ecs_cluster`, `modules/application_load_balancer`, and `modules/ecs_service`.
+
+Operators maintain one canonical `ecs_services` map. A service may be registered with `image_digest = null`; this keeps its required ECR repository in Terraform ownership while omitting the per-service runtime. Baseline derives deployable ECS/IAM/ALB/security-policy inputs only after a non-null exact SHA-256 digest is selected.
 
 ```text
-modules/ecr
-modules/ecs_cluster
-modules/application_load_balancer
-modules/ecs_service
+registered service (image_digest = null)
+  -> ECR repository exists
+  -> no per-service ECS runtime
+
+selected immutable digest
+  -> task execution/task IAM roles
+  -> task security group
+  -> /aws/ecs/<name-prefix>/<service> log group
+  -> task definition
+  -> ECS service
+  -> optional ALB routing
 ```
 
-Each workload environment owns one ECS cluster. Operators configure one canonical `ecs_services` map; the baseline derives the required ECR repositories, per-service IAM role inputs, optional ALB routing, cross-component security policy, and ECS runtime configuration.
+Fargate tasks run in compute-private subnets with `awsvpc`, no public IP, and one task security group per service. Private ECR API/registry traffic uses `ecr.api` and `ecr.dkr` Interface Endpoints in endpoint-private subnets, while ECR image layers use the S3 Gateway Endpoint. Optional ingress uses a shared internet-facing HTTPS ALB in public subnets.
+
+Task images are constructed only from the managed repository URL and a reviewed immutable digest:
 
 ```text
-public subnets
-  -> zero or one shared internet-facing ALB
-  -> HTTPS :443, explicit listener rules, fixed 404 default
-  -> ip target groups
-
-compute_private subnets
-  -> Fargate tasks using awsvpc
-  -> exactly one task SG per service
-  -> assign_public_ip = false
-
-endpoint_private subnets
-  -> ecr.api and ecr.dkr Interface Endpoints
-
-S3 Gateway Endpoint
-  -> private ECR image-layer retrieval through associated route tables
-  -> resource-backed prefix-list ID used by restrictive task SG rules
+<repository_url>@sha256:<digest>
 ```
 
-Task definitions use Linux and `X86_64` or `ARM64`, and services use the resource-backed Fargate platform version emitted by Terraform. Every service currently has exactly one essential container named for the stable service key. Its image is constructed from the managed repository URL and a reviewed digest:
+Terraform owns the runtime infrastructure but never builds or pushes application images. The implemented `Deploy Application` workflow uses a dedicated branch-trusted Image Publisher OIDC role to publish/query ECR, resolves the authoritative digest, and then uses a separate GitHub-only release job to update exactly the selected service digest and open a release PR. Merge, Terraform Apply, ECS convergence, and evidence remain separate reviewed stages.
 
-```text
-<repository_url>@sha256:<64 hexadecimal characters>
-```
+Service launch uses resource-granular readiness instead of broad module dependencies: execution-policy IDs and cross-component security-policy rule IDs feed readiness checkpoints, and only ECS service launch waits on them.
 
-Terraform creates repositories and runtime infrastructure but does not build or push application images. For a first service, establish the environment/ECR foundation, publish the image outside Terraform, resolve the authoritative digest, and then review/apply the service plan containing that digest. Earlier staged live testing used multiple applies to prove intermediate states; this is not a separate foundation/runtime state architecture.
+Security-group objects remain owned by the resource modules, while cross-component rules remain in `modules/networking/security_policy`. Database and ALB relationships are conditional on deployable service intent.
 
-Service launch uses resource-level readiness rather than broad module dependencies:
-
-```text
-IAM execution policy IDs
-  -> terraform_data.ecs_execution_policy_ready
-
-security-policy rule IDs
-  -> terraform_data.ecs_security_policy_ready
-
-both
-  -> aws_ecs_service.services
-```
-
-The task SG is created before the cross-component rules so the security-policy module can reference it. The ECS service alone waits for completed readiness checkpoints.
-
-Security-group object ownership remains with the resource-owning modules:
-
-| Object | Owner |
-|---|---|
-| ALB SG | `modules/application_load_balancer` |
-| ECS task SG | `modules/ecs_service` |
-| RDS/data SG | `modules/storage` |
-| Interface Endpoint SG | `modules/vpc_endpoints` |
-| Cross-component rules | `modules/networking/security_policy` |
-
-Every ECS task SG has TCP/443 relationships with the Interface Endpoint SG and the AWS-managed S3 prefix list. Database and ALB rules are created only when the canonical service declares those capabilities. The ALB security-policy filter uses the plan-time-known `alb_access` semantic derived from non-null service ingress; it does not filter on the resource-derived ALB SG ID, which is unknown during planning.
-
-These readiness checks do not prove that routes, NAT Gateway, Network Firewall, DNS, or package repositories are healthy. At first boot, Ubuntu package sources are rewritten to HTTPS, APT is forced over IPv4, transient failures are retried, any repository-refresh error fails provisioning, and a noninteractive distribution upgrade runs before required packages are installed. User-data changes replace the instance.
-
----
+The ECS cluster also owns its Container Insights performance log group at `/aws/ecs/containerinsights/<cluster-name>/performance` when Container Insights is enabled. Service logs and the performance log group use the effective retention policy and workload logs CMK according to their resource ownership.
 
 ## Deployment Profiles
 
@@ -510,9 +475,7 @@ The current Interface Endpoint set includes:
 
 Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and
-`ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway
-Endpoint.
+Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and `ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway Endpoint.
 
 The `guardduty-data` endpoint is intentionally Terraform-managed and participates in the compute readiness dependency so Runtime Monitoring does not need to create an unmanaged endpoint after EC2 appears. This also keeps endpoint placement and destroy ordering inside the Terraform graph.
 
@@ -555,39 +518,21 @@ The access model separates operational duties:
 
 ## CI/CD Architecture
 
-GitHub Actions authenticates to AWS using OIDC.
-
-No long-lived AWS access keys are required for CI/CD.
-
-Each environment has dedicated GitHub plan and apply roles.
-
-Example mapping:
+GitHub Actions authenticates to AWS with short-lived OIDC credentials. Workload environments have separate Plan and Apply roles, and image publication adds a third Image Publisher role with a narrower ECR-only authority boundary.
 
 ```text
-dev-plan        -> dev GitHub-Plan role
-dev             -> dev GitHub-Apply role
-
-staging-plan    -> staging GitHub-Plan role
-staging         -> staging GitHub-Apply role
-
-prod-plan       -> prod GitHub-Plan role
-prod            -> prod GitHub-Apply role
-
-control-plane-plan    -> control-plane GitHub-Plan role
-control-plane         -> control-plane GitHub-Apply role
-
-security-operations-plan -> security-operations GitHub-Plan role
+<env>-plan  -> workload Plan role
+<env>       -> protected workload Apply role
+allowed branch -> workload Image Publisher role
 ```
 
-The GitHub OIDC roles are created by account substacks and are intentionally separated from the baseline infrastructure they manage.
+The publisher role uses exact branch-based trust. The `publish-image` job therefore does not declare a GitHub Environment; doing so would change the OIDC subject. That job has `id-token: write` and `contents: read`, while the separate release/PR job has repository write permissions but no AWS credentials or OIDC token.
 
-This prevents Terraform workflows from destroying the IAM roles they are actively using.
+The standalone `Terraform Plan` workflow is informational/review CI. It does not create the binary plan used by Apply. `Terraform Apply` contains its own internal Plan job, which creates the saved binary plan, readable plan, metadata, and checksum. After protected-environment approval, the Apply job verifies and applies that exact artifact without replanning.
 
-Layer-specific evidence workflows use the Plan roles and their corresponding `*-plan` GitHub environments. Because active state-stack `backend.tf` files are ignored, these workflows copy `backend.tf.migrated.example` to `backend.tf` before initializing and validating migrated state stacks.
+Workload Plan/Apply paths validate `DEPLOYMENT_PROFILE` and fail closed if it is missing or invalid. Workload Plan environments also validate `ISOLATION_ALLOWED` before planning.
 
-The standalone Terraform Plan workflow covers workload environments, control-plane Identity Center and Organizations, and `bootstrap/security_operations/security_services`. The current general-purpose Terraform Apply and Terraform Destroy workflows remain workload-scoped; centralized security services are not part of routine workload lifecycle operations.
-
-Workload Plan environments validate `ISOLATION_ALLOWED` as exactly `true` or `false`. Development currently opts in; staging and production remain opted out. The protected Apply job uses the reviewed saved plan, and Destroy falls back to `false` when the value is absent.
+Layer-specific evidence workflows use Plan roles and remain read-only. The generic workload Apply/Destroy lifecycle remains separate from centralized security-services administration.
 
 ## Terraform State Architecture
 
@@ -678,33 +623,23 @@ Each Terraform root uses a distinct state object key. This separation reduces bl
 
 ## Centralized Logging
 
-Operational and security activity is captured through:
+Operational and security telemetry includes CloudTrail, AWS Config, VPC Flow Logs, CloudWatch Logs, Lambda logs, Network Firewall flow/alert logs when enabled, ECS application logs, and ECS Container Insights performance logs.
 
-- CloudTrail
-- AWS Config
-- VPC Flow Logs
-- CloudWatch Logs
-- Lambda logs
-- Network Firewall flow and alert logs, when Network Firewall is deployed
+Deployable ECS services use Terraform-owned application log groups under:
 
-Logs are designed to be:
+```text
+/aws/ecs/<name-prefix>/<service>
+```
 
-- Stored centrally
-- Encrypted
-- Versioned
-- Lifecycle-managed
-- Protected against tampering
-- Retained for long-term audit and forensic use
+When Container Insights is enabled, `modules/ecs_cluster` owns:
 
-The centralized logs bucket is configured with controls such as:
+```text
+/aws/ecs/containerinsights/<cluster-name>/performance
+```
 
-- KMS encryption
-- S3 versioning
-- Object Lock, where enabled
-- Restricted bucket policies
-- Lifecycle transitions
+Both ECS log paths follow the effective workload CloudWatch retention policy and use the workload logs CMK where configured. Runtime validation compares the resource-backed expected names, retention, and KMS identity to live AWS state.
 
-CloudWatch Logs retention is profile-aware by default:
+CloudWatch retention is profile-aware by default:
 
 | `deployment_profile` | Default CloudWatch retention |
 |---|---:|
@@ -712,9 +647,7 @@ CloudWatch Logs retention is profile-aware by default:
 | `development` | 30 days |
 | `minimal` | 14 days |
 
-This supports monitoring continuity, incident response, and evidence preservation while allowing lower-cost profiles for non-production environments.
-
----
+Long-term centralized log storage remains encrypted, versioned, lifecycle-managed, and access-restricted. These controls support monitoring continuity, incident response, and audit-readiness evidence without representing the platform as independently certified.
 
 ## Centralized Security Governance
 
