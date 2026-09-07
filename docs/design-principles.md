@@ -173,39 +173,21 @@ This preserves the required bootstrap sequence without leaving long-lived Terraf
 
 ## 4. No Long-Lived CI/CD Credentials
 
-GitHub Actions uses OIDC to assume AWS IAM roles.
-
-The platform does not require static AWS access keys for CI/CD.
-
-This reduces risk from:
-
-- Leaked repository secrets
-- Long-lived access keys
-- Over-permissive machine users
-- Manual key rotation failures
-
-Each environment has its own plan and apply roles.
-
-Example:
+GitHub Actions uses short-lived OIDC credentials instead of static AWS access keys. Workload infrastructure separates Plan and Apply authorities, and application image publication adds a third narrow Image Publisher role.
 
 ```text
-dev-plan        -> dev GitHub-Plan role
-dev             -> dev GitHub-Apply role
-
-staging-plan    -> staging GitHub-Plan role
-staging         -> staging GitHub-Apply role
-
-prod-plan       -> prod GitHub-Plan role
-prod            -> prod GitHub-Apply role
-
-security-operations-plan -> security-operations GitHub-Plan role
+Plan role          -> Terraform planning / read paths
+Apply role         -> protected exact-plan application
+Image Publisher    -> ECR publication/query from approved branches
 ```
 
-This keeps CI/CD access scoped to the account and stack being operated on. The current general-purpose Apply and Destroy workflows remain workload-scoped; `security-operations-plan` is used for security-services planning and read-only evidence.
+The publisher job intentionally has `id-token: write` and `contents: read` only. A separate release/PR job receives repository write permissions but no AWS credentials and no `id-token`. This reduces the chance that one compromised CI job can both publish an AWS artifact and rewrite the deployment declaration that selects it.
 
-Workload deployment follows a plan-before-approval model. The Plan job publishes and stores the exact Terraform plan, and the protected Apply job verifies and applies that saved plan without replanning after approval. Security-sensitive inputs such as `ISOLATION_ALLOWED` are validated before the plan is created.
+The Image Publisher role uses exact branch-based OIDC subjects. Its job must not use a GitHub Environment because that would change the subject from `ref:refs/heads/<branch>` to an environment subject.
 
----
+Workload deployment follows plan-before-approval semantics. The standalone Terraform Plan workflow is informational; the Terraform Apply workflow creates its own binary plan, readable plan, metadata, and checksum, then applies that exact artifact after protected approval without replanning. `DEPLOYMENT_PROFILE` and other critical Plan inputs are validated before planning.
+
+Static AWS keys are not part of the intended CI/CD model.
 
 ## 5. Human Access Through IAM Identity Center
 
@@ -384,9 +366,7 @@ This keeps endpoint ENIs separate from compute, data, serverless, firewall, and 
 
 The S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and
-`ecr.dkr` Interface Endpoints, while ECR image layers use the existing S3
-Gateway Endpoint.
+Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and `ecr.dkr` Interface Endpoints, while ECR image layers use the existing S3 Gateway Endpoint.
 
 ---
 
@@ -576,43 +556,17 @@ Migration is not considered complete merely because `backend.tf` exists. Validat
 
 ## 18. Modular but Opinionated
 
-The repository is organized into reusable modules, but the baseline remains opinionated.
+The repository is modular but intentionally opinionated. Modules have resource-ownership boundaries rather than being generalized merely for abstraction.
 
-Modules support clear boundaries such as:
+EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2-only; the preferred modern application runtime is split across `modules/ecr`, `modules/ecs_cluster`, `modules/application_load_balancer`, and `modules/ecs_service` according to resource lifecycle and ownership.
 
-- Networking
-- Firewall
-- Logging
-- Monitoring
-- Security
-- IAM
-- Automation
-- Backup
-- Patch management
-- Storage
-- VPC endpoints
-- Compute
-- ECR
-- ECS cluster
-- ECS services
-- Application Load Balancer
+Operators maintain one canonical `ecs_services` map. A service can be registered with `image_digest = null`; baseline still derives its repository requirement while filtering per-service runtime resources until an immutable digest is selected. This avoids a second service inventory and avoids splitting Terraform state merely to bootstrap ECR.
 
-This makes the platform easier to understand, test, and adapt.
+Terraform owns runtime infrastructure, not application artifacts. Builds, tests, image publication, and digest selection happen outside Terraform. A deployable task uses the resource-backed ECR repository URL plus the reviewed immutable `sha256` digest.
 
-The goal is not maximum abstraction. The goal is a secure and maintainable baseline.
+The application release pipeline also preserves authority separation: image publication uses the AWS Image Publisher role, while the release/PR job changes only the selected service digest with GitHub repository authority and no AWS credentials.
 
-EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2-only; the preferred modern application runtime is split across `modules/ecr`, `modules/ecs_cluster`, `modules/application_load_balancer`, and `modules/ecs_service` according to resource ownership.
-
-Operators maintain one canonical `ecs_services` map. Baseline derives narrower ECR, IAM, ALB, security-policy, and runtime inputs rather than requiring parallel service inventories. Terraform owns the runtime infrastructure and consumes the reviewed digest, while the application/release process owns builds, image publication, and digest selection. Deployed images use a resource-backed ECR repository URL plus an immutable `sha256` digest present in the reviewed saved plan.
-
-When an output represents what Terraform actually configured on an AWS
-resource, validators should consume a resource-backed output instead of
-re-deriving names or policy in Bash. Current examples include firewall domain
-targets, ECR repository metadata and CMK identity, ECS platform version and
-Container Insights, ALB listener metadata, the S3 Gateway Endpoint prefix-list
-ID, and the workload logs CMK ARN.
-
----
+When a validator needs to compare what Terraform actually configured, prefer resource-backed outputs over reconstructing names/policy in Bash. Examples include ECR CMK identity, ECS service platform version, Container Insights/log-group metadata, ALB listener metadata, S3 prefix-list ID, and the workload logs CMK.
 
 ## 19. Secure Defaults Over Maximum Flexibility
 
