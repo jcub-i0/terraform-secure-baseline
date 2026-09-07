@@ -2,27 +2,13 @@
 
 ## Status and purpose
 
-This document records the implemented, unreleased v1.8.0 secure container
-workload architecture on `main`. The B1-B8 prerequisites and C1-C5 core
-ECS/Fargate runtime are implemented, merged, and live-tested. `v1.7.0` remains
-the latest released version.
+`v1.8.0 — Secure Container Workloads` is implemented and live-proven on `main`; `v1.7.0` remains the latest tagged release until the v1.8.0 tag is created. This document describes the current ECS/Fargate runtime architecture, ownership boundaries, application release lifecycle, and validation contract.
 
-The platform remains generic. It is not an application-specific Terraform
-implementation. EC2 remains a supported host-based workload pattern through
-`modules/compute`; ECS/Fargate is the preferred modern SaaS/application
-runtime. The two are sibling capabilities, and `modules/compute` remains
-EC2-only.
-
-This document distinguishes:
-
-- **CURRENT IMPLEMENTATION**: behavior present in Terraform or validation now.
-- **DEFERRED/FUTURE**: work outside the merged core runtime.
-- **EXISTING HARDENING ITEM**: production hardening that is independent of ECS
-  architecture.
+ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
 ## Implemented module boundaries
 
-The runtime is composed from four separate reusable modules:
+The reusable container platform is intentionally divided across four sibling modules rather than one monolithic ECS module:
 
 ```text
 modules/ecr
@@ -31,66 +17,27 @@ modules/application_load_balancer
 modules/ecs_service
 ```
 
-`baseline/main.tf` composes those modules with the existing IAM, security,
-networking, storage, firewall, and endpoint modules. Workload roots in
-`environments/dev`, `environments/staging`, and `environments/prod` pass the
-same canonical inputs to `module.baseline`. All resources remain in the
-existing workload-environment Terraform state; the runtime does not introduce
-a foundation/runtime state split.
+`baseline` composes these modules with `modules/iam`, `modules/networking/security_policy`, `modules/vpc_endpoints`, `modules/security`, and existing workload infrastructure. ECR repositories are N-per-environment, the ECS cluster is one-per-environment, the shared ALB is zero-or-one-per-environment, and ECS services are N-per-environment.
 
-Conceptual cardinality is:
-
-```text
-workload environment
-├── one ECS cluster
-├── zero or one shared ALB
-├── N ECR repositories
-└── N ECS services
-```
-
-The cluster exists even when `ecs_services = {}`. The ALB exists only when at
-least one service configures ingress.
+Do not move ECR into bootstrap, introduce a second service map, or split foundation/runtime Terraform state merely to reduce applies.
 
 ## Network placement
 
-The existing subnet classes retain their established roles:
+Fargate tasks use `awsvpc`, run in `compute_private` subnets, and receive no public IP. An optional shared internet-facing ALB uses public subnets. Interface VPC Endpoints, including `ecr.api` and `ecr.dkr`, use `endpoint_private` subnets. ECR image layers use the S3 Gateway Endpoint.
 
-| Subnet class | Current role |
-| --- | --- |
-| `public` | Internet-facing shared ALB |
-| `compute_private` | EC2 and ECS/Fargate application compute |
-| `data_private` | RDS |
-| `serverless_private` | VPC-attached security and automation Lambda functions |
-| `endpoint_private` | Interface VPC Endpoints |
-| `firewall_private` | AWS Network Firewall |
-
-`modules/ecs_service/main.tf` configures Fargate services with `awsvpc`, the
-compute-private subnet set, exactly one service task security group, and
-`assign_public_ip = false`. No application-specific subnet class or public task
-IP is supported.
-
-Workload egress continues to follow `effective_egress_mode`:
-
-- `network_firewall`: compute routes through Network Firewall and NAT;
-- `nat_only`: compute routes directly through NAT; and
-- `vpc_endpoints_only`: compute has no default internet route.
-
-The latter remains fail closed; declaring application domains does not create
-connectivity in that mode.
+Application HTTPS egress follows the effective workload egress mode: `development` defaults to `nat_only`, `production` defaults to `network_firewall`, and `minimal` defaults to `vpc_endpoints_only`. The task-security-policy path is derived from the same effective mode rather than using a separate ECS egress model.
 
 ## Canonical service interface
 
-Operators maintain one `ecs_services` map. `baseline/locals.tf` derives the
-narrower ECR, IAM, ALB, security-policy, and ECS runtime maps. Operators do not
-maintain parallel `alb_services`, IAM-service, or security-policy-service maps.
+Operators maintain exactly one `ecs_services` map. Baseline derives the narrower ECR, IAM, ALB, security-policy, and ECS-runtime maps from it.
 
-The exact current interface in `baseline/variables.tf` is:
+The current interface is conceptually:
 
 ```hcl
 variable "ecs_services" {
   type = map(object({
     repository_name = string
-    image_digest    = string
+    image_digest    = optional(string)
 
     container_port = number
     cpu            = number
@@ -102,8 +49,8 @@ variable "ecs_services" {
 
     environment_variables = optional(map(string), {})
 
-    secrets_manager_secrets = optional(map(string), {})
-    ssm_parameters          = optional(map(string), {})
+    secrets_manager_secrets      = optional(map(string), {})
+    ssm_parameters               = optional(map(string), {})
     task_execution_kms_key_arns  = optional(set(string), [])
 
     ingress = optional(object({
@@ -118,452 +65,166 @@ variable "ecs_services" {
 }
 ```
 
-Service keys are stable environment-local identities. Repository names use
-lowercase ECR syntax. Image digests must match `sha256:` followed by 64
-lowercase hexadecimal characters. Plain environment-variable names cannot
-overlap ECS-native secret names, and a secret name cannot be declared in both
-Secrets Manager and SSM maps.
+A non-null digest must match `sha256:` plus 64 lowercase hexadecimal characters. Plain environment-variable names cannot overlap ECS-native secret names, and a secret name cannot be declared in both the Secrets Manager and SSM maps.
 
-The current service abstraction creates exactly one essential container named
-for the service. Multi-container/sidecar support is not part of the current
-interface.
+### Registered versus deployable services
+
+`image_digest = null` is a valid lifecycle state. It means the service is registered but unreleased.
+
+Baseline derives `deployable_ecs_services` by filtering the canonical map to entries whose `image_digest` is non-null. ECR repository requirements intentionally derive from **all registered services**, while per-service ECS runtime, runtime IAM, task security groups, application log groups, and ALB routing derive only from **deployable services**.
+
+Therefore a registered-but-unreleased service preserves/creates its required ECR repository without creating a task definition or ECS service. Selecting a valid digest later materializes the runtime from the same service entry.
 
 ## Image and repository lifecycle
 
-`modules/ecr` owns private repositories through
-`aws_ecr_repository.repositories` and their lifecycle policies through
-`aws_ecr_lifecycle_policy.untagged_cleanup`. Its `repositories` input is
-`map(object({}))`, keyed directly by repository name. Actual names are
-`${var.name_prefix}-${each.key}`.
+`modules/ecr` owns private repositories and their lifecycle policies. Repositories use immutable tags, KMS encryption with the dedicated ECR CMK, and a lifecycle rule that expires only untagged images older than 30 days.
 
-All repositories use:
+The effective repository set merges explicitly configured `repositories` with repository names required by the canonical `ecs_services` map. Explicit repositories remain useful when a repository is needed without a service declaration, but the normal first-image path can register a service with `image_digest = null` and let that service derive the repository.
 
-- `image_tag_mutability = "IMMUTABLE"`;
-- KMS encryption with the dedicated ECR CMK from `modules/security`; and
-- a lifecycle policy that expires only untagged images older than 30 days.
+Any image digest that remains active or deployable must retain at least one tag so it is not eligible for the untagged-image lifecycle policy. Tag immutability prevents reassignment of a tag; it does not protect an intentionally untagged image from lifecycle cleanup.
 
-No repository policy, basic scanning configuration, or registry scanning
-configuration is owned by `modules/ecr`. Inspector ownership stays in
-`modules/security`; baseline adds `ECR` to
-`effective_inspector_resource_types` whenever the effective repository set is
-non-empty.
-
-Baseline computes the effective repository set by merging explicitly declared
-repositories with repository names required by `ecs_services`. This permits a
-first deployment such as:
-
-```hcl
-repositories = {
-  test = {}
-}
-ecs_services = {}
-```
-
-followed by:
-
-```hcl
-repositories = {}
-ecs_services = {
-  test = {
-    repository_name = "test"
-    # remaining service fields omitted
-  }
-}
-```
-
-The stable repository key remains `test`, so that transition does not
-destroy/recreate the repository.
-
-Any digest that is active or remains deployable by Terraform must retain at
-least one immutable release tag. Tag immutability prevents reassignment but
-does not prevent deleting the final tag. Application release automation must
-not remove that tag while the digest remains active or deployable.
-
-The current ephemeral development/test posture sets
-`force_delete = true # CHANGE THIS IN PROD` on repositories. This lets normal
-apply/test/destroy cycles remove repositories containing development images.
-There is no `prevent_destroy` protection. Persistent production deployments
-must reconsider this behavior.
-
-Terraform never builds, publishes, or selects an image. Task image references
-are constructed in `baseline/locals.tf` as:
+Terraform never builds, pushes, tests, or chooses application images. A deployable task image is constructed from the resource-backed repository URL and the selected digest:
 
 ```text
-<resource-backed repository_url>@sha256:<digest>
+<repository_url>@sha256:<digest>
 ```
 
-The intended first-service lifecycle is:
+## ECS cluster and Container Insights
 
-1. Terraform ensures the environment foundation and ECR repository exist.
-2. Application code is built, tested, and pushed outside Terraform.
-3. The authoritative ECR SHA-256 digest is resolved.
-4. Terraform plans and applies the ECS runtime with that immutable digest.
+`modules/ecs_cluster` owns one ECS cluster per workload environment and the cluster's Container Insights configuration. `container_insights` accepts `enhanced`, `enabled`, or `disabled` and defaults to `enhanced`.
 
-Staged live testing may use additional applies, but three applies are not an
-architectural requirement.
+When Container Insights is enabled, the module also owns the performance log group:
 
-## ECS cluster
-
-`modules/ecs_cluster` owns one `aws_ecs_cluster.cluster` per environment. It
-owns naming, standard tags, and the Container Insights setting. It does not own
-services, task definitions, IAM roles, networking, ALB resources, ECR, or
-service log groups.
-
-`container_insights` accepts `enhanced`, `enabled`, or `disabled` and defaults
-to `enhanced`. The resource-backed workload output is:
-
-```hcl
-ecs_cluster = {
-  arn                = string
-  name               = string
-  container_insights = string
-}
+```text
+/aws/ecs/containerinsights/<cluster-name>/performance
 ```
 
-The runtime validator compares the live cluster setting exactly with that
-output; it does not hard-code the default.
+Terraform manages that log group's retention, workload logs-CMK encryption, tags, and resource-backed metadata. The workload `ecs_cluster` output includes cluster identity, the resource-backed Container Insights setting, and `container_insights_log_group` metadata; the log-group value is `null` when Container Insights is disabled.
 
 ## ECS services and task definitions
 
-One `modules/ecs_service` instance manages the full stable service map. For
-each key it owns:
+`modules/ecs_service` receives only deployable services from baseline. For each low-level service entry it owns a task security group, a Terraform-managed service log group, a task definition, and an ECS service.
 
-- `aws_security_group.task_security_groups`;
-- `aws_cloudwatch_log_group.service_logs`;
-- `aws_ecs_task_definition.task_definitions`; and
-- `aws_ecs_service.services`.
+Task definitions use Fargate, `awsvpc`, Linux, and either `X86_64` or `ARM64`. The module validates supported Fargate CPU/memory combinations. The platform version is explicit, defaults to `1.4.0`, and is exposed from the resource as `ecs_services[service].platform_version` for exact validation.
 
-Task definitions use Fargate, `awsvpc`, Linux, and either `X86_64` or `ARM64`.
-The module validates supported Fargate CPU/memory combinations. The platform
-version is explicit, defaults to `1.4.0`, and is exposed from the resource as
-`ecs_services[service].platform_version` for exact validation.
+Each task definition uses separate per-service task execution and application task roles. The current abstraction contains exactly one essential container named for the stable service key, one TCP port mapping, plaintext environment values, approved ECS-native secret references, and the `awslogs` driver.
 
-Each task definition uses a per-service execution role and application task
-role. It contains one essential container named for the stable service key,
-one TCP port mapping whose host and container ports match, plaintext
-environment entries, ECS-native secret references, and an `awslogs` driver.
-
-The ECS service uses Fargate launch type, the explicit platform version,
-compute-private subnets, exactly the task SG, no public IP, and an enabled
-deployment circuit breaker with automatic rollback. A load-balancer attachment
-is present only for ingress-enabled services.
-
-The current ephemeral posture sets
-`force_delete = true # CHANGE THIS IN PROD` on `aws_ecs_service.services`.
-Persistent production use must reconsider the destruction posture.
+The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
 
 ## Logging
 
-`modules/ecs_service` owns one deterministic log group per service:
+Each deployable service receives a Terraform-owned application log group:
 
 ```text
-/aws/ecs/${var.name_prefix}/${service_name}
+/aws/ecs/<name-prefix>/<service>
 ```
 
-Retention uses `effective_cloudwatch_retention_days`. Encryption uses the
-existing workload logs CMK from `modules/security`, whose exact ARN is exposed
-as `logs_cmk_arn`. The task definition uses:
+The log group uses the effective profile-driven CloudWatch retention period and the workload logs CMK. Task definitions reference the resource-backed log-group name directly and do not rely on `awslogs-create-group`.
 
-```text
-logDriver              = awslogs
-awslogs-group          = resource-backed log-group name
-awslogs-region         = workload Region
-awslogs-stream-prefix  = ecs
-mode                   = non-blocking
-```
-
-Terraform creates the log group; `awslogs-create-group = true` is neither
-needed nor configured. `modules/logging` continues to own platform/security
-telemetry such as CloudTrail and VPC Flow Logs.
+The cluster-owned Container Insights performance log group uses `/aws/ecs/containerinsights/<cluster-name>/performance` and follows the same effective retention/logs-CMK policy. Service log groups and the cluster performance log group have different resource owners, but both are part of the workload logging contract.
 
 ## IAM ownership
 
-`modules/iam/ecs.tf` creates one execution-role/task-role pair per service.
-Both trust `ecs-tasks.amazonaws.com` with current-account and ECS SourceArn
-restrictions.
+`modules/iam` creates separate task execution and application task roles for deployable services only.
 
-The custom per-service execution policy grants:
+The task execution role is used by ECS/Fargate during startup. Its custom policy scopes ECR pulls, CloudWatch Logs writes, declared Secrets Manager/SSM references, and optional KMS decrypt authority required to retrieve startup configuration. The application task role is the role used by application code after the container starts and intentionally begins without broad application permissions.
 
-- `ecr:GetAuthorizationToken` on `*`;
-- ECR layer/image pull actions on only the service repository ARN;
-- CloudWatch Logs stream creation/write actions on only the service log group;
-- optional Secrets Manager, SSM Parameter Store, and `kms:Decrypt` access only
-  for explicitly declared ARNs.
+The canonical field `task_execution_kms_key_arns` means: the customer-managed KMS key ARNs that the **task execution role** may use with `kms:Decrypt` during startup. If the configured set is empty, the execution policy must not grant `kms:Decrypt`. If it is populated, the policy must grant `kms:Decrypt` to exactly those key ARNs. This authority is separate from application task-role permissions.
 
-The task role initially has no broad application policy. Application API
-permissions do not belong on the execution role. Neither role receives
-`iam:PassRole`, and ordinary ECR pulls do not require direct execution-role
-access to the ECR encryption CMK.
+Neither role receives `iam:PassRole` as part of the per-service runtime contract.
 
-The execution-policy resource IDs feed ECS launch readiness. They are not
-credentials and are not public workload-root outputs.
+## Security-group ownership and launch readiness
 
-## Security-group ownership and readiness
-
-Security-group ownership is intentionally split:
+Security-group ownership remains split by resource owner:
 
 | Object or rule | Owner |
-| --- | --- |
+|---|---|
 | ALB SG object | `modules/application_load_balancer` |
 | ECS task SG objects | `modules/ecs_service` |
 | RDS/data SG object | `modules/storage` |
 | Interface Endpoint SG object | `modules/vpc_endpoints` |
 | Cross-component SG rules | `modules/networking/security_policy` |
 
-Every configured service receives these cross-component relationships:
+Every deployable task receives the required Interface Endpoint and S3 relationships. Database access rules exist only when `database_access = true`. ALB/task rules exist only for deployable ingress services. Application HTTPS egress exists for `nat_only` and `network_firewall` and is absent for `vpc_endpoints_only`.
 
-```text
-task SG -> Interface Endpoint SG :443
-Interface Endpoint SG <- task SG :443
-task SG -> AWS-managed S3 prefix list :443
-```
-
-The Interface Endpoints `ecr.api` and `ecr.dkr` carry ECR API/registry traffic.
-ECR layers use the existing S3 Gateway Endpoint, so the S3 prefix-list rule is
-required independently. Baseline passes the resource-backed
-`aws_vpc_endpoint.s3.prefix_list_id`; validators do not assume the AWS
-endpoint description response is the authoritative prefix-list source.
-
-When `database_access = true`, policy adds task-to-data and data-from-task rules
-on the RDS port. Those relationships are absent when it is false. When ingress
-is configured, policy adds ALB-to-task relationships on the container port.
-Application HTTPS egress exists for `nat_only` and `network_firewall` and is
-absent for `vpc_endpoints_only`.
-
-ALB rule filtering uses the plan-time-known semantic value `alb_access`, which
-baseline derives from `service.ingress != null`. It must not filter on
-whether the resource-derived ALB SG ID is non-null, because that ID is unknown
-during planning.
-
-Launch readiness is resource granular:
-
-```text
-IAM execution policy IDs
-  -> terraform_data.ecs_execution_policy_ready
-
-security-policy rule IDs
-  -> terraform_data.ecs_security_policy_ready
-
-both checkpoints
-  -> aws_ecs_service.services
-```
-
-The task SG remains independently creatable so it can be passed to
-`security_policy`. Only task launch waits on downstream rule IDs. Broad
-module-level dependencies would create a cycle and are not part of the design.
+Launch readiness is resource-granular: IAM execution-policy IDs and security-policy rule IDs feed `terraform_data` readiness checkpoints, and ECS service launch waits on those checkpoints. The task-security-group objects remain independently creatable so cross-component rules can reference them without creating module dependency cycles.
 
 ## Application Load Balancer
 
-`modules/application_load_balancer` creates zero or one shared,
-internet-facing Application Load Balancer. It uses public subnets and one
-environment-level ingress CIDR set. It creates no HTTP listener.
+`modules/application_load_balancer` creates zero or one shared internet-facing HTTPS ALB. Baseline includes a service in the ALB map only when the service is deployable **and** its `ingress` object is non-null.
 
-The HTTPS listener uses the caller-supplied ACM certificate ARN and TLS policy.
-The current default is:
+The listener uses a caller-supplied ACM certificate and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09`. Its default action is a fixed 404 response. Each ingress-enabled deployable service receives an `ip` target group and one explicit listener rule with at least one host-header or path-pattern condition.
 
-```text
-ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
-```
-
-Its default action is a fixed JSON 404. Each ingress-enabled service gets an
-HTTP target group with `target_type = "ip"` and one explicit forwarding rule.
-Each rule must contain at least one host-header or path-pattern condition; when
-both are present, both conditions must match.
-
-The ALB module owns the ALB SG object and public HTTPS ingress rule. The shared
-SG ingress is environment-wide; the current interface does not implement
-per-service client CIDR conditions. Cross-component ALB/task rules stay in
-`modules/networking/security_policy`.
-
-Current ALB ownership does not include Route53, ACM certificate creation, WAF,
-or ALB vended-log delivery. The current deletion-friendly development posture
-sets `enable_deletion_protection = false # CHANGE THIS IN PROD`.
-
-The resource-backed output is:
-
-```hcl
-application_load_balancer = null # when no ingress service exists
-
-# otherwise
-application_load_balancer = {
-  arn               = string
-  dns_name          = string
-  security_group_id = string
-  https_listener = {
-    arn             = string
-    certificate_arn = string
-    ssl_policy      = string
-  }
-  target_groups = map(object({
-    arn  = string
-    name = string
-  }))
-}
-```
+The ALB module does not own Route53, ACM certificate creation, WAF, or application deployment orchestration.
 
 ## Storage outputs and secret handling
 
-`modules/storage` and the workload roots expose only non-secret RDS connection
-metadata: address, endpoint, port, database name, master username, master
-secret ARN, and data SG ID. They do not expose secret values or render
-credential-bearing DSNs.
+Workload storage outputs expose non-secret RDS consumer metadata such as address, endpoint, port, database name, master username, master secret ARN, and data security-group ID. Secret values and credential-bearing DSNs are not emitted.
 
-ECS services can reference explicitly approved Secrets Manager or SSM ARNs for
-ECS-native injection. The generic runtime does not automatically grant the RDS
-master credential, create application database users, rotate application
-credentials, or run schema migrations.
+ECS services may reference explicitly approved Secrets Manager and SSM ARNs. The generic runtime does not create application database users, rotate application credentials, run schema migrations, or grant broad application AWS permissions.
+
+## Application publication and release lifecycle
+
+Application artifact delivery is implemented outside Terraform through `scripts/deployment/` and `.github/workflows/deploy-application.yml`.
+
+The implemented flow is:
+
+```text
+registered ecs_services entry
+  -> Deploy Application
+  -> resolve canonical repository/platform
+  -> build image
+  -> publish to ECR with branch-trusted Image Publisher OIDC role
+  -> resolve + re-check authoritative ECR sha256 digest
+  -> separate release/PR job
+  -> update only ecs_services.<service>.image_digest
+  -> release PR
+  -> human review/merge
+  -> separate Terraform Apply workflow
+  -> internal saved-plan generation
+  -> protected approval
+  -> exact-plan verification/application
+  -> ECS convergence
+  -> separate validation/evidence
+```
+
+The publisher job has AWS OIDC/ECR authority and `contents: read` only. It intentionally has no GitHub Environment because the IAM trust policy is branch-based. The release/PR job has `contents: write` and `pull-requests: write` but no AWS credentials and no `id-token`.
+
+`update-application-digest.sh` requires the service to exist in the tracked canonical workload file and proves that the target digest is the only semantic service change. Successful image publication is not equivalent to infrastructure deployment; merge, Apply, convergence, and evidence remain separately reviewable stages.
+
+## Plan and Apply semantics
+
+The standalone `.github/workflows/terraform-plan.yml` and the Plan job inside `.github/workflows/terraform-apply.yml` are distinct.
+
+The standalone Plan workflow provides informational/review plans and does not produce the binary plan consumed by Apply. `terraform-apply.yml` is self-contained: its internal Plan job creates the saved binary plan, readable plan, metadata, and checksum; the protected Apply job downloads and verifies that exact artifact and applies it without replanning.
+
+Workload Plan/Apply paths pass and validate `DEPLOYMENT_PROFILE`. Missing or invalid deployment-profile configuration fails closed.
 
 ## Validation contract
 
-ECS/Fargate extends the existing workload-baseline validation layer. There are
-four validation/evidence layers in total and 16 validators in the workload
-baseline layer; no fifth layer exists.
+ECS/Fargate remains inside the existing workload-baseline validation layer. There are four validation/evidence layers total and 16 validators in the workload baseline suite; no fifth ECS layer exists.
 
-The main prerequisite/runtime owners are:
+`validate-ecr.sh` verifies repository identity, immutable tags, KMS encryption against the exact workload ECR CMK, and the approved untagged-only lifecycle rule.
 
-- `validate-vpc-endpoints.sh`: canonical endpoint inventory, private DNS,
-  exact endpoint subnets/SG, and S3 Gateway Endpoint route-table coverage;
-- `validate-networking.sh`: resource-backed effective Network Firewall domain
-  set and existing route/egress invariants;
-- `validate-ecr.sh`: repository identity, immutable tags, KMS encryption,
-  exact `ecr_cmk_arn`, and the approved untagged-only lifecycle policy;
-- `validate-security-workload.sh`: live Inspector types against
-  `effective_inspector_resource_types`;
-- `validate-kms.sh`: environment alias/key inventory, key state,
-  customer-managed ownership, and rotation;
-- `validate-iam.sh`: ECS trust and custom execution-policy scope; and
-- `validate-ecs-runtime.sh`: cluster, service, task definition, logging,
-  network, and conditional ALB relationships.
+`validate-ecs-runtime.sh` verifies the cluster, exact Container Insights setting, Container Insights performance log-group identity/retention/KMS encryption, exact live ECS service inventory, service steady state, task definitions, immutable image references, per-service logging, task security-policy relationships, conditional database access, and conditional ALB relationships.
 
-`validate-ecs-runtime.sh` validates the resource-backed contract, including:
+`validate-iam.sh` verifies per-service task/execution role trust and authority separation, scoped execution-policy permissions, absence of `iam:PassRole`, initially empty application task-role authority, and exact `task_execution_kms_key_arns` behavior. The former deferred task-execution KMS warning has been removed.
 
-- cluster identity, `ACTIVE` state, and exact Container Insights setting;
-- exact service inventory and service/task-definition identity;
-- Fargate launch type and resource-backed platform version;
-- compute-private subnets, disabled public IP assignment, and exactly the task
-  SG;
-- circuit breaker/rollback plus steady state (`runningCount == desiredCount`,
-  `pendingCount == 0`, and PRIMARY rollout `COMPLETED`);
-- Fargate, `awsvpc`, Linux, supported CPU architecture, and role equality;
-- exactly one essential service-named container, a digest-pinned ECR image,
-  TCP port mapping, and `awslogs` configuration;
-- exact log-group identity, retention, and exact `logs_cmk_arn`;
-- database SG presence/absence from resource-backed `database_access` intent;
-- Interface Endpoint, S3 prefix-list, and egress-mode-aware HTTPS rules; and
-- conditional ALB identity, public subnets, SG, exact HTTPS listener ARN,
-  certificate, TLS policy, fixed 404, IP target group, listener rule, ECS
-  attachment, and ALB/task SG rules.
-
-`ecr_repositories = {}` and `ecs_services = {}` are valid. The ECR validator
-skips repository API calls for an empty repository map. The runtime validator
-still validates the environment cluster, then skips per-service and ALB checks
-when no services are configured.
-
-The public validator-facing outputs include:
-
-```text
-ecs_cluster
-ecs_services
-ecs_service_configuration
-ecs_task_definition_arns
-ecs_task_security_group_ids
-ecs_log_groups
-ecs_task_execution_roles
-ecs_task_roles
-ecr_repositories
-ecr_cmk_arn
-logs_cmk_arn
-application_load_balancer
-s3_prefix_list_id
-effective_egress_mode
-effective_cloudwatch_retention_days
-```
-
-Internal readiness IDs are deliberately not exposed merely for validation.
-When a value represents what Terraform configured on an AWS resource, the
-project prefers a resource-backed Terraform output over re-deriving it or
-hard-coding the value in Bash.
-
-## Deployment semantics and ownership
-
-The existing workflow contract remains authoritative:
-
-```text
-Terraform Plan
-  -> saved binary plan
-  -> checksum and metadata
-  -> review/approval
-  -> Apply the exact reviewed plan
-```
-
-Terraform/platform ownership includes the VPC, endpoints, cluster, ECR
-repositories, ALB, ECS services/task definitions, IAM roles, SGs/rules, log
-groups, monitoring, and validation.
-
-Application/release ownership includes source code, Dockerfile, build/test,
-image push, selection/promotion of the authoritative digest, schema migrations,
-and application-aware release sequencing. Terraform consumes a selected digest
-but does not build or push the image.
+The final development workload validation completed with all 16 workload validators passing, and a subsequent Terraform plan reported no changes. Generated evidence packages remain the authoritative per-run record; do not represent this infrastructure evidence as SOC 2 or ISO 27001 certification.
 
 ## Central security boundary
 
-Inspector ECR scanning remains workload-local under `modules/security`.
-Central GuardDuty organization ownership remains in
-`bootstrap/security_operations/security_services`. Its current intended
-feature state remains:
+Inspector ECR scanning remains workload-local under `modules/security`. Central GuardDuty organization ownership remains in `bootstrap/security_operations/security_services`. The current central setting keeps `ECS_FARGATE_AGENT_MANAGEMENT = NONE`; Fargate managed-agent deployment is not part of v1.8.0.
 
-```text
-EC2_AGENT_MANAGEMENT         = ALL
-ECS_FARGATE_AGENT_MANAGEMENT = NONE
-EKS_ADDON_MANAGEMENT         = NONE
-```
+## Post-v1.8.0 work
 
-An operational ECS runtime does not imply that Fargate managed-agent deployment
-is enabled. That later change remains centrally owned. Workload-local,
-deterministic remediation remains the containment boundary; no broad central
-remediation role is introduced.
+The following capabilities are intentionally outside the v1.8.0 release boundary and are not blockers for `Secure Container Workloads`:
 
-## Deferred/future work
+- ECS Service Auto Scaling
+- GuardDuty Fargate managed-agent enablement
+- fail-closed ECS task containment/remediation
+- ReconoSense reference deployment
 
-The next immediate v1.8.0 milestone is an application image
-build/publish/deployment workflow that will use short-lived AWS/OIDC
-credentials, publish to ECR, resolve the authoritative digest, feed it into the
-saved Terraform plan, apply that exact plan, wait for ECS convergence, and run
-ECR/IAM/ECS validation. It is not implemented by the current core runtime.
-
-Subsequent expected work includes:
-
-- ECS Service Auto Scaling;
-- GuardDuty Fargate Runtime Monitoring;
-- fail-closed, evidence-first ECS task containment;
-- the ReconoSense reference deployment;
-- release-readiness documentation, changelog, and tagging;
-- scheduled/run-to-completion and migration-task abstractions;
-- Route53 and first-class ACM ownership;
-- advanced WAF ownership;
-- audited ECS Exec;
-- service-wide automatic containment;
-- per-service ALBs;
-- multi-container/sidecar services;
-- application database-user lifecycle and rotation;
-- Windows Fargate; and
-- sophisticated historical ECR release retention.
+Other potential extensions include scheduled/run-to-completion task abstractions, first-class Route53/ACM ownership, WAF, audited ECS Exec, multi-container services, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention.
 
 No `modules/ecs_task` module is part of the current architecture.
-
-## Existing hardening items outside ECS scope
-
-These independent items must not drive changes to ECS ownership:
-
-- **RDS:** `aws_db_instance.main` currently has deletion protection disabled
-  and skips a final snapshot, with production-follow-up comments in
-  `modules/storage/main.tf`.
-- **Central log bucket:** `aws_s3_bucket.centralized_logs` currently permits
-  destruction and has no effective `prevent_destroy` protection, with
-  production-follow-up comments in `modules/storage/main.tf`.
-- **CMKs:** several workload CMKs, including the ECR CMK, currently have
-  development-friendly lifecycle protection settings marked for production
-  follow-up in `modules/security/main.tf`.
-
-These settings support the current ephemeral apply/test/destroy model. They
-must be deliberately reconsidered before persistent production use.
