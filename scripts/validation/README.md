@@ -356,7 +356,7 @@ Validation scripts passed:  16/16
 Validation scripts failed:  0/16
 ```
 
-The final v1.8.0 development release exercise completed with all 16 workload validators passing, followed by a converged Terraform plan with no changes. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
+The v1.8.0 release validation exercise completed with all 16 workload validators passing, followed by a converged Terraform plan with no changes. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
 
 ---
 
