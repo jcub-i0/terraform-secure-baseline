@@ -12,6 +12,7 @@ The module creates:
 
 - One `aws_ecs_cluster`
 - CloudWatch Container Insights configuration for the cluster
+- One Terraform-managed Container Insights performance log group when `container_insights` is not `disabled`
 
 The ECS cluster name is constructed as:
 
@@ -32,6 +33,8 @@ tf-secure-baseline-dev-ecs
 | `name_prefix` | `string` | Yes | — | Baseline naming prefix used to construct the ECS cluster name. |
 | `environment` | `string` | Yes | — | Workload environment identity used for tagging. |
 | `container_insights` | `string` | No | `"enhanced"` | CloudWatch Container Insights mode for the ECS cluster. Supported values are `enhanced`, `enabled`, and `disabled`. |
+| `cloudwatch_retention_days` | `number` | Yes | — | Retention for the Container Insights performance log group. |
+| `logs_cmk_arn` | `string` | Yes | — | Workload logs CMK ARN used to encrypt the performance log group. |
 
 ## Container Insights
 
@@ -51,6 +54,14 @@ container_insights = "enhanced"
 ```
 
 This provides the strongest default observability posture for ECS workloads while still allowing callers to explicitly select `enabled` or `disabled` when appropriate.
+
+When Container Insights is enabled, Terraform also creates:
+
+```text
+/aws/ecs/containerinsights/${name_prefix}-ecs/performance
+```
+
+The log group uses the supplied retention period and logs CMK. It is absent when `container_insights = "disabled"`. The cluster depends on this resource so the Terraform-owned group exists before the cluster activates Container Insights.
 
 ## Tags
 
@@ -73,8 +84,9 @@ The module exposes:
 | `cluster_arn` | ARN of the ECS cluster. |
 | `cluster_name` | Name of the ECS cluster. |
 | `container_insights` | Resource-backed Container Insights setting configured on the cluster. |
+| `container_insights_log_group` | Resource-backed ARN, name, retention, and KMS metadata; `null` when Container Insights is disabled. |
 
-Baseline exposes all three values through the workload-root `ecs_cluster` object. The runtime validator compares the live cluster setting with the resource-backed `container_insights` value.
+Baseline exposes all four values through the workload-root `ecs_cluster` object. The runtime validator compares the live cluster setting and, when enabled, the performance log-group identity, retention, and KMS key with these resource-backed values.
 
 ## Ownership Boundary
 
@@ -85,8 +97,9 @@ It owns:
 - ECS cluster creation
 - Cluster naming
 - Container Insights configuration
+- Container Insights performance log-group creation, retention, encryption, and tags
 - Standard cluster tags
-- Cluster ARN/name outputs
+- Cluster and Container Insights metadata outputs
 
 It does **not** own:
 
@@ -95,7 +108,7 @@ It does **not** own:
 - Container definitions
 - ECS task or execution IAM roles
 - ECS task security groups
-- CloudWatch log groups for containers
+- Per-service CloudWatch log groups for application containers
 - Application Load Balancers
 - Target groups or listener rules
 - ECR repositories
@@ -134,7 +147,9 @@ module "ecs_cluster" {
   name_prefix = "tf-secure-baseline-dev"
   environment = "dev"
 
-  container_insights = "enhanced"
+  container_insights        = "enhanced"
+  cloudwatch_retention_days = 30
+  logs_cmk_arn              = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
 }
 ```
 
