@@ -15,6 +15,9 @@
 #   STRICT_GITHUB_SUBJECT_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
 #   STRICT_WORKLOAD_CMK_POLICY_CHECKS=false ./scripts/validation/validate-bootstrap.sh dev
 #   REQUIRE_STATE_STACK_REMOTE=true ./scripts/validation/validate-bootstrap.sh dev
+#   REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true \
+#     EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]' \
+#     ./scripts/validation/validate-bootstrap.sh dev
 #
 # Notes:
 #   This script is intentionally read-only. It does not initialize Terraform
@@ -35,6 +38,14 @@
 #     references fail validation.
 #   - Set STRICT_WORKLOAD_CMK_POLICY_CHECKS=false to report stale/missing
 #     workload CMK policy references as warnings instead of failures.
+#
+#   Image Publisher validation:
+#   - If image_publisher_role_github_arn is present, the role is validated even
+#     when REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=false.
+#   - Set REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true to require the role.
+#   - Publisher trust must use exact branch-based GitHub OIDC subjects.
+#   - Publisher permissions must remain limited to approved ECR publication/query
+#     actions, with repository-scoped actions restricted to <name_prefix>-*.
 
 set -euo pipefail
 
@@ -59,12 +70,18 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-}"
 
 REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
 REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE:-false}"
 STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-true}"
 REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
 EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES="${EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES:-}"
+
+if [[ -z "$EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES" ]]; then
+  EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES="${BRANCHES_IMAGE_PUBLISHER_GITHUB:-[\"main\"]}"
+fi
 
 # Workload-created CMK policy checks always run when workload outputs are readable.
 # By default, stale/missing workload CMK policy references fail validation because
@@ -86,6 +103,19 @@ case "$REQUIRE_STATE_STACK_REMOTE" in
     fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
     ;;
 esac
+
+case "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE: ${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE}. Expected true or false."
+    ;;
+esac
+
+if [[ "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" == "true" &&
+      "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" != "true" ]]; then
+  fail "REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true requires REQUIRE_BOOTSTRAP_GITHUB_OIDC=true."
+fi
 
 export AWS_PAGER=""
 
@@ -631,6 +661,14 @@ validate_account_outputs() {
     else
       warn "REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE is false. Apply role output is not required."
     fi
+
+    if [[ "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" == "true" ]]; then
+      require_terraform_output "$account_outputs_json" image_publisher_role_github_arn "bootstrap/${ENV_NAME}/account"
+    elif terraform_output_exists "$account_outputs_json" image_publisher_role_github_arn; then
+      success "bootstrap/${ENV_NAME}/account Terraform output exists: image_publisher_role_github_arn"  
+    else
+      warn "Image Publisher role is optional and image_publisher_role_github_arn is not exposed by this account stack."
+    fi
   else
     warn "REQUIRE_BOOTSTRAP_GITHUB_OIDC is false. Account GitHub OIDC outputs are not required."
   fi
@@ -754,6 +792,306 @@ check_github_role() {
     check_trust_policy_subject "$trust_json" "$role_description" "$expected_subject"
   else
     warn "EXPECTED_GITHUB_REPOSITORY not set. Skipping GitHub repository and subject checks for ${role_description}."
+  fi
+}
+
+validate_image_publisher_branches_json() {
+  local branches_json="$1"
+
+  if jq -e \
+    'type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' \
+    <<< "$branches_json" >/dev/null; then
+    success "Expected Image Publisher branch list is a non-empty JSON array"
+  else
+    echo "$branches_json" | jq . 2>/dev/null || true
+    fail "EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES must be a non-empty JSON array of non-empty strings."
+  fi
+}
+
+get_expected_image_publisher_subjects_json() {
+  local branches_json="$1"
+
+  jq -cn \
+    --arg repo "$EXPECTED_GITHUB_REPOSITORY" \
+    --argjson branches "$branches_json" \
+    '$branches | map("repo:" + $repo + ":ref:refs/heads/" + .) | unique | sort'
+}
+
+get_github_subjects_from_trust_json() {
+  local trust_json="$1"
+
+  echo "$trust_json" |
+    jq -c '
+      [
+        .Statement[]?
+        | select(.Effect == "Allow")
+        | .Condition? as $condition
+        | (
+            $condition.StringLike?["token.actions.githubusercontent.com:sub"]?,
+            $condition.StringEquals?["token.actions.githubusercontent.com:sub"]?
+          )
+        | select(. != null)
+        | if type == "array" then .[] else . end
+      ]
+      | unique
+      | sort
+    '
+}
+
+check_image_publisher_trust() {
+  local role_arn="$1"
+  local branches_json="$2"
+  local role_description="Bootstrap GitHub Image Publisher"
+
+  section "Checking bootstrap GitHub Image Publisher role trust"
+
+  validate_image_publisher_branches_json "$branches_json"
+
+  if [[ ! "$role_arn" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+    fail "${role_description} ARN is not a valid IAM role ARN: ${role_arn}"
+  fi
+
+  local role_account_id="${BASH_REMATCH[1]}"
+  if [[ "$role_account_id" == "$ACTIVE_ACCOUNT_ID" ]]; then
+    success "${role_description} ARN belongs to the active AWS account"
+  else
+    fail "${role_description} ARN belongs to account ${role_account_id}; active account is ${ACTIVE_ACCOUNT_ID}"
+  fi
+
+  local role_name
+  role_name="$(get_role_name_from_arn "$role_arn")"
+  require_non_empty "$role_name" "${role_description} role name"
+
+  local role_json
+  role_json="$(
+    aws iam get-role \
+      "${aws_args[@]}" \
+      --role-name "$role_name" \
+      --output json
+  )"
+
+  local resolved_arn
+  resolved_arn="$(echo "$role_json" | jq -r '.Role.Arn')"
+
+  if [[ "$resolved_arn" == "$role_arn" ]]; then
+    success "${role_description} role exists: ${role_name}"
+  else
+    echo "$role_json" | jq .
+    fail "${role_description} role ARN mismatch. Expected ${role_arn}, got ${resolved_arn}"
+  fi
+
+  local trust_json
+  trust_json="$(echo "$role_json" | jq '.Role.AssumeRolePolicyDocument')"
+
+  local has_github_federated_principal
+  has_github_federated_principal="$(
+    echo "$trust_json" |
+      jq '[.. | strings | select(contains("token.actions.githubusercontent.com"))] | length'
+  )"
+
+  local has_web_identity_action
+  has_web_identity_action="$(
+    echo "$trust_json" |
+      jq '[.. | strings | select(. == "sts:AssumeRoleWithWebIdentity")] | length'
+  )"
+
+  if [[ "$has_github_federated_principal" -gt 0 && "$has_web_identity_action" -gt 0 ]]; then
+    success "${role_description} trust policy allows GitHub OIDC web identity"
+  else
+    echo "$trust_json" | jq .
+    fail "${role_description} trust policy does not allow GitHub OIDC web identity"
+  fi
+
+  local actual_audiences_json
+  actual_audiences_json="$(
+    echo "$trust_json" |
+      jq -c '
+        [
+          .Statement[]?
+          | select(.Effect == "Allow")
+          | .Condition.StringEquals?["token.actions.githubusercontent.com:aud"]?
+          | select(. != null)
+          | if type == "array" then .[] else . end
+        ]
+        | unique
+        | sort
+      '
+  )"
+
+  if [[ "$actual_audiences_json" == '["sts.amazonaws.com"]' ]]; then
+    success "${role_description} trust audience is exactly sts.amazonaws.com"
+  else
+    echo "$trust_json" | jq .
+    fail "${role_description} trust audience is not exactly sts.amazonaws.com: ${actual_audiences_json}"
+  fi
+
+  if [[ -z "$EXPECTED_GITHUB_REPOSITORY" ]]; then
+    warn "EXPECTED_GITHUB_REPOSITORY not set. Skipping exact Image Publisher branch-subject checks."
+    return 0
+  fi
+
+  local expected_subjects_json
+  local actual_subjects_json
+  expected_subjects_json="$(get_expected_image_publisher_subjects_json "$branches_json")"
+  actual_subjects_json="$(get_github_subjects_from_trust_json "$trust_json")"
+
+  if [[ "$actual_subjects_json" == "$expected_subjects_json" ]]; then
+    success "${role_description} trust subjects exactly match the configured publisher branches"
+  else
+    echo "$trust_json" | jq .
+    info "Expected Image Publisher subjects: ${expected_subjects_json}"
+    info "Actual Image Publisher subjects:   ${actual_subjects_json}"
+
+    local message="${role_description} trust subjects do not exactly match the configured branch subjects"
+    if [[ "$STRICT_GITHUB_SUBJECT_CHECKS" == "true" ]]; then
+      fail "$message"
+    else
+      warn "$message"
+    fi
+  fi
+}
+
+check_image_publisher_policy() {
+  local role_arn="$1"
+  local role_description="Bootstrap GitHub Image Publisher"
+
+  section "Checking bootstrap GitHub Image Publisher role policy"
+
+  local role_name
+  role_name="$(get_role_name_from_arn "$role_arn")"
+  require_non_empty "$role_name" "${role_description} role name"
+
+  local policy_documents
+  policy_documents="$(get_all_policy_documents_for_role "$role_name")"
+
+  local policies_json
+  policies_json="$(echo "$policy_documents" | jq -s '.')"
+
+  local allowed_actions_json
+  allowed_actions_json='[
+    "ecr:GetAuthorizationToken",
+    "ecr:BatchCheckLayerAvailability",
+    "ecr:BatchGetImage",
+    "ecr:CompleteLayerUpload",
+    "ecr:DescribeImages",
+    "ecr:DescribeRepositories",
+    "ecr:GetDownloadUrlForLayer",
+    "ecr:InitiateLayerUpload",
+    "ecr:ListImages",
+    "ecr:PutImage",
+    "ecr:UploadLayerPart"
+  ]'
+
+  local disallowed_actions_json
+  disallowed_actions_json="$(
+    echo "$policies_json" |
+      jq -c \
+        --argjson allowed "$allowed_actions_json" \
+        '[
+          .[]?.Statement[]?
+          | select(.Effect == "Allow")
+          | .Action
+          | if type == "array" then .[] else . end
+          | . as $action
+          | select(($allowed | index($action)) == null)
+        ] | unique | sort'
+  )"
+
+  if [[ "$disallowed_actions_json" == "[]" ]]; then
+    success "${role_description} grants only approved ECR publication/query actions"
+  else
+    echo "$policies_json" | jq .
+    fail "${role_description} grants actions outside the approved ECR publication/query allowlist: ${disallowed_actions_json}"
+  fi
+
+  local required_actions_json
+  required_actions_json='[
+    "ecr:GetAuthorizationToken",
+    "ecr:BatchCheckLayerAvailability",
+    "ecr:CompleteLayerUpload",
+    "ecr:DescribeImages",
+    "ecr:DescribeRepositories",
+    "ecr:InitiateLayerUpload",
+    "ecr:PutImage",
+    "ecr:UploadLayerPart"
+  ]'
+
+  local present_actions_json
+  present_actions_json="$(
+    echo "$policies_json" |
+      jq -c '
+        [
+          .[]?.Statement[]?
+          | select(.Effect == "Allow")
+          | .Action
+          | if type == "array" then .[] else . end
+        ] | unique | sort
+      '
+  )"
+
+  local missing_required_actions_json
+  missing_required_actions_json="$(
+    jq -cn \
+      --argjson required "$required_actions_json" \
+      --argjson present "$present_actions_json" \
+      '$required - $present'
+  )"
+
+  if [[ "$missing_required_actions_json" == "[]" ]]; then
+    success "${role_description} includes the required ECR publication and digest-query actions"
+  else
+    echo "$policies_json" | jq .
+    fail "${role_description} is missing required ECR actions: ${missing_required_actions_json}"
+  fi
+
+  local auth_scope_failures_json
+  auth_scope_failures_json="$(
+    echo "$policies_json" |
+      jq -c '
+        [
+          .[]?.Statement[]?
+          | select(.Effect == "Allow")
+          | (.Action | if type == "array" then . else [.] end) as $actions
+          | select($actions | index("ecr:GetAuthorizationToken") != null)
+          | (.Resource | if type == "array" then . else [.] end) as $resources
+          | select(($resources | index("*")) == null)
+          | $resources[]
+        ] | unique | sort
+      '
+  )"
+
+  if [[ "$auth_scope_failures_json" == "[]" ]]; then
+    success "${role_description} scopes ecr:GetAuthorizationToken to the required registry-wide resource"
+  else
+    echo "$policies_json" | jq .
+    fail "${role_description} has unexpected ecr:GetAuthorizationToken resource scope: ${auth_scope_failures_json}"
+  fi
+
+  local role_partition
+  role_partition="${role_arn#arn:}"
+  role_partition="${role_partition%%:*}"
+  local expected_repository_arn_prefix="arn:${role_partition}:ecr:${AWS_REGION}:${ACTIVE_ACCOUNT_ID}:repository/${NAME_PREFIX}-"
+
+  local repository_scope_failures_json
+  repository_scope_failures_json="$(
+    echo "$policies_json" |
+      jq -c \
+        --arg repo_prefix "$expected_repository_arn_prefix" \
+        '[
+          .[]?.Statement[]?
+          | select(.Effect == "Allow")
+          | (.Action | if type == "array" then . else [.] end) as $actions
+          | select(any($actions[]; . != "ecr:GetAuthorizationToken"))
+          | (.Resource | if type == "array" then . else [.] end)[]
+          | select((startswith($repo_prefix)) | not)
+        ] | unique | sort'
+  )"
+
+  if [[ "$repository_scope_failures_json" == "[]" ]]; then
+    success "${role_description} repository-scoped permissions are limited to ${NAME_PREFIX}-* ECR repositories"
+  else
+    echo "$policies_json" | jq .
+    fail "${role_description} has repository-scoped permissions outside ${NAME_PREFIX}-* ECR repositories: ${repository_scope_failures_json}"
   fi
 }
 
@@ -1062,6 +1400,7 @@ validate_account_outputs "$ACCOUNT_OUTPUTS_JSON"
 
 PLAN_ROLE_ARN="$(get_output_string "$ACCOUNT_OUTPUTS_JSON" plan_role_github_arn)"
 APPLY_ROLE_ARN="$(get_output_string "$ACCOUNT_OUTPUTS_JSON" apply_role_github_arn)"
+IMAGE_PUBLISHER_ROLE_ARN="$(get_output_string "$ACCOUNT_OUTPUTS_JSON" image_publisher_role_github_arn)"
 
 if [[ "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" == "true" ]]; then
   require_non_empty "$PLAN_ROLE_ARN" "bootstrap GitHub plan role ARN"
@@ -1089,6 +1428,15 @@ if [[ "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" == "true" ]]; then
   else
     warn "REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE is false. Skipping apply role validation."
   fi
+
+  if [[ -n "$IMAGE_PUBLISHER_ROLE_ARN" ]]; then
+    check_image_publisher_trust       "$IMAGE_PUBLISHER_ROLE_ARN"       "$EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES"
+    check_image_publisher_policy "$IMAGE_PUBLISHER_ROLE_ARN"
+  elif [[ "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" == "true" ]]; then
+    fail "Image Publisher role is required but image_publisher_role_github_arn is empty or null."
+  else
+    info "Image Publisher role is not enabled; skipping Image Publisher validation."
+  fi
 else
   warn "REQUIRE_BOOTSTRAP_GITHUB_OIDC is false. Skipping GitHub OIDC role validation."
 fi
@@ -1105,9 +1453,12 @@ State bucket ARN:                  ${TF_STATE_BUCKET_ARN}
 State CMK ARN:                     ${TF_STATE_BUCKET_CMK_ARN}
 GitHub plan role ARN:              ${PLAN_ROLE_ARN:-<not validated>}
 GitHub apply role ARN:             ${APPLY_ROLE_ARN:-<not validated>}
+GitHub image publisher role ARN:   ${IMAGE_PUBLISHER_ROLE_ARN:-<not enabled>}
 Expected GitHub repository:        ${EXPECTED_GITHUB_REPOSITORY:-<not checked>}
 Expected GitHub plan subject:      ${EXPECTED_GITHUB_PLAN_SUBJECT:-<not checked>}
 Expected GitHub apply subject:     ${EXPECTED_GITHUB_APPLY_SUBJECT:-<not checked>}
+Expected publisher branches:       ${EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES}
+Image publisher role required:     ${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE}
 Strict workload CMK policy checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}
 State stack remote required:       ${REQUIRE_STATE_STACK_REMOTE}
 SUMMARY
