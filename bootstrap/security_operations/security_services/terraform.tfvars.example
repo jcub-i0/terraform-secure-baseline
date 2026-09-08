@@ -3,7 +3,7 @@
 cloud_name     = "tf-secure-baseline"
 environment    = "security-operations"
 primary_region = "us-east-1"
-account_id     = "123456789012"
+account_id     = "222222222222"
 
 
 # Security Hub CSPM central organization configuration

@@ -13,14 +13,14 @@ deployment_profile = "production"
 allowed_egress_domains = []
 
 secops_emails = [
-  "jeffrey.williams@gmail.com"
+  "security@example.com"
 ]
 
 bucket_admin_principals = [
-  "arn:aws:iam::123456789012:root",
-  "arn:aws:iam::123456789012:role/tf-secure-baseline-prod-github-apply-role"
+  "arn:aws:iam::555555555555:root",
+  "arn:aws:iam::555555555555:role/tf-secure-baseline-prod-github-apply-role"
 ]
 
 break_glass_trusted_principal_arns = [
-  "arn:aws:iam::0123456789012:root"
+  "arn:aws:iam::111111111111:root"
 ]
