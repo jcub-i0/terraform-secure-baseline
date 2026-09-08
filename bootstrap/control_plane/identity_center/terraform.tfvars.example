@@ -1,6 +1,6 @@
 identity_center_workloads = {
   "dev" = {
-    account_id                   = "123456789012"
+    account_id                   = "333333333333"
     primary_region               = "us-east-1"
     enable_secops_analyst        = true
     enable_secops_engineer       = true
@@ -9,7 +9,7 @@ identity_center_workloads = {
   }
 
   "staging" = {
-    account_id                   = "123456789012"
+    account_id                   = "444444444444"
     primary_region               = "us-east-1"
     enable_secops_analyst        = true
     enable_secops_engineer       = true
@@ -18,11 +18,15 @@ identity_center_workloads = {
   }
 
   "prod" = {
-    account_id                   = "123456789012"
+    account_id                   = "555555555555"
     primary_region               = "us-east-1"
     enable_secops_analyst        = true
     enable_secops_engineer       = true
     logs_s3_readonly_policy_name = "tf-secure-baseline-prod-CentralizedLogsS3ReadOnly"
     logs_cmk_decrypt_policy_name = "tf-secure-baseline-prod-LogsKmsDecrypt"
   }
+}
+
+identity_center_secops = {
+  account_id = "222222222222"
 }
