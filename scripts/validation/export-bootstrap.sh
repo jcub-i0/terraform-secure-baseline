@@ -246,7 +246,7 @@ jq -n \
   --arg require_bootstrap_github_oidc "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" \
   --arg require_bootstrap_github_apply_role "$REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE" \
   --arg require_bootstrap_github_image_publisher_role "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" \
-  --arg expected_github_image_publisher_branches "$EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES" \
+  --argjson expected_github_image_publisher_branches "$EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES" \
   --arg strict_workload_cmk_policy_checks "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" \
   --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
   --arg strict_github_subject_checks "$STRICT_GITHUB_SUBJECT_CHECKS" \
@@ -298,11 +298,11 @@ jq -n \
       "workload_github_oidc_provider",
       "workload_github_plan_role",
       "workload_github_apply_role",
-      "workload_github_image_publisher_role_when_enabled",
-      "github_image_publisher_branch_trust",
-      "github_image_publisher_ecr_publication_query_policy",
-      "github_image_publisher_repository_scope",
-      "github_image_publisher_authority_boundary",
+      "workload_github_image_publisher_role_when_enabled_or_required",
+      "github_image_publisher_branch_trust_when_enabled",
+      "github_image_publisher_ecr_publication_query_policy_when_enabled",
+      "github_image_publisher_repository_scope_when_enabled",
+      "github_image_publisher_authority_boundary_when_enabled",
       "github_repository_trust_conditions",
       "github_environment_subject_conditions",
       "github_state_bucket_access",
@@ -425,10 +425,10 @@ section "Generating Markdown summary"
   echo "- GitHub OIDC provider presence"
   echo "- Workload GitHub Plan and Apply roles"
   echo "- Workload GitHub Image Publisher role when enabled or required"
-  echo "- Exact branch-based GitHub OIDC trust for configured Image Publisher branches"
-  echo "- Image Publisher ECR publication/query action allowlist"
-  echo "- Image Publisher repository scope limited to \`${NAME_PREFIX}-*\`"
-  echo "- Image Publisher authority boundary excluding Terraform state, ECS, IAM, and general AWS administration"
+  echo "- Exact branch-based GitHub OIDC trust for configured Image Publisher branches when the role is enabled"
+  echo "- Image Publisher ECR publication/query policy contract when the role is enabled"
+  echo "- Image Publisher repository scope limited to \`${NAME_PREFIX}-*\` when the role is enabled"
+  echo "- Image Publisher authority boundary excluding Terraform state, ECS, IAM, and general AWS administration when the role is enabled"
   echo "- GitHub repository trust conditions"
   echo "- GitHub environment subject conditions"
   echo "- GitHub role access to state bucket resources"
