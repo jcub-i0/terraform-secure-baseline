@@ -75,9 +75,13 @@ Most scripts use the following environment variables:
 | `AWS_REGION` | AWS region to validate | Recommended |
 | `ENV_NAME` | Environment the validation script applies to. Most environment-specific scripts also accept this as the first positional argument. | Recommended |
 | `EXPECTED_ACCOUNT_ID` | Expected AWS account ID for safety checks | Recommended |
+| `EXPECTED_GITHUB_REPOSITORY` | Expected GitHub repository in `<owner>/<repo>` form for OIDC trust validation. Required for strict Image Publisher repository/branch trust validation. | Bootstrap / control plane |
 | `CLOUD_NAME` | Cloud/project prefix, defaults to `tf-secure-baseline` | Optional |
 | `NAME_PREFIX` | Resource name prefix override. Defaults to `${CLOUD_NAME}-${ENV_NAME}` for environment-specific scripts. | Optional |
 | `REQUIRE_STATE_STACK_REMOTE` | Makes migrated state-stack backend findings fail instead of warn. Defaults to `false` in direct script/exporter runs; GitHub evidence workflows default it to `true`. | Optional |
+| `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE` | Requires the workload GitHub Image Publisher role to exist. Defaults to `false`; when the role output is present, the role is still validated even if this flag is `false`. | Workload bootstrap only |
+| `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` | Non-empty JSON array of branches expected in Image Publisher OIDC trust. Falls back to `BRANCHES_IMAGE_PUBLISHER_GITHUB`, then `["main"]`. | Workload bootstrap only |
+| `STRICT_GITHUB_SUBJECT_CHECKS` | Controls strict GitHub OIDC subject checking. Defaults to `true`; use relaxed behavior only for deliberate transitional troubleshooting. | Bootstrap / control plane |
 | `IDENTITY_CENTER_WORKLOADS` | JSON map containing the `dev`, `staging`, and `prod` Identity Center workload configurations. Required by the control-plane validator and exporter. | Control plane only |
 | `IDENTITY_CENTER_SECOPS` | JSON object containing the security-operations Identity Center configuration. Required by the control-plane validator and exporter. | Control plane only |
 | `WORKLOADS_OU_NAME` | Workloads OU name used by centralized-security validation. Defaults to `Workloads`. | Security operations / control plane |
@@ -129,6 +133,13 @@ This script validates:
 - GitHub trust policies reference the expected repository and subjects
 - GitHub role policies reference the Terraform state bucket, state objects including `.tflock` objects, and state CMK
 - GitHub Apply role references the current workload-created Lambda and Secrets Manager CMKs
+- the optional GitHub Image Publisher role is validated whenever `image_publisher_role_github_arn` is present, and is required when `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true`
+- the Image Publisher role ARN belongs to the active workload account and resolves to the expected live IAM role
+- Image Publisher trust is exactly one `Allow` statement using `sts:AssumeRoleWithWebIdentity`, the workload-account GitHub OIDC provider, `sts.amazonaws.com` audience, and the exact configured branch subjects
+- Image Publisher permissions exactly match the Terraform-defined ECR publication/query action contract
+- `ecr:GetAuthorizationToken` is granted exactly once with `Resource = "*"`
+- all other Image Publisher ECR permissions are scoped exactly to `arn:<partition>:ecr:<region>:<account-id>:repository/<name-prefix>-*`
+- the Image Publisher policy contains no Terraform-state, ECS, IAM, conditional, deny, `NotAction`, `NotResource`, or general AWS administration authority
 
 ### Architecture Assumption
 
@@ -218,6 +229,52 @@ Behavior:
 
 Use `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/manual GitHub workflow testing, or environments where the workload stack has not yet been reconciled back into `bootstrap/<env>/account`.
 
+### GitHub Image Publisher Validation
+
+The Image Publisher role is owned by `bootstrap/<env>/account`, so its IAM trust and publication-policy boundary are validated in the workload bootstrap layer rather than the workload baseline layer. ECR repository configuration and ECS runtime resources remain workload-baseline concerns.
+
+If `image_publisher_role_github_arn` is present in the account-stack outputs, `validate-bootstrap.sh` validates the role even when it is not explicitly required. Set the following for release/client-facing evidence when application image publication is enabled:
+
+```bash
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]'
+```
+
+`REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true` requires `REQUIRE_BOOTSTRAP_GITHUB_OIDC=true`. The expected branch value must be a non-empty JSON array of non-empty strings. If `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` is unset, the validator/exporter uses `BRANCHES_IMAGE_PUBLISHER_GITHUB` when available and otherwise defaults to `["main"]`.
+
+For an enabled Image Publisher role, the validator requires:
+
+- the Terraform output `image_publisher_role_github_arn` to resolve to a live IAM role in the active workload account
+- exactly one trust statement with `Effect = "Allow"`
+- the exact trust action `sts:AssumeRoleWithWebIdentity`
+- the exact workload-account GitHub OIDC federated principal and no additional principal types
+- only `StringEquals` trust conditions for `token.actions.githubusercontent.com:aud` and `token.actions.githubusercontent.com:sub`
+- the exact audience `sts.amazonaws.com`
+- exact branch-based subjects of the form `repo:<owner>/<repo>:ref:refs/heads/<branch>` for the configured branch set
+- the exact Terraform-defined ECR publication/query action set: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:BatchGetImage`, `ecr:CompleteLayerUpload`, `ecr:DescribeImages`, `ecr:DescribeRepositories`, `ecr:InitiateLayerUpload`, `ecr:PutImage`, and `ecr:UploadLayerPart`
+- exactly one `ecr:GetAuthorizationToken` grant with `Resource = "*"`
+- all repository-scoped permissions using exactly `arn:<partition>:ecr:<region>:<account-id>:repository/<name-prefix>-*`
+- only unconditional `Allow` statements using `Action` and `Resource`, with no additional state, ECS, IAM, or general administrative authority
+
+When strict publisher validation is required, `EXPECTED_GITHUB_REPOSITORY` must also be set so the exact repository and branch subjects can be constructed and compared.
+
+### Strict Publisher-Enabled Release Validation
+
+For a workload deployment that enables application image publication, use both strict remote-state and strict publisher requirements for release/client-facing bootstrap evidence:
+
+```bash
+AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
+REQUIRE_STATE_STACK_REMOTE=true \
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true \
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]' \
+./scripts/validation/validate-bootstrap.sh dev
+```
+
+Deployments that intentionally do not enable application image publication should leave `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=false`. In that case, absence of the role is allowed; if the role output is present, it is still validated.
+
 ### Dev
 
 ```bash
@@ -294,17 +351,19 @@ Repeat with the matching profile, account ID, and environment name for `staging`
 
 The manual **Export Bootstrap Evidence** workflow uses the `<env>-plan` GitHub Environment and initializes all three roots before exporting evidence. It defaults `REQUIRE_STATE_STACK_REMOTE` to `true`, renders the report in the Actions run summary, and uploads the evidence directory as an artifact.
 
+For a publisher-enabled workload release, also require the Image Publisher role and provide the expected branch JSON to the exporter. The publisher trust remains branch-based; do not reinterpret the Image Publisher role as using the `<env>-plan` GitHub Environment subject.
+
 Under GitHub OIDC, `AWS_PROFILE` is intentionally not set. The report should identify the credential source as `GitHub OIDC environment credentials`.
 
 For strict workload CMK evidence, the expected deployment sequence is:
 
 ```text
 1. Apply bootstrap/<env>/state.
-2. Apply bootstrap/<env>/account.
+2. Apply bootstrap/<env>/account, including the Image Publisher role and branch allowlist when application publication is enabled.
 3. Apply environments/<env>.
 4. Capture current workload outputs for lambda_cmk_arn and secrets_manager_cmk_arn.
-5. Re-apply bootstrap/<env>/account with those current CMK ARNs.
-6. Run validate-bootstrap.sh or export-bootstrap.sh with the default strict behavior.
+5. Re-apply or reconcile bootstrap/<env>/account with those current CMK ARNs while preserving the enabled Image Publisher role and branch allowlist.
+6. Run validate-bootstrap.sh or export-bootstrap.sh with strict workload CMK behavior; for publisher-enabled release evidence, also set REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true and the exact EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES JSON.
 ```
 
 ---
@@ -636,15 +695,23 @@ Generated evidence is environment-specific and should generally not be committed
 
 ### Workload Bootstrap Evidence
 
+For a publisher-enabled workload release, generate strict bootstrap evidence with both remote-state and Image Publisher requirements enabled:
+
 ```bash
 AWS_PROFILE="dev" \
 AWS_REGION="us-east-1" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 REQUIRE_STATE_STACK_REMOTE=true \
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true \
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]' \
 CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-bootstrap.sh dev
 ```
+
+If application image publication is intentionally disabled for the workload, leave `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=false`; the exporter still validates the role whenever `image_publisher_role_github_arn` is present.
+
+The generated Markdown and JSON summaries record whether the publisher role and remote state were required, the expected publisher branch set, and the Image Publisher validation scope. `expected_github_image_publisher_branches` is emitted as a JSON array in `summary.json`.
 
 Package location:
 
@@ -799,6 +866,9 @@ Examples:
 - missing required Terraform output from a remote-backed stack
 - missing AWS resource
 - missing GitHub OIDC role
+- required Image Publisher role missing when `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true`
+- Image Publisher trust has an unexpected principal, action, condition, audience, repository, or branch subject
+- Image Publisher permissions differ from the exact Terraform-defined ECR publication/query contract or use repository scope broader than `<name-prefix>-*`
 - backend missing `use_lockfile = true`
 - state stack S3 object missing, unreadable, or sharing another root's backend key while `REQUIRE_STATE_STACK_REMOTE=true`
 - state bucket encryption missing
@@ -886,6 +956,28 @@ STRICT_WORKLOAD_CMK_POLICY_CHECKS=false
 ```
 
 This keeps the checks enabled but reports stale/missing workload CMK policy references as warnings instead of failures.
+
+### Image Publisher Validation Fails
+
+If `validate-bootstrap.sh` fails in the Image Publisher trust or policy section, first confirm that the account stack actually exposes the role and that the expected branch configuration matches Terraform:
+
+```bash
+terraform -chdir=bootstrap/<env>/account output -json | \
+  jq -r '.image_publisher_role_github_arn.value // "<not enabled>"'
+```
+
+For a publisher-enabled workload, confirm `bootstrap/<env>/account` is configured with the intended `enable_image_publisher_role_github = true` and `branches_image_publisher_github` values, then run validation with the same branch set through `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES`. The Image Publisher role uses branch-based GitHub OIDC subjects, not GitHub Environment subjects.
+
+Do not use `deploy-application.sh` to repair bootstrap IAM validation. The deployment helper builds and publishes application images; bootstrap IAM drift should be corrected by reconciling or applying `bootstrap/<env>/account`, then rerunning `validate-bootstrap.sh` / `export-bootstrap.sh`.
+
+For release/client-facing evidence where the publisher is expected, use:
+
+```bash
+REQUIRE_STATE_STACK_REMOTE=true \
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true \
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]' \
+./scripts/validation/export-bootstrap.sh <env>
+```
 
 ---
 

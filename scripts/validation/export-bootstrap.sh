@@ -14,12 +14,17 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}
 
 REQUIRE_BOOTSTRAP_GITHUB_OIDC="${REQUIRE_BOOTSTRAP_GITHUB_OIDC:-true}"
 REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE:-true}"
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE="${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE:-false}"
 STRICT_WORKLOAD_CMK_POLICY_CHECKS="${STRICT_WORKLOAD_CMK_POLICY_CHECKS:-true}"
 REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
 STRICT_GITHUB_SUBJECT_CHECKS="${STRICT_GITHUB_SUBJECT_CHECKS:-true}"
 
 EXPECTED_GITHUB_PLAN_SUBJECT="${EXPECTED_GITHUB_PLAN_SUBJECT:-}"
 EXPECTED_GITHUB_APPLY_SUBJECT="${EXPECTED_GITHUB_APPLY_SUBJECT:-}"
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES="${EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES:-}"
+if [[ -z "$EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES" ]]; then
+  EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES="${BRANCHES_IMAGE_PUBLISHER_GITHUB:-[\"main\"]}"
+fi
 
 case "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" in
   true|false)
@@ -36,6 +41,23 @@ case "$REQUIRE_STATE_STACK_REMOTE" in
     fail "Invalid REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}. Expected true or false."
     ;;
 esac
+
+case "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" in
+  true|false)
+    ;;
+  *)
+    fail "Invalid REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE: ${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE}. Expected true or false."
+    ;;
+esac
+
+if [[ "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" == "true" &&
+      "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" != "true" ]]; then
+  fail "REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true requires REQUIRE_BOOTSTRAP_GITHUB_OIDC=true."
+fi
+
+if ! jq -e   'type == "array" and length > 0 and all(.[]; type == "string" and length > 0)'   <<< "$EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES" >/dev/null; then
+  fail "EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES must be a non-empty JSON array of non-empty strings."
+fi
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
@@ -67,11 +89,13 @@ export EXPECTED_ACCOUNT_ID
 export EXPECTED_GITHUB_REPOSITORY
 export REQUIRE_BOOTSTRAP_GITHUB_OIDC
 export REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE
+export REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE
 export STRICT_WORKLOAD_CMK_POLICY_CHECKS
 export REQUIRE_STATE_STACK_REMOTE
 export STRICT_GITHUB_SUBJECT_CHECKS
 export EXPECTED_GITHUB_PLAN_SUBJECT
 export EXPECTED_GITHUB_APPLY_SUBJECT
+export EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES
 
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
@@ -126,11 +150,13 @@ info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
 info "REQUIRE_BOOTSTRAP_GITHUB_OIDC: ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
 info "REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE: ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
+info "REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE: ${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE}"
 info "STRICT_WORKLOAD_CMK_POLICY_CHECKS: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
 info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
 info "STRICT_GITHUB_SUBJECT_CHECKS: ${STRICT_GITHUB_SUBJECT_CHECKS}"
 info "EXPECTED_GITHUB_PLAN_SUBJECT: ${EXPECTED_GITHUB_PLAN_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>}"
 info "EXPECTED_GITHUB_APPLY_SUBJECT: ${EXPECTED_GITHUB_APPLY_SUBJECT:-<derived by validate-bootstrap.sh when repository is set>}"
+info "EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES: ${EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES}"
 info "Validation time: ${VALIDATION_TIME}"
 
 if [[ "$NAME_PREFIX" != *"-${ENV_NAME}" ]]; then
@@ -219,6 +245,8 @@ jq -n \
   --arg expected_github_apply_subject "$EXPECTED_GITHUB_APPLY_SUBJECT" \
   --arg require_bootstrap_github_oidc "$REQUIRE_BOOTSTRAP_GITHUB_OIDC" \
   --arg require_bootstrap_github_apply_role "$REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE" \
+  --arg require_bootstrap_github_image_publisher_role "$REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE" \
+  --argjson expected_github_image_publisher_branches "$EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES" \
   --arg strict_workload_cmk_policy_checks "$STRICT_WORKLOAD_CMK_POLICY_CHECKS" \
   --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
   --arg strict_github_subject_checks "$STRICT_GITHUB_SUBJECT_CHECKS" \
@@ -245,6 +273,8 @@ jq -n \
     expected_github_apply_subject: $expected_github_apply_subject,
     require_bootstrap_github_oidc: $require_bootstrap_github_oidc,
     require_bootstrap_github_apply_role: $require_bootstrap_github_apply_role,
+    require_bootstrap_github_image_publisher_role: $require_bootstrap_github_image_publisher_role,
+    expected_github_image_publisher_branches: $expected_github_image_publisher_branches,
     strict_workload_cmk_policy_checks: $strict_workload_cmk_policy_checks,
     require_state_stack_remote: $require_state_stack_remote,
     strict_github_subject_checks: $strict_github_subject_checks,
@@ -268,6 +298,11 @@ jq -n \
       "workload_github_oidc_provider",
       "workload_github_plan_role",
       "workload_github_apply_role",
+      "workload_github_image_publisher_role_when_enabled_or_required",
+      "github_image_publisher_branch_trust_when_enabled",
+      "github_image_publisher_ecr_publication_query_policy_when_enabled",
+      "github_image_publisher_repository_scope_when_enabled",
+      "github_image_publisher_authority_boundary_when_enabled",
       "github_repository_trust_conditions",
       "github_environment_subject_conditions",
       "github_state_bucket_access",
@@ -351,6 +386,8 @@ section "Generating Markdown summary"
   echo "| Expected GitHub Apply Subject | \`${EXPECTED_GITHUB_APPLY_SUBJECT:-not configured}\` |"
   echo "| Require Bootstrap GitHub OIDC | ${REQUIRE_BOOTSTRAP_GITHUB_OIDC} |"
   echo "| Require Bootstrap GitHub Apply Role | ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE} |"
+  echo "| Require Bootstrap GitHub Image Publisher Role | ${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE} |"
+  echo "| Expected GitHub Image Publisher Branches | \`${EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES}\` |"
   echo "| Strict Workload CMK Policy Checks | ${STRICT_WORKLOAD_CMK_POLICY_CHECKS} |"
   echo "| Require State Stack Remote | ${REQUIRE_STATE_STACK_REMOTE} |"
   echo "| Strict GitHub Subject Checks | ${STRICT_GITHUB_SUBJECT_CHECKS} |"
@@ -387,6 +424,11 @@ section "Generating Markdown summary"
   echo "- Customer-managed state CMK status"
   echo "- GitHub OIDC provider presence"
   echo "- Workload GitHub Plan and Apply roles"
+  echo "- Workload GitHub Image Publisher role when enabled or required"
+  echo "- Exact branch-based GitHub OIDC trust for configured Image Publisher branches when the role is enabled"
+  echo "- Image Publisher ECR publication/query policy contract when the role is enabled"
+  echo "- Image Publisher repository scope limited to \`${NAME_PREFIX}-*\` when the role is enabled"
+  echo "- Image Publisher authority boundary excluding Terraform state, ECS, IAM, and general AWS administration when the role is enabled"
   echo "- GitHub repository trust conditions"
   echo "- GitHub environment subject conditions"
   echo "- GitHub role access to state bucket resources"
@@ -425,7 +467,7 @@ section "Generating Markdown summary"
   echo
   echo "## Limitations"
   echo
-  echo "This report validates selected workload bootstrap, backend locking, state backend, and GitHub OIDC readiness controls for the target environment."
+  echo "This report validates selected workload bootstrap, backend locking, state backend, GitHub OIDC, and Image Publisher IAM readiness controls for the target environment."
   echo
   echo "The validation script is read-only and does not run \`terraform init\`, \`terraform apply\`, \`terraform destroy\`, backend migration, role assumption, or live GitHub workflow execution."
   echo
@@ -455,6 +497,8 @@ echo "Name prefix:                ${NAME_PREFIX}"
 echo "Expected GitHub repository: ${EXPECTED_GITHUB_REPOSITORY:-not configured}"
 echo "Require GitHub OIDC:        ${REQUIRE_BOOTSTRAP_GITHUB_OIDC}"
 echo "Require GitHub apply role:  ${REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE}"
+echo "Require image publisher:    ${REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE}"
+echo "Publisher branches:         ${EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES}"
 echo "Strict workload CMK checks: ${STRICT_WORKLOAD_CMK_POLICY_CHECKS}"
 echo "Require remote state stack:  ${REQUIRE_STATE_STACK_REMOTE}"
 echo "Strict subject checks:      ${STRICT_GITHUB_SUBJECT_CHECKS}"
