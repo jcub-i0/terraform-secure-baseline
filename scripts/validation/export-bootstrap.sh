@@ -320,6 +320,10 @@ jq -n \
         "workflow": "Export Baseline Evidence"
       },
       {
+        "validation": "iam_identity_center_assignment_validation",
+        "workflow": null
+      },
+      {
         "validation": "end_user_sso_login_validation",
         "workflow": null
       },
