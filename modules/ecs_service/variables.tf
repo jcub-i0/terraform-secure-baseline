@@ -22,6 +22,11 @@ variable "cluster_arn" {
   type        = string
 }
 
+variable "cluster_name" {
+  description = "Name of the ECS cluster that hosts the services."
+  type        = string
+}
+
 variable "compute_private_subnet_ids" {
   description = "Compute-private subnet IDs used by Fargate tasks."
   type        = set(string)
