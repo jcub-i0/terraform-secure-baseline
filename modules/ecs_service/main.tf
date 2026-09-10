@@ -118,7 +118,7 @@ resource "terraform_data" "ecs_security_policy_ready" {
 }
 
 resource "aws_ecs_service" "services" {
-  for_each = var.services
+  for_each = local.fixed_services
 
   name            = "${var.name_prefix}-${each.key}"
   cluster         = var.cluster_arn
