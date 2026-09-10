@@ -162,3 +162,55 @@ resource "aws_ecs_service" "services" {
     Terraform   = "true"
   }
 }
+
+resource "aws_ecs_service" "autoscaled_services" {
+  for_each = local.autoscaled_services
+
+  name            = "${var.name_prefix}-${each.key}"
+  cluster         = var.cluster_arn
+  task_definition = aws_ecs_task_definition.task_definitions[each.key].arn
+  desired_count   = each.value.desired_count
+
+  launch_type      = "FARGATE"
+  platform_version = var.platform_version
+
+  force_delete = true # CHANGE THIS IN PROD
+
+  lifecycle {
+    ignore_changes = [
+      desired_count,
+    ]
+  }
+
+  network_configuration {
+    subnets          = var.compute_private_subnet_ids
+    security_groups  = [aws_security_group.task_security_groups[each.key].id]
+    assign_public_ip = false
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  dynamic "load_balancer" {
+    for_each = each.value.target_group_arn != null ? [each.value.target_group_arn] : []
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = each.key
+      container_port   = each.value.container_port
+    }
+  }
+
+  depends_on = [
+    terraform_data.ecs_execution_policy_ready,
+    terraform_data.ecs_security_policy_ready,
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
