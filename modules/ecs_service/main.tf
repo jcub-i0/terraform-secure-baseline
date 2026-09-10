@@ -8,6 +8,9 @@ locals {
     if service.scaling == null
   }
 
+  # Autoscaled services require a separate ECS resource because Terraform
+  # lifecycle.ignore_changes cannot be selected conditionally per for_each
+  # instance. Application Auto Scaling owns desired_count after creation.
   autoscaled_services = {
     for service_name, service in var.services :
     service_name => service
