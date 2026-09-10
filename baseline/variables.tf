@@ -418,6 +418,16 @@ variable "ecs_services" {
     memory         = number
     desired_count  = optional(number, 1)
 
+    scaling = optional(object({
+      min_capacity               = number
+      max_capacity               = number
+      cpu_target_percent         = optional(number)
+      memory_target_percent      = optional(number)
+      alb_requests_per_target    = optional(number)
+      scale_in_cooldown_seconds  = optional(number, 300)
+      scale_out_cooldown_seconds = optional(number, 300)
+    }), null)
+
     cpu_architecture = optional(string, "X86_64")
 
     database_access = optional(bool, false)
@@ -455,6 +465,83 @@ variable "ecs_services" {
     ])
 
     error_message = "Each ECS service image_digest must be null or a SHA-256 digest in sha256:<64 hexadecimal characters> format."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.scaling == null ? true : (
+        service.scaling.min_capacity >= 1 &&
+        service.scaling.max_capacity >= service.scaling.min_capacity &&
+        service.desired_count >= service.scaling.min_capacity &&
+        service.desired_count <= service.scaling.max_capacity
+      )
+    ])
+
+    error_message = "When ECS scaling is configured, min_capacity must be at least 1, max_capacity must be greater than or equal to min_capacity, and desired_count must fall within the configured capacity range."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.scaling == null ? true : (
+        service.scaling.cpu_target_percent != null ||
+        service.scaling.memory_target_percent != null ||
+        service.scaling.alb_requests_per_target != null
+      )
+    ])
+
+    error_message = "When ECS scaling is configured, at least one target-tracking metric must be configured: cpu_target_percent, memory_target_percent, or alb_requests_per_target."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.scaling == null ? true : (
+        (
+          service.scaling.cpu_target_percent == null
+          ? true
+          : service.scaling.cpu_target_percent > 0
+        ) &&
+        (
+          service.scaling.memory_target_percent == null
+          ? true
+          : service.scaling.memory_target_percent > 0
+        ) &&
+        (
+          service.scaling.alb_requests_per_target == null
+          ? true
+          : service.scaling.alb_requests_per_target > 0
+        )
+      )
+    ])
+
+    error_message = "Configured ECS scaling target values must be greater than zero."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.scaling == null ? true : (
+        service.scaling.scale_in_cooldown_seconds >= 0 &&
+        service.scaling.scale_out_cooldown_seconds >= 0
+      )
+    ])
+
+    error_message = "ECS scaling cooldown values must be zero or greater."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.scaling == null ? true : (
+        service.scaling.alb_requests_per_target == null
+        ? true
+        : service.ingress != null
+      )
+    ])
+
+    error_message = "alb_requests_per_target requires ECS service ingress to be configured."
   }
 
   validation {
