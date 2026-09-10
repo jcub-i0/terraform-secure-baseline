@@ -235,3 +235,21 @@ resource "aws_ecs_service" "autoscaled_services" {
     Terraform   = "true"
   }
 }
+
+resource "aws_appautoscaling_target" "ecs_services" {
+  for_each = local.autoscaled_services
+
+  min_capacity = each.value.scaling.min_capacity
+  max_capacity = each.value.scaling.max_capacity
+
+  resource_id = "service/${var.cluster_name}/${aws_ecs_service.autoscaled_services[each.key].name}"
+
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace = "ecs"
+
+  tags = {
+    Name = "${var.name_prefix}-${each.key}-ECS-AutoScaling"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
