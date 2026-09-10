@@ -275,3 +275,25 @@ resource "aws_appautoscaling_policy" "ecs_cpu_target_tracking" {
     }
   }
 }
+
+resource "aws_appautoscaling_policy" "ecs_memory_target_tracking" {
+  for_each = local.memory_target_tracking_services
+
+  name = "${var.name_prefix}-${each.key}-ecs-memory-target-tracking"
+  policy_type = "TargetTrackingScaling"
+
+  resource_id = aws_appautoscaling_target.ecs_services[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_services[each.key].scalable_dimension
+  service_namespace = aws_appautoscaling_target.ecs_services[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value = each.value.scaling.memory_target_percent
+
+    scale_in_cooldown = each.value.scaling.scale_in_cooldown_seconds
+    scale_out_cooldown = each.value.sclaing.scale_out_cooldown_seconds
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+  }
+}
