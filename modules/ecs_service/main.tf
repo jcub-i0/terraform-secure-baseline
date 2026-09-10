@@ -290,7 +290,7 @@ resource "aws_appautoscaling_policy" "ecs_memory_target_tracking" {
     target_value = each.value.scaling.memory_target_percent
 
     scale_in_cooldown  = each.value.scaling.scale_in_cooldown_seconds
-    scale_out_cooldown = each.value.sclaing.scale_out_cooldown_seconds
+    scale_out_cooldown = each.value.scaling.scale_out_cooldown_seconds
 
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageMemoryUtilization"
