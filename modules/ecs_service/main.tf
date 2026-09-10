@@ -1,4 +1,7 @@
 locals {
+  # Fixed-count services remain on the original aws_ecs_service.services
+  # resource address so Terraform continues to own desired_count and existing
+  # v1.8 state addresses remain stable.
   fixed_services = {
     for service_name, service in var.services :
     service_name => service
