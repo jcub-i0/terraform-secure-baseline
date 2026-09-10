@@ -265,7 +265,7 @@ resource "aws_appautoscaling_policy" "ecs_cpu_target_tracking" {
   service_namespace  = aws_appautoscaling_target.ecs_services[each.key].service_namespace
 
   target_tracking_scaling_policy_configuration {
-    target_value = each.value.scaling.cpu_target_permit
+    target_value = each.value.scaling.cpu_target_percent
 
     scale_in_cooldown  = each.value.scaling.scale_in_cooldown_seconds
     scale_out_cooldown = each.value.scaling.scale_out_cooldown_seconds
