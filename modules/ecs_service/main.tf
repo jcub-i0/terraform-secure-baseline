@@ -169,6 +169,9 @@ resource "aws_ecs_service" "services" {
   }
 }
 
+# Application Auto Scaling owns desired_count after initial service creation.
+# Keep this resource separate from fixed-count services so Terraform does not
+# reconcile legitimate runtime scaling back to the configured bootstrap count.
 resource "aws_ecs_service" "autoscaled_services" {
   for_each = local.autoscaled_services
 
