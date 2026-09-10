@@ -193,6 +193,21 @@ output "ecs_service_configuration" {
   value       = module.baseline.ecs_service_configuration
 }
 
+output "ecs_autoscaling_targets" {
+  description = "Application Auto Scaling targets keyed by ECS service name."
+  value       = module.baseline.ecs_autoscaling_targets
+}
+
+output "ecs_autoscaling_cpu_policies" {
+  description = "CPU target-tracking policies keyed by ECS service name."
+  value       = module.baseline.ecs_autoscaling_cpu_policies
+}
+
+output "ecs_autoscaling_memory_policies" {
+  description = "Memory target-tracking policies keyed by ECS service name."
+  value       = module.baseline.ecs_autoscaling_memory_policies
+}
+
 output "logs_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt workload CloudWatch Logs."
   value       = module.baseline.logs_cmk_arn
