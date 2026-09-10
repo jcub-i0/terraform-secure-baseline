@@ -16,6 +16,18 @@ locals {
     service_name => service
     if service.scaling != null
   }
+
+  cpu_target_tracking_services = {
+    for service_name, service in local.autoscaled_services :
+    service_name => service
+    if service.scaling.cpu_target_percent != null
+  }
+
+  memory_target_tracking_services = {
+    for service_name, service in local.autoscaled_services :
+    service_name => service
+    if service.scaling.memory_target_percent != null
+  }
 }
 
 resource "aws_security_group" "task_security_groups" {
