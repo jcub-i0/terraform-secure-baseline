@@ -1,3 +1,17 @@
+locals {
+  fixed_services = {
+    for service_name, service in var.services :
+    service_name => service
+    if service.scaling == null
+  }
+
+  autoscaled_services = {
+    for service_name, service in var.services :
+    service_name => service
+    if service.scaling != null
+  }
+}
+
 resource "aws_security_group" "task_security_groups" {
   for_each = var.services
 
