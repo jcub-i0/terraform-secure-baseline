@@ -319,6 +319,7 @@ module "ecs_service" {
 
   vpc_id      = module.networking.vpc_id
   cluster_arn = module.ecs_cluster.cluster_arn
+  cluster_name = module.ecs_cluster.cluster_name
 
   compute_private_subnet_ids = toset(
     module.networking.compute_private_subnet_ids_list
