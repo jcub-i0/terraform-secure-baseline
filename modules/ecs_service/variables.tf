@@ -66,7 +66,7 @@ variable "services" {
     execution_role_arn = string
     task_role_arn      = string
 
-    target_group_arn = optional(string)
+    target_group_arn           = optional(string)
     alb_request_resource_label = optional(string)
 
     cpu_architecture = optional(string, "X86_64")
