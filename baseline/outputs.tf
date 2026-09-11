@@ -197,6 +197,21 @@ output "ecs_service_configuration" {
   }
 }
 
+output "ecs_autoscaling_targets" {
+  description = "Application Auto Scaling targets keyed by ECS service name."
+  value       = module.ecs_service.autoscaling_targets
+}
+
+output "ecs_autoscaling_cpu_policies" {
+  description = "CPU target-tracking policies keyed by ECS service name."
+  value       = module.ecs_service.autoscaling_cpu_policies
+}
+
+output "ecs_autoscaling_memory_policies" {
+  description = "Memory target-tracking policies keyed by ECS service name."
+  value       = module.ecs_service.autoscaling_memory_policies
+}
+
 output "ecs_task_definition_arns" {
   description = "ECS task definition ARNs keyed by service name"
   value       = module.ecs_service.task_definition_arns

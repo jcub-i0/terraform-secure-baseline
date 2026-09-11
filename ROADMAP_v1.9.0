@@ -1,0 +1,75 @@
+# Terraform Secure Baseline v1.9.0
+
+## Finished v1.9.0 Criteria
+
+One canonical ecs_services map.
+
+scaling = null means no platform-owned autoscaling target/policy.
+
+Registered-but-unreleased services create no ECS scaling resources.
+
+Fixed services:
+Terraform owns desired_count.
+
+Autoscaled services:
+desired_count is bootstrap capacity;
+Application Auto Scaling owns subsequent desired count.
+
+Never let Terraform reassert the bootstrap count after an autoscaler
+has legitimately changed it.
+
+Application Auto Scaling policies use target tracking only in v1.9.
+
+ALBRequestCountPerTarget requires ingress.
+
+The ALB scaling resource label comes from Terraform-owned resource
+identities, not string reconstruction in Bash.
+
+AWS-managed target-tracking CloudWatch alarms remain AWS-managed.
+Do not edit or repurpose them.
+
+Operational notification alarms are separate Terraform-owned alarms.
+
+ECS autoscaling remains workload-baseline infrastructure.
+
+No fifth validation/evidence layer.
+
+Keep the existing ECS/ECR/ALB/cluster module boundaries.
+
+Keep private Fargate / assign_public_ip = false.
+
+Keep digest-pinned application releases.
+
+Deploy Application continues to change only image_digest.
+It does not manage service scaling configuration.
+
+The exact-saved-plan Apply workflow remains unchanged.
+
+## Roadmap
+
+| Milestone                             | Purpose                                                                                                                                                            | Expected repository areas                                                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **O1 — Scaling Ownership & Contract** | Finalize canonical scaling schema; prove fixed-vs-autoscaled `desired_count` ownership and safe state transition with plans only/test state before production code | `docs/ecs-runtime-design.md`, `baseline/variables.tf`, `modules/ecs_service/`, possibly migration documentation/tooling                                       |
+| **O2 — Core ECS Auto Scaling**        | Application Auto Scaling target plus CPU/memory target-tracking policies; resource-backed outputs                                                                  | `modules/ecs_service/main.tf`, `variables.tf`, `outputs.tf`, `baseline/locals.tf`, `baseline/main.tf`, `baseline/outputs.tf`, environment variable interfaces |
+| **O3 — ALB Request Scaling**          | Add `ALBRequestCountPerTarget`; derive exact resource label from ALB/TG resources                                                                                  | `modules/application_load_balancer/outputs.tf`, `modules/ecs_service/`, `baseline/locals.tf`                                                                  |
+| **O4 — Deployment Health**            | Minimum healthy %, maximum %, health-check grace; preserve current defaults when absent                                                                            | `modules/ecs_service/variables.tf`, `main.tf`, outputs, canonical `ecs_services` interface                                                                    |
+| **O5 — Operational Signals**          | Task-deficit and ingress health alarms; optional CPU/memory/5xx alerts; reuse notification architecture                                                            | `modules/monitoring/variables.tf`, `main.tf`, outputs, `baseline/main.tf`, `baseline/locals.tf`                                                               |
+| **O6 — Exact Runtime Validation**     | Extend existing ECS validator for scaling targets, policies, deployment settings, dynamic count semantics, and alarm state                                         | `scripts/validation/validate-ecs-runtime.sh`, `scripts/validation/README.md`, `docs/validation-checklist.md`; baseline output contracts                       |
+| **O7 — Live Qualification & Release** | Exercise scale-out/in, releases while scaled, alarms, full evidence, docs, no-change plan, then release                                                            | test fixtures, `README.md`, `CHANGELOG.md`, `docs/ecs-runtime-design.md`, deployment docs if needed                                                           |
+
+## Final Release Gate - Validation
+
+| Test | Result |
+| ---- | ------ |
+| CPU target-tracking scale-out/in | PASS |
+| memory target-tracking scale-out/in | PASS |
+| ALB request scaling, when configured | PASS |
+| fixed-count service behavior | PASS |
+| autoscaled desired_count ownership | PASS |
+| digest release while service is scaled | PASS |
+| deployment-health settings | PASS |
+| operational alarm configuration | PASS |
+| validate-ecs-runtime.sh | PASS |
+| full workload baseline | 16/16 PASS |
+| strict workload bootstrap | 1/1 PASS |
+| final Terraform plan | No changes |

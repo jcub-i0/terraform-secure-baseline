@@ -1,3 +1,35 @@
+locals {
+  # Fixed-count services remain on the original aws_ecs_service.services
+  # resource address so Terraform continues to own desired_count and existing
+  # v1.8 state addresses remain stable.
+  fixed_services = {
+    for service_name, service in var.services :
+    service_name => service
+    if service.scaling == null
+  }
+
+  # Autoscaled services require a separate ECS resource because Terraform
+  # lifecycle.ignore_changes cannot be selected conditionally per for_each
+  # instance. Application Auto Scaling owns desired_count after creation.
+  autoscaled_services = {
+    for service_name, service in var.services :
+    service_name => service
+    if service.scaling != null
+  }
+
+  cpu_target_tracking_services = {
+    for service_name, service in local.autoscaled_services :
+    service_name => service
+    if service.scaling.cpu_target_percent != null
+  }
+
+  memory_target_tracking_services = {
+    for service_name, service in local.autoscaled_services :
+    service_name => service
+    if service.scaling.memory_target_percent != null
+  }
+}
+
 resource "aws_security_group" "task_security_groups" {
   for_each = var.services
 
@@ -104,7 +136,7 @@ resource "terraform_data" "ecs_security_policy_ready" {
 }
 
 resource "aws_ecs_service" "services" {
-  for_each = var.services
+  for_each = local.fixed_services
 
   name            = "${var.name_prefix}-${each.key}"
   cluster         = var.cluster_arn
@@ -146,5 +178,122 @@ resource "aws_ecs_service" "services" {
     Name        = "${var.name_prefix}-${each.key}"
     Environment = var.environment
     Terraform   = "true"
+  }
+}
+
+# Application Auto Scaling owns desired_count after initial service creation.
+# Keep this resource separate from fixed-count services so Terraform does not
+# reconcile legitimate runtime scaling back to the configured bootstrap count.
+resource "aws_ecs_service" "autoscaled_services" {
+  for_each = local.autoscaled_services
+
+  name            = "${var.name_prefix}-${each.key}"
+  cluster         = var.cluster_arn
+  task_definition = aws_ecs_task_definition.task_definitions[each.key].arn
+  desired_count   = each.value.desired_count
+
+  launch_type      = "FARGATE"
+  platform_version = var.platform_version
+
+  force_delete = true # CHANGE THIS IN PROD
+
+  lifecycle {
+    ignore_changes = [
+      desired_count,
+    ]
+  }
+
+  network_configuration {
+    subnets          = var.compute_private_subnet_ids
+    security_groups  = [aws_security_group.task_security_groups[each.key].id]
+    assign_public_ip = false
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  dynamic "load_balancer" {
+    for_each = each.value.target_group_arn != null ? [each.value.target_group_arn] : []
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = each.key
+      container_port   = each.value.container_port
+    }
+  }
+
+  depends_on = [
+    terraform_data.ecs_execution_policy_ready,
+    terraform_data.ecs_security_policy_ready,
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+resource "aws_appautoscaling_target" "ecs_services" {
+  for_each = local.autoscaled_services
+
+  min_capacity = each.value.scaling.min_capacity
+  max_capacity = each.value.scaling.max_capacity
+
+  resource_id = "service/${var.cluster_name}/${aws_ecs_service.autoscaled_services[each.key].name}"
+
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  tags = {
+    Name        = "${var.name_prefix}-${each.key}-ECS-AutoScaling"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+resource "aws_appautoscaling_policy" "ecs_cpu_target_tracking" {
+  for_each = local.cpu_target_tracking_services
+
+  name        = "${var.name_prefix}-${each.key}-ecs-cpu-target-tracking"
+  policy_type = "TargetTrackingScaling"
+
+  resource_id        = aws_appautoscaling_target.ecs_services[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_services[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_services[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value = each.value.scaling.cpu_target_percent
+
+    scale_in_cooldown  = each.value.scaling.scale_in_cooldown_seconds
+    scale_out_cooldown = each.value.scaling.scale_out_cooldown_seconds
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+  }
+}
+
+resource "aws_appautoscaling_policy" "ecs_memory_target_tracking" {
+  for_each = local.memory_target_tracking_services
+
+  name        = "${var.name_prefix}-${each.key}-ecs-memory-target-tracking"
+  policy_type = "TargetTrackingScaling"
+
+  resource_id        = aws_appautoscaling_target.ecs_services[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_services[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_services[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value = each.value.scaling.memory_target_percent
+
+    scale_in_cooldown  = each.value.scaling.scale_in_cooldown_seconds
+    scale_out_cooldown = each.value.scaling.scale_out_cooldown_seconds
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
   }
 }

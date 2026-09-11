@@ -260,6 +260,16 @@ variable "ecs_services" {
     memory         = number
     desired_count  = optional(number, 1)
 
+    scaling = optional(object({
+      min_capacity               = number
+      max_capacity               = number
+      cpu_target_percent         = optional(number)
+      memory_target_percent      = optional(number)
+      alb_requests_per_target    = optional(number)
+      scale_in_cooldown_seconds  = optional(number, 300)
+      scale_out_cooldown_seconds = optional(number, 300)
+    }), null)
+
     cpu_architecture = optional(string, "X86_64")
 
     database_access = optional(bool, false)
