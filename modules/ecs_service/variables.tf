@@ -67,6 +67,7 @@ variable "services" {
     task_role_arn      = string
 
     target_group_arn = optional(string)
+    alb_request_resource_label = optional(string)
 
     cpu_architecture = optional(string, "X86_64")
 
@@ -157,6 +158,22 @@ variable "services" {
     ])
 
     error_message = "Each ECS service must use a valid AWS Fargate CPU and memory combination."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      service.scaling == null ? true : (
+        service.scaling.alb_requests_per_target == null
+        ? true
+        : (
+          service.target_group_arn != null &&
+          service.alb_request_resource_label != null
+        )
+      )
+    ])
+
+    error_message = "ALB request-count scaling requires both target_group_arn and alb_request_resource_label."
   }
 }
 
