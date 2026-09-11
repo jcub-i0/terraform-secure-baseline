@@ -33,8 +33,9 @@ output "target_groups" {
 
   value = {
     for service_name, target_group in aws_lb_target_group.target_groups : service_name => {
-      arn  = target_group.arn
-      name = target_group.name
+      arn        = target_group.arn
+      arn_suffix = target_group.arn_suffix
+      name       = target_group.name
     }
   }
 }
