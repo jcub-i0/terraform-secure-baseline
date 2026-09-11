@@ -214,7 +214,7 @@ output "ecs_autoscaling_memory_policies" {
 
 output "ecs_autoscaling_request_policies" {
   description = "ALB request-count target-tracking policies keyed by ECS service name"
-  value = module.ecs_service.autoscaling_alb_request_policies
+  value       = module.ecs_service.autoscaling_alb_request_policies
 }
 
 output "ecs_task_definition_arns" {

@@ -105,12 +105,12 @@ output "autoscaling_alb_request_policies" {
   value = {
     for service_name, policy in aws_appautoscaling_policy.ecs_alb_request_target_tracking :
     service_name => {
-      arn = policy.arn
-      name = policy.name
-      policy_type = policy.policy_type
-      resource_id = policy.resource_id
+      arn                = policy.arn
+      name               = policy.name
+      policy_type        = policy.policy_type
+      resource_id        = policy.resource_id
       scalable_dimension = policy.scalable_dimension
-      service_namespace = policy.service_namespace
+      service_namespace  = policy.service_namespace
     }
   }
 }
