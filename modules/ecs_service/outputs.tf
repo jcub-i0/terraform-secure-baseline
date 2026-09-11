@@ -98,3 +98,19 @@ output "autoscaling_memory_policies" {
     }
   }
 }
+
+output "autoscaling_alb_request_policies" {
+  description = "ALB request-count target-tracking scaling policies keyed by ECS service name"
+
+  value = {
+    for service_name, policy in aws_appautoscaling_policy.ecs_alb_request_target_tracking :
+    service_name => {
+      arn = policy.arn
+      name = policy.name
+      policy_type = policy.policy_type
+      resource_id = policy.resource_id
+      scalable_dimension = policy.scalable_dimension
+      service_namespace = policy.service_namespace
+    }
+  }
+}
