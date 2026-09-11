@@ -208,6 +208,11 @@ output "ecs_autoscaling_memory_policies" {
   value       = module.baseline.ecs_autoscaling_memory_policies
 }
 
+output "ecs_autoscaling_alb_request_policies" {
+  description = "ALB request-count target-tracking policies keyed by ECS service name"
+  value       = module.baseline.ecs_autoscaling_alb_request_policies
+}
+
 output "logs_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt workload CloudWatch Logs."
   value       = module.baseline.logs_cmk_arn

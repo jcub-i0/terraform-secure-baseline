@@ -28,6 +28,12 @@ locals {
     service_name => service
     if service.scaling.memory_target_percent != null
   }
+
+  alb_request_target_tracking_services = {
+    for service_name, service in local.autoscaled_services :
+    service_name => service
+    if service.scaling.alb_requests_per_target != null
+  }
 }
 
 resource "aws_security_group" "task_security_groups" {
@@ -294,6 +300,29 @@ resource "aws_appautoscaling_policy" "ecs_memory_target_tracking" {
 
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+  }
+}
+
+resource "aws_appautoscaling_policy" "ecs_alb_request_target_tracking" {
+  for_each = local.alb_request_target_tracking_services
+
+  name        = "${var.name_prefix}-${each.key}-ecs-alb-request-target-tracking"
+  policy_type = "TargetTrackingScaling"
+
+  resource_id        = aws_appautoscaling_target.ecs_services[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_services[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_services[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value = each.value.scaling.alb_requests_per_target
+
+    scale_in_cooldown  = each.value.scaling.scale_in_cooldown_seconds
+    scale_out_cooldown = each.value.scaling.scale_out_cooldown_seconds
+
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      resource_label         = each.value.alb_request_resource_label
     }
   }
 }

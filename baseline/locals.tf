@@ -192,6 +192,12 @@ locals {
         : null
       )
 
+      alb_request_resource_label = (
+        service.ingress != null
+        ? "${module.application_load_balancer[0].load_balancer_arn_suffix}/${module.application_load_balancer[0].target_groups[service_name].arn_suffix}"
+        : null
+      )
+
       cpu_architecture = service.cpu_architecture
 
       environment_variables = service.environment_variables
