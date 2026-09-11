@@ -8,6 +8,11 @@ output "load_balancer_arn" {
   value       = aws_lb.load_balancer.arn
 }
 
+output "load_balancer_arn_suffix" {
+  description = "ARN suffix of the Application Load Balancer for CloudWatch and Application Auto Scaling metrics"
+  value       = aws_lb.load_balancer.arn_suffix
+}
+
 output "dns_name" {
   description = "DNS name of the Application Load Balancer"
   value       = aws_lb.load_balancer.dns_name
