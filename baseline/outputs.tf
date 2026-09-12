@@ -242,6 +242,16 @@ output "ecs_task_roles" {
   value       = module.iam.ecs_task_roles
 }
 
+output "ecs_task_deficit_alarms" {
+  description = "ECS task-deficit operational alarms keyed by service name."
+  value       = module.monitoring.ecs_task_deficit_alarms
+}
+
+output "ecs_ingress_unhealthy_target_alarms" {
+  description = "ECS ingress unhealthy-target operational alarms keyed by service name."
+  value       = module.monitoring.ecs_ingress_unhealthy_target_alarms
+}
+
 output "s3_prefix_list_id" {
   description = "AWS-managed S3 prefix list ID associated with the workload S3 Gateway Endpoint."
   value       = module.vpc_endpoints.s3_prefix_list_id
