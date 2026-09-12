@@ -23,6 +23,11 @@ variable "data_private_subnet_ids_list" {
   type        = list(string)
 }
 
+variable "rds_multi_az" {
+  description = "Whether the RDS DB instance uses a Multi-AZ deployment."
+  type        = bool
+}
+
 variable "db_username" {
   type = string
 }

@@ -80,6 +80,7 @@ module "storage" {
   account_id  = var.account_id
   random_id   = var.random_id
 
+  rds_multi_az = local.effective_rds_multi_az
   db_port     = var.db_port
   db_username = var.db_username
 
