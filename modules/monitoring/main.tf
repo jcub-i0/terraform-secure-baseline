@@ -792,7 +792,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
     id          = "deficit"
     expression  = "desired - running"
     label       = "ECS task deficit"
-    return_data = false
+    return_data = true
   }
 
   alarm_actions = [
