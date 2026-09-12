@@ -149,6 +149,22 @@ output "autoscaling_alb_request_policies" {
       resource_id        = policy.resource_id
       scalable_dimension = policy.scalable_dimension
       service_namespace  = policy.service_namespace
+
+      target_value = policy.target_tracking_scaling_policy_configuration[0].target_value
+
+      scale_in_cooldown = (
+        policy.target_tracking_scaling_policy_configuration[0].scale_in_cooldown
+      )
+
+      scale_out_cooldown = (
+        policy.target_tracking_scaling_policy_configuration[0].scale_out_cooldown
+      )
+
+      predefined_metric_type = (
+        policy.target_tracking_scaling_policy_configuration[0]
+        .predefined_metric_specification[0]
+        .predefined_metric_type
+      )
     }
   }
 }
