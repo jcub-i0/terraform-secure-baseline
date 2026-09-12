@@ -822,22 +822,22 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
   )
 
   comparison_operator = "GreaterThanThreshold"
-  threshold = 0
+  threshold           = 0
 
-  evaluation_periods = 3
+  evaluation_periods  = 3
   datapoints_to_alarm = 3
 
   treat_missing_data = "notBreaching"
 
   metric_query {
-    id = "desired"
+    id          = "desired"
     return_data = false
 
     metric {
-      namespace = "ECS/ContainerInsights"
+      namespace   = "ECS/ContainerInsights"
       metric_name = "DesiredTaskCount"
-      period = 60
-      stat = "Average"
+      period      = 60
+      stat        = "Average"
 
       dimensions = {
         ClusterName = each.value.cluster_name
@@ -847,14 +847,14 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
   }
 
   metric_query {
-    id = "running"
+    id          = "running"
     return_data = false
 
     metric {
-      namespace = "ECS/ContainerInsights"
+      namespace   = "ECS/ContainerInsights"
       metric_name = "RunningTaskCount"
-      period = 60
-      stat = "Average"
+      period      = 60
+      stat        = "Average"
 
       dimensions = {
         ClusterName = each.value.cluster_name
@@ -864,9 +864,9 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
   }
 
   metric_query {
-    id = "deficit"
-    expression = "desired - running"
-    label = "ECS task deficit"
+    id          = "deficit"
+    expression  = "desired - running"
+    label       = "ECS task deficit"
     return_data = true
   }
 
@@ -879,8 +879,8 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
   ]
 
   tags = {
-    Name = "${var.name_prefix}-${each.key}-ECS-Task-Deficit"
+    Name        = "${var.name_prefix}-${each.key}-ECS-Task-Deficit"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
