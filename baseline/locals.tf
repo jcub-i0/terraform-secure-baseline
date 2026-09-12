@@ -182,6 +182,7 @@ locals {
       memory         = service.memory
       desired_count  = service.desired_count
       scaling        = service.scaling
+      deployment    = service.deployment
 
       execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
       task_role_arn      = module.iam.ecs_task_roles[service_name].arn
