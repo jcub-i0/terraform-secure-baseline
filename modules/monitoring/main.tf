@@ -747,22 +747,22 @@ resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
   alarm_description = "ECS service ${each.value.service_name} has fewer running tasks than desired for a sustained period."
 
   comparison_operator = "GreaterThanThreshold"
-  threshold = 0
+  threshold           = 0
 
-  evaluation_periods = 3
+  evaluation_periods  = 3
   datapoints_to_alarm = 3
 
   treat_missing_data = "notBreaching"
 
   metric_query {
-    id = "desired"
+    id          = "desired"
     return_data = false
 
     metric {
-      namespace = "ECS/ContainerInsights"
+      namespace   = "ECS/ContainerInsights"
       metric_name = "DesiredTaskCount"
-      period = 60
-      stat = "Average"
+      period      = 60
+      stat        = "Average"
 
       dimensions = {
         ClusterName = each.value.cluster_name
@@ -772,14 +772,14 @@ resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
   }
 
   metric_query {
-    id = "running"
+    id          = "running"
     return_data = false
 
     metric {
-      namespace = "ECS/ContainerInsights"
+      namespace   = "ECS/ContainerInsights"
       metric_name = "RunningTaskCount"
-      period = 60
-      stat = "Average"
+      period      = 60
+      stat        = "Average"
 
       dimensions = {
         ClusterName = each.value.cluster_name
@@ -789,9 +789,9 @@ resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
   }
 
   metric_query {
-    id = "deficit"
-    expression = "desired - running"
-    label = "ECS task deficit"
+    id          = "deficit"
+    expression  = "desired - running"
+    label       = "ECS task deficit"
     return_data = false
   }
 
@@ -804,8 +804,8 @@ resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
   ]
 
   tags = {
-    Name = "${var.name_prefix}-${each.key}-ECS-Task-Deficit"
+    Name        = "${var.name_prefix}-${each.key}-ECS-Task-Deficit"
     Environment = var.environment
-    Terraform = "true"
+    Terraform   = "true"
   }
 }
