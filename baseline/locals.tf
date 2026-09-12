@@ -250,6 +250,12 @@ locals {
     : local.is_production_profile
   )
 
+  effective_rds_multi_az = (
+    var.rds_multi_az != null
+    ? var.rds_multi_az
+    : local.is_production_profile
+  )
+
   effective_inspector_enabled = (
     var.inspector_enabled != null
     ? var.inspector_enabled
