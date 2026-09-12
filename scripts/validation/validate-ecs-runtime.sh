@@ -281,6 +281,35 @@ validate_target_tracking_policy() {
   success "${policy_description} scaling policy exactly matches Terraform: ${service_name}"
 }
 
+validate_operational_alarm_state() {
+  local alarm_json="$1"
+  local alarm_description="$2"
+  local state
+
+  state="$(
+    echo "$alarm_json" |
+      jq -r '.StateValue // empty'
+  )"
+
+  case "$state" in
+    OK)
+      success "${alarm_description} alarm state is OK"
+      ;;
+
+    INSUFFICIENT_DATA)
+      warn "${alarm_description} alarm state is INSUFFICIENT_DATA; configuration is valid but metric evaluation is not yet complete"
+      ;;
+
+    ALARM)
+      fail "${alarm_description} operational alarm is currently ALARM"
+      ;;
+
+    *)
+      fail "${alarm_description} alarm has unexpected state: ${state:-<missing>}"
+      ;;
+  esac
+}
+
 section "${CLOUD_NAME} ECS Runtime Validation"
 
 section "Checking required local commands"
@@ -313,22 +342,12 @@ ECS_LOG_GROUPS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_log_groups)"
 ECS_EXECUTION_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_execution_roles)"
 ECS_TASK_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_roles)"
 ECR_REPOSITORIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecr_repositories)"
-
-ECS_AUTOSCALING_TARGETS_JSON="$(
-  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_targets
-)"
-
-ECS_AUTOSCALING_CPU_POLICIES_JSON="$(
-  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_cpu_policies
-)"
-
-ECS_AUTOSCALING_MEMORY_POLICIES_JSON="$(
-  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_memory_policies
-)"
-
-ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON="$(
-  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_alb_request_policies
-)"
+ECS_AUTOSCALING_TARGETS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_autoscaling_targets)"
+ECS_AUTOSCALING_CPU_POLICIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_autoscaling_cpu_policies)"
+ECS_AUTOSCALING_MEMORY_POLICIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_autoscaling_memory_policies)"
+ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_autoscaling_alb_request_policies)"
+ECS_TASK_DEFICIT_ALARMS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_deficit_alarms)"
+ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_ingress_unhealthy_target_alarms)"
 
 for output_name in \
   vpc_id \
@@ -338,7 +357,8 @@ for output_name in \
   effective_cloudwatch_retention_days \
   logs_cmk_arn \
   data_sg_id \
-  rds_port; do
+  rds_port \
+  secops_topic_arn; do
 
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output: ${output_name}"
@@ -352,6 +372,7 @@ EFFECTIVE_CLOUDWATCH_RETENTION_DAYS="$(get_terraform_output_value "$OUTPUTS_JSON
 LOGS_CMK_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" logs_cmk_arn)"
 DATA_SG_ID="$(get_terraform_output_value "$OUTPUTS_JSON" data_sg_id)"
 RDS_PORT="$(get_terraform_output_value "$OUTPUTS_JSON" rds_port)"
+SECOPS_TOPIC_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" secops_topic_arn)"
 
 APPLICATION_LOAD_BALANCER_JSON="$(
   echo "$OUTPUTS_JSON" |
@@ -377,6 +398,7 @@ if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
       and (.https_listener.certificate_arn | type == "string" and length > 0)
       and (.https_listener.ssl_policy | type == "string" and length > 0)
       and (.target_groups | type == "object" and length > 0)
+      and (.arn_suffix | type == "string" and length > 0)
     ' >/dev/null; then
     fail "application_load_balancer output is not null and lacks required runtime metadata"
   fi
@@ -580,6 +602,31 @@ EXPECTED_CONTAINER_INSIGHTS="$(
   echo "$ECS_CLUSTER_JSON" |
     jq -r '.container_insights'
 )"
+
+if [[ "$EXPECTED_CONTAINER_INSIGHTS" == "disabled" ]]; then
+  EXPECTED_TASK_DEFICIT_ALARM_SERVICES_JSON='{}'
+else
+  EXPECTED_TASK_DEFICIT_ALARM_SERVICES_JSON="$ECS_SERVICE_CONFIGURATION_JSON"
+fi
+
+EXPECTED_INGRESS_ALARM_SERVICES_JSON="$(
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+    jq -c '
+      with_entries(
+        select(.value.ingress_enabled == true)
+      )
+    '
+)"
+
+require_same_map_keys \
+  "$EXPECTED_TASK_DEFICIT_ALARM_SERVICES_JSON" \
+  "$ECS_TASK_DEFICIT_ALARMS_JSON" \
+  "ECS task-deficit alarms"
+
+require_same_map_keys \
+  "$EXPECTED_INGRESS_ALARM_SERVICES_JSON" \
+  "$ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON" \
+  "ECS ingress unhealthy-target alarms"
 
 if [[ "$CONTAINER_INSIGHTS_LIVE_VALUE" != "$EXPECTED_CONTAINER_INSIGHTS" ]]; then
   fail "ECS Container Insights setting does not match Terraform: expected=${EXPECTED_CONTAINER_INSIGHTS} actual=${CONTAINER_INSIGHTS_LIVE_VALUE:-<missing>}"
@@ -1551,16 +1598,302 @@ else
   done < <(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.target_groups | keys[]')
 
   success "Shared Application Load Balancer runtime is valid"
-
 fi
 
+section "Validating ECS Operational Alarms"
+
+LIVE_OPERATIONAL_ALARMS_JSON="$(
+  aws cloudwatch describe-alarms \
+    "${aws_args[@]}" \
+    --alarm-name-prefix "${NAME_PREFIX}-" \
+    --output json
+)"
+
+EXPECTED_OPERATIONAL_ALARM_NAMES_JSON="$(
+  jq -c -n \
+    --argjson task "$ECS_TASK_DEFICIT_ALARMS_JSON" \
+    --argjson ingress "$ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON" '
+      [
+        ($task[]? | .name),
+        ($ingress[]? | .name)
+      ]
+      | sort
+      | unique
+    '
+)"
+
+LIVE_OPERATIONAL_ALARM_NAMES_JSON="$(
+  echo "$LIVE_OPERATIONAL_ALARMS_JSON" |
+    jq -c '
+      [
+        .MetricAlarms[]?
+        | select(
+            (.AlarmName | endswith("-ecs-task-deficit"))
+            or
+            (.AlarmName | endswith("-ecs-ingress-unhealthy-targets"))
+          )
+        | .AlarmName
+      ]
+      | sort
+      | unique
+    '
+)"
+
+if [[ "$EXPECTED_OPERATIONAL_ALARM_NAMES_JSON" != "$LIVE_OPERATIONAL_ALARM_NAMES_JSON" ]]; then
+  jq -n \
+    --argjson expected "$EXPECTED_OPERATIONAL_ALARM_NAMES_JSON" \
+    --argjson actual "$LIVE_OPERATIONAL_ALARM_NAMES_JSON" \
+    '{
+      expected_operational_alarms: $expected,
+      actual_operational_alarms: $actual
+    }'
+
+  fail "ECS operational alarm inventory does not exactly match Terraform"
+fi
+
+success "ECS operational alarm inventory exactly matches Terraform"
+
+while IFS= read -r service_name; do
+  expected_alarm_json="$(
+    echo "$ECS_TASK_DEFICIT_ALARMS_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  expected_alarm_name="$(
+    echo "$expected_alarm_json" |
+      jq -r '.name'
+  )"
+
+  expected_alarm_arn="$(
+    echo "$expected_alarm_json" |
+      jq -r '.arn'
+  )"
+
+  expected_service_name="$(
+    echo "$ECS_SERVICES_JSON" |
+      jq -r --arg service "$service_name" '.[$service].name'
+  )"
+
+  live_alarm_matches_json="$(
+    echo "$LIVE_OPERATIONAL_ALARMS_JSON" |
+      jq -c \
+        --arg name "$expected_alarm_name" '
+          [
+            .MetricAlarms[]?
+            | select(.AlarmName == $name)
+          ]
+        '
+  )"
+
+  if [[ "$(echo "$live_alarm_matches_json" | jq 'length')" -ne 1 ]]; then
+    echo "$live_alarm_matches_json" | jq .
+    fail "Expected exactly one ECS task-deficit alarm: ${service_name}"
+  fi
+
+  live_alarm_json="$(
+    echo "$live_alarm_matches_json" |
+      jq -c '.[0]'
+  )"
+
+  if ! echo "$live_alarm_json" |
+    jq -e \
+      --arg arn "$expected_alarm_arn" \
+      --arg name "$expected_alarm_name" \
+      --arg topic "$SECOPS_TOPIC_ARN" \
+      --arg cluster "$EXPECTED_CLUSTER_NAME" \
+      --arg service "$expected_service_name" '
+        .AlarmArn == $arn
+        and .AlarmName == $name
+        and .ActionsEnabled == true
+
+        and (.AlarmActions | sort) == [$topic]
+        and (.OKActions | sort) == [$topic]
+        and ((.InsufficientDataActions // []) | length) == 0
+
+        and .ComparisonOperator == "GreaterThanThreshold"
+        and .Threshold == 0
+        and .EvaluationPeriods == 3
+        and .DatapointsToAlarm == 3
+        and .TreatMissingData == "notBreaching"
+
+        and (.Metrics | length) == 3
+
+        and any(
+          .Metrics[];
+          .Id == "desired"
+          and .ReturnData == false
+          and .MetricStat.Metric.Namespace == "ECS/ContainerInsights"
+          and .MetricStat.Metric.MetricName == "DesiredTaskCount"
+          and .MetricStat.Period == 60
+          and .MetricStat.Stat == "Average"
+          and (.MetricStat.Metric.Dimensions | length) == 2
+          and any(.MetricStat.Metric.Dimensions[]; .Name == "ClusterName" and .Value == $cluster)
+          and any(.MetricStat.Metric.Dimensions[]; .Name == "ServiceName" and .Value == $service)
+        )
+
+        and any(
+          .Metrics[];
+          .Id == "running"
+          and .ReturnData == false
+          and .MetricStat.Metric.Namespace == "ECS/ContainerInsights"
+          and .MetricStat.Metric.MetricName == "RunningTaskCount"
+          and .MetricStat.Period == 60
+          and .MetricStat.Stat == "Average"
+          and (.MetricStat.Metric.Dimensions | length) == 2
+          and any(.MetricStat.Metric.Dimensions[]; .Name == "ClusterName" and .Value == $cluster)
+          and any(.MetricStat.Metric.Dimensions[]; .Name == "ServiceName" and .Value == $service)
+        )
+
+        and any(
+          .Metrics[];
+          .Id == "deficit"
+          and .Expression == "desired - running"
+          and .Label == "ECS task deficit"
+          and .ReturnData == true
+        )
+      ' >/dev/null; then
+
+    echo "$live_alarm_json" | jq .
+    fail "ECS task-deficit alarm does not exactly match Terraform baseline semantics: ${service_name}"
+  fi
+
+  success "ECS task-deficit alarm exactly matches Terraform baseline semantics: ${service_name}"
+
+  validate_operational_alarm_state \
+    "$live_alarm_json" \
+    "ECS task-deficit ${service_name}"
+
+done < <(echo "$ECS_TASK_DEFICIT_ALARMS_JSON" | jq -r 'keys[]')
+
+while IFS= read -r service_name; do
+  expected_alarm_json="$(
+    echo "$ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  expected_alarm_name="$(
+    echo "$expected_alarm_json" |
+      jq -r '.name'
+  )"
+
+  expected_alarm_arn="$(
+    echo "$expected_alarm_json" |
+      jq -r '.arn'
+  )"
+
+  expected_load_balancer_suffix="$(
+    echo "$APPLICATION_LOAD_BALANCER_JSON" |
+      jq -r '.arn_suffix'
+  )"
+
+  expected_target_group_suffix="$(
+    echo "$APPLICATION_LOAD_BALANCER_JSON" |
+      jq -r --arg service "$service_name" '.target_groups[$service].arn_suffix'
+  )"
+
+  live_alarm_matches_json="$(
+    echo "$LIVE_OPERATIONAL_ALARMS_JSON" |
+      jq -c \
+        --arg name "$expected_alarm_name" '
+          [
+            .MetricAlarms[]?
+            | select(.AlarmName == $name)
+          ]
+        '
+  )"
+
+  if [[ "$(echo "$live_alarm_matches_json" | jq 'length')" -ne 1 ]]; then
+    echo "$live_alarm_matches_json" | jq .
+    fail "Expected exactly one ECS ingress unhealthy-target alarm: ${service_name}"
+  fi
+
+  live_alarm_json="$(
+    echo "$live_alarm_matches_json" |
+      jq -c '.[0]'
+  )"
+
+  if ! echo "$live_alarm_json" |
+    jq -e \
+      --arg arn "$expected_alarm_arn" \
+      --arg name "$expected_alarm_name" \
+      --arg topic "$SECOPS_TOPIC_ARN" \
+      --arg lb "$expected_load_balancer_suffix" \
+      --arg tg "$expected_target_group_suffix" '
+        .AlarmArn == $arn
+        and .AlarmName == $name
+        and .ActionsEnabled == true
+
+        and (.AlarmActions | sort) == [$topic]
+        and (.OKActions | sort) == [$topic]
+        and ((.InsufficientDataActions // []) | length) == 0
+
+        and .Namespace == "AWS/ApplicationELB"
+        and .MetricName == "UnHealthyHostCount"
+        and .Statistic == "Maximum"
+        and .Period == 60
+        and .EvaluationPeriods == 3
+        and .DatapointsToAlarm == 3
+        and .Threshold == 0
+        and .ComparisonOperator == "GreaterThanThreshold"
+        and .TreatMissingData == "notBreaching"
+
+        and (.Dimensions | length) == 2
+        and any(.Dimensions[]; .Name == "LoadBalancer" and .Value == $lb)
+        and any(.Dimensions[]; .Name == "TargetGroup" and .Value == $tg)
+      ' >/dev/null; then
+
+    echo "$live_alarm_json" | jq .
+    fail "ECS ingress unhealthy-target alarm does not exactly match Terraform baseline semantics: ${service_name}"
+  fi
+
+  success "ECS ingress unhealthy-target alarm exactly matches Terraform baseline semantics: ${service_name}"
+
+  validate_operational_alarm_state \
+    "$live_alarm_json" \
+    "ECS ingress unhealthy-target ${service_name}"
+
+done < <(echo "$ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON" | jq -r 'keys[]')
+
+success "ECS operational alarms exactly match Terraform"
+
+AUTOSCALED_SERVICE_COUNT="$(
+  echo "$ECS_AUTOSCALING_TARGETS_JSON" | jq 'length'
+)"
+
+CPU_SCALING_POLICY_COUNT="$(
+  echo "$ECS_AUTOSCALING_CPU_POLICIES_JSON" | jq 'length'
+)"
+
+MEMORY_SCALING_POLICY_COUNT="$(
+  echo "$ECS_AUTOSCALING_MEMORY_POLICIES_JSON" | jq 'length'
+)"
+
+ALB_REQUEST_SCALING_POLICY_COUNT="$(
+  echo "$ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON" | jq 'length'
+)"
+
+TASK_DEFICIT_ALARM_COUNT="$(
+  echo "$ECS_TASK_DEFICIT_ALARMS_JSON" | jq 'length'
+)"
+
+INGRESS_HEALTH_ALARM_COUNT="$(
+  echo "$ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON" | jq 'length'
+)"
+
 section "ECS Runtime Summary"
+
 cat <<SUMMARY
 Environment:                       ${ENV_NAME}
 AWS account ID:                    ${ACCOUNT_ID}
 AWS region:                        ${AWS_REGION}
 ECS cluster:                       ${EXPECTED_CLUSTER_NAME}
 Configured ECS services:           ${ECS_SERVICE_COUNT}
+Autoscaled ECS services:           ${AUTOSCALED_SERVICE_COUNT}
+CPU scaling policies:              ${CPU_SCALING_POLICY_COUNT}
+Memory scaling policies:           ${MEMORY_SCALING_POLICY_COUNT}
+ALB request scaling policies:      ${ALB_REQUEST_SCALING_POLICY_COUNT}
+Task-deficit alarms:               ${TASK_DEFICIT_ALARM_COUNT}
+Ingress-health alarms:             ${INGRESS_HEALTH_ALARM_COUNT}
 Effective egress mode:             ${EFFECTIVE_EGRESS_MODE}
 CloudWatch retention days:         ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS}
 Application Load Balancer present: $([[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]] && echo false || echo true)
