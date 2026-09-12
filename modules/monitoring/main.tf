@@ -744,7 +744,9 @@ resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
 
   alarm_name = "${var.name_prefix}-${each.key}-ecs-task-deficit"
 
-  alarm_description = "ECS service ${each.value.service_name} has fewer running tasks than desired for a sustained period."
+  alarm_description = (
+    "ECS service ${each.value.service_name} has fewer running tasks than desired for a sustained period."
+  )
 
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
