@@ -811,3 +811,76 @@ resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
     Terraform   = "true"
   }
 }
+
+resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
+  for_each = var.ecs_ingress_services
+
+  alarm_name = "${var.name_prefix}-${each.key}-ecs-ingress-unhealthy-targets"
+
+  alarm_description = (
+    "One or more ALB targets for ECS service ${each.key} have remained unhealthy."
+  )
+
+  comparison_operator = "GreaterThanThreshold"
+  threshold = 0
+
+  evaluation_periods = 3
+  datapoints_to_alarm = 3
+
+  treat_missing_data = "notBreaching"
+
+  metric_query {
+    id = "desired"
+    return_data = false
+
+    metric {
+      namespace = "ECS/ContainerInsights"
+      metric_name = "DesiredTaskCount"
+      period = 60
+      stat = "Average"
+
+      dimensions = {
+        ClusterName = each.value.cluster_name
+        ServiceName = each.value.service_name
+      }
+    }
+  }
+
+  metric_query {
+    id = "running"
+    return_data = false
+
+    metric {
+      namespace = "ECS/ContainerInsights"
+      metric_name = "RunningTaskCount"
+      period = 60
+      stat = "Average"
+
+      dimensions = {
+        ClusterName = each.value.cluster_name
+        ServiceName = each.value.service_name
+      }
+    }
+  }
+
+  metric_query {
+    id = "deficit"
+    expression = "desired - running"
+    label = "ECS task deficit"
+    return_data = true
+  }
+
+  alarm_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  ok_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  tags = {
+    Name = "${var.name_prefix}-${each.key}-ECS-Task-Deficit"
+    Environment = var.environment
+    Terraform = "true"
+  }
+}
