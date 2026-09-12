@@ -241,6 +241,24 @@ locals {
     ]))
   }
 
+  ecs_task_deficit_monitoring_services = {
+    for service_name, service in local.deployable_ecs_services :
+    service_name => {
+      cluster_name = module.ecs_cluster.cluster_name
+      service_name = "${local.name_prefix}-${service_name}"
+    }
+    if var.container_insights != "disabled"
+  }
+
+  ecs_ingress_monitoring_services = {
+    for service_name, service in local.deployable_ecs_services :
+    service_name => {
+      load_balancer_arn_suffix = module.application_load_balancer[0].load_balancer_arn_suffix
+      target_group_arn_suffix  = module.application_load_balancer[0].target_groups[service_name].arn_suffix
+    }
+    if service.ingress != null
+  }
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------

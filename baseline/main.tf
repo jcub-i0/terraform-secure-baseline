@@ -194,6 +194,9 @@ module "monitoring" {
   break_glass_admin_role_arn    = module.iam.break_glass_admin_role_arn
 
   secops_emails = var.secops_emails
+
+  ecs_task_deficit_services = local.ecs_task_deficit_monitoring_services
+  ecs_ingress_services      = local.ecs_ingress_monitoring_services
 }
 
 module "automation" {

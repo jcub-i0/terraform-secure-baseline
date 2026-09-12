@@ -734,3 +734,121 @@ resource "aws_cloudwatch_metric_alarm" "iam_changes" {
     Terraform   = "true"
   }
 }
+
+####################################
+# ECS OPERATIONAL HEALTH MONITORING
+####################################
+
+resource "aws_cloudwatch_metric_alarm" "ecs_task_deficit" {
+  for_each = var.ecs_task_deficit_services
+
+  alarm_name = "${var.name_prefix}-${each.key}-ecs-task-deficit"
+
+  alarm_description = (
+    "ECS service ${each.value.service_name} has fewer running tasks than desired for a sustained period."
+  )
+
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+
+  treat_missing_data = "notBreaching"
+
+  metric_query {
+    id          = "desired"
+    return_data = false
+
+    metric {
+      namespace   = "ECS/ContainerInsights"
+      metric_name = "DesiredTaskCount"
+      period      = 60
+      stat        = "Average"
+
+      dimensions = {
+        ClusterName = each.value.cluster_name
+        ServiceName = each.value.service_name
+      }
+    }
+  }
+
+  metric_query {
+    id          = "running"
+    return_data = false
+
+    metric {
+      namespace   = "ECS/ContainerInsights"
+      metric_name = "RunningTaskCount"
+      period      = 60
+      stat        = "Average"
+
+      dimensions = {
+        ClusterName = each.value.cluster_name
+        ServiceName = each.value.service_name
+      }
+    }
+  }
+
+  metric_query {
+    id          = "deficit"
+    expression  = "desired - running"
+    label       = "ECS task deficit"
+    return_data = true
+  }
+
+  alarm_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  ok_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-${each.key}-ECS-Task-Deficit"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
+  for_each = var.ecs_ingress_services
+
+  alarm_name = "${var.name_prefix}-${each.key}-ecs-ingress-unhealthy-targets"
+
+  alarm_description = (
+    "One or more ALB targets for ECS service ${each.key} have remained unhealthy."
+  )
+
+  namespace   = "AWS/ApplicationELB"
+  metric_name = "UnHealthyHostCount"
+  statistic   = "Maximum"
+
+  period              = 60
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = each.value.load_balancer_arn_suffix
+    TargetGroup  = each.value.target_group_arn_suffix
+  }
+
+  alarm_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  ok_actions = [
+    aws_sns_topic.secops.arn
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-${each.key}-ECS-Ingress-Unhealthy-Targets"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}

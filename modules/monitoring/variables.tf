@@ -49,3 +49,25 @@ variable "securityhub_high_critical_rule_name" {
 variable "securityhub_high_critical_rule_arn" {
   type = string
 }
+
+variable "ecs_task_deficit_services" {
+  description = "ECS services monitored for desired-versus-running task deficits."
+
+  type = map(object({
+    cluster_name = string
+    service_name = string
+  }))
+
+  default = {}
+}
+
+variable "ecs_ingress_services" {
+  description = "Ingress-enabled ECS services monitored for unhealthy ALB targets."
+
+  type = map(object({
+    load_balancer_arn_suffix = string
+    target_group_arn_suffix  = string
+  }))
+
+  default = {}
+}
