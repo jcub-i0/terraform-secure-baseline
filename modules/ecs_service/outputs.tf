@@ -38,6 +38,9 @@ output "services" {
         arn              = service.arn
         name             = service.name
         platform_version = service.platform_version
+        deployment_minimum_healthy_percent = service.deployment_minimum_healthy_percent
+        deployment_maximum_percent         = service.deployment_maximum_percent
+        health_check_grace_period_seconds  = service.health_check_grace_period_seconds
       }
     },
     {
