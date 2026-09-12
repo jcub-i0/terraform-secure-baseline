@@ -435,8 +435,8 @@ variable "ecs_services" {
     }), null)
 
     deployment = optional(object({
-      minimum_healthy_percent = optional(number, 100)
-      maximum_percent = optional(number, 200)
+      minimum_healthy_percent           = optional(number, 100)
+      maximum_percent                   = optional(number, 200)
       health_check_grace_period_seconds = optional(number, 0)
     }), {})
 
