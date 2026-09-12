@@ -35,9 +35,9 @@ output "services" {
     {
       for service_name, service in aws_ecs_service.services :
       service_name => {
-        arn              = service.arn
-        name             = service.name
-        platform_version = service.platform_version
+        arn                                = service.arn
+        name                               = service.name
+        platform_version                   = service.platform_version
         deployment_minimum_healthy_percent = service.deployment_minimum_healthy_percent
         deployment_maximum_percent         = service.deployment_maximum_percent
         health_check_grace_period_seconds  = service.health_check_grace_period_seconds
