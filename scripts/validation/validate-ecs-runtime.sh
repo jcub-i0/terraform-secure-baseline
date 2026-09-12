@@ -309,10 +309,30 @@ if ! echo "$ECS_SERVICE_CONFIGURATION_JSON" |
   jq -e '
     all(.[];
       type == "object"
+
+      and (.desired_count | type) == "number"
+
+      and (
+        .scaling == null
+        or (
+          (.scaling | type) == "object"
+          and (.scaling.min_capacity | type) == "number"
+          and (.scaling.max_capacity | type) == "number"
+        )
+      )
+
+      and (.deployment | type) == "object"
+      and (.deployment.minimum_healthy_percent | type) == "number"
+      and (.deployment.maximum_percent | type) == "number"
+      and (.deployment.health_check_grace_period_seconds | type) == "number"
+
+      and (.ingress_enabled | type) == "boolean"
       and (.database_access | type) == "boolean"
+
+      and (.task_execution_kms_key_arns | type) == "array"
     )
   ' >/dev/null; then
-  fail "ecs_service_configuration must contain boolean database_access for every ECS service"
+  fail "ecs_service_configuration contains invalid validator metadata"
 fi
 
 if [[ -z "$LOGS_CMK_ARN" ]]; then
@@ -587,14 +607,46 @@ section "Validating ECS services, task definitions, logs, and task security grou
 
 while IFS= read -r service_name; do
   expected_service_json="$(echo "$ECS_SERVICES_JSON" | jq -c --arg service "$service_name" '.[$service]')"
+
+  expected_service_configuration_json="$(
+    echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  expected_bootstrap_desired_count="$(
+    echo "$expected_service_configuration_json" |
+      jq -r '.desired_count'
+  )"
+
+  expected_scaling_json="$(
+    echo "$expected_service_configuration_json" |
+      jq -c '.scaling'
+  )"
+
+  expected_deployment_minimum_healthy_percent="$(
+    echo "$expected_service_configuration_json" |
+      jq -r '.deployment.minimum_healthy_percent'
+  )"
+
+  expected_deployment_maximum_percent="$(
+    echo "$expected_service_configuration_json" |
+      jq -r '.deployment.maximum_percent'
+  )"
+
+  expected_health_check_grace_period_seconds="$(
+    echo "$expected_service_configuration_json" |
+      jq -r '.deployment.health_check_grace_period_seconds'
+  )"
+
   expected_service_arn="$(echo "$expected_service_json" | jq -r '.arn')"
   expected_service_name="$(echo "$expected_service_json" | jq -r '.name')"
   expected_platform_version="$(echo "$expected_service_json" | jq -r '.platform_version')"
   expected_task_definition_arn="$(echo "$TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
   expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
+  
   database_access="$(
-    echo "$ECS_SERVICE_CONFIGURATION_JSON" |
-      jq -r --arg service "$service_name" '.[$service].database_access'
+    echo "$expected_service_configuration_json" |
+      jq -r '.database_access'
   )"
 
   expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
@@ -646,6 +698,66 @@ while IFS= read -r service_name; do
       ' >/dev/null; then
     echo "$service_response_json" | jq '.services[0] | {serviceArn, serviceName, clusterArn, status, taskDefinition, launchType, platformVersion, desiredCount, runningCount, pendingCount, deployments, deploymentConfiguration}'
     fail "ECS service identity, Fargate settings, or deployment safeguards are invalid: ${service_name} (expected platform version ${expected_platform_version})"
+  fi
+
+  live_deployment_minimum_healthy_percent="$(
+    echo "$service_response_json" |
+      jq -r '.services[0].deploymentConfiguration.minimumHealthyPercent'
+  )"
+
+  live_deployment_maximum_percent="$(
+    echo "$service_response_json" |
+      jq -r '.services[0].deploymentConfiguration.maximumPercent'
+  )"
+
+  live_health_check_grace_period_seconds="$(
+    echo "$service_response_json" |
+      jq -r '.services[0].healthCheckGracePeriodSeconds'
+  )"
+
+  if [[ "$live_deployment_minimum_healthy_percent" -ne "$expected_deployment_minimum_healthy_percent" ]]; then
+    fail "ECS deployment minimum healthy percent does not match Terraform: ${service_name} expected=${expected_deployment_minimum_healthy_percent} actual=${live_deployment_minimum_healthy_percent}"
+  fi
+
+  if [[ "$live_deployment_maximum_percent" -ne "$expected_deployment_maximum_percent" ]]; then
+    fail "ECS deployment maximum percent does not match Terraform: ${service_name} expected=${expected_deployment_maximum_percent} actual=${live_deployment_maximum_percent}"
+  fi
+
+  if [[ "$live_health_check_grace_period_seconds" -ne "$expected_health_check_grace_period_seconds" ]]; then
+    fail "ECS health-check grace period does not match Terraform: ${service_name} expected=${expected_health_check_grace_period_seconds} actual=${live_health_check_grace_period_seconds}"
+  fi
+
+  success "ECS deployment-health settings exactly match Terraform: ${service_name}"
+
+  live_desired_count="$(
+    echo "$service_response_json" |
+      jq -r '.services[0].desiredCount'
+  )"
+
+  if [[ "$expected_scaling_json" == "null" ]]; then
+    if [[ "$live_desired_count" -ne "$expected_bootstrap_desired_count" ]]; then
+      fail "Fixed-count ECS service desiredCount does not match Terraform: ${service_name} expected=${expected_bootstrap_desired_count} actual=${live_desired_count}"
+    fi
+
+    success "Terraform owns desiredCount for fixed ECS service: ${service_name}"
+
+  else
+    expected_min_capacity="$(
+      echo "$expected_scaling_json" |
+        jq -r '.min_capacity'
+    )"
+
+    expected_max_capacity="$(
+      echo "$expected_scaling_json" |
+        jq -r '.max_capacity'
+    )"
+
+    if (( live_desired_count < expected_min_capacity ||
+          live_desired_count > expected_max_capacity )); then
+      fail "Autoscaled ECS service desiredCount is outside Terraform scaling bounds: ${service_name} desired=${live_desired_count} min=${expected_min_capacity} max=${expected_max_capacity}"
+    fi
+
+    success "Application Auto Scaling owns desiredCount within configured bounds: ${service_name}"
   fi
 
   service_subnet_ids_json="$(echo "$service_response_json" | jq -c '[.services[0].networkConfiguration.awsvpcConfiguration.subnets[]?] | sort | unique')"
