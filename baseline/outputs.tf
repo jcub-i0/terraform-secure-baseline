@@ -192,8 +192,8 @@ output "ecs_service_configuration" {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
       desired_count = service.desired_count
-      scaling = service.scaling
-      deployment = service.deployment
+      scaling       = service.scaling
+      deployment    = service.deployment
 
       ingress_enabled = service.ingress != null
 
