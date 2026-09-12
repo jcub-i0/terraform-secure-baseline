@@ -81,8 +81,8 @@ module "storage" {
   random_id   = var.random_id
 
   rds_multi_az = local.effective_rds_multi_az
-  db_port     = var.db_port
-  db_username = var.db_username
+  db_port      = var.db_port
+  db_username  = var.db_username
 
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list

@@ -217,8 +217,8 @@ variable "backup_enabled" {
 
 variable "rds_multi_az" {
   description = "Whether the RDS DB instance uses a Multi-AZ deployment. Set to null to use the deployment_profile default"
-  type = bool
-  default = null
+  type        = bool
+  default     = null
 }
 
 variable "inspector_enabled" {
