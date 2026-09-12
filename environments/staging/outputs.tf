@@ -213,6 +213,16 @@ output "ecs_autoscaling_alb_request_policies" {
   value       = module.baseline.ecs_autoscaling_alb_request_policies
 }
 
+output "ecs_task_deficit_alarms" {
+  description = "ECS task-deficit operational alarms keyed by service name."
+  value       = module.baseline.ecs_task_deficit_alarms
+}
+
+output "ecs_ingress_unhealthy_target_alarms" {
+  description = "ECS ingress unhealthy-target operational alarms keyed by service name."
+  value       = module.baseline.ecs_ingress_unhealthy_target_alarms
+}
+
 output "logs_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt workload CloudWatch Logs."
   value       = module.baseline.logs_cmk_arn
