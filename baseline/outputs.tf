@@ -191,6 +191,12 @@ output "ecs_service_configuration" {
   value = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
+      desired_count = service.desired_count
+      scaling = service.scaling
+      deployment = service.deployment
+
+      ingress_enabled = service.ingress != null
+
       database_access             = service.database_access
       task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
     }
