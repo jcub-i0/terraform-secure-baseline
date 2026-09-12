@@ -170,6 +170,117 @@ sg_has_ipv4_cidr_rule() {
       ' >/dev/null
 }
 
+validate_target_tracking_policy() {
+  local service_name="$1"
+  local policy_description="$2"
+  local expected_policy_json="$3"
+  local live_policies_json="$4"
+
+  local expected_policy_name
+  local expected_resource_id
+  local live_policy_matches_json
+  local live_policy_json
+
+  expected_policy_name="$(
+    echo "$expected_policy_json" |
+      jq -r '.name'
+  )"
+
+  expected_resource_id="$(
+    echo "$expected_policy_json" |
+      jq -r '.resource_id'
+  )"
+
+  live_policy_matches_json="$(
+    echo "$live_policies_json" |
+      jq -c \
+        --arg name "$expected_policy_name" \
+        --arg resource_id "$expected_resource_id" '
+          [
+            .ScalingPolicies[]?
+            | select(
+                .PolicyName == $name
+                and .ResourceId == $resource_id
+              )
+          ]
+        '
+  )"
+
+  if [[ "$(echo "$live_policy_matches_json" | jq 'length')" -ne 1 ]]; then
+    echo "$live_policy_matches_json" | jq .
+    fail "Expected exactly one ${policy_description} scaling policy for ${service_name}"
+  fi
+
+  live_policy_json="$(
+    echo "$live_policy_matches_json" |
+      jq -c '.[0]'
+  )"
+
+  if ! echo "$live_policy_json" |
+    jq -e \
+      --argjson expected "$expected_policy_json" '
+        .PolicyARN == $expected.arn
+        and .PolicyName == $expected.name
+        and .PolicyType == $expected.policy_type
+        and .ResourceId == $expected.resource_id
+        and .ScalableDimension == $expected.scalable_dimension
+        and .ServiceNamespace == $expected.service_namespace
+
+        and (
+          .TargetTrackingScalingPolicyConfiguration.TargetValue
+          == $expected.target_value
+        )
+
+        and (
+          .TargetTrackingScalingPolicyConfiguration.ScaleInCooldown
+          == $expected.scale_in_cooldown
+        )
+
+        and (
+          .TargetTrackingScalingPolicyConfiguration.ScaleOutCooldown
+          == $expected.scale_out_cooldown
+        )
+
+        and (
+          .TargetTrackingScalingPolicyConfiguration
+          .PredefinedMetricSpecification
+          .PredefinedMetricType
+          == $expected.predefined_metric_type
+        )
+
+        and (
+          (
+            .TargetTrackingScalingPolicyConfiguration
+            .PredefinedMetricSpecification
+            .ResourceLabel // null
+          )
+          ==
+          ($expected.resource_label // null)
+        )
+
+        and (
+          .TargetTrackingScalingPolicyConfiguration
+          .CustomizedMetricSpecification // null
+        ) == null
+      ' >/dev/null; then
+
+    echo "$live_policy_json" |
+      jq '{
+        PolicyARN,
+        PolicyName,
+        PolicyType,
+        ResourceId,
+        ScalableDimension,
+        ServiceNamespace,
+        TargetTrackingScalingPolicyConfiguration
+      }'
+
+    fail "${policy_description} scaling policy does not exactly match Terraform: ${service_name}"
+  fi
+
+  success "${policy_description} scaling policy exactly matches Terraform: ${service_name}"
+}
+
 section "${CLOUD_NAME} ECS Runtime Validation"
 
 section "Checking required local commands"
@@ -202,6 +313,22 @@ ECS_LOG_GROUPS_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_log_groups)"
 ECS_EXECUTION_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_execution_roles)"
 ECS_TASK_ROLES_JSON="$(json_object_output "$OUTPUTS_JSON" ecs_task_roles)"
 ECR_REPOSITORIES_JSON="$(json_object_output "$OUTPUTS_JSON" ecr_repositories)"
+
+ECS_AUTOSCALING_TARGETS_JSON="$(
+  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_targets
+)"
+
+ECS_AUTOSCALING_CPU_POLICIES_JSON="$(
+  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_cpu_policies
+)"
+
+ECS_AUTOSCALING_MEMORY_POLICIES_JSON="$(
+  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_memory_policies
+)"
+
+ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON="$(
+  json_object_output "$OUTPUTS_JSON" ecs_autoscaling_alb_request_policies
+)"
 
 for output_name in \
   vpc_id \
@@ -334,6 +461,52 @@ if ! echo "$ECS_SERVICE_CONFIGURATION_JSON" |
   ' >/dev/null; then
   fail "ecs_service_configuration contains invalid validator metadata"
 fi
+
+EXPECTED_AUTOSCALED_SERVICES_JSON="$(
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+    jq -c 'with_entries(select(.value.scaling != null))'
+)"
+
+EXPECTED_CPU_SCALING_SERVICES_JSON="$(
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+    jq -c '
+      with_entries(
+        select(
+          .value.scaling != null
+          and .value.scaling.cpu_target_percent != null
+        )
+      )
+    '
+)"
+
+EXPECTED_MEMORY_SCALING_SERVICES_JSON="$(
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+    jq -c '
+      with_entries(
+        select(
+          .value.scaling != null
+          and .value.scaling.memory_target_percent != null
+        )
+      )
+    '
+)"
+
+EXPECTED_ALB_REQUEST_SCALING_SERVICES_JSON="$(
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+    jq -c '
+      with_entries(
+        select(
+          .value.scaling != null
+          and .value.scaling.alb_requests_per_target != null
+        )
+      )
+    '
+)"
+
+require_same_map_keys "$EXPECTED_AUTOSCALED_SERVICES_JSON" "$ECS_AUTOSCALING_TARGETS_JSON" "Application Auto Scaling targets"
+require_same_map_keys "$EXPECTED_CPU_SCALING_SERVICES_JSON" "$ECS_AUTOSCALING_CPU_POLICIES_JSON" "CPU target-tracking policies"
+require_same_map_keys "$EXPECTED_MEMORY_SCALING_SERVICES_JSON" "$ECS_AUTOSCALING_MEMORY_POLICIES_JSON" "memory target-tracking policies"
+require_same_map_keys "$EXPECTED_ALB_REQUEST_SCALING_SERVICES_JSON" "$ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON" "ALB request-count target-tracking policies"
 
 if [[ -z "$LOGS_CMK_ARN" ]]; then
   fail "logs_cmk_arn is empty"
@@ -643,11 +816,13 @@ while IFS= read -r service_name; do
   expected_platform_version="$(echo "$expected_service_json" | jq -r '.platform_version')"
   expected_task_definition_arn="$(echo "$TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
   expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
-  
+
   database_access="$(
     echo "$expected_service_configuration_json" |
       jq -r '.database_access'
   )"
+
+  expected_ingress_enabled="$(echo "$expected_service_configuration_json" | jq -r '.ingress_enabled')"
 
   expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
   expected_log_group_name="$(echo "$expected_log_group_json" | jq -r '.name')"
@@ -970,6 +1145,14 @@ while IFS= read -r service_name; do
   has_target_group="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r --arg service "$service_name" 'if type == "object" and (.target_groups | has($service)) then "true" else "false" end')"
   live_load_balancers_json="$(echo "$service_response_json" | jq -c '.services[0].loadBalancers // []')"
 
+  if [[ "$expected_ingress_enabled" == "true" && "$has_target_group" != "true" ]]; then
+    fail "ECS service config enables ingress but Terraform exposes no target group: ${service_name}"
+  fi
+
+  if [[ "$expected_ingress_enabled" == "false" && "$has_target_group" == "true" ]]; then
+    fail "Terraform exposes an ALB target group while ingress_enabled=false: ${service_name}"
+  fi
+
   if [[ "$has_target_group" == "true" ]]; then
 
     expected_target_group_arn="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r --arg service "$service_name" '.target_groups[$service].arn')"
@@ -997,6 +1180,199 @@ while IFS= read -r service_name; do
 
   success "ECS service is healthy at steady state and runtime-critical task SG relationships are valid: ${service_name}"
 done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
+
+section "Validating ECS Application Auto Scaling"
+
+LIVE_SCALABLE_TARGETS_JSON="$(
+  aws application-autoscaling describe-scalable-targets \
+    "${aws_args[@]}" \
+    --service-namespace ecs \
+    --output json
+)"
+
+EXPECTED_SCALABLE_RESOURCE_IDS_JSON="$(
+  echo "$ECS_AUTOSCALING_TARGETS_JSON" |
+    jq -c '[.[].resource_id] | sort | unique'
+)"
+
+LIVE_CLUSTER_SCALABLE_RESOURCE_IDS_JSON="$(
+  echo "$LIVE_SCALABLE_TARGETS_JSON" |
+    jq -c \
+      --arg prefix "service/${EXPECTED_CLUSTER_NAME}/" '
+        [
+          .ScalableTargets[]?
+          | select(.ResourceId | startswith($prefix))
+          | select(.ScalableDimension == "ecs:service:DesiredCount")
+          | .ResourceId
+        ]
+        | sort
+        | unique
+      '
+)"
+
+if [[ "$EXPECTED_SCALABLE_RESOURCE_IDS_JSON" != "$LIVE_CLUSTER_SCALABLE_RESOURCE_IDS_JSON" ]]; then
+  jq -n \
+    --argjson expected "$EXPECTED_SCALABLE_RESOURCE_IDS_JSON" \
+    --argjson actual "$LIVE_CLUSTER_SCALABLE_RESOURCE_IDS_JSON" \
+    '{
+      expected_scalable_targets: $expected,
+      actual_scalable_targets: $actual
+    }'
+
+  fail "Application Auto Scaling target inventory does not exactly match Terraform"
+fi
+
+success "Application Auto Scaling target inventory exactly matches Terraform"
+
+while IFS= read -r service_name; do
+  expected_target_json="$(
+    echo "$ECS_AUTOSCALING_TARGETS_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  expected_resource_id="$(
+    echo "$expected_target_json" |
+      jq -r '.resource_id'
+  )"
+
+  live_target_matches_json="$(
+    echo "$LIVE_SCALABLE_TARGETS_JSON" |
+      jq -c \
+        --arg resource_id "$expected_resource_id" '
+          [
+            .ScalableTargets[]?
+            | select(.ResourceId == $resource_id)
+          ]
+        '
+  )"
+
+  if [[ "$(echo "$live_target_matches_json" | jq 'length')" -ne 1 ]]; then
+    echo "$live_target_matches_json" | jq .
+    fail "Expected exactly one Application Auto Scaling target: ${service_name}"
+  fi
+
+  live_target_json="$(
+    echo "$live_target_matches_json" |
+      jq -c '.[0]'
+  )"
+
+  if ! echo "$live_target_json" |
+    jq -e \
+      --argjson expected "$expected_target_json" '
+        .ScalableTargetARN == $expected.arn
+        and .ResourceId == $expected.resource_id
+        and .ScalableDimension == $expected.scalable_dimension
+        and .ServiceNamespace == $expected.service_namespace
+        and .MinCapacity == $expected.min_capacity
+        and .MaxCapacity == $expected.max_capacity
+
+        and (.SuspendedState.DynamicScalingInSuspended // false) == false
+        and (.SuspendedState.DynamicScalingOutSuspended // false) == false
+        and (.SuspendedState.ScheduledScalingSuspended // false) == false
+      ' >/dev/null; then
+
+    echo "$live_target_json" | jq .
+    fail "Application Auto Scaling target does not exactly match Terraform: ${service_name}"
+  fi
+
+  success "Application Auto Scaling target exactly matches Terraform: ${service_name}"
+
+done < <(echo "$ECS_AUTOSCALING_TARGETS_JSON" | jq -r 'keys[]')
+
+LIVE_SCALING_POLICIES_JSON="$(
+  aws application-autoscaling describe-scaling-policies \
+    "${aws_args[@]}" \
+    --service-namespace ecs \
+    --output json
+)"
+
+EXPECTED_SCALING_POLICY_IDENTITIES_JSON="$(
+  jq -c -n \
+    --argjson cpu "$ECS_AUTOSCALING_CPU_POLICIES_JSON" \
+    --argjson memory "$ECS_AUTOSCALING_MEMORY_POLICIES_JSON" \
+    --argjson alb "$ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON" '
+      [
+        ($cpu[]?    | "\(.resource_id)|\(.name)"),
+        ($memory[]? | "\(.resource_id)|\(.name)"),
+        ($alb[]?    | "\(.resource_id)|\(.name)")
+      ]
+      | sort
+      | unique
+    '
+)"
+
+LIVE_CLUSTER_SCALING_POLICY_IDENTITIES_JSON="$(
+  echo "$LIVE_SCALING_POLICIES_JSON" |
+    jq -c \
+      --arg prefix "service/${EXPECTED_CLUSTER_NAME}/" '
+        [
+          .ScalingPolicies[]?
+          | select(.ResourceId | startswith($prefix))
+          | select(.ScalableDimension == "ecs:service:DesiredCount")
+          | "\(.ResourceId)|\(.PolicyName)"
+        ]
+        | sort
+        | unique
+      '
+)"
+
+if [[ "$EXPECTED_SCALING_POLICY_IDENTITIES_JSON" != "$LIVE_CLUSTER_SCALING_POLICY_IDENTITIES_JSON" ]]; then
+  jq -n \
+    --argjson expected "$EXPECTED_SCALING_POLICY_IDENTITIES_JSON" \
+    --argjson actual "$LIVE_CLUSTER_SCALING_POLICY_IDENTITIES_JSON" \
+    '{
+      expected_scaling_policies: $expected,
+      actual_scaling_policies: $actual
+    }'
+
+  fail "Application Auto Scaling policy inventory does not exactly match Terraform"
+fi
+
+success "Application Auto Scaling policy inventory exactly matches Terraform"
+
+while IFS= read -r service_name; do
+  expected_policy_json="$(
+    echo "$ECS_AUTOSCALING_CPU_POLICIES_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  validate_target_tracking_policy \
+    "$service_name" \
+    "CPU target-tracking" \
+    "$expected_policy_json" \
+    "$LIVE_SCALING_POLICIES_JSON"
+
+done < <(echo "$ECS_AUTOSCALING_CPU_POLICIES_JSON" | jq -r 'keys[]')
+
+while IFS= read -r service_name; do
+  expected_policy_json="$(
+    echo "$ECS_AUTOSCALING_MEMORY_POLICIES_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  validate_target_tracking_policy \
+    "$service_name" \
+    "memory target-tracking" \
+    "$expected_policy_json" \
+    "$LIVE_SCALING_POLICIES_JSON"
+
+done < <(echo "$ECS_AUTOSCALING_MEMORY_POLICIES_JSON" | jq -r 'keys[]')
+
+while IFS= read -r service_name; do
+  expected_policy_json="$(
+    echo "$ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  validate_target_tracking_policy \
+    "$service_name" \
+    "ALB request-count target-tracking" \
+    "$expected_policy_json" \
+    "$LIVE_SCALING_POLICIES_JSON"
+
+done < <(echo "$ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON" | jq -r 'keys[]')
+
+success "ECS Application Auto Scaling runtime exactly matches Terraform"
 
 section "Validating conditional shared Application Load Balancer"
 
