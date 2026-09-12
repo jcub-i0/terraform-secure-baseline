@@ -821,53 +821,21 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
     "One or more ALB targets for ECS service ${each.key} have remained unhealthy."
   )
 
-  comparison_operator = "GreaterThanThreshold"
-  threshold           = 0
+  namespace   = "AWS/ApplicationELB"
+  metric_name = "UnHealthyHostCount"
+  statistic   = "Maximum"
 
+  period              = 60
   evaluation_periods  = 3
   datapoints_to_alarm = 3
 
-  treat_missing_data = "notBreaching"
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
 
-  metric_query {
-    id          = "desired"
-    return_data = false
-
-    metric {
-      namespace   = "ECS/ContainerInsights"
-      metric_name = "DesiredTaskCount"
-      period      = 60
-      stat        = "Average"
-
-      dimensions = {
-        ClusterName = each.value.cluster_name
-        ServiceName = each.value.service_name
-      }
-    }
-  }
-
-  metric_query {
-    id          = "running"
-    return_data = false
-
-    metric {
-      namespace   = "ECS/ContainerInsights"
-      metric_name = "RunningTaskCount"
-      period      = 60
-      stat        = "Average"
-
-      dimensions = {
-        ClusterName = each.value.cluster_name
-        ServiceName = each.value.service_name
-      }
-    }
-  }
-
-  metric_query {
-    id          = "deficit"
-    expression  = "desired - running"
-    label       = "ECS task deficit"
-    return_data = true
+  dimensions = {
+    LoadBalancer = each.value.load_balancer_arn_suffix
+    TargetGroup  = each.value.target_group_arn_suffix
   }
 
   alarm_actions = [
@@ -879,7 +847,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
   ]
 
   tags = {
-    Name        = "${var.name_prefix}-${each.key}-ECS-Task-Deficit"
+    Name        = "${var.name_prefix}-${each.key}-ECS-Ingress-Unhealthy-Targets"
     Environment = var.environment
     Terraform   = "true"
   }
