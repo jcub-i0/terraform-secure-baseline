@@ -467,6 +467,15 @@ For every configured repository, it compares the live name, ARN, and registry ID
 
 ### ECS runtime and IAM validation
 
+`validate-ecs-runtime.sh` is the single ECS runtime entry point. Its sourced modules
+under `lib/ecs-runtime/` separate shared helpers (`common.sh`), Terraform outputs
+and membership checks (`contract.sh`), cluster and Container Insights checks
+(`cluster.sh`), service/task/network checks (`services.sh`), Application Auto Scaling
+(`autoscaling.sh`), conditional ALB checks (`ingress.sh`), operational alarms
+(`alarms.sh`), and final counts/output (`summary.sh`). These modules are internal;
+the baseline runner still invokes one ECS runtime validator. Operational alarms
+run independently of the conditional ALB stage for configured services.
+
 `validate-ecs-runtime.sh` uses the workload-root ECS output maps as the authoritative service inventory. It always validates the environment ECS cluster. When `ecs_services = {}`, it confirms that the live service inventory is empty, requires the ALB output to be `null`, and skips per-service checks.
 
 For configured services it validates Fargate service placement, the resource-backed platform version, deployment circuit breaker and rollback, desired/running/pending steady state, and a completed primary rollout. It also validates the task-definition platform and separate roles; exactly one essential service container; a digest-pinned image from an output-backed ECR repository; port and `awslogs` settings; exact log-group identity, retention, and `logs_cmk_arn`; task-SG endpoint, resource-backed S3 prefix-list, database-access, and egress-mode relationships; and conditional ALB service attachments and ALB/task SG relationships.
