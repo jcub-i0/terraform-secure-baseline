@@ -149,6 +149,10 @@ resource "aws_ecs_service" "services" {
   task_definition = aws_ecs_task_definition.task_definitions[each.key].arn
   desired_count   = each.value.desired_count
 
+  deployment_minimum_healthy_percent = each.value.deployment.minimum_healthy_percent
+  deployment_maximum_percent = each.value.deployment.maximum_percent
+  health_check_grace_period_seconds = each.value.deployment.health_check_grace_period_seconds
+
   launch_type      = "FARGATE"
   platform_version = var.platform_version
 
@@ -197,6 +201,10 @@ resource "aws_ecs_service" "autoscaled_services" {
   cluster         = var.cluster_arn
   task_definition = aws_ecs_task_definition.task_definitions[each.key].arn
   desired_count   = each.value.desired_count
+
+  deployment_minimum_healthy_percent = each.value.deployment.minimum_healthy_percent
+  deployment_maximum_percent = each.value.deployment.maximum_percent
+  health_check_grace_period_seconds = each.value.deployment.health_check_grace_period_seconds
 
   launch_type      = "FARGATE"
   platform_version = var.platform_version
