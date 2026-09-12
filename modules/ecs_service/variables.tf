@@ -63,6 +63,12 @@ variable "services" {
       scale_out_cooldown_seconds = optional(number, 300)
     }), null)
 
+    deployment = optional(object({
+      minimum_healthy_percent           = optional(number, 100)
+      maximum_percent                   = optional(number, 200)
+      health_check_grace_period_seconds = optional(number, 0)
+    }), {})
+
     execution_role_arn = string
     task_role_arn      = string
 

@@ -434,6 +434,12 @@ variable "ecs_services" {
       scale_out_cooldown_seconds = optional(number, 300)
     }), null)
 
+    deployment = optional(object({
+      minimum_healthy_percent           = optional(number, 100)
+      maximum_percent                   = optional(number, 200)
+      health_check_grace_period_seconds = optional(number, 0)
+    }), {})
+
     cpu_architecture = optional(string, "X86_64")
 
     database_access = optional(bool, false)
@@ -548,6 +554,36 @@ variable "ecs_services" {
     ])
 
     error_message = "alb_requests_per_target requires ECS service ingress to be configured."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.deployment.minimum_healthy_percent >= 0 &&
+      service.deployment.minimum_healthy_percent <= 100
+    ])
+
+    error_message = "ECS deployment minimum_healthy_percent must be between 0 and 100."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.deployment.maximum_percent >= 100 &&
+      service.deployment.maximum_percent >= service.deployment.minimum_healthy_percent
+    ])
+
+    error_message = "ECS deployment maximum_percent must be at least 100 and greater than or equal to minimum_healthy_percent."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.deployment.health_check_grace_period_seconds >= 0 &&
+      service.deployment.health_check_grace_period_seconds <= 2147483647
+    ])
+
+    error_message = "ECS health_check_grace_period_seconds must be between 0 and 2147483647."
   }
 
   validation {
