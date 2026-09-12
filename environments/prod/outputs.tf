@@ -123,6 +123,11 @@ output "db_port" {
   value       = module.baseline.db_port
 }
 
+output "secops_topic_arn" {
+  description = "ARN of the SecOps SNS notification topic."
+  value       = module.baseline.secops_topic_arn
+}
+
 output "effective_manage_securityhub_cspm_locally" {
   description = "Whether Security Hub CSPM resources are managed locally by Terraform in this workload account"
   value       = module.baseline.effective_manage_securityhub_cspm_locally
