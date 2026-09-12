@@ -132,6 +132,11 @@ output "db_port" {
   value       = var.db_port
 }
 
+output "secops_topic_arn" {
+  description = "ARN of the SecOps SNS notification topic."
+  value       = module.monitoring.secops_topic_arn
+}
+
 output "effective_manage_securityhub_cspm_locally" {
   description = "Whether Security Hub CSPM resources are managed locally by Terraform in this workload account"
   value       = var.manage_securityhub_cspm_locally
@@ -162,6 +167,7 @@ output "application_load_balancer" {
 
   value = length(local.ecs_alb_services) > 0 ? {
     arn               = module.application_load_balancer[0].load_balancer_arn
+    arn_suffix        = module.application_load_balancer[0].load_balancer_arn_suffix
     dns_name          = module.application_load_balancer[0].dns_name
     security_group_id = module.application_load_balancer[0].security_group_id
     https_listener    = module.application_load_balancer[0].https_listener
@@ -191,6 +197,12 @@ output "ecs_service_configuration" {
   value = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
+      desired_count = service.desired_count
+      scaling       = service.scaling
+      deployment    = service.deployment
+
+      ingress_enabled = service.ingress != null
+
       database_access             = service.database_access
       task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
     }
