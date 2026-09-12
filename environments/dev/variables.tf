@@ -129,6 +129,12 @@ variable "backup_enabled" {
   default     = null
 }
 
+variable "rds_multi_az" {
+  description = "Whether the RDS DB instance uses a Multi-AZ deployment. Set to null to use the deployment_profile default."
+  type        = bool
+  default     = null
+}
+
 variable "inspector_enabled" {
   description = "Whether to enable Amazon Inspector. Set to null to use the deployment_profile default."
   type        = bool
