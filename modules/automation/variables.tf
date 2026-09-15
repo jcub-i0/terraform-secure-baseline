@@ -94,5 +94,4 @@ variable "ip_enrich_max_ips_extracted" {
 variable "ec2_auto_isolation_severities" {
   description = "GuardDuty severity labels eligible for automatic EC2 isolation."
   type        = set(string)
-  default     = ["CRITICAL"]
 }
