@@ -215,7 +215,7 @@ module "automation" {
 
   lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
   lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
-  ec2_auto_isolation_severities = var.ec2_auto_isolation_severities
+  ec2_auto_isolation_severities            = var.ec2_auto_isolation_severities
   lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
   eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
 
