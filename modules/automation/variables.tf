@@ -90,3 +90,8 @@ variable "ip_enrich_abuseipdb_max_age" {
 variable "ip_enrich_max_ips_extracted" {
   type = string
 }
+
+variable "ec2_auto_isolation_severities" {
+  description = "GuardDuty severity labels eligible for automatic EC2 isolation."
+  type        = set(string)
+}

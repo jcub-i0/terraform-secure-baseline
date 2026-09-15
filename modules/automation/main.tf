@@ -9,7 +9,7 @@ resource "archive_file" "lambda_ec2_isolation" {
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
   function_name                  = "${var.name_prefix}-ec2-isolation"
-  description                    = "Isolate EC2 resources by sending them to the Quarantine SG when a HIGH/CRITICAL Security Hub finding is observed on an instance"
+  description                    = "Automatically isolate opted-in EC2 instances for eligible GuardDuty findings imported through Security Hub"
   role                           = var.lambda_ec2_isolation_role_arn
   handler                        = "ec2_isolation.lambda_handler"
   runtime                        = "python3.12"
@@ -32,9 +32,12 @@ resource "aws_lambda_function" "ec2_isolation" {
 
   environment {
     variables = {
-      QUARANTINE_SG_ID          = var.quarantine_sg_id
-      SNS_TOPIC_ARN             = var.secops_topic_arn
-      AUTO_ISOLATION_SEVERITIES = "CRITICAL"
+      QUARANTINE_SG_ID = var.quarantine_sg_id
+      SNS_TOPIC_ARN    = var.secops_topic_arn
+      AUTO_ISOLATION_SEVERITIES = join(
+        ",",
+        sort(tolist(var.ec2_auto_isolation_severities))
+      )
     }
   }
 
@@ -67,13 +70,16 @@ resource "aws_security_group" "lambda_ec2_isolation_sg" {
 ### EVENT RULE TO TRIGGER UPON HIGH/CRITICAL SECURITY HUB EC2 FINDINGS
 resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
   name        = "${var.name_prefix}-securityhub-ec2-high-critical"
-  description = "New High/Critical Security Hub EC2 findings"
+  description = "New High/Critical GuardDuty EC2 findings imported through Security Hub"
 
   event_pattern = jsonencode({
     source      = ["aws.securityhub"],
     detail-type = ["Security Hub Findings - Imported"],
     detail = {
       findings = {
+        ProductArn = [
+          "arn:aws:securityhub:${var.primary_region}::product/aws/guardduty"
+        ],
         Severity = {
           Label = ["HIGH", "CRITICAL"]
         },
@@ -82,7 +88,8 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
         },
         Workflow = {
           Status = ["NEW"]
-        }
+        },
+        RecordState = ["ACTIVE"]
       }
     }
   })
