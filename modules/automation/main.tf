@@ -9,7 +9,7 @@ resource "archive_file" "lambda_ec2_isolation" {
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
   function_name                  = "${var.name_prefix}-ec2-isolation"
-  description = "Automatically isolate opted-in EC2 instances for eligible CRITICAL GuardDuty findings imported through Security Hub"
+  description                    = "Automatically isolate opted-in EC2 instances for eligible CRITICAL GuardDuty findings imported through Security Hub"
   role                           = var.lambda_ec2_isolation_role_arn
   handler                        = "ec2_isolation.lambda_handler"
   runtime                        = "python3.12"
