@@ -309,6 +309,24 @@ variable "isolation_allowed" {
   default     = false
 }
 
+variable "ec2_auto_isolation_severities" {
+  description = "GuardDuty severity labels eligible for automatic EC2 isolation."
+  type        = set(string)
+  default     = ["CRITICAL"]
+
+  validation {
+    condition = (
+      length(var.ec2_auto_isolation_severities) > 0 &&
+      alltrue([
+        for severity in var.ec2_auto_isolation_severities :
+        contains(["HIGH", "CRITICAL"], severity)
+      ])
+    )
+
+    error_message = "ec2_auto_isolation_severities may contain only HIGH and/or CRITICAL."
+  }
+}
+
 variable "manage_securityhub_cspm_locally" {
   description = "Whether this workload account manages its own Security Hub CSPM enablement and standards. Set to false when CSPM is centrally managed from the security-operations account."
   type        = bool
