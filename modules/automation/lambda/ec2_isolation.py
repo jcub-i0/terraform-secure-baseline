@@ -94,7 +94,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
             workflow = str(
                 finding.get("Workflow", {}).get("Status", "")
             ).strip().upper()
-            record_state = str(finding.get("RecordState", "ACTIVE")).strip().upper()
+            record_state = str(finding.get("RecordState", "")).strip().upper()
             product_arn = str(finding.get("ProductArn", "")).strip()
             finding_id = str(finding.get("Id", "")).strip()
 
