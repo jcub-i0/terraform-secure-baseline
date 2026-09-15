@@ -23,6 +23,7 @@ module "baseline" {
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
   secops_emails                      = var.secops_emails
   isolation_allowed                  = var.isolation_allowed
+  ec2_auto_isolation_severities = var.ec2_auto_isolation_severities
   manage_securityhub_cspm_locally    = var.manage_securityhub_cspm_locally
   manage_guardduty_locally           = var.manage_guardduty_locally
   manage_securityhub_v2_locally      = var.manage_securityhub_v2_locally
