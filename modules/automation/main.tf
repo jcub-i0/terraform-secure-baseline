@@ -9,7 +9,7 @@ resource "archive_file" "lambda_ec2_isolation" {
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
   function_name                  = "${var.name_prefix}-ec2-isolation"
-  description = "Automatically isolate opted-in EC2 instances for eligible GuardDuty findings imported through Security Hub"
+  description                    = "Automatically isolate opted-in EC2 instances for eligible GuardDuty findings imported through Security Hub"
   role                           = var.lambda_ec2_isolation_role_arn
   handler                        = "ec2_isolation.lambda_handler"
   runtime                        = "python3.12"
@@ -32,8 +32,8 @@ resource "aws_lambda_function" "ec2_isolation" {
 
   environment {
     variables = {
-      QUARANTINE_SG_ID          = var.quarantine_sg_id
-      SNS_TOPIC_ARN             = var.secops_topic_arn
+      QUARANTINE_SG_ID = var.quarantine_sg_id
+      SNS_TOPIC_ARN    = var.secops_topic_arn
       AUTO_ISOLATION_SEVERITIES = join(
         ",",
         sort(tolist(var.ec2_auto_isolation_severities))
