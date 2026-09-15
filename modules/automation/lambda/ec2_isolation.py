@@ -17,8 +17,16 @@ sns = boto3.client("sns")
 
 QUARANTINE_SG = os.getenv("QUARANTINE_SG_ID", "").strip()
 SNS_TOPIC_ARN = os.getenv("SNS_TOPIC_ARN", "").strip()
+AWS_REGION = os.getenv("AWS_REGION", "").strip()
+
 PROTECTION_TAG = "IsolationAllowed"
 ISOLATED_TAG = "Isolated"
+
+GUARDDUTY_PRODUCT_ARN = (
+    f"arn:aws:securityhub:{AWS_REGION}::product/aws/guardduty"
+    if AWS_REGION
+    else ""
+)
 
 
 def _configured_severities() -> set[str]:
@@ -58,7 +66,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
         return summary
 
     logger.info(
-        "Received event with automatic-isolation severities=%s: %s",
+        "Received event with automatic-isolation product_arn=%s severities=%s: %s",
+        GUARDDUTY_PRODUCT_ARN or "<unconfigured>",
         sorted(AUTO_ISOLATION_SEVERITIES),
         json.dumps(event, default=str),
     )
@@ -86,16 +95,20 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
                 finding.get("Workflow", {}).get("Status", "")
             ).strip().upper()
             record_state = str(finding.get("RecordState", "ACTIVE")).strip().upper()
+            product_arn = str(finding.get("ProductArn", "")).strip()
             finding_id = str(finding.get("Id", "")).strip()
 
             if (
-                severity not in AUTO_ISOLATION_SEVERITIES
+                product_arn != GUARDDUTY_PRODUCT_ARN
+                or severity not in AUTO_ISOLATION_SEVERITIES
                 or workflow != "NEW"
                 or record_state != "ACTIVE"
             ):
                 logger.info(
-                    "Skipping finding %s: severity=%s workflow=%s record_state=%s",
+                    "Skipping finding %s: product_arn=%s severity=%s "
+                    "workflow=%s record_state=%s",
                     finding_id or "<missing>",
+                    product_arn or "<missing>",
                     severity or "<missing>",
                     workflow or "<missing>",
                     record_state or "<missing>",
