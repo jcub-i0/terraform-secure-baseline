@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.0 (Unreleased)
+## v1.9.0
 
 v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. The implementation through O7 is merged to `main` and live-qualified; O8 documentation and release preparation remain in progress until the release is published.
 
