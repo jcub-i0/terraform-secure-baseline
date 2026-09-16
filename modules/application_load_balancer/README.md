@@ -8,6 +8,13 @@ It owns the public-facing ALB, its security group, HTTPS listener, per-service t
 
 The module is intended to be instantiated only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it.
 
+For v1.9, the module also exposes resource-backed ALB and target-group ARN suffixes used by:
+
+- `ALBRequestCountPerTarget` Application Auto Scaling resource labels; and
+- Terraform-owned unhealthy-target operational alarms.
+
+The module does not own scaling policies or operational alarms; it supplies the exact resource identities required by those consumers.
+
 ## Resources Created
 
 The module creates:
@@ -115,6 +122,11 @@ protocol    = "HTTP"
 The `ip` target type is required for the Fargate/`awsvpc` runtime model because ECS tasks register their task ENI IP addresses rather than EC2 instance IDs.
 
 The ECS service module consumes the target-group ARN and attaches the service to that target group.
+
+Each target-group output also exposes the resource-backed `arn_suffix`. Baseline uses that suffix for:
+
+- the `ALBRequestCountPerTarget` resource label when ALB request-count scaling is configured; and
+- the `TargetGroup` dimension of the Terraform-owned ingress unhealthy-target alarm.
 
 ## Health Checks
 
@@ -229,6 +241,22 @@ ecs_services = {
 
 In this example, only a digest-selected `api` is included in the ALB routing configuration. The `worker` service does not receive a target group or listener rule. A null digest would also exclude either service from ALB materialization.
 
+The canonical baseline requires ingress whenever a service configures:
+
+```hcl
+scaling.alb_requests_per_target
+```
+
+For such a service, baseline derives the Application Auto Scaling resource label from this module's resource-backed outputs:
+
+```text
+<load_balancer_arn_suffix>/<target_group_arn_suffix>
+```
+
+The label is not reconstructed from resource names in Bash or other deployment tooling.
+
+Baseline also uses the same ARN suffixes to build exact `AWS/ApplicationELB` dimensions for the Terraform-owned unhealthy-target operational alarm.
+
 This avoids requiring callers to maintain a separate ALB service map and prevents creation of an idle ALB when no ingress-enabled ECS workloads exist.
 
 ## Tags
@@ -249,9 +277,10 @@ The module exposes:
 |---|---|
 | `security_group_id` | Security group ID of the Application Load Balancer. |
 | `load_balancer_arn` | ARN of the Application Load Balancer. |
+| `load_balancer_arn_suffix` | Resource-backed ALB ARN suffix used by CloudWatch dimensions and Application Auto Scaling resource labels. |
 | `dns_name` | DNS name assigned to the Application Load Balancer. |
 | `https_listener` | HTTPS listener metadata, including ARN, certificate ARN, and SSL policy. |
-| `target_groups` | Target-group metadata keyed by ECS service name. |
+| `target_groups` | Target-group metadata keyed by ECS service name, including ARN, ARN suffix, and name. |
 
 The `target_groups` output is consumed by baseline when deriving ECS service runtime inputs.
 
@@ -260,11 +289,20 @@ Example shape:
 ```hcl
 target_groups = {
   api = {
-    arn  = "arn:aws:elasticloadbalancing:..."
-    name = "tf-secure-baseline-dev-api"
+    arn        = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tf-secure-baseline-dev-api/0123456789abcdef"
+    arn_suffix = "targetgroup/tf-secure-baseline-dev-api/0123456789abcdef"
+    name       = "tf-secure-baseline-dev-api"
   }
 }
 ```
+
+The ALB request-count scaling resource label is derived by baseline as:
+
+```text
+${load_balancer_arn_suffix}/${target_groups[service].arn_suffix}
+```
+
+The same suffix outputs are used as the exact `LoadBalancer` and `TargetGroup` dimensions for ingress unhealthy-target monitoring.
 
 ## Ownership Boundary
 
@@ -277,7 +315,7 @@ This module owns:
 - Fixed default listener response
 - Target groups
 - Listener rules
-- ALB-related outputs
+- Resource-backed ALB and target-group metadata outputs, including ARN suffixes
 
 This module does **not** own:
 
@@ -288,17 +326,22 @@ This module does **not** own:
 - ECS task definitions
 - ECS task security groups
 - ECS task or execution IAM roles
+- ECS Service Auto Scaling targets or policies
+- Terraform-owned ECS operational alarms
+- AWS-managed target-tracking alarms
 - ECR repositories
 - Container images
 - Runtime secrets
 - Cross-component ALB-to-task security-group rules
 - Application deployment orchestration
 
+`modules/ecs_service` owns Application Auto Scaling policies. `modules/monitoring` owns the Terraform-managed ingress unhealthy-target alarm. This module supplies resource-backed identifiers to both consumers.
+
 Those responsibilities belong to other modules or the baseline integration layer.
 
 ## Runtime Model
 
-The v1.8.0 architecture uses one shared ALB per workload environment when ingress is required.
+The v1.9 runtime architecture uses one shared ALB per workload environment when ingress is required.
 
 Multiple ECS services can be routed through the same listener using explicit host-header and/or path-pattern rules.
 
@@ -311,17 +354,29 @@ Internet / Approved CIDRs
           |
           v
    Shared Application
-    Load Balancer
-      /        \
-     /          \
-  rule A       rule B
-    |             |
-    v             v
-target A       target B
-    |             |
-    v             v
-service A      service B
+     Load Balancer
+       /        \
+      /          \
+   rule A       rule B
+     |             |
+     v             v
+ target A       target B
+     |             |
+     v             v
+ service A      service B
 ```
+
+For an ingress-enabled autoscaled service, the same Terraform-owned ALB resources also provide:
+
+```text
+ALB ARN suffix + target-group ARN suffix
+        |
+        +--> ALBRequestCountPerTarget resource label
+        |
+        +--> AWS/ApplicationELB unhealthy-target alarm dimensions
+```
+
+The ALB remains ingress infrastructure; scaling and monitoring ownership stay in their respective modules.
 
 ## Example
 
@@ -363,9 +418,21 @@ The current baseline connects the module's target groups and ALB security-group 
 - ECS task security groups
 - Cross-component security-policy rules
 - Runtime service definitions
+- Application Auto Scaling resource labels for `ALBRequestCountPerTarget`
+- Terraform-owned ingress unhealthy-target CloudWatch alarms
+
+Baseline derives a plan-time-known `alb_access` boolean from whether the canonical service has non-null `ingress`. The security-policy module uses that semantic value for `for_each` filtering. It does not filter on whether the resource-derived ALB security-group ID is non-null, because that value is unknown during planning.
+
+For request-count scaling, baseline derives:
+
+```text
+<ALB ARN suffix>/<target-group ARN suffix>
+```
+
+from this module's resource-backed outputs and passes that value to `modules/ecs_service`.
+
+For operational ingress monitoring, baseline passes the ALB and target-group ARN suffixes separately to `modules/monitoring`.
 
 Workload DNS configuration remains outside the module and current runtime scope.
 
-`baseline/locals.tf` derives a plan-time-known `alb_access` boolean from whether the canonical service has non-null `ingress`. The security-policy module uses that semantic value for `for_each` filtering. It does not filter on whether the resource-derived ALB security-group ID is non-null, because that value is unknown during planning.
-
-The module intentionally remains independent of ECS service implementation details.
+The module intentionally remains independent of ECS service implementation details, scaling policy implementation, and operational alarm implementation.
