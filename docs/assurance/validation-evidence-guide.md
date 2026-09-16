@@ -62,6 +62,16 @@ CLOUD_NAME="tf-secure-baseline" \
 ./scripts/validation/export-bootstrap.sh dev
 ```
 
+For publisher-enabled release/client evidence, add:
+
+```bash
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true \
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]' \
+./scripts/validation/export-bootstrap.sh dev
+```
+
+The strict publisher path also requires `EXPECTED_GITHUB_REPOSITORY` so the exact branch-based trust subjects can be validated.
+
 Generated workload bootstrap evidence is written to:
 
 ```text
@@ -209,13 +219,24 @@ Workload bootstrap validation is handled separately from workload baseline valid
 | State KMS CMK | Resolves the state CMK from live bucket encryption and confirms it is enabled and customer-managed |
 | GitHub OIDC | Confirms the workload account GitHub OIDC provider exists |
 | GitHub Plan/Apply Roles | Confirms workload GitHub plan/apply roles exist |
-| GitHub Trust Conditions | Confirms role trust policies reference the expected GitHub repository and environment subjects |
+| GitHub Trust Conditions | Confirms Plan/Apply trust policies reference the expected GitHub repository and environment subjects |
 | State Access Policies | Confirms GitHub roles reference the state bucket, state objects including `.tflock` objects, and the state CMK |
 | Workload CMK Policy Access | Confirms the GitHub Apply role references current workload-created Lambda and Secrets Manager CMK ARNs |
+| Image Publisher Role | When enabled or explicitly required, confirms the role exists in the active workload account and matches the Terraform output |
+| Image Publisher Trust | Confirms one `Allow` trust statement for `sts:AssumeRoleWithWebIdentity`, the workload OIDC provider, `sts.amazonaws.com`, and the exact configured branch subjects |
+| Image Publisher ECR Policy | Confirms the exact Terraform-defined ECR publication/query action set, one registry-wide `ecr:GetAuthorizationToken`, and repository-scoped access limited to `<name-prefix>-*` |
+| Image Publisher Authority Boundary | Rejects unexpected state, ECS, IAM, deny, conditional, `NotAction`, `NotResource`, or general administrative authority |
 
 ### Image Publisher Validation Boundary
 
-The workload bootstrap validator currently proves the OIDC provider and Plan/Apply role contract, including state/KMS access, but does not yet fully validate the v1.8.0 Image Publisher role's branch trust and ECR publication policy. For release/client evidence, review the publisher role, `BRANCHES_IMAGE_PUBLISHER_GITHUB`, and repository-scoped ECR permissions manually unless the bootstrap validator is extended later.
+The Image Publisher role is a workload-bootstrap concern because it is created by `bootstrap/<env>/account`. When `image_publisher_role_github_arn` is present, `validate-bootstrap.sh` validates the role even if it is optional. For publisher-enabled release/client evidence, require it explicitly and provide the expected branch set:
+
+```bash
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]'
+```
+
+Strict publisher validation also requires `EXPECTED_GITHUB_REPOSITORY` so the validator can construct and compare the exact branch-based OIDC subjects. The publisher trust uses branch subjects such as `repo:<owner>/<repo>:ref:refs/heads/main`; it is intentionally different from the environment subjects used by the Plan and Apply roles.
 
 ### Remote State Stack Evidence
 
@@ -264,9 +285,21 @@ Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/
 
 The automated workload baseline suite currently runs 16 read-only validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
-For v1.8.0 ECS/Fargate, the evidence set includes exact ECR repository/KMS/lifecycle checks; ECS cluster and service inventory; service steady state; digest-pinned task definitions; Terraform-owned service log groups; exact Container Insights setting and performance-log identity/retention/KMS encryption; runtime task-security-policy relationships; conditional ALB/database relationships; and per-service IAM task/execution separation including exact `task_execution_kms_key_arns` behavior.
+For the current v1.9.0 ECS/Fargate implementation, the evidence set includes exact ECR repository/KMS/lifecycle checks; ECS cluster and deployable-service inventory; service steady state; digest-pinned task definitions; Terraform-owned service log groups; exact Container Insights setting and performance-log identity/retention/KMS encryption; runtime task-security-policy relationships; conditional ALB/database relationships; and per-service IAM task/execution separation including exact `task_execution_kms_key_arns` behavior.
 
-The final development workload validation completed with all 16 workload validators passing. Treat the generated `summary.md`, `summary.json`, and per-script logs as the authoritative record for a particular run rather than relying only on release-note prose.
+`validate-ecs-runtime.sh` also validates the v1.9.0 runtime operations contract:
+
+- fixed-count services keep Terraform ownership of exact `desiredCount`;
+- autoscaled services allow Application Auto Scaling to own live `desiredCount` within the configured `min_capacity` / `max_capacity` bounds;
+- Application Auto Scaling target inventory exactly matches Terraform;
+- CPU, memory, and conditional ALB request-count policies are target-tracking policies whose target values, cooldowns, metric types, and ALB resource labels exactly match Terraform outputs;
+- service deployment minimum healthy percentage, maximum percentage, and health-check grace period exactly match Terraform;
+- Terraform-owned ECS task-deficit alarms and ingress unhealthy-target alarms exactly match the expected configuration and SecOps notification actions;
+- AWS-managed target-tracking CloudWatch alarms remain outside the Terraform-owned operational-alarm inventory.
+
+Operational alarm state is interpreted deliberately: `OK` passes, `INSUFFICIENT_DATA` is a warning that metric evaluation is not yet complete, and `ALARM` fails runtime validation.
+
+The O7 development qualification recorded CPU and memory scale-out/in, conditional ALB request scaling, fixed-count behavior, autoscaled desired-count ownership, a digest release while scaled, deployment-health settings, operational alarm configuration, `validate-ecs-runtime.sh`, the full 16/16 workload suite, strict 1/1 workload bootstrap validation, and a final no-change Terraform plan as passing. Generated `summary.md`, `summary.json`, and per-script logs remain the authoritative record for each individual evidence run.
 
 ## What Automated Control-Plane Validation Covers
 
@@ -316,9 +349,11 @@ This layer intentionally does not prove the complete AWS Organizations topology;
 
 ## Application Release Evidence
 
-`Deploy Application` produces a technical chain that can supplement workload infrastructure evidence. Useful artifacts include publication metadata, the authoritative ECR digest re-check, workflow run identity, the generated release branch/PR, and the one-field `image_digest` change.
+`Deploy Application` produces a technical chain that can supplement workload infrastructure evidence. Useful artifacts include publication metadata, the authoritative ECR digest re-check, workflow run identity, the generated release branch/PR, and the one-field `image_digest` change. The workflow does not manage `scaling` or `deployment` configuration.
 
-After the release PR is merged, collect the separate `Terraform Apply` run showing the internal saved plan, checksum/metadata verification, protected approval, and exact-plan apply. Follow that with ECS convergence and the workload baseline evidence package. Do not treat successful image publication by itself as proof that the application was deployed.
+For publisher-enabled workloads, strict bootstrap evidence can separately prove the Image Publisher role's exact branch trust, ECR action set, repository scope, and authority boundary.
+
+After the release PR is merged, collect the separate `Terraform Apply` run showing the internal saved plan, checksum/metadata verification, protected approval, and exact-plan apply. Follow that with ECS convergence and the workload baseline evidence package. For autoscaled services, runtime validation evaluates the live desired count against the Terraform min/max scaling bounds rather than requiring Terraform's bootstrap count to be reasserted. Do not treat successful image publication by itself as proof that the application was deployed.
 
 The publisher job and release/PR job intentionally hold different authorities: AWS OIDC/ECR publication versus GitHub repository mutation. Preserving that evidence helps demonstrate the intended separation of duties.
 
@@ -387,8 +422,9 @@ Examples include:
 - Backup resources skipped because backups are disabled
 - Network Firewall absent because the environment uses `nat_only`
 - NAT Gateway absent because the environment uses `vpc_endpoints_only`
-- Workload accounts located under the AWS Organizations root when Terraform currently creates OU structure but does not manage account placement
+- An ECS operational alarm in `INSUFFICIENT_DATA` while the metric has not yet accumulated enough datapoints
 - State-stack migration findings when `REQUIRE_STATE_STACK_REMOTE=false` was intentionally selected
+- Image Publisher role absence when application publication is intentionally disabled and `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=false`
 
 Warnings should be reviewed before client handoff or sign-off.
 
@@ -410,6 +446,9 @@ A failed validation script may indicate:
 - Incorrect control-plane account profile
 - Incorrect expected GitHub repository value
 - IAM trust policy issues
+- Image Publisher trust or ECR publication policy differing from the Terraform-defined contract when the role is enabled or required
+- ECS autoscaling target/policy inventory, deployment-health settings, or Terraform-owned operational alarms differing from Terraform outputs
+- A Terraform-owned ECS operational alarm currently in `ALARM`
 - Failed AWS CLI calls
 - Missing required local tooling
 - Mismatched resource naming
@@ -487,6 +526,9 @@ Recommended retention considerations:
 | Control-plane `summary.md` | Retain with governance/control-plane evidence |
 | Control-plane `summary.json` | Retain for automation, indexing, dashboarding, or evidence package generation |
 | `validate-control-plane.log` | Retain as supporting control-plane technical evidence |
+| Security-operations `summary.md` | Retain with centralized-security governance evidence |
+| Security-operations `summary.json` | Retain for automation, indexing, dashboarding, or evidence package generation |
+| `validate-security-operations.log` | Retain as supporting centralized-security technical evidence |
 | Manual validation notes | Retain with sign-off or engagement records |
 | Exceptions | Retain with risk acceptance or remediation tracking |
 
@@ -521,14 +563,17 @@ Recommended evidence items may include:
 7. Control-plane `summary.md`
 8. Control-plane `summary.json`
 9. `validate-control-plane.log`
-10. Completed manual validation notes, where applicable
-11. Documented warnings or exceptions
-12. Limitations language
-13. Sign-off section or acceptance record
+10. Security-operations `summary.md`
+11. Security-operations `summary.json`
+12. `validate-security-operations.log`
+13. Completed manual validation notes, where applicable
+14. Documented warnings or exceptions
+15. Limitations language
+16. Sign-off section or acceptance record
 
 Recommended handoff message:
 
-> The attached evidence includes applicable automated read-only validation results for the deployed workload bootstrap resources, workload baseline environment, and supporting control-plane resources. Bootstrap evidence includes remote state-stack readability, Terraform backend locking, GitHub OIDC, state access, and strict workload CMK policy validation. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, and automation resources. Control-plane evidence covers state backend resources, GitHub OIDC, AWS Organizations OU structure, and IAM Identity Center basics. Manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
+> The attached evidence includes applicable automated read-only validation results across the workload bootstrap, workload baseline, control-plane, and security-operations layers. Bootstrap evidence covers remote state-stack readability, Terraform backend locking, GitHub OIDC, state/KMS access, strict workload CMK policy validation, and the Image Publisher role when enabled or required. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, ECS runtime, autoscaling, deployment-health, and automation resources. Control-plane evidence covers state/OIDC foundations, AWS Organizations topology and delegated-administrator prerequisites, and IAM Identity Center. Security-operations evidence covers centralized Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 governance. Live/manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
 
 ---
 
@@ -543,16 +588,19 @@ Before using validation evidence for client delivery or internal sign-off:
 5. Confirm workload bootstrap evidence was exported with `export-bootstrap.sh`, when applicable.
 6. Confirm workload baseline evidence was exported with `export-baseline.sh`, when applicable.
 7. Confirm control-plane validation/evidence export was run with the control-plane profile, when applicable.
-8. Confirm `EXPECTED_GITHUB_REPOSITORY` matched the repository trusted by the GitHub OIDC roles.
-9. Confirm `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true` unless advisory behavior was intentionally documented.
-10. Confirm `REQUIRE_STATE_STACK_REMOTE=true` for bootstrap and control-plane release or client-facing evidence.
-11. Confirm workflow-generated reports identify `GitHub OIDC environment credentials` when `AWS_PROFILE` is not set.
-12. Review all failed checks.
-13. Review all warnings.
-14. Confirm manual validation items are tracked.
-15. Confirm exceptions are documented.
-16. Confirm evidence files are stored in the appropriate location.
-17. Confirm generated evidence is not committed to the source repository.
+8. Confirm security-operations validation/evidence export was run from the delegated administrator account, when applicable.
+9. Confirm `EXPECTED_GITHUB_REPOSITORY` matched the repository trusted by the GitHub OIDC roles.
+10. Confirm `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true` unless advisory behavior was intentionally documented.
+11. Confirm `REQUIRE_STATE_STACK_REMOTE=true` for bootstrap and control-plane release or client-facing evidence.
+12. For publisher-enabled workloads, confirm `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true` and `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` matches the approved branch set.
+13. Confirm workload baseline evidence includes `validate-ecs-runtime.log` when ECS runtime operations are in scope, and review any ECS operational-alarm warnings or failures.
+14. Confirm workflow-generated reports identify `GitHub OIDC environment credentials` when `AWS_PROFILE` is not set.
+15. Review all failed checks.
+16. Review all warnings.
+17. Confirm live/manual validation items are tracked.
+18. Confirm exceptions are documented.
+19. Confirm evidence files are stored in the appropriate location.
+20. Confirm generated evidence is not committed to the source repository.
 
 ---
 
