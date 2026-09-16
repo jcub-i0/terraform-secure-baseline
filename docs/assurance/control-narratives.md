@@ -153,13 +153,14 @@ Protect Terraform state because it contains sensitive infrastructure metadata an
 
 The baseline uses dedicated state resources per account/environment, including:
 
-- S3 bucket for Terraform state
-- KMS encryption
-- State locking
-- Restricted bucket administration
-- Separate state files per stack
+- S3 buckets for Terraform state
+- customer-managed KMS encryption
+- S3 native lockfiles with `use_lockfile = true`
+- restricted bucket administration
+- distinct state object keys per Terraform root
+- bucket versioning and public-access protections
 
-The `state` substacks are applied locally first to create remote backend resources for later stacks.
+Each `state` substack follows a two-phase lifecycle: it is applied locally first to create its state bucket and CMK, then `scripts/bootstrap/migrate-state-stack.sh` migrates that stack into the protected S3 backend it created. Strict release/client evidence can require the remote state object to exist, be readable, and support `terraform state pull`.
 
 ## Security Impact
 
@@ -181,11 +182,13 @@ Use short-lived, narrowly scoped CI/CD identities and preserve separation betwee
 
 ## Implementation
 
-GitHub Actions authenticates to AWS using OIDC rather than long-lived access keys. Workload accounts separate Plan and Apply roles, and v1.8.0 adds a dedicated branch-trusted Image Publisher role whose AWS permissions are limited to ECR publication/query operations.
+GitHub Actions authenticates to AWS using OIDC rather than long-lived access keys. Workload accounts separate Plan and Apply roles and may also enable a dedicated branch-trusted Image Publisher role whose AWS permissions are limited to the Terraform-defined ECR publication/query contract.
 
-Application publication further separates authority at the job level: the publisher job receives AWS OIDC authority and repository read access, while the release/PR job receives repository write permissions but no AWS credentials or OIDC token. The release job updates only the selected `ecs_services.<service>.image_digest` in tracked workload configuration.
+Application publication further separates authority at the job level: the publisher job receives AWS OIDC authority and repository read access, while the release/PR job receives repository write permissions but no AWS credentials or OIDC token. The release job updates only the selected `ecs_services.<service>.image_digest` in tracked workload configuration; it does not change service scaling configuration.
 
 Workload infrastructure deployment remains plan-before-approval. `terraform-apply.yml` creates its own saved binary plan, readable plan, metadata, and checksum before protected approval; the Apply job verifies and applies that exact artifact without replanning. The standalone Terraform Plan workflow is informational and is not the source of the Apply artifact.
+
+Workload bootstrap validation can also verify the enabled Image Publisher role's exact branch-based trust, ECR action set, repository scope, and absence of unexpected state, ECS, IAM, or general administrative authority.
 
 ## Security Impact
 
@@ -298,24 +301,17 @@ Reduce data exfiltration risk and improve visibility over outbound network traff
 
 ## Implementation
 
-Outbound traffic from private workloads follows controlled paths.
+Outbound traffic from private workloads follows one of three explicit egress modes:
 
-Typical egress path:
+| Effective mode | Internet path |
+|---|---|
+| `network_firewall` | Private compute -> AWS Network Firewall -> NAT Gateway -> Internet Gateway |
+| `nat_only` | Private compute -> NAT Gateway -> Internet Gateway |
+| `vpc_endpoints_only` | No default internet route; supported AWS service access uses VPC endpoints |
 
-```text
-Private Compute Subnets
-    |
-    v
-AWS Network Firewall
-    |
-    v
-NAT Gateway
-    |
-    v
-Internet Gateway
-```
+When `egress_mode = "auto"`, the deployment profile selects the effective mode. Network Firewall therefore represents the strongest inspected path, not an unconditional dependency for every workload environment.
 
-AWS service access can use VPC endpoints where available.
+AWS service access uses VPC endpoints where available, reducing dependence on public internet routes.
 
 ## Security Impact
 
@@ -338,19 +334,25 @@ Reduce reliance on public internet paths for AWS service communication.
 
 The baseline deploys VPC endpoints for AWS services used by workloads and automation.
 
-Examples may include:
+The current endpoint set includes private connectivity for services such as:
 
-- SSM
-- SSM Messages
-- SQS
+- STS
+- Systems Manager and SSM Messages
+- SQS and SNS
 - CloudWatch Logs
 - KMS
 - Secrets Manager
 - EC2
-- S3
+- AWS Config
+- EventBridge
+- Security Hub
+- Lambda
+- Amazon ECR API (`ecr.api`)
+- Amazon ECR Docker Registry (`ecr.dkr`)
 - GuardDuty data (`guardduty-data`) for Runtime Monitoring
+- S3 through a Gateway Endpoint
 
-The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources.
+The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources. ECS/Fargate image pulls use the ECR Interface Endpoints plus the S3 Gateway Endpoint.
 
 ## Security Impact
 
@@ -360,6 +362,54 @@ This supports:
 - Reduced public internet dependency
 - Improved management access for private workloads
 - Better alignment with private-by-default architecture
+
+---
+
+# Secure ECS/Fargate Runtime Operations
+
+## Control Intent
+
+Provide a private, immutable, observable application runtime while preserving explicit ownership of service capacity, deployment health, and operational alerting.
+
+## Implementation
+
+ECS/Fargate is the preferred modern application runtime and uses one canonical `ecs_services` map. A service may remain registered with `image_digest = null`; its required ECR repository can exist while per-service ECS runtime resources remain absent until an immutable digest is selected.
+
+Deployable services use:
+
+- digest-pinned ECR images;
+- Fargate with `awsvpc` networking in compute-private subnets;
+- no public task IP;
+- separate task execution and application task IAM roles;
+- per-service task security groups;
+- Terraform-owned KMS-encrypted application log groups;
+- deployment circuit breaking with rollback;
+- optional shared HTTPS ALB ingress.
+
+Service-capacity ownership is explicit. When `scaling = null`, Terraform owns the ECS service `desired_count`. When scaling is configured, the configured `desired_count` is bootstrap capacity and Application Auto Scaling owns subsequent live desired count within the Terraform-defined minimum and maximum bounds. The current scaling policies use target tracking for CPU, memory, and optional `ALBRequestCountPerTarget`; ALB request scaling requires ingress and uses resource labels derived from Terraform-owned ALB and target-group identities.
+
+Deployment-health configuration is also explicit through minimum healthy percentage, maximum percentage, and health-check grace period.
+
+Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. The monitoring module creates:
+
+- an ECS task-deficit alarm based on `DesiredTaskCount - RunningTaskCount` when Container Insights is enabled; and
+- an unhealthy-target alarm for ingress-enabled ECS services.
+
+Both operational alarm families route alarm and recovery notifications to the SecOps SNS topic.
+
+`validate-ecs-runtime.sh` verifies this ownership model against live AWS: exact autoscaling target/policy inventory, fixed-versus-autoscaled desired-count semantics, deployment-health settings, operational alarm configuration/state, and conditional ALB relationships. AWS-managed target-tracking alarms are deliberately excluded from the Terraform-owned operational-alarm inventory.
+
+## Security Impact
+
+This supports:
+
+- private workload placement and reduced public exposure;
+- immutable application release selection;
+- least-privilege runtime identity separation;
+- deterministic scaling ownership without Terraform fighting legitimate autoscaling;
+- controlled deployment-health behavior;
+- timely detection of sustained task deficits and unhealthy ingress targets;
+- auditable runtime validation through resource-backed Terraform outputs.
 
 ---
 
@@ -419,6 +469,7 @@ The baseline combines centrally governed and workload-local services:
 - AWS Config remains workload-local and provides configuration recording/rule evaluation where enabled.
 - Inspector remains workload-local and provides vulnerability detection for configured resource types.
 - CloudTrail, EventBridge, CloudWatch, and SNS provide activity capture, routing, and alerting.
+- Terraform-owned ECS task-deficit and ingress unhealthy-target alarms provide operational runtime signals, while AWS-managed target-tracking alarms remain owned by Application Auto Scaling.
 
 ## Security Impact
 
@@ -474,15 +525,21 @@ Contain potentially compromised EC2 instances quickly when high-severity finding
 
 ## Implementation
 
-The EC2 Isolation Lambda responds to qualifying Security Hub findings. The default automated-isolation threshold is `CRITICAL`, and the finding must also satisfy the workflow eligibility gates.
+The EC2 Isolation EventBridge rule is intentionally narrower than the baseline's general Security Hub notification/enrichment path. It accepts imported Security Hub findings only when the finding is from the GuardDuty product, severity is `HIGH` or `CRITICAL`, the resource type is `AwsEc2Instance`, workflow status is `NEW`, and record state is `ACTIVE`.
 
-When an eligible finding is processed, the Lambda can:
+The Lambda independently revalidates the GuardDuty product ARN, workflow status, record state, resource type, and configured automatic-isolation severity. `ec2_auto_isolation_severities` defaults to `CRITICAL` and is limited by the baseline contract to `HIGH` and/or `CRITICAL`. Missing `ProductArn`, missing `RecordState`, unsupported severity, or other ineligible finding state fails closed.
 
-- Identify the affected EC2 instance
-- Preserve original security group information
-- Replace current security groups with a quarantine security group
-- Tag the instance for visibility
-- Send an SNS notification
+Before quarantine, the Lambda also requires a valid running or stopped EC2 instance with `IsolationAllowed=true`, skips duplicate or already-isolated instances, and requests tagged snapshots for attached EBS volumes. Any snapshot API failure prevents the security-group change.
+
+When an eligible finding is processed successfully, the Lambda:
+
+- preserves the original security group IDs in instance metadata;
+- replaces the current security groups with the quarantine security group;
+- applies isolation evidence tags while leaving `IsolationAllowed` Terraform-managed;
+- records the finding and isolation time; and
+- publishes an SNS notification when the SecOps topic is configured.
+
+A notification failure is logged after isolation and does not roll back an already successful quarantine.
 
 ## Security Impact
 
@@ -645,6 +702,8 @@ The baseline includes AWS Backup support, including:
 - Tag-based resource selection
 - Retention policies
 
+The EC2 isolation workflow also requests tagged snapshots of attached EBS volumes after all eligibility checks pass and before quarantine is applied. Snapshot-request failure stops isolation rather than quarantining without that recovery evidence.
+
 Patch management support is provided through SSM Patch Manager.
 
 ## Security Impact
@@ -671,13 +730,17 @@ SNS topics are used to notify SecOps or compliance contacts.
 
 Alerts may include:
 
-- High-severity Security Hub findings
-- EC2 isolation events
-- EC2 rollback events
-- IP enrichment results
-- Tamper detection
-- Break-glass role usage
-- AWS Config compliance events
+- broad HIGH/CRITICAL Security Hub findings routed through the general notification path;
+- GuardDuty-driven EC2 isolation events;
+- EC2 rollback events;
+- IP enrichment results;
+- tamper detection;
+- break-glass role usage;
+- AWS Config compliance events;
+- ECS task-deficit alarms; and
+- ECS ingress unhealthy-target alarms.
+
+The general Security Hub HIGH/CRITICAL notification and IP-enrichment rule remains broader than the separate GuardDuty-only EC2 isolation rule.
 
 ## Security Impact
 
