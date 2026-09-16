@@ -177,7 +177,7 @@ Deploying this baseline provides a production-aligned AWS security foundation wi
 - Dedicated private subnets for Interface VPC Endpoints
 - VPC endpoints
 - A preferred ECS/Fargate application runtime with one shared cluster per environment
-- KMS-encrypted ECR repositories, digest-pinned task definitions, per-service IAM/task SGs, and an optional shared HTTPS ALB
+- KMS-encrypted ECR repositories, digest-pinned task definitions, per-service IAM/task SGs, optional target-tracking ECS Service Auto Scaling, configurable deployment health, and an optional shared HTTPS ALB
 - Centralized logging
 - KMS-backed encryption
 - CloudTrail
@@ -367,7 +367,7 @@ Key decisions:
 - Which deployment profile should each environment use?
 - Which egress mode should each environment use?
 - Will the workload use EC2, ECS/Fargate, or both?
-- Which immutable ECR digest and optional ALB ingress rules will each ECS service use?
+- Which immutable ECR digest, fixed-versus-autoscaled capacity model, target-tracking metrics, deployment-health settings, and optional ALB ingress rules will each ECS service use?
 
 ### Terraform Variable Templates
 
@@ -441,6 +441,8 @@ Use `minimal` only when the lack of general internet access is acceptable.
 Follow `docs/quickstart.md` for the full deployment sequence. At a high level: bootstrap/control-plane and security-operations foundations first, then workload state/account stacks, then workload environments, reconciliation, Identity Center, and the four validation/evidence layers.
 
 For ECS/Fargate applications, register each service in the tracked canonical `environments/<env>/container-workloads.auto.tfvars.json`. A new service may use `image_digest = null` so Terraform can create/retain its required ECR repository without creating the runtime before an image exists.
+
+For services that need elastic capacity, configure the canonical `scaling` object rather than maintaining a second scaling inventory. `scaling = null` keeps Terraform ownership of `desired_count`; a non-null object makes `desired_count` bootstrap capacity and hands subsequent runtime count ownership to Application Auto Scaling within the configured bounds. CPU, memory, and conditional ALB request-count target tracking are supported.
 
 Application release then follows the implemented workflow:
 
@@ -530,7 +532,7 @@ Common customization areas include:
 - GuardDuty organization protection-plan settings
 - AWS Config rules
 - VPC endpoint coverage
-- Canonical `ecs_services` definitions, immutable image digests, and optional shared-ALB routing
+- Canonical `ecs_services` definitions, immutable image digests, scaling/deployment settings, and optional shared-ALB routing
 - Backup retention
 - Patch windows
 - Tags
@@ -674,7 +676,7 @@ Before adopting this baseline, answer the following questions:
 ### Incident Response Strategy
 
 - Which environments are authorized for automatic isolation?
-- Which severities may trigger automatic containment?
+- Which GuardDuty severities are allowed by `ec2_auto_isolation_severities` (default `CRITICAL`; optionally `HIGH` plus `CRITICAL`)?
 - Which workloads may receive `IsolationAllowed=true`?
 - Are quarantine security-group behavior and snapshot permissions validated?
 - Who reviews EC2 isolation events and is allowed to trigger rollback?
@@ -729,7 +731,7 @@ The existence of `backend.tf` alone is not proof of migration. The remote S3 obj
 
 ### GitHub OIDC Roles
 
-GitHub OIDC roles are critical CI/CD access components. Workload environments use separate Plan and Apply roles, and v1.8.0 adds a dedicated Image Publisher role per workload account.
+GitHub OIDC roles are critical CI/CD access components. Workload environments use separate Plan and Apply roles, plus an optional dedicated Image Publisher role per workload account.
 
 ```text
 <env>-plan / Plan role
@@ -743,7 +745,7 @@ The release/PR job has the opposite authority boundary: GitHub `contents: write`
 
 The standalone Terraform Plan workflow and Terraform Apply's internal Plan job are distinct. The protected Apply job consumes only the saved plan produced inside the same Apply workflow run, after checksum/metadata verification.
 
-Current automated workload bootstrap validation proves the Plan/Apply roles and their state/KMS relationships. It does not yet provide equivalent automated proof of the Image Publisher role's branch trust and ECR policy; include those checks in release/client review unless the bootstrap validator is extended later.
+Current automated workload bootstrap validation proves the Plan/Apply roles and their state/KMS relationships and also validates the Image Publisher role whenever its Terraform output is present. For publisher-enabled release/client evidence, require it explicitly with `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true` and supply the exact expected repository/branch set so trust and ECR policy scope are checked against the Terraform contract.
 
 Modify workload account stacks carefully and reconcile them when required. Do not destroy account/OIDC stacks before the infrastructure that depends on their roles.
 
@@ -879,6 +881,8 @@ Before using this baseline for production workloads, confirm:
 - GitHub Actions is permitted to create release PRs if `Deploy Application` automation is used.
 - A registered-but-unreleased ECS service can retain its ECR repository with `image_digest = null` without creating runtime resources.
 - The application release path has been proven through image publication, authoritative digest resolution, one-field release PR, protected exact-plan Apply, ECS steady state, and workload validation.
+- Fixed ECS services retain Terraform `desired_count` ownership; autoscaled services use only approved target-tracking policies and keep live desired count within configured bounds without Terraform reasserting the bootstrap count.
+- Deployment-health settings and Terraform-owned task-deficit / ingress unhealthy-target alarms match the intended production operating model.
 - GitHub environments have appropriate protections.
 - IAM Identity Center groups are assigned correctly.
 - Break-glass access is documented and tested.

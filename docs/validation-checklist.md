@@ -29,6 +29,7 @@ This checklist validates:
 - Lambda workflows
 - SNS, SQS, EventBridge, and DLQ-based alert delivery paths
 - Alerting
+- ECS scaling ownership, deployment health, and operational alarms
 - Destroy/cleanup readiness
 
 ---
@@ -520,7 +521,7 @@ These scripts validate:
 - Lambda functions, runtime, state, execution role, timeout, memory, KMS config, VPC config, environment variables, resource policies, and EventBridge permissions
 - SSM managed instance registration, online status, associations, maintenance windows, and patch baseline visibility
 - EC2 compute instances, private placement, public IP absence, IMDSv2, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption
-- ECS cluster identity and state; Fargate service placement and deployment safeguards; task-definition platform, separate role, digest-pinned ECR image, port, and `awslogs` contracts; Terraform-owned application log groups; runtime task-SG relationships; and conditional shared-ALB state
+- ECS cluster identity and state; fixed-versus-autoscaled desired-count ownership; exact Application Auto Scaling targets and CPU/memory/conditional ALB target-tracking policies; deployment-health settings; Fargate service placement and deployment safeguards; task-definition platform, separate role, digest-pinned ECR image, port, and `awslogs` contracts; Terraform-owned application log groups; runtime task-SG relationships; conditional shared-ALB state; and Terraform-owned task-deficit / ingress unhealthy-target operational alarms
 - IAM roles, service trust policies, key service roles, GitHub OIDC roles where present, break-glass MFA conditions, shared log access policies, and per-service ECS task/execution role separation and least-privilege execution-policy scope
 
 A successful run should end with:
@@ -837,7 +838,7 @@ tf-secure-baseline-dev-github-image-publisher-role
 
 The Image Publisher role must use branch-based GitHub OIDC trust for the configured `BRANCHES_IMAGE_PUBLISHER_GITHUB` values. Its AWS policy should be limited to ECR publication/query operations for the intended repositories, except for the registry-wide `ecr:GetAuthorizationToken` action.
 
-**Current automation boundary:** `validate-bootstrap.sh` validates the workload GitHub OIDC provider and Plan/Apply role trust/state/KMS relationships, but it does not yet provide equivalent automated validation of the Image Publisher role's branch trust and ECR policy. Treat the publisher checks above as a manual/release-review requirement unless that validator is extended.
+`validate-bootstrap.sh` also validates the optional Image Publisher role whenever `image_publisher_role_github_arn` is present. For publisher-enabled release/client evidence, set `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true`, provide `EXPECTED_GITHUB_REPOSITORY`, and set `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` to the approved branch JSON. The validator then checks the exact branch-based OIDC subjects and exact Terraform-defined ECR publication/query policy boundary.
 
 ## GitHub Workflow Validation
 
@@ -1311,11 +1312,17 @@ The validator uses resource-backed workload outputs as the authoritative expecte
 
 For deployable services, validation covers Fargate launch type, compute-private placement, no public IP, exact task security group, resource-backed platform version, deployment circuit breaker/rollback, service steady state, completed primary rollout, separate task/execution roles, one essential service container, digest-pinned ECR image, TCP port mapping, and exact `awslogs` configuration.
 
+Desired-count validation follows the canonical ownership contract: fixed services (`scaling = null`) must match Terraform `desired_count` exactly, while autoscaled services may differ from the bootstrap count but must remain within their configured minimum and maximum capacities.
+
+For autoscaled services, the validator requires the exact Application Auto Scaling target inventory and exact target fields. It also requires the exact CPU, memory, and conditional ALB request-count target-tracking policies, including target values, cooldowns, predefined metric types, and the resource-backed ALB request resource label. `ALBRequestCountPerTarget` is valid only for ingress-enabled services.
+
+The service's deployment `minimum_healthy_percent`, `maximum_percent`, and `health_check_grace_period_seconds` must match Terraform exactly. The health-check grace period is the task-startup interval during which ECS ignores unhealthy load-balancer, VPC Lattice, and container health checks.
+
 Per-service application log groups must match the Terraform output, use `/aws/ecs/<name-prefix>/<service>`, use the effective retention period, and use the exact workload `logs_cmk_arn`.
 
 Cluster validation also checks the exact Container Insights setting and, when enabled, the Terraform-owned performance log group `/aws/ecs/containerinsights/<cluster-name>/performance`, including exact resource identity, retention, and KMS encryption.
 
-The same validator checks task-SG relationships to Interface Endpoints and the S3 prefix list, effective-mode HTTPS egress, database SG presence/absence, and conditional shared-ALB relationships.
+The same validator checks task-SG relationships to Interface Endpoints and the S3 prefix list, effective-mode HTTPS egress, database SG presence/absence, and conditional shared-ALB relationships. It validates Terraform-owned task-deficit alarms for deployable services when Container Insights is enabled and ingress unhealthy-target alarms for deployable ingress services. AWS-managed target-tracking alarms are not treated as Terraform operational alarms. Operational alarm state is interpreted as `OK` = pass, `INSUFFICIENT_DATA` = warning, and `ALARM` = failure.
 
 ECS IAM assertions remain in `validate-iam.sh`. It verifies restricted task/execution trust, scoped execution-policy ECR/log/secret/parameter permissions, absence of `iam:PassRole`, initially empty application task-role authority, and exact `task_execution_kms_key_arns` behavior. If the configured KMS-key set is empty, the execution policy must not grant `kms:Decrypt`; if populated, live policy resources must match the configured set exactly.
 
@@ -2045,7 +2052,7 @@ Expected rules may include:
 - Security Hub finding routing, including HIGH/CRITICAL events where configured
 - Tamper detection
 - Break-glass detection (`break-glass-admin-assumed`)
-- EC2 isolation trigger (`EC2-High-Critical`); the Lambda still applies its default `CRITICAL` containment threshold and eligibility gates
+- EC2 isolation trigger (`${NAME_PREFIX}-securityhub-ec2-high-critical`), which receives only `HIGH`/`CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings for `AwsEc2Instance`; the Lambda independently revalidates GuardDuty product and applies the configured `ec2_auto_isolation_severities` set (default `CRITICAL`)
 
 Validate `secops` custom event bus:
 
@@ -2103,6 +2110,8 @@ Expected:
 - Protected EventBridge targets use retry attempts of `3`.
 - Protected EventBridge targets use max event age of `3600` seconds.
 
+The EC2 isolation and IP-enrichment rules are intentionally different. `${NAME_PREFIX}-securityhub-ec2-high-critical` is GuardDuty- and EC2-scoped for automatic isolation. `${NAME_PREFIX}-securityhub-high-critical` remains the broader HIGH/CRITICAL Security Hub rule used by IP enrichment and the SecOps SNS notification target.
+
 ---
 
 # 14. Validate Lambda Functions
@@ -2153,8 +2162,9 @@ docs/lambda_tests/ec2_isolation.md
 
 Expected:
 
-- A `CRITICAL`, `NEW`, `ACTIVE` EC2 finding isolates an eligible development instance by default.
-- A `HIGH` finding is skipped unless `AUTO_ISOLATION_SEVERITIES` explicitly includes `HIGH`.
+- A `CRITICAL`, `NEW`, `ACTIVE` GuardDuty finding for an `AwsEc2Instance` isolates an eligible development instance by default.
+- A non-GuardDuty Security Hub finding does not enter the EC2 isolation EventBridge path and is also rejected by direct Lambda revalidation.
+- A `HIGH` GuardDuty finding is skipped by the Lambda unless the canonical `ec2_auto_isolation_severities` configuration explicitly includes `HIGH`; the secure default is `CRITICAL` only.
 - Staging and production instances are skipped while `IsolationAllowed=false`.
 - Attached EBS snapshots are requested before the quarantine security group is applied.
 - Isolation evidence tags are added while `IsolationAllowed` remains Terraform-managed.
@@ -2883,7 +2893,7 @@ A complete validation pass means the applicable evidence layers agree with one a
 - control-plane validation confirms state/OIDC foundations, AWS Organizations topology, centralized-security prerequisites, and IAM Identity Center
 - security-operations validation confirms centralized Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 governance
 - workload bootstrap validation confirms workload state/OIDC foundations
-- workload baseline validation confirms networking, VPC endpoints, workload-security realization, KMS, Backup, messaging, automation, SSM, compute, and IAM controls
+- workload baseline validation confirms networking, VPC endpoints, workload-security realization, KMS, Backup, messaging, automation, SSM, compute, ECS fixed/autoscaled runtime ownership and operational alarms, and IAM controls
 - generated evidence packages use the expected GitHub OIDC credential source and contain the supporting logs
 - live isolation, rollback, enrichment, tamper, break-glass, end-user SSO, and destroy-safety tests are completed where appropriate
 

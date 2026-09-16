@@ -159,7 +159,7 @@ cp environments/dev/terraform.tfvars.example \
 
 Repeat this for each Terraform root you plan to deploy. The resulting `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its values separately through workflow matrices, GitHub variables, and GitHub secrets.
 
-For local workload deployment, set `isolation_allowed` explicitly. The current policy is `true` for development and `false` for staging and production; the variable default remains fail closed at `false`.
+For local workload deployment, set `isolation_allowed` explicitly. The current policy is `true` for development and `false` for staging and production; the reusable variable default remains fail closed at `false`. Automatic EC2 isolation is additionally limited to GuardDuty findings and uses `ec2_auto_isolation_severities = ["CRITICAL"]` by default; only `HIGH` and `CRITICAL` are accepted values.
 
 ---
 
@@ -715,7 +715,46 @@ A service can be **registered but unreleased** by setting its digest to `null`:
 }
 ```
 
-With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, or application log group is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
+With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, application log group, Application Auto Scaling target/policy, or ECS operational alarm is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
+
+### Optional ECS scaling and deployment health
+
+A deployable service remains fixed-count when `scaling` is omitted or `null`; Terraform owns `desired_count` exactly. To enable Application Auto Scaling, add a `scaling` object. The configured `desired_count` then becomes bootstrap capacity and must be within the configured min/max range; Application Auto Scaling owns subsequent live desired-count changes.
+
+Example:
+
+```json
+{
+  "repositories": {},
+  "ecs_services": {
+    "api": {
+      "repository_name": "api",
+      "image_digest": "sha256:<64-lowercase-hex-characters>",
+      "container_port": 8080,
+      "cpu": 256,
+      "memory": 512,
+      "desired_count": 1,
+      "scaling": {
+        "min_capacity": 1,
+        "max_capacity": 2,
+        "cpu_target_percent": 50,
+        "memory_target_percent": 60,
+        "scale_in_cooldown_seconds": 60,
+        "scale_out_cooldown_seconds": 60
+      },
+      "deployment": {
+        "minimum_healthy_percent": 100,
+        "maximum_percent": 200,
+        "health_check_grace_period_seconds": 120
+      }
+    }
+  }
+}
+```
+
+At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. v1.9 uses target tracking only.
+
+Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. When Container Insights is enabled, each deployable service receives a task-deficit alarm. Each deployable ingress service receives an ALB unhealthy-target alarm. Both notify the SecOps SNS topic on ALARM and OK transitions.
 
 The normal application release lifecycle is:
 
@@ -917,7 +956,7 @@ Recommended validation order:
 12. Confirm workload-local AWS Config and Inspector are active where expected by profile.
 13. Confirm centralized Security Hub CSPM policy associations and effective Security Hub V2 workload policies are healthy after workload deployment.
 14. Run the full 16-validator workload baseline suite, including `validate-ecr.sh`, `validate-ecs-runtime.sh`, and the ECS-aware `validate-iam.sh`; empty repository/service maps are valid and the environment cluster is still checked.
-15. When ECS services are configured, confirm they reach steady state with digest-pinned images, private task networking, exact logging encryption, and any declared database/ALB relationships.
+15. When ECS services are configured, confirm they reach steady state with digest-pinned images, private task networking, exact logging encryption, any declared database/ALB relationships, fixed-versus-autoscaled desired-count ownership, exact scaling/deployment settings, and expected ECS operational alarms.
 16. Confirm SNS subscriptions are confirmed.
 17. Run Lambda tests:
     - `docs/lambda_tests/ec2_isolation.md`
@@ -1083,6 +1122,7 @@ Notable cost drivers include:
 - Inspector
 - KMS requests
 - Backup storage
+- ECS/Fargate runtime capacity and Application Load Balancers when services are deployed
 
 Deployment profiles and egress modes can reduce cost for non-production environments, but they also change security and connectivity behavior.
 
