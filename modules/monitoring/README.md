@@ -578,7 +578,6 @@ Terraform-owned task-deficit alarm       Terraform-owned unhealthy-target alarm
 
 These alarms are notification/health signals. They are not the AWS-managed target-tracking alarms used by Application Auto Scaling.
 
-
 ### Break-Glass Notification Path
 
 ```text
