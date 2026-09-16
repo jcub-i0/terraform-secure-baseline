@@ -171,7 +171,7 @@ Environment stacks can include:
 - VPC endpoints
 - Dedicated VPC endpoint subnets
 - EC2 workloads
-- One shared ECS cluster and optional long-running ECS/Fargate application services
+- One shared ECS cluster and optional long-running ECS/Fargate application services with fixed or target-tracking autoscaled capacity
 - KMS-encrypted ECR repositories and a conditional shared HTTPS Application Load Balancer
 - S3 buckets
 - KMS keys
@@ -253,6 +253,16 @@ Terraform owns the runtime infrastructure but never builds or pushes application
 Service launch uses resource-granular readiness instead of broad module dependencies: execution-policy IDs and cross-component security-policy rule IDs feed readiness checkpoints, and only ECS service launch waits on them.
 
 Security-group objects remain owned by the resource modules, while cross-component rules remain in `modules/networking/security_policy`. Database and ALB relationships are conditional on deployable service intent.
+
+### ECS scaling and deployment ownership
+
+The canonical `scaling` object defines ownership of ECS desired capacity. With `scaling = null`, Terraform owns the service's `desired_count` exactly. With scaling configured, `desired_count` is bootstrap capacity only; Application Auto Scaling owns subsequent live desired-count changes within the configured minimum and maximum. Separate fixed and autoscaled ECS resources preserve this ownership boundary so Terraform does not undo legitimate runtime scaling.
+
+v1.9 uses Application Auto Scaling target-tracking policies only. Services may target average ECS CPU, average ECS memory, and—when ingress exists—ALB requests per target. The ALB request resource label is constructed from Terraform-owned ALB and target-group ARN suffix outputs instead of being recreated from resource names by validation scripts.
+
+Canonical deployment settings control ECS minimum healthy percentage, maximum percentage, and task-startup health-check grace period. The grace period applies to unhealthy load-balancer, VPC Lattice, and container health checks. Deployment circuit breaking with rollback remains enabled.
+
+Terraform-owned operational notification alarms are separate from AWS-managed target-tracking alarms. Deployable services receive task-deficit monitoring when Container Insights is enabled, and deployable ingress services receive ALB unhealthy-target monitoring. Both use the SecOps notification path for ALARM and OK transitions.
 
 The ECS cluster also owns its Container Insights performance log group at `/aws/ecs/containerinsights/<cluster-name>/performance` when Container Insights is enabled. Service logs and the performance log group use the effective retention policy and workload logs CMK according to their resource ownership.
 
@@ -746,7 +756,7 @@ Automation functions include:
 
 | Function | Purpose |
 |---------|---------|
-| `EC2 Isolation` | Quarantines explicitly authorized EC2 instances for eligible findings; automatic response defaults to CRITICAL |
+| `EC2 Isolation` | Quarantines explicitly authorized EC2 instances for eligible GuardDuty findings imported through Security Hub; configured automatic response defaults to CRITICAL |
 | `EC2 Rollback` | Restores original security groups after approval |
 | `IP Enrichment` | Enriches public IPs from Security Hub findings |
 | `Tamper Detection` | Sends alerts for security control changes |
@@ -756,12 +766,13 @@ Automation functions include:
 
 ## EC2 Isolation Workflow
 
-The `EC2 Isolation` EventBridge rule receives HIGH and CRITICAL EC2-related Security Hub findings. The Lambda defaults automatic action to `CRITICAL` and applies additional fail-closed checks before containment.
+The `EC2 Isolation` EventBridge rule receives only `HIGH` and `CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings imported through Security Hub whose resource type is `AwsEc2Instance`. The Lambda independently revalidates the GuardDuty product, workflow state, record state, and the canonical `ec2_auto_isolation_severities` policy before containment. The configured severity set defaults to `CRITICAL` and may contain only `HIGH`, `CRITICAL`, or both.
 
 Workflow:
 
 ```text
-Security Hub Finding
+GuardDuty EC2 Finding
+(imported through Security Hub)
     |
     v
 Default EventBridge Bus
@@ -781,7 +792,7 @@ Tag instance and send SNS notification
 
 The isolation Lambda:
 
-- Requires the configured severity, `NEW` workflow status, and `ACTIVE` record state
+- Requires the GuardDuty Security Hub product ARN, a severity allowed by `ec2_auto_isolation_severities`, `NEW` workflow status, and `ACTIVE` record state
 - Requires a valid running or stopped EC2 instance with `IsolationAllowed=true`
 - Skips duplicate and already-isolated instances
 - Requests tagged EBS snapshots after eligibility checks and before quarantine
@@ -789,7 +800,7 @@ The isolation Lambda:
 - Replaces existing security groups with the quarantine security group
 - Adds isolation evidence tags and sends a SecOps notification
 
-This enables rapid containment of potentially compromised instances.
+This enables rapid containment of potentially compromised instances. The separate IP-enrichment EventBridge rule remains broader: it accepts HIGH/CRITICAL Security Hub findings without the GuardDuty/EC2 isolation restriction.
 
 ---
 

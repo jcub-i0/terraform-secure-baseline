@@ -96,11 +96,12 @@ Use `not-applicable` for fields that do not apply to the selected validation sco
 | Overall Result | `<PASS/FAIL>` |
 | Validation Scripts Passed | `<passed>/<total>` |
 | Validation Scripts Failed | `<failed>/<total>` |
-| Manual Validation Remaining | `<yes/no>` |
+| Other Validation Layers Outstanding | `<yes/no/not-applicable>` |
+| Live / Human Validation Remaining | `<yes/no>` |
 
 Summary:
 
-`<Briefly summarize the validation outcome for the selected evidence package. Example: The dev workload bootstrap evidence package passed automated read-only validation with 1 of 1 validation scripts passing. Strict workload CMK policy checks were enabled, and no workload bootstrap validation failures were reported. Manual validation remains for Terraform plan/apply/destroy workflow execution, end-user access, live Lambda workflow tests, tamper testing, break-glass testing, and destroy safety review.>`
+`<Briefly summarize the validation outcome for the selected evidence package. Example: The dev workload bootstrap evidence package passed automated read-only validation with 1 of 1 validation scripts passing. Strict workload CMK policy checks and strict remote-state evidence were enabled. If application publication was enabled, note whether strict Image Publisher validation was required and passed. Separate evidence packages remain authoritative for other automated layers, while end-user access, live Lambda workflow tests, tamper testing, break-glass testing, and destroy safety review remain live/human activities where applicable.>`
 
 ---
 
@@ -117,6 +118,14 @@ EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 REQUIRE_STATE_STACK_REMOTE=true \
 CLOUD_NAME="<cloud-name>" \
+./scripts/validation/export-bootstrap.sh <dev|staging|prod>
+```
+
+For a publisher-enabled workload release, also require the Image Publisher role and its exact approved branch set:
+
+```bash
+REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true \
+EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]' \
 ./scripts/validation/export-bootstrap.sh <dev|staging|prod>
 ```
 
@@ -148,6 +157,8 @@ Validation scripts failed:  0/1
 |---|---|
 | `REQUIRE_BOOTSTRAP_GITHUB_OIDC` | `<true/false>` |
 | `REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE` | `<true/false>` |
+| `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE` | `<true/false>` |
+| `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` | `<JSON-array/not-applicable>` |
 | `STRICT_WORKLOAD_CMK_POLICY_CHECKS` | `<true/false>` |
 | `REQUIRE_STATE_STACK_REMOTE` | `<true/false>` |
 | `STRICT_GITHUB_SUBJECT_CHECKS` | `<true/false>` |
@@ -180,7 +191,25 @@ When `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false`, stale or missing workload CMK po
 | `terraform state pull` succeeds through the configured backend | `<PASS/WARN/FAIL/Not Reviewed>` |
 | Backend bucket matches the state stack output | `<PASS/WARN/FAIL/Not Reviewed>` |
 
-Direct script and exporter runs default `REQUIRE_STATE_STACK_REMOTE` to `false`, which makes remote-state findings advisory. The GitHub evidence workflows default the setting to `true`. Use `true` for v1.4.0 release validation and client-facing evidence after state migration is complete.
+Direct script and exporter runs default `REQUIRE_STATE_STACK_REMOTE` to `false`, which makes remote-state findings advisory. The GitHub evidence workflows default the setting to `true`. Use `true` for release-readiness and client-facing evidence after state migration is complete.
+
+### Image Publisher Role Validation
+
+Use this subsection when application image publication is enabled for the workload.
+
+| Field | Value |
+|---|---|
+| `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE` | `<true/false>` |
+| `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` | `<JSON-array>` |
+| `image_publisher_role_github_arn` output present | `<yes/no/not-reviewed>` |
+| Role belongs to active workload account | `<PASS/WARN/FAIL/Not Reviewed>` |
+| Exact branch-based OIDC trust matches expected repository/branches | `<PASS/WARN/FAIL/Not Reviewed>` |
+| Exact ECR publication/query actions match Terraform | `<PASS/WARN/FAIL/Not Reviewed>` |
+| `ecr:GetAuthorizationToken` is the only registry-wide grant | `<PASS/WARN/FAIL/Not Reviewed>` |
+| Repository permissions are scoped to `<name-prefix>-*` | `<PASS/WARN/FAIL/Not Reviewed>` |
+| No unexpected state, ECS, IAM, deny, conditional, `NotAction`, or `NotResource` authority | `<PASS/WARN/FAIL/Not Reviewed>` |
+
+When the role is present, `validate-bootstrap.sh` validates it even if it is optional. For publisher-enabled release/client-facing evidence, set `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true` and provide the approved branch set explicitly.
 
 ### Workload Bootstrap Coverage
 
@@ -198,8 +227,11 @@ Direct script and exporter runs default `REQUIRE_STATE_STACK_REMOTE` to `false`,
 | Workload GitHub OIDC provider | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | Workload GitHub Plan role | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | Workload GitHub Apply role | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
+| Workload GitHub Image Publisher role, when enabled or required | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | GitHub repository trust conditions | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
-| GitHub environment subject conditions | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
+| GitHub Plan/Apply environment subject conditions | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
+| Image Publisher exact branch subjects, when enabled | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
+| Image Publisher exact ECR publication/query policy and repository scope, when enabled | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | GitHub state bucket access | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | GitHub `.tflock` object access | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
 | GitHub state CMK access | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-bootstrap.log` | `<notes>` |
@@ -265,6 +297,24 @@ validation-results/<env>/baseline/<timestamp>/
 | IAM | `validate-iam.sh` | `<PASS/FAIL/Not Run>` | `validate-iam.log` | `<notes>` |
 
 The current workload baseline export contains 16 validators. The generated package and `summary.json` remain the source of truth for each evidence run.
+
+### ECS Runtime Operations Evidence
+
+Use this subsection when ECS/Fargate services are in scope. Supporting detail comes from `validate-ecs-runtime.log`; the baseline summary still counts `validate-ecs-runtime.sh` as one validator.
+
+| Runtime assertion | Result | Evidence Log | Notes |
+|---|---|---|---|
+| Fixed-count services: Terraform owns exact `desiredCount` | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| Autoscaled services: live `desiredCount` remains within Terraform min/max bounds | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| Application Auto Scaling target inventory exactly matches Terraform | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| CPU target-tracking policy configuration | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| Memory target-tracking policy configuration | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| ALB request-count target tracking, when configured | `<PASS/WARN/FAIL/Not Applicable>` | `validate-ecs-runtime.log` | `<notes>` |
+| Deployment minimum/maximum healthy percentages and health-check grace | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| Terraform-owned ECS task-deficit alarm inventory/configuration | `<PASS/WARN/FAIL/Not Applicable>` | `validate-ecs-runtime.log` | `<notes>` |
+| Terraform-owned ingress unhealthy-target alarm inventory/configuration | `<PASS/WARN/FAIL/Not Applicable>` | `validate-ecs-runtime.log` | `<notes>` |
+| Operational alarm state | `<OK/INSUFFICIENT_DATA/ALARM/Not Applicable>` | `validate-ecs-runtime.log` | `INSUFFICIENT_DATA` is warning-only; `ALARM` fails validation |
+| AWS-managed target-tracking alarms remain outside Terraform operational-alarm inventory | `<PASS/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
 
 ---
 
@@ -415,6 +465,8 @@ Examples of environment-specific exceptions may include:
 - AWS Config rules not required when Config is intentionally disabled by deployment profile
 - Pending SNS email confirmation where subscriber approval is still required
 - Optional Identity Center Analyst/Engineer groups intentionally disabled
+- ECS operational alarm state is `INSUFFICIENT_DATA` while metric evaluation is not yet complete
+- Image Publisher role intentionally absent because application publication is disabled and the role is not required
 - Workload CMK policy checks intentionally run with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` during transitional validation
 - State-stack remote validation intentionally run with `REQUIRE_STATE_STACK_REMOTE=false`, producing advisory findings instead of strict migration evidence
 - A deliberately relaxed `STRICT_ACCOUNT_OU_CHECKS=false` or `STRICT_IDENTITY_CENTER_ASSIGNMENTS=false` run, which should be identified as weaker evidence than the default strict mode

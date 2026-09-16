@@ -1,5 +1,98 @@
 # Changelog
 
+## v1.9.0
+
+v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. The implementation has completed live qualification and release documentation.
+
+### Added
+
+- Added an optional canonical `ecs_services.<service>.scaling` object with:
+  - `min_capacity`;
+  - `max_capacity`;
+  - optional CPU target tracking through `cpu_target_percent`;
+  - optional memory target tracking through `memory_target_percent`;
+  - optional ALB request-count target tracking through `alb_requests_per_target`; and
+  - configurable scale-in and scale-out cooldowns, defaulting to 300 seconds.
+- Added one ECS Application Auto Scaling target for each deployable service with non-null scaling configuration.
+- Added target-tracking scaling policies using AWS predefined metrics:
+  - `ECSServiceAverageCPUUtilization`;
+  - `ECSServiceAverageMemoryUtilization`; and
+  - `ALBRequestCountPerTarget`.
+- Added Terraform-backed ALB and target-group ARN suffix outputs so ALB request scaling and operational monitoring use resource identities rather than reconstructing AWS identifiers in validation code.
+- Added an optional canonical `ecs_services.<service>.deployment` object with:
+  - `minimum_healthy_percent`, defaulting to `100`;
+  - `maximum_percent`, defaulting to `200`; and
+  - `health_check_grace_period_seconds`, defaulting to `0`.
+- Added Terraform-owned ECS operational alarms:
+  - sustained desired-versus-running task deficit using `ECS/ContainerInsights`; and
+  - sustained unhealthy ALB targets for ingress-enabled services using `AWS/ApplicationELB`.
+- Added resource-backed baseline outputs for:
+  - validator-relevant ECS service configuration;
+  - Application Auto Scaling targets;
+  - CPU target-tracking policies;
+  - memory target-tracking policies;
+  - ALB request-count target-tracking policies;
+  - task-deficit alarms; and
+  - ingress unhealthy-target alarms.
+- Refactored `validate-ecs-runtime.sh` into one stable validator entry point backed by focused helpers under `scripts/validation/lib/ecs-runtime/` for contract, cluster, services, autoscaling, ingress, alarms, and summary validation.
+- Added workload-level `ec2_auto_isolation_severities` configuration. The supported automatic-isolation severity set is `HIGH` and/or `CRITICAL`, with `CRITICAL` as the default.
+
+### Changed
+
+- Split ECS service ownership into fixed-count and autoscaled Terraform resources because `lifecycle.ignore_changes` cannot be selected conditionally per `for_each` instance.
+- Fixed-count services continue to use Terraform-owned `desired_count`.
+- Autoscaled services treat configured `desired_count` as bootstrap capacity; Application Auto Scaling owns subsequent live desired count changes within the configured minimum and maximum.
+- Autoscaled ECS services ignore later Terraform reconciliation of `desired_count`, preventing legitimate runtime scaling from being forced back to the bootstrap value.
+- `scaling = null` means the service has no platform-owned Application Auto Scaling target or scaling policies.
+- Registered-but-unreleased services with `image_digest = null` continue to create no ECS runtime or scaling resources.
+- ALB request-count scaling now requires canonical ingress configuration and uses the resource-backed ALB/target-group identity produced by Terraform.
+- ECS deployment minimum/maximum percentages and health-check grace period are now part of the canonical service contract and are applied to both fixed and autoscaled services.
+- ECS operational alarms remain separate from AWS-managed target-tracking alarms. Terraform does not adopt, edit, or repurpose the CloudWatch alarms created internally by Application Auto Scaling.
+- The workload validation architecture remains four layers. ECS runtime operations stay inside the existing workload-baseline layer; no fifth validation/evidence layer was introduced.
+- Application release ownership remains unchanged: `Deploy Application` publishes an image and the release mutation changes only `ecs_services.<service>.image_digest`; it does not change scaling or deployment configuration.
+- The protected exact-saved-plan Terraform Apply workflow remains unchanged.
+
+### Fixed
+
+- Fixed autoscaled service drift so Terraform no longer reasserts the configured bootstrap `desired_count` after Application Auto Scaling legitimately changes the service count.
+- Fixed automatic EC2 isolation scope so broad HIGH/CRITICAL Security Hub findings from products such as Inspector cannot independently trigger containment.
+- Fixed the EC2 Isolation Lambda to fail closed when `RecordState` is missing instead of treating a missing value as `ACTIVE`.
+
+### Security
+
+- Restricted the EC2 isolation EventBridge rule to GuardDuty findings imported through Security Hub with:
+  - GuardDuty `ProductArn`;
+  - `HIGH` or `CRITICAL` severity;
+  - `AwsEc2Instance` resource type;
+  - `Workflow.Status = NEW`; and
+  - `RecordState = ACTIVE`.
+- Kept the EventBridge rule broad enough to admit both HIGH and CRITICAL GuardDuty EC2 findings while allowing the Lambda's configured severity set to decide which severities are eligible for automatic containment.
+- The EC2 Isolation Lambda independently revalidates GuardDuty product identity, configured severity, workflow status, and record state before evaluating instance-level isolation gates.
+- Automatic isolation continues to require `IsolationAllowed=true`, an isolatable instance state, a non-isolated target, and successful pre-isolation EBS snapshot requests before quarantine.
+- The separate IP Enrichment Security Hub HIGH/CRITICAL rule remains broad and is not restricted to GuardDuty or EC2 findings.
+
+### Validation
+
+- Live qualification confirmed CPU target-tracking scale-out and scale-in behavior.
+- Live qualification confirmed memory target-tracking behavior.
+- Live qualification confirmed ALB request-count target tracking when ingress is configured.
+- Fixed-count services were verified to remain Terraform-owned at the configured `desired_count`.
+- Autoscaled services were verified to allow Application Auto Scaling to own live desired count within configured bounds.
+- Digest-pinned application release was exercised while the service was scaled.
+- Deployment-health settings were verified against live ECS service configuration.
+- Task-deficit and ingress unhealthy-target operational alarms were verified against Terraform-owned configuration.
+- `validate-ecs-runtime.sh` passed against the qualified development runtime after the validator refactor.
+- The full workload baseline validation completed with `16/16` validators passing.
+- Strict workload bootstrap validation completed with `1/1` validator passing.
+- The final Terraform plan after qualification reported no changes.
+
+### Deferred / Future
+
+- GuardDuty Fargate managed-agent enablement remains outside the current release boundary.
+- Fail-closed ECS task-level containment/remediation remains future work.
+- The ReconoSense reference deployment remains future work.
+- Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, and more sophisticated historical ECR retention remain future design work.
+
 ## v1.8.0 — Secure Container Workloads
 
 v1.8.0 adds a generic secure ECS/Fargate application runtime and release path while retaining EC2 as a supported host-based workload pattern. The runtime, image-publication workflow, digest-promotion workflow, protected exact-plan deployment path, and workload validation are implemented and live-tested.

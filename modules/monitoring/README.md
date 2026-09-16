@@ -2,13 +2,11 @@
 
 ## Overview
 
-The `monitoring` module provisions the notification and alert-routing layer for a `tf-secure-baseline` workload environment.
+The `monitoring` module provisions the notification, alert-routing, and selected operational-health monitoring layer for a `tf-secure-baseline` workload environment.
 
-It creates encrypted SNS and SQS resources for security and compliance notifications, attaches selected EventBridge targets to the security notification path, and creates CloudWatch metric filters and alarms for CloudTrail-based detections.
+It creates encrypted SNS and SQS resources for security and compliance notifications, attaches selected EventBridge targets to the security notification path, creates CloudWatch metric filters and alarms for CloudTrail-based detections, and creates Terraform-owned ECS operational alarms for task deficits and unhealthy ALB targets.
 
-This module is responsible for routing alerts. It does not own every detection source. Some rules and producers are created by other modules and passed into this module as inputs.
-
----
+This module is responsible for routing alerts and for the operational alarms it explicitly creates. It does not own every detection source, and it does not own the AWS-managed CloudWatch alarms created by Application Auto Scaling target-tracking policies. Some rules and producers are created by other modules and passed into this module as inputs.
 
 ## What This Module Creates
 
@@ -18,14 +16,13 @@ This module is responsible for routing alerts. It does not own every detection s
 | Security notifications | Security notifications SNS topic, email subscriptions, security notifications SQS queue, security notifications SQS DLQ |
 | EventBridge failure handling | Shared EventBridge DLQ for EventBridge-to-security-SNS delivery failures |
 | EventBridge targets | Security Hub high/critical SNS target, break-glass SNS target |
-| CloudWatch detections | Metric filters and alarms for root activity, unauthorized API calls, CloudTrail stop/delete activity, and IAM policy changes |
+| CloudTrail detections | Metric filters and alarms for root activity, unauthorized API calls, CloudTrail stop/delete activity, and IAM policy changes |
+| ECS operational health | Per-service task-deficit alarms and per-ingress-service unhealthy-target alarms |
 | DLQ alerting | CloudWatch alarms for security notification DLQ messages and EventBridge security notification DLQ messages |
-
----
 
 ## Design Purpose
 
-The monitoring module centralizes security and compliance notification handling.
+The monitoring module centralizes security, compliance, and selected ECS operational notification handling.
 
 It supports:
 
@@ -34,11 +31,13 @@ It supports:
 - EventBridge delivery failure retention for security notification targets
 - Alarmed DLQ paths for failed or undelivered security notification events
 - CloudTrail-based detection for high-risk account activity
+- Terraform-owned ECS task-deficit detection
+- Terraform-owned ALB unhealthy-target detection for ingress-enabled ECS services
 - Notification routing for Security Hub, tamper detection, break-glass access, CloudWatch alarms, and security automation workflows
 
-The module is intentionally focused on notification routing and operational visibility. Security services, automation workflows, and some EventBridge rules are created by other modules and integrated here through variables.
+The module is intentionally focused on notification routing and selected operational visibility. Security services, automation workflows, ECS service scaling policies, and some EventBridge rules are created by other modules and integrated here through variables.
 
----
+Application Auto Scaling target-tracking alarms are AWS-managed. They remain separate from the Terraform-owned ECS operational alarms documented here.
 
 ## Notification Resources
 
@@ -295,6 +294,101 @@ These events may indicate privilege creation, privilege expansion, permission re
 
 ---
 
+## ECS Operational Health Alarms
+
+The v1.9 runtime adds two Terraform-owned ECS operational alarm families. They are intentionally separate from Application Auto Scaling target-tracking alarms.
+
+### ECS Task Deficit
+
+For each entry in `ecs_task_deficit_services`, the module creates:
+
+```text
+<name_prefix>-<service>-ecs-task-deficit
+```
+
+The alarm uses CloudWatch metric math over `ECS/ContainerInsights`:
+
+```text
+DesiredTaskCount - RunningTaskCount
+```
+
+with dimensions:
+
+```text
+ClusterName
+ServiceName
+```
+
+The underlying metrics use:
+
+```text
+period    = 60 seconds
+statistic = Average
+```
+
+The alarm enters `ALARM` when the deficit is greater than zero for three consecutive datapoints:
+
+```text
+evaluation_periods  = 3
+datapoints_to_alarm = 3
+threshold           = 0
+comparison          = GreaterThanThreshold
+treat_missing_data  = notBreaching
+```
+
+Both `alarm_actions` and `ok_actions` notify the SecOps SNS topic.
+
+Baseline supplies task-deficit monitoring entries for every deployable ECS service only when Container Insights is not disabled. If `container_insights = "disabled"`, baseline passes an empty task-deficit monitoring map because the required Container Insights task-count metrics are not part of that configuration.
+
+### ECS Ingress Unhealthy Targets
+
+For each entry in `ecs_ingress_services`, the module creates:
+
+```text
+<name_prefix>-<service>-ecs-ingress-unhealthy-targets
+```
+
+The alarm monitors:
+
+```text
+namespace   = AWS/ApplicationELB
+metric      = UnHealthyHostCount
+statistic   = Maximum
+period      = 60 seconds
+```
+
+using exact resource-backed dimensions:
+
+```text
+LoadBalancer = <ALB ARN suffix>
+TargetGroup  = <target-group ARN suffix>
+```
+
+The alarm enters `ALARM` when one or more unhealthy targets persist for three consecutive datapoints:
+
+```text
+evaluation_periods  = 3
+datapoints_to_alarm = 3
+threshold           = 0
+comparison          = GreaterThanThreshold
+treat_missing_data  = notBreaching
+```
+
+Both `alarm_actions` and `ok_actions` notify the SecOps SNS topic.
+
+Baseline supplies this map only for deployable ECS services with non-null ingress. The ALB and target-group dimensions come from Terraform resource outputs rather than string reconstruction.
+
+### Separation from Auto Scaling Alarms
+
+CPU, memory, and ALB request-count target-tracking policies are owned by `modules/ecs_service` through Application Auto Scaling.
+
+AWS creates the CloudWatch alarms used internally by those target-tracking policies. This module does not create, edit, rename, repurpose, or include those AWS-managed alarms in its Terraform-owned operational alarm inventory.
+
+The Terraform-owned alarms in this module answer different operational questions:
+
+- Is the service persistently running fewer tasks than desired?
+- Are one or more ingress targets persistently unhealthy?
+
 ## DLQ Alarms
 
 ### Security Notifications SQS DLQ Alarm
@@ -348,8 +442,8 @@ This alarm indicates that EventBridge failed to deliver one or more security not
 | `break_glass_admin_role_arn` | IAM role ARN for the break-glass admin role | Yes |
 | `securityhub_high_critical_rule_name` | Name of the EventBridge rule for high/critical Security Hub findings | Yes |
 | `securityhub_high_critical_rule_arn` | ARN of the EventBridge rule for high/critical Security Hub findings | Yes |
-
----
+| `ecs_task_deficit_services` | ECS services monitored for desired-versus-running task deficits; map values contain `cluster_name` and `service_name` | No; defaults to `{}` |
+| `ecs_ingress_services` | Ingress-enabled ECS services monitored for unhealthy ALB targets; map values contain load-balancer and target-group ARN suffixes | No; defaults to `{}` |
 
 ## Outputs
 
@@ -358,8 +452,8 @@ This alarm indicates that EventBridge failed to deliver one or more security not
 | `compliance_topic_arn` | ARN of the compliance SNS topic |
 | `secops_topic_arn` | ARN of the security notifications SNS topic |
 | `sec_notifs_eventbridge_dlq_arn` | ARN of the shared EventBridge DLQ for security notification target failures |
-
----
+| `ecs_task_deficit_alarms` | Task-deficit alarm ARN/name metadata keyed by ECS service name |
+| `ecs_ingress_unhealthy_target_alarms` | Ingress unhealthy-target alarm ARN/name metadata keyed by ECS service name |
 
 ## Usage Example
 
@@ -383,10 +477,13 @@ module "monitoring" {
   break_glass_admin_role_arn    = module.iam.break_glass_admin_role_arn
 
   secops_emails = var.secops_emails
+
+  ecs_task_deficit_services = local.ecs_task_deficit_monitoring_services
+  ecs_ingress_services      = local.ecs_ingress_monitoring_services
 }
 ```
 
----
+Baseline derives both ECS monitoring maps from the canonical deployable `ecs_services` inventory. Operators do not maintain a separate service list for monitoring.
 
 ## Validation
 
@@ -396,6 +493,7 @@ Use the automated validation scripts for normal validation.
 ./scripts/validation/validate-sns.sh dev
 ./scripts/validation/validate-sqs.sh dev
 ./scripts/validation/validate-eventbridge.sh dev
+./scripts/validation/validate-ecs-runtime.sh dev
 ```
 
 Expected coverage:
@@ -405,6 +503,9 @@ Expected coverage:
 | `validate-sns.sh` | Security and compliance SNS topics, encryption, subscription counts, pending confirmations |
 | `validate-sqs.sh` | Compliance queue, security notification queue, security notification DLQ, security notification EventBridge DLQ, encryption, SNS-to-SQS wiring |
 | `validate-eventbridge.sh` | EventBridge rules, targets, target DLQs, retry policies, Security Hub/SecOps routing |
+| `validate-ecs-runtime.sh` | Exact ECS runtime contract, Application Auto Scaling targets/policies, deployment settings, and Terraform-owned task-deficit/ingress-health operational alarms |
+
+`validate-ecs-runtime.sh` treats AWS-managed target-tracking alarms separately from the Terraform-owned operational alarm inventory.
 
 Detailed manual validation commands belong in the validation runbook rather than this module README.
 
@@ -413,8 +514,6 @@ Recommended companion doc path:
 ```text
 docs/validationmonitoring-validation.md
 ```
-
----
 
 ## Alert Routing Summary
 
@@ -455,6 +554,29 @@ EventBridge Rule from automation module
     |
     +--> Security Notifications SNS target from monitoring module
 ```
+
+### ECS Operational Alarm Path
+
+```text
+ECS / Container Insights                 Application Load Balancer
+        |                                          |
+        | DesiredTaskCount                         | UnHealthyHostCount
+        | RunningTaskCount                         |
+        v                                          v
+Terraform-owned task-deficit alarm       Terraform-owned unhealthy-target alarm
+        |                                          |
+        +-------------------+----------------------+
+                            |
+                            v
+                 Security Notifications SNS
+                            |
+                 +----------+----------+
+                 |                     |
+                 v                     v
+           SecOps Email        Security Notifications SQS
+```
+
+These alarms are notification/health signals. They are not the AWS-managed target-tracking alarms used by Application Auto Scaling.
 
 ### Break-Glass Notification Path
 
@@ -524,6 +646,20 @@ docs/runbooks/notification-dlq-response.md
 
 ---
 
+### ECS Monitoring Dependencies
+
+Task-deficit alarms depend on Container Insights task-count metrics. Baseline therefore creates task-deficit alarm inputs only when `container_insights` is not `disabled`.
+
+Ingress unhealthy-target alarms do not depend on Container Insights. They use `AWS/ApplicationELB` and resource-backed ALB/target-group ARN suffixes.
+
+A service may be autoscaled and still have the Terraform-owned task-deficit alarm. The alarm compares live desired count with running count; it does not assume that the configured bootstrap `desired_count` remains authoritative after Application Auto Scaling changes desired capacity.
+
+### Target-Tracking Alarm Ownership
+
+Application Auto Scaling target-tracking policies create AWS-managed CloudWatch alarms. Operators should not rename, edit, repurpose, or treat those alarms as Terraform-owned monitoring resources.
+
+The operational alarms created by this module are deliberately independent so their names, notification actions, and validation contract remain under Terraform ownership.
+
 ## Troubleshooting
 
 ### SecOps Emails Are Not Receiving Alerts
@@ -570,6 +706,28 @@ Check:
 - The queue redrive policy is configured correctly
 - The failure is not caused by permissions, timeout, throttling, or malformed input
 
+### ECS Task-Deficit Alarm Is Missing or Does Not Evaluate
+
+Check:
+
+- The service is deployable and exists in the canonical `ecs_services` map with a non-null image digest
+- Container Insights is not `disabled`
+- The ECS cluster and service names match the alarm dimensions
+- `DesiredTaskCount` and `RunningTaskCount` are present in `ECS/ContainerInsights`
+- The alarm has three 60-second metric periods and uses the `desired - running` expression
+- SecOps SNS permissions allow CloudWatch alarm delivery
+
+### ECS Ingress Unhealthy-Target Alarm Is Missing or Does Not Evaluate
+
+Check:
+
+- The service is deployable and has non-null ingress
+- The shared ALB and service target group exist
+- The alarm dimensions use the resource-backed ALB and target-group ARN suffixes
+- `AWS/ApplicationELB` is publishing `UnHealthyHostCount`
+- The target group is actually receiving registered ECS targets
+- SecOps SNS permissions allow CloudWatch alarm delivery
+
 ### CloudWatch Alarms Do Not Fire
 
 Check:
@@ -596,8 +754,8 @@ Check:
 - Unauthorized API calls generate an alert.
 - CloudTrail stop/delete activity generates an alert.
 - Selected IAM policy changes generate an alert.
-
----
+- ECS task-deficit and ingress unhealthy-target alarms are Terraform-owned and notify the SecOps topic on both ALARM and OK transitions.
+- Application Auto Scaling target-tracking alarms remain AWS-managed and are not modified by this module.
 
 ## Design Principles
 
@@ -611,9 +769,9 @@ This module follows:
 - Least privilege publishing
 - Human-readable security notifications
 - Separation of detection and notification routing
+- Separation of autoscaling control alarms from Terraform-owned operational alarms
+- Resource-backed ECS/ALB monitoring dimensions
 - Fast escalation for critical security events
-
----
 
 ## Notes
 
@@ -624,4 +782,7 @@ This module follows:
 - The tamper detection EventBridge rule is created outside this module.
 - The security notifications SNS topic ARN is consumed by automation and security workflows.
 - The compliance SNS topic ARN can be consumed by AWS Config or other compliance routing logic.
+- Baseline supplies task-deficit alarm inputs only when Container Insights is enabled.
+- Baseline supplies ingress unhealthy-target alarm inputs only for deployable services with ingress.
+- AWS-managed target-tracking alarms are not part of this module's Terraform-owned alarm inventory.
 - For production, confirm all SecOps email subscriptions after deployment.

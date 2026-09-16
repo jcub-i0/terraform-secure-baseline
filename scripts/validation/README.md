@@ -415,7 +415,7 @@ Validation scripts passed:  16/16
 Validation scripts failed:  0/16
 ```
 
-The v1.8.0 release validation exercise completed with all 16 workload validators passing, followed by a converged Terraform plan with no changes. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
+The v1.9 live qualification completed with all 16 workload validators passing, strict workload-bootstrap validation passing, and a converged Terraform plan with no changes. The qualification also exercised CPU and memory scale-out/scale-in, conditional ALB request scaling, fixed-versus-autoscaled desired-count ownership, digest release while scaled, deployment-health settings, and ECS operational alarms. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
 
 ---
 
@@ -480,9 +480,17 @@ run independently of the conditional ALB stage for configured services.
 
 For configured services it validates Fargate service placement, the resource-backed platform version, deployment circuit breaker and rollback, desired/running/pending steady state, and a completed primary rollout. It also validates the task-definition platform and separate roles; exactly one essential service container; a digest-pinned image from an output-backed ECR repository; port and `awslogs` settings; exact log-group identity, retention, and `logs_cmk_arn`; task-SG endpoint, resource-backed S3 prefix-list, database-access, and egress-mode relationships; and conditional ALB service attachments and ALB/task SG relationships.
 
-The environment cluster check also validates the Terraform-owned Container Insights performance log group when Container Insights is enabled: exact name and ARN, effective retention, and exact `logs_cmk_arn`. When Container Insights is disabled, the resource-backed log-group output must be `null`.
+Desired-count ownership is conditional on the canonical scaling contract. A fixed service (`scaling = null`) must have a live ECS `desiredCount` exactly equal to Terraform. An autoscaled service may differ from its configured bootstrap `desired_count`, but the live value must remain within `min_capacity` and `max_capacity`.
 
-When an ALB is present, the validator compares the resource-backed ALB, listener, ACM certificate, TLS policy, and target-group metadata with live AWS. It also requires public-subnet placement, the fixed 404 default, `ip` target groups, and meaningful forwarding listener rules.
+Application Auto Scaling validation requires the exact target inventory for the environment cluster and exact target attributes, including min/max capacity, `ecs:service:DesiredCount`, ECS namespace, resource identity, and unsuspended scaling state. The policy inventory must also match Terraform exactly. CPU, memory, and conditional ALB request-count policies must be `TargetTrackingScaling`, with exact targets, scale-in/out cooldowns, predefined metric types, and—when applicable—the resource-backed ALB request resource label. Customized metric specifications are not accepted by the v1.9 contract.
+
+The validator also compares `minimum_healthy_percent`, `maximum_percent`, and `health_check_grace_period_seconds` exactly with the canonical deployment configuration.
+
+The environment cluster check validates the Terraform-owned Container Insights performance log group when Container Insights is enabled: exact name and ARN, effective retention, and exact `logs_cmk_arn`. When Container Insights is disabled, the resource-backed log-group output must be `null`.
+
+When an ALB is present, the validator compares the resource-backed ALB, listener, ACM certificate, TLS policy, load-balancer ARN suffix, and target-group metadata with live AWS. It also requires public-subnet placement, the fixed 404 default, `ip` target groups, and meaningful forwarding listener rules.
+
+Operational alarms are validated independently of the conditional ALB stage. The expected Terraform-owned inventory consists only of task-deficit and ingress unhealthy-target alarms; AWS-managed target-tracking alarms are deliberately outside this operational inventory. Task-deficit alarms must implement the Container Insights `DesiredTaskCount - RunningTaskCount` contract, and ingress alarms must implement `AWS/ApplicationELB` `UnHealthyHostCount` with the resource-backed ALB/target-group suffix dimensions. `OK` passes, `INSUFFICIENT_DATA` warns while metric evaluation completes, and `ALARM` fails validation.
 
 `validate-iam.sh` owns the ECS IAM assertions. For each service it validates the separate execution and task roles, ECS task trust restrictions, the custom repository- and log-group-scoped execution policy, optional ARN-identifiable Secrets Manager and SSM permissions, absence of managed-policy attachments and `iam:PassRole`, and an initially policy-free application task role. It compares the live execution-policy `kms:Decrypt` resources exactly with `ecs_service_configuration[*].task_execution_kms_key_arns`; an empty expected set requires the decrypt action to be absent.
 

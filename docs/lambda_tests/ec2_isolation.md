@@ -4,7 +4,7 @@
 
 This document provides manual tests used to validate the **EC2 Isolation Lambda** behavior before and after changes.
 
-The EC2 Isolation Lambda is responsible for isolating EC2 instances and snapshotting their EBS volumes when qualifying Security Hub findings are detected.
+The EC2 Isolation Lambda is responsible for isolating EC2 instances and requesting pre-isolation EBS snapshots when qualifying GuardDuty findings are imported through Security Hub.
 
 It is designed to support the broader `tf-secure-baseline` architecture, including:
 
@@ -30,12 +30,23 @@ This document includes two categories of tests:
    - Validate that the isolation workflow fits into the larger platform design
    - Confirm that isolated instances can later be restored through the controlled rollback workflow
 
-In production, this Lambda is triggered by:
+In the deployed workflow, this Lambda is triggered by the dedicated EC2-isolation EventBridge rule when a qualifying GuardDuty finding is imported through Security Hub.
 
-- Security Hub findings
-- EventBridge rules
+The EventBridge rule prefilters for:
 
-Direct invocation is useful for validating Lambda behavior without waiting for a real Security Hub finding.
+- `source = aws.securityhub`
+- `detail-type = Security Hub Findings - Imported`
+- GuardDuty `ProductArn`
+- `HIGH` or `CRITICAL` severity
+- `AwsEc2Instance` resources
+- `Workflow.Status = NEW`
+- `RecordState = ACTIVE`
+
+The Lambda independently revalidates the GuardDuty product, configured severity, workflow status, record state, resource type, instance state, instance authorization tag, and already-isolated state before containment.
+
+Direct invocation is useful for validating Lambda-side gates without waiting for a real Security Hub finding. Direct invocation bypasses the EventBridge pattern, so negative tests can deliberately submit payloads that EventBridge would normally reject.
+
+The Lambda does not use the top-level EventBridge `source` or `detail-type` fields as authorization gates. They are retained in the direct-invocation payloads to mirror the production event shape; the Lambda's own finding gates are evaluated from `detail.findings`.
 
 ---
 
@@ -45,7 +56,7 @@ This project uses a centralized IAM Identity Center model.
 
 For this test document:
 
-- **EC2 Isolation** is automated and triggered by Security Hub/EventBridge.
+- **EC2 Isolation** is automated and triggered by qualifying GuardDuty findings imported through Security Hub and matched by the dedicated EventBridge rule.
 - **EC2 Rollback** is manually triggered by a user assigned to the environment-specific `SecOps-Operator` group.
 - The `SecOps-Operator` role does **not** directly invoke this Lambda.
 - Direct Lambda invocation tests should be run by an administrator, engineer, or CI/CD role with `lambda:InvokeFunction`.
@@ -67,8 +78,8 @@ The operator workflow is primarily validated in the EC2 rollback test document, 
 Before running these tests, confirm:
 
 - The target environment has been deployed.
-- Security Hub is enabled in the target account.
-- EventBridge rules for Security Hub findings are deployed.
+- Security Hub is enabled for the target account and receives GuardDuty findings.
+- The dedicated EC2-isolation EventBridge rule is deployed.
 - The EC2 Isolation Lambda exists.
 - The `Quarantine` security group exists.
 - The SecOps SNS topic exists.
@@ -94,6 +105,8 @@ export ACCOUNT_ID="<YOUR-ACCOUNT-ID>"
 export INSTANCE_ID="<EC2-INSTANCE-ID>"
 export INSTANCE_ARN="arn:aws:ec2:${AWS_REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-isolation"
+export ISOLATION_RULE_NAME="${CLOUD_NAME}-${ENVIRONMENT}-securityhub-ec2-high-critical"
+export GUARDDUTY_PRODUCT_ARN="arn:aws:securityhub:${AWS_REGION}::product/aws/guardduty"
 ```
 > If any of the following tests fail, ensure that the above environment variables are correctly set.
 
@@ -120,6 +133,70 @@ Example:
 ```text
 tf-secure-baseline-dev-ec2-isolation
 ```
+
+### Confirm Deployed Lambda Configuration
+
+Before running the behavior tests, inspect the deployed environment variables:
+
+```bash
+aws lambda get-function-configuration \
+  --region "${AWS_REGION}" \
+  --function-name "${FUNCTION_NAME}" \
+  --query 'Environment.Variables.{QUARANTINE_SG_ID:QUARANTINE_SG_ID,SNS_TOPIC_ARN:SNS_TOPIC_ARN,AUTO_ISOLATION_SEVERITIES:AUTO_ISOLATION_SEVERITIES}' \
+  --output json
+```
+
+Expected:
+
+- `QUARANTINE_SG_ID` is populated.
+- `SNS_TOPIC_ARN` is populated for the normal baseline deployment.
+- `AUTO_ISOLATION_SEVERITIES` reflects the Terraform-configured severity set.
+
+The Lambda itself falls back to `CRITICAL` if `AUTO_ISOLATION_SEVERITIES` is absent or empty. Tests that specifically expect `HIGH` to be skipped assume `HIGH` is **not** present in the deployed severity set.
+
+### Confirm Dedicated EventBridge Rule
+
+Inspect the EC2-isolation rule:
+
+```bash
+aws events describe-rule \
+  --region "${AWS_REGION}" \
+  --name "${ISOLATION_RULE_NAME}" \
+  --query EventPattern \
+  --output text | jq .
+```
+
+The deployed pattern should require all of the following under `detail.findings`:
+
+```text
+ProductArn   = arn:aws:securityhub:<region>::product/aws/guardduty
+Severity     = HIGH or CRITICAL
+Resources    = AwsEc2Instance
+Workflow     = NEW
+RecordState  = ACTIVE
+```
+
+The EC2-isolation rule is distinct from the broader `${CLOUD_NAME}-${ENVIRONMENT}-securityhub-high-critical` rule used by the IP-enrichment/security-notification path.
+
+Confirm the dedicated rule targets the EC2-isolation Lambda and uses the workflow DLQ/retry policy:
+
+```bash
+aws events list-targets-by-rule \
+  --region "${AWS_REGION}" \
+  --rule "${ISOLATION_RULE_NAME}" \
+  --query 'Targets[?Id==`Ec2IsolationLambda`].{Id:Id,Arn:Arn,DLQ:DeadLetterConfig.Arn,MaxAttempts:RetryPolicy.MaximumRetryAttempts,MaxAge:RetryPolicy.MaximumEventAgeInSeconds}' \
+  --output json
+```
+
+Expected for the `Ec2IsolationLambda` target:
+
+```text
+DLQ suffix   = -ec2-isolation-dlq
+MaxAttempts  = 3
+MaxAge       = 3600
+```
+
+Terraform also configures the Lambda's asynchronous failure destination to the same workflow DLQ with a 3600-second maximum event age and two Lambda retry attempts.
 
 ---
 
@@ -181,24 +258,50 @@ aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
   --region "${AWS_REGION}" \
   --since 15m
 ```
-> If this returns nothing, that's fine; but you do not want to see errors.
+> If this returns nothing, that's fine; but you do not want to see unexpected errors.
+
+### Interpret Direct-Invocation Results
+
+`aws lambda invoke` prints invocation metadata to the terminal and writes the handler return value to `response.json`.
+
+The handler returns a summary with:
+
+```json
+{
+  "findings_received": 0,
+  "instances_evaluated": 0,
+  "instances_isolated": 0,
+  "instances_skipped": 0,
+  "errors": 0
+}
+```
+
+Important counting behavior:
+
+- A finding rejected by the GuardDuty product, severity, workflow, or record-state gate is skipped **before** EC2 resource evaluation. It does not increment `instances_evaluated` or `instances_skipped`.
+- An EC2 instance that reaches instance evaluation but fails instance-state, `IsolationAllowed`, or already-isolated checks increments `instances_skipped`.
+- A successfully quarantined instance increments `instances_isolated`.
+- AWS API or unexpected processing exceptions increment `errors`.
 
 ---
 
 # EC2 ISOLATION LAMBDA TESTS
 
-## Test 1 - HIGH EC2 Security Hub Finding
+## Test 1 - HIGH GuardDuty EC2 Finding (Direct Invocation)
 
 ### Purpose
 
-Validate that a `HIGH` severity EC2 finding is skipped by the default `CRITICAL`-only automatic-isolation policy.
+Validate the Lambda-side severity gate using a `HIGH` GuardDuty EC2 finding. Under a `CRITICAL`-only deployed severity set, the finding must be skipped.
 
 ### Expected Outcome
 
 - Lambda executes successfully.
-- The finding is logged and skipped because `HIGH` is not in the default configured severity set.
+- The GuardDuty product, workflow, record-state, and EC2-resource fields are valid.
+- The finding is logged and skipped because `HIGH` is not in the deployed configured severity set.
 - No snapshots, security-group changes, isolation tags, or isolation SNS notification are created.
 - No unexpected errors appear in CloudWatch Logs.
+
+If `AUTO_ISOLATION_SEVERITIES` intentionally includes `HIGH`, this test is no longer a negative severity test; an otherwise eligible instance can be isolated.
 
 ### Manual Event via AWS CLI
 
@@ -223,6 +326,7 @@ aws lambda invoke \
         "Id": "test-finding-high-ec2-001",
         "Title": "Manual test HIGH EC2 finding",
         "Description": "Manual test event used to validate EC2 isolation behavior.",
+        "ProductArn": "${GUARDDUTY_PRODUCT_ARN}",
         "Severity": {
           "Label": "HIGH"
         },
@@ -242,25 +346,30 @@ aws lambda invoke \
 }
 EOF
 )" \
-response.json && cat response.json && rm response.json
+  response.json && cat response.json && rm response.json
 ```
 
 ### Expected CLI Output
 
+The AWS CLI invocation metadata should report success. Because the finding is rejected before EC2 evaluation, `response.json` should contain a handler summary equivalent to:
+
 ```json
 {
-  "StatusCode": 200,
-  "ExecutedVersion": "$LATEST"
+  "findings_received": 1,
+  "instances_evaluated": 0,
+  "instances_isolated": 0,
+  "instances_skipped": 0,
+  "errors": 0
 }
 ```
 
 ---
 
-## Test 2 - CRITICAL EC2 Security Hub Finding
+## Test 2 - CRITICAL GuardDuty EC2 Finding (Direct Invocation)
 
 ### Purpose
 
-Validate that a `CRITICAL` severity Security Hub finding for an EC2 instance causes the instance to be isolated.
+Validate that a `CRITICAL`, `NEW`, `ACTIVE` GuardDuty finding for an authorized EC2 instance causes the instance to be isolated.
 
 ### Expected Outcome
 
@@ -269,7 +378,10 @@ Validate that a `CRITICAL` severity Security Hub finding for an EC2 instance cau
 - The instance is moved into the quarantine security group.
 - Isolation evidence tags are applied while `IsolationAllowed` remains `true`.
 - SNS notification is sent to the configured SecOps topic.
-- No errors appear in CloudWatch Logs.
+- The returned handler summary reports one evaluated and isolated instance with zero processing errors.
+- No unexpected errors appear in CloudWatch Logs.
+
+The Lambda does not roll back an already-successful isolation if SNS publication later fails. A notification failure is logged and should be treated as an operational alerting failure, not as proof that the instance was not quarantined.
 
 ### Manual Event via AWS CLI
 
@@ -294,6 +406,7 @@ aws lambda invoke \
         "Id": "test-finding-critical-ec2-001",
         "Title": "Manual test CRITICAL EC2 finding",
         "Description": "Manual test event used to validate EC2 isolation behavior.",
+        "ProductArn": "${GUARDDUTY_PRODUCT_ARN}",
         "Severity": {
           "Label": "CRITICAL"
         },
@@ -313,25 +426,157 @@ aws lambda invoke \
 }
 EOF
 )" \
-response.json && cat response.json && rm response.json
+  response.json && cat response.json && rm response.json
 ```
 
 ### Expected CLI Output
 
+The AWS CLI invocation metadata should report success, and `response.json` should contain a handler summary equivalent to:
+
 ```json
 {
-  "StatusCode": 200,
-  "ExecutedVersion": "$LATEST"
+  "findings_received": 1,
+  "instances_evaluated": 1,
+  "instances_isolated": 1,
+  "instances_skipped": 0,
+  "errors": 0
 }
 ```
 
 ---
 
-## Test 3 - CRITICAL Non-EC2 Finding
+## Test 2A - CRITICAL Non-GuardDuty EC2 Finding (Direct Invocation)
 
 ### Purpose
 
-Validate that a configured `CRITICAL` finding for a non-EC2 resource does not trigger EC2 isolation.
+Validate the Lambda's product gate. A `CRITICAL`, `NEW`, `ACTIVE` EC2 finding from another Security Hub product must not isolate the instance even when every other finding field is eligible.
+
+This test intentionally bypasses EventBridge. The deployed EventBridge rule would reject this finding before Lambda invocation because its `ProductArn` is not GuardDuty.
+
+### Expected Outcome
+
+- Lambda executes successfully.
+- The finding is logged and skipped because `ProductArn` does not equal the GuardDuty Security Hub product ARN.
+- `instances_evaluated` remains `0`.
+- No snapshots, security-group changes, isolation tags, or isolation SNS notification are created.
+- No unexpected errors appear in CloudWatch Logs.
+
+### Manual Event via AWS CLI
+
+```bash
+aws lambda invoke \
+  --region "${AWS_REGION}" \
+  --function-name "${FUNCTION_NAME}" \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
+{
+  "version": "0",
+  "id": "test-critical-non-guardduty-ec2",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "${ACCOUNT_ID}",
+  "time": "2026-01-22T03:45:49Z",
+  "region": "${AWS_REGION}",
+  "resources": [],
+  "detail": {
+    "findings": [
+      {
+        "Id": "test-finding-critical-non-guardduty-ec2-001",
+        "Title": "Manual test CRITICAL non-GuardDuty EC2 finding",
+        "Description": "Manual test event used to validate the GuardDuty product gate.",
+        "ProductArn": "arn:aws:securityhub:${AWS_REGION}::product/aws/inspector",
+        "Severity": {
+          "Label": "CRITICAL"
+        },
+        "Workflow": {
+          "Status": "NEW"
+        },
+        "RecordState": "ACTIVE",
+        "Resources": [
+          {
+            "Type": "AwsEc2Instance",
+            "Id": "${INSTANCE_ARN}"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+)" \
+  response.json && cat response.json && rm response.json
+```
+
+---
+
+## Test 2B - CRITICAL GuardDuty EC2 Finding Missing RecordState (Direct Invocation)
+
+### Purpose
+
+Validate fail-closed handling when `RecordState` is absent.
+
+The Lambda reads a missing `RecordState` as an empty value, not as `ACTIVE`. The deployed EventBridge rule also requires `RecordState = ACTIVE`, so this condition is independently enforced at both layers.
+
+### Expected Outcome
+
+- Lambda executes successfully.
+- The finding is logged and skipped because `RecordState` is missing.
+- `instances_evaluated` remains `0`.
+- No snapshots, security-group changes, isolation tags, or isolation SNS notification are created.
+- No unexpected errors appear in CloudWatch Logs.
+
+### Manual Event via AWS CLI
+
+```bash
+aws lambda invoke \
+  --region "${AWS_REGION}" \
+  --function-name "${FUNCTION_NAME}" \
+  --cli-binary-format raw-in-base64-out \
+  --payload "$(cat <<EOF
+{
+  "version": "0",
+  "id": "test-critical-missing-record-state",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "account": "${ACCOUNT_ID}",
+  "time": "2026-01-22T03:45:49Z",
+  "region": "${AWS_REGION}",
+  "resources": [],
+  "detail": {
+    "findings": [
+      {
+        "Id": "test-finding-critical-missing-record-state-001",
+        "Title": "Manual test CRITICAL GuardDuty EC2 finding without RecordState",
+        "Description": "Manual test event used to validate fail-closed RecordState handling.",
+        "ProductArn": "${GUARDDUTY_PRODUCT_ARN}",
+        "Severity": {
+          "Label": "CRITICAL"
+        },
+        "Workflow": {
+          "Status": "NEW"
+        },
+        "Resources": [
+          {
+            "Type": "AwsEc2Instance",
+            "Id": "${INSTANCE_ARN}"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+)" \
+  response.json && cat response.json && rm response.json
+```
+
+---
+
+## Test 3 - CRITICAL GuardDuty Non-EC2 Finding (Direct Invocation)
+
+### Purpose
+
+Validate that a configured `CRITICAL` GuardDuty finding for a non-EC2 resource does not trigger EC2 isolation.
 
 ### Expected Outcome
 
@@ -365,6 +610,7 @@ aws lambda invoke \
         "Id": "test-finding-critical-non-ec2-001",
         "Title": "Manual test CRITICAL non-EC2 finding",
         "Description": "Manual test event used to validate non-EC2 findings are ignored.",
+        "ProductArn": "${GUARDDUTY_PRODUCT_ARN}",
         "Severity": {
           "Label": "CRITICAL"
         },
@@ -384,7 +630,7 @@ aws lambda invoke \
 }
 EOF
 )" \
-response.json && cat response.json && rm response.json
+  response.json && cat response.json && rm response.json
 ```
 
 ### Expected CLI Output
@@ -398,7 +644,7 @@ response.json && cat response.json && rm response.json
 
 ---
 
-## Test 4 - MEDIUM EC2 Finding
+## Test 4 - MEDIUM GuardDuty EC2 Finding (Direct Invocation)
 
 ### Purpose
 
@@ -436,6 +682,7 @@ aws lambda invoke \
         "Id": "test-finding-medium-ec2-001",
         "Title": "Manual test MEDIUM EC2 finding",
         "Description": "Manual test event used to validate MEDIUM findings are ignored.",
+        "ProductArn": "${GUARDDUTY_PRODUCT_ARN}",
         "Severity": {
           "Label": "MEDIUM"
         },
@@ -455,7 +702,7 @@ aws lambda invoke \
 }
 EOF
 )" \
-response.json && cat response.json && rm response.json
+  response.json && cat response.json && rm response.json
 ```
 
 ### Expected CLI Output
@@ -469,7 +716,7 @@ response.json && cat response.json && rm response.json
 
 ---
 
-## Test 5 - LOW EC2 Finding
+## Test 5 - LOW GuardDuty EC2 Finding (Direct Invocation)
 
 ### Purpose
 
@@ -507,6 +754,7 @@ aws lambda invoke \
         "Id": "test-finding-low-ec2-001",
         "Title": "Manual test LOW EC2 finding",
         "Description": "Manual test event used to validate LOW findings are ignored.",
+        "ProductArn": "${GUARDDUTY_PRODUCT_ARN}",
         "Severity": {
           "Label": "LOW"
         },
@@ -526,7 +774,7 @@ aws lambda invoke \
 }
 EOF
 )" \
-response.json && cat response.json && rm response.json
+  response.json && cat response.json && rm response.json
 ```
 
 ### Expected CLI Output
@@ -540,7 +788,7 @@ response.json && cat response.json && rm response.json
 
 ---
 
-## Test 6 - RESOLVED EC2 Finding
+## Test 6 - RESOLVED GuardDuty EC2 Finding (Direct Invocation)
 
 ### Purpose
 
@@ -578,6 +826,7 @@ aws lambda invoke \
         "Id": "test-finding-resolved-ec2-001",
         "Title": "Manual test RESOLVED EC2 finding",
         "Description": "Manual test event used to validate resolved findings are ignored.",
+        "ProductArn": "${GUARDDUTY_PRODUCT_ARN}",
         "Severity": {
           "Label": "CRITICAL"
         },
@@ -597,7 +846,7 @@ aws lambda invoke \
 }
 EOF
 )" \
-response.json && cat response.json && rm response.json
+  response.json && cat response.json && rm response.json
 ```
 
 ### Expected CLI Output
@@ -617,7 +866,9 @@ Use the Test 2 `CRITICAL` payload and change one condition at a time.
 
 | Condition | Expected result |
 |---|---|
+| `ProductArn` is missing or is not the GuardDuty Security Hub product ARN | Finding is skipped before instance evaluation |
 | `IsolationAllowed` is missing or `false` | Invocation succeeds; instance is skipped |
+| `RecordState` is missing | Finding is skipped before instance evaluation |
 | `RecordState` is `ARCHIVED` | Finding is skipped |
 | Workflow status is not `NEW` | Finding is skipped |
 | Instance state is not `running` or `stopped` | Instance is skipped |
@@ -631,68 +882,41 @@ Before continuing, restore `IsolationAllowed=true` on the approved development t
 
 ---
 
-## Test 7 - Multi-Account Environment Naming Validation
+## Test 7 - Multi-Account Environment Naming and Account-Boundary Validation
 
 ### Purpose
 
-Validate that the function naming convention works consistently across environments.
+Validate that the same Lambda naming and eligibility model works across workload accounts without accidentally reusing another environment's account or instance identifiers.
 
-This does not require changing the payload. It validates that the same test pattern can be used in `dev`, `staging`, or `prod` by changing the `ENVIRONMENT` variable.
+For `staging` or `prod`, use credentials for the target account and recompute all account-specific values. Changing only `ENVIRONMENT` is not sufficient.
 
 ### Example
 
 ```bash
 export ENVIRONMENT="staging"
 export FUNCTION_NAME="${CLOUD_NAME}-${ENVIRONMENT}-ec2-isolation"
+export ISOLATION_RULE_NAME="${CLOUD_NAME}-${ENVIRONMENT}-securityhub-ec2-high-critical"
 
-aws lambda invoke \
+export ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+export INSTANCE_ID="<STAGING-EC2-INSTANCE-ID>"
+export INSTANCE_ARN="arn:aws:ec2:${AWS_REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}"
+
+aws lambda get-function \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
-  --cli-binary-format raw-in-base64-out \
-  --payload "$(cat <<EOF
-{
-  "version": "0",
-  "id": "test-staging-critical-ec2-isolation",
-  "detail-type": "Security Hub Findings - Imported",
-  "source": "aws.securityhub",
-  "account": "${ACCOUNT_ID}",
-  "time": "2026-01-22T03:45:49Z",
-  "region": "${AWS_REGION}",
-  "resources": [],
-  "detail": {
-    "findings": [
-      {
-        "Id": "test-finding-staging-critical-ec2-001",
-        "Title": "Manual staging test CRITICAL EC2 finding",
-        "Description": "Manual test event used to validate environment-specific Lambda naming.",
-        "Severity": {
-          "Label": "CRITICAL"
-        },
-        "Workflow": {
-          "Status": "NEW"
-        },
-        "RecordState": "ACTIVE",
-        "Resources": [
-          {
-            "Type": "AwsEc2Instance",
-            "Id": "${INSTANCE_ARN}"
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
-)" \
-response.json && cat response.json && rm response.json
+  --query 'Configuration.[FunctionName,FunctionArn,State]' \
+  --output table
 ```
+
+If an approved direct-invocation test is required, reuse the Test 2 payload only after confirming the target account, target instance, and `IsolationAllowed` policy for that environment.
 
 ### Expected Outcome
 
-- The environment-specific Lambda function is invoked.
-- The same eligibility checks are applied in that account.
-- Staging and production skip isolation by default because their instances have `IsolationAllowed=false`.
-- Only the target account/environment is evaluated.
+- The environment-specific Lambda resolves in the active AWS account.
+- The active AWS account ID matches the account encoded in `INSTANCE_ARN`.
+- The same Lambda-side eligibility checks apply in each workload account.
+- An instance with `IsolationAllowed` missing or not equal to `true` is skipped even for an otherwise eligible GuardDuty finding.
+- Only resources in the active target account are evaluated.
 
 ---
 
@@ -709,7 +933,7 @@ This test does not invoke the rollback Lambda directly. It confirms that isolati
 After running Test 2 against an approved development instance, ensure the following:
 
 - Instance is isolated
-- Snapshot is taken of EBS volume(s) associated with the instance
+- Snapshot requests exist for attached EBS volume(s) associated with the instance; snapshot completion may still be pending
 - Original security group information is preserved according to the Lambda implementation
 - Isolation tags are present
 - The instance can be targeted by the EC2 Rollback test workflow
@@ -751,24 +975,54 @@ Use this section to validate the event-driven workflow.
 ## Integration Path
 
 ```text
-Security Hub Finding
+GuardDuty finding
+    |
+    v
+Security Hub imported finding
     |
     v
 Default EventBridge Bus
     |
     v
-EventBridge Rule
+${CLOUD_NAME}-${ENVIRONMENT}-securityhub-ec2-high-critical
     |
     v
 EC2 Isolation Lambda
     |
-    v
-EC2 Security Group Replacement + SNS Alert
+    +--> request pre-isolation EBS snapshots
+    |
+    +--> replace instance security groups with quarantine SG
+    |
+    +--> add isolation evidence tags
+    |
+    +--> publish SecOps SNS notification
 ```
+
+## EventBridge Filtering Versus Lambda Filtering
+
+The deployed EC2-isolation EventBridge rule only forwards findings that already match:
+
+```text
+ProductArn   = GuardDuty
+Severity     = HIGH or CRITICAL
+Resource     = AwsEc2Instance
+Workflow     = NEW
+RecordState  = ACTIVE
+```
+
+The Lambda independently revalidates the same product/workflow/state assumptions and then applies the configured automatic-isolation severity set plus runtime EC2 checks.
+
+This distinction matters during testing:
+
+- `MEDIUM`, `LOW`, non-EC2, non-GuardDuty, non-`NEW`, and non-`ACTIVE` payloads are useful **direct Lambda negative tests**, but the production EventBridge rule would normally filter them out first.
+- `HIGH` is allowed through EventBridge. Whether it isolates is determined by `AUTO_ISOLATION_SEVERITIES`.
+- `CRITICAL` isolates only when the deployed severity set includes `CRITICAL` and all remaining instance/snapshot gates pass.
 
 ## Expected Integration Behavior
 
-When a HIGH or CRITICAL EC2 finding is imported, EventBridge invokes the Lambda. Isolation occurs only when the runtime severity configuration and all finding, instance, authorization, and snapshot checks pass. With the default configuration, a `CRITICAL`, `NEW`, `ACTIVE` finding against a development instance with `IsolationAllowed=true` should result in quarantine, evidence tags, and an SNS notification.
+With a `CRITICAL`-only severity configuration, a GuardDuty `CRITICAL`, `NEW`, `ACTIVE` EC2 finding against an eligible development instance with `IsolationAllowed=true` should result in snapshot requests, quarantine, evidence tags, and an SNS notification.
+
+A GuardDuty `HIGH`, `NEW`, `ACTIVE` EC2 finding still reaches the Lambda through EventBridge, but the Lambda skips it unless `HIGH` is explicitly present in `AUTO_ISOLATION_SEVERITIES`.
 
 ---
 
@@ -798,14 +1052,17 @@ Ensure that all environment variables are correctly set prior to following the t
 
 Check:
 
-- Finding severity is included in `AUTO_ISOLATION_SEVERITIES`; the deployed default is `CRITICAL`.
-- Workflow status is `NEW` and record state is `ACTIVE`.
+- `ProductArn` exactly matches `arn:aws:securityhub:${AWS_REGION}::product/aws/guardduty`.
+- Finding severity is included in `AUTO_ISOLATION_SEVERITIES`.
+- Workflow status is `NEW` and record state is explicitly `ACTIVE`; missing `RecordState` fails closed.
 - Resource type is `AwsEc2Instance` and the resource ID is valid.
 - Instance state is `running` or `stopped`.
 - Instance has `IsolationAllowed=true` and is not already isolated.
 - Snapshot creation succeeded before the security-group change.
 - Lambda execution role has the required EC2 and SNS permissions.
 - Quarantine security group exists in the expected VPC.
+
+If the security group was replaced but isolation tags are incomplete, treat the result as a partial isolation failure requiring investigation. Security-group replacement happens before the isolation tags are written; a later tagging error is not automatically rolled back.
 
 ---
 
@@ -828,6 +1085,8 @@ Check:
 - SNS topic policy allows publish from the Lambda role.
 - Email subscription is confirmed.
 - SNS topic uses the correct KMS key permissions.
+
+A failed SNS publish does not undo a successful quarantine. Verify the instance security groups and isolation tags independently of notification delivery.
 
 ---
 
@@ -861,9 +1120,10 @@ These tests validate the EC2 Isolation Lambda in the context of the full `tf-sec
 
 They confirm that:
 
-- CRITICAL EC2 findings isolate only explicitly authorized, eligible instances by default.
-- HIGH findings are skipped unless the configured severity set is expanded.
-- Non-EC2, inactive, non-NEW, ineligible, duplicate, and already-isolated targets are skipped.
+- Automatic EC2 isolation is restricted to GuardDuty findings imported through Security Hub.
+- CRITICAL GuardDuty EC2 findings isolate only explicitly authorized, eligible instances when `CRITICAL` is configured.
+- HIGH GuardDuty findings are skipped unless the configured severity set includes `HIGH`.
+- Non-GuardDuty, non-EC2, inactive, missing-state, non-NEW, ineligible, duplicate, and already-isolated targets are skipped.
 - Snapshot failure prevents quarantine.
 - Environment-specific naming and authorization work across accounts.
 - Isolation preserves the controlled rollback workflow.

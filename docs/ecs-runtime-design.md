@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document describes the implemented `v1.8.0 — Secure Container Workloads` ECS/Fargate runtime architecture, ownership boundaries, application release lifecycle, and validation contract.
+This document describes the implemented ECS/Fargate runtime architecture as extended for the `v1.9.0` release, including ownership boundaries, service scaling, deployment health, operational alarms, application release lifecycle, and validation contract.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
@@ -44,6 +44,22 @@ variable "ecs_services" {
     memory         = number
     desired_count  = optional(number, 1)
 
+    scaling = optional(object({
+      min_capacity               = number
+      max_capacity               = number
+      cpu_target_percent         = optional(number)
+      memory_target_percent      = optional(number)
+      alb_requests_per_target    = optional(number)
+      scale_in_cooldown_seconds  = optional(number, 300)
+      scale_out_cooldown_seconds = optional(number, 300)
+    }), null)
+
+    deployment = optional(object({
+      minimum_healthy_percent           = optional(number, 100)
+      maximum_percent                   = optional(number, 200)
+      health_check_grace_period_seconds = optional(number, 0)
+    }), {})
+
     cpu_architecture = optional(string, "X86_64")
     database_access = optional(bool, false)
 
@@ -67,13 +83,27 @@ variable "ecs_services" {
 
 A non-null digest must match `sha256:` plus 64 lowercase hexadecimal characters. Plain environment-variable names cannot overlap ECS-native secret names, and a secret name cannot be declared in both the Secrets Manager and SSM maps.
 
+When `scaling` is configured, `min_capacity` must be at least 1, `max_capacity` must be greater than or equal to `min_capacity`, and the configured `desired_count` bootstrap value must fall within that range. At least one of `cpu_target_percent`, `memory_target_percent`, or `alb_requests_per_target` must be configured, target values must be greater than zero, and cooldowns must be non-negative. `alb_requests_per_target` additionally requires `ingress`.
+
+Deployment-health inputs preserve ECS defaults when omitted: `minimum_healthy_percent = 100`, `maximum_percent = 200`, and `health_check_grace_period_seconds = 0`.
+
 ### Registered versus deployable services
 
 `image_digest = null` is a valid lifecycle state. It means the service is registered but unreleased.
 
 Baseline derives `deployable_ecs_services` by filtering the canonical map to entries whose `image_digest` is non-null. ECR repository requirements intentionally derive from **all registered services**, while per-service ECS runtime, runtime IAM, task security groups, application log groups, and ALB routing derive only from **deployable services**.
 
-Therefore a registered-but-unreleased service preserves/creates its required ECR repository without creating a task definition or ECS service. Selecting a valid digest later materializes the runtime from the same service entry.
+Therefore a registered-but-unreleased service preserves/creates its required ECR repository without creating a task definition or ECS service. Selecting a valid digest later materializes the runtime from the same service entry. Registered-but-unreleased services also create no Application Auto Scaling targets or policies and no ECS operational alarms.
+
+### Fixed versus autoscaled desired-count ownership
+
+`scaling = null` means the service is fixed-count. Terraform owns `desired_count` and the runtime validator requires the live ECS desired count to equal the configured value exactly.
+
+A non-null `scaling` object means the service is autoscaled. The configured `desired_count` is bootstrap capacity used when the ECS service is created; after creation, Application Auto Scaling owns subsequent desired-count changes within `min_capacity` and `max_capacity`. Terraform must not reset a legitimate runtime scaling decision back to the bootstrap count.
+
+`modules/ecs_service` therefore keeps fixed and autoscaled ECS services on separate Terraform resources. Fixed services use `aws_ecs_service.services`; autoscaled services use `aws_ecs_service.autoscaled_services` with `lifecycle.ignore_changes = [desired_count]`. This split is required because Terraform lifecycle behavior cannot be selected conditionally for individual `for_each` instances.
+
+Existing fixed-count services retain the original `aws_ecs_service.services` address, preserving the v1.8 state identity for services that do not opt into scaling.
 
 ## Image and repository lifecycle
 
@@ -110,6 +140,40 @@ Task definitions use Fargate, `awsvpc`, Linux, and either `X86_64` or `ARM64`. T
 Each task definition uses separate per-service task execution and application task roles. The current abstraction contains exactly one essential container named for the stable service key, one TCP port mapping, plaintext environment values, approved ECS-native secret references, and the `awslogs` driver.
 
 The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
+
+## Deployment health
+
+Both fixed and autoscaled services apply the canonical `deployment` settings directly to the ECS service:
+
+- `minimum_healthy_percent` controls the lower deployment bound as a percentage of desired tasks;
+- `maximum_percent` controls the upper deployment bound; and
+- `health_check_grace_period_seconds` tells ECS how long after task startup to ignore unhealthy load-balancer, VPC Lattice, and container health checks.
+
+The existing deployment circuit breaker remains enabled with automatic rollback. The deployment settings are exposed through resource-backed service outputs so `validate-ecs-runtime.sh` can compare the exact live ECS values with Terraform.
+
+## Application Auto Scaling
+
+For every deployable service whose canonical `scaling` object is non-null, `modules/ecs_service` creates one `aws_appautoscaling_target` for `ecs:service:DesiredCount` using the configured minimum and maximum capacities. v1.9 uses target-tracking policies only.
+
+Optional target-tracking policies are materialized from the same scaling object:
+
+| Canonical field | AWS predefined metric |
+|---|---|
+| `cpu_target_percent` | `ECSServiceAverageCPUUtilization` |
+| `memory_target_percent` | `ECSServiceAverageMemoryUtilization` |
+| `alb_requests_per_target` | `ALBRequestCountPerTarget` |
+
+All configured policies use `scale_in_cooldown_seconds` and `scale_out_cooldown_seconds`. CPU and memory policies do not require ingress. ALB request-count scaling requires an ingress-enabled deployable service.
+
+The `ALBRequestCountPerTarget` resource label is derived from Terraform-owned ALB and target-group resource identities:
+
+```text
+<load-balancer-arn-suffix>/<target-group-arn-suffix>
+```
+
+Baseline consumes `load_balancer_arn_suffix` and per-target-group `arn_suffix` outputs from `modules/application_load_balancer`; validation does not reconstruct these identities from naming conventions in Bash.
+
+AWS creates and manages the CloudWatch alarms that support target-tracking policies. Those alarms remain AWS-managed and are intentionally separate from Terraform-owned operational notification alarms.
 
 ## Logging
 
@@ -155,7 +219,17 @@ Launch readiness is resource-granular: IAM execution-policy IDs and security-pol
 
 The listener uses a caller-supplied ACM certificate and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09`. Its default action is a fixed 404 response. Each ingress-enabled deployable service receives an `ip` target group and one explicit listener rule with at least one host-header or path-pattern condition.
 
-The ALB module does not own Route53, ACM certificate creation, WAF, or application deployment orchestration.
+The ALB module does not own Route53, ACM certificate creation, WAF, or application deployment orchestration. Its resource-backed ALB and target-group ARN suffix outputs are consumed by both ALB request-count scaling and ingress-health monitoring.
+
+## Operational health monitoring
+
+`modules/monitoring` owns ECS operational notification alarms separately from the AWS-managed target-tracking alarms.
+
+A task-deficit alarm is created for every deployable service when Container Insights is enabled. It evaluates the `ECS/ContainerInsights` expression `DesiredTaskCount - RunningTaskCount` once per minute and alarms when the deficit is greater than zero for three consecutive datapoints. Both ALARM and OK transitions notify the workload SecOps SNS topic, and missing data is treated as not breaching.
+
+An ingress unhealthy-target alarm is created for every deployable ingress service. It evaluates `AWS/ApplicationELB` `UnHealthyHostCount` with `Maximum`, using the resource-backed load-balancer and target-group ARN suffixes, and alarms when the count is greater than zero for three consecutive one-minute datapoints. Both ALARM and OK transitions notify SecOps.
+
+Task-deficit alarms are absent when Container Insights is disabled. Ingress alarms are conditional on ingress and are validated independently of the general ALB validation stage.
 
 ## Storage outputs and secret handling
 
@@ -206,21 +280,26 @@ ECS/Fargate remains inside the existing workload-baseline validation layer. Ther
 
 `validate-ecr.sh` verifies repository identity, immutable tags, KMS encryption against the exact workload ECR CMK, and the approved untagged-only lifecycle rule.
 
-`validate-ecs-runtime.sh` verifies the cluster, exact Container Insights setting, Container Insights performance log-group identity/retention/KMS encryption, exact live ECS service inventory, service steady state, task definitions, immutable image references, per-service logging, task security-policy relationships, conditional database access, and conditional ALB relationships.
+`validate-ecs-runtime.sh` remains the single workload-baseline ECS validator entry point. Its internal helpers under `scripts/validation/lib/ecs-runtime/` split contract, cluster, service, autoscaling, ingress, alarm, and summary checks without creating another validation layer.
 
-`validate-iam.sh` verifies per-service task/execution role trust and authority separation, scoped execution-policy permissions, absence of `iam:PassRole`, initially empty application task-role authority, and exact `task_execution_kms_key_arns` behavior. The former deferred task-execution KMS warning has been removed.
+The validator verifies the cluster, exact Container Insights setting, Container Insights performance log-group identity/retention/KMS encryption, exact live ECS service inventory, service steady state, task definitions, immutable image references, per-service logging, task security-policy relationships, conditional database access, and conditional ALB relationships.
 
-The final development workload validation completed with all 16 workload validators passing, and a subsequent Terraform plan reported no changes. Generated evidence packages remain the authoritative per-run record; do not represent this infrastructure evidence as SOC 2 or ISO 27001 certification.
+For fixed services it requires live `desiredCount` to equal Terraform exactly. For autoscaled services it requires live `desiredCount` to remain within the configured minimum/maximum bounds rather than equal the bootstrap count. It also requires the Application Auto Scaling target inventory to exactly match Terraform and validates target bounds, resource identities, namespaces/dimensions, suspension state, and the exact CPU, memory, and conditional ALB target-tracking policies, including targets, cooldowns, predefined metric type, and ALB resource label.
+
+Deployment minimum/maximum percentages and health-check grace period are compared exactly with the resource-backed Terraform contract. Operational task-deficit and ingress unhealthy-target alarm inventories and configurations are also validated exactly. AWS-managed target-tracking alarms are deliberately excluded from the Terraform operational-alarm inventory. Operational alarm state is interpreted as `OK` = pass, `INSUFFICIENT_DATA` = warning while metric evaluation completes, and `ALARM` = validation failure.
+
+`validate-iam.sh` verifies per-service task/execution role trust and authority separation, scoped execution-policy permissions, absence of `iam:PassRole`, initially empty application task-role authority, and exact `task_execution_kms_key_arns` behavior.
+
+The v1.9 live qualification completed with all 16 workload validators passing, the strict workload-bootstrap validation passing, and a subsequent Terraform plan reporting no changes. The qualification also exercised CPU and memory scale-out/scale-in, conditional ALB request scaling, fixed and autoscaled desired-count ownership, digest release while scaled, deployment-health settings, and operational alarms. Generated evidence packages remain the authoritative per-run record; do not represent this infrastructure evidence as SOC 2 or ISO 27001 certification.
 
 ## Central security boundary
 
-Inspector ECR scanning remains workload-local under `modules/security`. Central GuardDuty organization ownership remains in `bootstrap/security_operations/security_services`. The current central setting keeps `ECS_FARGATE_AGENT_MANAGEMENT = NONE`; Fargate managed-agent deployment is not part of v1.8.0.
+Inspector ECR scanning remains workload-local under `modules/security`. Central GuardDuty organization ownership remains in `bootstrap/security_operations/security_services`. The current central setting keeps `ECS_FARGATE_AGENT_MANAGEMENT = NONE`; GuardDuty Fargate managed-agent deployment is not part of the v1.9 runtime scope.
 
-## Post-v1.8.0 work
+## Post-v1.9.0 work
 
-The following capabilities are intentionally outside the v1.8.0 release boundary and are not blockers for `Secure Container Workloads`:
+The following capabilities remain outside the v1.9 release boundary:
 
-- ECS Service Auto Scaling
 - GuardDuty Fargate managed-agent enablement
 - fail-closed ECS task containment/remediation
 - ReconoSense reference deployment

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`scripts/deployment` contains the application image-publication and immutable digest-promotion tooling for the v1.8.0 ECS/Fargate runtime. Terraform owns ECR repositories and ECS infrastructure; these scripts build and publish images outside Terraform, resolve the digest recorded by ECR, and prepare the one-field configuration change that selects a release.
+`scripts/deployment` contains the application image-publication and immutable digest-promotion tooling used by the ECS/Fargate runtime, including the v1.9 runtime contract. Terraform owns ECR repositories and ECS infrastructure; these scripts build and publish images outside Terraform, resolve the digest recorded by ECR, and prepare the one-field configuration change that selects a release.
 
 The canonical workload configuration is tracked at:
 
@@ -27,7 +27,8 @@ registered ecs_services entry
   -> human review and merge
   -> self-contained Terraform Apply workflow and protected approval
   -> verify and apply the exact saved plan
-  -> ECS convergence and workload validation
+  -> ECS convergence
+  -> separate workload validation/evidence
 ```
 
 The `Deploy Application` workflow publishes an image and opens a release PR. It does not merge the PR, run Terraform Apply, or directly deploy the ECS service.
@@ -104,7 +105,9 @@ in the selected tracked workload configuration. It requires:
   --image-digest "sha256:<64-lowercase-hex-characters>"
 ```
 
-The script requires a clean repository working tree, validates the existing JSON and service registration, rejects an invalid or already-selected digest, and proves that removing the target `image_digest` leaves the before/after JSON semantically identical. It then runs `git diff --check` for the tracked file. It does not commit, push, open a PR, plan Terraform, or apply Terraform.
+The script requires a clean repository working tree, validates the existing JSON and service registration, rejects an invalid or already-selected digest, and proves that removing the target `image_digest` leaves the before/after JSON semantically identical. It then runs `git diff --check` for the tracked file. It receives the authoritative digest as an input; it does not discover or resolve the digest itself. It does not commit, push, open a PR, plan Terraform, or apply Terraform.
+
+The GitHub release/PR job calls this script with the digest resolved and re-checked by the separate publisher job. Because the mutation is restricted to `image_digest`, releases do not rewrite a service's `scaling`, `deployment`, ingress, IAM, or other canonical runtime configuration.
 
 ## GitHub `Deploy Application` Workflow
 
@@ -157,7 +160,7 @@ This separation keeps AWS image-publishing authority out of the repository mutat
 
 The tooling fails closed for invalid service/repository syntax, unsupported platforms, account mismatches, missing or inaccessible repositories, tag reuse, invalid or unresolved digests, missing canonical configuration, unregistered services, dirty release checkouts, and configuration mutations outside the selected digest field.
 
-Successful publication does not imply deployment. Operators must review the release PR and its standalone Terraform Plan, merge the PR, run the protected `Terraform Apply` workflow, and confirm ECS convergence with the workload validation suite.
+Successful publication does not imply deployment. Operators must review the release PR and its standalone informational Terraform Plan, merge the PR, run the protected `Terraform Apply` workflow, and confirm ECS convergence with the workload validation suite. For autoscaled services, Terraform applies runtime changes without reasserting the configured bootstrap `desired_count`; Application Auto Scaling retains ownership of the live desired count within the configured bounds.
 
 ## Ownership Boundary
 

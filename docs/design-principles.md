@@ -52,6 +52,7 @@ The baseline is designed to provide:
 - Dedicated private subnets for Interface VPC Endpoints
 - Centralized logging and monitoring
 - Automated detection and response
+- Explicit runtime ownership between Terraform and managed autoscaling
 - Human-approved recovery workflows
 - Encrypted and tamper-resistant operational evidence
 - A structure that is understandable enough to be adopted by small teams
@@ -460,14 +461,15 @@ This enables rapid response without requiring humans to manually execute every a
 
 ## 14. Automated Containment, Human-Approved Recovery
 
-Containment can happen automatically when a high-confidence security condition is detected, but authorization fails closed. Automatic isolation defaults to `CRITICAL`, requires an eligible `NEW` and `ACTIVE` finding, and requires the instance to have `IsolationAllowed=true`.
+Containment can happen automatically when a high-confidence security condition is detected, but authorization fails closed. The EC2 isolation EventBridge path is limited to `HIGH`/`CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings for `AwsEc2Instance`. The Lambda independently revalidates the GuardDuty product and the canonical `ec2_auto_isolation_severities` set, which defaults to `CRITICAL`, and still requires the instance to have `IsolationAllowed=true`.
 
 The reusable environment default is `false`; development explicitly opts in while staging and production remain opted out. Attached EBS snapshots are requested before quarantine, and recovery should require human review.
 
 For example:
 
 ```text
-Security Hub finding
+GuardDuty EC2 finding
+(imported through Security Hub)
     |
     v
 EC2 Isolation Lambda
@@ -562,11 +564,15 @@ EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2
 
 Operators maintain one canonical `ecs_services` map. A service can be registered with `image_digest = null`; baseline still derives its repository requirement while filtering per-service runtime resources until an immutable digest is selected. This avoids a second service inventory and avoids splitting Terraform state merely to bootstrap ECR.
 
+The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. v1.9 intentionally supports target tracking only: CPU, memory, and conditional ALB requests per target.
+
+Deployment health is likewise explicit in the canonical contract through minimum healthy percentage, maximum percentage, and task-startup health-check grace period. AWS-managed target-tracking alarms remain AWS-managed; Terraform-owned task-deficit and ingress unhealthy-target alarms are separate operational notification controls.
+
 Terraform owns runtime infrastructure, not application artifacts. Builds, tests, image publication, and digest selection happen outside Terraform. A deployable task uses the resource-backed ECR repository URL plus the reviewed immutable `sha256` digest.
 
 The application release pipeline also preserves authority separation: image publication uses the AWS Image Publisher role, while the release/PR job changes only the selected service digest with GitHub repository authority and no AWS credentials.
 
-When a validator needs to compare what Terraform actually configured, prefer resource-backed outputs over reconstructing names/policy in Bash. Examples include ECR CMK identity, ECS service platform version, Container Insights/log-group metadata, ALB listener metadata, S3 prefix-list ID, and the workload logs CMK.
+When a validator needs to compare what Terraform actually configured, prefer resource-backed outputs over reconstructing names/policy in Bash. Examples include ECR CMK identity, ECS service platform version, Container Insights/log-group metadata, ALB listener and ARN-suffix metadata, Application Auto Scaling targets/policies, operational alarm identities, S3 prefix-list ID, and the workload logs CMK.
 
 ## 19. Secure Defaults Over Maximum Flexibility
 
@@ -808,6 +814,7 @@ Notable cost drivers include:
 - Security services
 - KMS requests
 - Backup storage
+- ECS/Fargate runtime capacity and Application Load Balancers when enabled
 
 The default production design favors stronger security.
 

@@ -2,7 +2,9 @@
 
 ## Overview
 
-The `ecr` module creates a stable map of private Amazon Elastic Container Registry repositories for a workload environment. It supplies repository infrastructure to the implemented ECS/Fargate runtime without building, publishing, or selecting container images.
+The `ecr` module creates a stable map of private Amazon Elastic Container Registry repositories for a workload environment. It supplies repository infrastructure to the ECS/Fargate runtime without building, publishing, selecting, or scaling container workloads.
+
+Repository ownership is intentionally independent of ECS service runtime state. A canonical service can require its repository while remaining registered-but-unreleased with `image_digest = null`, and later ECS Service Auto Scaling configuration does not change repository ownership or lifecycle.
 
 ## Resources Created
 
@@ -84,11 +86,16 @@ The module does not create an `aws_ecr_repository_policy`. Repositories are work
 
 ## Current Integration Status
 
-The repository resource declares the standard `Name`, `Environment`, and `Terraform` tags. Its `Name` tag is the rendered repository name: `${var.name_prefix}-${each.key}`.
-
 Each workload root passes `repositories` to baseline. Baseline merges those explicit keys with repository keys required by the canonical `ecs_services` map and passes the effective set to this module. It also supplies the dedicated security-owned ECR CMK key ARN. Workload roots expose `ecr_repositories` and `ecr_cmk_arn` for consumers and validation.
 
-Every registered canonical service contributes its `repository_name` even when `image_digest = null`. This lets Terraform create the repository while keeping the task definition, ECS service, per-service roles, task SG, and runtime log group absent until an immutable digest is selected.
+Every registered canonical service contributes its `repository_name` even when `image_digest = null`. This lets Terraform create or retain the repository while keeping the task definition, ECS service, per-service roles, task security group, runtime log group, Application Auto Scaling target, and scaling policies absent until an immutable digest is selected.
+
+Service runtime settings do not alter repository derivation. In particular:
+
+- `scaling = null` versus a configured scaling object has no effect on ECR repository ownership.
+- Deployment-health settings have no effect on ECR repository ownership.
+- Ingress settings have no effect on ECR repository ownership.
+- Application Auto Scaling and Terraform-owned operational alarms are outside this module.
 
 Explicit repositories still support initial repository provisioning without permanent duplication:
 
@@ -119,6 +126,9 @@ It does not own:
 - Container image builds or publishing
 - Image-tag or deployment-digest selection
 - ECS clusters, services, or task definitions
+- ECS Service Auto Scaling targets or policies
+- ECS deployment-health configuration
+- Terraform-owned ECS operational alarms
 - IAM execution roles, task roles, or publishing permissions
 - Repository resource policies
 - Networking or VPC endpoints
@@ -127,6 +137,8 @@ It does not own:
 - KMS key creation
 - Application release sequencing or deployment workflow behavior
 
-The implemented `Deploy Application` workflow owns that separate boundary: it publishes an image through the image-publisher role, resolves the authoritative ECR digest, and opens a release PR. It does not change this module's ownership or make Terraform build or push images.
+Those responsibilities belong to other modules or baseline integration.
+
+The implemented `Deploy Application` workflow owns the separate image-publication boundary: it publishes an image through the image-publisher role, resolves the authoritative ECR digest, and opens a release PR. It does not change this module's ownership or make Terraform build or push images.
 
 `validate-ecr.sh` uses the workload-root repository output as its authoritative inventory and passes cleanly for `{}`. For configured repositories it validates identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved untagged-only lifecycle policy. `validate-security-workload.sh` separately checks the Terraform-computed effective Inspector resource types.
