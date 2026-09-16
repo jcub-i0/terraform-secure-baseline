@@ -10,9 +10,7 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 `tf-secure-baseline` is a Terraform-driven AWS security and application-hosting baseline for organizations running workloads that handle PII or other sensitive data.
 
-**Current published release:** `v1.8.0 — Secure Container Workloads`.
-
-**Main branch release candidate:** `v1.9.0` extends the ECS/Fargate runtime with Application Auto Scaling, explicit fixed-vs-autoscaled service-count ownership, deployment-health controls, operational alarms, exact runtime validation, and GuardDuty-scoped EC2 isolation hardening. The v1.9 implementation through live qualification is merged to `main`; the release is not yet published.
+**Current release:** `v1.9.0` extends the ECS/Fargate runtime with Application Auto Scaling, explicit fixed-vs-autoscaled service-count ownership, deployment-health controls, operational alarms, exact runtime validation, and GuardDuty-scoped EC2 isolation hardening.
 
 The platform provides:
 
@@ -212,7 +210,7 @@ Automatic EC2 isolation is intentionally narrower than the general Security Hub 
 
 ## ECS/Fargate Runtime and Operations
 
-`v1.8.0 — Secure Container Workloads` established the generic ECS/Fargate runtime without replacing the existing EC2 path. The qualified v1.9 implementation on `main` adds explicit runtime-operations ownership, target-tracking auto scaling, deployment-health configuration, and operational signals.
+`v1.8.0 — Secure Container Workloads` established the generic ECS/Fargate runtime without replacing the existing EC2 path. `v1.9.0` extends that runtime with explicit runtime-operations ownership, target-tracking auto scaling, deployment-health configuration, and operational signals.
 
 The runtime remains composed from:
 
@@ -433,7 +431,7 @@ AWS-managed target-tracking alarms are intentionally excluded from Terraform-own
 
 When the GitHub Image Publisher role is enabled, workload bootstrap validation also verifies its exact branch-based OIDC trust and ECR publication/query authority. Strict release/client evidence can require the publisher role explicitly.
 
-The v1.9 live qualification gate completed successfully on development infrastructure:
+The v1.9.0 live qualification gate completed successfully on development infrastructure:
 
 - CPU target-tracking scale-out/in: PASS
 - Memory target tracking: PASS
@@ -534,24 +532,9 @@ docs/            architecture, adoption, validation, assurance, and runtime desi
 
 ## Release Highlights
 
-### Current Published Release: `v1.8.0`
+### Current Release: `v1.9.0`
 
-`v1.8.0 — Secure Container Workloads` established:
-
-- Canonical `ecs_services` configuration with nullable `image_digest`
-- KMS-encrypted immutable ECR repositories
-- Exact digest-pinned Fargate task images
-- Shared ECS cluster and optional shared HTTPS ALB
-- Separate least-privilege task execution and application task roles
-- Terraform-owned application and Container Insights logging
-- GitHub OIDC image publication and authoritative ECR digest resolution
-- Automated one-field release PR generation
-- Protected exact saved-plan Terraform Apply
-- 16-validator workload baseline coverage including ECR and ECS runtime validation
-
-### Upcoming Release Candidate: `v1.9.0`
-
-The qualified v1.9 implementation on `main` adds:
+`v1.9.0` adds:
 
 - Explicit fixed-count versus autoscaled ECS `desired_count` ownership
 - Application Auto Scaling targets for autoscaled services
@@ -567,9 +550,22 @@ The qualified v1.9 implementation on `main` adds:
 - Lambda-side fail-closed revalidation of GuardDuty product, severity, workflow status, and record state
 - Completed live O7 qualification with full workload and strict bootstrap validation plus a final no-change Terraform plan
 
-`v1.9.0` is not yet the latest published GitHub release; O8 documentation and release preparation must complete before publication.
+### Previous Release: `v1.8.0`
 
-### Previous Release: `v1.7.0`
+`v1.8.0 — Secure Container Workloads` established:
+
+- Canonical `ecs_services` configuration with nullable `image_digest`
+- KMS-encrypted immutable ECR repositories
+- Exact digest-pinned Fargate task images
+- Shared ECS cluster and optional shared HTTPS ALB
+- Separate least-privilege task execution and application task roles
+- Terraform-owned application and Container Insights logging
+- GitHub OIDC image publication and authoritative ECR digest resolution
+- Automated one-field release PR generation
+- Protected exact saved-plan Terraform Apply
+- 16-validator workload baseline coverage including ECR and ECS runtime validation
+
+### Earlier Release: `v1.7.0`
 
 `v1.7.0` introduced the dedicated `security-operations` administration layer and centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance.
 
@@ -579,7 +575,7 @@ For complete release history, see [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Future Roadmap
 
-After the qualified v1.9 runtime-operations work, remaining candidates include:
+After the v1.9.0 runtime-operations work, remaining candidates include:
 
 - GuardDuty Fargate managed-agent enablement
 - Fail-closed ECS task-level containment/remediation
@@ -611,8 +607,6 @@ Other potential improvements include expanded dashboarding and visual evidence, 
 `tf-secure-baseline` is a deployable AWS security foundation and generic application-hosting baseline for sensitive workloads.
 
 It combines five-account isolation, Organizations and Identity Center governance, centralized security administration, private-first networking, configurable egress, Security Hub/GuardDuty governance, workload-local remediation, supported EC2 hosting, digest-pinned ECS/Fargate workloads, optional target-tracking auto scaling, explicit service-count ownership, ECS deployment-health controls, operational alarms, durable alerting, protected Terraform CI/CD, and layered validation evidence into a reusable Terraform platform.
-
-The current published release is v1.8.0. The v1.9.0 implementation on `main` has completed live qualification and is in documentation/release preparation.
 
 The goal is to provide a secure-by-default foundation that can be adapted and extended without representing the infrastructure alone as a complete compliance program.
 
