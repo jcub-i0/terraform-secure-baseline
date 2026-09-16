@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document describes the implemented ECS/Fargate runtime architecture as extended for the `v1.9.0` release candidate, including ownership boundaries, service scaling, deployment health, operational alarms, application release lifecycle, and validation contract.
+This document describes the implemented ECS/Fargate runtime architecture as extended for the `v1.9.0` release, including ownership boundaries, service scaling, deployment health, operational alarms, application release lifecycle, and validation contract.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
