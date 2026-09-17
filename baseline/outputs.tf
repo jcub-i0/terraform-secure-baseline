@@ -274,7 +274,7 @@ output "ecs_ingress_unhealthy_target_alarms" {
 
 output "guardduty_ecs_runtime_coverage_notification" {
   description = "GuardDuty ECS Runtime Monitoring coverage-status notification metadata"
-  value = module.monitoring.guardduty_ecs_runtime_coverage_notification
+  value       = module.monitoring.guardduty_ecs_runtime_coverage_notification
 }
 
 output "s3_prefix_list_id" {
