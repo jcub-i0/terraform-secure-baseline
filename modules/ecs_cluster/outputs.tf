@@ -30,10 +30,10 @@ output "container_insights_log_group" {
 
 output "guardduty_fargate_runtime_monitoring_enabled" {
   description = "Expected GuardDuty Fargate Runtime Monitoring participation for this ECS cluster"
-  value = var.guardduty_fargate_runtime_monitoring_enabled
+  value       = var.guardduty_fargate_runtime_monitoring_enabled
 }
 
 output "guardduty_managed_tag_value" {
   description = "Terraform-managed GuardDutyManaged tag value on the ECS cluster"
-  value = aws_ecs_cluster.cluster.tags["GuardDutyManaged"]
+  value       = aws_ecs_cluster.cluster.tags["GuardDutyManaged"]
 }
