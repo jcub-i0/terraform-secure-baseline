@@ -852,3 +852,35 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
     Terraform   = "true"
   }
 }
+
+##############################################
+# GUARDDUTY ECS RUNTIME COVERAGE HEALTH
+##############################################
+
+resource "aws_cloudwatch_event_rule" "guardduty_ecs_runtime_coverage" {
+  name = "${var.name_prefix}-guardduty-ecs-runtime-coverage"
+  description = "Notify SecOps when GuardDuty ECS Runtime Monitoring coverage changes health state"
+
+  event_pattern = jsonencode({
+    source = [
+      "aws.guardduty"
+    ]
+
+    detail-type = [
+      "GuardDuty Runtime Protection Unhealthy",
+      "GuardDuty Runtime Protection Healthy"
+    ]
+
+    detail = {
+      resourceAccountId = [
+        var.account_id
+      ]
+
+      resourceDetails = {
+        resourceType = [
+          "ECS"
+        ]
+      }
+    }
+  })
+}
