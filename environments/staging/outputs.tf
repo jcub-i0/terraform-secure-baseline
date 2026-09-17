@@ -228,6 +228,11 @@ output "ecs_ingress_unhealthy_target_alarms" {
   value       = module.baseline.ecs_ingress_unhealthy_target_alarms
 }
 
+output "guardduty_ecs_runtime_coverage_notification" {
+  description = "GuardDuty ECS Runtime Monitoring coverage-status notification metadata"
+  value       = module.baseline.guardduty_ecs_runtime_coverage_notification
+}
+
 output "logs_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt workload CloudWatch Logs."
   value       = module.baseline.logs_cmk_arn
