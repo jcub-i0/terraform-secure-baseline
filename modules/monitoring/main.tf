@@ -906,9 +906,9 @@ resource "aws_cloudwatch_event_target" "guardduty_ecs_runtime_coverage_to_sns" {
       cluster_name    = "$.detail.resourceDetails.ecsClusterDetails.clusterName"
       current_status  = "$.detail.currentStatus"
       previous_status = "$.detail.previousStatus"
-      issue            = "$.detail.issue"
-      last_updated_at  = "$.detail.lastUpdatedAt"
-      event_time       = "$.time"
+      issue           = "$.detail.issue"
+      last_updated_at = "$.detail.lastUpdatedAt"
+      event_time      = "$.time"
     }
 
     input_template = <<-EOT
