@@ -79,6 +79,7 @@ variable "ecs_iam_services" {
 
   type = map(object({
     ecr_repository_arns = set(string)
+    guardduty_agent_ecr_repository_arns = optional(set(string), [])
     log_group_arns      = set(string)
 
     execution_secret_arns        = optional(set(string), [])
