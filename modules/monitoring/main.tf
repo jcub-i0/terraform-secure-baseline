@@ -858,7 +858,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_ingress_unhealthy_targets" {
 ##############################################
 
 resource "aws_cloudwatch_event_rule" "guardduty_ecs_runtime_coverage" {
-  name = "${var.name_prefix}-guardduty-ecs-runtime-coverage"
+  name        = "${var.name_prefix}-guardduty-ecs-runtime-coverage"
   description = "Notify SecOps when GuardDuty ECS Runtime Monitoring coverage changes health state"
 
   event_pattern = jsonencode({
