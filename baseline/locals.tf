@@ -159,8 +159,8 @@ locals {
       guardduty_agent_ecr_repository_arns = (
         local.effective_guardduty_fargate_runtime_monitoring_enabled
         ? toset([
-            local.guardduty_fargate_agent_ecr_repository_arn
-          ])
+          local.guardduty_fargate_agent_ecr_repository_arn
+        ])
         : toset([])
       )
 
