@@ -156,6 +156,14 @@ locals {
         module.ecr.repositories[service.repository_name].arn
       ])
 
+      guardduty_agent_ecr_repository_arns = (
+        local.effective_guardduty_fargate_runtime_monitoring_enabled
+        ? toset([
+            local.guardduty_fargate_agent_ecr_repository_arn
+          ])
+        : toset([])
+      )
+
       log_group_arns = toset([
         local.ecs_log_group_arns[service_name]
       ])
