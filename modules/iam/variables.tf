@@ -78,8 +78,9 @@ variable "ecs_iam_services" {
   description = "ECS services requiring task execution and task IAM roles"
 
   type = map(object({
-    ecr_repository_arns = set(string)
-    log_group_arns      = set(string)
+    ecr_repository_arns                 = set(string)
+    guardduty_agent_ecr_repository_arns = optional(set(string), [])
+    log_group_arns                      = set(string)
 
     execution_secret_arns        = optional(set(string), [])
     execution_ssm_parameter_arns = optional(set(string), [])

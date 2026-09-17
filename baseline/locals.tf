@@ -149,12 +149,68 @@ locals {
     service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/aws/ecs/${local.name_prefix}/${service_name}"
   }
 
+  guardduty_fargate_agent_ecr_account_ids = {
+    "af-south-1"     = "197869348890"
+    "ap-east-1"      = "258348409381"
+    "ap-east-2"      = "259886477082"
+    "ap-northeast-1" = "533107202818"
+    "ap-northeast-2" = "914738172881"
+    "ap-northeast-3" = "273192626886"
+    "ap-south-1"     = "251508486986"
+    "ap-south-2"     = "950823858135"
+    "ap-southeast-1" = "174946120834"
+    "ap-southeast-2" = "005257825471"
+    "ap-southeast-3" = "510637619217"
+    "ap-southeast-4" = "251357961535"
+    "ap-southeast-5" = "156041399949"
+    "ap-southeast-7" = "054037130133"
+    "ca-central-1"   = "354763396469"
+    "ca-west-1"      = "339712888787"
+    "eu-central-1"   = "323658145986"
+    "eu-central-2"   = "529164026651"
+    "eu-north-1"     = "591436053604"
+    "eu-south-1"     = "266869475730"
+    "eu-south-2"     = "919611009337"
+    "eu-west-1"      = "694911143906"
+    "eu-west-2"      = "892757235363"
+    "eu-west-3"      = "665651866788"
+    "il-central-1"   = "870907303882"
+    "me-central-1"   = "000014521398"
+    "me-south-1"     = "536382113932"
+    "mx-central-1"   = "311141559934"
+    "sa-east-1"      = "758426053663"
+    "us-east-1"      = "593207742271"
+    "us-east-2"      = "307168627858"
+    "us-west-1"      = "684579721401"
+    "us-west-2"      = "733349766148"
+  }
+
+  guardduty_fargate_agent_ecr_account_id = (
+    local.effective_guardduty_fargate_runtime_monitoring_enabled
+    ? local.guardduty_fargate_agent_ecr_account_ids[var.primary_region]
+    : null
+  )
+
+  guardduty_fargate_agent_ecr_repository_arn = (
+    local.effective_guardduty_fargate_runtime_monitoring_enabled
+    ? "arn:${data.aws_partition.current.partition}:ecr:${var.primary_region}:${local.guardduty_fargate_agent_ecr_account_id}:repository/aws-guardduty-agent-fargate"
+    : null
+  )
+
   ecs_iam_services = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
       ecr_repository_arns = toset([
         module.ecr.repositories[service.repository_name].arn
       ])
+
+      guardduty_agent_ecr_repository_arns = (
+        local.effective_guardduty_fargate_runtime_monitoring_enabled
+        ? toset([
+          local.guardduty_fargate_agent_ecr_repository_arn
+        ])
+        : toset([])
+      )
 
       log_group_arns = toset([
         local.ecs_log_group_arns[service_name]
@@ -285,4 +341,12 @@ locals {
     var.inspector_resource_types,
     length(local.effective_repositories) > 0 ? ["ECR"] : [],
   ))
+
+  profile_default_guardduty_fargate_runtime_monitoring_enabled = (
+    !local.is_minimal_profile
+  )
+
+  effective_guardduty_fargate_runtime_monitoring_enabled = (
+    local.profile_default_guardduty_fargate_runtime_monitoring_enabled
+  )
 }
