@@ -134,7 +134,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
   }
 
   dynamic "statement" {
-    for_each = length(each.value.guardduty_agent_ecr_repoistory_arns) > 0 ? [1] : []
+    for_each = length(each.value.guardduty_agent_ecr_repository_arns) > 0 ? [1] : []
 
     content {
       sid    = "AllowGuardDutyAgentImagePulls"
