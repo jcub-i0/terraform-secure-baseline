@@ -313,6 +313,10 @@ module "ecs_cluster" {
   container_insights        = var.container_insights
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
   logs_cmk_arn              = module.security.logs_cmk_arn
+
+  guardduty_fargate_runtime_monitoring_enabled = (
+    local.effective_guardduty_fargate_runtime_monitoring_enabled
+  )
 }
 
 module "ecs_service" {
