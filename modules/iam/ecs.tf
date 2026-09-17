@@ -132,6 +132,23 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
       resources = each.value.task_execution_kms_key_arns
     }
   }
+
+  dynamic "statement" {
+    for_each = length(each.value.guardduty_agent_ecr_repoistory_arns) > 0 ? [1] : []
+
+    content {
+      sid = "AllowGuardDutyAgentImagePulls"
+      effect = "Allow"
+
+      actions = [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+      ]
+
+      resources = each.value.guardduty_agent_ecr_repository_arns
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_policies" {
