@@ -166,7 +166,7 @@ Runtime Monitoring additional configuration defaults to:
 | Configuration | Auto-enable |
 | --- | --- |
 | `EC2_AGENT_MANAGEMENT` | `ALL` |
-| `ECS_FARGATE_AGENT_MANAGEMENT` | `NONE` |
+| `ECS_FARGATE_AGENT_MANAGEMENT` | `ALL` |
 | `EKS_ADDON_MANAGEMENT` | `NONE` |
 
 The additional configuration is modeled as an ordered list to match the AWS

@@ -46,6 +46,24 @@ output "guardduty_detector_id" {
   value       = data.aws_guardduty_detector.main.id
 }
 
+output "guardduty_organization_features" {
+  description = "Resource-backed GuardDuty organization feature configuration"
+
+  value = {
+    for feature_name, feature in aws_guardduty_organization_configuration_feature.main :
+    feature_name => {
+      auto_enable = feature.auto_enable
+
+      additional_configuration = [
+        for configuration in feature.additional_configuration : {
+          name        = configuration.name
+          auto_enable = configuration.auto_enable
+        }
+      ]
+    }
+  }
+}
+
 output "securityhub_v2_organization_policy_id" {
   description = "ID of the Security Hub V2 AWS Organizations policy"
 

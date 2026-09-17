@@ -133,7 +133,7 @@ variable "guardduty_organization_features" {
       additional_configuration = [
         {
           name        = "ECS_FARGATE_AGENT_MANAGEMENT"
-          auto_enable = "NONE"
+          auto_enable = "ALL"
         },
         {
           name        = "EC2_AGENT_MANAGEMENT"

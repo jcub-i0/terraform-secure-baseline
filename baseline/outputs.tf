@@ -183,6 +183,14 @@ output "ecs_cluster" {
     name                         = module.ecs_cluster.cluster_name
     container_insights           = module.ecs_cluster.container_insights
     container_insights_log_group = module.ecs_cluster.container_insights_log_group
+
+    guardduty_fargate_runtime_monitoring_enabled = (
+      module.ecs_cluster.guardduty_fargate_runtime_monitoring_enabled
+    )
+
+    guardduty_managed_tag_value = (
+      module.ecs_cluster.guardduty_managed_tag_value
+    )
   }
 }
 

@@ -27,3 +27,13 @@ output "container_insights_log_group" {
     kms_key_id        = aws_cloudwatch_log_group.container_insights_performance[0].kms_key_id
   }
 }
+
+output "guardduty_fargate_runtime_monitoring_enabled" {
+  description = "Expected GuardDuty Fargate Runtime Monitoring participation for this ECS cluster"
+  value       = var.guardduty_fargate_runtime_monitoring_enabled
+}
+
+output "guardduty_managed_tag_value" {
+  description = "Terraform-managed GuardDutyManaged tag value on the ECS cluster"
+  value       = aws_ecs_cluster.cluster.tags["GuardDutyManaged"]
+}

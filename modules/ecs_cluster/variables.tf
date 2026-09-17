@@ -24,6 +24,11 @@ variable "container_insights" {
   }
 }
 
+variable "guardduty_fargate_runtime_monitoring_enabled" {
+  description = "Whether the ECS cluster participates in GuardDuty Fargate Runtime Monitoring"
+  type        = bool
+}
+
 variable "cloudwatch_retention_days" {
   description = "CloudWatch Logs retention period for the ECS Container Insights performance log group"
   type        = number
