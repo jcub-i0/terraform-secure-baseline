@@ -285,4 +285,12 @@ locals {
     var.inspector_resource_types,
     length(local.effective_repositories) > 0 ? ["ECR"] : [],
   ))
+
+  profile_default_guardduty_fargate_runtime_monitoring_enabled = (
+    !local.is_minimal_profile
+  )
+
+  effective_guardduty_fargate_runtime_monitoring_enabled = (
+    local.profile_default_guardduty_fargate_runtime_monitoring_enabled
+  )
 }
