@@ -295,6 +295,18 @@ locals {
     "us-west-2"      = "733349766148"
   }
 
+  guardduty_fargate_agent_ecr_account_id = (
+    local.effective_guardduty_fargate_runtime_monitoring_enabled
+    ? local.guardduty_fargate_agent_ecr_account_ids[var.primary_region]
+    : null
+  )
+
+  guardduty_fargate_agent_ecr_repository_arn = (
+    local.effective_guardduty_fargate_runtime_monitoring_enabled
+    ? "arn:${data.aws_partition.current.partition}:ecr:${var.primary_region}:${local.guardduty_fargate_agent_ecr_account_id}:repository/aws-guardduty-agent-fargate"
+    : null
+  )
+
   # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
