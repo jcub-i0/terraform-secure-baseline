@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document describes the implemented ECS/Fargate runtime architecture as extended for the `v1.9.0` release, including ownership boundaries, service scaling, deployment health, operational alarms, application release lifecycle, and validation contract.
+This document describes the implemented ECS/Fargate runtime architecture through `v1.9.0` and the locked `v1.10.0` GuardDuty Fargate Runtime Monitoring contract, including ownership boundaries, service scaling, deployment health, operational alarms, runtime-security policy, application release lifecycle, and validation responsibilities.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
@@ -294,65 +294,242 @@ The v1.9 live qualification completed with all 16 workload validators passing, t
 
 ## Central security boundary
 
-Inspector ECR scanning remains workload-local under `modules/security`. Central GuardDuty organization ownership remains in `bootstrap/security_operations/security_services`. The current central setting keeps `ECS_FARGATE_AGENT_MANAGEMENT = NONE`; GuardDuty Fargate managed-agent deployment is not part of the v1.9 runtime scope.
+Inspector ECR scanning remains workload-local under `modules/security`. Central
+GuardDuty organization ownership remains in
+`bootstrap/security_operations/security_services`.
+
+The v1.9 central configuration keeps `ECS_FARGATE_AGENT_MANAGEMENT = NONE`
+because Fargate managed-agent deployment was outside the v1.9 scope. The locked
+v1.10 contract changes that organization-level additional configuration to
+`ALL` while preserving `RUNTIME_MONITORING = ALL`,
+`EC2_AGENT_MANAGEMENT = ALL`, and `EKS_ADDON_MANAGEMENT = NONE`.
+
+Workload Terraform does not create or manage GuardDuty detectors or organization
+features.
 
 ## GuardDuty Fargate Runtime Monitoring contract
 
-GuardDuty Runtime Monitoring for Fargate is a cluster-level platform capability,
-not a per-service application setting.
+GuardDuty Runtime Monitoring for Fargate is a cluster/runtime security
+capability, not a per-service application setting. It does not add fields to the
+canonical `ecs_services` map.
 
-The centralized `security-operations` stack remains the owner of GuardDuty
-organization configuration. `RUNTIME_MONITORING` remains centrally enabled while
-`ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`. Workload Terraform does not manage
-the GuardDuty detector or organization feature configuration.
+### Terraform and GuardDuty ownership
 
-The Terraform-managed workload ECS cluster uses the AWS-defined
-`GuardDutyManaged` tag for selective enrollment:
+Terraform owns the policy and prerequisites that determine whether Runtime
+Monitoring operates:
 
-- `GuardDutyManaged=true` means the cluster is included in GuardDuty automated
-  Fargate agent management.
-- `GuardDutyManaged=false` means the cluster is explicitly excluded.
+- centralized GuardDuty organization Runtime Monitoring configuration;
+- centralized Fargate automated-agent management configuration;
+- deployment-profile defaults;
+- ECS cluster `GuardDutyManaged` intent;
+- task execution IAM;
+- ECR/S3/`guardduty-data` networking;
+- validation expectations.
 
-The canonical workload setting is:
+GuardDuty service-manages the runtime artifacts produced by that
+Terraform-owned policy:
 
-`guardduty_fargate_runtime_monitoring_enabled`
+- `aws-gd-agent` injection;
+- GuardDuty agent updates;
+- runtime telemetry collection.
 
-and defaults to `false`.
+Those service-managed artifacts intentionally do not have separate Terraform
+resource addresses. The model is comparable to Application Auto Scaling:
+Terraform owns the scaling policy while AWS directly lifecycle-manages the
+target-tracking CloudWatch alarms created from that policy.
+
+### Organization-wide secure default
+
+The v1.10 centralized GuardDuty contract is:
+
+```text
+RUNTIME_MONITORING           = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT         = ALL
+EKS_ADDON_MANAGEMENT         = NONE
+```
+
+Enabling Fargate automated agent management centrally makes runtime protection
+the organization default for existing and future member accounts.
+
+### Deployment-profile policy
+
+Fargate Runtime Monitoring is a cost-sensitive security control and therefore
+follows the existing `deployment_profile` model instead of adding a new
+standalone top-level enable/disable variable.
+
+The locked defaults are:
+
+| `deployment_profile` | Fargate Runtime Monitoring | ECS cluster intent |
+|---|---:|---|
+| `production` | Enabled | `GuardDutyManaged=true` |
+| `development` | Enabled | `GuardDutyManaged=true` |
+| `minimal` | Disabled | `GuardDutyManaged=false` |
+
+Conceptually:
+
+```hcl
+profile_default_guardduty_fargate_runtime_monitoring_enabled = (
+  !local.is_minimal_profile
+)
+```
+
+`development` remains protected because it is the lower-cost qualification
+environment for the production security architecture, not an intentionally
+insecure sandbox. `minimal` carries the explicit exclusion because that profile
+already trades selected security/availability services for the lowest-cost
+private AWS-only footprint.
+
+The first v1.10 implementation does not introduce an independent public
+`guardduty_fargate_runtime_monitoring_enabled` variable. If adopters later
+demonstrate a legitimate requirement for an override, it can use the existing
+nullable-override pattern without changing the profile defaults.
+
+### Cluster enrollment intent
+
+The Terraform-managed workload ECS cluster expresses the effective
+deployment-profile policy explicitly with the AWS-defined `GuardDutyManaged`
+tag:
+
+```text
+production  -> GuardDutyManaged=true
+development -> GuardDutyManaged=true
+minimal     -> GuardDutyManaged=false
+```
+
+Even though centralized Fargate automated-agent management is `ALL`, explicitly
+setting `GuardDutyManaged=true` on protected baseline clusters preserves a
+resource-level desired state and avoids relying solely on implicit account-wide
+behavior. `GuardDutyManaged=false` is the deliberate minimal-profile exclusion.
 
 The setting applies to the single Terraform-managed ECS cluster and does not
-change the canonical `ecs_services` schema.
+change the canonical `ecs_services` schema, application image ownership,
+Application Auto Scaling ownership, or deployment-health semantics.
+
+### Terraform-owned GuardDuty networking
 
 Terraform continues to own workload networking. The existing `guardduty-data`
 Interface VPC Endpoint is the authoritative Runtime Monitoring telemetry
 endpoint. GuardDuty must reuse that endpoint and must not create a second VPC
-endpoint or security group.
+endpoint or endpoint security group.
 
-The ECS task execution role remains least privilege. When Runtime Monitoring is
-enabled, Terraform adds only the ECR image-pull scope required for the AWS-hosted
-`aws-guardduty-agent-fargate` repository while preserving the existing
-application-repository scope.
+The existing private runtime paths remain:
+
+```text
+ECS task SG
+  -> ecr.api / ecr.dkr Interface Endpoints
+  -> S3 Gateway Endpoint
+  -> guardduty-data Interface Endpoint
+```
+
+Fargate tasks continue to use `awsvpc`, compute-private subnets, and
+`assign_public_ip = false`.
+
+### Task execution IAM
+
+The ECS task execution role remains least privilege. Existing application image
+pulls remain scoped to the application's Terraform-owned ECR repositories.
+
+When the effective profile enables Runtime Monitoring (`production` or
+`development`), Terraform adds only the additional pull scope required for the
+AWS-hosted `aws-guardduty-agent-fargate` repository while preserving the
+existing action set:
+
+```text
+ecr:GetAuthorizationToken
+ecr:BatchCheckLayerAvailability
+ecr:GetDownloadUrlForLayer
+ecr:BatchGetImage
+```
+
+The additional repository-scoped GuardDuty-agent permissions must be absent for
+the `minimal` profile.
+
+The exact cross-account/Region agent repository ARN derivation is an
+implementation detail for the prerequisite-wiring milestone; broad ECR
+administrative authority is not part of the contract.
+
+### Agent injection and rollout
 
 GuardDuty owns injection and lifecycle of the `aws-gd-agent` sidecar. Terraform
-does not add the GuardDuty container to the canonical ECS task definition.
+does not add that container to the canonical ECS task definition.
 
-Existing running Fargate tasks are not automatically retrofitted with the
-GuardDuty agent. Initial enrollment therefore requires a deliberate new service
-deployment after the cluster, IAM, and networking prerequisites have converged.
-Terraform must not permanently enable forced ECS redeployment merely to achieve
-agent rollout.
+New protected tasks must expose the injected `aws-gd-agent` container and report
+it as `RUNNING`. Existing running Fargate tasks are not silently retrofitted, so
+brownfield adoption requires one deliberate new service deployment after
+central configuration, IAM, networking, and cluster intent converge.
 
-Runtime Monitoring does not change Terraform versus Application Auto Scaling
-ownership of ECS `desired_count`, application image ownership, deployment-health
-settings, or the digest-pinned release lifecycle.
+Terraform must not permanently set forced-deployment behavior merely to obtain
+GuardDuty agent injection.
+
+For a fresh baseline deployment with central Fargate agent management already
+enabled, the first ECS service deployment should receive GuardDuty
+instrumentation from initial task launch.
+
+### Cost-conscious design
+
+GuardDuty Runtime Monitoring adds monitored-vCPU cost and consumes task
+resources for the injected security sidecar. The baseline treats that as a
+deployment-profile tradeoff rather than a per-service application decision:
+
+- `production`: Runtime Monitoring enabled;
+- `development`: Runtime Monitoring enabled so qualification matches the
+  production runtime-security architecture;
+- `minimal`: Runtime Monitoring disabled to preserve the lowest-cost profile.
+
+The baseline does not automatically inflate application task CPU/memory
+settings to compensate for the sidecar. Live qualification uses Container
+Insights to observe agent overhead and documents practical sizing implications.
+
+### Validation ownership
+
+Security-operations validation owns the centralized GuardDuty contract:
+
+```text
+RUNTIME_MONITORING = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT = ALL
+EKS_ADDON_MANAGEMENT = NONE
+```
+
+Workload ECS runtime validation owns the effective profile and cluster/runtime
+contract.
+
+For `production` and `development`, validation eventually proves:
+
+- effective Runtime Monitoring enabled;
+- exact `GuardDutyManaged=true`;
+- compatible Fargate platform version;
+- exact GuardDuty-agent ECR pull scope;
+- existing application ECR scope preserved;
+- required ECR, S3, and `guardduty-data` connectivity;
+- exactly one Terraform-owned `guardduty-data` endpoint;
+- `aws-gd-agent` present on newly deployed tasks;
+- `aws-gd-agent` `RUNNING`;
+- healthy GuardDuty ECS/Fargate coverage.
+
+For `minimal`, validation eventually proves:
+
+- effective Runtime Monitoring disabled;
+- exact `GuardDutyManaged=false`;
+- no GuardDuty-agent ECR repository scope;
+- absence of injected GuardDuty sidecars is valid;
+- healthy GuardDuty ECS/Fargate coverage is not required.
+
+`validate-ecs-runtime.sh` remains the single workload-baseline ECS validator
+entry point. v1.10 does not create a seventeenth validator or a fifth
+validation/evidence layer.
+
+### Containment remains separate
 
 Automatic ECS/Fargate task containment is outside the v1.10 Runtime Monitoring
-contract and requires a separate response design.
+contract and requires a separate response design. Runtime detection and coverage
+must not be coupled to an unproven containment mechanism.
 
 ## Post-v1.9.0 work
 
-The following capabilities remain outside the v1.9 release boundary:
+The following capabilities remain outside the v1.10 Runtime Monitoring release boundary:
 
-- GuardDuty Fargate managed-agent enablement
 - fail-closed ECS task containment/remediation
 - ReconoSense reference deployment
 
