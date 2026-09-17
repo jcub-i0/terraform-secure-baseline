@@ -296,6 +296,58 @@ The v1.9 live qualification completed with all 16 workload validators passing, t
 
 Inspector ECR scanning remains workload-local under `modules/security`. Central GuardDuty organization ownership remains in `bootstrap/security_operations/security_services`. The current central setting keeps `ECS_FARGATE_AGENT_MANAGEMENT = NONE`; GuardDuty Fargate managed-agent deployment is not part of the v1.9 runtime scope.
 
+## GuardDuty Fargate Runtime Monitoring contract
+
+GuardDuty Runtime Monitoring for Fargate is a cluster-level platform capability,
+not a per-service application setting.
+
+The centralized `security-operations` stack remains the owner of GuardDuty
+organization configuration. `RUNTIME_MONITORING` remains centrally enabled while
+`ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`. Workload Terraform does not manage
+the GuardDuty detector or organization feature configuration.
+
+The Terraform-managed workload ECS cluster uses the AWS-defined
+`GuardDutyManaged` tag for selective enrollment:
+
+- `GuardDutyManaged=true` means the cluster is included in GuardDuty automated
+  Fargate agent management.
+- `GuardDutyManaged=false` means the cluster is explicitly excluded.
+
+The canonical workload setting is:
+
+`guardduty_fargate_runtime_monitoring_enabled`
+
+and defaults to `false`.
+
+The setting applies to the single Terraform-managed ECS cluster and does not
+change the canonical `ecs_services` schema.
+
+Terraform continues to own workload networking. The existing `guardduty-data`
+Interface VPC Endpoint is the authoritative Runtime Monitoring telemetry
+endpoint. GuardDuty must reuse that endpoint and must not create a second VPC
+endpoint or security group.
+
+The ECS task execution role remains least privilege. When Runtime Monitoring is
+enabled, Terraform adds only the ECR image-pull scope required for the AWS-hosted
+`aws-guardduty-agent-fargate` repository while preserving the existing
+application-repository scope.
+
+GuardDuty owns injection and lifecycle of the `aws-gd-agent` sidecar. Terraform
+does not add the GuardDuty container to the canonical ECS task definition.
+
+Existing running Fargate tasks are not automatically retrofitted with the
+GuardDuty agent. Initial enrollment therefore requires a deliberate new service
+deployment after the cluster, IAM, and networking prerequisites have converged.
+Terraform must not permanently enable forced ECS redeployment merely to achieve
+agent rollout.
+
+Runtime Monitoring does not change Terraform versus Application Auto Scaling
+ownership of ECS `desired_count`, application image ownership, deployment-health
+settings, or the digest-pinned release lifecycle.
+
+Automatic ECS/Fargate task containment is outside the v1.10 Runtime Monitoring
+contract and requires a separate response design.
+
 ## Post-v1.9.0 work
 
 The following capabilities remain outside the v1.9 release boundary:
