@@ -33,3 +33,15 @@ output "ecs_ingress_unhealthy_target_alarms" {
     }
   }
 }
+
+output "guardduty_ecs_runtime_coverage_notification" {
+  description = "GuardDuty ECS Runtime Monitoring coverage-status notification metadata"
+
+  value = {
+    rule_arn  = aws_cloudwatch_event_rule.guardduty_ecs_runtime_coverage.arn
+    rule_name = aws_cloudwatch_event_rule.guardduty_ecs_runtime_coverage.name
+
+    target_id  = aws_cloudwatch_event_target.guardduty_ecs_runtime_coverage_to_sns.target_id
+    target_arn = aws_cloudwatch_event_target.guardduty_ecs_runtime_coverage_to_sns.arn
+  }
+}
