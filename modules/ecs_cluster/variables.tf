@@ -26,7 +26,7 @@ variable "container_insights" {
 
 variable "guardduty_fargate_runtime_monitoring_enabled" {
   description = "Whether the ECS cluster participates in GuardDuty Fargate Runtime Monitoring"
-  type = bool
+  type        = bool
 }
 
 variable "cloudwatch_retention_days" {
