@@ -884,3 +884,50 @@ resource "aws_cloudwatch_event_rule" "guardduty_ecs_runtime_coverage" {
     }
   })
 }
+
+resource "aws_cloudwatch_event_target" "guardduty_ecs_runtime_coverage_to_sns" {
+  rule      = aws_cloudwatch_event_rule.guardduty_ecs_runtime_coverage.name
+  target_id = "guardduty-ecs-runtime-coverage-to-secops-sns"
+  arn       = aws_sns_topic.secops.arn
+
+  dead_letter_config {
+    arn = aws_sqs_queue.security_notifications_eventbridge_dlq.arn
+  }
+
+  retry_policy {
+    maximum_event_age_in_seconds = 3600
+    maximum_retry_attempts       = 3
+  }
+
+  input_transformer {
+    input_paths = {
+      account         = "$.detail.resourceAccountId"
+      region          = "$.region"
+      cluster_name    = "$.detail.resourceDetails.ecsClusterDetails.clusterName"
+      current_status  = "$.detail.currentStatus"
+      previous_status = "$.detail.previousStatus"
+      issue            = "$.detail.issue"
+      last_updated_at  = "$.detail.lastUpdatedAt"
+      event_time       = "$.time"
+    }
+
+    input_template = <<-EOT
+"🛡️ GUARDDUTY ECS RUNTIME COVERAGE STATUS CHANGE"
+"------------------------------------------------"
+"Current Status: <current_status>"
+"Previous Status: <previous_status>"
+"Cluster: <cluster_name>"
+"Account: <account>"
+"Region: <region>"
+"Issue: <issue>"
+"GuardDuty Updated At: <last_updated_at>"
+"Event Time: <event_time>"
+"------------------------------------------------"
+"If coverage is Unhealthy, GuardDuty may be unable to receive runtime telemetry or generate Runtime Monitoring findings for the affected resource."
+EOT
+  }
+
+  depends_on = [
+    aws_cloudwatch_event_rule.guardduty_ecs_runtime_coverage
+  ]
+}
