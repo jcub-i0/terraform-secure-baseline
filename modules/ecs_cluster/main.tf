@@ -14,9 +14,9 @@ resource "aws_ecs_cluster" "cluster" {
   ]
 
   tags = {
-    Name        = "${var.name_prefix}-ecs"
-    Environment = var.environment
-    Terraform   = "true"
+    Name             = "${var.name_prefix}-ecs"
+    Environment      = var.environment
+    Terraform        = "true"
     GuardDutyManaged = var.guardduty_fargate_runtime_monitoring_enabled ? "true" : "false"
   }
 }
