@@ -233,6 +233,11 @@ output "guardduty_ecs_runtime_coverage_notification" {
   value       = module.baseline.guardduty_ecs_runtime_coverage_notification
 }
 
+output "interface_endpoint_ids" {
+  description = "Interface VPC Endpoint IDs keyed by AWS service short name"
+  value = module.baseline.interface_endpoint_ids
+}
+
 output "logs_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt workload CloudWatch Logs."
   value       = module.baseline.logs_cmk_arn
