@@ -15,6 +15,8 @@
 # - Repository encryption uses a configured KMS key
 # - Lifecycle policy contains exactly the approved 30-day untagged expiration
 #   rule and no tagged-image expiration rule
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 

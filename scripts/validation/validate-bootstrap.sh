@@ -46,6 +46,8 @@
 #   - Publisher trust must use exact branch-based GitHub OIDC subjects.
 #   - Publisher permissions must remain limited to approved ECR publication/query
 #     actions, with repository-scoped actions restricted to <name_prefix>-*.
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 

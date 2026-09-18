@@ -10,6 +10,8 @@
 #
 # Optional:
 #   AWS_PROFILE=tf-secure-baseline-dev AWS_REGION=us-east-1 ./scripts/validation/validate-env.sh dev
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 

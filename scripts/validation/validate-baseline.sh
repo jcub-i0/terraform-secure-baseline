@@ -13,6 +13,8 @@
 #
 # Optional override:
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-baseline.sh dev
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 

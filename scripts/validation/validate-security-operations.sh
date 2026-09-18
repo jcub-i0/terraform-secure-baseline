@@ -32,6 +32,8 @@
 # managed CSPM policy associations must have its workload-local prerequisites
 # deployed and healthy. In this architecture that includes AWS Config, which is
 # required for centrally enabled Security Hub CSPM standards.
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 
