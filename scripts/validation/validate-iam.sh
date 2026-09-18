@@ -926,22 +926,22 @@ fi
 section "IAM Summary"
 
 cat <<SUMMARY
-Environment:                  ${ENV_NAME}
-AWS profile:                  ${AWS_PROFILE:-<default>}
-AWS region:                   ${AWS_REGION}
-AWS account ID:               ${ACCOUNT_ID}
-Name prefix:                  ${NAME_PREFIX}
+Environment:                    ${ENV_NAME}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+AWS account ID:                 ${ACCOUNT_ID}
+Name prefix:                    ${NAME_PREFIX}
 
-Baseline roles validated:     ${VALIDATED_ROLE_COUNT}
-GitHub plan role present:     ${GITHUB_PLAN_PRESENT}
-GitHub apply role present:    ${GITHUB_APPLY_PRESENT}
+Baseline roles validated:       ${VALIDATED_ROLE_COUNT}
+GitHub plan role present:       ${GITHUB_PLAN_PRESENT}
+GitHub apply role present:      ${GITHUB_APPLY_PRESENT}
 
-Logs S3 policy output:        ${LOGS_S3_READONLY_POLICY_NAME:-<missing>}
-Logs CMK policy output:       ${LOGS_CMK_DECRYPT_POLICY_NAME:-<missing>}
-ECS services validated:       ${ECS_IAM_SERVICE_COUNT}
-Deployment profile:           ${DEPLOYMENT_PROFILE}
-GuardDuty Runtime IAM:        ${GUARDDUTY_RUNTIME_IAM_EXPECTED}
-GuardDuty ECR-scoped services: ${GUARDDUTY_ECR_SCOPE_SERVICE_COUNT}
+Logs S3 policy output:          ${LOGS_S3_READONLY_POLICY_NAME:-<missing>}
+Logs CMK policy output:         ${LOGS_CMK_DECRYPT_POLICY_NAME:-<missing>}
+ECS services validated:         ${ECS_IAM_SERVICE_COUNT}
+Deployment profile:             ${DEPLOYMENT_PROFILE}
+GuardDuty Runtime IAM:          ${GUARDDUTY_RUNTIME_IAM_EXPECTED}
+GuardDuty ECR-scoped services:  ${GUARDDUTY_ECR_SCOPE_SERVICE_COUNT}
 SUMMARY
 
 section "Validation Result"
