@@ -11,6 +11,8 @@
 # - Interface VPC Endpoints exist and are available
 # - Interface VPC Endpoints have the canonical service inventory, private DNS,
 #   exact endpoint-private subnet placement, and the expected endpoint SG
+# - Live Interface VPC Endpoint IDs exactly match Terraform-owned endpoint IDs
+# - The GuardDuty data endpoint is unique and reuses the Terraform-owned endpoint
 # - S3 Gateway Endpoint exists
 # - S3 Gateway Endpoint has the exact expected private route-table associations
 #
@@ -110,6 +112,81 @@ OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
 if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
   fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
 fi
+
+if ! terraform_output_exists "$OUTPUTS_JSON" interface_endpoint_ids; then
+  fail "Missing required Terraform output for exact Interface VPC Endpoint ownership validation: interface_endpoint_ids"
+fi
+
+INTERFACE_ENDPOINT_IDS_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -S -c '.interface_endpoint_ids.value // null'
+)"
+
+if ! echo "$INTERFACE_ENDPOINT_IDS_JSON" |
+  jq -e '
+    type == "object"
+    and length > 0
+    and all(
+      to_entries[];
+      (.key | type == "string" and length > 0)
+      and (.value | type == "string" and test("^vpce-[0-9a-f]+$"))
+    )
+  ' >/dev/null; then
+  echo "$INTERFACE_ENDPOINT_IDS_JSON" | jq .
+  fail "interface_endpoint_ids must be a non-empty map of service names to VPC Endpoint IDs."
+fi
+
+EXPECTED_INTERFACE_SERVICES_JSON="$(
+  printf '%s\n' "${EXPECTED_INTERFACE_ENDPOINT_SERVICES[@]}" |
+    jq -R . |
+    jq -s -c 'sort | unique'
+)"
+
+TERRAFORM_INTERFACE_SERVICES_JSON="$(
+  echo "$INTERFACE_ENDPOINT_IDS_JSON" |
+    jq -c 'keys | sort'
+)"
+
+if [[ "$TERRAFORM_INTERFACE_SERVICES_JSON" != "$EXPECTED_INTERFACE_SERVICES_JSON" ]]; then
+  jq -n \
+    --argjson expected "$EXPECTED_INTERFACE_SERVICES_JSON" \
+    --argjson terraform "$TERRAFORM_INTERFACE_SERVICES_JSON" \
+    '{
+      expected_services: $expected,
+      terraform_services: $terraform,
+      missing_from_terraform: ($expected - $terraform),
+      unexpected_in_terraform: ($terraform - $expected)
+    }'
+
+  fail "interface_endpoint_ids keys do not exactly match the platform-owned Interface VPC Endpoint service inventory."
+fi
+
+TERRAFORM_INTERFACE_ENDPOINT_COUNT="$(
+  echo "$INTERFACE_ENDPOINT_IDS_JSON" |
+    jq 'length'
+)"
+
+TERRAFORM_UNIQUE_INTERFACE_ENDPOINT_COUNT="$(
+  echo "$INTERFACE_ENDPOINT_IDS_JSON" |
+    jq '[.[]] | unique | length'
+)"
+
+if [[ "$TERRAFORM_UNIQUE_INTERFACE_ENDPOINT_COUNT" -ne "$TERRAFORM_INTERFACE_ENDPOINT_COUNT" ]]; then
+  echo "$INTERFACE_ENDPOINT_IDS_JSON" | jq .
+  fail "interface_endpoint_ids contains a VPC Endpoint ID assigned to more than one service."
+fi
+
+GUARDDUTY_DATA_ENDPOINT_ID="$(
+  echo "$INTERFACE_ENDPOINT_IDS_JSON" |
+    jq -r '."guardduty-data" // empty'
+)"
+
+if [[ -z "$GUARDDUTY_DATA_ENDPOINT_ID" ]]; then
+  fail "interface_endpoint_ids does not contain the required guardduty-data endpoint."
+fi
+
+success "Terraform Interface VPC Endpoint ownership contract is valid: ${TERRAFORM_INTERFACE_ENDPOINT_COUNT} endpoints"
+info "Terraform-owned guardduty-data endpoint: ${GUARDDUTY_DATA_ENDPOINT_ID}"
 
 if terraform_output_exists "$OUTPUTS_JSON" effective_egress_mode; then
   EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
@@ -450,12 +527,6 @@ if [[ "${#DUPLICATE_INTERFACE_SERVICES[@]}" -gt 0 ]]; then
   exit 1
 fi
 
-EXPECTED_INTERFACE_SERVICES_JSON="$(
-  printf '%s\n' "${EXPECTED_INTERFACE_ENDPOINT_SERVICES[@]}" |
-    jq -R . |
-    jq -s 'sort | unique'
-)"
-
 ACTUAL_INTERFACE_SERVICES_JSON="$(
   echo "$INTERFACE_ENDPOINTS_JSON" |
     jq --arg prefix "com.amazonaws.${AWS_REGION}." '
@@ -476,6 +547,74 @@ else
   echo "$UNEXPECTED_INTERFACE_SERVICES_JSON" | jq '{unexpected_interface_endpoint_services: .}'
   fail "Unexpected Interface VPC Endpoint services are present."
 fi
+
+section "Checking Terraform-owned Interface VPC Endpoint identities"
+
+LIVE_INTERFACE_ENDPOINT_IDS_JSON="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq -S -c \
+      --arg prefix "com.amazonaws.${AWS_REGION}." '
+        reduce .VpcEndpoints[] as $endpoint ({};
+          .[($endpoint.ServiceName | ltrimstr($prefix))] = $endpoint.VpcEndpointId
+        )
+      '
+)"
+
+if [[ "$LIVE_INTERFACE_ENDPOINT_IDS_JSON" != "$INTERFACE_ENDPOINT_IDS_JSON" ]]; then
+  INTERFACE_ENDPOINT_ID_DRIFT_JSON="$(
+    jq -n \
+      --argjson terraform "$INTERFACE_ENDPOINT_IDS_JSON" \
+      --argjson live "$LIVE_INTERFACE_ENDPOINT_IDS_JSON" '
+        (($terraform | keys) + ($live | keys) | unique) as $services
+        | [
+            $services[] as $service
+            | select($terraform[$service] != $live[$service])
+            | {
+                service: $service,
+                terraform_endpoint_id: ($terraform[$service] // null),
+                live_endpoint_id: ($live[$service] // null)
+              }
+          ]
+      '
+  )"
+
+  echo "$INTERFACE_ENDPOINT_ID_DRIFT_JSON" | jq .
+  fail "Live Interface VPC Endpoint identities do not exactly match Terraform output interface_endpoint_ids."
+fi
+
+success "Every live Interface VPC Endpoint ID exactly matches Terraform ownership state"
+
+GUARDDUTY_DATA_ENDPOINTS_JSON="$(
+  echo "$INTERFACE_ENDPOINTS_JSON" |
+    jq -c \
+      --arg service "com.amazonaws.${AWS_REGION}.guardduty-data" '
+        [
+          .VpcEndpoints[]
+          | select(.ServiceName == $service)
+        ]
+      '
+)"
+
+GUARDDUTY_DATA_ENDPOINT_COUNT="$(
+  echo "$GUARDDUTY_DATA_ENDPOINTS_JSON" |
+    jq 'length'
+)"
+
+if [[ "$GUARDDUTY_DATA_ENDPOINT_COUNT" -ne 1 ]]; then
+  echo "$GUARDDUTY_DATA_ENDPOINTS_JSON" | jq .
+  fail "Expected exactly one guardduty-data Interface VPC Endpoint; found ${GUARDDUTY_DATA_ENDPOINT_COUNT}."
+fi
+
+LIVE_GUARDDUTY_DATA_ENDPOINT_ID="$(
+  echo "$GUARDDUTY_DATA_ENDPOINTS_JSON" |
+    jq -r '.[0].VpcEndpointId // empty'
+)"
+
+if [[ "$LIVE_GUARDDUTY_DATA_ENDPOINT_ID" != "$GUARDDUTY_DATA_ENDPOINT_ID" ]]; then
+  fail "Live guardduty-data endpoint ${LIVE_GUARDDUTY_DATA_ENDPOINT_ID:-<missing>} does not match Terraform-owned endpoint ${GUARDDUTY_DATA_ENDPOINT_ID}."
+fi
+
+success "GuardDuty Runtime Monitoring reuses the unique Terraform-owned guardduty-data endpoint: ${GUARDDUTY_DATA_ENDPOINT_ID}"
 
 section "Checking S3 Gateway VPC Endpoint"
 
@@ -614,7 +753,9 @@ effective_egress_mode:                ${EFFECTIVE_EGRESS_MODE}
 Endpoint private subnets:             ${ENDPOINT_SUBNET_COUNT}
 Endpoint private route tables:        ${ENDPOINT_RT_COUNT}
 Interface VPC Endpoints:              ${INTERFACE_ENDPOINT_COUNT}
+Terraform-owned endpoint IDs:         ${TERRAFORM_INTERFACE_ENDPOINT_COUNT}
 Interface Endpoint security group:    ${INTERFACE_ENDPOINT_SG_ID}
+GuardDuty data endpoint:              ${GUARDDUTY_DATA_ENDPOINT_ID}
 S3 Gateway Endpoint count:            ${S3_ENDPOINT_COUNT}
 S3 Gateway route table associations:  ${S3_ROUTE_TABLE_COUNT}
 Compute private route tables:         ${COMPUTE_RT_COUNT}
