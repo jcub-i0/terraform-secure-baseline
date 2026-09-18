@@ -213,6 +213,12 @@ output "ecs_service_configuration" {
 
       database_access             = service.database_access
       task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
+
+      guardduty_agent_ecr_repository_arns = sort(
+        tolist(
+          local.ecs_iam_services[service_name].guardduty_agent_ecr_repository_arns
+        )
+      )
     }
   }
 }
