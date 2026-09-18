@@ -13,9 +13,11 @@
 # - Environment EventBridge rules have targets
 # - SecOps event bus exists
 # - SecOps event bus rules are enabled and have targets, when present
-# - EventBridge Lambda targets have configured DLQs
-# - EventBridge Lambda targets have expected retry policies
-# - EventBridge Lambda targets point to expected workflow DLQs
+# - EventBridge targets have configured DLQs and expected retry policies
+# - EventBridge targets point to expected workflow DLQs
+# - GuardDuty ECS Runtime coverage-health rule matches the Terraform contract
+# - GuardDuty coverage events route to the shared SecOps SNS topic and EventBridge DLQ
+# - GuardDuty coverage notification input transformation preserves required R4 evidence fields
 #
 # Usage:
 #   ./scripts/validation/validate-eventbridge.sh dev
@@ -28,6 +30,8 @@
 #
 # Optional override:
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-eventbridge.sh dev
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 
@@ -97,6 +101,71 @@ if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
 fi
 
 success "Terraform outputs are readable"
+
+section "Resolving GuardDuty Runtime coverage notification contract"
+
+for output_name in secops_topic_arn guardduty_ecs_runtime_coverage_notification; do
+  if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
+    fail "Missing required Terraform output for EventBridge Runtime coverage validation: ${output_name}"
+  fi
+done
+
+SECOPS_TOPIC_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" secops_topic_arn)"
+
+GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.guardduty_ecs_runtime_coverage_notification.value'
+)"
+
+if ! echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+  jq -e '
+    type == "object"
+    and (keys | sort) == [
+      "dead_letter_arn",
+      "rule_arn",
+      "rule_name",
+      "target_arn",
+      "target_id"
+    ]
+    and all(
+      .dead_letter_arn,
+      .rule_arn,
+      .rule_name,
+      .target_arn,
+      .target_id;
+      type == "string" and length > 0
+    )
+  ' >/dev/null; then
+  echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" | jq .
+  fail "guardduty_ecs_runtime_coverage_notification output does not match the expected R5 contract."
+fi
+
+GUARDDUTY_COVERAGE_RULE_ARN="$(
+  echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+    jq -r '.rule_arn'
+)"
+
+GUARDDUTY_COVERAGE_RULE_NAME="$(
+  echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+    jq -r '.rule_name'
+)"
+
+GUARDDUTY_COVERAGE_TARGET_ID="$(
+  echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+    jq -r '.target_id'
+)"
+
+GUARDDUTY_COVERAGE_TARGET_ARN="$(
+  echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+    jq -r '.target_arn'
+)"
+
+GUARDDUTY_COVERAGE_DLQ_ARN="$(
+  echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+    jq -r '.dead_letter_arn'
+)"
+
+success "GuardDuty Runtime coverage notification Terraform contract is readable"
 
 section "Checking AWS caller identity"
 
@@ -347,6 +416,237 @@ validate_expected_target_dlq() {
   fi
 }
 
+validate_guardduty_runtime_coverage_notification() {
+  local expected_rule_name
+  local expected_target_id
+  local expected_dlq_arn
+  local partition
+  local rule_json
+  local actual_event_pattern_raw
+  local actual_event_pattern_normalized
+  local expected_event_pattern_normalized
+  local targets_json
+  local target_json
+  local actual_input_paths_json
+  local expected_input_paths_json
+  local input_template
+  local required_template_token
+
+  section "Validating GuardDuty ECS Runtime coverage notification"
+
+  partition="$(echo "$CALLER_ARN" | cut -d: -f2)"
+
+  if [[ -z "$partition" ]]; then
+    fail "Unable to resolve AWS partition from caller ARN: ${CALLER_ARN}"
+  fi
+
+  expected_rule_name="${NAME_PREFIX}-guardduty-ecs-runtime-coverage"
+  expected_target_id="guardduty-ecs-runtime-coverage-to-secops-sns"
+  expected_dlq_arn="arn:${partition}:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-security-notifications-eventbridge-dlq"
+
+  if [[ "$GUARDDUTY_COVERAGE_RULE_NAME" != "$expected_rule_name" ]]; then
+    fail "GuardDuty Runtime coverage rule name from Terraform is ${GUARDDUTY_COVERAGE_RULE_NAME}; expected ${expected_rule_name}."
+  fi
+
+  if [[ "$GUARDDUTY_COVERAGE_TARGET_ID" != "$expected_target_id" ]]; then
+    fail "GuardDuty Runtime coverage target ID from Terraform is ${GUARDDUTY_COVERAGE_TARGET_ID}; expected ${expected_target_id}."
+  fi
+
+  if [[ "$GUARDDUTY_COVERAGE_TARGET_ARN" != "$SECOPS_TOPIC_ARN" ]]; then
+    fail "GuardDuty Runtime coverage target ARN does not match Terraform secops_topic_arn."
+  fi
+
+  if [[ "$GUARDDUTY_COVERAGE_DLQ_ARN" != "$expected_dlq_arn" ]]; then
+    fail "GuardDuty Runtime coverage DLQ ARN is ${GUARDDUTY_COVERAGE_DLQ_ARN}; expected shared EventBridge DLQ ${expected_dlq_arn}."
+  fi
+
+  rule_json="$(
+    aws events describe-rule \
+      "${aws_args[@]}" \
+      --event-bus-name "default" \
+      --name "$GUARDDUTY_COVERAGE_RULE_NAME" \
+      --output json
+  )"
+
+  if ! echo "$rule_json" |
+    jq -e \
+      --arg arn "$GUARDDUTY_COVERAGE_RULE_ARN" \
+      --arg name "$GUARDDUTY_COVERAGE_RULE_NAME" \
+      --arg description "Notify SecOps when GuardDuty ECS Runtime Monitoring coverage changes health state" '
+        .Arn == $arn
+        and .Name == $name
+        and .State == "ENABLED"
+        and .Description == $description
+      ' >/dev/null; then
+    echo "$rule_json" |
+      jq '{Name, Arn, State, Description, EventBusName}'
+    fail "GuardDuty Runtime coverage EventBridge rule identity or state does not match Terraform."
+  fi
+
+  actual_event_pattern_raw="$(
+    echo "$rule_json" |
+      jq -r '.EventPattern // empty'
+  )"
+
+  if [[ -z "$actual_event_pattern_raw" ]]; then
+    echo "$rule_json" | jq .
+    fail "GuardDuty Runtime coverage EventBridge rule has no event pattern."
+  fi
+
+  actual_event_pattern_normalized="$(
+    printf '%s' "$actual_event_pattern_raw" |
+      jq -S -c '
+        walk(
+          if type == "array"
+          then sort
+          else .
+          end
+        )
+      '
+  )"
+
+  expected_event_pattern_normalized="$(
+    jq -S -c -n \
+      --arg account_id "$ACCOUNT_ID" '
+        {
+          source: [
+            "aws.guardduty"
+          ],
+          "detail-type": [
+            "GuardDuty Runtime Protection Unhealthy",
+            "GuardDuty Runtime Protection Healthy"
+          ],
+          detail: {
+            resourceAccountId: [
+              $account_id
+            ],
+            resourceDetails: {
+              resourceType: [
+                "ECS"
+              ]
+            }
+          }
+        }
+        | walk(
+            if type == "array"
+            then sort
+            else .
+            end
+          )
+      '
+  )"
+
+  if [[ "$actual_event_pattern_normalized" != "$expected_event_pattern_normalized" ]]; then
+    jq -n \
+      --argjson expected "$expected_event_pattern_normalized" \
+      --argjson actual "$actual_event_pattern_normalized" \
+      '{
+        expected_guardduty_runtime_coverage_pattern: $expected,
+        actual_guardduty_runtime_coverage_pattern: $actual
+      }'
+    fail "GuardDuty Runtime coverage EventBridge rule pattern does not exactly match the R4/R5 ECS coverage contract."
+  fi
+
+  success "GuardDuty Runtime coverage EventBridge rule exactly matches Terraform and the ECS coverage event contract"
+
+  targets_json="$(
+    aws events list-targets-by-rule \
+      "${aws_args[@]}" \
+      --event-bus-name "default" \
+      --rule "$GUARDDUTY_COVERAGE_RULE_NAME" \
+      --output json
+  )"
+
+  if [[ "$(echo "$targets_json" | jq '.Targets | length')" -ne 1 ]]; then
+    echo "$targets_json" | jq '.Targets'
+    fail "GuardDuty Runtime coverage rule must have exactly one EventBridge target."
+  fi
+
+  target_json="$(echo "$targets_json" | jq -c '.Targets[0]')"
+
+  if ! echo "$target_json" |
+    jq -e \
+      --arg target_id "$GUARDDUTY_COVERAGE_TARGET_ID" \
+      --arg target_arn "$GUARDDUTY_COVERAGE_TARGET_ARN" \
+      --arg dlq_arn "$GUARDDUTY_COVERAGE_DLQ_ARN" '
+        .Id == $target_id
+        and .Arn == $target_arn
+        and .DeadLetterConfig.Arn == $dlq_arn
+        and .RetryPolicy.MaximumRetryAttempts == 3
+        and .RetryPolicy.MaximumEventAgeInSeconds == 3600
+      ' >/dev/null; then
+    echo "$target_json" |
+      jq '{
+        Id,
+        Arn,
+        DeadLetterConfig,
+        RetryPolicy
+      }'
+    fail "GuardDuty Runtime coverage target does not match the Terraform SNS/DLQ/retry contract."
+  fi
+
+  success "GuardDuty Runtime coverage target points to the Terraform SecOps SNS topic with the shared EventBridge DLQ and exact retry policy"
+
+  actual_input_paths_json="$(
+    echo "$target_json" |
+      jq -S -c '.InputTransformer.InputPathsMap // {}'
+  )"
+
+  expected_input_paths_json="$(
+    jq -S -c -n '
+      {
+        account: "$.detail.resourceAccountId",
+        region: "$.region",
+        cluster_name: "$.detail.resourceDetails.ecsClusterDetails.clusterName",
+        current_status: "$.detail.currentStatus",
+        previous_status: "$.detail.previousStatus",
+        issue: "$.detail.issue",
+        last_updated_at: "$.detail.lastUpdatedAt",
+        event_time: "$.time"
+      }
+    '
+  )"
+
+  if [[ "$actual_input_paths_json" != "$expected_input_paths_json" ]]; then
+    jq -n \
+      --argjson expected "$expected_input_paths_json" \
+      --argjson actual "$actual_input_paths_json" \
+      '{
+        expected_input_paths: $expected,
+        actual_input_paths: $actual
+      }'
+    fail "GuardDuty Runtime coverage input-transformer paths do not match the R4 evidence contract."
+  fi
+
+  input_template="$(
+    echo "$target_json" |
+      jq -r '.InputTransformer.InputTemplate // empty'
+  )"
+
+  if [[ -z "$input_template" ]]; then
+    fail "GuardDuty Runtime coverage target has no input-transformer template."
+  fi
+
+  for required_template_token in \
+    "GUARDDUTY ECS RUNTIME COVERAGE STATUS CHANGE" \
+    "<current_status>" \
+    "<previous_status>" \
+    "<cluster_name>" \
+    "<account>" \
+    "<region>" \
+    "<issue>" \
+    "<last_updated_at>" \
+    "<event_time>"; do
+    if [[ "$input_template" != *"$required_template_token"* ]]; then
+      printf '%s\n' "$input_template"
+      fail "GuardDuty Runtime coverage notification template is missing required token: ${required_template_token}"
+    fi
+  done
+
+  success "GuardDuty Runtime coverage notification transformer preserves all required R4 evidence fields"
+}
+
+
 section "Listing EventBridge event buses"
 
 EVENT_BUSES_JSON="$(
@@ -486,6 +786,8 @@ validate_expected_target_dlq \
   "3" \
   "3600"
 
+validate_guardduty_runtime_coverage_notification
+
 section "EventBridge Summary"
 
 DEFAULT_RULE_COUNT="$(echo "$DEFAULT_RULES_JSON" | jq 'length')"
@@ -505,6 +807,10 @@ Total rules validated:          ${VALIDATED_RULE_COUNT}
 Total targets discovered:       ${TOTAL_TARGET_COUNT}
 Security rule patterns:         ${SECURITY_RULE_COUNT}
 SecOps rollback rule patterns:  ${SECOPS_ROLLBACK_RULE_COUNT}
+
+GuardDuty coverage rule:         ${GUARDDUTY_COVERAGE_RULE_NAME}
+GuardDuty coverage target:       ${GUARDDUTY_COVERAGE_TARGET_ID}
+GuardDuty coverage DLQ:          ${GUARDDUTY_COVERAGE_DLQ_ARN}
 SUMMARY
 
 if [[ "${#RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then

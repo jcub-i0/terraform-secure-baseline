@@ -14,7 +14,7 @@ ecs_runtime_validate_cluster() {
     aws ecs describe-clusters \
       "${AWS_ARGS[@]}" \
       --clusters "$EXPECTED_CLUSTER_ARN" \
-      --include SETTINGS \
+      --include SETTINGS TAGS \
       --output json
   )"
 
@@ -37,18 +37,58 @@ ecs_runtime_validate_cluster() {
 
   success "ECS cluster exists, matches Terraform output, and is ACTIVE"
 
+  validate_guardduty_cluster_enrollment "$cluster_response_json"
   validate_container_insights "$cluster_response_json"
   validate_service_inventory
 
-  # Preserve the cluster-only success path when Terraform configures no services.
+  # Do not exit the top-level validator when no services are configured. R5
+  # still requires cluster/runtime prerequisite validation to continue.
   if [[ "$ECS_SERVICE_COUNT" -eq 0 ]]; then
     if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
       fail "ecs_services is empty, but application_load_balancer output is not null"
     fi
-    section "Validation Result"
-    success "ECS cluster is valid and no ECS services are configured; per-service and ALB checks skipped"
-    exit 0
+
+    success "No ECS services are configured; cluster Runtime Monitoring validation remains active"
   fi
+}
+
+validate_guardduty_cluster_enrollment() {
+  local cluster_response_json="$1"
+  local guardduty_managed_tags_json
+  local live_guardduty_managed_tag_value
+
+  guardduty_managed_tags_json="$(
+    echo "$cluster_response_json" |
+      jq -c '
+        [
+          .clusters[0].tags[]?
+          | select(.key == "GuardDutyManaged")
+        ]
+      '
+  )"
+
+  if [[ "$(echo "$guardduty_managed_tags_json" | jq 'length')" -ne 1 ]]; then
+    echo "$cluster_response_json" | jq '.clusters[0].tags // []'
+    fail "Expected exactly one GuardDutyManaged tag on the ECS cluster"
+  fi
+
+  live_guardduty_managed_tag_value="$(
+    echo "$guardduty_managed_tags_json" |
+      jq -r '.[0].value // empty'
+  )"
+
+  if [[ "$live_guardduty_managed_tag_value" != "$GUARDDUTY_MANAGED_TAG_VALUE" ]]; then
+    fail "Live ECS GuardDutyManaged tag (${live_guardduty_managed_tag_value:-<missing>}) does not match Terraform output (${GUARDDUTY_MANAGED_TAG_VALUE})."
+  fi
+
+  if [[ "$live_guardduty_managed_tag_value" != "$EXPECTED_GUARDDUTY_MANAGED_TAG_VALUE" ]]; then
+    fail "Live ECS GuardDutyManaged tag (${live_guardduty_managed_tag_value:-<missing>}) does not match deployment_profile=${DEPLOYMENT_PROFILE} expectation (${EXPECTED_GUARDDUTY_MANAGED_TAG_VALUE})."
+  fi
+
+  # shellcheck disable=SC2034 # Consumed by summary.sh once R5 runtime evidence is added.
+  LIVE_GUARDDUTY_MANAGED_TAG_VALUE="$live_guardduty_managed_tag_value"
+
+  success "Live ECS GuardDutyManaged tag matches Terraform and deployment_profile=${DEPLOYMENT_PROFILE}: ${live_guardduty_managed_tag_value}"
 }
 
 validate_container_insights_log_group() {

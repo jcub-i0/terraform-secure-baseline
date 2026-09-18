@@ -35,6 +35,8 @@
 #   This script is intentionally read-only. It does not run GitHub workflows,
 #   assume roles, modify Identity Center assignments, move accounts, or perform
 #   destroy/cleanup operations.
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 

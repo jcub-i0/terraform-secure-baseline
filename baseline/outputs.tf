@@ -213,6 +213,12 @@ output "ecs_service_configuration" {
 
       database_access             = service.database_access
       task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
+
+      guardduty_agent_ecr_repository_arns = sort(
+        tolist(
+          local.ecs_iam_services[service_name].guardduty_agent_ecr_repository_arns
+        )
+      )
     }
   }
 }
@@ -275,6 +281,11 @@ output "ecs_ingress_unhealthy_target_alarms" {
 output "guardduty_ecs_runtime_coverage_notification" {
   description = "GuardDuty ECS Runtime Monitoring coverage-status notification metadata"
   value       = module.monitoring.guardduty_ecs_runtime_coverage_notification
+}
+
+output "interface_endpoint_ids" {
+  description = "Interface VPC Endpoint IDs keyed by AWS service short name"
+  value       = module.vpc_endpoints.interface_endpoint_ids
 }
 
 output "s3_prefix_list_id" {

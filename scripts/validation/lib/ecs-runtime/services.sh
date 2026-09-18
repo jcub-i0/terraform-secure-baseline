@@ -2,6 +2,78 @@
 
 # Internal ECS runtime services helpers; sourced by validate-ecs-runtime.sh.
 
+readonly GUARDDUTY_MINIMUM_FARGATE_PLATFORM_VERSION="1.4.0"
+
+fargate_platform_version_at_least() {
+  local actual_version="$1"
+  local minimum_version="$2"
+  local actual_major
+  local actual_minor
+  local actual_patch
+  local minimum_major
+  local minimum_minor
+  local minimum_patch
+
+  # AWS documents LATEST as GuardDuty-compatible for Linux Fargate. The baseline
+  # currently pins 1.4.0, but accepting LATEST keeps this helper correct if the
+  # module interface is intentionally expanded later.
+  if [[ "$actual_version" == "LATEST" ]]; then
+    return 0
+  fi
+
+  if ! [[ "$actual_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    return 1
+  fi
+
+  actual_major="${BASH_REMATCH[1]}"
+  actual_minor="${BASH_REMATCH[2]}"
+  actual_patch="${BASH_REMATCH[3]}"
+
+  if ! [[ "$minimum_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    fail "Internal validator error: invalid minimum Fargate platform version ${minimum_version}"
+  fi
+
+  minimum_major="${BASH_REMATCH[1]}"
+  minimum_minor="${BASH_REMATCH[2]}"
+  minimum_patch="${BASH_REMATCH[3]}"
+
+  if ((actual_major > minimum_major)); then
+    return 0
+  fi
+
+  if ((actual_major < minimum_major)); then
+    return 1
+  fi
+
+  if ((actual_minor > minimum_minor)); then
+    return 0
+  fi
+
+  if ((actual_minor < minimum_minor)); then
+    return 1
+  fi
+
+  ((actual_patch >= minimum_patch))
+}
+
+validate_guardduty_fargate_platform_version() {
+  local service_name="$1"
+  local expected_platform_version="$2"
+
+  if [[ "$EXPECTED_GUARDDUTY_RUNTIME_ENABLED" != "true" ]]; then
+    info "GuardDuty Runtime Monitoring is disabled; GuardDuty-specific Fargate platform compatibility is not required: ${service_name}"
+    return 0
+  fi
+
+  if ! fargate_platform_version_at_least \
+    "$expected_platform_version" \
+    "$GUARDDUTY_MINIMUM_FARGATE_PLATFORM_VERSION"; then
+    fail "ECS service Fargate platform version is not compatible with GuardDuty Runtime Monitoring: ${service_name} platform=${expected_platform_version:-<missing>} minimum=${GUARDDUTY_MINIMUM_FARGATE_PLATFORM_VERSION}"
+  fi
+
+  success "ECS service Fargate platform is GuardDuty Runtime Monitoring compatible: ${service_name} platform=${expected_platform_version}"
+}
+
 ecs_runtime_validate_services() {
   local service_name
 
@@ -368,6 +440,8 @@ validate_task_definition() {
     fail "Task definition must contain exactly one essential container named ${service_name}"
   fi
 
+  success "Canonical task definition remains application-only; GuardDuty agent injection is not Terraform-defined: ${service_name}"
+
   primary_container_json="$(
     echo "$task_definition_response_json" |
       jq -c '.taskDefinition.containerDefinitions[0]'
@@ -626,6 +700,10 @@ validate_service() {
   expected_task_role_arn="$(echo "$ECS_TASK_ROLES_JSON" | jq -r --arg service "$service_name" '.[$service].arn')"
 
   info "Validating ECS service: ${service_name}"
+
+  validate_guardduty_fargate_platform_version \
+    "$service_name" \
+    "$expected_platform_version"
 
   service_response_json="$(
     aws ecs describe-services \

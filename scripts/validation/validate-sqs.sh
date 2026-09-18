@@ -32,6 +32,8 @@
 #
 # Optional override:
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-sqs.sh dev
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 

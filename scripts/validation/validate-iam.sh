@@ -12,6 +12,9 @@
 # - Break-glass trust policy includes MFA protection when detectable
 # - Optional GitHub OIDC roles are detected if present
 # - Shared IAM policies from Terraform outputs exist if available
+# - Per-service ECS task/execution-role trust and least-privilege policy scope
+# - GuardDuty Fargate agent ECR pull authority matches deployment_profile exactly
+# - No broad or unexpected ECR authority is present on ECS execution roles
 #
 # Usage:
 #   ./scripts/validation/validate-iam.sh dev
@@ -21,6 +24,8 @@
 #
 # Optional override:
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-iam.sh dev
+#
+# shellcheck source-path=SCRIPTDIR
 
 set -euo pipefail
 
@@ -241,6 +246,58 @@ policy_contains_action() {
         | if type == "array" then . else [.] end
         | any((.Action | if type == "array" then . else [.] end) | index($action) != null)
       ' >/dev/null
+}
+
+policy_has_allow_not_action() {
+    local policy_json="$1"
+
+    echo "$policy_json" |
+      jq -e '
+        .Statement
+        | if type == "array" then . else [.] end
+        | any(
+            .Effect == "Allow"
+            and has("NotAction")
+          )
+      ' >/dev/null
+}
+
+policy_ecr_statements_json() {
+    local policy_json="$1"
+
+    echo "$policy_json" |
+      jq -c '
+        .Statement
+        | if type == "array" then . else [.] end
+        | [
+            .[]
+            | (.Action // [] | if type == "array" then . else [.] end) as $actions
+            | select(
+                any(
+                  $actions[]?;
+                  (. | ascii_downcase) == "*"
+                  or ((. | ascii_downcase) | startswith("ecr:"))
+                )
+              )
+            | {
+                effect: .Effect,
+                actions: ($actions | map(ascii_downcase) | sort | unique),
+                resources: (
+                  (.Resource // [])
+                  | if type == "array" then . else [.] end
+                  | sort
+                  | unique
+                ),
+                condition: (.Condition // null),
+                not_resource: (.NotResource // null)
+              }
+          ]
+        | sort_by(
+            .effect,
+            (.actions | join(",")),
+            (.resources | join(","))
+          )
+      '
 }
 
 validate_ecs_task_trust() {
@@ -501,12 +558,26 @@ fi
 
 section "Validating per-service ECS IAM roles and policies"
 
-for output_name in ecs_services ecs_service_configuration ecs_task_definition_arns ecs_log_groups ecs_task_execution_roles ecs_task_roles ecr_repositories; do
+for output_name in deployment_profile ecs_services ecs_service_configuration ecs_task_definition_arns ecs_log_groups ecs_task_execution_roles ecs_task_roles ecr_repositories; do
  
   if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
     fail "Missing required Terraform output for ECS IAM validation: ${output_name}"
   fi
 done
+
+DEPLOYMENT_PROFILE="$(get_terraform_output_value "$OUTPUTS_JSON" deployment_profile)"
+require_value_in_list "$DEPLOYMENT_PROFILE" "production development minimal" "deployment_profile"
+
+case "$DEPLOYMENT_PROFILE" in
+  production|development)
+    GUARDDUTY_RUNTIME_IAM_EXPECTED="enabled"
+    ;;
+  minimal)
+    GUARDDUTY_RUNTIME_IAM_EXPECTED="disabled"
+    ;;
+esac
+
+success "GuardDuty Fargate Runtime Monitoring IAM expectation derived from deployment_profile=${DEPLOYMENT_PROFILE}: ${GUARDDUTY_RUNTIME_IAM_EXPECTED}"
 
 ECS_SERVICES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecs_services.value')"
 
@@ -555,7 +626,22 @@ for output_name in \
   fi
 done
 
+if ! echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+  jq -e '
+    all(.[];
+      type == "object"
+      and has("task_execution_kms_key_arns")
+      and (.task_execution_kms_key_arns | type) == "array"
+      and has("guardduty_agent_ecr_repository_arns")
+      and (.guardduty_agent_ecr_repository_arns | type) == "array"
+    )
+  ' >/dev/null; then
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" | jq .
+  fail "ecs_service_configuration is missing required ECS IAM validator metadata"
+fi
+
 ECS_IAM_SERVICE_COUNT="$(echo "$ECS_SERVICES_JSON" | jq 'length')"
+GUARDDUTY_ECR_SCOPE_SERVICE_COUNT=0
 
 if [[ "$ECS_IAM_SERVICE_COUNT" -eq 0 ]]; then
   success "No ECS services are configured; per-service ECS IAM validation skipped"
@@ -613,6 +699,12 @@ else
       fail "ECS task execution role grants iam:PassRole: ${service_name}"
     fi
 
+    if policy_has_allow_not_action "$execution_policy_json"; then
+      echo "$execution_policy_json" |
+        jq '.Statement | if type == "array" then . else [.] end | map(select(.Effect == "Allow" and has("NotAction")))'
+      fail "ECS task execution role contains an Allow statement using NotAction, which prevents exact least-privilege validation: ${service_name}"
+    fi
+
     task_definition_arn="$(echo "$ECS_TASK_DEFINITION_ARNS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
     task_definition_json="$(aws ecs describe-task-definition "${aws_args[@]}" --task-definition "$task_definition_arn" --output json)"
     primary_container_json="$(echo "$task_definition_json" | jq -c --arg service "$service_name" '[.taskDefinition.containerDefinitions[] | select(.name == $service)] | if length == 1 then .[0] else null end')"
@@ -629,6 +721,47 @@ else
       fail "Cannot resolve exactly one ECR repository ARN for the ECS execution policy: ${service_name}"
     fi
 
+    expected_guardduty_ecr_arns_json="$(
+      echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+        jq -c \
+          --arg service "$service_name" \
+          '.[$service].guardduty_agent_ecr_repository_arns | sort | unique'
+    )"
+
+    if ! echo "$expected_guardduty_ecr_arns_json" |
+      jq -e \
+        --arg region "$AWS_REGION" \
+        --arg partition "$partition" '
+          type == "array"
+          and all(.[];
+            type == "string"
+            and (split(":")) as $parts
+            | ($parts | length) == 6
+            and $parts[0] == "arn"
+            and $parts[1] == $partition
+            and $parts[2] == "ecr"
+            and $parts[3] == $region
+            and ($parts[4] | test("^[0-9]{12}$"))
+            and $parts[5] == "repository/aws-guardduty-agent-fargate"
+          )
+        ' >/dev/null; then
+      echo "$expected_guardduty_ecr_arns_json" | jq .
+      fail "guardduty_agent_ecr_repository_arns output is invalid: ${service_name}"
+    fi
+
+    if [[ "$GUARDDUTY_RUNTIME_IAM_EXPECTED" == "enabled" ]]; then
+      if [[ "$(echo "$expected_guardduty_ecr_arns_json" | jq 'length')" -ne 1 ]]; then
+        echo "$expected_guardduty_ecr_arns_json" | jq .
+        fail "${DEPLOYMENT_PROFILE} requires exactly one GuardDuty agent ECR repository ARN: ${service_name}"
+      fi
+
+      GUARDDUTY_ECR_SCOPE_SERVICE_COUNT=$((GUARDDUTY_ECR_SCOPE_SERVICE_COUNT + 1))
+
+    elif [[ "$(echo "$expected_guardduty_ecr_arns_json" | jq 'length')" -ne 0 ]]; then
+      echo "$expected_guardduty_ecr_arns_json" | jq .
+      fail "minimal deployment_profile must not expose GuardDuty agent ECR repository authority: ${service_name}"
+    fi
+
     expected_log_group_arn="$(echo "$ECS_LOG_GROUPS_JSON" | jq -r --arg service "$service_name" '.[$service].arn | rtrimstr(":*")')"
     expected_log_resources_json="$(jq -nc --arg arn "${expected_log_group_arn}:*" '[$arn]')"
 
@@ -642,6 +775,86 @@ else
       "$expected_ecr_arns_json"; then
       fail "ECS execution policy ECR pull permissions are not scoped to the task image repository: ${service_name}"
     fi
+
+    if [[ "$GUARDDUTY_RUNTIME_IAM_EXPECTED" == "enabled" ]]; then
+      if ! policy_statement_allows_exact_resources \
+        "$execution_policy_json" \
+        '["ecr:BatchCheckLayerAvailability","ecr:GetDownloadUrlForLayer","ecr:BatchGetImage"]' \
+        "$expected_guardduty_ecr_arns_json"; then
+        fail "ECS execution policy GuardDuty agent image-pull permissions do not exactly match Terraform: ${service_name}"
+      fi
+
+      success "GuardDuty agent ECR pull permissions exactly match Terraform: ${service_name}"
+    fi
+
+    actual_ecr_policy_statements_json="$(
+      policy_ecr_statements_json "$execution_policy_json"
+    )"
+
+    expected_ecr_policy_statements_json="$(
+      jq -nc \
+        --argjson application_resources "$expected_ecr_arns_json" \
+        --argjson guardduty_resources "$expected_guardduty_ecr_arns_json" '
+          [
+            {
+              effect: "Allow",
+              actions: ["ecr:getauthorizationtoken"],
+              resources: ["*"],
+              condition: null,
+              not_resource: null
+            },
+            {
+              effect: "Allow",
+              actions: [
+                "ecr:batchchecklayeravailability",
+                "ecr:batchgetimage",
+                "ecr:getdownloadurlforlayer"
+              ],
+              resources: ($application_resources | sort | unique),
+              condition: null,
+              not_resource: null
+            }
+          ]
+          + (
+              if ($guardduty_resources | length) > 0 then
+                [
+                  {
+                    effect: "Allow",
+                    actions: [
+                      "ecr:batchchecklayeravailability",
+                      "ecr:batchgetimage",
+                      "ecr:getdownloadurlforlayer"
+                    ],
+                    resources: ($guardduty_resources | sort | unique),
+                    condition: null,
+                    not_resource: null
+                  }
+                ]
+              else
+                []
+              end
+            )
+          | sort_by(
+              .effect,
+              (.actions | join(",")),
+              (.resources | join(","))
+            )
+        '
+    )"
+
+    if [[ "$actual_ecr_policy_statements_json" != "$expected_ecr_policy_statements_json" ]]; then
+      jq -n \
+        --argjson expected "$expected_ecr_policy_statements_json" \
+        --argjson actual "$actual_ecr_policy_statements_json" \
+        '{
+          expected_ecr_statements: $expected,
+          actual_ecr_statements: $actual
+        }'
+
+      fail "ECS execution policy ECR authority does not exactly match application and GuardDuty repository requirements: ${service_name}"
+    fi
+
+    success "ECS execution policy ECR authority is exact and contains no broad or unexpected permissions: ${service_name}"
 
     if ! policy_statement_allows_exact_resources \
       "$execution_policy_json" \
@@ -708,26 +921,29 @@ else
       fi
     fi
 
-    success "ECS IAM trust, execution-policy scope, empty task-role authority, and PassRole absence are valid: ${service_name}"
+    success "ECS IAM trust, exact application/GuardDuty execution-policy scope, empty task-role authority, and PassRole absence are valid: ${service_name}"
   done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 fi
 
 section "IAM Summary"
 
 cat <<SUMMARY
-Environment:                  ${ENV_NAME}
-AWS profile:                  ${AWS_PROFILE:-<default>}
-AWS region:                   ${AWS_REGION}
-AWS account ID:               ${ACCOUNT_ID}
-Name prefix:                  ${NAME_PREFIX}
+Environment:                    ${ENV_NAME}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+AWS account ID:                 ${ACCOUNT_ID}
+Name prefix:                    ${NAME_PREFIX}
 
-Baseline roles validated:     ${VALIDATED_ROLE_COUNT}
-GitHub plan role present:     ${GITHUB_PLAN_PRESENT}
-GitHub apply role present:    ${GITHUB_APPLY_PRESENT}
+Baseline roles validated:       ${VALIDATED_ROLE_COUNT}
+GitHub plan role present:       ${GITHUB_PLAN_PRESENT}
+GitHub apply role present:      ${GITHUB_APPLY_PRESENT}
 
-Logs S3 policy output:        ${LOGS_S3_READONLY_POLICY_NAME:-<missing>}
-Logs CMK policy output:       ${LOGS_CMK_DECRYPT_POLICY_NAME:-<missing>}
-ECS services validated:       ${ECS_IAM_SERVICE_COUNT}
+Logs S3 policy output:          ${LOGS_S3_READONLY_POLICY_NAME:-<missing>}
+Logs CMK policy output:         ${LOGS_CMK_DECRYPT_POLICY_NAME:-<missing>}
+ECS services validated:         ${ECS_IAM_SERVICE_COUNT}
+Deployment profile:             ${DEPLOYMENT_PROFILE}
+GuardDuty Runtime IAM:          ${GUARDDUTY_RUNTIME_IAM_EXPECTED}
+GuardDuty ECR-scoped services:  ${GUARDDUTY_ECR_SCOPE_SERVICE_COUNT}
 SUMMARY
 
 section "Validation Result"

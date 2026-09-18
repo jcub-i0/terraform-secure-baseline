@@ -43,5 +43,7 @@ output "guardduty_ecs_runtime_coverage_notification" {
 
     target_id  = aws_cloudwatch_event_target.guardduty_ecs_runtime_coverage_to_sns.target_id
     target_arn = aws_cloudwatch_event_target.guardduty_ecs_runtime_coverage_to_sns.arn
+
+    dead_letter_arn = aws_sqs_queue.security_notifications_eventbridge_dlq.arn
   }
 }
