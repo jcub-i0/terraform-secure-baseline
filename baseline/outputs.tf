@@ -277,6 +277,11 @@ output "guardduty_ecs_runtime_coverage_notification" {
   value       = module.monitoring.guardduty_ecs_runtime_coverage_notification
 }
 
+output "interface_endpoint_ids" {
+  description = "Interface VPC Endpoint IDs keyed by AWS service short name"
+  value = module.vpc_endpoints.interface_endpoint_ids
+}
+
 output "s3_prefix_list_id" {
   description = "AWS-managed S3 prefix list ID associated with the workload S3 Gateway Endpoint."
   value       = module.vpc_endpoints.s3_prefix_list_id
