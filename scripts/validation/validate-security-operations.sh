@@ -117,6 +117,7 @@ REQUIRED_OUTPUTS=(
   securityhub_cspm_policy_association_target_ids
   guardduty_detector_id
   securityhub_v2_organization_policy_id
+  guardduty_organization_features
 )
 
 for output_name in "${REQUIRED_OUTPUTS[@]}"; do
