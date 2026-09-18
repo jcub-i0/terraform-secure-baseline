@@ -25,6 +25,8 @@ source "${SCRIPT_DIR}/lib/ecs-runtime/ingress.sh"
 source "${SCRIPT_DIR}/lib/ecs-runtime/alarms.sh"
 # shellcheck source=lib/ecs-runtime/summary.sh
 source "${SCRIPT_DIR}/lib/ecs-runtime/summary.sh"
+# shellcheck source=lib/ecs-runtime/guardduty.sh
+source "${SCRIPT_DIR}/lib/ecs-runtime/guardduty.sh"
 
 ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
