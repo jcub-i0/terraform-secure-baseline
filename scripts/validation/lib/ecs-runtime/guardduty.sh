@@ -320,6 +320,9 @@ ecs_runtime_validate_guardduty_tasks() {
   success "Every running protected ECS/Fargate task has one RUNNING aws-gd-agent sidecar and a valid application container"
 }
 
+# validate-security-workload.sh owns workload GuardDuty detector health and
+# administrator-association validation. ECS runtime validation resolves the
+# workload detector ID here only because GuardDuty list-coverage requires it.
 ecs_runtime_resolve_guardduty_detector() {
   local detectors_json
 
@@ -343,7 +346,7 @@ ecs_runtime_resolve_guardduty_detector() {
     fail "Unable to resolve the workload GuardDuty detector ID."
   fi
 
-  success "Resolved workload GuardDuty detector for ECS Runtime Monitoring coverage"
+  success "Resolved workload GuardDuty detector ID required for ECS coverage lookup"
 }
 
 ecs_runtime_get_guardduty_cluster_coverage() {
