@@ -36,10 +36,15 @@ ecs_runtime_load_contract() {
   ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" ecs_autoscaling_alb_request_policies)"
   ECS_TASK_DEFICIT_ALARMS_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" ecs_task_deficit_alarms)"
   ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" ecs_ingress_unhealthy_target_alarms)"
+  # shellcheck disable=SC2034 # Consumed by future GuardDuty runtime validation and summary helpers.
+  INTERFACE_ENDPOINT_IDS_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" interface_endpoint_ids)"
+  # shellcheck disable=SC2034 # Consumed by future GuardDuty runtime validation and summary helpers.
+  GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" guardduty_ecs_runtime_coverage_notification)"
 
   for output_name in \
     vpc_id \
     name_prefix \
+    deployment_profile \
     s3_prefix_list_id \
     effective_egress_mode \
     effective_cloudwatch_retention_days \
@@ -54,6 +59,10 @@ ecs_runtime_load_contract() {
 
   # shellcheck disable=SC2034 # Consumed by services.sh and ingress.sh.
   VPC_ID="$(get_terraform_output_value "$OUTPUTS_JSON" vpc_id)"
+  # shellcheck disable=SC2034 # Consumed by services.sh, ingress.sh, alarms.sh, and GuardDuty runtime helpers.
+  NAME_PREFIX="$(get_terraform_output_value "$OUTPUTS_JSON" name_prefix)"
+  # shellcheck disable=SC2034 # Consumed by GuardDuty runtime validation and summary helpers.
+  DEPLOYMENT_PROFILE="$(get_terraform_output_value "$OUTPUTS_JSON" deployment_profile)"
   # shellcheck disable=SC2034 # Consumed by services.sh.
   S3_PREFIX_LIST_ID="$(get_terraform_output_value "$OUTPUTS_JSON" s3_prefix_list_id)"
   EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
@@ -74,11 +83,13 @@ ecs_runtime_load_contract() {
       '
   )"
 
-  # shellcheck disable=SC2034 # Consumed by services.sh, ingress.sh, and alarms.sh.
-  NAME_PREFIX="$(get_terraform_output_value "$OUTPUTS_JSON" name_prefix)"
   validate_alb_output
 
+  require_value_in_list "$DEPLOYMENT_PROFILE" "production development minimal" "deployment_profile"
   require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
+
+  ecs_runtime_resolve_guardduty_profile_contract
+  ecs_runtime_validate_guardduty_integration_outputs
 
   if ! [[ "$EFFECTIVE_CLOUDWATCH_RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
     fail "effective_cloudwatch_retention_days is not an integer: ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS}"
@@ -101,7 +112,120 @@ ecs_runtime_load_contract() {
   fi
 
   ECS_SERVICE_COUNT="$(echo "$ECS_SERVICES_JSON" | jq 'length')"
+  info "Deployment profile: ${DEPLOYMENT_PROFILE}"
+  info "GuardDuty Fargate Runtime Monitoring expected: ${EXPECTED_GUARDDUTY_RUNTIME_ENABLED}"
+  info "GuardDutyManaged expected tag value: ${EXPECTED_GUARDDUTY_MANAGED_TAG_VALUE}"
   info "Configured ECS services: ${ECS_SERVICE_COUNT}"
+}
+
+ecs_runtime_resolve_guardduty_profile_contract() {
+  case "$DEPLOYMENT_PROFILE" in
+    production | development)
+      EXPECTED_GUARDDUTY_RUNTIME_ENABLED="true"
+      EXPECTED_GUARDDUTY_MANAGED_TAG_VALUE="true"
+      ;;
+    minimal)
+      EXPECTED_GUARDDUTY_RUNTIME_ENABLED="false"
+      EXPECTED_GUARDDUTY_MANAGED_TAG_VALUE="false"
+      ;;
+    *)
+      fail "Unsupported deployment_profile for GuardDuty Runtime Monitoring contract: ${DEPLOYMENT_PROFILE}"
+      ;;
+  esac
+}
+
+ecs_runtime_validate_guardduty_integration_outputs() {
+  local required_endpoint_service
+  local expected_rule_name
+  local expected_target_id
+
+  section "Validating GuardDuty Runtime Monitoring Terraform contract"
+
+  for required_endpoint_service in ecr.api ecr.dkr guardduty-data; do
+    if ! echo "$INTERFACE_ENDPOINT_IDS_JSON" |
+      jq -e \
+        --arg service "$required_endpoint_service" '
+          has($service)
+          and (.[$service] | type == "string")
+          and (.[$service] | test("^vpce-[0-9a-f]+$"))
+        ' >/dev/null; then
+      echo "$INTERFACE_ENDPOINT_IDS_JSON" | jq .
+      fail "interface_endpoint_ids does not contain a valid Terraform-managed '${required_endpoint_service}' endpoint ID."
+    fi
+  done
+
+  if ! echo "$INTERFACE_ENDPOINT_IDS_JSON" |
+    jq -e '
+      [
+        .["ecr.api"],
+        .["ecr.dkr"],
+        .["guardduty-data"]
+      ]
+      | unique
+      | length == 3
+    ' >/dev/null; then
+    echo "$INTERFACE_ENDPOINT_IDS_JSON" | jq .
+    fail "Required ECR and GuardDuty Interface Endpoint IDs must resolve to three distinct Terraform resources."
+  fi
+
+  # shellcheck disable=SC2034 # Consumed by future GuardDuty runtime validation and summary helpers.
+  ECR_API_ENDPOINT_ID="$(echo "$INTERFACE_ENDPOINT_IDS_JSON" | jq -r '."ecr.api"')"
+  # shellcheck disable=SC2034 # Consumed by future GuardDuty runtime validation and summary helpers.
+  ECR_DKR_ENDPOINT_ID="$(echo "$INTERFACE_ENDPOINT_IDS_JSON" | jq -r '."ecr.dkr"')"
+  # shellcheck disable=SC2034 # Consumed by future GuardDuty runtime validation and summary helpers.
+  GUARDDUTY_DATA_ENDPOINT_ID="$(echo "$INTERFACE_ENDPOINT_IDS_JSON" | jq -r '."guardduty-data"')"
+
+  expected_rule_name="${NAME_PREFIX}-guardduty-ecs-runtime-coverage"
+  expected_target_id="guardduty-ecs-runtime-coverage-to-secops-sns"
+
+  if ! echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+    jq -e \
+      --arg rule_name "$expected_rule_name" \
+      --arg target_id "$expected_target_id" \
+      --arg secops_topic_arn "$SECOPS_TOPIC_ARN" '
+        type == "object"
+        and (keys | sort) == [
+          "dead_letter_arn",
+          "rule_arn",
+          "rule_name",
+          "target_arn",
+          "target_id"
+        ]
+        and .rule_name == $rule_name
+        and .target_id == $target_id
+        and .target_arn == $secops_topic_arn
+        and (.rule_arn | type == "string" and length > 0)
+        and (.dead_letter_arn | type == "string" and length > 0)
+      ' >/dev/null; then
+    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" | jq .
+    fail "guardduty_ecs_runtime_coverage_notification does not match the workload Runtime Monitoring notification contract."
+  fi
+
+  # Resource-specific EventBridge semantics are validated by validate-eventbridge.sh.
+  # These values are retained here so ECS Runtime validation can prove integration
+  # without reconstructing resource identities from names later.
+  GUARDDUTY_COVERAGE_RULE_ARN="$(
+    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+      jq -r '.rule_arn'
+  )"
+  GUARDDUTY_COVERAGE_RULE_NAME="$(
+    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+      jq -r '.rule_name'
+  )"
+  GUARDDUTY_COVERAGE_TARGET_ID="$(
+    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+      jq -r '.target_id'
+  )"
+  GUARDDUTY_COVERAGE_TARGET_ARN="$(
+    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+      jq -r '.target_arn'
+  )"
+  GUARDDUTY_COVERAGE_DLQ_ARN="$(
+    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
+      jq -r '.dead_letter_arn'
+  )"
+
+  success "GuardDuty Runtime Monitoring endpoint and notification integration outputs are valid"
 }
 
 ecs_runtime_validate_alarm_output_membership() {
@@ -176,6 +300,9 @@ validate_cluster_output() {
       and (.name | type == "string" and length > 0)
       and (.container_insights | type == "string" and length > 0)
       and has("container_insights_log_group")
+      and (.guardduty_fargate_runtime_monitoring_enabled | type == "boolean")
+      and (.guardduty_managed_tag_value | type == "string")
+      and (.guardduty_managed_tag_value | IN("true", "false"))
       and (
         (
           .container_insights == "disabled"
@@ -192,8 +319,28 @@ validate_cluster_output() {
         )
       )
     ' >/dev/null; then
-    fail "ecs_cluster output contains invalid cluster or Container Insights log-group metadata"
+    fail "ecs_cluster output contains invalid cluster, Container Insights, or GuardDuty Runtime Monitoring metadata"
   fi
+
+  GUARDDUTY_FARGATE_RUNTIME_MONITORING_ENABLED="$(
+    echo "$ECS_CLUSTER_JSON" |
+      jq -r '.guardduty_fargate_runtime_monitoring_enabled'
+  )"
+
+  GUARDDUTY_MANAGED_TAG_VALUE="$(
+    echo "$ECS_CLUSTER_JSON" |
+      jq -r '.guardduty_managed_tag_value'
+  )"
+
+  if [[ "$GUARDDUTY_FARGATE_RUNTIME_MONITORING_ENABLED" != "$EXPECTED_GUARDDUTY_RUNTIME_ENABLED" ]]; then
+    fail "Terraform GuardDuty Fargate Runtime Monitoring state (${GUARDDUTY_FARGATE_RUNTIME_MONITORING_ENABLED}) does not match deployment_profile=${DEPLOYMENT_PROFILE} expectation (${EXPECTED_GUARDDUTY_RUNTIME_ENABLED})."
+  fi
+
+  if [[ "$GUARDDUTY_MANAGED_TAG_VALUE" != "$EXPECTED_GUARDDUTY_MANAGED_TAG_VALUE" ]]; then
+    fail "Terraform GuardDutyManaged tag value (${GUARDDUTY_MANAGED_TAG_VALUE}) does not match deployment_profile=${DEPLOYMENT_PROFILE} expectation (${EXPECTED_GUARDDUTY_MANAGED_TAG_VALUE})."
+  fi
+
+  success "Terraform ECS cluster GuardDuty Runtime Monitoring intent matches deployment_profile=${DEPLOYMENT_PROFILE}"
 }
 
 validate_service_outputs() {
@@ -229,10 +376,87 @@ validate_service_outputs() {
         and (.database_access | type) == "boolean"
 
         and (.task_execution_kms_key_arns | type) == "array"
+        and (.guardduty_agent_ecr_repository_arns | type) == "array"
+        and all(.guardduty_agent_ecr_repository_arns[]; type == "string")
       )
     ' >/dev/null; then
     fail "ecs_service_configuration contains invalid validator metadata"
   fi
+
+  local invalid_guardduty_services_json
+  local guardduty_agent_repository_arns_json
+
+  invalid_guardduty_services_json="$(
+    echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+      jq -c \
+        --argjson enabled "$EXPECTED_GUARDDUTY_RUNTIME_ENABLED" '
+          [
+            to_entries[]
+            | select(
+                if $enabled
+                then (.value.guardduty_agent_ecr_repository_arns | length) != 1
+                else (.value.guardduty_agent_ecr_repository_arns | length) != 0
+                end
+              )
+            | {
+                service: .key,
+                guardduty_agent_ecr_repository_arns: .value.guardduty_agent_ecr_repository_arns
+              }
+          ]
+        '
+  )"
+
+  if [[ "$(echo "$invalid_guardduty_services_json" | jq 'length')" -ne 0 ]]; then
+    echo "$invalid_guardduty_services_json" | jq .
+    if [[ "$EXPECTED_GUARDDUTY_RUNTIME_ENABLED" == "true" ]]; then
+      fail "Each ECS service must expose exactly one GuardDuty agent ECR repository ARN when Runtime Monitoring is enabled."
+    else
+      fail "ECS services must not expose GuardDuty agent ECR repository ARNs when Runtime Monitoring is disabled."
+    fi
+  fi
+
+  guardduty_agent_repository_arns_json="$(
+    echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+      jq -c '
+        [
+          .[]?.guardduty_agent_ecr_repository_arns[]?
+        ]
+        | sort
+        | unique
+      '
+  )"
+
+  if [[ "$EXPECTED_GUARDDUTY_RUNTIME_ENABLED" == "true" ]] &&
+    [[ "$(echo "$guardduty_agent_repository_arns_json" | jq 'length')" -gt 0 ]]; then
+
+    if [[ "$(echo "$guardduty_agent_repository_arns_json" | jq 'length')" -ne 1 ]]; then
+      echo "$guardduty_agent_repository_arns_json" | jq .
+      fail "Protected ECS services must resolve to one shared regional GuardDuty agent ECR repository ARN."
+    fi
+
+    if ! echo "$guardduty_agent_repository_arns_json" |
+      jq -e \
+        --arg region "$AWS_REGION" '
+          all(.[];
+            type == "string"
+            and (
+              split(":") as $parts
+              | ($parts | length) == 6
+              and $parts[0] == "arn"
+              and ($parts[1] | length) > 0
+              and $parts[2] == "ecr"
+              and $parts[3] == $region
+              and ($parts[4] | test("^[0-9]{12}$"))
+              and $parts[5] == "repository/aws-guardduty-agent-fargate"
+            )
+          )
+        ' >/dev/null; then
+      echo "$guardduty_agent_repository_arns_json" | jq .
+      fail "GuardDuty agent ECR repository metadata does not match the expected regional aws-guardduty-agent-fargate repository shape."
+    fi
+  fi
+
+  success "ECS service GuardDuty agent repository metadata matches the effective Runtime Monitoring contract"
 }
 
 validate_scaling_output_membership() {
