@@ -235,7 +235,7 @@ output "guardduty_ecs_runtime_coverage_notification" {
 
 output "interface_endpoint_ids" {
   description = "Interface VPC Endpoint IDs keyed by AWS service short name"
-  value = module.baseline.interface_endpoint_ids
+  value       = module.baseline.interface_endpoint_ids
 }
 
 output "logs_cmk_arn" {
