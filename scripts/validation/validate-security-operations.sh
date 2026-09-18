@@ -169,6 +169,11 @@ SECURITYHUB_V2_POLICY_ENABLED="$(
     jq -r '.securityhub_v2 // false'
 )"
 
+GUARDDUTY_ORGANIZATION_FEATURES_OUTPUT_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.guardduty_organization_features.value // {}'
+)"
+
 require_value_in_list "$SECURITYHUB_CSPM_ENABLED" "true false" "central_security_features_enabled.securityhub_cspm"
 require_value_in_list "$GUARDDUTY_ORGANIZATION_ENABLED" "true false" "central_security_features_enabled.guardduty"
 require_value_in_list "$SECURITYHUB_V2_POLICY_ENABLED" "true false" "central_security_features_enabled.securityhub_v2"
@@ -228,6 +233,109 @@ EXPECTED_GUARDDUTY_FEATURES_JSON="$(
       ]
     '
 )"
+
+if ! echo "$GUARDDUTY_ORGANIZATION_FEATURES_OUTPUT_JSON" |
+  jq -e 'type == "object"' >/dev/null; then
+  fail "guardduty_organization_features output must be a map/object."
+fi
+
+GUARDDUTY_FEATURES_OUTPUT_NORMALIZED="$(
+  echo "$GUARDDUTY_ORGANIZATION_FEATURES_OUTPUT_JSON" |
+    jq -c '
+      to_entries
+      | map({
+          name: .key,
+          auto_enable: .value.auto_enable,
+          additional_configuration: (
+            (.value.additional_configuration // [])
+            | map({
+                name: .name,
+                auto_enable: .auto_enable
+              })
+            | sort_by(.name)
+          )
+        })
+      | sort_by(.name)
+    '
+)"
+
+EXPECTED_GUARDDUTY_FEATURES_NORMALIZED="$(
+  echo "$EXPECTED_GUARDDUTY_FEATURES_JSON" |
+    jq -c '
+      map({
+        name: .name,
+        auto_enable: .auto_enable,
+        additional_configuration: (
+          (.additional_configuration // [])
+          | map({
+              name: .name,
+              auto_enable: .auto_enable
+            })
+          | sort_by(.name)
+        )
+      })
+      | sort_by(.name)
+    '
+)"
+
+if [[ "$GUARDDUTY_FEATURES_OUTPUT_NORMALIZED" != "$EXPECTED_GUARDDUTY_FEATURES_NORMALIZED" ]]; then
+  jq -n \
+    --argjson output "$GUARDDUTY_FEATURES_OUTPUT_NORMALIZED" \
+    --argjson state "$EXPECTED_GUARDDUTY_FEATURES_NORMALIZED" \
+    '{
+      terraform_output: $output,
+      terraform_state: $state
+    }'
+
+  fail "GuardDuty organization feature output does not match Terraform state."
+fi
+
+success "GuardDuty organization feature output matches Terraform state"
+
+if [[ "$GUARDDUTY_ORGANIZATION_ENABLED" == "true" ]]; then
+  if ! echo "$GUARDDUTY_FEATURES_OUTPUT_NORMALIZED" |
+    jq -e '
+      [
+        .[]
+        | select(.name == "RUNTIME_MONITORING")
+      ] == [
+        {
+          name: "RUNTIME_MONITORING",
+          auto_enable: "ALL",
+          additional_configuration: [
+            {
+              name: "EC2_AGENT_MANAGEMENT",
+              auto_enable: "ALL"
+            },
+            {
+              name: "ECS_FARGATE_AGENT_MANAGEMENT",
+              auto_enable: "ALL"
+            },
+            {
+              name: "EKS_ADDON_MANAGEMENT",
+              auto_enable: "NONE"
+            }
+          ]
+        }
+      ]
+    ' >/dev/null; then
+    echo "$GUARDDUTY_FEATURES_OUTPUT_NORMALIZED" | jq .
+    fail "GuardDuty Runtime Monitoring organization configuration does not match the v1.10 baseline contract."
+  fi
+
+  success "GuardDuty Runtime Monitoring organization configuration matches the v1.10 baseline contract"
+else
+  if [[ "$GUARDDUTY_FEATURES_OUTPUT_NORMALIZED" != "[]" ]]; then
+    echo "$GUARDDUTY_FEATURES_OUTPUT_NORMALIZED" | jq .
+    fail "GuardDuty organization configuration is disabled, but managed organization features remain in Terraform state."
+  fi
+
+  success "GuardDuty organization features are absent as expected when centralized GuardDuty configuration is disabled"
+fi
+
+# The resource-backed output matches Terraform state and is the canonical
+# expected feature contract for live AWS validation.
+EXPECTED_GUARDDUTY_FEATURES_JSON="$GUARDDUTY_FEATURES_OUTPUT_NORMALIZED"
 
 EXPECTED_SECURITYHUB_ORG_JSON="$(
   echo "$STATE_JSON" |
@@ -917,80 +1025,41 @@ if [[ "$GUARDDUTY_ORGANIZATION_ENABLED" == "true" ]]; then
 
   success "GuardDuty organization member auto-enrollment matches Terraform state"
 
-  while IFS= read -r feature_json; do
-    [[ -z "$feature_json" ]] && continue
+  ACTUAL_GUARDDUTY_FEATURES_NORMALIZED="$(
+    echo "$GUARDDUTY_ORG_JSON" |
+      jq -c '
+        [
+          .Features[]?
+          | {
+              name: .Name,
+              auto_enable: .AutoEnable,
+              additional_configuration: (
+                (.AdditionalConfiguration // [])
+                | map({
+                    name: .Name,
+                    auto_enable: .AutoEnable
+                  })
+                | sort_by(.name)
+              )
+            }
+        ]
+        | sort_by(.name)
+      '
+  )"
 
-    feature_name="$(
-      echo "$feature_json" |
-        jq -r '.name'
-    )"
+  if [[ "$ACTUAL_GUARDDUTY_FEATURES_NORMALIZED" != "$EXPECTED_GUARDDUTY_FEATURES_JSON" ]]; then
+    jq -n \
+      --argjson expected "$EXPECTED_GUARDDUTY_FEATURES_JSON" \
+      --argjson actual "$ACTUAL_GUARDDUTY_FEATURES_NORMALIZED" \
+      '{
+        terraform_expected: $expected,
+        aws_actual: $actual
+      }'
 
-    expected_auto_enable="$(
-      echo "$feature_json" |
-        jq -r '.auto_enable'
-    )"
+    fail "Live GuardDuty organization features do not exactly match Terraform."
+  fi
 
-    actual_feature_json="$(
-      echo "$GUARDDUTY_ORG_JSON" |
-        jq -c --arg feature_name "$feature_name" '
-          [
-            .Features[]?
-            | select(.Name == $feature_name)
-          ][0] // {}
-        '
-    )"
-
-    if [[ "$actual_feature_json" == "{}" ]]; then
-      fail "GuardDuty organization feature '${feature_name}' is missing."
-    fi
-
-    actual_auto_enable="$(
-      echo "$actual_feature_json" |
-        jq -r '.AutoEnable // empty'
-    )"
-
-    if [[ "$actual_auto_enable" != "$expected_auto_enable" ]]; then
-      fail "GuardDuty feature '${feature_name}' AutoEnable=${actual_auto_enable}; expected ${expected_auto_enable}."
-    fi
-
-    while IFS= read -r additional_json; do
-      [[ -z "$additional_json" ]] && continue
-
-      additional_name="$(
-        echo "$additional_json" |
-          jq -r '.name'
-      )"
-
-      expected_additional_auto_enable="$(
-        echo "$additional_json" |
-          jq -r '.auto_enable'
-      )"
-
-      actual_additional_auto_enable="$(
-        echo "$actual_feature_json" |
-          jq -r --arg additional_name "$additional_name" '
-            [
-              .AdditionalConfiguration[]?
-              | select(.Name == $additional_name)
-              | .AutoEnable
-            ][0] // empty
-          '
-      )"
-
-      if [[ -z "$actual_additional_auto_enable" ]]; then
-        echo "$actual_feature_json" | jq .
-        fail "GuardDuty feature '${feature_name}' additional configuration '${additional_name}' is missing."
-      fi
-
-      if [[ "$actual_additional_auto_enable" != "$expected_additional_auto_enable" ]]; then
-        fail "GuardDuty '${feature_name}/${additional_name}' AutoEnable=${actual_additional_auto_enable}; expected ${expected_additional_auto_enable}."
-      fi
-
-      success "GuardDuty '${feature_name}/${additional_name}' matches Terraform state"
-    done < <(echo "$feature_json" | jq -c '.additional_configuration[]?')
-
-    success "GuardDuty organization feature '${feature_name}' matches Terraform state"
-  done < <(echo "$EXPECTED_GUARDDUTY_FEATURES_JSON" | jq -c '.[]')
+  success "Live GuardDuty organization features exactly match Terraform"
 else
   warn "central_security_features_enabled.guardduty=false. Skipping GuardDuty organization configuration validation."
 fi
@@ -1149,6 +1218,63 @@ else
   warn "central_security_features_enabled.securityhub_v2=false. Skipping Security Hub V2 organization-policy validation."
 fi
 
+GUARDDUTY_RUNTIME_MONITORING_MODE="<not managed>"
+GUARDDUTY_ECS_FARGATE_AGENT_MANAGEMENT_MODE="<not managed>"
+GUARDDUTY_EC2_AGENT_MANAGEMENT_MODE="<not managed>"
+GUARDDUTY_EKS_ADDON_MANAGEMENT_MODE="<not managed>"
+
+if [[ "$GUARDDUTY_ORGANIZATION_ENABLED" == "true" ]]; then
+  GUARDDUTY_RUNTIME_MONITORING_MODE="$(
+    echo "$EXPECTED_GUARDDUTY_FEATURES_JSON" |
+      jq -r '
+        [
+          .[]
+          | select(.name == "RUNTIME_MONITORING")
+          | .auto_enable
+        ][0] // "<missing>"
+      '
+  )"
+
+  GUARDDUTY_ECS_FARGATE_AGENT_MANAGEMENT_MODE="$(
+    echo "$EXPECTED_GUARDDUTY_FEATURES_JSON" |
+      jq -r '
+        [
+          .[]
+          | select(.name == "RUNTIME_MONITORING")
+          | .additional_configuration[]?
+          | select(.name == "ECS_FARGATE_AGENT_MANAGEMENT")
+          | .auto_enable
+        ][0] // "<missing>"
+      '
+  )"
+
+  GUARDDUTY_EC2_AGENT_MANAGEMENT_MODE="$(
+    echo "$EXPECTED_GUARDDUTY_FEATURES_JSON" |
+      jq -r '
+        [
+          .[]
+          | select(.name == "RUNTIME_MONITORING")
+          | .additional_configuration[]?
+          | select(.name == "EC2_AGENT_MANAGEMENT")
+          | .auto_enable
+        ][0] // "<missing>"
+      '
+  )"
+
+  GUARDDUTY_EKS_ADDON_MANAGEMENT_MODE="$(
+    echo "$EXPECTED_GUARDDUTY_FEATURES_JSON" |
+      jq -r '
+        [
+          .[]
+          | select(.name == "RUNTIME_MONITORING")
+          | .additional_configuration[]?
+          | select(.name == "EKS_ADDON_MANAGEMENT")
+          | .auto_enable
+        ][0] // "<missing>"
+      '
+  )"
+fi
+
 section "Security Operations Summary"
 
 cat <<SUMMARY
@@ -1167,6 +1293,10 @@ Security Hub finding aggregator:        ${SECURITYHUB_FINDING_AGGREGATOR_ARN}
 Central GuardDuty enabled:              ${GUARDDUTY_ORGANIZATION_ENABLED}
 GuardDuty detector ID:                  ${GUARDDUTY_DETECTOR_ID}
 GuardDuty organization feature count:   ${GUARDDUTY_FEATURE_COUNT}
+GuardDuty Runtime Monitoring:           ${GUARDDUTY_RUNTIME_MONITORING_MODE}
+GuardDuty ECS Fargate agent mgmt:       ${GUARDDUTY_ECS_FARGATE_AGENT_MANAGEMENT_MODE}
+GuardDuty EC2 agent management:         ${GUARDDUTY_EC2_AGENT_MANAGEMENT_MODE}
+GuardDuty EKS addon management:         ${GUARDDUTY_EKS_ADDON_MANAGEMENT_MODE}
 
 Security Hub V2 policy enabled:         ${SECURITYHUB_V2_POLICY_ENABLED}
 Security Hub V2 organization policy:    ${SECURITYHUB_V2_ORGANIZATION_POLICY_ID:-<not managed>}
