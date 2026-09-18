@@ -73,6 +73,7 @@ declare -A SERVICE_CONTAINER_PORTS=()
 declare -A SERVICE_TARGET_GROUP_ARNS=()
 
 ecs_runtime_validate_services
+ecs_runtime_validate_guardduty
 ecs_runtime_validate_autoscaling
 ecs_runtime_validate_ingress
 ecs_runtime_validate_alarms
