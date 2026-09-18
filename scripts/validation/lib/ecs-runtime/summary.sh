@@ -9,6 +9,7 @@ ecs_runtime_print_summary() {
   local alb_request_scaling_policy_count
   local task_deficit_alarm_count
   local ingress_health_alarm_count
+  local guardduty_runtime_state
 
   autoscaled_service_count="$(
     echo "$ECS_AUTOSCALING_TARGETS_JSON" | jq 'length'
@@ -34,22 +35,52 @@ ecs_runtime_print_summary() {
     echo "$ECS_INGRESS_UNHEALTHY_TARGET_ALARMS_JSON" | jq 'length'
   )"
 
+  case "$EXPECTED_GUARDDUTY_RUNTIME_ENABLED" in
+    true)
+      guardduty_runtime_state="enabled"
+      ;;
+    false)
+      guardduty_runtime_state="dsiabled"
+      ;;
+    *)
+      guardduty_runtime_state="<unknown>"
+      ;;
+  esac
+
   section "ECS Runtime Summary"
 
+
   cat <<SUMMARY
-Environment:                       ${ENV_NAME}
-AWS account ID:                    ${ACCOUNT_ID}
-AWS region:                        ${AWS_REGION}
-ECS cluster:                       ${EXPECTED_CLUSTER_NAME}
-Configured ECS services:           ${ECS_SERVICE_COUNT}
-Autoscaled ECS services:           ${autoscaled_service_count}
-CPU scaling policies:              ${cpu_scaling_policy_count}
-Memory scaling policies:           ${memory_scaling_policy_count}
-ALB request scaling policies:      ${alb_request_scaling_policy_count}
-Task-deficit alarms:               ${task_deficit_alarm_count}
-Ingress-health alarms:             ${ingress_health_alarm_count}
-Effective egress mode:             ${EFFECTIVE_EGRESS_MODE}
-CloudWatch retention days:         ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS}
-Application Load Balancer present: $([[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]] && echo false || echo true)
+Environment:                        ${ENV_NAME}
+AWS account ID:                     ${ACCOUNT_ID}
+AWS region:                         ${AWS_REGION}
+Deployment profile:                 ${DEPLOYMENT_PROFILE}
+ECS cluster:                        ${EXPECTED_CLUSTER_NAME}
+
+Configured ECS services:            ${ECS_SERVICE_COUNT}
+Autoscaled ECS services:            ${autoscaled_service_count}
+CPU scaling policies:               ${cpu_scaling_policy_count}
+Memory scaling policies:            ${memory_scaling_policy_count}
+ALB request scaling policies:       ${alb_request_scaling_policy_count}
+Task-deficit alarms:                ${task_deficit_alarm_count}
+Ingress-health alarms:              ${ingress_health_alarm_count}
+
+Effective egress mode:              ${EFFECTIVE_EGRESS_MODE}
+CloudWatch retention days:          ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS}
+Application Load Balancer present:  $([[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]] && echo false || echo true)
+
+GuardDuty Runtime Monitoring:       ${guardduty_runtime_state}
+GuardDutyManaged Terraform value:   ${GUARDDUTY_MANAGED_TAG_VALUE}
+GuardDutyManaged live value:        ${LIVE_GUARDDUTY_MANAGED_TAG_VALUE}
+GuardDuty data endpoint ID:         ${GUARDDUTY_DATA_ENDPOINT_ID}
+
+Protected running tasks checked:    ${GUARDDUTY_RUNNING_TASKS_CHECKED}
+GuardDuty agents running:           ${GUARDDUTY_AGENT_CONTAINERS_RUNNING}
+Application containers valid:       ${GUARDDUTY_APPLICATION_CONTAINERS_VALID}
+
+GuardDuty management type:          ${GUARDDUTY_MANAGEMENT_TYPE}
+GuardDuty ECS coverage status:      ${GUARDDUTY_COVERAGE_STATUS}
+GuardDuty coverage issue count:     ${GUARDDUTY_COVERAGE_ISSUE_COUNT}
+GuardDuty coverage updated at:      ${GUARDDUTY_COVERAGE_UPDATED_AT}
 SUMMARY
 }
