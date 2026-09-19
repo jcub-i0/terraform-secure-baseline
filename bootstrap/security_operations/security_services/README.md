@@ -20,7 +20,7 @@ This stack currently manages:
 - Security Hub CSPM central organization configuration;
 - per-account Security Hub CSPM configuration policies and associations;
 - the existing GuardDuty delegated-administrator detector by discovery;
-- GuardDuty organization member enrollment and protection-plan configuration;
+- GuardDuty organization member enrollment and protection-plan configuration, including the v1.10 Runtime Monitoring automated-agent contract;
 - Security Hub V2 enablement in the `security-operations` account; and
 - the Security Hub V2 AWS Organizations policy attached to the root-level
   `Workloads` OU.
@@ -142,11 +142,9 @@ The GuardDuty detector is discovered rather than created:
 data "aws_guardduty_detector" "main"
 ```
 
-This preserves the detector created when the account became the GuardDuty
-delegated administrator.
+This preserves the detector created when the account became the GuardDuty delegated administrator.
 
-When `enable_guardduty_organization_configuration = true`, organization member
-auto-enrollment is set to:
+When `enable_guardduty_organization_configuration = true`, organization member auto-enrollment is set to:
 
 ```text
 ALL
@@ -161,17 +159,19 @@ The default centrally managed protection plans are:
 | Lambda network logs | `ALL` |
 | Runtime Monitoring | `ALL` |
 
-Runtime Monitoring additional configuration defaults to:
+Runtime Monitoring additional configuration is:
 
 | Configuration | Auto-enable |
 | --- | --- |
-| `EC2_AGENT_MANAGEMENT` | `ALL` |
 | `ECS_FARGATE_AGENT_MANAGEMENT` | `ALL` |
+| `EC2_AGENT_MANAGEMENT` | `ALL` |
 | `EKS_ADDON_MANAGEMENT` | `NONE` |
 
-The additional configuration is modeled as an ordered list to match the AWS
-provider's ordered GuardDuty configuration behavior.
+The additional configuration is modeled as an ordered list to match the AWS provider's ordered GuardDuty configuration behavior.
 
+This stack owns the organization-wide secure default. Workload Terraform does **not** manage these organization features. Instead, each workload ECS cluster expresses its own deployment-profile-derived participation intent with `GuardDutyManaged=true` for `production`/`development` or `GuardDutyManaged=false` for `minimal`.
+
+For Fargate, GuardDuty service-manages runtime-agent injection and telemetry after the central policy, workload cluster intent, IAM, and networking prerequisites are present. Workload Terraform retains ownership of the ECS cluster, task execution IAM, and the Terraform-owned `guardduty-data` endpoint.
 ## Security Hub V2
 
 Security Hub V2 is enabled directly in the `security-operations` account.
@@ -227,6 +227,7 @@ configuration values for downstream validation and evidence tooling:
 - `securityhub_cspm_configuration_policy_ids`
 - `securityhub_cspm_policy_association_target_ids`
 - `guardduty_detector_id`
+- `guardduty_organization_features`
 - `securityhub_v2_organization_policy_id`
 
 These outputs describe Terraform intent and stable resource identifiers.
@@ -284,11 +285,14 @@ The validator checks:
 - Security Hub CSPM administrator state and finding aggregation;
 - Security Hub CSPM CENTRAL organization configuration;
 - CSPM configuration policies and workload associations;
-- the GuardDuty administrator detector, organization enrollment, protection
-  plans, and Runtime Monitoring configuration;
+- the GuardDuty administrator detector, organization enrollment, protection plans, and Runtime Monitoring configuration;
+- exact equality for the Terraform-managed GuardDuty organization feature subset, including `ECS_FARGATE_AGENT_MANAGEMENT = ALL`;
+- that any additional GuardDuty organization features returned by AWS outside the Terraform-managed set remain disabled (`NONE`), including any additional configurations;
 - Security Hub V2 administrator state;
 - the `SECURITYHUB_POLICY` attachment to the `Workloads` OU; and
 - effective Security Hub V2 policy for configured workload accounts.
+
+The distinction between the Terraform-managed subset and AWS's full returned feature inventory is intentional. AWS can return supported organization features that this stack does not manage. The validator does not require those disabled features to disappear from the API response; it requires them to remain disabled and fails closed if any unmanaged feature becomes enabled.
 
 Full AWS Organizations topology and workload-account placement are validated
 separately by the control-plane validation layer. Workload-local realization of
