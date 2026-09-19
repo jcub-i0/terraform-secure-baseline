@@ -246,7 +246,7 @@ validate_alias_and_key() {
     OPTIONAL_KEY_COUNT=$((OPTIONAL_KEY_COUNT + 1))
   fi
 
-  alias_short="${alias_name#alias/${NAME_PREFIX}/}"
+  alias_short="${alias_name#alias/"${NAME_PREFIX}"/}"
 
   KMS_SUMMARY_ROWS+=("${label}|${alias_short}|${key_id}|${key_state}|${key_manager}|${key_rotation_enabled}")
 }

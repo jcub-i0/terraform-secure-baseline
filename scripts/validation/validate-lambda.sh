@@ -298,7 +298,7 @@ validate_lambda_function() {
 
   VALIDATED_FUNCTION_COUNT=$((VALIDATED_FUNCTION_COUNT + 1))
 
-  function_short="${function_name#${NAME_PREFIX}-}"
+  function_short="${function_name#"${NAME_PREFIX}"-}"
 
   LAMBDA_SUMMARY_ROWS+=("${label}|${function_short}|${runtime}|${state}|${timeout}|${memory_size}|${subnet_count}|${security_group_count}|${env_var_count}|${statement_count}|${eventbridge_permission_count}")
 }

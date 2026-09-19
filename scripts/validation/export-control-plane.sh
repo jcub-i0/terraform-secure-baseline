@@ -495,8 +495,8 @@ section "Generating Markdown summary"
   echo
   echo "The automated control-plane validation export is intentionally read-only. The following checks remain outside this report:"
   echo
-  echo "- Workload bootstrap validation (`Export Bootstrap Evidence`)"
-  echo "- Workload baseline validation (`Export Baseline Evidence`)"
+  echo '- Workload bootstrap validation (`Export Bootstrap Evidence`)'
+  echo '- Workload baseline validation (`Export Baseline Evidence`)'
   echo "- End-user SSO login validation"
   echo "- Live EC2 isolation test"
   echo "- Live EC2 rollback test"
