@@ -471,7 +471,7 @@ ecs_runtime_validate_guardduty_coverage() {
         --arg cluster_name "$EXPECTED_CLUSTER_NAME" '
           .DetectorId == $detector_id
           and .AccountId == $account_id
-          and .ResourceType == "ECS"
+          and .ResourceDetails.ResourceType == "ECS"
           and .ResourceDetails.EcsClusterDetails.ClusterName == $cluster_name
           and .ResourceDetails.EcsClusterDetails.FargateDetails.ManagementType == "DISABLED"
         ' >/dev/null; then
@@ -524,7 +524,7 @@ ecs_runtime_validate_guardduty_coverage() {
       --arg cluster_name "$EXPECTED_CLUSTER_NAME" '
         .DetectorId == $detector_id
         and .AccountId == $account_id
-        and .ResourceType == "ECS"
+        and .ResourceDetails.ResourceType == "ECS"
         and .ResourceDetails.EcsClusterDetails.ClusterName == $cluster_name
         and .ResourceDetails.EcsClusterDetails.FargateDetails.ManagementType == "AUTO_MANAGED"
         and .CoverageStatus == "HEALTHY"
@@ -534,7 +534,7 @@ ecs_runtime_validate_guardduty_coverage() {
         DetectorId,
         AccountId,
         ResourceId,
-        ResourceType,
+        ResourceType: .ResourceDetails.ResourceType,
         CoverageStatus,
         Issue,
         UpdatedAt,
