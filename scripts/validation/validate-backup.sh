@@ -104,15 +104,9 @@ fi
 
 success "Terraform outputs are readable"
 
-for output_name in \
-  effective_backup_enabled \
-  effective_backup_schedule \
-  effective_delete_backups_after_days
-do
-  if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
-    fail "Missing required Terraform output: ${output_name}"
-  fi
-done
+if ! terraform_output_exists "$OUTPUTS_JSON" effective_backup_enabled; then
+  fail "Missing required Terraform output: effective_backup_enabled"
+fi
 
 EFFECTIVE_BACKUP_ENABLED="$(
   get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled
@@ -122,15 +116,26 @@ require_value_in_list \
   "true false" \
   "effective_backup_enabled"
 
-EFFECTIVE_BACKUP_SCHEDULE_JSON="$(
-  echo "$OUTPUTS_JSON" |
-    jq -c '.effective_backup_schedule.value'
-)"
+# Terraform omits root outputs whose evaluated value is null from
+# `terraform output -json`. Treat an absent effective schedule/retention output
+# as null so the disabled-state contract can be validated correctly.
+if terraform_output_exists "$OUTPUTS_JSON" effective_backup_schedule; then
+  EFFECTIVE_BACKUP_SCHEDULE_JSON="$(
+    echo "$OUTPUTS_JSON" |
+      jq -c '.effective_backup_schedule.value'
+  )"
+else
+  EFFECTIVE_BACKUP_SCHEDULE_JSON="null"
+fi
 
-EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON="$(
-  echo "$OUTPUTS_JSON" |
-    jq -c '.effective_delete_backups_after_days.value'
-)"
+if terraform_output_exists "$OUTPUTS_JSON" effective_delete_backups_after_days; then
+  EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON="$(
+    echo "$OUTPUTS_JSON" |
+      jq -c '.effective_delete_backups_after_days.value'
+  )"
+else
+  EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON="null"
+fi
 
 if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
   if ! echo "$EFFECTIVE_BACKUP_SCHEDULE_JSON" |
