@@ -108,6 +108,16 @@ output "effective_backup_enabled" {
   value       = module.baseline.effective_backup_enabled
 }
 
+output "effective_backup_schedule" {
+  description = "Effective AWS Backup schedule after resolving deployment_profile and backup_schedule override; null when backups are disabled"
+  value = module.baseline.effective_backup_schedule
+}
+
+output "effective_delete_backups_after_days" {
+  description = "Effective AWS Backup retention period in days after resolving deployment_profile and delete_backups_after_days override; null when backups are disabled"
+  value = module.baseline.effective_delete_backups_after_days
+}
+
 output "effective_inspector_enabled" {
   description = "Effective Inspector enablement after resolving deployment_profile"
   value       = module.baseline.effective_inspector_enabled
