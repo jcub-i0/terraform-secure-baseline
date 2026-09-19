@@ -186,7 +186,7 @@ validate_service_identity() {
             pendingCount, deployments, deploymentConfiguration
           }
       '
-    fail "ECS service identity, Fargate configuration, deployment safeguards, or steady-state status are invalid: ${service_name}""
+    fail "ECS service identity, Fargate configuration, deployment safeguards, or steady-state status are invalid: ${service_name}"
   fi
 }
 
