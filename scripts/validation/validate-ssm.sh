@@ -132,14 +132,13 @@ EC2_INSTANCES_JSON="$(
     --output json
 )"
 
-ENV_INSTANCE_IDS="$(
+ENV_INSTANCE_IDS_JSON="$(
   echo "$EC2_INSTANCES_JSON" |
-    jq -r '
+    jq '
       [
         .Reservations[].Instances[]
         | .InstanceId
       ]
-      | join(" ")
     '
 )"
 
@@ -205,7 +204,7 @@ fi
 
 MATCHING_SSM_JSON="$(
   echo "$SSM_INSTANCE_INFO_JSON" |
-    jq --argjson instance_ids "$(printf '%s\n' "$ENV_INSTANCE_IDS" | jq -R . | jq -s .)" '
+    jq --argjson instance_ids "$ENV_INSTANCE_IDS_JSON" '
       [
         .InstanceInformationList[]
         | select(.InstanceId as $id | $instance_ids | index($id))
