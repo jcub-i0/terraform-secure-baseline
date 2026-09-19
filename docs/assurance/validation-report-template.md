@@ -298,12 +298,22 @@ validation-results/<env>/baseline/<timestamp>/
 
 The current workload baseline export contains 16 validators. The generated package and `summary.json` remain the source of truth for each evidence run.
 
-### ECS Runtime Operations Evidence
+### ECS Runtime and Runtime Security Evidence
 
-Use this subsection when ECS/Fargate services are in scope. Supporting detail comes from `validate-ecs-runtime.log`; the baseline summary still counts `validate-ecs-runtime.sh` as one validator.
+Use this subsection when ECS/Fargate services are in scope. Supporting detail is distributed across `validate-ecs-runtime.log`, `validate-iam.log`, `validate-vpc-endpoints.log`, and `validate-eventbridge.log`; the baseline summary still counts each top-level validator once.
 
 | Runtime assertion | Result | Evidence Log | Notes |
 |---|---|---|---|
+| Deployment-profile Runtime Monitoring intent matches Terraform | `<PASS/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `production`/`development` enabled; `minimal` disabled |
+| Live ECS `GuardDutyManaged` tag matches Terraform and deployment profile | `<PASS/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| Protected running tasks have exactly one GuardDuty agent and it is `RUNNING` | `<PASS/FAIL/Not Applicable>` | `validate-ecs-runtime.log` | Agent may be `aws-gd-agent` or `aws-guardduty-agent-<suffix>` |
+| Canonical Terraform task definition remains application-only | `<PASS/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
+| GuardDuty ECS coverage management type | `<AUTO_MANAGED/DISABLED/ABSENT/Not Applicable>` | `validate-ecs-runtime.log` | `<notes>` |
+| GuardDuty ECS coverage status | `<HEALTHY/other/not-required/Not Applicable>` | `validate-ecs-runtime.log` | `<notes>` |
+| GuardDuty unresolved coverage issue count | `<0/value/Not Applicable>` | `validate-ecs-runtime.log` | `<notes>` |
+| Exact Terraform-owned `guardduty-data` endpoint reused; no duplicate endpoint | `<PASS/FAIL/Not Reviewed>` | `validate-vpc-endpoints.log` | `<notes>` |
+| Exact GuardDuty-agent ECR pull authority matches profile | `<PASS/FAIL/Not Reviewed>` | `validate-iam.log` | No agent scope for `minimal` |
+| GuardDuty coverage EventBridge rule/target/DLQ/retry/transformer | `<PASS/FAIL/Not Reviewed>` | `validate-eventbridge.log` | `<notes>` |
 | Fixed-count services: Terraform owns exact `desiredCount` | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
 | Autoscaled services: live `desiredCount` remains within Terraform min/max bounds | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
 | Application Auto Scaling target inventory exactly matches Terraform | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
@@ -316,8 +326,20 @@ Use this subsection when ECS/Fargate services are in scope. Supporting detail co
 | Operational alarm state | `<OK/INSUFFICIENT_DATA/ALARM/Not Applicable>` | `validate-ecs-runtime.log` | `INSUFFICIENT_DATA` is warning-only; `ALARM` fails validation |
 | AWS-managed target-tracking alarms remain outside Terraform operational-alarm inventory | `<PASS/FAIL/Not Reviewed>` | `validate-ecs-runtime.log` | `<notes>` |
 
----
+### AWS Backup Evidence
 
+`validate-backup.log` is the authoritative workload evidence for the profile-aware Backup contract.
+
+| Backup assertion | Result / Value | Evidence Log | Notes |
+|---|---|---|---|
+| `effective_backup_enabled` | `<true/false>` | `validate-backup.log` | `<notes>` |
+| Effective backup schedule | `<value/null>` | `validate-backup.log` | Must be null when disabled |
+| Effective retention days | `<value/null>` | `validate-backup.log` | Must be null when disabled |
+| Environment backup vault retained and KMS-encrypted | `<PASS/FAIL>` | `validate-backup.log` | Required in both enabled and disabled states |
+| Backup plan / selection state | `<present/absent>` | `validate-backup.log` | Present when enabled; absent when disabled |
+| EC2 `Backup` tags | `<true/false>` | `validate-backup.log` | Must match effective enablement |
+| RDS `Backup` tag | `<true/false>` | `validate-backup.log` | Must match effective enablement |
+| Backup jobs / recovery-point health | `<PASS/WARN/FAIL/Not Applicable>` | `validate-backup.log` | Applicable when scheduled backup is enabled |
 ## Control-Plane Validation Results
 
 Use this section only when the validation scope is `control-plane`.
@@ -422,7 +444,9 @@ validation-results/security-operations/security-services/<timestamp>/
 | Security-operations AWS identity and applied security-services Terraform state | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | `<notes>` |
 | Security Hub and GuardDuty trusted access / delegated administration dependencies | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | `<notes>` |
 | Security Hub CSPM administrator state, finding aggregation, CENTRAL configuration, policies, and workload associations | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | `<notes>` |
-| GuardDuty administrator detector, organization enrollment, protection plans, and Runtime Monitoring configuration | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | `<notes>` |
+| GuardDuty administrator detector and organization member enrollment | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | `<notes>` |
+| Terraform-managed GuardDuty organization feature subset exactly matches AWS | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | `RUNTIME_MONITORING=ALL`, `ECS_FARGATE_AGENT_MANAGEMENT=ALL`, `EC2_AGENT_MANAGEMENT=ALL`, `EKS_ADDON_MANAGEMENT=NONE` |
+| AWS-returned GuardDuty features outside Terraform management remain disabled | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | Unmanaged feature/additional-configuration values must remain `NONE` |
 | Security Hub V2 administrator state, organization policy attachment, and effective workload policies | `<PASS/WARN/FAIL/Not Reviewed>` | `validate-security-operations.log` | `<notes>` |
 
 The security-operations report intentionally does not replace full AWS Organizations topology validation or workload-local validation. Those responsibilities remain with the control-plane and workload evidence layers respectively.
@@ -459,7 +483,9 @@ Document warnings, expected deviations, skipped checks, or environment-specific 
 
 Examples of environment-specific exceptions may include:
 
-- Backup resources not required when `effective_backup_enabled = false`
+- Scheduled Backup plan/selection intentionally absent when `effective_backup_enabled = false`, while the encrypted backup vault remains retained
+- `effective_backup_schedule` and `effective_delete_backups_after_days` intentionally null when scheduled backups are disabled
+- GuardDuty Fargate Runtime Monitoring intentionally disabled for `deployment_profile = minimal` with `GuardDutyManaged=false` and no GuardDuty-agent ECR scope
 - Network Firewall not required when `effective_egress_mode = nat_only`
 - Network Firewall and NAT Gateway not required when `effective_egress_mode = vpc_endpoints_only`
 - AWS Config rules not required when Config is intentionally disabled by deployment profile
@@ -489,7 +515,7 @@ Document the files included in the selected generated evidence package.
 
 This report validates deployed AWS control presence and selected configuration settings for the selected validation scope.
 
-The validation scripts confirm the presence and configuration of selected AWS security controls, governance resources, state backend resources, GitHub OIDC resources, and supporting infrastructure at the time validation was run.
+The validation scripts confirm the presence and configuration of selected AWS security controls, governance resources, state backend resources, GitHub OIDC resources, and supporting infrastructure at the time validation was run. The report is point-in-time evidence: a passing GuardDuty Runtime coverage state does not guarantee future coverage or finding delivery, and validation of EventBridge/SNS/DLQ configuration does not prove that every future coverage event will be delivered successfully.
 
 This report does not replace:
 
