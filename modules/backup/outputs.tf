@@ -4,6 +4,6 @@ output "backup_vault_name" {
 }
 
 output "backup_plan_id" {
-  description = "The 'id' attribute of the Main Backup Plan"
-  value       = aws_backup_plan.main.id
+  description = "The ID of the AWS Backup plan when backups are enabled; null otherwise."
+  value       = var.backup_enabled ? aws_backup_plan.main[0].id : null
 }
