@@ -7,16 +7,19 @@
 #
 # Checks:
 # - Terraform outputs are readable
-# - effective_backup_enabled is respected
+# - effective_backup_enabled, effective_backup_schedule, and
+#   effective_delete_backups_after_days match the resolved backup contract
 # - AWS caller identity is valid
-# - Backup vault exists when backups are enabled
-# - Backup vault encryption is configured
+# - Backup vault exists and remains encrypted regardless of backup enablement
+# - Workload EC2 and RDS Backup tags exactly match effective_backup_enabled
+# - Backup plan and selection are absent when backups are disabled
 # - Backup plan exists when backups are enabled
-# - Backup plan targets the expected vault
+# - Backup plan schedule, retention, rule name, and target vault exactly match
+#   Terraform's effective backup settings
 # - Backup selection exists when backups are enabled
-# - Backup selection uses the expected tag-based selection model
+# - Backup selection uses the expected Backup=true tag-based selection model
 # - Backup service role is configured on the selection
-# - Recovery points and recent backup jobs are reported
+# - Recovery points and recent backup jobs are reported when backups are enabled
 #
 # Usage:
 #   ./scripts/validation/validate-backup.sh dev
@@ -101,19 +104,80 @@ fi
 
 success "Terraform outputs are readable"
 
-EFFECTIVE_BACKUP_ENABLED="false"
+for output_name in \
+  effective_backup_enabled \
+  effective_backup_schedule \
+  effective_delete_backups_after_days
+do
+  if ! terraform_output_exists "$OUTPUTS_JSON" "$output_name"; then
+    fail "Missing required Terraform output: ${output_name}"
+  fi
+done
 
-if terraform_output_exists "$OUTPUTS_JSON" effective_backup_enabled; then
-  EFFECTIVE_BACKUP_ENABLED="$(get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled)"
-  require_value_in_list "$EFFECTIVE_BACKUP_ENABLED" "true false" "effective_backup_enabled"
-  success "effective_backup_enabled is valid: $EFFECTIVE_BACKUP_ENABLED"
+EFFECTIVE_BACKUP_ENABLED="$(
+  get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled
+)"
+require_value_in_list \
+  "$EFFECTIVE_BACKUP_ENABLED" \
+  "true false" \
+  "effective_backup_enabled"
+
+EFFECTIVE_BACKUP_SCHEDULE_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.effective_backup_schedule.value'
+)"
+
+EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.effective_delete_backups_after_days.value'
+)"
+
+if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
+  if ! echo "$EFFECTIVE_BACKUP_SCHEDULE_JSON" |
+    jq -e 'type == "string" and length > 0' >/dev/null; then
+    echo "$EFFECTIVE_BACKUP_SCHEDULE_JSON" | jq .
+    fail "effective_backup_schedule must be a non-empty string when backups are enabled."
+  fi
+
+  if ! echo "$EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON" |
+    jq -e 'type == "number" and . >= 1 and floor == .' >/dev/null; then
+    echo "$EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON" | jq .
+    fail "effective_delete_backups_after_days must be a positive integer when backups are enabled."
+  fi
+
+  EFFECTIVE_BACKUP_SCHEDULE="$(
+    echo "$EFFECTIVE_BACKUP_SCHEDULE_JSON" |
+      jq -r '.'
+  )"
+
+  EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS="$(
+    echo "$EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON" |
+      jq -r '.'
+  )"
 else
-  warn "Missing Terraform output: effective_backup_enabled. Treating backup validation as optional."
+  if [[ "$EFFECTIVE_BACKUP_SCHEDULE_JSON" != "null" ]]; then
+    echo "$EFFECTIVE_BACKUP_SCHEDULE_JSON" | jq .
+    fail "effective_backup_schedule must be null when backups are disabled."
+  fi
+
+  if [[ "$EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON" != "null" ]]; then
+    echo "$EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS_JSON" | jq .
+    fail "effective_delete_backups_after_days must be null when backups are disabled."
+  fi
+
+  EFFECTIVE_BACKUP_SCHEDULE="<disabled>"
+  EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS="<disabled>"
 fi
+
+success "Effective AWS Backup Terraform contract is valid"
+info "effective_backup_enabled: ${EFFECTIVE_BACKUP_ENABLED}"
+info "effective_backup_schedule: ${EFFECTIVE_BACKUP_SCHEDULE}"
+info "effective_delete_backups_after_days: ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}"
 
 EXPECTED_BACKUP_VAULT_NAME="${NAME_PREFIX}-backup-vault"
 EXPECTED_BACKUP_PLAN_NAME="${NAME_PREFIX}-backup-plan"
 EXPECTED_BACKUP_SELECTION_NAME="${NAME_PREFIX}-backup-selection"
+EXPECTED_BACKUP_RULE_NAME="daily-backups"
 EXPECTED_BACKUP_TAG_KEY="Backup"
 EXPECTED_BACKUP_TAG_VALUE="true"
 
@@ -125,13 +189,6 @@ if terraform_output_exists "$OUTPUTS_JSON" backup_vault_name; then
   success "backup_vault_name output found: $BACKUP_VAULT_NAME"
 else
   info "backup_vault_name output not found. Using expected name: $BACKUP_VAULT_NAME"
-fi
-
-if terraform_output_exists "$OUTPUTS_JSON" backup_plan_id; then
-  BACKUP_PLAN_ID="$(get_terraform_output_value "$OUTPUTS_JSON" backup_plan_id)"
-  success "backup_plan_id output found: $BACKUP_PLAN_ID"
-else
-  info "backup_plan_id output not found. Will resolve backup plan by name."
 fi
 
 section "Checking AWS caller identity"
@@ -170,71 +227,156 @@ backup_vault_exists() {
     --output json >/dev/null 2>&1
 }
 
-resolve_backup_plan_id_by_name() {
+resolve_backup_plan_ids_by_name() {
   local plan_name="$1"
 
   aws backup list-backup-plans \
     "${aws_args[@]}" \
     --output json |
-    jq -r --arg plan_name "$plan_name" '
+    jq -c --arg plan_name "$plan_name" '
       [
-        .BackupPlansList[]
+        .BackupPlansList[]?
         | select(.BackupPlanName == $plan_name)
         | .BackupPlanId
       ]
-      | first // empty
+      | sort
+      | unique
     '
 }
 
-section "Handling backup-enabled state"
+validate_workload_backup_tags() {
+  local expected_value="$1"
+  local ec2_response_json
+  local ec2_instances_json
+  local invalid_ec2_json
+  local rds_response_json
+  local rds_instances_json
+  local invalid_rds_json
+  local expected_rds_identifier
 
-if [[ "$EFFECTIVE_BACKUP_ENABLED" != "true" ]]; then
-  warn "effective_backup_enabled=false. Backup resources are not required for this environment."
+  section "Validating workload Backup tags"
 
-  if backup_vault_exists "$BACKUP_VAULT_NAME"; then
-    warn "Backup vault exists even though effective_backup_enabled=false: $BACKUP_VAULT_NAME"
-  else
-    success "No required backup vault validation needed while backups are disabled"
+  ec2_response_json="$(
+    aws ec2 describe-instances \
+      "${aws_args[@]}" \
+      --filters \
+        "Name=tag:Name,Values=${NAME_PREFIX}-EC2-*" \
+        "Name=tag:Environment,Values=${ENV_NAME}" \
+        "Name=tag:Terraform,Values=true" \
+        "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+      --output json
+  )"
+
+  ec2_instances_json="$(
+    echo "$ec2_response_json" |
+      jq -c '[.Reservations[].Instances[]?]'
+  )"
+
+  ENV_EC2_RESOURCE_COUNT="$(
+    echo "$ec2_instances_json" |
+      jq 'length'
+  )"
+
+  if [[ "$ENV_EC2_RESOURCE_COUNT" -eq 0 ]]; then
+    fail "No environment EC2 compute instances were found for Backup tag validation."
   fi
 
-  if [[ -z "$BACKUP_PLAN_ID" ]]; then
-    BACKUP_PLAN_ID="$(resolve_backup_plan_id_by_name "$EXPECTED_BACKUP_PLAN_NAME")"
+  invalid_ec2_json="$(
+    echo "$ec2_instances_json" |
+      jq -c \
+        --arg expected "$expected_value" '
+          [
+            .[]
+            | {
+                instance_id: .InstanceId,
+                name: (
+                  [
+                    .Tags[]?
+                    | select(.Key == "Name")
+                    | .Value
+                  ][0] // "<missing>"
+                ),
+                backup_tag_values: [
+                  .Tags[]?
+                  | select(.Key == "Backup")
+                  | .Value
+                ]
+              }
+            | select(.backup_tag_values != [$expected])
+          ]
+        '
+  )"
+
+  if [[ "$(echo "$invalid_ec2_json" | jq 'length')" -ne 0 ]]; then
+    echo "$invalid_ec2_json" | jq .
+    fail "One or more environment EC2 instances do not have Backup=${expected_value}."
   fi
 
-  if [[ -n "$BACKUP_PLAN_ID" ]]; then
-    warn "Backup plan exists even though effective_backup_enabled=false: $BACKUP_PLAN_ID"
-  else
-    success "No required backup plan validation needed while backups are disabled"
+  success "All environment EC2 compute instances have Backup=${expected_value}: ${ENV_EC2_RESOURCE_COUNT}"
+
+  expected_rds_identifier="${NAME_PREFIX}-saas-db"
+
+  rds_response_json="$(
+    aws rds describe-db-instances \
+      "${aws_args[@]}" \
+      --output json
+  )"
+
+  rds_instances_json="$(
+    echo "$rds_response_json" |
+      jq -c \
+        --arg identifier "$expected_rds_identifier" '
+          [
+            .DBInstances[]?
+            | select(.DBInstanceIdentifier == $identifier)
+          ]
+        '
+  )"
+
+  ENV_RDS_RESOURCE_COUNT="$(
+    echo "$rds_instances_json" |
+      jq 'length'
+  )"
+
+  if [[ "$ENV_RDS_RESOURCE_COUNT" -ne 1 ]]; then
+    echo "$rds_instances_json" | jq .
+    fail "Expected exactly one environment RDS instance for Backup tag validation: ${expected_rds_identifier}"
   fi
 
-  section "Backup Summary"
+  invalid_rds_json="$(
+    echo "$rds_instances_json" |
+      jq -c \
+        --arg expected "$expected_value" '
+          [
+            .[]
+            | {
+                db_instance_identifier: .DBInstanceIdentifier,
+                backup_tag_values: [
+                  (.TagList // [])[]?
+                  | select(.Key == "Backup")
+                  | .Value
+                ]
+              }
+            | select(.backup_tag_values != [$expected])
+          ]
+        '
+  )"
 
-  cat <<SUMMARY
-Environment:                ${ENV_NAME}
-AWS profile:                ${AWS_PROFILE:-<default>}
-AWS region:                 ${AWS_REGION}
-AWS account ID:             ${ACCOUNT_ID}
-Name prefix:                ${NAME_PREFIX}
+  if [[ "$(echo "$invalid_rds_json" | jq 'length')" -ne 0 ]]; then
+    echo "$invalid_rds_json" | jq .
+    fail "The environment RDS instance does not have Backup=${expected_value}."
+  fi
 
-effective_backup_enabled:   ${EFFECTIVE_BACKUP_ENABLED}
-Backup validation mode:     optional/skipped
-Expected backup vault name: ${EXPECTED_BACKUP_VAULT_NAME}
-Expected backup plan name:  ${EXPECTED_BACKUP_PLAN_NAME}
-SUMMARY
-
-  section "Validation Result"
-
-  success "Backup validation completed successfully for: ${ENV_NAME}"
-  exit 0
-fi
+  success "Environment RDS instance has Backup=${expected_value}: ${expected_rds_identifier}"
+}
 
 section "Validating backup vault"
 
 if ! backup_vault_exists "$BACKUP_VAULT_NAME"; then
-  fail "Required backup vault not found: ${BACKUP_VAULT_NAME}"
+  fail "Required retained backup vault not found: ${BACKUP_VAULT_NAME}"
 fi
 
-success "Backup vault exists: $BACKUP_VAULT_NAME"
+success "Backup vault exists as required: $BACKUP_VAULT_NAME"
 
 BACKUP_VAULT_JSON="$(
   aws backup describe-backup-vault \
@@ -250,31 +392,89 @@ BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.EncryptionKeyArn
 BACKUP_VAULT_KMS_KEY_ID="${BACKUP_VAULT_KMS_KEY_ARN##*/}"
 [[ -z "$BACKUP_VAULT_KMS_KEY_ARN" ]] && BACKUP_VAULT_KMS_KEY_ID="<none>"
 
-if [[ -n "$BACKUP_VAULT_ARN" ]]; then
-  success "Backup vault ARN resolved: $BACKUP_VAULT_ARN"
-else
-  fail "Backup vault ARN could not be resolved"
+if [[ "$(echo "$BACKUP_VAULT_JSON" | jq -r '.BackupVaultName // empty')" != "$BACKUP_VAULT_NAME" ]]; then
+  echo "$BACKUP_VAULT_JSON" | jq '{BackupVaultName, BackupVaultArn, EncryptionKeyArn}'
+  fail "Backup vault identity does not match the expected Terraform naming contract."
 fi
 
-if [[ -n "$BACKUP_VAULT_KMS_KEY_ARN" ]]; then
-  success "Backup vault encryption key configured: $BACKUP_VAULT_KMS_KEY_ARN"
-else
-  warn "Backup vault encryption key was not returned. Vault may be using default encryption behavior."
+if [[ -z "$BACKUP_VAULT_ARN" ]]; then
+  fail "Backup vault ARN could not be resolved."
 fi
 
-info "Vault recovery points reported: $BACKUP_VAULT_RECOVERY_POINT_COUNT"
+if [[ -z "$BACKUP_VAULT_KMS_KEY_ARN" ]]; then
+  fail "Backup vault does not report a KMS encryption key."
+fi
+
+success "Backup vault ARN and KMS encryption are configured"
+info "Backup vault ARN: ${BACKUP_VAULT_ARN}"
+info "Backup vault KMS key: ${BACKUP_VAULT_KMS_KEY_ARN}"
+info "Vault recovery points reported: ${BACKUP_VAULT_RECOVERY_POINT_COUNT}"
+
+EXPECTED_RESOURCE_BACKUP_TAG_VALUE="$EFFECTIVE_BACKUP_ENABLED"
+validate_workload_backup_tags "$EXPECTED_RESOURCE_BACKUP_TAG_VALUE"
+
+LIVE_BACKUP_PLAN_IDS_JSON="$(
+  resolve_backup_plan_ids_by_name "$EXPECTED_BACKUP_PLAN_NAME"
+)"
+
+LIVE_BACKUP_PLAN_COUNT="$(
+  echo "$LIVE_BACKUP_PLAN_IDS_JSON" |
+    jq 'length'
+)"
+
+section "Validating backup enablement contract"
+
+if [[ "$EFFECTIVE_BACKUP_ENABLED" != "true" ]]; then
+  if [[ "$LIVE_BACKUP_PLAN_COUNT" -ne 0 ]]; then
+    echo "$LIVE_BACKUP_PLAN_IDS_JSON" | jq .
+    fail "Backup plan exists even though effective_backup_enabled=false."
+  fi
+
+  success "Backup plan is absent as required while backups are disabled"
+  success "Backup selection is absent by construction because no backup plan exists"
+
+  section "Backup Summary"
+
+  cat <<SUMMARY
+Environment:                              ${ENV_NAME}
+AWS profile:                              ${AWS_PROFILE:-<default>}
+AWS region:                               ${AWS_REGION}
+AWS account ID:                           ${ACCOUNT_ID}
+Name prefix:                              ${NAME_PREFIX}
+
+effective_backup_enabled:                 ${EFFECTIVE_BACKUP_ENABLED}
+effective_backup_schedule:                ${EFFECTIVE_BACKUP_SCHEDULE}
+effective_delete_backups_after_days:      ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}
+
+Backup validation mode:                   disabled
+Retained backup vault:                    ${BACKUP_VAULT_NAME}
+Backup vault KMS key ID:                  ${BACKUP_VAULT_KMS_KEY_ID}
+Vault recovery points reported:           ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
+Backup plan count:                        ${LIVE_BACKUP_PLAN_COUNT}
+Expected workload Backup tag value:       ${EXPECTED_RESOURCE_BACKUP_TAG_VALUE}
+Environment EC2 resources checked:        ${ENV_EC2_RESOURCE_COUNT}
+Environment RDS resources checked:        ${ENV_RDS_RESOURCE_COUNT}
+SUMMARY
+
+  section "Validation Result"
+
+  success "Backup disabled-state validation completed successfully for: ${ENV_NAME}"
+  exit 0
+fi
+
+if [[ "$LIVE_BACKUP_PLAN_COUNT" -ne 1 ]]; then
+  echo "$LIVE_BACKUP_PLAN_IDS_JSON" | jq .
+  fail "Expected exactly one backup plan when backups are enabled; found ${LIVE_BACKUP_PLAN_COUNT}."
+fi
+
+BACKUP_PLAN_ID="$(
+  echo "$LIVE_BACKUP_PLAN_IDS_JSON" |
+    jq -r '.[0]'
+)"
+
+success "Exactly one backup plan exists as required when backups are enabled: ${BACKUP_PLAN_ID}"
 
 section "Validating backup plan"
-
-if [[ -z "$BACKUP_PLAN_ID" ]]; then
-  BACKUP_PLAN_ID="$(resolve_backup_plan_id_by_name "$EXPECTED_BACKUP_PLAN_NAME")"
-fi
-
-if [[ -z "$BACKUP_PLAN_ID" ]]; then
-  fail "Required backup plan not found by name: ${EXPECTED_BACKUP_PLAN_NAME}"
-fi
-
-success "Backup plan exists: ${EXPECTED_BACKUP_PLAN_NAME} (${BACKUP_PLAN_ID})"
 
 BACKUP_PLAN_JSON="$(
   aws backup get-backup-plan \
@@ -286,60 +486,58 @@ BACKUP_PLAN_JSON="$(
 BACKUP_PLAN_NAME="$(echo "$BACKUP_PLAN_JSON" | jq -r '.BackupPlan.BackupPlanName // empty')"
 BACKUP_RULE_COUNT="$(echo "$BACKUP_PLAN_JSON" | jq '.BackupPlan.Rules | length')"
 
-if [[ "$BACKUP_PLAN_NAME" == "$EXPECTED_BACKUP_PLAN_NAME" ]]; then
-  success "Backup plan name matches expected name: $BACKUP_PLAN_NAME"
-else
-  warn "Backup plan name does not match expected name. Expected=${EXPECTED_BACKUP_PLAN_NAME}, Actual=${BACKUP_PLAN_NAME}"
+if [[ "$BACKUP_PLAN_NAME" != "$EXPECTED_BACKUP_PLAN_NAME" ]]; then
+  echo "$BACKUP_PLAN_JSON" | jq '.BackupPlan | {BackupPlanName, Rules}'
+  fail "Backup plan name does not match the expected Terraform naming contract."
 fi
 
-if [[ "$BACKUP_RULE_COUNT" -gt 0 ]]; then
-  success "Backup plan has rule(s): $BACKUP_RULE_COUNT"
-else
-  fail "Backup plan has no rules"
-fi
-
-RULES_TARGETING_EXPECTED_VAULT="$(
-  echo "$BACKUP_PLAN_JSON" |
-    jq --arg vault_name "$BACKUP_VAULT_NAME" '
-      [
-        .BackupPlan.Rules[]
-        | select(.TargetBackupVaultName == $vault_name)
-      ]
-      | length
-    '
-)"
-
-if [[ "$RULES_TARGETING_EXPECTED_VAULT" -gt 0 ]]; then
-  success "Backup plan has rule(s) targeting expected vault: $BACKUP_VAULT_NAME"
-else
+if [[ "$BACKUP_RULE_COUNT" -ne 1 ]]; then
   echo "$BACKUP_PLAN_JSON" | jq '.BackupPlan.Rules'
-  fail "Backup plan does not have a rule targeting expected vault: $BACKUP_VAULT_NAME"
+  fail "Expected exactly one backup rule; found ${BACKUP_RULE_COUNT}."
 fi
+
+if ! echo "$BACKUP_PLAN_JSON" |
+  jq -e \
+    --arg rule_name "$EXPECTED_BACKUP_RULE_NAME" \
+    --arg vault_name "$BACKUP_VAULT_NAME" \
+    --arg schedule "$EFFECTIVE_BACKUP_SCHEDULE" \
+    --argjson retention_days "$EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS" '
+      .BackupPlan.Rules[0].RuleName == $rule_name
+      and .BackupPlan.Rules[0].TargetBackupVaultName == $vault_name
+      and .BackupPlan.Rules[0].ScheduleExpression == $schedule
+      and .BackupPlan.Rules[0].Lifecycle.DeleteAfterDays == $retention_days
+    ' >/dev/null; then
+  jq -n \
+    --arg rule_name "$EXPECTED_BACKUP_RULE_NAME" \
+    --arg vault_name "$BACKUP_VAULT_NAME" \
+    --arg schedule "$EFFECTIVE_BACKUP_SCHEDULE" \
+    --argjson retention_days "$EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS" \
+    --argjson actual "$(echo "$BACKUP_PLAN_JSON" | jq -c '.BackupPlan.Rules[0]')" '
+      {
+        expected: {
+          RuleName: $rule_name,
+          TargetBackupVaultName: $vault_name,
+          ScheduleExpression: $schedule,
+          DeleteAfterDays: $retention_days
+        },
+        actual: $actual
+      }
+    '
+
+  fail "Backup plan rule does not exactly match Terraform's effective backup schedule, retention, rule name, and target vault."
+fi
+
+success "Backup plan exactly matches Terraform's effective schedule, retention, rule name, and target vault"
 
 BACKUP_RULE_SUMMARY_ROWS=()
 
-while IFS= read -r rule; do
-  [[ -z "$rule" ]] && continue
+rule_json="$(echo "$BACKUP_PLAN_JSON" | jq -c '.BackupPlan.Rules[0]')"
+rule_name="$(echo "$rule_json" | jq -r '.RuleName')"
+target_vault="$(echo "$rule_json" | jq -r '.TargetBackupVaultName')"
+schedule="$(echo "$rule_json" | jq -r '.ScheduleExpression')"
+delete_after="$(echo "$rule_json" | jq -r '.Lifecycle.DeleteAfterDays')"
 
-  rule_name="$(echo "$rule" | jq -r '.RuleName // "unknown"')"
-  target_vault="$(echo "$rule" | jq -r '.TargetBackupVaultName // "unknown"')"
-  schedule="$(echo "$rule" | jq -r '.ScheduleExpression // "unknown"')"
-  delete_after="$(echo "$rule" | jq -r '.Lifecycle.DeleteAfterDays // "none"')"
-
-  if [[ "$schedule" != "unknown" && "$schedule" != "null" ]]; then
-    success "Backup rule has schedule: ${rule_name} -> ${schedule}"
-  else
-    fail "Backup rule is missing schedule expression: ${rule_name}"
-  fi
-
-  if [[ "$delete_after" != "none" && "$delete_after" != "null" ]]; then
-    success "Backup rule has retention policy: ${rule_name} delete_after=${delete_after} days"
-  else
-    warn "Backup rule does not have DeleteAfterDays configured: ${rule_name}"
-  fi
-
-  BACKUP_RULE_SUMMARY_ROWS+=("${rule_name}|${target_vault}|${schedule}|${delete_after}")
-done < <(echo "$BACKUP_PLAN_JSON" | jq -c '.BackupPlan.Rules[]')
+BACKUP_RULE_SUMMARY_ROWS+=("${rule_name}|${target_vault}|${schedule}|${delete_after}")
 
 section "Validating backup selection"
 
@@ -352,11 +550,12 @@ SELECTIONS_JSON="$(
 
 BACKUP_SELECTION_COUNT="$(echo "$SELECTIONS_JSON" | jq '.BackupSelectionsList | length')"
 
-if [[ "$BACKUP_SELECTION_COUNT" -gt 0 ]]; then
-  success "Backup plan has selection(s): $BACKUP_SELECTION_COUNT"
-else
-  fail "Backup plan has no backup selections"
+if [[ "$BACKUP_SELECTION_COUNT" -ne 1 ]]; then
+  echo "$SELECTIONS_JSON" | jq '.BackupSelectionsList'
+  fail "Expected exactly one backup selection; found ${BACKUP_SELECTION_COUNT}."
 fi
+
+success "Exactly one backup selection exists as expected"
 
 EXPECTED_SELECTION_ID="$(
   echo "$SELECTIONS_JSON" |
@@ -420,43 +619,25 @@ SELECTION_TAG_MATCH_COUNT="$(
     '
 )"
 
-if [[ "$SELECTION_TAG_MATCH_COUNT" -gt 0 ]]; then
-  success "Backup selection uses expected tag filter: ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE}"
-else
+if [[ "$SELECTION_TAG_MATCH_COUNT" -ne 1 ]]; then
   echo "$BACKUP_SELECTION_JSON" | jq '.BackupSelection'
-  fail "Backup selection does not clearly use expected tag filter: ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE}"
+  fail "Backup selection must contain exactly one ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE} tag selector."
 fi
 
-section "Reporting tagged backup resources"
+if ! echo "$BACKUP_SELECTION_JSON" |
+  jq -e '
+    (.BackupSelection.Resources // []) as $resources
+    | (
+        ($resources | length) == 0
+        or $resources == ["*"]
+      )
+      and ((.BackupSelection.NotResources // []) | length) == 0
+  ' >/dev/null; then
+  echo "$BACKUP_SELECTION_JSON" | jq '.BackupSelection'
+  fail "Backup selection must use the tag-based selection model without explicit resource or exclusion ARNs."
+fi
 
-TAGGED_EC2_COUNT="$(
-  aws ec2 describe-instances \
-    "${aws_args[@]}" \
-    --filters \
-      "Name=tag:${EXPECTED_BACKUP_TAG_KEY},Values=${EXPECTED_BACKUP_TAG_VALUE}" \
-      "Name=instance-state-name,Values=pending,running,stopping,stopped" \
-    --query 'length(Reservations[].Instances[])' \
-    --output text 2>/dev/null || echo "0"
-)"
-
-TAGGED_RDS_COUNT="$(
-  aws rds describe-db-instances \
-    "${aws_args[@]}" \
-    --output json 2>/dev/null |
-    jq --arg key "$EXPECTED_BACKUP_TAG_KEY" --arg value "$EXPECTED_BACKUP_TAG_VALUE" '
-      [
-        .DBInstances[]
-        | select(
-            (.TagList // [])
-            | any(.Key == $key and .Value == $value)
-          )
-      ]
-      | length
-    ' 2>/dev/null || echo "0"
-)"
-
-info "EC2 instances tagged for backup: ${TAGGED_EC2_COUNT}"
-info "RDS instances tagged for backup: ${TAGGED_RDS_COUNT}"
+success "Backup selection uses the expected tag-only filter: ${EXPECTED_BACKUP_TAG_KEY}=${EXPECTED_BACKUP_TAG_VALUE}"
 
 section "Reporting recovery points"
 
@@ -639,6 +820,9 @@ AWS account ID:                                     ${ACCOUNT_ID}
 Name prefix:                                        ${NAME_PREFIX}
 
 effective_backup_enabled:                           ${EFFECTIVE_BACKUP_ENABLED}
+effective_backup_schedule:                          ${EFFECTIVE_BACKUP_SCHEDULE}
+effective_delete_backups_after_days:                 ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}
+
 Backup vault name:                                  ${BACKUP_VAULT_NAME}
 Backup vault KMS key ID:                            ${BACKUP_VAULT_KMS_KEY_ID}
 Vault recovery points reported:                     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
@@ -648,8 +832,9 @@ Backup plan rule count:                             ${BACKUP_RULE_COUNT}
 Backup selections:                                  ${BACKUP_SELECTION_COUNT}
 Expected selection ID:                              ${EXPECTED_SELECTION_ID}
 Backup service role name:                           ${SELECTION_ROLE_NAME}
-Tagged EC2 backup resources:                        ${TAGGED_EC2_COUNT}
-Tagged RDS backup resources:                        ${TAGGED_RDS_COUNT}
+Expected workload Backup tag value:                 ${EXPECTED_RESOURCE_BACKUP_TAG_VALUE}
+Environment EC2 resources checked:                  ${ENV_EC2_RESOURCE_COUNT}
+Environment RDS resources checked:                  ${ENV_RDS_RESOURCE_COUNT}
 Recovery points listed:                             ${RECOVERY_POINT_COUNT}
 Recent backup jobs listed:                          ${BACKUP_JOB_COUNT}
 Historical failed backup jobs:                      ${FAILED_BACKUP_JOB_COUNT}
