@@ -215,6 +215,12 @@ variable "backup_enabled" {
   default     = null
 }
 
+variable "backup_schedule" {
+  description = "CRON expression for when backups are performed"
+  type        = string
+  default     = "cron(0 5 * * ? *)"
+}
+
 variable "rds_multi_az" {
   description = "Whether the RDS DB instance uses a Multi-AZ deployment. Set to null to use the deployment_profile default"
   type        = bool
@@ -283,12 +289,6 @@ variable "patch_tag_value" {
   description = "Tag value used to target patchable instances (the key is 'PatchGroup' by default)"
   type        = string
   default     = "weekly-linux"
-}
-
-variable "backup_schedule" {
-  description = "CRON expression for when backups are performed"
-  type        = string
-  default     = "cron(0 5 * * ? *)"
 }
 
 variable "delete_backups_after_days" {
