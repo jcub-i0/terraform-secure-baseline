@@ -208,7 +208,7 @@ The baseline provides a secure AWS cloud foundation using:
 - Control-plane and delegated security-administrator separation
 - Private networking
 - Centralized logging
-- Detection services
+- Detection services, including profile-driven GuardDuty ECS/Fargate Runtime Monitoring
 - KMS encryption
 - Backup and patch management
 - IAM Identity Center
@@ -235,6 +235,7 @@ The baseline provides technical foundations that support incident response, incl
 
 - Security Hub findings
 - GuardDuty findings
+- GuardDuty ECS/Fargate Runtime Monitoring and coverage-health notifications
 - EventBridge routing
 - SNS notifications
 - EC2 isolation
@@ -249,12 +250,11 @@ A.5.24 addresses planning and preparation for managing information security inci
 
 ### Narrative
 
-The baseline supports incident readiness by providing event-driven detection and response capabilities.
+The baseline supports incident readiness by providing event-driven detection, notification, and selected response capabilities. Runtime Monitoring extends detection into protected Fargate tasks and reports coverage degradation/recovery to SecOps.
+
+Automatic containment remains EC2-specific in v1.10; ECS/Fargate Runtime Monitoring is a detection and visibility capability.
 
 Organizations must still define incident response roles, escalation paths, communications procedures, severity criteria, and tabletop exercises.
-
----
-
 ## A.5.25 - Assessment and Decision on Information Security Events
 
 ### Baseline Control
@@ -263,6 +263,7 @@ The baseline supports event assessment through:
 
 - Security Hub findings
 - GuardDuty findings
+- GuardDuty ECS Runtime Monitoring coverage status and issue reporting
 - AWS Config evaluations
 - IP enrichment
 - SNS notifications
@@ -275,12 +276,9 @@ A.5.25 addresses assessing information security events and deciding whether they
 
 ### Narrative
 
-The baseline provides telemetry and enrichment that help teams evaluate events.
+The baseline provides telemetry, enrichment, and runtime-coverage context that help teams evaluate events.
 
-Human triage and decision-making remain an organizational responsibility.
-
----
-
+A healthy Runtime Monitoring coverage state is evidence that GuardDuty reports coverage for the protected cluster at the time checked; it is not a determination that the workload is free of compromise. Human triage and incident classification remain organizational responsibilities.
 ## A.5.26 - Response to Information Security Incidents
 
 ### Baseline Control
@@ -370,13 +368,15 @@ Organizations must still define evidence handling procedures and chain-of-custod
 
 The baseline supports operational resilience through:
 
-- AWS Backup
-- KMS-encrypted backup vaults
-- Retention policies
-- Centralized logs
-- Terraform-managed infrastructure
-- EC2 rollback
-- Patch management
+- a retained KMS-encrypted AWS Backup vault in each workload environment;
+- profile-aware backup plans and tag-based selections when scheduled backup is enabled;
+- configurable backup schedule and retention;
+- centralized logs;
+- Terraform-managed infrastructure;
+- controlled EC2 rollback; and
+- patch management.
+
+Production enables scheduled backup by default. Development and minimal disable scheduling by default while retaining the encrypted vault; when disabled, plan/selection resources are absent and workload EC2/RDS resources use `Backup=false`.
 
 ### ISO 27001 Alignment
 
@@ -384,12 +384,9 @@ A.5.30 addresses readiness of ICT systems for business continuity.
 
 ### Narrative
 
-The baseline supports technical recovery readiness.
+The baseline supports technical recovery readiness and repeatable infrastructure reconstruction.
 
-It does not define business continuity plans, recovery time objectives, recovery point objectives, or continuity exercises.
-
----
-
+It does not define business continuity plans, recovery time objectives, recovery point objectives, restoration procedures, or continuity exercises. Organizations must test recovery and select retention/scheduling appropriate to their risk requirements.
 ## A.5.33 - Protection of Records
 
 ### Baseline Control
@@ -658,10 +655,21 @@ It does not replace application-layer DLP, endpoint DLP, or data classification 
 
 AWS Backup support includes:
 
-- Backup vaults
-- KMS encryption
-- Tag-based backup selection
-- Retention policies
+- a retained KMS-encrypted backup vault per workload environment;
+- conditional backup plans and selections;
+- tag-based selection using `Backup=true` when scheduled backup is enabled;
+- profile-aware effective schedule and retention; and
+- validation that EC2/RDS `Backup` tags match the effective enablement state.
+
+Default behavior is:
+
+```text
+production  -> scheduled backup enabled, 30-day retention
+development -> scheduled backup disabled
+minimal     -> scheduled backup disabled
+```
+
+When disabled, the effective schedule and retention are null, plan/selection resources are absent, and the encrypted vault remains present.
 
 ### ISO 27001 Alignment
 
@@ -669,12 +677,9 @@ A.8.13 addresses maintaining backup copies of information, software, and systems
 
 ### Narrative
 
-The baseline provides backup infrastructure that supports recovery readiness.
+The baseline provides backup infrastructure and validation that can support recovery readiness.
 
-Organizations must define backup scope, RPO/RTO targets, restoration testing, and retention requirements.
-
----
-
+It does not itself establish backup sufficiency or successful restoration. Organizations must define backup scope, RPO/RTO targets, retention requirements, restoration testing, and recovery procedures.
 ## A.8.15 - Logging
 
 ### Baseline Control
@@ -717,12 +722,16 @@ The baseline provides technical log collection and protection, while organizatio
 
 Monitoring is supported through a combination of centrally governed and workload-local services:
 
-- centrally administered GuardDuty organization enrollment and protection plans
-- GuardDuty Runtime Monitoring configuration
-- centralized Security Hub CSPM finding aggregation and configuration policies
-- Security Hub V2 organization policy for workload enablement
-- workload-local AWS Config and Inspector
-- EventBridge, CloudWatch, CloudTrail, and SNS
+- centrally administered GuardDuty organization enrollment and protection plans;
+- GuardDuty Runtime Monitoring with `ECS_FARGATE_AGENT_MANAGEMENT = ALL`, `EC2_AGENT_MANAGEMENT = ALL`, and `EKS_ADDON_MANAGEMENT = NONE`;
+- deployment-profile-driven ECS cluster participation (`GuardDutyManaged=true` for production/development and `false` for minimal);
+- exact GuardDuty-agent ECR pull authority for protected ECS task execution roles;
+- live validation of injected GuardDuty agent state and ECS coverage health;
+- EventBridge/SNS notification for GuardDuty Runtime Protection unhealthy and healthy ECS coverage-state changes;
+- centralized Security Hub CSPM finding aggregation and configuration policies;
+- Security Hub V2 organization policy for workload enablement;
+- workload-local AWS Config and Inspector; and
+- EventBridge, CloudWatch, CloudTrail, and SNS.
 
 ### ISO 27001 Alignment
 
@@ -730,10 +739,11 @@ A.8.16 addresses monitoring networks, systems, and applications for anomalous be
 
 ### Narrative
 
-Centralized GuardDuty and Security Hub governance reduce account-level drift and provide common security visibility, while workload-local Config and Inspector preserve environment-specific configuration and vulnerability evidence. The baseline supplies technical monitoring mechanisms; organizations must still define review, escalation, and response procedures.
+Centralized GuardDuty and Security Hub governance reduce account-level drift and provide common security visibility, while workload-local Config and Inspector preserve environment-specific configuration and vulnerability evidence.
 
----
+v1.10 adds protected Fargate runtime instrumentation and explicit coverage-health monitoring. The baseline validates that protected running tasks have one running GuardDuty agent and that GuardDuty reports the expected cluster as `AUTO_MANAGED`, `HEALTHY`, and without unresolved issues.
 
+These are technical monitoring mechanisms; organizations must still define review, escalation, investigation, and response procedures.
 ## A.8.20 - Network Security
 
 ### Baseline Control
@@ -765,12 +775,16 @@ The baseline uses layered AWS network controls to reduce public exposure and con
 
 Network services are secured through:
 
-- VPC endpoints
-- Security group restrictions
-- Private DNS
-- Controlled egress routing
-- Network Firewall inspection
-- Route table design
+- Terraform-owned VPC endpoints;
+- security group restrictions;
+- private DNS;
+- controlled egress routing;
+- Network Firewall inspection; and
+- route table design.
+
+For Runtime Monitoring, the `guardduty-data` Interface Endpoint remains Terraform-owned and shared with eligible workloads. Workload validation requires exactly one live endpoint for that service and requires its ID to match Terraform output, reducing unmanaged network-service drift.
+
+Protected ECS task security groups use the shared Interface Endpoint security group for private AWS API/telemetry paths and the S3 Gateway Endpoint for the S3/ECR layer path.
 
 ### ISO 27001 Alignment
 
@@ -778,10 +792,7 @@ A.8.21 addresses security mechanisms, service levels, and management requirement
 
 ### Narrative
 
-The baseline defines secure network service access paths for AWS services and workloads.
-
----
-
+The baseline defines secure network-service access paths for AWS services and workloads and keeps the Runtime Monitoring telemetry endpoint inside the same Terraform ownership, placement, and validation model as other private service endpoints.
 ## A.8.22 - Segregation of Networks
 
 ### Baseline Control
@@ -863,11 +874,14 @@ Organizations must still define cryptographic policies, key ownership, and key r
 The baseline is designed around secure architecture principles such as:
 
 - Multi-account isolation
-- Control-plane separation
+- Control-plane and delegated-security separation
 - Private-first networking
 - Centralized identity
 - Least privilege
-- Event-driven response
+- Immutable application release selection
+- Profile-driven Fargate Runtime Monitoring
+- Terraform-owned Runtime Monitoring IAM/network prerequisites with GuardDuty-owned live agent lifecycle
+- Event-driven response and coverage-health notification
 - Immutable logging
 - KMS encryption
 - Secure CI/CD
@@ -878,12 +892,11 @@ A.8.27 addresses secure system architecture and engineering principles.
 
 ### Narrative
 
-The Terraform architecture provides secure default patterns that can be reused across environments.
+The Terraform architecture provides reusable secure-default patterns while preserving explicit ownership boundaries between organization governance, workload infrastructure, and AWS service-managed runtime instrumentation.
 
-It should be reviewed and adapted for each organization’s system architecture.
+Automatic ECS/Fargate containment is deliberately excluded from v1.10 rather than applying the EC2 isolation model to AWS-managed Fargate task ENIs without a proven fail-closed design.
 
----
-
+The architecture should still be reviewed and adapted for each organization’s system and risk context.
 ## A.8.28 - Secure Coding
 
 ### Baseline Control
@@ -987,12 +1000,12 @@ CloudTrail status and protected log storage
 AWS Config recorder and rule state
 Security Hub CSPM central configuration, finding aggregation, policies, and associations
 Security Hub V2 effective workload policies
-GuardDuty detector, organization enrollment, protection plans, and Runtime Monitoring state
+GuardDuty detector, organization enrollment, exact Runtime Monitoring organization feature state, ECS `GuardDutyManaged` intent, live agent/coverage state, and coverage-health notification configuration
 Inspector account status
 KMS aliases and policies
 S3 encryption/Object Lock configuration
 VPC Flow Logs and VPC endpoint state
-Backup and patch state where enabled
+Backup vault, effective scheduled-backup state, plan/selection state, workload `Backup` tags, and patch-management state
 ```
 
 ## Identity / Incident Evidence
@@ -1029,9 +1042,9 @@ Security Hub / GuardDuty findings
 | A.8.8 Vulnerabilities | Inspector, Security Hub, patch management |
 | A.8.9 Configuration management | Terraform, AWS Config |
 | A.8.12 Data leakage prevention | Controlled egress, private networking, S3 public access controls |
-| A.8.13 Backup | AWS Backup, encrypted vaults |
+| A.8.13 Backup | Retained encrypted backup vaults, profile-aware plans/selections, validated resource backup tags |
 | A.8.15 Logging | CloudTrail, Config, VPC Flow Logs, CloudWatch Logs |
-| A.8.16 Monitoring | GuardDuty, Security Hub, EventBridge, SNS |
+| A.8.16 Monitoring | GuardDuty/Fargate Runtime Monitoring and coverage health, Security Hub, EventBridge, SNS |
 | A.8.20 Network security | VPC segmentation, firewall, endpoints, security groups |
 | A.8.21 Network services | VPC endpoints, private DNS, controlled service access |
 | A.8.22 Network segregation | Account separation, subnet tiers |
@@ -1049,8 +1062,8 @@ Security Hub / GuardDuty findings
 - Centralize identity management
 - Reduce public exposure
 - Protect CI/CD access
-- Monitor cloud activity
-- Detect security-relevant events
+- Monitor cloud activity and protected ECS/Fargate runtime coverage
+- Detect security-relevant events and monitoring-coverage degradation
 - Support incident containment and recovery
 - Preserve security evidence
 - Encrypt sensitive infrastructure data
