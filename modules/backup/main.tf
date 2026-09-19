@@ -48,7 +48,7 @@ resource "aws_backup_selection" "main" {
   count = var.backup_enabled ? 1 : 0
 
   name         = "${var.name_prefix}-backup-selection"
-  plan_id      = aws_backup_plan.main.id
+  plan_id      = aws_backup_plan.main[0].id
   iam_role_arn = var.backup_service_role_arn
 
   selection_tag {
