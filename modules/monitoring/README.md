@@ -18,6 +18,7 @@ This module is responsible for routing alerts and for the operational alarms it 
 | EventBridge targets | Security Hub high/critical SNS target, break-glass SNS target |
 | CloudTrail detections | Metric filters and alarms for root activity, unauthorized API calls, CloudTrail stop/delete activity, and IAM policy changes |
 | ECS operational health | Per-service task-deficit alarms and per-ingress-service unhealthy-target alarms |
+| GuardDuty ECS Runtime coverage | Default-bus healthy/unhealthy coverage rule and SecOps SNS target with shared EventBridge DLQ/retry handling |
 | DLQ alerting | CloudWatch alarms for security notification DLQ messages and EventBridge security notification DLQ messages |
 
 ## Design Purpose
@@ -33,7 +34,8 @@ It supports:
 - CloudTrail-based detection for high-risk account activity
 - Terraform-owned ECS task-deficit detection
 - Terraform-owned ALB unhealthy-target detection for ingress-enabled ECS services
-- Notification routing for Security Hub, tamper detection, break-glass access, CloudWatch alarms, and security automation workflows
+- GuardDuty ECS Runtime Monitoring healthy/unhealthy coverage-state notification
+- Notification routing for Security Hub, tamper detection, break-glass access, CloudWatch alarms, GuardDuty coverage health, and security automation workflows
 
 The module is intentionally focused on notification routing and selected operational visibility. Security services, automation workflows, ECS service scaling policies, and some EventBridge rules are created by other modules and integrated here through variables.
 
@@ -97,6 +99,7 @@ The security notifications topic receives alerts from:
 - Security Hub high/critical routing
 - Break-glass role usage detection
 - Tamper detection routing
+- GuardDuty ECS Runtime Monitoring coverage-state changes
 - Security automation workflows, where permitted by topic policy
 
 ### SecOps Email Subscriptions
@@ -160,6 +163,7 @@ Current protected SNS targets include:
 - Security Hub high/critical findings to security notifications SNS
 - Break-glass role assumption alerts to security notifications SNS
 - Tamper detection alerts to security notifications SNS
+- GuardDuty ECS Runtime Monitoring healthy/unhealthy coverage-state changes to security notifications SNS
 
 A CloudWatch alarm notifies SecOps when messages are visible in this EventBridge DLQ.
 
@@ -247,6 +251,36 @@ The tamper detection EventBridge rule is created outside this module and passed 
 The monitoring module authorizes that rule to publish to the security notifications SNS topic and allows it to use the shared security notifications EventBridge DLQ.
 
 ---
+
+### GuardDuty ECS Runtime Coverage Health
+
+v1.10 creates a default-bus EventBridge rule for GuardDuty ECS Runtime Monitoring coverage-state changes:
+
+| Attribute | Value |
+|---|---|
+| Terraform rule | `aws_cloudwatch_event_rule.guardduty_ecs_runtime_coverage` |
+| Rule name | `<name_prefix>-guardduty-ecs-runtime-coverage` |
+| Source | `aws.guardduty` |
+| Detail types | `GuardDuty Runtime Protection Unhealthy`, `GuardDuty Runtime Protection Healthy` |
+| Resource filter | Workload account + `resourceDetails.resourceType = ECS` |
+| Target | `aws_sns_topic.secops.arn` |
+| Target ID | `guardduty-ecs-runtime-coverage-to-secops-sns` |
+| DLQ | `aws_sqs_queue.security_notifications_eventbridge_dlq.arn` |
+| Retry attempts | 3 |
+| Max event age | 3600 seconds |
+
+The input transformer preserves:
+
+- workload account ID;
+- AWS Region;
+- ECS cluster name;
+- current coverage status;
+- previous coverage status;
+- GuardDuty issue text;
+- GuardDuty `lastUpdatedAt`; and
+- EventBridge event time.
+
+Both unhealthy and healthy events are routed so the notification path records coverage degradation and recovery. This rule reports GuardDuty Runtime Monitoring coverage health; it does not stop tasks or implement automatic ECS/Fargate containment.
 
 ## CloudWatch Metric Filters and Alarms
 
@@ -445,6 +479,8 @@ This alarm indicates that EventBridge failed to deliver one or more security not
 | `ecs_task_deficit_services` | ECS services monitored for desired-versus-running task deficits; map values contain `cluster_name` and `service_name` | No; defaults to `{}` |
 | `ecs_ingress_services` | Ingress-enabled ECS services monitored for unhealthy ALB targets; map values contain load-balancer and target-group ARN suffixes | No; defaults to `{}` |
 
+The GuardDuty coverage rule uses existing required inputs (`name_prefix`, `account_id`, and the module-owned SecOps topic/DLQ) and does not add a separate GuardDuty-specific input variable.
+
 ## Outputs
 
 | Name | Description |
@@ -454,6 +490,7 @@ This alarm indicates that EventBridge failed to deliver one or more security not
 | `sec_notifs_eventbridge_dlq_arn` | ARN of the shared EventBridge DLQ for security notification target failures |
 | `ecs_task_deficit_alarms` | Task-deficit alarm ARN/name metadata keyed by ECS service name |
 | `ecs_ingress_unhealthy_target_alarms` | Ingress unhealthy-target alarm ARN/name metadata keyed by ECS service name |
+| `guardduty_ecs_runtime_coverage_notification` | Resource-backed GuardDuty coverage rule/target/DLQ metadata used by workload validation |
 
 ## Usage Example
 
@@ -502,8 +539,8 @@ Expected coverage:
 |---|---|
 | `validate-sns.sh` | Security and compliance SNS topics, encryption, subscription counts, pending confirmations |
 | `validate-sqs.sh` | Compliance queue, security notification queue, security notification DLQ, security notification EventBridge DLQ, encryption, SNS-to-SQS wiring |
-| `validate-eventbridge.sh` | EventBridge rules, targets, target DLQs, retry policies, Security Hub/SecOps routing |
-| `validate-ecs-runtime.sh` | Exact ECS runtime contract, Application Auto Scaling targets/policies, deployment settings, and Terraform-owned task-deficit/ingress-health operational alarms |
+| `validate-eventbridge.sh` | EventBridge rules, targets, target DLQs, retry policies, Security Hub/SecOps routing, and the exact GuardDuty ECS Runtime coverage rule/transformer contract |
+| `validate-ecs-runtime.sh` | Exact ECS runtime contract, GuardDuty Runtime integration metadata, live agent/coverage state, Application Auto Scaling targets/policies, deployment settings, and Terraform-owned task-deficit/ingress-health operational alarms |
 
 `validate-ecs-runtime.sh` treats AWS-managed target-tracking alarms separately from the Terraform-owned operational alarm inventory.
 
@@ -554,6 +591,33 @@ EventBridge Rule from automation module
     |
     +--> Security Notifications SNS target from monitoring module
 ```
+
+### GuardDuty ECS Runtime Coverage Notification Path
+
+```text
+GuardDuty ECS Runtime coverage state
+    |
+    | Healthy / Unhealthy
+    v
+Default EventBridge Bus
+    |
+    v
+GuardDuty Runtime coverage rule
+    |
+    v
+Security Notifications SNS
+    |
+    +--> SecOps Email
+    |
+    +--> Security Notifications SQS
+
+EventBridge delivery failure
+    |
+    v
+Security Notifications EventBridge DLQ
+```
+
+The rule is a coverage-health signal. GuardDuty remains the runtime detection service; this module owns only the workload notification routing for the coverage-status events.
 
 ### ECS Operational Alarm Path
 
@@ -756,6 +820,7 @@ Check:
 - Selected IAM policy changes generate an alert.
 - ECS task-deficit and ingress unhealthy-target alarms are Terraform-owned and notify the SecOps topic on both ALARM and OK transitions.
 - Application Auto Scaling target-tracking alarms remain AWS-managed and are not modified by this module.
+- GuardDuty ECS Runtime Monitoring coverage-state changes are routed through the same encrypted SecOps SNS and EventBridge DLQ architecture rather than a parallel notification system.
 
 ## Design Principles
 
