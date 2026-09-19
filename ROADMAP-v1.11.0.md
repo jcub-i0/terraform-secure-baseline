@@ -283,7 +283,7 @@ Do not re-plan after approval.
 
 | Milestone | Purpose | Expected repository areas |
 |---|---|---|
-| **R1 - Production Resilience Contract** | Lock AZ, RDS, ECS availability, lifecycle-protection, retirement, Restore Testing, and validation semantics before resource changes | `ROADMAP-v1.11.0.md`, `baseline/variables.tf`, `baseline/locals.tf`, environment interfaces |
+| ✅ **R1 - Production Resilience Contract** | Lock AZ, RDS, ECS availability, lifecycle-protection, retirement, Restore Testing, and validation semantics before resource changes | `ROADMAP-v1.11.0.md`, `baseline/variables.tf`, `baseline/locals.tf`, environment interfaces |
 | **R2 - Three-AZ Production Topology** | Make production networking three-AZ and propagate the full topology to firewall, endpoints, RDS, ECS, and ALB | `modules/networking/`, `modules/firewall/`, `modules/vpc_endpoints/`, `baseline/`, environments |
 | **R3 - RDS Resilience & Lifecycle** | Enforce production Multi-AZ, deletion protection, final-snapshot behavior, automated-backup retention, and exact RDS validation | `modules/storage/`, `baseline/`, workload outputs, `validate-backup.sh` |
 | **R4 - ECS Production Availability** | Enforce redundant service capacity, strict deployment-health semantics, and explicit AZ rebalancing | `modules/ecs_service/`, `baseline/`, ECS runtime validators |
@@ -292,12 +292,40 @@ Do not re-plan after approval.
 | **R7 - Exact Resilience Validation** | Extend existing validators to prove the complete v1.11 contract without changing validation-layer count | workload validators and ECS runtime helpers |
 | **R8 - Live Qualification & Release** | Exercise three-AZ topology, ECS replacement, RDS failover, RDS restore testing, dev teardown regression, evidence, docs, and final no-change plan | qualification/evidence, docs, module READMEs, README/CHANGELOG |
 
-## R1 - Production Resilience Contract
+## R1 - Production Resilience Contract ✅
 
-R1 is a contract milestone.
+**Status:** Complete.
+
+R1 is intentionally a contract-only milestone. It locks the production-resilience architecture before R2 begins changing live Terraform-managed infrastructure. R1 does not itself add a third AZ, modify RDS/ECS resources, enable deletion protection, or create Restore Testing resources.
 
 It should lock effective production policy before R2 begins making live
 infrastructure changes.
+
+### Locked decisions
+
+1. `deployment_profile = "production"` is the policy boundary for v1.11 resilience guarantees; do not key generic behavior directly from `environment == "prod"`.
+2. Production requires at least three distinct Availability Zones; development/minimal may remain two-AZ.
+3. Workload roots will expose and forward the existing `azs` and `subnet_cidrs` topology interfaces before R2 expands production networking.
+4. The existing PostgreSQL `aws_db_instance.main` remains the database resource model. v1.11 does not migrate to Aurora or an RDS Multi-AZ DB cluster.
+5. Production RDS must be Multi-AZ. An explicit `rds_multi_az = false` override is invalid under the production profile.
+6. Production scheduled AWS Backup is mandatory. An explicit `backup_enabled = false` override is invalid under the production profile.
+7. Production fixed-count ECS services require `desired_count >= 2`.
+8. Production autoscaled ECS services require `min_capacity >= 2`; Application Auto Scaling continues to own live desired count after bootstrap.
+9. Production ECS deployment settings require `minimum_healthy_percent = 100` and `maximum_percent >= 200`.
+10. Production ECS Availability Zone rebalancing is explicitly Terraform-owned and enabled; do not rely on AWS defaults.
+11. Production deletion/lifecycle behavior is profile-derived rather than exposed as independent per-resource operator toggles.
+12. Normal production uses RDS deletion protection, ALB deletion protection, Network Firewall delete protection, `ECR force_delete = false`, `ECS force_delete = false`, and `Backup vault force_destroy = false`.
+13. Intentional production retirement uses one explicit retirement signal rather than changing the deployment profile. The accepted public name is `production_retirement_mode`, default `false`.
+14. `production_retirement_mode = true` may relax only native deletion protections required for deliberate retirement; it must not automatically force-delete ECR images or Backup recovery points.
+15. Production RDS retirement still requires a final snapshot and retains automated backups regardless of retirement mode.
+16. AWS Backup Restore Testing is the accepted generic RDS recovery-verification mechanism for v1.11.
+17. Restore Testing proves infrastructure restorability only; application/business-data validation is outside the generic baseline contract.
+18. Existing Backup IAM should be reused for Restore Testing if its current backup/restore authority is sufficient; do not create a broader second role without a demonstrated need.
+19. New resilience expectations remain inside the existing four evidence layers and 16-validator workload baseline.
+20. Validators consume Terraform-owned effective/resource-backed expectations rather than recreating production-profile policy in Bash.
+21. Existing ECS architecture remains intact: one `ecs_services` map, nullable `image_digest`, digest-pinned runtime, fixed/autoscaled ownership split, private Fargate networking, and GuardDuty-managed agent injection.
+22. The exact reviewed-plan Terraform Apply workflow remains unchanged.
+23. KMS `lifecycle.prevent_destroy` redesign, Vault Lock compliance mode, multi-region resilience, and ReconoSense-specific behavior remain outside v1.11.
 
 ### Effective production contract
 
@@ -368,11 +396,20 @@ maximum_percent < 200
 
 ### R1 exit criteria
 
-- Production policy is represented explicitly in Terraform.
-- Invalid production combinations fail during planning.
-- Dev/minimal flexibility is preserved.
-- Canonical `ecs_services` remains the only service inventory.
-- Terraform format/validation passes.
+- [x] Three-AZ production semantics are locked.
+- [x] Existing RDS DB-instance architecture is retained.
+- [x] Production Multi-AZ and scheduled-Backup requirements are locked.
+- [x] Production ECS minimum-capacity semantics are locked.
+- [x] Production deployment-health and AZ-rebalancing semantics are locked.
+- [x] Profile-derived production lifecycle protections are locked.
+- [x] `production_retirement_mode` ownership and boundaries are locked.
+- [x] AWS Backup Restore Testing is selected for RDS recovery verification.
+- [x] Application-level restore validation is explicitly excluded.
+- [x] Four-layer / 16-validator evidence architecture is preserved.
+- [x] Existing ECS and exact-plan deployment invariants are preserved.
+- [x] KMS lifecycle redesign and unrelated backlog are explicitly deferred.
+
+R2 may now introduce the three-AZ topology and its workload interfaces without reopening these architecture decisions.
 
 ## R2 - Three-AZ Production Topology
 
