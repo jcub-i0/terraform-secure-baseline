@@ -40,7 +40,7 @@ ecs_runtime_print_summary() {
       guardduty_runtime_state="enabled"
       ;;
     false)
-      guardduty_runtime_state="dsiabled"
+      guardduty_runtime_state="disabled"
       ;;
     *)
       guardduty_runtime_state="<unknown>"
