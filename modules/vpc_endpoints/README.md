@@ -97,19 +97,19 @@ existing S3 Gateway Endpoint.
 
 `guardduty-data` is intentionally part of the Terraform-managed Interface Endpoint set.
 
-This prevents GuardDuty Runtime Monitoring from needing to create and own its own VPC endpoint after eligible EC2 instances appear. The baseline passes the resulting `interface_endpoint_ids` map to the compute module, and EC2 launch waits until the endpoint resources—including `guardduty-data`—exist.
+The endpoint supports GuardDuty Runtime Monitoring telemetry for eligible workload resources, including the v1.10 ECS/Fargate runtime. The baseline does not leave endpoint creation to GuardDuty automation.
 
-The endpoint is therefore treated like the rest of the workload's VPC infrastructure:
+The endpoint is treated like the rest of the workload VPC infrastructure:
 
-- Terraform owns its lifecycle.
+- Terraform owns its lifecycle and resource identity.
 - It is placed only in the dedicated endpoint private subnets.
 - It uses the shared Interface Endpoint security group.
-- It is validated by the workload VPC endpoint validation path.
+- ECS task security groups receive HTTPS egress to the Interface Endpoint security group.
+- The Interface Endpoint security group receives matching HTTPS ingress from each deployable ECS task security group.
+- EC2 and approved automation paths continue to use the same shared endpoint tier.
+- Workload validation requires exactly one live `guardduty-data` endpoint and requires its ID to exactly match Terraform output.
 
-This ownership model avoids unmanaged `GuardDutyManaged` endpoint resources and makes workload teardown more deterministic.
-
----
-
+This ownership model prevents a second unmanaged GuardDuty endpoint/security group from appearing and keeps placement, policy, validation, and teardown inside the Terraform graph.
 ### Interface Endpoint Security Group
 
 Creates a dedicated security group for Interface VPC Endpoints:
@@ -149,10 +149,15 @@ Current endpoint-related rules include:
 | `endpoints_ingress_from_compute` | Ingress | Allows compute instances to reach Interface Endpoints over TCP/443 |
 | `endpoints_ingress_from_lambda_isolation` | Ingress | Allows the EC2 Isolation Lambda security group to reach Interface Endpoints over TCP/443 |
 | `endpoints_ingress_from_lambda_rollback` | Ingress | Allows the EC2 Rollback Lambda security group to reach Interface Endpoints over TCP/443 |
+| `endpoints_ingress_from_quarantine` | Ingress | Allows quarantined EC2 instances to retain approved Interface Endpoint access over TCP/443 |
+| `endpoints_ingress_from_ecs_tasks` | Ingress | Allows each deployable ECS task security group to reach Interface Endpoints over TCP/443 |
 | `endpoints_egress_any` | Egress | Allows endpoint ENIs to communicate with AWS services over TCP/443 |
 | `compute_egress_to_endpoints` | Egress | Allows compute instances to initiate HTTPS connections to Interface Endpoints |
+| `quarantine_egress_to_endpoints` | Egress | Allows quarantined EC2 instances to initiate HTTPS connections to Interface Endpoints |
 | `lambda_isolation_egress_to_endpoints` | Egress | Allows the EC2 Isolation Lambda to initiate HTTPS connections to Interface Endpoints |
 | `lambda_rollback_egress_to_endpoints` | Egress | Allows the EC2 Rollback Lambda to initiate HTTPS connections to Interface Endpoints |
+| `ecs_tasks_egress_to_endpoints` | Egress | Allows each deployable ECS task security group to initiate HTTPS connections to Interface Endpoints |
+| `ecs_tasks_egress_to_s3` | Egress | Allows ECS tasks to retrieve S3/ECR image-layer data over HTTPS through the Terraform-owned S3 prefix-list path |
 
 This design keeps endpoint access restricted to known internal security groups instead of exposing the endpoints broadly across the VPC CIDR.
 
@@ -305,10 +310,7 @@ s3_prefix_list_id         = module.vpc_endpoints.s3_prefix_list_id
 ```
 
 The first connection allows the networking layer to own endpoint traffic
-rules. The second preserves the EC2 launch dependency on the actual Interface
-Endpoint resources. The prefix-list output gives ECS security-policy and
-runtime validation the exact S3 identity configured by Terraform rather than
-inferring it from the live endpoint description response.
+rules. The second preserves the EC2 launch dependency on the actual Interface Endpoint resources and also exposes exact endpoint identities to workload validation. ECS task-to-endpoint access is created by `modules/networking/security_policy` from the Interface Endpoint security-group output. The prefix-list output gives ECS security-policy and runtime validation the exact S3 identity configured by Terraform rather than inferring it from the live endpoint description response.
 
 ---
 
@@ -332,9 +334,9 @@ This keeps traffic policy decisions centralized in the networking module instead
 
 GuardDuty Runtime Monitoring can create a `guardduty-data` VPC endpoint when no suitable endpoint exists. This baseline instead pre-creates that endpoint in Terraform as part of the standard Interface Endpoint set.
 
-That keeps the endpoint in the dedicated endpoint subnet tier and under the same lifecycle, tagging, security-group, validation, and destroy model as the other workload endpoints.
+That keeps the endpoint in the dedicated endpoint subnet tier and under the same lifecycle, tagging, security-group, validation, and destroy model as the other workload endpoints. The identity is exposed through `interface_endpoint_ids`; `validate-vpc-endpoints.sh` requires the complete live endpoint-ID map to exactly match Terraform and separately requires exactly one `guardduty-data` endpoint.
 
-The compute module consumes `interface_endpoint_ids`, so Terraform establishes endpoint creation before eligible EC2 instances launch.
+The compute module consumes `interface_endpoint_ids` so eligible EC2 launch waits for the endpoint resources. ECS/Fargate services use the same endpoint through task-to-endpoint security-group rules owned by `modules/networking/security_policy`.
 
 ---
 
@@ -482,8 +484,9 @@ aws ec2 describe-vpc-endpoints \
 
 Expected:
 
-- Exactly the intended `guardduty-data` endpoint is present.
-- It uses the dedicated endpoint private subnets.
+- Exactly one `guardduty-data` endpoint is present.
+- Its VPC Endpoint ID matches the Terraform-owned `interface_endpoint_ids["guardduty-data"]` value.
+- It uses the dedicated endpoint private subnets and shared Interface Endpoint security group.
 - Its tags identify normal Terraform/environment ownership rather than a separate GuardDuty-managed endpoint.
 
 The workload `validate-vpc-endpoints.sh` path should remain the authoritative automated check for endpoint placement and inventory.
@@ -584,7 +587,7 @@ Deployment profiles and egress modes can reduce NAT Gateway and Network Firewall
 
 ### GuardDuty Runtime Monitoring Ownership
 
-Do not remove `guardduty-data` from the Terraform endpoint set while centrally managed EC2 Runtime Monitoring is enabled unless the lifecycle implications are understood.
+Do not remove `guardduty-data` from the Terraform endpoint set while centrally managed EC2 or ECS/Fargate Runtime Monitoring is enabled unless the lifecycle implications are understood.
 
 Allowing GuardDuty to create an unmanaged endpoint can introduce resources outside Terraform ownership and make destroy/reapply behavior less deterministic. Keeping the endpoint pre-created also ensures it follows the endpoint-subnet placement policy.
 
@@ -687,8 +690,9 @@ Check:
 - Endpoint private subnets do not require a default internet route.
 - S3 private access is handled through a Gateway Endpoint and route table association.
 - Private DNS avoids hardcoding endpoint-specific URLs.
-- The module supports private operation of SSM, logging, encryption, secrets retrieval, EventBridge, Security Hub, Lambda API access, and the GuardDuty Runtime Monitoring data endpoint.
+- The module supports private operation of SSM, logging, encryption, secrets retrieval, EventBridge, Security Hub, Lambda API access, ECR pulls, and the GuardDuty Runtime Monitoring data endpoint.
 - `guardduty-data` is Terraform-owned instead of being left for GuardDuty to create opportunistically.
+- ECS/Fargate Runtime Monitoring reuses the same Terraform-owned endpoint tier; no parallel GuardDuty endpoint/security-group model is introduced.
 - Endpoint access should remain scoped to approved workload and automation security groups.
 
 ---
