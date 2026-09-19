@@ -10,7 +10,7 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 `tf-secure-baseline` is a Terraform-driven AWS security and application-hosting baseline for organizations running workloads that handle PII or other sensitive data.
 
-**Current release:** `v1.9.0` extends the ECS/Fargate runtime with Application Auto Scaling, explicit fixed-vs-autoscaled service-count ownership, deployment-health controls, operational alarms, exact runtime validation, and GuardDuty-scoped EC2 isolation hardening.
+**Current release:** `v1.10.0 — ECS Runtime Security` extends the ECS/Fargate runtime with GuardDuty Runtime Monitoring, deployment-profile-driven cluster enrollment, least-privilege managed-agent prerequisites, runtime coverage-health notification, exact live validation, and corrected profile-aware AWS Backup semantics.
 
 The platform provides:
 
@@ -24,6 +24,8 @@ The platform provides:
 - ECS/Fargate as the preferred modern application runtime
 - Optional ECS target-tracking auto scaling with explicit service-count ownership
 - ECS deployment-health configuration and Terraform-owned operational alarms
+- GuardDuty Fargate Runtime Monitoring for production/development with explicit minimal-profile opt-out
+- GuardDuty ECS coverage-health notification through the existing SecOps path
 - GitHub OIDC-based CI/CD without long-lived AWS access keys
 - Exact reviewed-plan Terraform application through protected environments
 - Four-layer read-only validation and evidence export
@@ -55,6 +57,7 @@ The platform provides:
 ### Security operations
 
 - Centralized Security Hub CSPM and GuardDuty governance
+- Centralized GuardDuty Runtime Monitoring with EC2 and ECS/Fargate automated agent management
 - Security Hub V2 organization policy governance
 - Workload-local AWS Config, Inspector, remediation, and supporting controls
 - GuardDuty-scoped EC2 automatic isolation with configurable severity eligibility, defaulting to `CRITICAL`
@@ -75,6 +78,8 @@ The platform provides:
 - Explicit Terraform-vs-autoscaler ownership of ECS `desired_count`
 - Configurable ECS deployment minimum/maximum percentages and health-check grace period
 - Terraform-owned task-deficit and ingress unhealthy-target operational alarms
+- Deployment-profile-driven `GuardDutyManaged` ECS cluster enrollment
+- GuardDuty-managed Fargate runtime agent with Terraform-owned IAM/network prerequisites and live coverage validation
 
 ---
 
@@ -162,11 +167,11 @@ A service with `scaling = null` remains fixed-count and Terraform owns `desired_
 
 ## Deployment Profiles and Egress Modes
 
-| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | Log retention | Intended use |
-|---|---|---:|---:|---:|---:|---|
-| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
-| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
-| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+| `deployment_profile` | Default `egress_mode` | AWS Config | Scheduled Backup | Inspector | GuardDuty Fargate Runtime Monitoring | Log retention | Intended use |
+|---|---|---:|---:|---:|---:|---:|---|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days | Lower-cost development/testing with production-aligned runtime detection |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
 
 Explicit egress behavior:
 
@@ -178,10 +183,17 @@ Explicit egress behavior:
 
 When `egress_mode = "auto"`, the effective mode is selected from `deployment_profile`.
 
+GuardDuty Fargate Runtime Monitoring also follows the deployment profile directly in v1.10. There is no independent top-level Runtime Monitoring toggle:
+
+```text
+production  -> GuardDutyManaged=true
+development -> GuardDutyManaged=true
+minimal     -> GuardDutyManaged=false
+```
+
+The Scheduled Backup column controls the plan/selection behavior, not whether the environment backup vault exists. The KMS-encrypted backup vault is retained in all profiles. When scheduled backup is disabled, effective schedule/retention are null, the plan/selection are absent, and workload EC2/RDS resources use `Backup=false`. Production defaults to `cron(0 5 * * ? *)` with 30-day retention; explicitly enabled non-production backup defaults to 7-day retention unless overridden.
+
 `vpc_endpoints_only` is intended for AWS-private testing or workloads that do not require general internet access. Public package repositories and third-party services require another explicitly approved path.
-
----
-
 ## Security Architecture
 
 The baseline combines centralized security governance with workload-local enforcement.
@@ -189,28 +201,38 @@ The baseline combines centralized security governance with workload-local enforc
 | Service / capability | Primary Terraform ownership | Purpose |
 |---|---|---|
 | Security Hub CSPM | `security_operations/security_services` | Central policy, standards, finding aggregation, workload associations |
-| GuardDuty | `security_operations/security_services` | Organization enrollment, protection plans, Runtime Monitoring |
+| GuardDuty organization policy | `security_operations/security_services` | Organization enrollment, protection plans, Runtime Monitoring and automated agent policy |
+| ECS Runtime Monitoring intent | Workload | `GuardDutyManaged` cluster participation, exact task-execution IAM, networking, validation |
+| GuardDuty live Fargate agent | GuardDuty service-managed | Agent injection/upgrades and runtime telemetry |
 | Security Hub V2 | Control-plane prerequisites + security-operations policy | Workload enablement through `SECURITYHUB_POLICY` |
 | AWS Config / Inspector | Workload | Configuration monitoring, remediation support, vulnerability scanning |
 | CloudTrail / CloudWatch | Workload | API activity, logs, metrics, and alarms |
-| EventBridge / Lambda | Workload | Detection routing and deterministic response automation |
+| EventBridge / Lambda | Workload | Detection routing, coverage-health notification, deterministic response automation |
 | SNS / SQS | Workload | Alert delivery, retention, and failure paths |
 | IAM Identity Center | Control plane | Centralized workforce access |
 | AWS Backup / SSM Patch Manager | Workload | Recovery and patch-management foundations |
 
+The v1.10 centralized GuardDuty Runtime Monitoring contract is:
+
+```text
+RUNTIME_MONITORING           = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT         = ALL
+EKS_ADDON_MANAGEMENT         = NONE
+```
+
 Central Security Hub CSPM and GuardDuty governance reduce account-level drift while workload Terraform retains AWS Config, Inspector, remediation, logging, and incident-response responsibilities.
 
-The workload VPC endpoint layer pre-creates `guardduty-data` so Runtime Monitoring does not introduce unmanaged workload networking.
+The workload VPC endpoint layer pre-creates `guardduty-data`; runtime validation requires exactly one such endpoint and exact agreement between the live VPC Endpoint ID and Terraform output. Protected Fargate tasks also use Terraform-owned `ecr.api`, `ecr.dkr`, and S3 private paths.
 
 EC2 remains supported with fail-closed isolation authorization, first-boot package updating, scheduled SSM patching, controlled rollback, and Terraform lifecycle handling that does not silently undo active quarantine.
 
 Automatic EC2 isolation is intentionally narrower than the general Security Hub alert/enrichment path. EventBridge forwards only active, `NEW`, HIGH/CRITICAL GuardDuty findings for `AwsEc2Instance` resources to the isolation Lambda. The Lambda then independently revalidates GuardDuty product identity, workflow state, record state, and the configured `ec2_auto_isolation_severities` set, which defaults to `CRITICAL`, before evaluating the instance-level `IsolationAllowed` and quarantine gates.
 
----
-
+Automatic ECS/Fargate containment is not implemented in v1.10; Runtime Monitoring provides detection and coverage visibility while a separate fail-closed containment design remains future work.
 ## ECS/Fargate Runtime and Operations
 
-`v1.8.0 — Secure Container Workloads` established the generic ECS/Fargate runtime without replacing the existing EC2 path. `v1.9.0` extends that runtime with explicit runtime-operations ownership, target-tracking auto scaling, deployment-health configuration, and operational signals.
+`v1.8.0 — Secure Container Workloads` established the generic ECS/Fargate runtime. `v1.9.0` added explicit runtime-operations ownership, target-tracking auto scaling, deployment-health configuration, and operational alarms. `v1.10.0 — ECS Runtime Security` adds GuardDuty Fargate Runtime Monitoring and exact runtime-security validation without changing the canonical application-service model.
 
 The runtime remains composed from:
 
@@ -277,7 +299,7 @@ scaling = {
 
 For autoscaled services, the configured `desired_count` is bootstrap capacity only. Application Auto Scaling owns subsequent live desired count changes within the configured bounds, and Terraform intentionally does not reconcile legitimate autoscaler changes back to the bootstrap count.
 
-Supported v1.9 target-tracking metrics are:
+Supported target-tracking metrics are:
 
 - ECS average CPU utilization
 - ECS average memory utilization
@@ -287,7 +309,7 @@ Supported v1.9 target-tracking metrics are:
 
 ### Deployment health
 
-Each service also supports deployment-health configuration:
+Each service supports deployment-health configuration:
 
 ```hcl
 deployment = {
@@ -310,10 +332,24 @@ Both alarm classes notify the SecOps SNS topic on `ALARM` and `OK`.
 
 These alarms are separate from the CloudWatch alarms that AWS creates internally for target-tracking policies. AWS-managed target-tracking alarms remain AWS-managed.
 
-See [`docs/ecs-runtime-design.md`](docs/ecs-runtime-design.md) for the full runtime contract.
+### GuardDuty Fargate Runtime Monitoring
 
----
+The shared ECS cluster expresses profile-derived participation through the exact `GuardDutyManaged` tag:
 
+```text
+production/development -> true
+minimal                -> false
+```
+
+For protected profiles, each deployable service's task execution role receives only the additional ECR pull scope for the regional AWS-hosted `aws-guardduty-agent-fargate` repository. Application image permissions remain independently resource-scoped.
+
+Terraform's task definition remains application-only. GuardDuty injects and manages the runtime agent on protected tasks. Live ECS may report the agent as `aws-gd-agent` or an AWS-generated `aws-guardduty-agent-<suffix>` name.
+
+For protected running tasks, `validate-ecs-runtime.sh` requires exactly one running GuardDuty agent, a valid application container, and GuardDuty ECS coverage of `AUTO_MANAGED` / `HEALTHY` with no unresolved issues.
+
+Coverage-state changes are routed through the existing SecOps notification architecture. The default-bus rule matches both `GuardDuty Runtime Protection Unhealthy` and `GuardDuty Runtime Protection Healthy` for ECS resources and uses the shared EventBridge security-notification DLQ/retry policy.
+
+See [`docs/ecs-runtime-design.md`](docs/ecs-runtime-design.md) for the full runtime and runtime-security contract.
 ## CI/CD and Application Releases
 
 GitHub Actions uses OIDC to assume account-specific AWS roles without storing long-lived AWS access keys.
@@ -414,37 +450,40 @@ The repository uses four read-only validation layers:
 
 The workload baseline suite contains 16 validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
-ECS runtime operations remain inside the existing workload-baseline layer; v1.9 does not introduce a fifth validation/evidence layer.
+ECS Runtime Monitoring stays inside the existing workload-baseline layer; v1.10 does not introduce a fifth validation/evidence layer or a seventeenth workload validator.
 
-The ECS runtime validator now verifies:
+The v1.10 runtime-security evidence chain verifies:
 
-- exact fixed-count versus autoscaled service ownership;
-- live desired count equality for fixed services and configured bounds for autoscaled services;
-- exact Application Auto Scaling target inventory;
-- exact CPU, memory, and conditional ALB request-count target-tracking policy configuration;
-- deployment minimum/maximum percentages and health-check grace period;
-- task-deficit operational alarm configuration and current state;
-- ingress unhealthy-target alarm configuration and current state;
-- the existing cluster, task-definition, logging, networking, database, and ALB runtime contracts.
+- deployment-profile Runtime Monitoring intent;
+- exact Terraform/live `GuardDutyManaged` cluster tag;
+- one `RUNNING` GuardDuty agent on each protected running task;
+- the canonical Terraform task definition remaining application-only;
+- GuardDuty ECS coverage `AUTO_MANAGED` / `HEALTHY` with no unresolved issues for protected running workloads;
+- disabled-state coverage semantics for `minimal`;
+- exact GuardDuty-agent ECR pull scope and absence of broad/unexpected ECR authority;
+- exact Terraform-owned `guardduty-data` endpoint reuse;
+- exact healthy/unhealthy GuardDuty coverage EventBridge rule, SecOps SNS target, shared DLQ, retry policy, and input transformer; and
+- the existing scaling, deployment-health, logging, networking, ALB/database, and ECS operational-alarm contracts.
 
-AWS-managed target-tracking alarms are intentionally excluded from Terraform-owned operational alarm inventory.
+Security-operations validation separately proves the centralized organization policy and permits AWS-returned GuardDuty features outside Terraform management only when they remain disabled.
 
-When the GitHub Image Publisher role is enabled, workload bootstrap validation also verifies its exact branch-based OIDC trust and ECR publication/query authority. Strict release/client evidence can require the publisher role explicitly.
+`validate-backup.sh` now owns the exact profile-aware Backup contract: the encrypted vault is retained in enabled and disabled states; plan/selection resources and resource `Backup` tags follow `effective_backup_enabled`; schedule/retention are null when disabled.
 
-The v1.9.0 live qualification gate completed successfully on development infrastructure:
+The merged R6 live qualification against development infrastructure confirmed:
 
-- CPU target-tracking scale-out/in: PASS
-- Memory target tracking: PASS
-- ALB request-count target tracking: PASS
-- Fixed-count ownership: PASS
-- Autoscaled desired-count ownership: PASS
-- Digest release while scaled: PASS
-- Deployment-health configuration: PASS
-- Operational alarm configuration: PASS
-- `validate-ecs-runtime.sh`: PASS
-- Full workload baseline: `16/16` PASS
-- Strict workload bootstrap: `1/1` PASS
-- Final Terraform plan: no changes
+- centralized `ECS_FARGATE_AGENT_MANAGEMENT = ALL`;
+- live `GuardDutyManaged=true`;
+- injected GuardDuty agent `RUNNING`;
+- application steady state preserved;
+- GuardDuty ECS coverage `AUTO_MANAGED` and `HEALTHY`;
+- zero unresolved coverage issues;
+- Terraform-owned `guardduty-data` reuse;
+- exact agent ECR IAM scope;
+- corrected disabled-backup semantics;
+- `validate-ecs-runtime.sh` PASS; and
+- full workload baseline `16/16` PASS.
+
+The final workload evidence export completed with overall `PASS`.
 
 Generated evidence includes Markdown, JSON, and per-validator logs. These results provide point-in-time technical-control and audit-readiness evidence; they are not SOC 2 or ISO 27001 certification.
 
@@ -456,9 +495,6 @@ Detailed guidance:
 - [`docs/assurance/validation-report-template.md`](docs/assurance/validation-report-template.md)
 
 Live EC2 isolation/rollback, IP enrichment, IAM Identity Center end-user login, tamper simulation, break-glass assumption, and destroy-safety testing remain separately controlled activities.
-
----
-
 ## State Management
 
 Terraform state is separated by account and Terraform root.
@@ -486,7 +522,7 @@ See [`scripts/bootstrap/README.md`](scripts/bootstrap/README.md) for migration a
 
 ## Cost Considerations
 
-Major cost drivers can include AWS Network Firewall, NAT Gateways, Interface VPC Endpoints, CloudWatch, AWS Config, Inspector, Security Hub/GuardDuty features, Backup, ECS/Fargate workloads, and Application Load Balancers.
+Major cost drivers can include AWS Network Firewall, NAT Gateways, Interface VPC Endpoints, CloudWatch, AWS Config, Inspector, Security Hub/GuardDuty features, GuardDuty Runtime Monitoring monitored-vCPU/runtime-agent overhead, Backup storage/scheduling, ECS/Fargate workloads, and Application Load Balancers.
 
 Recommended defaults:
 
@@ -532,9 +568,26 @@ docs/            architecture, adoption, validation, assurance, and runtime desi
 
 ## Release Highlights
 
-### Current Release: `v1.9.0`
+### Current Release: `v1.10.0 — ECS Runtime Security`
 
-`v1.9.0` adds:
+`v1.10.0` adds:
+
+- Centralized `ECS_FARGATE_AGENT_MANAGEMENT = ALL` while preserving `EC2_AGENT_MANAGEMENT = ALL` and `EKS_ADDON_MANAGEMENT = NONE`
+- Secure-by-default Runtime Monitoring for `production` and `development`, with deliberate `minimal` exclusion
+- Exact `GuardDutyManaged=true|false` ECS cluster intent
+- Region-aware, least-privilege GuardDuty agent ECR image-pull scope
+- GuardDuty-managed live agent injection while Terraform task definitions remain application-only
+- Exact live validation of injected agent state and GuardDuty ECS coverage
+- `AUTO_MANAGED` / `HEALTHY` coverage requirements with zero unresolved issues for protected running workloads
+- Terraform-owned `guardduty-data` endpoint reuse and duplicate-endpoint rejection
+- Healthy/unhealthy GuardDuty Runtime coverage events routed to the existing SecOps SNS path with DLQ/retry protection
+- Security-operations validation aligned with AWS's full returned feature inventory while failing closed on unmanaged enabled features
+- Corrected profile-aware AWS Backup behavior: retained encrypted vault, conditional plan/selection, nullable schedule/retention, and exact EC2/RDS `Backup` tags
+- Live R6 development qualification with `validate-ecs-runtime.sh` PASS and the full workload baseline at `16/16` PASS
+
+### Previous Release: `v1.9.0`
+
+`v1.9.0` added:
 
 - Explicit fixed-count versus autoscaled ECS `desired_count` ownership
 - Application Auto Scaling targets for autoscaled services
@@ -548,9 +601,8 @@ docs/            architecture, adoption, validation, assurance, and runtime desi
 - GuardDuty-scoped EC2 isolation EventBridge filtering
 - Configurable `ec2_auto_isolation_severities`, defaulting to `CRITICAL`
 - Lambda-side fail-closed revalidation of GuardDuty product, severity, workflow status, and record state
-- Completed live O7 qualification with full workload and strict bootstrap validation plus a final no-change Terraform plan
 
-### Previous Release: `v1.8.0`
+### Earlier Release: `v1.8.0`
 
 `v1.8.0 — Secure Container Workloads` established:
 
@@ -565,20 +617,13 @@ docs/            architecture, adoption, validation, assurance, and runtime desi
 - Protected exact saved-plan Terraform Apply
 - 16-validator workload baseline coverage including ECR and ECS runtime validation
 
-### Earlier Release: `v1.7.0`
-
-`v1.7.0` introduced the dedicated `security-operations` administration layer and centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance.
-
 For complete release history, see [`CHANGELOG.md`](CHANGELOG.md).
-
----
-
 ## Future Roadmap
 
-After the v1.9.0 runtime-operations work, remaining candidates include:
+After v1.10.0, remaining candidates include:
 
-- GuardDuty Fargate managed-agent enablement
-- Fail-closed ECS task-level containment/remediation
+- Fail-closed ECS/Fargate task-level containment/remediation
+- Platform resilience improvements such as third-AZ and stronger RDS resilience/validation
 - ReconoSense reference deployment
 - Scheduled/run-to-completion ECS task abstractions
 - Audited ECS Exec
@@ -588,9 +633,6 @@ After the v1.9.0 runtime-operations work, remaining candidates include:
 - More sophisticated historical ECR retention
 
 Other potential improvements include expanded dashboarding and visual evidence, configurable VPC endpoint service lists, additional deployment-profile-controlled services, a deliberate Service Control Policy strategy, multi-region centralized security/evidence patterns, and additional synthetic workload examples.
-
----
-
 ## Intended Audience
 
 - Cloud security engineers
@@ -606,7 +648,7 @@ Other potential improvements include expanded dashboarding and visual evidence, 
 
 `tf-secure-baseline` is a deployable AWS security foundation and generic application-hosting baseline for sensitive workloads.
 
-It combines five-account isolation, Organizations and Identity Center governance, centralized security administration, private-first networking, configurable egress, Security Hub/GuardDuty governance, workload-local remediation, supported EC2 hosting, digest-pinned ECS/Fargate workloads, optional target-tracking auto scaling, explicit service-count ownership, ECS deployment-health controls, operational alarms, durable alerting, protected Terraform CI/CD, and layered validation evidence into a reusable Terraform platform.
+It combines five-account isolation, Organizations and Identity Center governance, centralized security administration, private-first networking, configurable egress, Security Hub/GuardDuty governance, profile-driven GuardDuty ECS/Fargate Runtime Monitoring, workload-local remediation, supported EC2 hosting, digest-pinned ECS/Fargate workloads, optional target-tracking auto scaling, explicit service-count ownership, ECS deployment-health controls, runtime coverage notification, durable alerting, protected Terraform CI/CD, profile-aware backup controls, and layered validation evidence into a reusable Terraform platform.
 
 The goal is to provide a secure-by-default foundation that can be adapted and extended without representing the infrastructure alone as a complete compliance program.
 
