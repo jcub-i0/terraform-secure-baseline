@@ -1,8 +1,108 @@
 # Changelog
 
+## v1.10.0 — ECS Runtime Security
+
+v1.10.0 extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, deployment-profile-driven cluster enrollment, least-privilege managed-agent prerequisites, runtime coverage-health notification, and exact live validation. The release also corrects the profile-aware AWS Backup contract discovered during live qualification.
+
+### Added
+
+- Enabled the centralized GuardDuty Fargate automated-agent organization contract:
+  - `RUNTIME_MONITORING = ALL`;
+  - `ECS_FARGATE_AGENT_MANAGEMENT = ALL`;
+  - `EC2_AGENT_MANAGEMENT = ALL`; and
+  - `EKS_ADDON_MANAGEMENT = NONE`.
+- Added deployment-profile-driven GuardDuty Fargate Runtime Monitoring intent:
+  - `production` -> enabled;
+  - `development` -> enabled; and
+  - `minimal` -> disabled.
+- Added the exact AWS-defined ECS cluster participation tag:
+  - enabled profiles -> `GuardDutyManaged=true`;
+  - minimal -> `GuardDutyManaged=false`.
+- Added resource-backed ECS cluster outputs for Runtime Monitoring expectation and live Terraform tag value.
+- Added a Region-aware GuardDuty Fargate agent ECR account mapping and exact repository ARN derivation for `repository/aws-guardduty-agent-fargate`.
+- Added profile-aware ECS task execution-role image-pull authority for the GuardDuty agent using only:
+  - `ecr:BatchCheckLayerAvailability`;
+  - `ecr:GetDownloadUrlForLayer`; and
+  - `ecr:BatchGetImage`.
+- Added a default-bus EventBridge rule for both:
+  - `GuardDuty Runtime Protection Unhealthy`; and
+  - `GuardDuty Runtime Protection Healthy`
+  ECS coverage-state events.
+- Added the GuardDuty coverage target to the existing SecOps SNS topic with:
+  - the shared security-notification EventBridge DLQ;
+  - three retry attempts;
+  - 3600-second maximum event age; and
+  - an input transformer preserving workload account, Region, ECS cluster, current/previous status, issue, GuardDuty update time, and event time.
+- Added the `guardduty_ecs_runtime_coverage_notification` workload output for exact validation.
+- Added `guardduty.sh` to the internal ECS runtime validator helpers while preserving `validate-ecs-runtime.sh` as the single workload-baseline ECS entry point.
+- Added live GuardDuty task-instrumentation validation that accepts either `aws-gd-agent` or AWS-generated `aws-guardduty-agent-<suffix>` names while requiring exactly one running agent.
+- Added GuardDuty ECS coverage validation for:
+  - expected detector/account/cluster identity;
+  - `ResourceDetails.ResourceType = ECS`;
+  - Fargate `ManagementType = AUTO_MANAGED`;
+  - `CoverageStatus = HEALTHY`; and
+  - no unresolved coverage issues.
+- Added disabled-state Runtime Monitoring validation for `minimal`, including `GuardDutyManaged=false`, no GuardDuty-agent ECR authority, and valid absent/`DISABLED` coverage semantics.
+
+### Changed
+
+- Kept GuardDuty organization Runtime Monitoring ownership in `security-operations`; workload Terraform now expresses ECS cluster participation and owns only workload-local IAM, networking, service configuration, and validation expectations.
+- Kept the canonical Terraform ECS task definition application-only. GuardDuty service-manages agent injection, upgrades, and runtime telemetry.
+- Reused the existing Terraform-owned `guardduty-data`, `ecr.api`, `ecr.dkr`, and S3 endpoint paths; v1.10 does not introduce a parallel GuardDuty-managed VPC endpoint/security-group model.
+- Extended `validate-vpc-endpoints.sh` to require the complete live Interface Endpoint ID map to match Terraform and to prove exactly one Terraform-owned `guardduty-data` endpoint exists.
+- Extended `validate-iam.sh` to compare the complete ECS execution-role ECR authority against exact application and GuardDuty repository requirements, rejecting broad or unexpected ECR grants.
+- Extended `validate-eventbridge.sh` to validate the exact GuardDuty Runtime coverage rule, SNS target, shared DLQ, retry policy, and evidence-preserving transformer.
+- Changed security-operations GuardDuty feature validation to compare the Terraform-managed feature subset exactly while allowing AWS-returned features outside Terraform management only when their feature and additional-configuration values remain `NONE`.
+- Corrected AWS Backup profile semantics:
+  - the KMS-encrypted backup vault is retained regardless of scheduled-backup enablement;
+  - the backup plan and selection exist only when backups are enabled;
+  - effective backup schedule/retention resolve to `null` when disabled;
+  - production defaults to daily scheduling with 30-day retention;
+  - explicitly enabled non-production backup defaults to 7-day retention unless overridden; and
+  - EC2/RDS `Backup` tags now exactly match effective backup enablement.
+- Updated workload-security validation to delegate detailed disabled-state Backup semantics to `validate-backup.sh` instead of reporting unqueried zero counts.
+
+### Fixed
+
+- Fixed live GuardDuty agent validation so AWS-generated `aws-guardduty-agent-<suffix>` container names are recognized instead of assuming only `aws-gd-agent`.
+- Fixed GuardDuty coverage parsing to read resource type from `.ResourceDetails.ResourceType`, matching the live AWS coverage response shape.
+- Fixed centralized GuardDuty organization validation that previously treated AWS-returned disabled, unmanaged feature inventory as drift.
+- Fixed the Backup module behavior that created a backup plan and selection even when `effective_backup_enabled=false`.
+- Added Terraform `moved` blocks so the conditional Backup plan/selection resources preserve state addresses when enabled.
+- Fixed workload EC2 and RDS Backup tagging so disabled profiles use `Backup=false`.
+- Fixed Backup validation for nullable root outputs by treating omitted null schedule/retention outputs from `terraform output -json` as `null`.
+- Fixed misleading disabled-backup summary reporting in `validate-security-workload.sh`.
+
+### Security
+
+- Makes GuardDuty Fargate Runtime Monitoring secure-by-default for `production` and `development` while preserving an explicit cost-minimized `minimal` exclusion.
+- Preserves least privilege by adding only the exact AWS-hosted GuardDuty agent repository pull scope required for protected services.
+- Preserves Terraform ownership of private Runtime Monitoring networking and rejects duplicate/unexpected `guardduty-data` endpoint state.
+- Adds operational visibility when GuardDuty ECS Runtime Monitoring coverage becomes unhealthy or recovers.
+- Keeps Runtime Monitoring separate from automatic Fargate containment. v1.10 does not attempt to modify AWS-managed task ENIs or copy the EC2 quarantine model to ECS.
+
+### Validation
+
+- Live development qualification confirmed centralized `ECS_FARGATE_AGENT_MANAGEMENT = ALL`.
+- Live development qualification confirmed `GuardDutyManaged=true` on the Terraform-managed ECS cluster.
+- A real Fargate service received one GuardDuty agent that reached `RUNNING` while the application remained healthy.
+- GuardDuty ECS coverage reported `AUTO_MANAGED`, `HEALTHY`, and zero unresolved coverage issues.
+- Validation confirmed reuse of the unique Terraform-owned `guardduty-data` endpoint and exact GuardDuty-agent ECR IAM scope.
+- `validate-ecs-runtime.sh` passed against the qualified development runtime.
+- The full workload baseline completed with `16/16` validators passing.
+- Security-operations validation passed the centralized GuardDuty organization contract after aligning validation with AWS's returned feature inventory.
+- The corrected disabled-backup contract was applied and validated in development: retained encrypted vault, absent plan/selection, and `Backup=false` workload tags.
+- `export-baseline.sh` produced an overall `PASS` workload evidence package after the final R6 corrections.
+
+### Deferred / Future
+
+- Automatic ECS/Fargate task containment or remediation remains deferred pending a separate fail-closed design.
+- The ReconoSense reference deployment remains future work.
+- Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, more sophisticated historical ECR retention, and broader platform-resilience work remain future design areas.
+
 ## v1.9.0
 
-v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. The implementation has completed live qualification and release documentation.
+v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. The implementation completed live qualification and release documentation.
 
 ### Added
 

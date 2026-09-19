@@ -30,6 +30,8 @@ This checklist validates:
 - SNS, SQS, EventBridge, and DLQ-based alert delivery paths
 - Alerting
 - ECS scaling ownership, deployment health, and operational alarms
+- GuardDuty ECS/Fargate Runtime Monitoring enrollment, injected-agent state, coverage health, and SecOps coverage notifications
+- Profile-aware AWS Backup enabled/disabled state
 - Destroy/cleanup readiness
 
 ---
@@ -509,20 +511,20 @@ These scripts validate:
 - AWS account identity and expected account ID
 - Terraform outputs and effective environment settings
 - VPC, subnets, route tables, NAT Gateway, and Network Firewall expectations, including an exact order-independent comparison of the live stateful domain rule-group targets with Terraform output `effective_allowed_egress_domains`. Terraform owns allowlist composition; `validate-networking.sh` does not reconstruct it. The effective set must be empty when Network Firewall is not instantiated.
-- canonical VPC endpoint inventory, state, VPC, private DNS, exact endpoint-private subnet and Interface Endpoint SG placement, and exact S3 Gateway Endpoint coverage of endpoint, compute, and serverless private route tables
+- canonical VPC endpoint inventory, state, VPC, private DNS, exact endpoint-private subnet and Interface Endpoint SG placement, exact live-vs-Terraform endpoint IDs, unique Terraform-owned `guardduty-data` reuse, and exact S3 Gateway Endpoint coverage of endpoint, compute, and serverless private route tables
 - ECR repository identity, immutable tags, exact `ecr_cmk_arn` encryption, and exact 30-day untagged-only lifecycle cleanup, using `ecr_repositories` as the inventory
 - CloudTrail, VPC Flow Logs, CloudWatch log groups, metric filters, and alarms
-- workload-local AWS Config, Inspector, and AWS Backup state plus GuardDuty, Security Hub CSPM, and Security Hub V2 ownership/administrator relationships based on effective Terraform outputs
-- KMS aliases, CMKs, key state, key manager, and rotation status
-- Backup vaults, plans, selections, schedules, retention, tagged resources, recent jobs, and recovery point reporting
+- workload-local AWS Config and Inspector state plus GuardDuty, Security Hub CSPM, and Security Hub V2 ownership/administrator relationships based on effective Terraform outputs
+- KMS aliases, CMKs, key state, key manager, and rotation status, including the retained Backup CMK
+- the exact AWS Backup contract: encrypted vault retained in both enabled and disabled states; plan/selection, effective schedule/retention, and EC2/RDS `Backup` tags matching `effective_backup_enabled`; plus recent jobs and recovery points when enabled
 - SNS topics, subscriptions, pending confirmations, and encryption mode
 - SQS queues, SNS-to-SQS delivery paths, queue policies, encryption mode, redrive policies, DLQ status, visible messages, and not-visible messages
-- EventBridge default-bus and SecOps-bus rules, state, targets, target DLQs, retry policies, and rollback rule coverage
+- EventBridge default-bus and SecOps-bus rules, state, targets, target DLQs, retry policies, rollback rule coverage, and exact GuardDuty ECS Runtime coverage-state notification configuration
 - Lambda functions, runtime, state, execution role, timeout, memory, KMS config, VPC config, environment variables, resource policies, and EventBridge permissions
 - SSM managed instance registration, online status, associations, maintenance windows, and patch baseline visibility
 - EC2 compute instances, private placement, public IP absence, IMDSv2, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption
-- ECS cluster identity and state; fixed-versus-autoscaled desired-count ownership; exact Application Auto Scaling targets and CPU/memory/conditional ALB target-tracking policies; deployment-health settings; Fargate service placement and deployment safeguards; task-definition platform, separate role, digest-pinned ECR image, port, and `awslogs` contracts; Terraform-owned application log groups; runtime task-SG relationships; conditional shared-ALB state; and Terraform-owned task-deficit / ingress unhealthy-target operational alarms
-- IAM roles, service trust policies, key service roles, GitHub OIDC roles where present, break-glass MFA conditions, shared log access policies, and per-service ECS task/execution role separation and least-privilege execution-policy scope
+- ECS cluster identity and state; deployment-profile Runtime Monitoring intent and exact `GuardDutyManaged` tag; injected GuardDuty agent state; GuardDuty ECS coverage management/status/issues; fixed-versus-autoscaled desired-count ownership; exact Application Auto Scaling targets and CPU/memory/conditional ALB target-tracking policies; deployment-health settings; Fargate service placement and deployment safeguards; application-only task-definition contract, digest-pinned ECR image, port, and `awslogs` contracts; Terraform-owned application log groups; runtime task-SG relationships; conditional shared-ALB state; and Terraform-owned task-deficit / ingress unhealthy-target operational alarms
+- IAM roles, service trust policies, key service roles, GitHub OIDC roles where present, break-glass MFA conditions, shared log access policies, and per-service ECS task/execution role separation with exact application and GuardDuty-agent ECR authority
 
 A successful run should end with:
 
@@ -1091,18 +1093,22 @@ effective_cloudwatch_retention_days
 effective_enable_config
 effective_enable_rules
 effective_backup_enabled
+effective_backup_schedule
+effective_delete_backups_after_days
 effective_inspector_enabled
+ecs_cluster
+guardduty_ecs_runtime_coverage_notification
 ```
 
 Expected profile behavior:
 
-| `deployment_profile` | Default `effective_egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention |
-|---|---|---:|---:|---:|---:|
-| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days |
-| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days |
-| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days |
+| `deployment_profile` | Default `effective_egress_mode` | AWS Config | Backup scheduling | Inspector | GuardDuty Fargate Runtime Monitoring | CloudWatch retention |
+|---|---|---:|---:|---:|---:|---:|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | Enabled | 90 days |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days |
 
-If `egress_mode`, `enable_config`, `backup_enabled`, `cloudwatch_retention_days`, or related overrides are explicitly set, the effective outputs should reflect those overrides.
+If `egress_mode`, `enable_config`, `backup_enabled`, `backup_schedule`, `delete_backups_after_days`, `cloudwatch_retention_days`, or related overrides are explicitly set, the effective outputs should reflect those overrides. Runtime Monitoring is not independently overridden in v1.10; it follows `deployment_profile`. When backups are disabled, `effective_backup_schedule` and `effective_delete_backups_after_days` resolve to `null` and may be omitted from `terraform output -json` because Terraform omits root outputs whose evaluated value is null.
 
 ---
 
@@ -1290,7 +1296,7 @@ guardduty-data
 s3
 ```
 
-For the implemented Fargate runtime, private ECR pulls use the `ecr.api` and `ecr.dkr` Interface Endpoints, while image layers use the existing S3 Gateway Endpoint.
+For the implemented Fargate runtime, private ECR pulls use the `ecr.api` and `ecr.dkr` Interface Endpoints, image layers use the existing S3 Gateway Endpoint, and GuardDuty Runtime Monitoring telemetry uses the Terraform-owned `guardduty-data` Interface Endpoint. `validate-vpc-endpoints.sh` requires the live Interface Endpoint ID map to exactly match Terraform and requires exactly one `guardduty-data` endpoint.
 
 The automated validator treats the Interface Endpoint inventory as platform-owned and non-overridable. It requires exact endpoint-private subnet and shared Interface Endpoint SG placement for every Interface Endpoint, requires private DNS, and requires the S3 Gateway Endpoint route-table set to equal the union of endpoint-private, compute-private, and serverless-private route tables.
 
@@ -1323,6 +1329,14 @@ Per-service application log groups must match the Terraform output, use `/aws/ec
 Cluster validation also checks the exact Container Insights setting and, when enabled, the Terraform-owned performance log group `/aws/ecs/containerinsights/<cluster-name>/performance`, including exact resource identity, retention, and KMS encryption.
 
 The same validator checks task-SG relationships to Interface Endpoints and the S3 prefix list, effective-mode HTTPS egress, database SG presence/absence, and conditional shared-ALB relationships. It validates Terraform-owned task-deficit alarms for deployable services when Container Insights is enabled and ingress unhealthy-target alarms for deployable ingress services. AWS-managed target-tracking alarms are not treated as Terraform operational alarms. Operational alarm state is interpreted as `OK` = pass, `INSUFFICIENT_DATA` = warning, and `ALARM` = failure.
+
+v1.10 Runtime Monitoring validation derives the expected state directly from `deployment_profile`. `production` and `development` require `GuardDutyManaged=true`; `minimal` requires `GuardDutyManaged=false`. The Terraform task definition must remain application-only even when GuardDuty injects a live agent.
+
+For protected running tasks, live ECS must contain exactly one GuardDuty agent container and that agent must be `RUNNING`. AWS may report the agent as the exact name `aws-gd-agent` or as an AWS-generated name beginning `aws-guardduty-agent-`; both are valid. The canonical application container must remain valid and unexpected extra containers fail validation.
+
+For an enabled protected cluster with running tasks, the GuardDuty coverage record must identify the expected ECS cluster, report Fargate `ManagementType = AUTO_MANAGED`, `CoverageStatus = HEALTHY`, and contain no unresolved Fargate or top-level issues. For `minimal`, a missing coverage record is valid; if one exists it must report Fargate `ManagementType = DISABLED`.
+
+`validate-iam.sh` separately requires the exact regional `aws-guardduty-agent-fargate` repository pull scope for each protected service and rejects that scope for `minimal` or any broad/unexpected ECR authority. `validate-eventbridge.sh` verifies the GuardDuty Runtime coverage rule, its single SecOps SNS target, shared EventBridge DLQ, three retry attempts, 3600-second maximum age, and required coverage-status evidence fields.
 
 ECS IAM assertions remain in `validate-iam.sh`. It verifies restricted task/execution trust, scoped execution-policy ECR/log/secret/parameter permissions, absence of `iam:PassRole`, initially empty application task-role authority, and exact `task_execution_kms_key_arns` behavior. If the configured KMS-key set is empty, the execution policy must not grant `kms:Decrypt`; if populated, live policy resources must match the configured set exactly.
 
@@ -1706,7 +1720,18 @@ For the centrally governed workload environments, those values are expected to b
 
 When GuardDuty is centrally governed, the workload account should have an enabled detector/member state associated with the `security-operations` delegated administrator; organization feature policy is validated from the security-operations account rather than recreated locally.
 
-Use `validate-security-operations.sh` to prove organization enrollment, protection plans, and Runtime Monitoring configuration.
+The expected v1.10 centralized Runtime Monitoring contract is:
+
+```text
+RUNTIME_MONITORING           = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT         = ALL
+EKS_ADDON_MANAGEMENT         = NONE
+```
+
+`validate-security-operations.sh` compares the Terraform-managed organization feature subset exactly with live AWS. AWS may return other supported organization features that Terraform does not manage; those are allowed only when the feature and every additional configuration are disabled with `NONE`. Any unmanaged enabled feature fails validation.
+
+Workload-level ECS enrollment, agent IAM/networking, injected-agent state, and coverage health remain workload validation responsibilities.
 
 ## 10.2 Security Hub CSPM and Security Hub V2
 
@@ -1782,7 +1807,7 @@ ecr
 
 Note:
 
-Backup-related KMS aliases may only exist when backup resources are enabled.
+The Backup CMK and `backup-cmk` alias are retained regardless of `effective_backup_enabled` because the environment backup vault is also retained when scheduled backups are disabled.
 
 ---
 
@@ -2053,6 +2078,7 @@ Expected rules may include:
 - Tamper detection
 - Break-glass detection (`break-glass-admin-assumed`)
 - EC2 isolation trigger (`${NAME_PREFIX}-securityhub-ec2-high-critical`), which receives only `HIGH`/`CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings for `AwsEc2Instance`; the Lambda independently revalidates GuardDuty product and applies the configured `ec2_auto_isolation_severities` set (default `CRITICAL`)
+- GuardDuty ECS Runtime coverage status (`${NAME_PREFIX}-guardduty-ecs-runtime-coverage`), matching both `GuardDuty Runtime Protection Unhealthy` and `GuardDuty Runtime Protection Healthy` for ECS resources in the workload account
 
 Validate `secops` custom event bus:
 
@@ -2109,6 +2135,8 @@ Expected:
 - Automation Lambda targets use workflow-specific DLQs.
 - Protected EventBridge targets use retry attempts of `3`.
 - Protected EventBridge targets use max event age of `3600` seconds.
+- The GuardDuty ECS Runtime coverage rule has exactly one target with ID `guardduty-ecs-runtime-coverage-to-secops-sns`.
+- That target points to the Terraform SecOps SNS topic, uses the shared EventBridge DLQ, and preserves account, Region, cluster, current/previous status, issue, GuardDuty update time, and event time through the input transformer.
 
 The EC2 isolation and IP-enrichment rules are intentionally different. `${NAME_PREFIX}-securityhub-ec2-high-critical` is GuardDuty- and EC2-scoped for automatic isolation. `${NAME_PREFIX}-securityhub-high-critical` remains the broader HIGH/CRITICAL Security Hub rule used by IP enrichment and the SecOps SNS notification target.
 
@@ -2367,53 +2395,62 @@ If testing role assumption is not appropriate, validate that:
 
 ## Purpose
 
-Confirm backup and patch management resources exist if enabled.
+Confirm the profile-aware AWS Backup contract and patch-management resources.
 
 ## AWS Backup
 
-Confirm the effective backup setting first:
+Use the dedicated validator as the authoritative automated check:
+
+```bash
+./scripts/validation/validate-backup.sh "${ENVIRONMENT}"
+```
+
+Review the effective Terraform state first:
 
 ```bash
 terraform output effective_backup_enabled
+terraform output -json | jq '{
+  effective_backup_enabled: .effective_backup_enabled.value,
+  effective_backup_schedule: (.effective_backup_schedule.value // null),
+  effective_delete_backups_after_days: (.effective_delete_backups_after_days.value // null)
+}'
 ```
 
-If backup is enabled, confirm the backup vault exists:
+Terraform may omit a root output from `terraform output -json` when its evaluated value is `null`. `validate-backup.sh` accounts for that behavior for the disabled schedule and retention outputs.
 
-```bash
-aws backup list-backup-vaults \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'BackupVaultList[].[BackupVaultName,BackupVaultArn]' \
-  --output table
+The environment backup vault is retained regardless of scheduled-backup enablement and must remain encrypted with the workload Backup CMK.
+
+### Expected when backups are enabled
+
+- `effective_backup_enabled = true`.
+- `effective_backup_schedule` is a non-empty AWS Backup schedule expression.
+- `effective_delete_backups_after_days` is a positive integer.
+- The environment backup vault exists and is KMS-encrypted.
+- Exactly one environment backup plan exists.
+- The plan contains the `daily-backups` rule.
+- Rule schedule and retention exactly match the effective Terraform outputs.
+- Exactly one backup selection exists and selects `<backup_tag_key> = "true"`.
+- Environment EC2 and RDS resources use `Backup=true`.
+- Recovery points and recent backup-job health are reported by the validator.
+
+Profile defaults are:
+
+```text
+production -> enabled, cron(0 5 * * ? *), 30 days
 ```
 
-Confirm vault encryption is configured:
+If backup is explicitly enabled for `development` or `minimal`, the default schedule remains `cron(0 5 * * ? *)` and retention defaults to 7 days unless overridden.
 
-```bash
-export BACKUP_VAULT_NAME="$(aws backup list-backup-vaults \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query 'BackupVaultList[0].BackupVaultName' \
-  --output text)"
+### Expected when backups are disabled
 
-aws backup describe-backup-vault \
-  --backup-vault-name "${BACKUP_VAULT_NAME}" \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --query '{Name:BackupVaultName,Arn:BackupVaultArn,EncryptionKeyArn:EncryptionKeyArn,RecoveryPoints:NumberOfRecoveryPoints}' \
-  --output table
-```
+- `effective_backup_enabled = false`.
+- Effective backup schedule and retention resolve to `null`.
+- The encrypted environment backup vault remains present.
+- No environment backup plan exists.
+- No backup selection exists.
+- Environment EC2 and RDS resources use `Backup=false`.
 
-Expected when backup is enabled:
-
-- Backup vault exists.
-- `EncryptionKeyArn` is populated.
-- `EncryptionKeyArn` points to the expected backup vault KMS CMK.
-
-Expected when backup is disabled:
-
-- Project-specific backup vaults and plans may be absent.
-- This is expected for lower-cost profiles such as `development` and `minimal` unless backup is explicitly enabled.
+`development` and `minimal` disable scheduled backups by default. Disabled scheduling does **not** mean the backup vault or Backup CMK should be absent.
 
 ## SSM Patch Manager
 
@@ -2435,9 +2472,6 @@ Expected:
 - If custom patch baselines are enabled, project-specific baselines appear.
 - If no custom patch baselines are configured, seeing only `AWS-*DefaultPatchBaseline` entries is acceptable.
 - Maintenance window exists if enabled.
-
----
-
 # 20. Validate GitHub Actions Workflows
 
 ## Purpose
@@ -2651,6 +2685,27 @@ If an ownership value is `true`, troubleshoot the corresponding workload-local T
 
 ---
 
+## GuardDuty ECS Runtime Monitoring Is Unhealthy or Agent Is Missing
+
+Check:
+
+- `deployment_profile` and the workload `ecs_cluster` Terraform output.
+- The live ECS cluster has exactly one `GuardDutyManaged` tag matching Terraform.
+- `production` / `development` resolve to `GuardDutyManaged=true`; `minimal` resolves to `false`.
+- Central security-operations validation passes the exact Runtime Monitoring organization contract.
+- Each protected service execution role has the exact regional GuardDuty agent ECR repository scope and no broad ECR authority.
+- `ecr.api`, `ecr.dkr`, and `guardduty-data` Interface Endpoints plus the S3 Gateway Endpoint are present.
+- `validate-vpc-endpoints.sh` confirms exactly one Terraform-owned `guardduty-data` endpoint.
+- The task security group has HTTPS access to the Interface Endpoint security group and S3 prefix-list path.
+- A protected service was deployed after the Runtime Monitoring prerequisites and cluster intent converged.
+- `validate-ecs-runtime.sh` reports one running GuardDuty agent per protected running task.
+- GuardDuty coverage reports the expected cluster as `AUTO_MANAGED` and `HEALTHY` with no unresolved issues.
+- `validate-eventbridge.sh` passes the GuardDuty coverage-state notification contract.
+
+Do not add the GuardDuty agent to the Terraform task definition manually. GuardDuty owns the live injected agent lifecycle.
+
+---
+
 ## AWS Config Is Missing
 
 Check:
@@ -2666,18 +2721,24 @@ Expected:
 
 ---
 
-## Backup Resources Are Missing
+## Backup State Looks Wrong
 
 Check:
 
-- `effective_backup_enabled` output.
-- `backup_enabled` override value.
+- `effective_backup_enabled`.
+- `effective_backup_schedule`.
+- `effective_delete_backups_after_days`.
+- `backup_enabled`, `backup_schedule`, and `delete_backups_after_days` overrides.
 - `deployment_profile`.
+- `validate-backup.sh <env>` output.
 
 Expected:
 
-- `production` enables backup by default.
-- `development` and `minimal` disable backup by default unless explicitly overridden.
+- The encrypted environment backup vault exists regardless of scheduled-backup enablement.
+- `production` enables scheduled backup by default.
+- `development` and `minimal` disable scheduled backup by default unless explicitly overridden.
+- When disabled, effective schedule/retention are null, no backup plan/selection exists, and workload EC2/RDS resources use `Backup=false`.
+- When enabled, the plan/selection exist and workload EC2/RDS resources use `Backup=true`.
 
 ---
 
@@ -2893,7 +2954,7 @@ A complete validation pass means the applicable evidence layers agree with one a
 - control-plane validation confirms state/OIDC foundations, AWS Organizations topology, centralized-security prerequisites, and IAM Identity Center
 - security-operations validation confirms centralized Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 governance
 - workload bootstrap validation confirms workload state/OIDC foundations
-- workload baseline validation confirms networking, VPC endpoints, workload-security realization, KMS, Backup, messaging, automation, SSM, compute, ECS fixed/autoscaled runtime ownership and operational alarms, and IAM controls
+- workload baseline validation confirms networking, exact Terraform-owned VPC endpoint reuse, workload-security realization, KMS, the enabled/disabled Backup contract, messaging, automation, SSM, compute, ECS fixed/autoscaled runtime ownership, GuardDuty Fargate Runtime Monitoring enrollment/agent/coverage state, operational alarms, and IAM controls
 - generated evidence packages use the expected GitHub OIDC credential source and contain the supporting logs
 - live isolation, rollback, enrichment, tamper, break-glass, end-user SSO, and destroy-safety tests are completed where appropriate
 

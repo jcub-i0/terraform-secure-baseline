@@ -205,7 +205,7 @@ fi
 
 MATCHING_SSM_JSON="$(
   echo "$SSM_INSTANCE_INFO_JSON" |
-    jq --argjson instance_ids "$(printf '%s\n' $ENV_INSTANCE_IDS | jq -R . | jq -s .)" '
+    jq --argjson instance_ids "$(printf '%s\n' "$ENV_INSTANCE_IDS" | jq -R . | jq -s .)" '
       [
         .InstanceInformationList[]
         | select(.InstanceId as $id | $instance_ids | index($id))

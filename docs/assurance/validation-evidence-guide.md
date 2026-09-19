@@ -283,24 +283,51 @@ Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/
 
 ## What Automated Workload Baseline Validation Covers
 
-The automated workload baseline suite currently runs 16 read-only validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
+The automated workload baseline suite runs 16 read-only validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
-For the current v1.9.0 ECS/Fargate implementation, the evidence set includes exact ECR repository/KMS/lifecycle checks; ECS cluster and deployable-service inventory; service steady state; digest-pinned task definitions; Terraform-owned service log groups; exact Container Insights setting and performance-log identity/retention/KMS encryption; runtime task-security-policy relationships; conditional ALB/database relationships; and per-service IAM task/execution separation including exact `task_execution_kms_key_arns` behavior.
+The v1.10 ECS/Fargate evidence set preserves the v1.9 operational contract and adds exact GuardDuty Runtime Monitoring evidence.
 
-`validate-ecs-runtime.sh` also validates the v1.9.0 runtime operations contract:
+`validate-ecs-runtime.sh` verifies:
 
-- fixed-count services keep Terraform ownership of exact `desiredCount`;
-- autoscaled services allow Application Auto Scaling to own live `desiredCount` within the configured `min_capacity` / `max_capacity` bounds;
-- Application Auto Scaling target inventory exactly matches Terraform;
-- CPU, memory, and conditional ALB request-count policies are target-tracking policies whose target values, cooldowns, metric types, and ALB resource labels exactly match Terraform outputs;
-- service deployment minimum healthy percentage, maximum percentage, and health-check grace period exactly match Terraform;
-- Terraform-owned ECS task-deficit alarms and ingress unhealthy-target alarms exactly match the expected configuration and SecOps notification actions;
-- AWS-managed target-tracking CloudWatch alarms remain outside the Terraform-owned operational-alarm inventory.
+- deployment-profile Runtime Monitoring intent (`production`/`development` enabled; `minimal` disabled);
+- exact Terraform and live `GuardDutyManaged=true|false` cluster intent;
+- exact Container Insights setting and performance-log identity/retention/KMS encryption;
+- exact live service inventory and service steady state;
+- application-only Terraform task definitions;
+- Fargate platform compatibility;
+- digest-pinned application images and exact logging/network relationships;
+- one running GuardDuty agent per protected running task while the application container remains valid;
+- GuardDuty ECS coverage management type, health, and issues;
+- fixed-versus-autoscaled desired-count ownership;
+- exact Application Auto Scaling targets and target-tracking policies;
+- deployment-health configuration; and
+- Terraform-owned task-deficit and ingress unhealthy-target alarms.
 
-Operational alarm state is interpreted deliberately: `OK` passes, `INSUFFICIENT_DATA` is a warning that metric evaluation is not yet complete, and `ALARM` fails runtime validation.
+Live GuardDuty agent names are not assumed to be a single literal value. The validator accepts `aws-gd-agent` or an AWS-generated name beginning `aws-guardduty-agent-`, while still requiring exactly one injected agent and `lastStatus = RUNNING`.
 
-The O7 development qualification recorded CPU and memory scale-out/in, conditional ALB request scaling, fixed-count behavior, autoscaled desired-count ownership, a digest release while scaled, deployment-health settings, operational alarm configuration, `validate-ecs-runtime.sh`, the full 16/16 workload suite, strict 1/1 workload bootstrap validation, and a final no-change Terraform plan as passing. Generated `summary.md`, `summary.json`, and per-script logs remain the authoritative record for each individual evidence run.
+For protected `production` and `development` clusters with running tasks, GuardDuty coverage must identify the expected ECS cluster and report:
 
+```text
+Fargate ManagementType = AUTO_MANAGED
+CoverageStatus          = HEALTHY
+Fargate Issues          = []
+top-level Issue          = empty
+```
+
+For `minimal`, healthy coverage is not required. A missing coverage record is valid; if a matching record exists, Fargate `ManagementType` must be `DISABLED`.
+
+Supporting workload validators provide the rest of the Runtime Monitoring evidence chain:
+
+- `validate-vpc-endpoints.sh` requires the full live Interface Endpoint map to exactly match Terraform and requires exactly one Terraform-owned `guardduty-data` endpoint;
+- `validate-iam.sh` requires the exact regional GuardDuty-agent ECR image-pull scope when protected, no GuardDuty-agent scope for `minimal`, and no broad/unexpected ECR authority;
+- `validate-eventbridge.sh` requires the exact healthy/unhealthy GuardDuty ECS coverage rule, the existing SecOps SNS target, shared EventBridge DLQ, three retries, 3600-second maximum event age, and required input-transformer fields; and
+- `validate-security-workload.sh` verifies workload GuardDuty detector health and the centralized administrator relationship.
+
+AWS Backup evidence is also profile-aware. `validate-backup.sh` treats the encrypted environment backup vault as retained in both enabled and disabled states. When scheduled backup is disabled, effective schedule/retention resolve to null, the plan/selection must be absent, and workload EC2/RDS resources must use `Backup=false`. When enabled, schedule, retention, plan, selection, and `Backup=true` resource tags must match Terraform exactly.
+
+Operational alarm state remains deliberate: `OK` passes, `INSUFFICIENT_DATA` is a warning that metric evaluation is not yet complete, and `ALARM` fails runtime validation.
+
+The v1.10 R6 development qualification exercised the protected Runtime Monitoring path and the full workload evidence suite. Generated `summary.md`, `summary.json`, and per-script logs remain the authoritative record for each individual evidence run.
 ## What Automated Control-Plane Validation Covers
 
 Control-plane validation establishes the organization and access foundation that centralized security depends on.
@@ -329,31 +356,40 @@ Security-operations validation confirms centralized security governance from the
 
 Coverage includes:
 
-- security-operations AWS caller identity
-- `bootstrap/security_operations/security_services` Terraform outputs and applied state
-- Security Hub and GuardDuty trusted-access / delegated-administrator dependencies
-- GuardDuty malware-protection trusted access where required
-- Security Hub V2 `SECURITYHUB_POLICY` enablement prerequisite
-- Security Hub CSPM administrator state and finding aggregation
-- Security Hub CSPM `CENTRAL` organization configuration
-- CSPM configuration policies and workload account associations
-- GuardDuty administrator detector and organization member enrollment
-- GuardDuty organization protection plans and Runtime Monitoring configuration
-- Security Hub V2 administrator state
-- Security Hub V2 organization policy attachment to `Workloads`
-- effective Security Hub V2 policy for configured workload accounts
+- security-operations AWS caller identity;
+- `bootstrap/security_operations/security_services` Terraform outputs and applied state;
+- Security Hub and GuardDuty trusted-access / delegated-administrator dependencies;
+- GuardDuty malware-protection trusted access where required;
+- Security Hub V2 `SECURITYHUB_POLICY` enablement prerequisite;
+- Security Hub CSPM administrator state and finding aggregation;
+- Security Hub CSPM `CENTRAL` organization configuration;
+- CSPM configuration policies and workload account associations;
+- GuardDuty administrator detector and organization member enrollment;
+- the exact Terraform-managed GuardDuty organization feature subset;
+- verification that AWS-returned organization features outside Terraform management remain disabled;
+- Security Hub V2 administrator state;
+- Security Hub V2 organization policy attachment to `Workloads`; and
+- effective Security Hub V2 policy for configured workload accounts.
 
-This layer intentionally does not prove the complete AWS Organizations topology; that belongs to control-plane validation. It also does not prove workload-local Config, Inspector, Backup, networking, compute, or remediation state; those belong to workload validation.
+The expected v1.10 GuardDuty Runtime Monitoring organization contract is:
 
----
+```text
+RUNTIME_MONITORING           = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT         = ALL
+EKS_ADDON_MANAGEMENT         = NONE
+```
 
+AWS can return supported GuardDuty organization features that are not present in Terraform's managed feature map. That is not itself drift. The validator requires the Terraform-managed subset to match exactly and separately requires every unmanaged returned feature and its additional configurations to remain `NONE`.
+
+This layer intentionally does not prove the complete AWS Organizations topology; that belongs to control-plane validation. It also does not prove workload-local Runtime Monitoring realization, Config, Inspector, Backup, networking, compute, or remediation state; those belong to workload validation.
 ## Application Release Evidence
 
-`Deploy Application` produces a technical chain that can supplement workload infrastructure evidence. Useful artifacts include publication metadata, the authoritative ECR digest re-check, workflow run identity, the generated release branch/PR, and the one-field `image_digest` change. The workflow does not manage `scaling` or `deployment` configuration.
+`Deploy Application` produces a technical chain that can supplement workload infrastructure evidence. Useful artifacts include publication metadata, the authoritative ECR digest re-check, workflow run identity, the generated release branch/PR, and the one-field `image_digest` change. The workflow does not manage `scaling`, `deployment`, GuardDuty organization policy, or the GuardDuty runtime agent.
 
 For publisher-enabled workloads, strict bootstrap evidence can separately prove the Image Publisher role's exact branch trust, ECR action set, repository scope, and authority boundary.
 
-After the release PR is merged, collect the separate `Terraform Apply` run showing the internal saved plan, checksum/metadata verification, protected approval, and exact-plan apply. Follow that with ECS convergence and the workload baseline evidence package. For autoscaled services, runtime validation evaluates the live desired count against the Terraform min/max scaling bounds rather than requiring Terraform's bootstrap count to be reasserted. Do not treat successful image publication by itself as proof that the application was deployed.
+After the release PR is merged, collect the separate `Terraform Apply` run showing the internal saved plan, checksum/metadata verification, protected approval, and exact-plan apply. Follow that with ECS convergence and the workload baseline evidence package. For autoscaled services, runtime validation evaluates the live desired count against the Terraform min/max scaling bounds rather than requiring Terraform's bootstrap count to be reasserted. Do not treat successful image publication by itself as proof that the application was deployed. For a protected `production` or `development` cluster, the post-apply workload evidence should also prove the injected GuardDuty agent and healthy `AUTO_MANAGED` ECS coverage. Terraform's canonical task definition remains application-only; GuardDuty service-manages the live agent.
 
 The publisher job and release/PR job intentionally hold different authorities: AWS OIDC/ECR publication versus GitHub repository mutation. Preserving that evidence helps demonstrate the intended separation of duties.
 
@@ -404,7 +440,7 @@ A `PASS` result means the validation script completed successfully and confirmed
 
 A passing result should be interpreted in the context of the selected deployment profile, effective Terraform outputs, and whether the check applies to workload infrastructure or control-plane governance resources.
 
-For example, a development environment may pass even if AWS Backup is disabled, as long as the effective profile settings indicate that backups are not required for that environment.
+For example, a development environment may pass with scheduled AWS Backup disabled when `effective_backup_enabled=false`, provided the encrypted backup vault remains present, effective schedule/retention are null, the plan/selection are absent, and workload EC2/RDS resources use `Backup=false` as required by `validate-backup.sh`.
 
 A control-plane validation run may still contain non-blocking warnings for optional checks. Required account OU placement is strict by default; it becomes advisory only if `STRICT_ACCOUNT_OU_CHECKS=false` is deliberately used for a transitional run.
 
@@ -419,7 +455,7 @@ Examples include:
 - Optional resources not present
 - Pending SNS email confirmation
 - No custom patch baseline configured
-- Backup resources skipped because backups are disabled
+- Detailed Backup checks delegated from `validate-security-workload.sh` to `validate-backup.sh` when scheduled backup is disabled
 - Network Firewall absent because the environment uses `nat_only`
 - NAT Gateway absent because the environment uses `vpc_endpoints_only`
 - An ECS operational alarm in `INSUFFICIENT_DATA` while the metric has not yet accumulated enough datapoints
@@ -449,6 +485,13 @@ A failed validation script may indicate:
 - Image Publisher trust or ECR publication policy differing from the Terraform-defined contract when the role is enabled or required
 - ECS autoscaling target/policy inventory, deployment-health settings, or Terraform-owned operational alarms differing from Terraform outputs
 - A Terraform-owned ECS operational alarm currently in `ALARM`
+- `GuardDutyManaged` differing from the deployment-profile/Terraform contract
+- a protected running task missing its GuardDuty agent or reporting the agent as non-`RUNNING`
+- protected GuardDuty ECS coverage not `AUTO_MANAGED` / `HEALTHY`, or reporting unresolved issues
+- duplicate or non-Terraform `guardduty-data` endpoint identity
+- GuardDuty agent ECR authority missing, present for `minimal`, or broader than Terraform
+- GuardDuty coverage EventBridge rule/target/DLQ/retry/transformer drift
+- retained backup vault missing, an unexpected backup plan while disabled, or resource `Backup` tags differing from effective enablement
 - Failed AWS CLI calls
 - Missing required local tooling
 - Mismatched resource naming
@@ -573,7 +616,7 @@ Recommended evidence items may include:
 
 Recommended handoff message:
 
-> The attached evidence includes applicable automated read-only validation results across the workload bootstrap, workload baseline, control-plane, and security-operations layers. Bootstrap evidence covers remote state-stack readability, Terraform backend locking, GitHub OIDC, state/KMS access, strict workload CMK policy validation, and the Image Publisher role when enabled or required. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, ECS runtime, autoscaling, deployment-health, and automation resources. Control-plane evidence covers state/OIDC foundations, AWS Organizations topology and delegated-administrator prerequisites, and IAM Identity Center. Security-operations evidence covers centralized Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 governance. Live/manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
+> The attached evidence includes applicable automated read-only validation results across the workload bootstrap, workload baseline, control-plane, and security-operations layers. Bootstrap evidence covers remote state-stack readability, Terraform backend locking, GitHub OIDC, state/KMS access, strict workload CMK policy validation, and the Image Publisher role when enabled or required. Workload baseline evidence covers selected AWS security, networking, logging, monitoring, IAM, profile-aware AWS Backup state, ECS runtime/autoscaling/deployment health, and GuardDuty Fargate Runtime Monitoring enrollment, agent, endpoint, IAM, coverage, and notification configuration. Control-plane evidence covers state/OIDC foundations, AWS Organizations topology and delegated-administrator prerequisites, and IAM Identity Center. Security-operations evidence covers centralized Security Hub CSPM, the exact Terraform-managed GuardDuty organization Runtime Monitoring contract, and Security Hub V2 governance. Live/manual validation items and limitations are documented separately and should be reviewed before relying on the environment for production or audit-readiness purposes.
 
 ---
 
@@ -593,14 +636,15 @@ Before using validation evidence for client delivery or internal sign-off:
 10. Confirm `STRICT_WORKLOAD_CMK_POLICY_CHECKS=true` unless advisory behavior was intentionally documented.
 11. Confirm `REQUIRE_STATE_STACK_REMOTE=true` for bootstrap and control-plane release or client-facing evidence.
 12. For publisher-enabled workloads, confirm `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true` and `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` matches the approved branch set.
-13. Confirm workload baseline evidence includes `validate-ecs-runtime.log` when ECS runtime operations are in scope, and review any ECS operational-alarm warnings or failures.
-14. Confirm workflow-generated reports identify `GitHub OIDC environment credentials` when `AWS_PROFILE` is not set.
-15. Review all failed checks.
-16. Review all warnings.
-17. Confirm live/manual validation items are tracked.
-18. Confirm exceptions are documented.
-19. Confirm evidence files are stored in the appropriate location.
-20. Confirm generated evidence is not committed to the source repository.
+13. When ECS runtime security is in scope, review `validate-ecs-runtime.log` together with `validate-iam.log`, `validate-vpc-endpoints.log`, and `validate-eventbridge.log` so cluster intent, live agent/coverage state, exact ECR authority, endpoint ownership, and coverage notification routing are all represented.
+14. Review `validate-backup.log` for the exact enabled/disabled Backup contract rather than inferring Backup state from the broader workload-security summary.
+15. Confirm workflow-generated reports identify `GitHub OIDC environment credentials` when `AWS_PROFILE` is not set.
+16. Review all failed checks.
+17. Review all warnings.
+18. Confirm live/manual validation items are tracked.
+19. Confirm exceptions are documented.
+20. Confirm evidence files are stored in the appropriate location.
+21. Confirm generated evidence is not committed to the source repository.
 
 ---
 

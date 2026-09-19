@@ -177,7 +177,6 @@ validate_topic() {
   local kms_key_id
   local subscriptions_confirmed
   local subscriptions_pending
-  local subscriptions_deleted
   local subscriptions_json
   local subscription_count
   local pending_count
@@ -206,7 +205,6 @@ validate_topic() {
   kms_key_id="$(echo "$attrs_json" | jq -r '.Attributes.KmsMasterKeyId // empty')"
   subscriptions_confirmed="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsConfirmed // "0"')"
   subscriptions_pending="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
-  subscriptions_deleted="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsDeleted // "0"')"
 
   info "${label} topic name: ${topic_name:-<none>}"
 
@@ -259,7 +257,7 @@ validate_topic() {
   TOTAL_SUBSCRIPTION_COUNT=$((TOTAL_SUBSCRIPTION_COUNT + subscription_count))
   TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_count))
 
-  topic_short="${topic_name#${NAME_PREFIX}-}"
+  topic_short="${topic_name#"${NAME_PREFIX}"-}"
 
   SNS_SUMMARY_ROWS+=("${label}|${topic_short}|${subscription_count}|${subscriptions_confirmed}|${subscriptions_pending}|$([[ -n "$kms_key_id" ]] && echo "SSE-KMS" || echo "none")")
 }
@@ -304,7 +302,6 @@ if [[ "$VALIDATED_TOPIC_COUNT" -eq 0 ]]; then
     kms_key_id="$(echo "$attrs_json" | jq -r '.Attributes.KmsMasterKeyId // empty')"
     subscriptions_confirmed="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsConfirmed // "0"')"
     subscriptions_pending="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsPending // "0"')"
-    subscriptions_deleted="$(echo "$attrs_json" | jq -r '.Attributes.SubscriptionsDeleted // "0"')"
 
     subscriptions_json="$(
       aws sns list-subscriptions-by-topic \

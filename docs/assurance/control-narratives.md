@@ -35,6 +35,7 @@ The platform is built around:
 - Private-first networking
 - Centralized logging
 - Centrally governed Security Hub CSPM, GuardDuty, and Security Hub V2 for workload accounts
+- Profile-driven GuardDuty ECS/Fargate Runtime Monitoring with workload-local enrollment, least-privilege prerequisites, and coverage-health notification
 - Workload-local AWS Config, Inspector, remediation, and supporting security controls
 - Event-driven security automation
 - Encrypted and protected operational evidence
@@ -122,27 +123,36 @@ Apply consistent threat-detection and posture-governance policy across workload 
 
 The dedicated `security-operations` account centrally manages:
 
-- Security Hub CSPM administrator state and finding aggregation
-- Security Hub CSPM `CENTRAL` organization configuration
-- workload configuration policies and associations
-- GuardDuty organization enrollment and protection plans
-- GuardDuty Runtime Monitoring configuration
-- Security Hub V2 administrator state and the `SECURITYHUB_POLICY` attached to `Workloads`
+- Security Hub CSPM administrator state and finding aggregation;
+- Security Hub CSPM `CENTRAL` organization configuration;
+- workload configuration policies and associations;
+- GuardDuty organization enrollment and protection plans;
+- GuardDuty Runtime Monitoring organization policy; and
+- Security Hub V2 administrator state and the `SECURITYHUB_POLICY` attached to `Workloads`.
+
+The implemented v1.10 GuardDuty Runtime Monitoring organization contract is:
+
+```text
+RUNTIME_MONITORING           = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT         = ALL
+EKS_ADDON_MANAGEMENT         = NONE
+```
 
 The control-plane Organizations stack owns trusted service access, delegated-administrator registration, the `SECURITYHUB_POLICY` organization prerequisite, and OU/account placement. Workload Terraform defers account-level ownership of centrally governed Security Hub CSPM, GuardDuty, and Security Hub V2 resources while continuing to manage AWS Config, Inspector, remediation, and other workload-local controls.
+
+For ECS/Fargate, central GuardDuty policy and workload Terraform have separate responsibilities. The central stack enables automated Fargate agent management across organization members. Workload Terraform expresses whether its shared ECS cluster participates through `GuardDutyManaged=true` for `production` and `development` or `GuardDutyManaged=false` for `minimal`, and owns the supporting task-execution IAM, networking, and validation contract.
 
 ## Security Impact
 
 This supports:
 
-- Consistent security-service policy across dev, staging, and prod
-- Reduced account-level configuration drift
-- Separation of organization governance from security operations
-- Central finding visibility and delegated administration
-- Explicit evidence boundaries between organization, central security, and workload state
-
----
-
+- Consistent security-service policy across dev, staging, and prod;
+- Secure-by-default Fargate Runtime Monitoring for production and development;
+- Reduced account-level configuration drift;
+- Separation of organization governance from security operations;
+- Central finding visibility and delegated administration; and
+- Explicit evidence boundaries between organization, central security, and workload state.
 # Terraform State Protection
 
 ## Control Intent
@@ -352,24 +362,24 @@ The current endpoint set includes private connectivity for services such as:
 - GuardDuty data (`guardduty-data`) for Runtime Monitoring
 - S3 through a Gateway Endpoint
 
-The Terraform-owned `guardduty-data` Interface Endpoint is created before eligible EC2 instances launch so GuardDuty Runtime Monitoring does not need to create unmanaged VPC endpoint resources. ECS/Fargate image pulls use the ECR Interface Endpoints plus the S3 Gateway Endpoint.
+The `guardduty-data` Interface Endpoint is Terraform-owned and is reused by eligible Runtime Monitoring workloads rather than being left for GuardDuty to create opportunistically. Workload validation requires exactly one live `guardduty-data` endpoint and requires its VPC Endpoint ID to match Terraform output.
+
+For ECS/Fargate, task security groups reach the shared Interface Endpoint security group over TCP/443 and use the Terraform-owned S3 Gateway Endpoint for the S3/ECR layer path. Application image pulls use `ecr.api`, `ecr.dkr`, and S3; GuardDuty Runtime Monitoring telemetry uses `guardduty-data`.
 
 ## Security Impact
 
 This supports:
 
-- Private connectivity to AWS services
-- Reduced public internet dependency
-- Improved management access for private workloads
-- Better alignment with private-by-default architecture
-
----
-
-# Secure ECS/Fargate Runtime Operations
+- Private connectivity to AWS services;
+- Reduced public internet dependency;
+- Improved management access for private workloads;
+- Deterministic ownership of Runtime Monitoring networking; and
+- Better alignment with private-by-default architecture.
+# Secure ECS/Fargate Runtime and Runtime Security
 
 ## Control Intent
 
-Provide a private, immutable, observable application runtime while preserving explicit ownership of service capacity, deployment health, and operational alerting.
+Provide a private, immutable, observable application runtime while preserving explicit ownership of service capacity, deployment health, runtime-detection prerequisites, and operational alerting.
 
 ## Implementation
 
@@ -383,12 +393,12 @@ Deployable services use:
 - separate task execution and application task IAM roles;
 - per-service task security groups;
 - Terraform-owned KMS-encrypted application log groups;
-- deployment circuit breaking with rollback;
+- deployment circuit breaking with rollback; and
 - optional shared HTTPS ALB ingress.
 
 Service-capacity ownership is explicit. When `scaling = null`, Terraform owns the ECS service `desired_count`. When scaling is configured, the configured `desired_count` is bootstrap capacity and Application Auto Scaling owns subsequent live desired count within the Terraform-defined minimum and maximum bounds. The current scaling policies use target tracking for CPU, memory, and optional `ALBRequestCountPerTarget`; ALB request scaling requires ingress and uses resource labels derived from Terraform-owned ALB and target-group identities.
 
-Deployment-health configuration is also explicit through minimum healthy percentage, maximum percentage, and health-check grace period.
+Deployment-health configuration is explicit through minimum healthy percentage, maximum percentage, and health-check grace period.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. The monitoring module creates:
 
@@ -397,7 +407,39 @@ Terraform-owned operational alarms are separate from AWS-managed target-tracking
 
 Both operational alarm families route alarm and recovery notifications to the SecOps SNS topic.
 
-`validate-ecs-runtime.sh` verifies this ownership model against live AWS: exact autoscaling target/policy inventory, fixed-versus-autoscaled desired-count semantics, deployment-health settings, operational alarm configuration/state, and conditional ALB relationships. AWS-managed target-tracking alarms are deliberately excluded from the Terraform-owned operational-alarm inventory.
+### GuardDuty Fargate Runtime Monitoring
+
+v1.10 adds deployment-profile-driven GuardDuty Runtime Monitoring to the same ECS runtime without adding a second application-service inventory.
+
+```text
+production  -> GuardDutyManaged=true
+development -> GuardDutyManaged=true
+minimal     -> GuardDutyManaged=false
+```
+
+For protected profiles, the ECS task execution role receives only the additional image-pull scope required for the regional AWS-hosted repository:
+
+```text
+repository/aws-guardduty-agent-fargate
+```
+
+The permitted actions are limited to `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, and `ecr:BatchGetImage`; registry authorization remains the existing `ecr:GetAuthorizationToken` grant.
+
+Terraform intentionally keeps the canonical task definition application-only. GuardDuty service-manages runtime-agent injection, upgrades, and telemetry. Live tasks may report the agent as `aws-gd-agent` or an AWS-generated `aws-guardduty-agent-<suffix>` container.
+
+For protected running tasks, workload validation requires exactly one injected GuardDuty agent in `RUNNING` state while the application container remains valid. GuardDuty coverage must identify the expected ECS cluster and report:
+
+```text
+ManagementType = AUTO_MANAGED
+CoverageStatus = HEALTHY
+Issues         = none
+```
+
+For `minimal`, healthy coverage and an injected agent are not required; if a coverage record exists, its Fargate management type must be `DISABLED`.
+
+The monitoring module also routes both `GuardDuty Runtime Protection Unhealthy` and `GuardDuty Runtime Protection Healthy` ECS coverage-state events to the existing SecOps SNS topic through the default EventBridge bus. The target uses the shared EventBridge security-notification DLQ, three retry attempts, and a 3600-second maximum event age.
+
+Automatic ECS/Fargate task containment is **not** part of v1.10. Runtime Monitoring provides detection and coverage visibility; the existing automatic containment implementation remains EC2-specific.
 
 ## Security Impact
 
@@ -409,10 +451,9 @@ This supports:
 - deterministic scaling ownership without Terraform fighting legitimate autoscaling;
 - controlled deployment-health behavior;
 - timely detection of sustained task deficits and unhealthy ingress targets;
-- auditable runtime validation through resource-backed Terraform outputs.
-
----
-
+- runtime threat-detection coverage for protected Fargate tasks;
+- visibility when GuardDuty runtime coverage degrades or recovers; and
+- auditable runtime validation through resource-backed Terraform outputs and live AWS state.
 # Logging Integrity
 
 ## Control Intent
@@ -457,32 +498,36 @@ This supports:
 
 ## Control Intent
 
-Detect suspicious activity, vulnerabilities, and configuration problems across workload accounts while preserving a centralized governance boundary.
+Detect suspicious activity, vulnerabilities, configuration problems, and runtime-monitoring coverage degradation across workload accounts while preserving a centralized governance boundary.
 
 ## Implementation
 
 The baseline combines centrally governed and workload-local services:
 
 - GuardDuty is organization-enrolled and centrally configured from `security-operations`.
+- GuardDuty Runtime Monitoring is centrally enabled with EC2 and ECS/Fargate automated agent management, while EKS add-on management remains disabled.
+- Workload ECS cluster participation follows `deployment_profile` through `GuardDutyManaged=true|false`.
 - Security Hub CSPM uses centralized configuration policies and finding aggregation.
 - Security Hub V2 workload enablement is governed through an Organizations policy attached to `Workloads`.
 - AWS Config remains workload-local and provides configuration recording/rule evaluation where enabled.
 - Inspector remains workload-local and provides vulnerability detection for configured resource types.
 - CloudTrail, EventBridge, CloudWatch, and SNS provide activity capture, routing, and alerting.
+- GuardDuty ECS Runtime coverage unhealthy/healthy events route to the existing SecOps notification path.
 - Terraform-owned ECS task-deficit and ingress unhealthy-target alarms provide operational runtime signals, while AWS-managed target-tracking alarms remain owned by Application Auto Scaling.
+
+The security-operations validator compares the Terraform-managed GuardDuty organization feature subset exactly with live AWS. AWS may return supported features outside Terraform management; those are acceptable only while they remain disabled.
 
 ## Security Impact
 
 This supports:
 
-- Centralized visibility into workload security findings
-- Consistent threat-detection and posture policy
-- Workload-specific configuration and vulnerability evidence
-- Event-driven response and alerting
-- Reduced drift between workload accounts
-
----
-
+- Centralized visibility into workload security findings;
+- Consistent threat-detection and posture policy;
+- Runtime threat-detection coverage for protected Fargate workloads;
+- Detection of runtime-coverage degradation;
+- Workload-specific configuration and vulnerability evidence;
+- Event-driven response and alerting; and
+- Reduced drift between workload accounts.
 # Monitoring Integrity and Tamper Detection
 
 ## Control Intent
@@ -691,38 +736,57 @@ This supports:
 
 ## Control Intent
 
-Support recovery from accidental deletion, misconfiguration, or destructive events.
+Support recovery from accidental deletion, misconfiguration, or destructive events while making scheduled-backup behavior explicit by deployment profile.
 
 ## Implementation
 
-The baseline includes AWS Backup support, including:
+The baseline includes AWS Backup support with a retained, KMS-encrypted backup vault in each workload environment.
 
-- Backup vault
-- KMS encryption
-- Tag-based resource selection
-- Retention policies
+Scheduled backup behavior is profile-aware:
 
-The EC2 isolation workflow also requests tagged snapshots of attached EBS volumes after all eligibility checks pass and before quarantine is applied. Snapshot-request failure stops isolation rather than quarantining without that recovery evidence.
+```text
+production  -> enabled by default
+development -> disabled by default
+minimal     -> disabled by default
+```
+
+When scheduled backup is enabled:
+
+- a backup plan and selection are created;
+- the default schedule is `cron(0 5 * * ? *)`;
+- production retention defaults to 30 days;
+- explicitly enabled non-production retention defaults to 7 days unless overridden; and
+- workload EC2 and RDS resources use `Backup=true`.
+
+When scheduled backup is disabled:
+
+- the encrypted backup vault remains present;
+- the effective schedule and retention resolve to `null`;
+- the backup plan and selection are absent; and
+- workload EC2 and RDS resources use `Backup=false`.
+
+This design avoids treating a cost-control decision as authorization to delete the environment backup vault while also preventing disabled profiles from continuing scheduled backups.
+
+The EC2 isolation workflow separately requests tagged snapshots of attached EBS volumes after all eligibility checks pass and before quarantine is applied. Snapshot-request failure stops isolation rather than quarantining without that recovery evidence.
 
 Patch management support is provided through SSM Patch Manager.
+
+The baseline provides recovery infrastructure, not proof that backups meet an organization's recovery objectives. Production users must define backup scope, retention requirements, restore testing, RPO/RTO expectations, and destructive-resource protections appropriate to their environment.
 
 ## Security Impact
 
 This supports:
 
-- Recovery readiness
-- Operational resilience
-- Reduced impact from data loss
-- Improved patch hygiene
-- Support for audit expectations around recoverability
-
----
-
+- Recovery readiness;
+- Operational resilience;
+- Reduced impact from data loss;
+- Improved patch hygiene; and
+- Support for audit expectations around recoverability.
 # Alerting and Notification
 
 ## Control Intent
 
-Ensure security-relevant events reach the appropriate operational contacts.
+Ensure security-relevant events and monitoring-health changes reach the appropriate operational contacts.
 
 ## Implementation
 
@@ -732,6 +796,7 @@ Alerts may include:
 
 - broad HIGH/CRITICAL Security Hub findings routed through the general notification path;
 - GuardDuty-driven EC2 isolation events;
+- GuardDuty ECS Runtime Monitoring coverage unhealthy and healthy status changes;
 - EC2 rollback events;
 - IP enrichment results;
 - tamper detection;
@@ -740,19 +805,19 @@ Alerts may include:
 - ECS task-deficit alarms; and
 - ECS ingress unhealthy-target alarms.
 
+The GuardDuty ECS Runtime coverage target uses the existing security-notification SNS topic, shared EventBridge delivery DLQ, three retry attempts, and a one-hour maximum event age. Its transformed message preserves the workload account, Region, ECS cluster, current/previous status, GuardDuty issue, GuardDuty update time, and EventBridge event time.
+
 The general Security Hub HIGH/CRITICAL notification and IP-enrichment rule remains broader than the separate GuardDuty-only EC2 isolation rule.
 
 ## Security Impact
 
 This supports:
 
-- Timely awareness
-- Operational escalation
-- Centralized notification patterns
-- Improved incident response readiness
-
----
-
+- Timely awareness;
+- Operational escalation;
+- Centralized notification patterns;
+- Visibility into loss or recovery of Runtime Monitoring coverage; and
+- Improved incident response readiness.
 # Operational Impact
 
 Together, these controls help ensure that:
@@ -761,7 +826,7 @@ Together, these controls help ensure that:
 - Human and CI/CD access is controlled
 - Security-relevant activity is visible
 - Monitoring cannot be silently disabled
-- Security incidents can be contained
+- Qualifying EC2 incidents can be contained automatically, while ECS/Fargate Runtime Monitoring remains detection/visibility only
 - Recovery actions are controlled
 - Configuration integrity is monitored
 - Operational logs are protected
@@ -784,6 +849,8 @@ It does not replace:
 - Security policies and procedures
 - Vendor risk management
 - Business continuity planning
+- Backup restore testing, RPO/RTO definition, or proof of recoverability
+- Automatic ECS/Fargate containment or remediation
 - Compliance evidence management
 - Security awareness training
 - Continuous SOC monitoring
@@ -794,6 +861,6 @@ Organizations should treat this baseline as a technical foundation that supports
 
 # Summary
 
-`tf-secure-baseline` implements a secure AWS infrastructure baseline with controls for identity, networking, logging, monitoring, detection, response, encryption, backup, and operational resilience.
+`tf-secure-baseline` implements a secure AWS infrastructure baseline with controls for identity, networking, logging, centralized threat detection, profile-driven ECS/Fargate Runtime Monitoring, response, encryption, backup, and operational resilience.
 
 The control narratives in this document explain how those controls function and what security outcomes they are intended to support.

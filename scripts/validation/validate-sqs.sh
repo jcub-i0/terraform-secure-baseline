@@ -273,7 +273,6 @@ validate_sns_producer_for_queue() {
 
   TOTAL_PENDING_SUBSCRIPTION_COUNT=$((TOTAL_PENDING_SUBSCRIPTION_COUNT + pending_subscription_count))
 
-  SNS_TOPIC_ARN_RESULT="$topic_arn"
   SNS_SUBSCRIPTION_COUNT_RESULT="$queue_subscription_count"
   SNS_PENDING_COUNT_RESULT="$pending_subscription_count"
 }
@@ -299,7 +298,6 @@ validate_sqs_queue() {
   local approximate_number_of_messages_not_visible
   local producer_type
   local producer_suffix
-  local sns_topic_arn="<none>"
   local sns_subscription_count="0"
   local sns_pending_count="0"
   local redrive_policy_configured="false"
@@ -390,13 +388,11 @@ validate_sqs_queue() {
 
       policy_json="$(echo "$policy_raw" | jq '.')"
 
-      SNS_TOPIC_ARN_RESULT="<none>"
       SNS_SUBSCRIPTION_COUNT_RESULT="0"
       SNS_PENDING_COUNT_RESULT="0"
 
       validate_sns_producer_for_queue "$queue_label" "$queue_arn" "$producer_suffix" "$policy_json"
 
-      sns_topic_arn="$SNS_TOPIC_ARN_RESULT"
       sns_subscription_count="$SNS_SUBSCRIPTION_COUNT_RESULT"
       sns_pending_count="$SNS_PENDING_COUNT_RESULT"
       ;;
@@ -422,7 +418,7 @@ validate_sqs_queue() {
     TOTAL_OPTIONAL_QUEUES=$((TOTAL_OPTIONAL_QUEUES + 1))
   fi
 
-  queue_short="${queue_name#${NAME_PREFIX}-}"
+  queue_short="${queue_name#"${NAME_PREFIX}"-}"
   producer_short="$producer_ref"
 
   if [[ "$producer_short" == sns:* ]]; then

@@ -543,7 +543,13 @@ ecs_runtime_validate_guardduty_coverage() {
     fail "GuardDuty ECS/Fargate coverage is not HEALTHY and AUTO_MANAGED for the protected cluster."
   fi
 
-  if [[ "$(echo "$fargate_issues_json" | jq 'length')" -ne 0 ]]; then
+  # shellcheck disable=SC2034 # Consumed by summary.sh after ECS runtime helpers are sourced.
+  GUARDDUTY_COVERAGE_ISSUE_COUNT="$(
+    echo "$fargate_issues_json" |
+      jq 'length'
+  )"
+
+  if [[ "$GUARDDUTY_COVERAGE_ISSUE_COUNT" -ne 0 ]]; then
     echo "$fargate_issues_json" | jq .
     fail "GuardDuty reports unresolved Fargate runtime coverage issues for the protected cluster."
   fi
@@ -553,19 +559,23 @@ ecs_runtime_validate_guardduty_coverage() {
     fail "GuardDuty reports an unresolved ECS runtime coverage issue for the protected cluster."
   fi
 
+  # shellcheck disable=SC2034 # Consumed by summary.sh after ECS runtime helpers are sourced.
   GUARDDUTY_MANAGEMENT_TYPE="$(
     echo "$coverage_resource_json" |
       jq -r '.ResourceDetails.EcsClusterDetails.FargateDetails.ManagementType'
   )"
+
+  # shellcheck disable=SC2034 # Consumed by summary.sh after ECS runtime helpers are sourced.
   GUARDDUTY_COVERAGE_STATUS="$(
     echo "$coverage_resource_json" |
       jq -r '.CoverageStatus'
   )"
+
+  # shellcheck disable=SC2034 # Consumed by summary.sh after ECS runtime helpers are sourced.
   GUARDDUTY_COVERAGE_UPDATED_AT="$(
     echo "$coverage_resource_json" |
       jq -r '.UpdatedAt // "<not reported>"'
   )"
-  GUARDDUTY_COVERAGE_ISSUE_COUNT=0
 
   success "GuardDuty ECS/Fargate coverage is HEALTHY, AUTO_MANAGED, and has no unresolved issues"
 }
