@@ -267,7 +267,6 @@ Terraform-owned operational notification alarms are separate from AWS-managed ta
 
 The ECS cluster also owns its Container Insights performance log group at `/aws/ecs/containerinsights/<cluster-name>/performance` when Container Insights is enabled. Service logs and the performance log group use the effective retention policy and workload logs CMK according to their resource ownership.
 
-
 ### GuardDuty Fargate Runtime Monitoring
 
 v1.10 extends the ECS/Fargate runtime with centralized GuardDuty Runtime Monitoring while preserving Terraform ownership of workload infrastructure.

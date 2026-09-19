@@ -340,6 +340,7 @@ Use this subsection when ECS/Fargate services are in scope. Supporting detail is
 | EC2 `Backup` tags | `<true/false>` | `validate-backup.log` | Must match effective enablement |
 | RDS `Backup` tag | `<true/false>` | `validate-backup.log` | Must match effective enablement |
 | Backup jobs / recovery-point health | `<PASS/WARN/FAIL/Not Applicable>` | `validate-backup.log` | Applicable when scheduled backup is enabled |
+
 ## Control-Plane Validation Results
 
 Use this section only when the validation scope is `control-plane`.
