@@ -234,6 +234,12 @@ variable "backup_schedule" {
   }
 }
 
+variable "delete_backups_after_days" {
+  description = "Number of days to retain backups before deletion"
+  type        = string
+  default     = "30"
+}
+
 variable "rds_multi_az" {
   description = "Whether the RDS DB instance uses a Multi-AZ deployment. Set to null to use the deployment_profile default"
   type        = bool
@@ -302,12 +308,6 @@ variable "patch_tag_value" {
   description = "Tag value used to target patchable instances (the key is 'PatchGroup' by default)"
   type        = string
   default     = "weekly-linux"
-}
-
-variable "delete_backups_after_days" {
-  description = "Number of days to retain backups before deletion"
-  type        = string
-  default     = "30"
 }
 
 variable "break_glass_trusted_principal_arns" {
