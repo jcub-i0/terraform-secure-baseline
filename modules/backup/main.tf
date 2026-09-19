@@ -17,7 +17,7 @@ resource "aws_backup_vault" "main" {
 # BACKUP PLAN
 resource "aws_backup_plan" "main" {
   count = var.backup_enabled ? 1 : 0
-  
+
   name = "${var.name_prefix}-backup-plan"
 
   rule {
