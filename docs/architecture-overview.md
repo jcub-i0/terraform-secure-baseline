@@ -172,6 +172,7 @@ Environment stacks can include:
 - Dedicated VPC endpoint subnets
 - EC2 workloads
 - One shared ECS cluster and optional long-running ECS/Fargate application services with fixed or target-tracking autoscaled capacity
+- Deployment-profile-driven GuardDuty Fargate Runtime Monitoring enrollment and live coverage validation
 - KMS-encrypted ECR repositories and a conditional shared HTTPS Application Load Balancer
 - S3 buckets
 - KMS keys
@@ -266,17 +267,56 @@ Terraform-owned operational notification alarms are separate from AWS-managed ta
 
 The ECS cluster also owns its Container Insights performance log group at `/aws/ecs/containerinsights/<cluster-name>/performance` when Container Insights is enabled. Service logs and the performance log group use the effective retention policy and workload logs CMK according to their resource ownership.
 
+
+### GuardDuty Fargate Runtime Monitoring
+
+v1.10 extends the ECS/Fargate runtime with centralized GuardDuty Runtime Monitoring while preserving Terraform ownership of workload infrastructure.
+
+The organization-level policy is owned by `bootstrap/security_operations/security_services`:
+
+```text
+RUNTIME_MONITORING           = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT         = ALL
+EKS_ADDON_MANAGEMENT         = NONE
+```
+
+The workload cluster expresses exact participation intent from `deployment_profile`:
+
+| `deployment_profile` | Runtime Monitoring | Cluster intent |
+|---|---:|---|
+| `production` | Enabled | `GuardDutyManaged=true` |
+| `development` | Enabled | `GuardDutyManaged=true` |
+| `minimal` | Disabled | `GuardDutyManaged=false` |
+
+For enabled profiles, baseline adds only the regional GuardDuty agent ECR repository to the task execution role's image-pull scope. Application repository permissions remain independently resource-scoped.
+
+GuardDuty service-manages the injected runtime agent. Terraform intentionally does not add that container to the canonical application task definition. Live validation accepts either `aws-gd-agent` or an AWS-generated `aws-guardduty-agent-<suffix>` container name, requires exactly one injected agent, and requires it to be `RUNNING`.
+
+The private runtime path remains Terraform-owned:
+
+```text
+ECS task security group
+  -> ecr.api / ecr.dkr Interface Endpoints
+  -> S3 Gateway Endpoint
+  -> guardduty-data Interface Endpoint
+```
+
+GuardDuty coverage is validated through the workload detector's coverage API. Protected clusters must report `AUTO_MANAGED`, `HEALTHY`, and no unresolved coverage issues.
+
+A Terraform-owned EventBridge rule on the default bus routes both GuardDuty Runtime Protection unhealthy and healthy ECS coverage-state changes to the existing SecOps SNS topic. The target uses the shared EventBridge security-notification DLQ, three retry attempts, and a one-hour maximum event age. This is a visibility/notification path, not automatic Fargate containment.
+
 ## Deployment Profiles
 
 The baseline supports deployment profiles that set environment-appropriate defaults.
 
 Profiles are intended to provide a clear cost/security posture while still allowing explicit overrides.
 
-| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention | Intended use |
-|---|---|---:|---:|---:|---:|---|
-| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
-| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
-| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | GuardDuty Fargate Runtime Monitoring | CloudWatch retention | Intended use |
+|---|---|---:|---:|---:|---:|---:|---|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days | Lower-cost development and testing with production-aligned runtime detection |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
 
 The profile defines defaults only. Explicit variables can override profile defaults.
 
@@ -327,6 +367,8 @@ The `baseline` is designed around the following principles:
 - Least-privilege access
 
 These principles guide the structure of the Terraform modules, account layout, IAM model, deployment profiles, egress modes, and security automation workflows.
+
+Automatic containment currently applies to the established EC2 isolation workflow. v1.10 adds ECS/Fargate runtime detection and coverage visibility, but automatic ECS/Fargate containment remains explicitly deferred pending a separate fail-closed design.
 
 ---
 
@@ -487,7 +529,7 @@ Interface Endpoints are placed in dedicated endpoint private subnets, while the 
 
 Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and `ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway Endpoint.
 
-The `guardduty-data` endpoint is intentionally Terraform-managed and participates in the compute readiness dependency so Runtime Monitoring does not need to create an unmanaged endpoint after EC2 appears. This also keeps endpoint placement and destroy ordering inside the Terraform graph.
+The `guardduty-data` endpoint is intentionally Terraform-managed for GuardDuty Runtime Monitoring across eligible EC2 and ECS/Fargate workloads. EC2 launch readiness consumes the Terraform endpoint IDs, and ECS task security policy allows HTTPS to the shared Interface Endpoint security group. Keeping this endpoint pre-created avoids a duplicate GuardDuty-managed endpoint/security group and keeps endpoint placement, validation, and destroy ordering inside the Terraform graph.
 
 ---
 
@@ -675,7 +717,7 @@ The `bootstrap/security_operations/security_services` stack owns the delegated-a
 
 - Security Hub CSPM enablement, finding aggregation, CENTRAL organization configuration, and per-workload configuration policies/associations
 - GuardDuty administrator detector discovery, organization member enrollment, and organization protection plans
-- GuardDuty Runtime Monitoring with EC2 agent management enabled and unused ECS/Fargate and EKS agent-management integrations disabled
+- GuardDuty Runtime Monitoring with both EC2 and ECS/Fargate automated agent management enabled and EKS add-on management disabled
 - Security Hub V2 enablement in `security-operations`
 - a Security Hub V2 organization policy attached to the `Workloads` OU for the primary Region
 
@@ -710,7 +752,7 @@ These services provide visibility into:
 - Security service tampering
 - Policy violations
 
-Some detection and compliance services are profile-aware. For example, AWS Config remains enabled by default for `production` and `development`, while `minimal` disables it by default unless explicitly overridden. Inspector is enabled by default for `production` and `development`, and disabled by default for `minimal`.
+Some detection and compliance services are profile-aware. AWS Config remains enabled by default for `production` and `development`, while `minimal` disables it by default unless explicitly overridden. Inspector is enabled by default for `production` and `development`, and disabled by default for `minimal`. GuardDuty Fargate Runtime Monitoring is enabled for `production` and `development` and explicitly excluded at the ECS cluster level for `minimal` with `GuardDutyManaged=false`.
 
 ---
 
@@ -924,25 +966,31 @@ The baseline includes support for operational resilience through:
 
 - Strict first-boot Ubuntu patching and package-state logging
 - AWS Backup
-- Backup vault encryption
-- Tag-based backup selection
-- Retention policies
+- A retained, KMS-encrypted backup vault per workload environment
+- Tag-based backup selection when scheduled backups are enabled
+- Profile-aware backup scheduling and retention
 - SSM Patch Manager
 - Maintenance windows
 - Patch groups
 
 AWS Backup enablement is profile-aware:
 
-| `deployment_profile` | Backup default |
-|---|---:|
-| `production` | Enabled |
-| `development` | Disabled |
-| `minimal` | Disabled |
+| `deployment_profile` | Backup default | Effective schedule when enabled by default | Effective retention when enabled by default |
+|---|---:|---|---:|
+| `production` | Enabled | `cron(0 5 * * ? *)` | 30 days |
+| `development` | Disabled | `null` | `null` |
+| `minimal` | Disabled | `null` | `null` |
 
-This keeps production recovery controls enabled by default while reducing cost in lower-cost profiles unless backup is explicitly enabled.
+If backups are explicitly enabled for a non-production profile, the default schedule remains `cron(0 5 * * ? *)` and the default retention becomes 7 days unless overridden.
 
----
+The backup vault is retained regardless of `effective_backup_enabled`. The backup plan and tag-based selection exist only while backups are enabled. Workload EC2 and RDS resources receive:
 
+```text
+Backup=true   when backups are enabled
+Backup=false  when backups are disabled
+```
+
+This avoids treating a cost-control toggle as authorization to remove the environment backup vault while still preventing disabled profiles from continuing to schedule backups.
 ## Break-Glass Monitoring
 
 The baseline includes a break-glass administrative role for emergency access.
@@ -994,6 +1042,7 @@ Notable cost drivers include:
 - Security services
 - KMS requests
 - Backup storage
+- GuardDuty Runtime Monitoring monitored-vCPU/runtime overhead when enabled
 
 The default design prioritizes security and production readiness, but deployment profiles and egress modes allow teams to choose different cost/security tradeoffs per environment.
 
@@ -1015,6 +1064,6 @@ These profiles do not replace environment-specific review. Production deployment
 
 ## Summary
 
-`tf-secure-baseline` implements a multi-account AWS security baseline with centralized identity, delegated security administration, secure networking, encrypted logging, continuous detection, event-driven response, deployment profile support, configurable egress modes, dedicated VPC endpoint subnets, and GitHub OIDC-based CI/CD.
+`tf-secure-baseline` implements a multi-account AWS security baseline with centralized identity, delegated security administration, secure networking, encrypted logging, continuous detection, profile-driven GuardDuty ECS/Fargate Runtime Monitoring, event-driven response, deployment profile support, configurable egress modes, dedicated VPC endpoint subnets, and GitHub OIDC-based CI/CD.
 
 The architecture is designed to provide a secure starting point for SaaS companies and teams handling sensitive data while remaining modular enough to adapt to different environments, cost requirements, and organizational security expectations.
