@@ -178,14 +178,25 @@ validate_service_identity() {
         )
       ' >/dev/null; then
     echo "$service_response_json" |
-      jq '
-        .services[0]
-        | {
-            serviceArn, serviceName, clusterArn, status, taskDefinition,
-            launchType, platformVersion, desiredCount, runningCount,
-            pendingCount, deployments, deploymentConfiguration
-          }
-      '
+      jq \
+        --arg expected_platform_version "$expected_platform_version" '
+          .services[0]
+          | {
+              serviceArn,
+              serviceName,
+              clusterArn,
+              status,
+              taskDefinition,
+              launchType,
+              platformVersion,
+              expectedPlatformVersion: $expected_platform_version,
+              desiredCount,
+              runningCount,
+              pendingCount,
+              deployments,
+              deploymentConfiguration
+            }
+        '
     fail "ECS service identity, Fargate configuration, deployment safeguards, or steady-state status are invalid: ${service_name}"
   fi
 }
