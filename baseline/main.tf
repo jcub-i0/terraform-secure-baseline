@@ -370,8 +370,8 @@ module "backup" {
   environment = var.environment
 
   backup_enabled            = local.effective_backup_enabled
-  backup_schedule           = var.backup_schedule
+  backup_schedule           = local.effective_backup_schedule
   backup_vault_cmk_arn      = module.security.backup_vault_cmk_arn
-  delete_backups_after_days = var.delete_backups_after_days
+  delete_backups_after_days = local.effective_delete_backups_after_days
   backup_service_role_arn   = module.iam.backup_service_role_arn
 }
