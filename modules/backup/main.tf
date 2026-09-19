@@ -54,6 +54,6 @@ resource "aws_backup_selection" "main" {
   selection_tag {
     type  = "STRINGEQUALS"
     key   = var.backup_tag_key
-    value = var.backup_tag_value
+    value = "true"
   }
 }
