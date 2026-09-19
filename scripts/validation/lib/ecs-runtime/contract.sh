@@ -201,30 +201,6 @@ ecs_runtime_validate_guardduty_integration_outputs() {
     fail "guardduty_ecs_runtime_coverage_notification does not match the workload Runtime Monitoring notification contract."
   fi
 
-  # Resource-specific EventBridge semantics are validated by validate-eventbridge.sh.
-  # These values are retained here so ECS Runtime validation can prove integration
-  # without reconstructing resource identities from names later.
-  GUARDDUTY_COVERAGE_RULE_ARN="$(
-    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
-      jq -r '.rule_arn'
-  )"
-  GUARDDUTY_COVERAGE_RULE_NAME="$(
-    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
-      jq -r '.rule_name'
-  )"
-  GUARDDUTY_COVERAGE_TARGET_ID="$(
-    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
-      jq -r '.target_id'
-  )"
-  GUARDDUTY_COVERAGE_TARGET_ARN="$(
-    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
-      jq -r '.target_arn'
-  )"
-  GUARDDUTY_COVERAGE_DLQ_ARN="$(
-    echo "$GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON" |
-      jq -r '.dead_letter_arn'
-  )"
-
   success "GuardDuty Runtime Monitoring endpoint and notification integration outputs are valid"
 }
 
@@ -510,14 +486,17 @@ validate_scaling_output_membership() {
     "$expected_autoscaled_services_json" \
     "$ECS_AUTOSCALING_TARGETS_JSON" \
     "Application Auto Scaling targets"
+
   ecs_runtime_require_same_map_keys \
     "$expected_cpu_scaling_services_json" \
     "$ECS_AUTOSCALING_CPU_POLICIES_JSON" \
     "CPU target-tracking policies"
+
   ecs_runtime_require_same_map_keys \
     "$expected_memory_scaling_services_json" \
     "$ECS_AUTOSCALING_MEMORY_POLICIES_JSON" \
     "memory target-tracking policies"
+
   ecs_runtime_require_same_map_keys \
     "$expected_alb_request_scaling_services_json" \
     "$ECS_AUTOSCALING_ALB_REQUEST_POLICIES_JSON" \
