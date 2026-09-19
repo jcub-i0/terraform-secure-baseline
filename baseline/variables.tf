@@ -235,9 +235,31 @@ variable "backup_schedule" {
 }
 
 variable "delete_backups_after_days" {
-  description = "Number of days to retain backups before deletion"
-  type        = string
-  default     = "30"
+  description = "Override for backup retention in days. Set to null to use the deployment_profile default when backups are enabled."
+  type        = number
+  default     = null
+
+  validation {
+    condition = (
+      var.delete_backups_after_days == null ||
+      (
+        var.backup_enabled != null
+        ? var.backup_enabled
+        : var.deployment_profile == "production"
+      )
+    )
+
+    error_message = "delete_backups_after_days must be null when AWS Backup is disabled by backup_enabled or deployment_profile."
+  }
+
+  validation {
+    condition = (
+      var.delete_backups_after_days == null ||
+      var.delete_backups_after_days >= 1
+    )
+
+    error_message = "delete_backups_after_days must be at least 1 when configured."
+  }
 }
 
 variable "rds_multi_az" {
