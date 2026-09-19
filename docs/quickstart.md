@@ -68,11 +68,15 @@ Before deploying an environment baseline, decide which deployment profile and eg
 
 Deployment profiles provide cost/security defaults for each environment.
 
-| `deployment_profile` | Default `egress_mode` | AWS Config | Backup | Inspector | CloudWatch retention | Intended use |
-|---|---|---:|---:|---:|---:|---|
-| `production` | `network_firewall` | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
-| `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
-| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+| `deployment_profile` | Default `egress_mode` | AWS Config | Backup scheduling | Inspector | GuardDuty Fargate Runtime Monitoring | CloudWatch retention | Intended use |
+|---|---|---:|---:|---:|---:|---:|---|
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days | Lower-cost development and testing with production-aligned runtime detection |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+
+GuardDuty Fargate Runtime Monitoring is derived directly from `deployment_profile` in v1.10; there is no independent top-level Runtime Monitoring enable/disable input. `production` and `development` set the workload ECS cluster to `GuardDutyManaged=true`, while `minimal` sets `GuardDutyManaged=false`.
+
+The Backup column refers to scheduled AWS Backup behavior. The encrypted environment backup vault and backup CMK are retained even when scheduling is disabled. When backups are disabled, the effective schedule and retention outputs are `null`, the backup plan/selection are absent, and workload EC2/RDS resources use `Backup=false`. Production defaults to `cron(0 5 * * ? *)` with 30-day retention. If backups are explicitly enabled for a non-production profile, the same default schedule is used with 7-day retention unless overridden.
 
 The `egress_mode` controls private compute subnet outbound routing.
 
@@ -420,7 +424,16 @@ enable_guardduty_organization_configuration    = true
 enable_securityhub_v2_organization_policy      = true
 ```
 
-Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. GuardDuty organization protection-plan defaults are defined in the stack's `variables.tf`; override them only when the client requires a different strategy.
+Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. The v1.10 default centralized GuardDuty contract is:
+
+```text
+RUNTIME_MONITORING           = ALL
+ECS_FARGATE_AGENT_MANAGEMENT = ALL
+EC2_AGENT_MANAGEMENT         = ALL
+EKS_ADDON_MANAGEMENT         = NONE
+```
+
+These organization settings are owned by the `security-operations` stack. Workload Terraform does not recreate them; workload stacks express cluster participation, task-execution IAM, networking, and validation expectations. Override the GuardDuty organization feature map only when the deployment intentionally requires a different organization policy.
 
 Apply locally:
 
@@ -680,10 +693,14 @@ effective_cloudwatch_retention_days
 effective_enable_config
 effective_enable_rules
 effective_backup_enabled
+effective_backup_schedule
+effective_delete_backups_after_days
 effective_inspector_enabled
 effective_manage_securityhub_cspm_locally
 effective_manage_guardduty_locally
 effective_manage_securityhub_v2_locally
+ecs_cluster
+guardduty_ecs_runtime_coverage_notification
 ```
 
 These outputs confirm how profile defaults and explicit overrides resolved for the environment. In the centralized deployment, the three `effective_manage_*_locally` security-service outputs should be `false`.
@@ -716,6 +733,35 @@ A service can be **registered but unreleased** by setting its digest to `null`:
 ```
 
 With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, application log group, Application Auto Scaling target/policy, or ECS operational alarm is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
+
+### GuardDuty Fargate Runtime Monitoring
+
+Runtime Monitoring is a cluster/runtime security capability; it does not add fields to the canonical `ecs_services` map.
+
+Baseline derives the effective intent from `deployment_profile`:
+
+```text
+production  -> GuardDutyManaged=true
+development -> GuardDutyManaged=true
+minimal     -> GuardDutyManaged=false
+```
+
+For `production` and `development`, each deployable service's task execution role receives only the additional ECR image-pull scope required for the regional AWS-hosted `aws-guardduty-agent-fargate` repository. Existing application ECR scope remains separate and resource-scoped. `minimal` receives no GuardDuty-agent repository authority.
+
+The private prerequisites remain Terraform-owned:
+
+```text
+ECS task SG
+  -> ecr.api / ecr.dkr Interface Endpoints
+  -> S3 Gateway Endpoint
+  -> guardduty-data Interface Endpoint
+```
+
+The Terraform task definition remains application-only. GuardDuty service-manages the runtime agent injected into protected tasks. Live ECS may report that container as `aws-gd-agent` or an AWS-generated `aws-guardduty-agent-<suffix>` name.
+
+A new protected service deployment should receive Runtime Monitoring instrumentation once the centralized GuardDuty policy, task execution IAM, networking, and cluster tag are in place. Existing tasks are not silently retrofitted, so adopting Runtime Monitoring for an already-running service requires one deliberate new deployment. Terraform does not permanently force a deployment on every apply.
+
+After deployment, `validate-ecs-runtime.sh` verifies the live cluster tag, injected agent, application container, and GuardDuty ECS coverage. Protected running tasks must report `AUTO_MANAGED`, `HEALTHY`, and no unresolved coverage issues. For `minimal`, injected agents and healthy coverage are not required.
 
 ### Optional ECS scaling and deployment health
 
@@ -752,7 +798,7 @@ Example:
 }
 ```
 
-At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. v1.9 uses target tracking only.
+At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. v1.10 retains the v1.9 target-tracking-only scaling contract.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. When Container Insights is enabled, each deployable service receives a task-deficit alarm. Each deployable ingress service receives an ALB unhealthy-target alarm. Both notify the SecOps SNS topic on ALARM and OK transitions.
 
@@ -941,24 +987,25 @@ Recommended validation order:
    AWS_PROFILE=prod ./scripts/bootstrap/migrate-state-stack.sh prod --verify-only
    ```
 2. Run the **Export Control Plane Evidence** workflow and confirm Organizations topology, account placement, delegated-administrator prerequisites, and Identity Center are green.
-3. Run the **Export Security Operations Evidence** workflow and confirm Security Hub CSPM, GuardDuty, Runtime Monitoring, and Security Hub V2 central governance are green.
+3. Run the **Export Security Operations Evidence** workflow and confirm Security Hub CSPM, Security Hub V2, and the centralized GuardDuty contract are green, including `RUNTIME_MONITORING = ALL`, `ECS_FARGATE_AGENT_MANAGEMENT = ALL`, `EC2_AGENT_MANAGEMENT = ALL`, and `EKS_ADDON_MANAGEMENT = NONE`.
 4. Run **Export Bootstrap Evidence** and **Export Baseline Evidence** for each workload environment.
 5. Confirm GitHub OIDC roles can be assumed by the applicable workflows.
-6. Confirm deployment profile outputs resolved correctly.
+6. Confirm deployment profile outputs resolved correctly, including nullable Backup schedule/retention and the ECS cluster Runtime Monitoring intent.
 7. Confirm egress mode behavior:
    - `network_firewall`: Network Firewall and NAT Gateway are deployed, compute private default route points to firewall endpoints.
    - `nat_only`: Network Firewall is not deployed, NAT Gateway is deployed, compute private default route points to NAT.
    - `vpc_endpoints_only`: Network Firewall and NAT Gateway are not deployed, compute private subnets have no default route.
 8. Confirm dedicated endpoint private subnets exist.
 9. Confirm all Terraform-managed Interface VPC Endpoints, including `guardduty-data`, are deployed into endpoint private subnets.
-10. Confirm `guardduty-data` is Terraform-owned and only one such endpoint exists per workload VPC.
+10. Confirm the live Interface Endpoint IDs exactly match Terraform output and exactly one `guardduty-data` endpoint exists; Runtime Monitoring must reuse it rather than introduce a duplicate endpoint/security group.
 11. Confirm the S3 Gateway Endpoint is associated with the expected private route tables.
-12. Confirm workload-local AWS Config and Inspector are active where expected by profile.
+12. Confirm workload-local AWS Config and Inspector are active where expected by profile, and confirm the exact enabled/disabled AWS Backup contract with `validate-backup.sh`.
 13. Confirm centralized Security Hub CSPM policy associations and effective Security Hub V2 workload policies are healthy after workload deployment.
-14. Run the full 16-validator workload baseline suite, including `validate-ecr.sh`, `validate-ecs-runtime.sh`, and the ECS-aware `validate-iam.sh`; empty repository/service maps are valid and the environment cluster is still checked.
-15. When ECS services are configured, confirm they reach steady state with digest-pinned images, private task networking, exact logging encryption, any declared database/ALB relationships, fixed-versus-autoscaled desired-count ownership, exact scaling/deployment settings, and expected ECS operational alarms.
-16. Confirm SNS subscriptions are confirmed.
-17. Run Lambda tests:
+14. Run the full 16-validator workload baseline suite, including `validate-ecr.sh`, `validate-ecs-runtime.sh`, `validate-eventbridge.sh`, and the ECS-aware `validate-iam.sh`; empty repository/service maps are valid and the environment cluster is still checked.
+15. For protected `production`/`development` ECS services, confirm `GuardDutyManaged=true`, exactly one injected GuardDuty agent is `RUNNING`, the application remains valid, GuardDuty coverage is `AUTO_MANAGED` and `HEALTHY` with no unresolved issues, exact agent ECR authority is present, and the coverage-state EventBridge notification path matches Terraform. For `minimal`, confirm `GuardDutyManaged=false`, no agent ECR authority, and valid disabled-state coverage semantics.
+16. When ECS services are configured, also confirm steady state with digest-pinned images, private task networking, exact logging encryption, declared database/ALB relationships, fixed-versus-autoscaled desired-count ownership, exact scaling/deployment settings, and expected ECS operational alarms.
+17. Confirm SNS subscriptions are confirmed.
+18. Run Lambda tests:
     - `docs/lambda_tests/ec2_isolation.md`
     - `docs/lambda_tests/ec2_rollback.md`
     - `docs/lambda_tests/ip_enrichment.md`
@@ -1086,7 +1133,7 @@ Interface VPC Endpoints are deployed into dedicated endpoint private subnets.
 
 These subnets have their own route tables and do not require a default internet route.
 
-Workloads reach Interface Endpoints over VPC-local routing and security group rules. The Terraform-managed endpoint set includes `guardduty-data`, and compute waits for Interface Endpoint creation before EC2 launches. This allows GuardDuty Runtime Monitoring to use the existing endpoint and keeps endpoint lifecycle inside Terraform.
+Workloads reach Interface Endpoints over VPC-local routing and security group rules. The Terraform-managed endpoint set includes `guardduty-data`. Compute waits for Interface Endpoint creation before EC2 launches, while each deployable ECS task security group receives HTTPS access to the shared Interface Endpoint security group and S3 prefix-list path. GuardDuty Runtime Monitoring therefore reuses the same Terraform-owned endpoint tier for eligible EC2 and ECS/Fargate workloads.
 
 ---
 
@@ -1117,7 +1164,7 @@ Notable cost drivers include:
 - VPC endpoints
 - CloudWatch Logs
 - VPC Flow Logs
-- GuardDuty
+- GuardDuty, including Runtime Monitoring monitored-vCPU/runtime-agent overhead for protected ECS/Fargate workloads
 - Security Hub
 - Inspector
 - KMS requests
@@ -1142,7 +1189,7 @@ This quickstart deploys `tf-secure-baseline` in the intended order:
 - Deploy centralized Identity Center access
 - Validate each architecture layer through its evidence workflow
 
-After completion, the platform provides a multi-account AWS security baseline with centralized identity, delegated security administration, secure CI/CD, logging, detection, configurable egress behavior, private VPC endpoint access, and event-driven response automation.
+After completion, the platform provides a multi-account AWS security baseline with centralized identity, delegated security administration, secure CI/CD, logging, profile-driven GuardDuty ECS/Fargate Runtime Monitoring, configurable egress behavior, private VPC endpoint access, and event-driven response automation.
 
 # Destruction / Cleanup Procedure
 
