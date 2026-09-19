@@ -218,7 +218,20 @@ variable "backup_enabled" {
 variable "backup_schedule" {
   description = "CRON expression for when backups are performed"
   type        = string
-  default     = "cron(0 5 * * ? *)"
+  default     = null
+
+  validation {
+    condition = (
+      var.backup_schedule == null ||
+      (
+        var.backup_enabled != null
+        ? var.backup_enabled
+        : var.deployment_profile == "production"
+      )
+    )
+
+    error_message = "backup_schedule must be null when AWS Backup is disabled by backup_enabled or deployment_profile."
+  }
 }
 
 variable "rds_multi_az" {
