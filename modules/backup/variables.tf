@@ -4,12 +4,12 @@ variable "name_prefix" {
 
 variable "backup_enabled" {
   description = "Whether to create the AWS Backup plan and backup selection."
-  type = bool
+  type        = bool
 }
 
 variable "backup_schedule" {
   description = "AWS Backup schedule expression used by the backup plan when backups are enabled"
-  type = string
+  type        = string
 }
 
 variable "backup_vault_cmk_arn" {
