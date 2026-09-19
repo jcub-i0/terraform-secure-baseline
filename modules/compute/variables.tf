@@ -59,3 +59,8 @@ variable "interface_endpoint_ids" {
   description = "Map of Interface-type VPC Endpoints and their IDs"
   type        = map(string)
 }
+
+variable "backup_enabled" {
+  description = "Whether to enable AWS Backup. Set to null to use the deployment_profile default."
+  type        = bool
+}

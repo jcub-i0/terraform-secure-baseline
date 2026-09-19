@@ -63,6 +63,7 @@ module "compute" {
   instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
   isolation_allowed              = var.isolation_allowed
+  backup_enabled                 = local.effective_backup_enabled
 
   interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
   interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
@@ -87,6 +88,7 @@ module "storage" {
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
 
+  backup_enabled            = local.effective_backup_enabled
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
   logs_cmk_arn            = module.security.logs_cmk_arn
@@ -368,8 +370,8 @@ module "backup" {
   environment = var.environment
 
   backup_enabled            = local.effective_backup_enabled
-  backup_schedule           = var.backup_schedule
+  backup_schedule           = local.effective_backup_schedule
   backup_vault_cmk_arn      = module.security.backup_vault_cmk_arn
-  delete_backups_after_days = var.delete_backups_after_days
+  delete_backups_after_days = local.effective_delete_backups_after_days
   backup_service_role_arn   = module.iam.backup_service_role_arn
 }

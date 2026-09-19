@@ -537,8 +537,8 @@ fi
 
 section "Checking AWS Backup"
 
-BACKUP_VAULT_COUNT="0"
-BACKUP_PLAN_COUNT="0"
+BACKUP_VAULT_COUNT="<not checked>"
+BACKUP_PLAN_COUNT="<not checked>"
 
 if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
   BACKUP_VAULTS_JSON="$(
@@ -575,8 +575,8 @@ if [[ "$EFFECTIVE_BACKUP_ENABLED" == "true" ]]; then
     fail "effective_backup_enabled=true, but no AWS Backup plans were found."
   fi
 else
-  warn "effective_backup_enabled=false. Skipping AWS Backup validation."
-  warn "This is expected for development/minimal profiles or explicit cost-control overrides."
+  info "effective_backup_enabled=false. Detailed disabled-state AWS Backup validation is delegated to validate-backup.sh."
+  info "The retained vault, absent backup plan/selection, and workload Backup=false tags are validated there."
 fi
 
 section "Workload Security Summary"
@@ -621,8 +621,8 @@ AWS Config recorder count:          ${CONFIG_RECORDER_COUNT}
 AWS Config delivery channel count:  ${CONFIG_DELIVERY_CHANNEL_COUNT}
 AWS Config rule count:              ${CONFIG_RULE_COUNT}
 
-AWS Backup vault count:             ${BACKUP_VAULT_COUNT}
-AWS Backup plan count:              ${BACKUP_PLAN_COUNT}
+AWS Backup vault count/check:       ${BACKUP_VAULT_COUNT}
+AWS Backup plan count/check:        ${BACKUP_PLAN_COUNT}
 SUMMARY
 
 section "Validation Result"

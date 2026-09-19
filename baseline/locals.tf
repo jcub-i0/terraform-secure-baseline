@@ -325,6 +325,30 @@ locals {
     : local.is_production_profile
   )
 
+  profile_default_backup_schedule = "cron(0 5 * * ? *)"
+
+  profile_default_delete_backups_after_days = (
+    local.is_production_profile ? 30 : 7
+  )
+
+  effective_backup_schedule = (
+    local.effective_backup_enabled
+    ? coalesce(
+      var.backup_schedule,
+      local.profile_default_backup_schedule,
+    )
+    : null
+  )
+
+  effective_delete_backups_after_days = (
+    local.effective_backup_enabled
+    ? coalesce(
+      var.delete_backups_after_days,
+      local.profile_default_delete_backups_after_days,
+    )
+    : null
+  )
+
   effective_rds_multi_az = (
     var.rds_multi_az != null
     ? var.rds_multi_az

@@ -61,3 +61,8 @@ variable "bucket_admin_principals" {
 variable "secrets_manager_cmk_arn" {
   type = string
 }
+
+variable "backup_enabled" {
+  description = "Whether to enable AWS Backup. Set to null to use the deployment_profile default."
+  type        = bool
+}

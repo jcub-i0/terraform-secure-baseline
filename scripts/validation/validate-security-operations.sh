@@ -1049,19 +1049,61 @@ if [[ "$GUARDDUTY_ORGANIZATION_ENABLED" == "true" ]]; then
       '
   )"
 
-  if [[ "$ACTUAL_GUARDDUTY_FEATURES_NORMALIZED" != "$EXPECTED_GUARDDUTY_FEATURES_JSON" ]]; then
+  ACTUAL_MANAGED_GUARDDUTY_FEATURES_NORMALIZED="$(
+    echo "$ACTUAL_GUARDDUTY_FEATURES_NORMALIZED" |
+      jq -c \
+        --argjson expected "$EXPECTED_GUARDDUTY_FEATURES_JSON" '
+          ($expected | map(.name)) as $managed_names
+          | [
+              .[]
+              | . as $feature
+              | select(($managed_names | index($feature.name)) != null)
+            ]
+          | sort_by(.name)
+        '
+  )"
+
+  if [[ "$ACTUAL_MANAGED_GUARDDUTY_FEATURES_NORMALIZED" != "$EXPECTED_GUARDDUTY_FEATURES_JSON" ]]; then
     jq -n \
       --argjson expected "$EXPECTED_GUARDDUTY_FEATURES_JSON" \
-      --argjson actual "$ACTUAL_GUARDDUTY_FEATURES_NORMALIZED" \
+      --argjson actual "$ACTUAL_MANAGED_GUARDDUTY_FEATURES_NORMALIZED" \
       '{
         terraform_expected: $expected,
-        aws_actual: $actual
+        aws_managed_subset: $actual
       }'
 
-    fail "Live GuardDuty organization features do not exactly match Terraform."
+    fail "Live Terraform-managed GuardDuty organization features do not exactly match Terraform."
   fi
 
-  success "Live GuardDuty organization features exactly match Terraform"
+  success "Live Terraform-managed GuardDuty organization features exactly match Terraform"
+
+  UNMANAGED_ENABLED_GUARDDUTY_FEATURES_JSON="$(
+    echo "$ACTUAL_GUARDDUTY_FEATURES_NORMALIZED" |
+      jq -c \
+        --argjson expected "$EXPECTED_GUARDDUTY_FEATURES_JSON" '
+          ($expected | map(.name)) as $managed_names
+          | [
+              .[]
+              | . as $feature
+              | select(($managed_names | index($feature.name)) == null)
+              | select(
+                  .auto_enable != "NONE"
+                  or any(
+                    .additional_configuration[]?;
+                    .auto_enable != "NONE"
+                  )
+                )
+            ]
+          | sort_by(.name)
+        '
+  )"
+
+  if [[ "$(echo "$UNMANAGED_ENABLED_GUARDDUTY_FEATURES_JSON" | jq 'length')" -ne 0 ]]; then
+    echo "$UNMANAGED_ENABLED_GUARDDUTY_FEATURES_JSON" | jq .
+    fail "AWS has GuardDuty organization features enabled outside the Terraform-managed feature contract."
+  fi
+
+  success "AWS-returned GuardDuty features outside the Terraform-managed contract are disabled"
 else
   warn "central_security_features_enabled.guardduty=false. Skipping GuardDuty organization configuration validation."
 fi

@@ -99,6 +99,6 @@ resource "aws_instance" "ec2" {
     Purpose          = "Receives input from users or other services, transforms it, validates it, and/or aggregates it"
     IsolationAllowed = tostring(var.isolation_allowed)
     PatchGroup       = var.patch_tag_value
-    Backup           = "true"
+    Backup           = tostring(var.backup_enabled)
   }
 }

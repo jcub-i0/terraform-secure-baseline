@@ -4,9 +4,10 @@
 #
 # Terraform owns the Runtime Monitoring policy, cluster enrollment intent, IAM,
 # networking, and canonical application task definition. GuardDuty service-manages
-# the injected aws-gd-agent sidecar and runtime coverage state.
+# the injected guardduty agent sidecar and runtime coverage state.
 
 readonly GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME="aws-gd-agent"
+readonly GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME_PREFIX="aws-guardduty-agent-"
 
 ecs_runtime_describe_tasks_json() {
   local task_arns_json="$1"
@@ -229,42 +230,60 @@ validate_guardduty_service_tasks() {
     fi
 
     guardduty_container_json="$(
-      echo "$task_json" |
+    echo "$task_json" |
         jq -c \
-          --arg agent "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME" '
+        --arg agent_exact "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME" \
+        --arg agent_prefix "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME_PREFIX" '
             [
-              .containers[]?
-              | select(.name == $agent)
+            .containers[]?
+            | select(
+                .name == $agent_exact
+                or (
+                    (.name | startswith($agent_prefix))
+                    and ((.name | length) > ($agent_prefix | length))
+                )
+                )
             ]
-          '
+        '
     )"
 
     if [[ "$(echo "$guardduty_container_json" | jq 'length')" -ne 1 ]]; then
       echo "$task_json" | jq '.containers'
-      fail "Protected Fargate task does not contain exactly one GuardDuty aws-gd-agent sidecar: ${task_arn}"
+      fail "Protected Fargate task does not contain exactly one GuardDuty guardduty agent sidecar: ${task_arn}"
     fi
 
     guardduty_container_json="$(echo "$guardduty_container_json" | jq -c '.[0]')"
 
     if [[ "$(echo "$guardduty_container_json" | jq -r '.lastStatus // empty')" != "RUNNING" ]]; then
       echo "$guardduty_container_json" | jq .
-      fail "GuardDuty aws-gd-agent sidecar is not RUNNING: ${task_arn}"
+      fail "GuardDuty guardduty agent sidecar is not RUNNING: ${task_arn}"
     fi
 
     # The baseline task definition is application-only. On a protected running
     # task, the only additional container expected is GuardDuty's injected agent.
     unexpected_container_names_json="$(
-      echo "$task_json" |
+    echo "$task_json" |
         jq -c \
-          --arg service "$service_name" \
-          --arg agent "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME" '
+        --arg service "$service_name" \
+        --arg agent_exact "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME" \
+        --arg agent_prefix "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME_PREFIX" '
             [
-              .containers[]?.name
-              | select(. != $service and . != $agent)
+            .containers[]?.name
+            | select(
+                . != $service
+                and . != $agent_exact
+                and (
+                    (
+                    startswith($agent_prefix)
+                    and (length > ($agent_prefix | length))
+                    )
+                    | not
+                )
+                )
             ]
             | sort
             | unique
-          '
+        '
     )"
 
     if [[ "$(echo "$unexpected_container_names_json" | jq 'length')" -ne 0 ]]; then
@@ -317,7 +336,7 @@ ecs_runtime_validate_guardduty_tasks() {
     fail "Valid application-container count does not match the number of protected running tasks."
   fi
 
-  success "Every running protected ECS/Fargate task has one RUNNING aws-gd-agent sidecar and a valid application container"
+  success "Every running protected ECS/Fargate task has one RUNNING guardduty agent sidecar and a valid application container"
 }
 
 # validate-security-workload.sh owns workload GuardDuty detector health and
@@ -452,7 +471,7 @@ ecs_runtime_validate_guardduty_coverage() {
         --arg cluster_name "$EXPECTED_CLUSTER_NAME" '
           .DetectorId == $detector_id
           and .AccountId == $account_id
-          and .ResourceType == "ECS"
+          and .ResourceDetails.ResourceType == "ECS"
           and .ResourceDetails.EcsClusterDetails.ClusterName == $cluster_name
           and .ResourceDetails.EcsClusterDetails.FargateDetails.ManagementType == "DISABLED"
         ' >/dev/null; then
@@ -505,7 +524,7 @@ ecs_runtime_validate_guardduty_coverage() {
       --arg cluster_name "$EXPECTED_CLUSTER_NAME" '
         .DetectorId == $detector_id
         and .AccountId == $account_id
-        and .ResourceType == "ECS"
+        and .ResourceDetails.ResourceType == "ECS"
         and .ResourceDetails.EcsClusterDetails.ClusterName == $cluster_name
         and .ResourceDetails.EcsClusterDetails.FargateDetails.ManagementType == "AUTO_MANAGED"
         and .CoverageStatus == "HEALTHY"
@@ -515,7 +534,7 @@ ecs_runtime_validate_guardduty_coverage() {
         DetectorId,
         AccountId,
         ResourceId,
-        ResourceType,
+        ResourceType: .ResourceDetails.ResourceType,
         CoverageStatus,
         Issue,
         UpdatedAt,

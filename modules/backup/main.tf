@@ -16,6 +16,8 @@ resource "aws_backup_vault" "main" {
 
 # BACKUP PLAN
 resource "aws_backup_plan" "main" {
+  count = var.backup_enabled ? 1 : 0
+
   name = "${var.name_prefix}-backup-plan"
 
   rule {
@@ -43,13 +45,15 @@ resource "aws_backup_plan" "main" {
 
 # BACKUP SELECTION
 resource "aws_backup_selection" "main" {
+  count = var.backup_enabled ? 1 : 0
+
   name         = "${var.name_prefix}-backup-selection"
-  plan_id      = aws_backup_plan.main.id
+  plan_id      = aws_backup_plan.main[0].id
   iam_role_arn = var.backup_service_role_arn
 
   selection_tag {
     type  = "STRINGEQUALS"
     key   = var.backup_tag_key
-    value = var.backup_tag_value
+    value = "true"
   }
 }
