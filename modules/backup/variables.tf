@@ -14,7 +14,7 @@ variable "backup_schedule" {
 
 variable "delete_backups_after_days" {
   description = "Number of days to retain AWS Backup recovery points before deletion when backups are enabled"
-  type        = string
+  type        = number
 }
 
 variable "backup_vault_cmk_arn" {
