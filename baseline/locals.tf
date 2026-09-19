@@ -334,18 +334,18 @@ locals {
   effective_backup_schedule = (
     local.effective_backup_enabled
     ? coalesce(
-        var.backup_schedule,
-        local.profile_default_backup_schedule,
-      )
+      var.backup_schedule,
+      local.profile_default_backup_schedule,
+    )
     : null
   )
 
   effective_delete_backups_after_days = (
     local.effective_backup_enabled
     ? coalesce(
-        var.delete_backups_after_days,
-        local.profile_default_delete_backups_after_days,
-      )
+      var.delete_backups_after_days,
+      local.profile_default_delete_backups_after_days,
+    )
     : null
   )
 
