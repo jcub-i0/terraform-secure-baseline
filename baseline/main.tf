@@ -63,6 +63,7 @@ module "compute" {
   instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
   isolation_allowed              = var.isolation_allowed
+  backup_enabled = local.effective_backup_enabled
 
   interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
   interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
