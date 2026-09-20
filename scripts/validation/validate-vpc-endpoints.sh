@@ -190,6 +190,66 @@ fi
 success "Terraform Interface VPC Endpoint ownership contract is valid: ${TERRAFORM_INTERFACE_ENDPOINT_COUNT} endpoints"
 info "Terraform-owned guardduty-data endpoint: ${GUARDDUTY_DATA_ENDPOINT_ID}"
 
+if ! terraform_output_exists "$OUTPUTS_JSON" network_topology; then
+  fail "Missing required Terraform output for exact R2 endpoint topology validation: network_topology"
+fi
+
+if ! NETWORK_TOPOLOGY_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -S -c '.network_topology.value // null'
+)"; then
+  fail "Unable to resolve network_topology from Terraform outputs."
+fi
+
+if ! echo "$NETWORK_TOPOLOGY_JSON" |
+  jq -e '
+    type == "object"
+    and (.availability_zones | type == "array" and length >= 2 and all(.[]; type == "string" and length > 0))
+    and (.endpoint_private_subnet_ids_by_az | type == "object")
+  ' >/dev/null; then
+  echo "$NETWORK_TOPOLOGY_JSON" | jq .
+  fail "network_topology is missing the Availability Zone or endpoint-private subnet contract required by R2."
+fi
+
+EXPECTED_AZS_JSON="$(echo "$NETWORK_TOPOLOGY_JSON" | jq -c '.availability_zones | sort | unique')"
+EXPECTED_AZ_COUNT="$(echo "$EXPECTED_AZS_JSON" | jq 'length')"
+EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON="$(
+  echo "$NETWORK_TOPOLOGY_JSON" |
+    jq -S -c '.endpoint_private_subnet_ids_by_az'
+)"
+EXPECTED_ENDPOINT_SUBNET_IDS_JSON="$(
+  echo "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" |
+    jq -c '[.[]] | sort | unique'
+)"
+
+if [[ "$(echo "$NETWORK_TOPOLOGY_JSON" | jq '.availability_zones | length')" -ne "$EXPECTED_AZ_COUNT" ]]; then
+  echo "$NETWORK_TOPOLOGY_JSON" | jq '.availability_zones'
+  fail "network_topology availability_zones contains duplicate Availability Zones."
+fi
+
+if [[ "$(echo "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" | jq -c 'keys | sort')" != "$EXPECTED_AZS_JSON" ]]; then
+  jq -n \
+    --argjson expected_azs "$EXPECTED_AZS_JSON" \
+    --argjson actual_azs "$(echo "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" | jq -c 'keys | sort')" '
+      {
+        expected_azs: $expected_azs,
+        endpoint_subnet_azs: $actual_azs,
+        missing_azs: ($expected_azs - $actual_azs),
+        unexpected_azs: ($actual_azs - $expected_azs)
+      }
+    '
+  fail "network_topology.endpoint_private_subnet_ids_by_az keys do not exactly match availability_zones."
+fi
+
+if ! echo "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" |
+  jq -e 'all(to_entries[]; ((.value | type) == "string") and (.value | test("^subnet-[0-9a-f]+$")))' >/dev/null; then
+  echo "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" | jq .
+  fail "network_topology.endpoint_private_subnet_ids_by_az must contain only subnet IDs."
+fi
+
+success "Terraform endpoint topology contract is valid: ${EXPECTED_AZ_COUNT} Availability Zone(s)"
+info "Expected Availability Zones: ${EXPECTED_AZS_JSON}"
+
 if terraform_output_exists "$OUTPUTS_JSON" effective_egress_mode; then
   EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
   require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
@@ -255,7 +315,7 @@ fi
 
 success "Resolved VPC ID: $VPC_ID"
 
-section "Checking endpoint private subnets"
+section "Checking exact Terraform-owned endpoint private subnets"
 
 ENDPOINT_SUBNETS_JSON="$(
   aws ec2 describe-subnets \
@@ -267,17 +327,36 @@ ENDPOINT_SUBNETS_JSON="$(
 )"
 
 ENDPOINT_SUBNET_COUNT="$(echo "$ENDPOINT_SUBNETS_JSON" | jq '.Subnets | length')"
-
-if [[ "$ENDPOINT_SUBNET_COUNT" -gt 0 ]]; then
-  success "Found endpoint private subnets: $ENDPOINT_SUBNET_COUNT"
-else
-  fail "No endpoint private subnets found using tag pattern: ${NAME_PREFIX}-Endpoint-Private-*"
-fi
-
-ENDPOINT_SUBNET_IDS_JSON="$(
+LIVE_ENDPOINT_SUBNET_IDS_BY_AZ_JSON="$(
   echo "$ENDPOINT_SUBNETS_JSON" |
-    jq '[.Subnets[].SubnetId] | sort | unique'
+    jq -S -c '
+      reduce .Subnets[] as $subnet ({};
+        .[$subnet.AvailabilityZone] = $subnet.SubnetId
+      )
+    '
 )"
+LIVE_ENDPOINT_SUBNET_IDS_JSON="$(
+  echo "$ENDPOINT_SUBNETS_JSON" |
+    jq -c '[.Subnets[].SubnetId] | sort | unique'
+)"
+
+if [[ "$ENDPOINT_SUBNET_COUNT" -ne "$EXPECTED_AZ_COUNT" || "$LIVE_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" != "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" ]]; then
+  jq -n \
+    --argjson expected "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson live "$LIVE_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson expected_count "$EXPECTED_AZ_COUNT" \
+    --argjson live_count "$ENDPOINT_SUBNET_COUNT" '
+      {
+        expected_count: $expected_count,
+        live_count: $live_count,
+        expected_endpoint_subnet_ids_by_az: $expected,
+        live_endpoint_subnet_ids_by_az: $live,
+        missing_azs: (($expected | keys) - ($live | keys)),
+        unexpected_azs: (($live | keys) - ($expected | keys))
+      }
+    '
+  fail "Live endpoint-private subnet inventory does not exactly match Terraform network_topology."
+fi
 
 PUBLIC_IP_MAPPING_COUNT="$(
   echo "$ENDPOINT_SUBNETS_JSON" |
@@ -287,8 +366,12 @@ PUBLIC_IP_MAPPING_COUNT="$(
 if [[ "$PUBLIC_IP_MAPPING_COUNT" -eq 0 ]]; then
   success "Endpoint private subnets do not auto-assign public IPs"
 else
+  echo "$ENDPOINT_SUBNETS_JSON" |
+    jq '[.Subnets[] | select(.MapPublicIpOnLaunch == true) | {subnet_id: .SubnetId, availability_zone: .AvailabilityZone}]'
   fail "One or more endpoint private subnets have MapPublicIpOnLaunch enabled."
 fi
+
+success "Endpoint-private subnet inventory exactly matches Terraform: ${ENDPOINT_SUBNET_COUNT} subnet(s)"
 
 section "Checking endpoint private route tables"
 
@@ -302,11 +385,34 @@ ENDPOINT_ROUTE_TABLES_JSON="$(
 )"
 
 ENDPOINT_RT_COUNT="$(echo "$ENDPOINT_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+ENDPOINT_RT_AZS_JSON="$(
+  echo "$ENDPOINT_ROUTE_TABLES_JSON" |
+    jq -c \
+      --arg prefix "${NAME_PREFIX}-Endpoint-Private-RT-" '
+        [
+          .RouteTables[]
+          | ((.Tags[]? | select(.Key == "Name") | .Value) // "")
+          | ltrimstr($prefix)
+        ]
+        | sort
+        | unique
+      '
+)"
 
-if [[ "$ENDPOINT_RT_COUNT" -gt 0 ]]; then
-  success "Found endpoint private route tables: $ENDPOINT_RT_COUNT"
-else
-  fail "No endpoint private route tables found using tag pattern: ${NAME_PREFIX}-Endpoint-Private-RT-*"
+if [[ "$ENDPOINT_RT_COUNT" -ne "$EXPECTED_AZ_COUNT" || "$ENDPOINT_RT_AZS_JSON" != "$EXPECTED_AZS_JSON" ]]; then
+  jq -n \
+    --argjson expected_azs "$EXPECTED_AZS_JSON" \
+    --argjson actual_azs "$ENDPOINT_RT_AZS_JSON" \
+    --argjson expected_count "$EXPECTED_AZ_COUNT" \
+    --argjson actual_count "$ENDPOINT_RT_COUNT" '
+      {
+        expected_count: $expected_count,
+        actual_count: $actual_count,
+        expected_azs: $expected_azs,
+        actual_azs: $actual_azs
+      }
+    '
+  fail "Endpoint-private route-table AZ inventory does not exactly match Terraform network_topology."
 fi
 
 ENDPOINT_DEFAULT_ROUTE_COUNT="$(
@@ -325,16 +431,34 @@ else
   fail "Expected endpoint private route tables to have no 0.0.0.0/0 default routes."
 fi
 
+ENDPOINT_ASSOCIATED_SUBNET_IDS_JSON="$(
+  echo "$ENDPOINT_ROUTE_TABLES_JSON" |
+    jq -c '[.RouteTables[].Associations[]? | select(.SubnetId != null) | .SubnetId] | sort | unique'
+)"
 ENDPOINT_RT_ASSOCIATION_COUNT="$(
   echo "$ENDPOINT_ROUTE_TABLES_JSON" |
     jq '[.RouteTables[].Associations[]? | select(.SubnetId != null)] | length'
 )"
 
-if [[ "$ENDPOINT_RT_ASSOCIATION_COUNT" -gt 0 ]]; then
-  success "Endpoint private route tables have subnet associations: $ENDPOINT_RT_ASSOCIATION_COUNT"
-else
-  fail "Endpoint private route tables do not appear to have subnet associations."
+if [[ "$ENDPOINT_RT_ASSOCIATION_COUNT" -ne "$EXPECTED_AZ_COUNT" || "$ENDPOINT_ASSOCIATED_SUBNET_IDS_JSON" != "$EXPECTED_ENDPOINT_SUBNET_IDS_JSON" ]]; then
+  jq -n \
+    --argjson expected_subnet_ids "$EXPECTED_ENDPOINT_SUBNET_IDS_JSON" \
+    --argjson actual_subnet_ids "$ENDPOINT_ASSOCIATED_SUBNET_IDS_JSON" \
+    --argjson expected_count "$EXPECTED_AZ_COUNT" \
+    --argjson actual_count "$ENDPOINT_RT_ASSOCIATION_COUNT" '
+      {
+        expected_association_count: $expected_count,
+        actual_association_count: $actual_count,
+        expected_endpoint_subnet_ids: $expected_subnet_ids,
+        actual_associated_subnet_ids: $actual_subnet_ids,
+        missing_subnet_ids: ($expected_subnet_ids - $actual_subnet_ids),
+        unexpected_subnet_ids: ($actual_subnet_ids - $expected_subnet_ids)
+      }
+    '
+  fail "Endpoint-private route-table associations do not exactly cover the Terraform-owned endpoint-private subnets."
 fi
+
+success "Endpoint-private route tables and subnet associations exactly match Terraform topology"
 
 section "Checking Interface VPC Endpoints"
 
@@ -416,7 +540,7 @@ fi
 
 INTERFACE_ENDPOINT_SUBNET_MISMATCH_COUNT="$(
   echo "$INTERFACE_ENDPOINTS_JSON" |
-    jq --argjson expected "$ENDPOINT_SUBNET_IDS_JSON" '
+    jq --argjson expected "$EXPECTED_ENDPOINT_SUBNET_IDS_JSON" '
       [
         .VpcEndpoints[]
         | {
@@ -439,7 +563,7 @@ if [[ "$INTERFACE_ENDPOINT_SUBNET_MISMATCH_COUNT" -eq 0 ]]; then
   success "Every Interface VPC Endpoint uses the exact endpoint-private subnet set"
 else
   echo "$INTERFACE_ENDPOINTS_JSON" |
-    jq --argjson expected "$ENDPOINT_SUBNET_IDS_JSON" '
+    jq --argjson expected "$EXPECTED_ENDPOINT_SUBNET_IDS_JSON" '
       [
         .VpcEndpoints[]
         | {
@@ -692,8 +816,12 @@ ENDPOINT_RT_IDS_JSON="$(echo "$ENDPOINT_ROUTE_TABLES_JSON" | jq '[.RouteTables[]
 COMPUTE_RT_COUNT="$(echo "$COMPUTE_RT_IDS_JSON" | jq 'length')"
 SERVERLESS_RT_COUNT="$(echo "$SERVERLESS_RT_IDS_JSON" | jq 'length')"
 
-if [[ "$COMPUTE_RT_COUNT" -eq 0 ]]; then
-  fail "No compute private route tables found for S3 Gateway Endpoint coverage check."
+if [[ "$COMPUTE_RT_COUNT" -ne "$EXPECTED_AZ_COUNT" ]]; then
+  fail "Expected ${EXPECTED_AZ_COUNT} compute-private route tables from Terraform topology, found ${COMPUTE_RT_COUNT}."
+fi
+
+if [[ "$SERVERLESS_RT_COUNT" -ne "$EXPECTED_AZ_COUNT" ]]; then
+  fail "Expected ${EXPECTED_AZ_COUNT} serverless-private route tables from Terraform topology, found ${SERVERLESS_RT_COUNT}."
 fi
 
 MISSING_COMPUTE_S3_ASSOCIATIONS="$(
@@ -711,10 +839,6 @@ else
     --argjson actual "$S3_ROUTE_TABLE_IDS_JSON" \
     '{missing_compute_route_table_ids: ($expected - $actual)}'
   fail "S3 Gateway Endpoint is missing one or more compute private route table associations."
-fi
-
-if [[ "$SERVERLESS_RT_COUNT" -eq 0 ]]; then
-  fail "No serverless private route tables found for S3 Gateway Endpoint coverage check."
 fi
 
 EXPECTED_S3_ROUTE_TABLE_IDS_JSON="$(
@@ -751,6 +875,8 @@ AWS region:                           ${AWS_REGION}
 Name prefix:                          ${NAME_PREFIX}
 VPC ID:                               ${VPC_ID}
 effective_egress_mode:                ${EFFECTIVE_EGRESS_MODE}
+Expected AZ count:                    ${EXPECTED_AZ_COUNT}
+Expected AZs:                         ${EXPECTED_AZS_JSON}
 
 Endpoint private subnets:             ${ENDPOINT_SUBNET_COUNT}
 Endpoint private route tables:        ${ENDPOINT_RT_COUNT}

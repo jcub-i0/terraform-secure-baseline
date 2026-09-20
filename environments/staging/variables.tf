@@ -9,6 +9,18 @@ variable "environment" {
   default     = "staging"
 }
 
+variable "azs" {
+  description = "Optional Availability Zone override. Null uses the deployment_profile default."
+  type        = list(string)
+  default     = null
+}
+
+variable "subnet_cidrs" {
+  description = "Optional subnet CIDR override. Null uses the deployment_profile default."
+  type        = map(list(string))
+  default     = null
+}
+
 variable "deployment_profile" {
   description = "Deployment profile controlling cost/security defaults. Valid values: production, development, minimal."
   type        = string

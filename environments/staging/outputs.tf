@@ -68,6 +68,11 @@ output "logs_s3_readonly_policy_name" {
   value       = module.baseline.logs_s3_readonly_policy_name
 }
 
+output "network_topology" {
+  description = "Terraform-managed workload network topology keyed by subnet class and Availability Zone"
+  value       = module.baseline.network_topology
+}
+
 output "deployment_profile" {
   description = "Selected deployment profile"
   value       = module.baseline.deployment_profile
