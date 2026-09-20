@@ -73,6 +73,50 @@ output "logs_s3_readonly_policy_name" {
   value       = module.iam.logs_s3_readonly_policy_name
 }
 
+output "network_topology" {
+  description = "Terraform-managed workload network topology keyed by subnet class and Availability Zone"
+
+  value = {
+    availability_zones = sort(
+      keys(module.networking.compute_private_subnet_ids_map)
+    )
+
+    public_subnet_ids_by_az = (
+      module.networking.public_subnet_ids_map
+    )
+
+    compute_private_subnet_ids_by_az = (
+      module.networking.compute_private_subnet_ids_map
+    )
+
+    data_private_subnet_ids_by_az = (
+      module.networking.data_private_subnet_ids_map
+    )
+
+    serverless_private_subnet_ids_by_az = (
+      module.networking.serverless_private_subnet_ids_map
+    )
+
+    endpoint_private_subnet_ids_by_az = (
+      module.networking.endpoint_private_subnet_ids_map
+    )
+
+    firewall_private_subnet_ids_by_az = (
+      module.networking.firewall_private_subnet_ids_map
+    )
+
+    nat_gateway_ids_by_az = (
+      module.networking.nat_gateway_ids_map
+    )
+
+    firewall_endpoint_ids_by_az = (
+      local.effective_egress_mode == "network_firewall"
+      ? module.firewall[0].firewall_endpoint_ids_by_az
+      : {}
+    )
+  }
+}
+
 output "deployment_profile" {
   description = "Selected deployment profile"
   value       = var.deployment_profile
