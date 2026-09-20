@@ -112,25 +112,35 @@ variable "main_vpc_cidr" {
 }
 
 variable "azs" {
-  description = "List of Availability Zones for deployment. If you add/remove an AZ from var.azs, update this."
+  description = "Availability Zones for the workload. Set to null to use the deployment_profile default."
   type        = list(string)
-  default = [
-    "us-east-1a",
-    "us-east-1b"
-  ]
+  default     = null
+
+  validation {
+    condition = (
+      var.azs == null ||
+      length(distinct(var.azs)) == length(var.azs)
+    )
+
+    error_message = "azs must not contain duplicate Availability Zones."
+  }
+
+  validation {
+    condition = (
+      var.azs == null ||
+      length(var.azs) >= (
+        var.deployment_profile == "production" ? 3 : 2
+      )
+    )
+
+    error_message = "production requires at least three Availability Zones; development and minimal require at least two."
+  }
 }
 
 variable "subnet_cidrs" {
-  description = "CIDR blocks for each subnet type. If you add/remove an AZ from var.azs, update this."
+  description = "CIDR blocks for each workload subnet family. Set to null to use deployment_profile defaults."
   type        = map(list(string))
-  default = {
-    "public"             = ["10.0.0.0/24", "10.0.1.0/24"]
-    "compute_private"    = ["10.0.16.0/24", "10.0.17.0/24"]
-    "data_private"       = ["10.0.32.0/24", "10.0.33.0/24"]
-    "serverless_private" = ["10.0.48.0/24", "10.0.49.0/24"]
-    "firewall_private"   = ["10.0.64.0/24", "10.0.65.0/24"]
-    "endpoint_private"   = ["10.0.128.0/24", "10.0.129.0/24"]
-  }
+  default     = null
 }
 
 variable "db_port" {

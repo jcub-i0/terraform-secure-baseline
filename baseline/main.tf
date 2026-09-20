@@ -23,8 +23,8 @@ module "networking" {
   cloud_name  = var.cloud_name
 
   main_vpc_cidr = var.main_vpc_cidr
-  subnet_cidrs  = var.subnet_cidrs
-  azs           = var.azs
+  subnet_cidrs  = local.effective_subnet_cidrs
+  azs           = local.effective_azs
 
   egress_mode = local.effective_egress_mode
 
@@ -256,7 +256,7 @@ module "vpc_endpoints" {
     values(module.networking.serverless_private_route_table_ids_map)
   )
 
-  subnet_cidrs = var.subnet_cidrs
+  subnet_cidrs = local.effective_subnet_cidrs
 }
 
 module "firewall" {

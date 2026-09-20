@@ -316,6 +316,54 @@ locals {
   }
 
   # ---------------------------------------------------------------------------
+  # Networking
+  # ---------------------------------------------------------------------------
+  profile_default_azs = (
+    local.is_production_profile
+    ? [
+      "us-east-1a",
+      "us-east-1b",
+      "us-east-1c",
+    ]
+    : [
+      "us-east-1a",
+      "us-east-1b",
+    ]
+  )
+
+  effective_azs = (
+    var.azs != null
+    ? var.azs
+    : local.profile_default_azs
+  )
+
+  profile_default_subnet_cidrs = (
+    local.is_production_profile
+    ? {
+      public             = ["10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24"]
+      compute_private    = ["10.0.16.0/24", "10.0.17.0/24", "10.0.18.0/24"]
+      data_private       = ["10.0.32.0/24", "10.0.33.0/24", "10.0.34.0/24"]
+      serverless_private = ["10.0.48.0/24", "10.0.49.0/24", "10.0.50.0/24"]
+      firewall_private   = ["10.0.64.0/24", "10.0.65.0/24", "10.0.66.0/24"]
+      endpoint_private   = ["10.0.128.0/24", "10.0.129.0/24", "10.0.130.0/24"]
+    }
+    : {
+      public             = ["10.0.0.0/24", "10.0.1.0/24"]
+      compute_private    = ["10.0.16.0/24", "10.0.17.0/24"]
+      data_private       = ["10.0.32.0/24", "10.0.33.0/24"]
+      serverless_private = ["10.0.48.0/24", "10.0.49.0/24"]
+      firewall_private   = ["10.0.64.0/24", "10.0.65.0/24"]
+      endpoint_private   = ["10.0.128.0/24", "10.0.129.0/24"]
+    }
+  )
+
+  effective_subnet_cidrs = (
+    var.subnet_cidrs != null
+    ? var.subnet_cidrs
+    : local.profile_default_subnet_cidrs
+  )
+
+  # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
 
