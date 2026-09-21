@@ -397,10 +397,33 @@ locals {
     : null
   )
 
+  profile_default_rds_multi_az = local.is_production_profile
+
   effective_rds_multi_az = (
-    var.rds_multi_az != null
-    ? var.rds_multi_az
-    : local.is_production_profile
+    local.is_production_profile
+    ? true
+    : coalesce(
+      var.rds_multi_az,
+      local.profile_default_rds_multi_az,
+    )
+  )
+
+  effective_rds_deletion_protection = (
+    local.is_production_profile
+  )
+
+  effective_rds_skip_final_snapshot = (
+    !local.is_production_profile
+  )
+
+  effective_rds_delete_automated_backups = (
+    !local.is_production_profile
+  )
+
+  effective_rds_final_snapshot_identifier = (
+    local.effective_rds_skip_final_snapshot
+    ? null
+    : "${local.name_prefix}-saas-db-final-${var.random_id}"
   )
 
   effective_inspector_enabled = (
