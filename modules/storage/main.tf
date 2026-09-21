@@ -53,8 +53,16 @@ resource "aws_db_instance" "main" {
   password_wo         = ephemeral.aws_secretsmanager_random_password.rds_master.random_password
   password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
-  deletion_protection     = false # CHANGE THIS TO 'TRUE' FOR A PRODUCTION ENVIRONMENT
-  skip_final_snapshot     = true  # CHANGE THIS TO 'FALSE' FOR A PRODUCTION ENVIRONMENT
+  deletion_protection      = var.rds_deletion_protection
+  skip_final_snapshot      = var.rds_skip_final_snapshot
+  delete_automated_backups = var.rds_delete_automated_backups
+
+  final_snapshot_identifier = (
+    var.rds_skip_final_snapshot
+    ? null
+    : var.rds_final_snapshot_identifier
+  )
+
   backup_retention_period = 14
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:05:00-sun:06:00"

@@ -276,6 +276,15 @@ variable "rds_multi_az" {
   description = "Whether the RDS DB instance uses a Multi-AZ deployment. Set to null to use the deployment_profile default"
   type        = bool
   default     = null
+
+  validation {
+    condition = (
+      var.deployment_profile != "production" ||
+      var.rds_multi_az != false
+    )
+
+    error_message = "rds_multi_az cannot be false when deployment_profile is production."
+  }
 }
 
 variable "inspector_enabled" {

@@ -66,3 +66,24 @@ variable "backup_enabled" {
   description = "Whether to enable AWS Backup. Set to null to use the deployment_profile default."
   type        = bool
 }
+
+variable "rds_deletion_protection" {
+  description = "Whether deletion protection is enabled on the RDS DB instance."
+  type        = bool
+}
+
+variable "rds_skip_final_snapshot" {
+  description = "Whether to skip creation of a final RDS snapshot when the DB instance is deleted."
+  type        = bool
+}
+
+variable "rds_delete_automated_backups" {
+  description = "Whether RDS automated backups are deleted immediately when the DB instance is deleted."
+  type        = bool
+}
+
+variable "rds_final_snapshot_identifier" {
+  description = "Identifier used for the final RDS snapshot when final snapshots are enabled."
+  type        = string
+  default     = null
+}

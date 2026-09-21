@@ -81,9 +81,14 @@ module "storage" {
   account_id  = var.account_id
   random_id   = var.random_id
 
-  rds_multi_az = local.effective_rds_multi_az
-  db_port      = var.db_port
-  db_username  = var.db_username
+  rds_multi_az                  = local.effective_rds_multi_az
+  rds_deletion_protection       = local.effective_rds_deletion_protection
+  rds_skip_final_snapshot       = local.effective_rds_skip_final_snapshot
+  rds_delete_automated_backups  = local.effective_rds_delete_automated_backups
+  rds_final_snapshot_identifier = local.effective_rds_final_snapshot_identifier
+
+  db_port     = var.db_port
+  db_username = var.db_username
 
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
