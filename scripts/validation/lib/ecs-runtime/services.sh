@@ -727,22 +727,40 @@ validate_service() {
       jq -r --arg service "$service_name" '.[$service]'
   )"
 
-  expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
+  expected_task_sg_id="$(
+    echo "$TASK_SECURITY_GROUP_IDS_JSON" |
+      jq -r --arg service "$service_name" '.[$service]'
+  )"
 
   database_access="$(
     echo "$expected_service_configuration_json" |
       jq -r '.database_access'
   )"
 
-  expected_ingress_enabled="$(echo "$expected_service_configuration_json" | jq -r '.ingress_enabled')"
+  expected_ingress_enabled="$(
+    echo "$expected_service_configuration_json" |
+      jq -r '.ingress_enabled'
+  )"
 
-  expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
-  expected_log_group_name="$(echo "$expected_log_group_json" | jq -r '.name')"
-  expected_log_group_arn="$(echo "$expected_log_group_json" | jq -r '.arn')"
+  expected_log_group_json="$(
+    echo "$ECS_LOG_GROUPS_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+
+  expected_log_group_name="$(
+    echo "$expected_log_group_json" |
+      jq -r '.name'
+  )"
+
+  expected_log_group_arn="$(
+    echo "$expected_log_group_json" |
+      jq -r '.arn'
+  )"
   expected_execution_role_arn="$(
     echo "$ECS_EXECUTION_ROLES_JSON" |
       jq -r --arg service "$service_name" '.[$service].arn'
   )"
+
   expected_task_role_arn="$(echo "$ECS_TASK_ROLES_JSON" | jq -r --arg service "$service_name" '.[$service].arn')"
 
   info "Validating ECS service: ${service_name}"
