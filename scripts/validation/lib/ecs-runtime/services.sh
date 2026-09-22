@@ -138,6 +138,25 @@ ecs_runtime_resolve_service_networking() {
   fi
 }
 
+validate_service_availability() {
+  local service_name="$1"
+  local service_response_json="$2"
+  local expected_availability_zone_rebalancing="$3"
+
+  local live_availability_zone_rebalancing
+
+  live_availability_zone_rebalancing="$(
+    echo "$service_response_json" |
+      jq -r '.services[0].availabilityZoneRebalancing // empty'
+  )"
+
+  if [[ "$live_availability_zone_rebalancing" != "$expected_availability_zone_rebalancing" ]]; then
+    fail "ECS Availability Zone rebalancing does not match Terraform: ${service_name} expected=${expected_availability_zone_rebalancing} actual=${live_availability_zone_rebalancing:-<missing>}"
+  fi
+
+  success "ECS Availability Zone rebalancing matches Terraform: ${service_name}"
+}
+
 validate_service_identity() {
   local service_name="$1"
   local service_response_json="$2"
@@ -653,7 +672,10 @@ validate_service() {
   local service_response_json
   local container_port
 
-  expected_service_json="$(echo "$ECS_SERVICES_JSON" | jq -c --arg service "$service_name" '.[$service]')"
+  expected_service_json="$(
+    echo "$ECS_SERVICES_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
 
   expected_service_configuration_json="$(
     echo "$ECS_SERVICE_CONFIGURATION_JSON" |
@@ -685,13 +707,26 @@ validate_service() {
       jq -r '.deployment.health_check_grace_period_seconds'
   )"
 
-  expected_service_arn="$(echo "$expected_service_json" | jq -r '.arn')"
-  expected_service_name="$(echo "$expected_service_json" | jq -r '.name')"
-  expected_platform_version="$(echo "$expected_service_json" | jq -r '.platform_version')"
+  expected_service_arn="$(
+    echo "$expected_service_json" |
+      jq -r '.arn'
+  )"
+
+  expected_service_name="$(
+    echo "$expected_service_json" |
+      jq -r '.name'
+  )"
+
+  expected_platform_version="$(
+    echo "$expected_service_json" |
+      jq -r '.platform_version'
+  )"
+
   expected_task_definition_arn="$(
     echo "$TASK_DEFINITION_ARNS_JSON" |
       jq -r --arg service "$service_name" '.[$service]'
   )"
+
   expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
 
   database_access="$(
