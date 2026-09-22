@@ -158,6 +158,11 @@ output "effective_manage_guardduty_locally" {
   value       = module.baseline.effective_manage_guardduty_locally
 }
 
+output "lifecycle_protection" {
+  description = "Effective destructive-lifecycle posture used by validation"
+  value       = module.baseline.lifecycle_protection
+}
+
 output "ecr_repositories" {
   description = "Managed ECR repository metadata keyed by repository name"
   value       = module.baseline.ecr_repositories
