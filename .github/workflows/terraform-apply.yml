@@ -9,10 +9,7 @@ on:
                 description: "Environment to deploy"
                 required: true
                 type: choice
-                options:
-                    - dev
-                    - staging
-                    - prod
+                options: [dev, staging, prod]
             production_retirement_mode:
                 description: "Prepare a production-profile workload for deliberate retirement"
                 required: true
@@ -24,9 +21,7 @@ on:
                 default: false
                 type: boolean
 
-permissions:
-    id-token: write
-    contents: read
+permissions: {}
 
 concurrency:
     group: terraform-workload-${{ inputs.environment }}
@@ -37,11 +32,10 @@ env:
     TF_IN_AUTOMATION: "true"
     TF_INPUT: "false"
     TERRAFORM_VERSION: "1.15.8"
+
     PLAN_ARTIFACT_NAME: terraform-baseline-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
     PLAN_ARTIFACT_DIR: terraform-plan-artifact
-    PLAN_FILE_NAME: baseline.tfplan
-    PLAN_TEXT_FILE_NAME: baseline-plan.txt
-    PLAN_METADATA_FILE_NAME: baseline-plan-metadata.json
+    PLAN_BASENAME: baseline
 
 jobs:
     terraform-plan:
@@ -50,7 +44,22 @@ jobs:
         timeout-minutes: 30
         environment: ${{ format('{0}-plan', inputs.environment) }}
 
+        permissions:
+            contents: read
+            id-token: write
+
+        outputs:
+            expected_account_id: ${{ steps.context.outputs.expected_account_id }}
+            primary_region: ${{ steps.context.outputs.primary_region }}
+            deployment_profile: ${{ steps.context.outputs.deployment_profile }}
+
         env:
+            WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+            EXPECTED_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+            AWS_REGION: ${{ vars.PRIMARY_REGION }}
+            AWS_DEFAULT_REGION: ${{ vars.PRIMARY_REGION }}
+            PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+
             TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
             TF_VAR_environment: ${{ inputs.environment }}
             TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
@@ -66,57 +75,54 @@ jobs:
 
         steps:
             - name: Checkout
-              uses: actions/checkout@v6
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
 
-            - name: Resolve and validate Plan workflow settings
+            - name: Validate Plan settings
+              id: context
               shell: bash
-              env:
-                  TARGET_ENVIRONMENT: ${{ inputs.environment }}
-                  CLOUD_NAME: ${{ vars.CLOUD_NAME }}
-                  PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
-                  PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
-                  TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
-                  TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
-                  ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
               run: |
                   set -euo pipefail
 
-                  required_settings=(
-                    CLOUD_NAME
-                    PRIMARY_REGION
-                    ACCOUNT_ID
+                  required=(
+                    EXPECTED_ACCOUNT_ID
+                    AWS_REGION
                     PLAN_ROLE_GITHUB_ARN
-                    TF_STATE_BUCKET_ARN
-                    TF_STATE_BUCKET_CMK_ARN
-                    TF_VAR_isolation_allowed
+                    TF_VAR_cloud_name
+                    TF_VAR_environment
+                    TF_VAR_primary_region
+                    TF_VAR_bucket_admin_principals
+                    TF_VAR_tf_state_bucket_arn
+                    TF_VAR_tf_state_bucket_cmk_arn
                     TF_VAR_deployment_profile
+                    TF_VAR_isolation_allowed
                   )
 
-                  for setting_name in "${required_settings[@]}"; do
-                    if [[ -z "${!setting_name:-}" ]]; then
-                      echo "::error::${setting_name} is not configured in the selected GitHub Environment."
+                  for name in "${required[@]}"; do
+                    [[ -n "${!name:-}" ]] || {
+                      echo "::error::${name} is not configured."
                       exit 1
-                    fi
+                    }
                   done
 
-                  if [[ ! "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]]; then
-                    echo "::error::ISOLATION_ALLOWED must be exactly true or false."
-                    exit 1
-                  fi
-
                   case "${TF_VAR_deployment_profile}" in
-                    production|development|minimal)
-                      ;;
+                    production|development|minimal) ;;
                     *)
                       echo "::error::DEPLOYMENT_PROFILE must be production, development, or minimal."
                       exit 1
                       ;;
                   esac
 
-                  if [[ ! "${TF_VAR_production_retirement_mode}" =~ ^(true|false)$ ]]; then
+                  [[ "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]] || {
+                    echo "::error::ISOLATION_ALLOWED must be exactly true or false."
+                    exit 1
+                  }
+
+                  [[ "${TF_VAR_production_retirement_mode}" =~ ^(true|false)$ ]] || {
                     echo "::error::production_retirement_mode must be exactly true or false."
                     exit 1
-                  fi
+                  }
 
                   if [[ "${TF_VAR_production_retirement_mode}" == "true" &&
                         "${TF_VAR_deployment_profile}" != "production" ]]; then
@@ -130,160 +136,116 @@ jobs:
                     exit 1
                   fi
 
-                  EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
-
-                  if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-                    echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::ACCOUNT_ID must contain exactly 12 digits."
                     exit 1
-                  fi
+                  }
 
                   if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
                     echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
                     exit 1
                   fi
 
-                  ROLE_ACCOUNT_ID="${BASH_REMATCH[1]}"
-
-                  if [[ "${ROLE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
-                    echo "::error::PLAN_ROLE_GITHUB_ARN belongs to account ${ROLE_ACCOUNT_ID}, expected ${EXPECTED_ACCOUNT_ID}."
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::PLAN_ROLE_GITHUB_ARN belongs to the wrong AWS account."
                     exit 1
-                  fi
+                  }
 
                   {
-                    echo "AWS_REGION=${PRIMARY_REGION}"
-                    echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
-                    echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
-                  } >> "${GITHUB_ENV}"
+                    echo "expected_account_id=${EXPECTED_ACCOUNT_ID}"
+                    echo "primary_region=${AWS_REGION}"
+                    echo "deployment_profile=${TF_VAR_deployment_profile}"
+                  } >> "${GITHUB_OUTPUT}"
 
-            - name: Configure AWS credentials from GitHub OIDC
-              uses: aws-actions/configure-aws-credentials@v6
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
               with:
                   role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
                   aws-region: ${{ vars.PRIMARY_REGION }}
-
-            - name: Verify AWS identity
-              shell: bash
-              run: |
-                  set -euo pipefail
-
-                  ACTIVE_ACCOUNT_ID="$(
-                    aws sts get-caller-identity                       --query Account                       --output text
-                  )"
-
-                  if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
-                    echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
-                    exit 1
-                  fi
-
-                  aws sts get-caller-identity
+                  allowed-account-ids: ${{ vars.ACCOUNT_ID }}
+                  role-session-name: tf-apply-plan-${{ github.run_id }}
+                  unset-current-credentials: true
 
             - name: Setup Terraform
-              uses: hashicorp/setup-terraform@v4
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
               with:
                   terraform_version: ${{ env.TERRAFORM_VERSION }}
                   terraform_wrapper: false
 
-            - name: Terraform Init
-              working-directory: ./environments/${{ inputs.environment }}
-              run: terraform init -input=false -no-color
-
-            - name: Terraform Validate
-              working-directory: ./environments/${{ inputs.environment }}
-              run: terraform validate -no-color
-
-            - name: Generate saved Terraform plan
+            - name: Initialize and validate Terraform
               shell: bash
-              env:
-                  WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
               run: |
                   set -euo pipefail
 
-                  PLAN_ARTIFACT_PATH="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
-                  PLAN_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}"
-                  PLAN_TEXT_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_TEXT_FILE_NAME}"
-                  PLAN_METADATA_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_METADATA_FILE_NAME}"
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+                  terraform -chdir="${WORKING_DIRECTORY}" validate -no-color
 
-                  mkdir -p "${PLAN_ARTIFACT_PATH}"
+            - name: Create exact saved plan
+              shell: bash
+              run: |
+                  set -euo pipefail
 
-                  terraform -chdir="${WORKING_DIRECTORY}" plan \
-                    -input=false \
-                    -no-color \
-                    -lock-timeout=5m \
-                    -out="${PLAN_FILE}"
-
-                  terraform -chdir="${WORKING_DIRECTORY}" show \
-                    -no-color \
-                    "${PLAN_FILE}" | tee "${PLAN_TEXT_FILE}"
-
-                  TERRAFORM_CLI_VERSION="$(
-                    terraform version -json |
-                      jq -r '.terraform_version'
+                  context="$(
+                    jq -cn \
+                      --arg operation baseline-apply \
+                      --arg environment "${{ inputs.environment }}" \
+                      --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                      --arg primary_region "${AWS_REGION}" \
+                      --arg deployment_profile "${TF_VAR_deployment_profile}" \
+                      --argjson production_retirement_mode "${TF_VAR_production_retirement_mode}" \
+                      --argjson reconcile_workload_account "${{ inputs.reconcile_workload_account }}" \
+                      '{
+                        operation: $operation,
+                        environment: $environment,
+                        expected_account_id: $expected_account_id,
+                        primary_region: $primary_region,
+                        deployment_profile: $deployment_profile,
+                        production_retirement_mode: $production_retirement_mode,
+                        reconcile_workload_account: $reconcile_workload_account
+                      }'
                   )"
 
-                  jq -n \
-                    --arg environment "${{ inputs.environment }}" \
-                    --arg commit_sha "${GITHUB_SHA}" \
-                    --arg repository "${GITHUB_REPOSITORY}" \
-                    --arg workflow_run_id "${GITHUB_RUN_ID}" \
-                    --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
-                    --arg terraform_version "${TERRAFORM_CLI_VERSION}" \
-                    --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
-                    --argjson production_retirement_mode "${TF_VAR_production_retirement_mode}" \
-                    '{
-                      environment: $environment,
-                      commit_sha: $commit_sha,
-                      repository: $repository,
-                      workflow_run_id: $workflow_run_id,
-                      workflow_run_attempt: $workflow_run_attempt,
-                      terraform_version: $terraform_version,
-                      expected_account_id: $expected_account_id,
-                      production_retirement_mode: $production_retirement_mode
-                    }' > "${PLAN_METADATA_FILE}"
+                  bash scripts/deployment/terraform-plan-artifact.sh create \
+                    --mode apply \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --artifact-directory "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" \
+                    --artifact-basename "${PLAN_BASENAME}" \
+                    --context-json "${context}"
 
-                  (
-                    cd "${PLAN_ARTIFACT_PATH}"
-                    sha256sum "${PLAN_FILE_NAME}" > "${PLAN_FILE_NAME}.sha256"
-                  )
-
-            - name: Publish Terraform plan summary
+            - name: Publish plan summary
               if: always()
               shell: bash
               run: |
-                  set -euo pipefail
-
-                  PLAN_TEXT_FILE="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_TEXT_FILE_NAME}"
-
                   {
                     echo "# Terraform Baseline Plan"
                     echo
                     echo "- Environment: \`${{ inputs.environment }}\`"
-                    echo "- GitHub Environment: \`${{ format('{0}-plan', inputs.environment) }}\`"
                     echo "- Commit: \`${GITHUB_SHA}\`"
-                    echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
-                    echo "- Terraform version: \`${TERRAFORM_VERSION}\`"
-                    echo "- Reconcile after apply: \`${{ inputs.reconcile_workload_account }}\`"
+                    echo "- AWS account: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+                    echo "- Deployment profile: \`${TF_VAR_deployment_profile:-<not resolved>}\`"
                     echo "- Production retirement mode: \`${{ inputs.production_retirement_mode }}\`"
-                    echo "- Plan job status: \`${{ job.status }}\`"
+                    echo "- Reconcile after apply: \`${{ inputs.reconcile_workload_account }}\`"
+                    echo "- Status: \`${{ job.status }}\`"
                     echo
-                    echo "The protected apply job will use the exact saved plan from this job."
-                    echo
+                    echo "The protected Apply job will use this exact saved plan."
                   } >> "${GITHUB_STEP_SUMMARY}"
 
-                  if [[ -f "${PLAN_TEXT_FILE}" ]]; then
+                  plan_text="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_BASENAME}-plan.txt"
+                  if [[ -f "${plan_text}" ]]; then
                     {
-                      echo "<details>"
-                      echo "<summary>View Terraform plan</summary>"
+                      echo "<details><summary>View Terraform plan</summary>"
                       echo
                       echo '```text'
-                      cat "${PLAN_TEXT_FILE}"
+                      cat "${plan_text}"
                       echo '```'
                       echo
                       echo "</details>"
                     } >> "${GITHUB_STEP_SUMMARY}"
                   fi
 
-            - name: Upload saved Terraform plan
-              uses: actions/upload-artifact@v7
+            - name: Upload saved plan
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:
                   name: ${{ env.PLAN_ARTIFACT_NAME }}
                   path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}
@@ -297,158 +259,110 @@ jobs:
         timeout-minutes: 45
         environment: ${{ inputs.environment }}
 
+        permissions:
+            contents: read
+            id-token: write
+
+        env:
+            WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+            EXPECTED_ACCOUNT_ID: ${{ needs.terraform-plan.outputs.expected_account_id }}
+            AWS_REGION: ${{ needs.terraform-plan.outputs.primary_region }}
+            AWS_DEFAULT_REGION: ${{ needs.terraform-plan.outputs.primary_region }}
+            DEPLOYMENT_PROFILE: ${{ needs.terraform-plan.outputs.deployment_profile }}
+            APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+
         steps:
             - name: Checkout
-              uses: actions/checkout@v6
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
 
-            - name: Resolve and validate Apply workflow settings
+            - name: Validate Apply settings
               shell: bash
-              env:
-                  TARGET_ENVIRONMENT: ${{ inputs.environment }}
-                  CLOUD_NAME: ${{ vars.CLOUD_NAME }}
-                  PRIMARY_REGION: ${{ vars.PRIMARY_REGION }}
-                  APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
-                  TF_STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
-                  TF_STATE_BUCKET_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
-                  ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
               run: |
                   set -euo pipefail
 
-                  required_settings=(
-                    CLOUD_NAME
-                    PRIMARY_REGION
-                    ACCOUNT_ID
-                    APPLY_ROLE_GITHUB_ARN
-                    TF_STATE_BUCKET_ARN
-                    TF_STATE_BUCKET_CMK_ARN
-                  )
-
-                  for setting_name in "${required_settings[@]}"; do
-                    if [[ -z "${!setting_name:-}" ]]; then
-                      echo "::error::${setting_name} is not configured in the selected GitHub Environment."
-                      exit 1
-                    fi
-                  done
-
-                  EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
-
-                  if [[ ! "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
-                    echo "::error::ACCOUNT_ID for ${TARGET_ENVIRONMENT} must contain exactly 12 digits."
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::Expected account ID is invalid."
                     exit 1
-                  fi
+                  }
 
                   if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
                     echo "::error::APPLY_ROLE_GITHUB_ARN is not a valid IAM role ARN."
                     exit 1
                   fi
 
-                  ROLE_ACCOUNT_ID="${BASH_REMATCH[1]}"
-
-                  if [[ "${ROLE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
-                    echo "::error::APPLY_ROLE_GITHUB_ARN belongs to account ${ROLE_ACCOUNT_ID}, expected ${EXPECTED_ACCOUNT_ID}."
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::APPLY_ROLE_GITHUB_ARN belongs to the wrong AWS account."
                     exit 1
-                  fi
+                  }
 
-                  {
-                    echo "AWS_REGION=${PRIMARY_REGION}"
-                    echo "AWS_DEFAULT_REGION=${PRIMARY_REGION}"
-                    echo "EXPECTED_ACCOUNT_ID=${EXPECTED_ACCOUNT_ID}"
-                  } >> "${GITHUB_ENV}"
-
-            - name: Configure AWS credentials from GitHub OIDC
-              uses: aws-actions/configure-aws-credentials@v6
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
               with:
                   role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
-                  aws-region: ${{ vars.PRIMARY_REGION }}
-
-            - name: Verify AWS identity
-              shell: bash
-              run: |
-                  set -euo pipefail
-
-                  ACTIVE_ACCOUNT_ID="$(
-                    aws sts get-caller-identity                       --query Account                       --output text
-                  )"
-
-                  if [[ "${ACTIVE_ACCOUNT_ID}" != "${EXPECTED_ACCOUNT_ID}" ]]; then
-                    echo "::error::AWS account mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACTIVE_ACCOUNT_ID}."
-                    exit 1
-                  fi
-
-                  aws sts get-caller-identity
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.EXPECTED_ACCOUNT_ID }}
+                  role-session-name: tf-apply-${{ github.run_id }}
+                  unset-current-credentials: true
 
             - name: Setup Terraform
-              uses: hashicorp/setup-terraform@v4
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
               with:
                   terraform_version: ${{ env.TERRAFORM_VERSION }}
                   terraform_wrapper: false
 
-            - name: Terraform Init
-              working-directory: ./environments/${{ inputs.environment }}
-              run: terraform init -input=false -no-color
+            - name: Initialize Terraform
+              shell: bash
+              run: |
+                  set -euo pipefail
 
-            - name: Download reviewed Terraform plan
-              uses: actions/download-artifact@v8
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+
+            - name: Download reviewed plan
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
               with:
                   name: ${{ env.PLAN_ARTIFACT_NAME }}
                   path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}
 
-            - name: Verify saved Terraform plan
+            - name: Verify and apply exact saved plan
               shell: bash
               run: |
                   set -euo pipefail
 
-                  PLAN_ARTIFACT_PATH="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
-                  PLAN_METADATA_FILE="${PLAN_ARTIFACT_PATH}/${PLAN_METADATA_FILE_NAME}"
+                  context="$(
+                    jq -cn \
+                      --arg operation baseline-apply \
+                      --arg environment "${{ inputs.environment }}" \
+                      --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                      --arg primary_region "${AWS_REGION}" \
+                      --arg deployment_profile "${DEPLOYMENT_PROFILE}" \
+                      --argjson production_retirement_mode "${{ inputs.production_retirement_mode }}" \
+                      --argjson reconcile_workload_account "${{ inputs.reconcile_workload_account }}" \
+                      '{
+                        operation: $operation,
+                        environment: $environment,
+                        expected_account_id: $expected_account_id,
+                        primary_region: $primary_region,
+                        deployment_profile: $deployment_profile,
+                        production_retirement_mode: $production_retirement_mode,
+                        reconcile_workload_account: $reconcile_workload_account
+                      }'
+                  )"
 
-                  test -s "${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}"
-                  test -s "${PLAN_ARTIFACT_PATH}/${PLAN_FILE_NAME}.sha256"
-                  test -s "${PLAN_METADATA_FILE}"
-
-                  (
-                    cd "${PLAN_ARTIFACT_PATH}"
-                    sha256sum --check "${PLAN_FILE_NAME}.sha256"
-                  )
-
-                  jq -e \
-                    --arg environment "${{ inputs.environment }}" \
-                    --arg commit_sha "${GITHUB_SHA}" \
-                    --arg repository "${GITHUB_REPOSITORY}" \
-                    --arg workflow_run_id "${GITHUB_RUN_ID}" \
-                    --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
-                    --arg terraform_version "${TERRAFORM_VERSION}" \
-                    --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
-                    --argjson production_retirement_mode "${{ inputs.production_retirement_mode }}" \
-                    '
-                      .environment == $environment and
-                      .commit_sha == $commit_sha and
-                      .repository == $repository and
-                      .workflow_run_id == $workflow_run_id and
-                      .workflow_run_attempt == $workflow_run_attempt and
-                      .terraform_version == $terraform_version and
-                      .expected_account_id == $expected_account_id and
-                      .production_retirement_mode == $production_retirement_mode
-                    ' \
-                    "${PLAN_METADATA_FILE}" >/dev/null
-
-                  echo "Saved Terraform plan metadata and checksum are valid."
-
-            - name: Apply reviewed Terraform plan
-              shell: bash
-              env:
-                  WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
-              run: |
-                  set -euo pipefail
-
-                  PLAN_FILE="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_FILE_NAME}"
-
-                  echo "Applying the reviewed plan for environment: ${{ inputs.environment }}"
+                  bash scripts/deployment/terraform-plan-artifact.sh verify \
+                    --mode apply \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --artifact-directory "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" \
+                    --artifact-basename "${PLAN_BASENAME}" \
+                    --context-json "${context}"
 
                   terraform -chdir="${WORKING_DIRECTORY}" apply \
                     -input=false \
                     -no-color \
                     -lock-timeout=5m \
-                    "${PLAN_FILE}"
+                    "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_BASENAME}.tfplan"
 
             - name: Publish apply summary
               if: always()
@@ -458,12 +372,11 @@ jobs:
                     echo "# Terraform Baseline Apply"
                     echo
                     echo "- Environment: \`${{ inputs.environment }}\`"
-                    echo "- GitHub Environment: \`${{ inputs.environment }}\`"
                     echo "- Commit: \`${GITHUB_SHA}\`"
-                    echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+                    echo "- AWS account: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+                    echo "- Deployment profile: \`${DEPLOYMENT_PROFILE:-<not resolved>}\`"
                     echo "- Production retirement mode: \`${{ inputs.production_retirement_mode }}\`"
-                    echo "- Saved plan artifact: \`${PLAN_ARTIFACT_NAME}\`"
-                    echo "- Apply job status: \`${{ job.status }}\`"
+                    echo "- Status: \`${{ job.status }}\`"
                   } >> "${GITHUB_STEP_SUMMARY}"
 
     reconcile-workload-account:
