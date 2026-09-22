@@ -370,10 +370,12 @@ validate_service_networking() {
     echo "$service_response_json" |
       jq -c '[.services[0].networkConfiguration.awsvpcConfiguration.subnets[]?] | sort | unique'
   )"
+  
   service_sg_ids_json="$(
     echo "$service_response_json" |
       jq -c '[.services[0].networkConfiguration.awsvpcConfiguration.securityGroups[]?] | sort | unique'
   )"
+
   assign_public_ip="$(
     echo "$service_response_json" |
       jq -r '.services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp // empty'
@@ -564,6 +566,7 @@ validate_task_definition() {
   fi
 
   container_port="$(echo "$port_mappings_json" | jq -r '.[0].containerPort')"
+
   SERVICE_CONTAINER_PORTS["$service_name"]="$container_port"
 
   validate_service_logging \
@@ -627,6 +630,7 @@ validate_service_security_groups() {
     [[ "$(echo "$task_sg_json" | jq -r '.SecurityGroups[0].VpcId')" != "$VPC_ID" ]]; then
     fail "Task security group is missing or belongs to the wrong VPC: ${service_name}"
   fi
+
   validate_service_database_access \
     "$service_name" \
     "$database_access" \
@@ -663,6 +667,7 @@ validate_service_security_groups() {
     echo "$APPLICATION_LOAD_BALANCER_JSON" |
       jq -r --arg service "$service_name" 'if type == "object" and (.target_groups | has($service)) then "true" else "false" end'
   )"
+
   live_load_balancers_json="$(echo "$service_response_json" | jq -c '.services[0].loadBalancers // []')"
 
   if [[ "$expected_ingress_enabled" == "true" && "$has_target_group" != "true" ]]; then
@@ -678,6 +683,7 @@ validate_service_security_groups() {
       echo "$APPLICATION_LOAD_BALANCER_JSON" |
         jq -r --arg service "$service_name" '.target_groups[$service].arn'
     )"
+
     # shellcheck disable=SC2034 # Consumed by ingress.sh.
     SERVICE_TARGET_GROUP_ARNS["$service_name"]="$expected_target_group_arn"
 
@@ -813,6 +819,7 @@ validate_service() {
     echo "$expected_log_group_json" |
       jq -r '.arn'
   )"
+
   expected_execution_role_arn="$(
     echo "$ECS_EXECUTION_ROLES_JSON" |
       jq -r --arg service "$service_name" '.[$service].arn'
