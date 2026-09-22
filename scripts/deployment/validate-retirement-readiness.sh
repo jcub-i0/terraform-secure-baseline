@@ -216,6 +216,12 @@ NAME_PREFIX="$(output_raw name_prefix)"
 RDS_ADDRESS="$(output_raw rds_address)"
 EFFECTIVE_EGRESS_MODE="$(output_raw effective_egress_mode)"
 LIFECYCLE_JSON="$(output_json lifecycle_protection)"
+
+PRODUCTION_RETIREMENT_MODE="$(
+  echo "$LIFECYCLE_JSON" |
+    jq -r '.production_retirement_mode'
+)"
+
 ECR_REPOSITORIES_JSON="$(output_json ecr_repositories)"
 ECS_CLUSTER_JSON="$(output_json ecs_cluster)"
 ECS_SERVICES_JSON="$(output_json ecs_services)"
@@ -389,6 +395,11 @@ RDS_LIVE_JSON="$(
     --db-instance-identifier "$RDS_IDENTIFIER" \
     --output json
 )" || fail "Unable to describe RDS instance: ${RDS_IDENTIFIER}"
+
+RDS_DELETION_PROTECTION="$(
+  echo "$RDS_LIVE_JSON" |
+    jq -r '.DBInstances[0].DeletionProtection'
+)"
 
 if ! echo "$RDS_LIVE_JSON" |
   jq -e \
@@ -806,6 +817,16 @@ if [[ "$(echo "$ACTIVE_BACKUP_JOBS" | jq 'length')" -ne 0 ]]; then
   fail "Backup vault has active backup jobs: ${BACKUP_VAULT_NAME}"
 fi
 
+ACTIVE_BACKUP_JOB_COUNT="$(
+  echo "$ACTIVE_BACKUP_JOBS" |
+    jq 'length'
+)"
+
+if [[ "$ACTIVE_BACKUP_JOB_COUNT" -ne 0 ]]; then
+  echo "$ACTIVE_BACKUP_JOBS" | jq .
+  fail "Backup vault has active backup jobs: ${BACKUP_VAULT_NAME}"
+fi
+
 success "Backup vault has no recovery points or active backup jobs"
 
 # -----------------------------------------------------------------------------
@@ -821,10 +842,10 @@ AWS account ID:                ${AWS_ACCOUNT_ID}
 AWS region:                    ${AWS_REGION}
 Name prefix:                   ${NAME_PREFIX}
 effective_egress_mode:         ${EFFECTIVE_EGRESS_MODE}
-production_retirement_mode:    true
+production_retirement_mode:    ${PRODUCTION_RETIREMENT_MODE}
 
 RDS identifier:                ${RDS_IDENTIFIER}
-RDS deletion protection:       disabled
+RDS deletion protection:       ${RDS_DELETION_PROTECTION}
 Final snapshot identifier:     ${FINAL_SNAPSHOT_IDENTIFIER}
 
 ALB expected:                  $(if [[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]]; then echo "no"; else echo "yes"; fi)
@@ -835,8 +856,8 @@ ECS autoscaling targets:       $(echo "$ECS_AUTOSCALING_TARGETS_JSON" | jq 'leng
 ECR repositories:              ${EXPECTED_ECR_COUNT}
 
 Backup vault:                  ${BACKUP_VAULT_NAME}
-Backup recovery points:        0
-Active backup jobs:            0
+Backup recovery points:        ${RECOVERY_POINT_COUNT}
+Active backup jobs:            ${ACTIVE_BACKUP_JOB_COUNT}
 SUMMARY
 
 section "Validation Result"
