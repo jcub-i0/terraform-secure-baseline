@@ -427,7 +427,7 @@ jobs:
                       .workflow_run_attempt == $workflow_run_attempt and
                       .terraform_version == $terraform_version and
                       .expected_account_id == $expected_account_id and
-                      .production_retirement_mode "${{ inputs.production_retirement_mode }}"
+                      .production_retirement_mode == $production_retirement_mode
                     ' \
                     "${PLAN_METADATA_FILE}" >/dev/null
 
