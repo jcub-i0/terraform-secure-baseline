@@ -217,3 +217,21 @@ variable "security_policy_rule_ids" {
     error_message = "security_policy_rule_ids must contain an entry for every configured ECS service."
   }
 }
+
+variable "availability_zone_rebalancing" {
+  description = "Whether ECS Availability Zone is explicitly managed for services"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      var.availability_zone_rebalancing != null ||
+      contains(
+        ["ENABLED", "DISABLED"],
+        var.availability_zone_rebalancing
+      )
+    )
+
+    error_message = "availability_zone_rebalancing must be null, ENABLED, or DISABLED."
+  }
+}
