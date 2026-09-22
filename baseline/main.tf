@@ -333,6 +333,10 @@ module "ecs_service" {
   environment    = var.environment
   primary_region = var.primary_region
 
+  availability_zone_rebalancing = (
+    local.effective_ecs_availability_zone_rebalancing
+  )
+
   vpc_id       = module.networking.vpc_id
   cluster_arn  = module.ecs_cluster.cluster_arn
   cluster_name = module.ecs_cluster.cluster_name
@@ -346,8 +350,7 @@ module "ecs_service" {
 
   services = local.ecs_runtime_services
 
-  execution_policy_ids = module.iam.ecs_task_execution_policy_ids
-
+  execution_policy_ids     = module.iam.ecs_task_execution_policy_ids
   security_policy_rule_ids = local.ecs_security_policy_rule_ids
 }
 

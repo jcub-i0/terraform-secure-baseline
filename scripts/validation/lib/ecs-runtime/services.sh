@@ -74,10 +74,66 @@ validate_guardduty_fargate_platform_version() {
   success "ECS service Fargate platform is GuardDuty Runtime Monitoring compatible: ${service_name} platform=${expected_platform_version}"
 }
 
+validate_production_service_availability_contract() {
+  local invalid_services_json
+
+  if [[ "$DEPLOYMENT_PROFILE" != "production" ]]; then
+    return 0
+  fi
+
+  invalid_services_json="$(
+    jq -n -c \
+      --argjson configuration "$ECS_SERVICE_CONFIGURATION_JSON" \
+      --argjson services "$ECS_SERVICES_JSON" '
+        [
+          $configuration
+          | to_entries[]
+          | . as $entry
+          | ($entry.value.scaling == null) as $fixed_count
+          | ($services[$entry.key].availability_zone_rebalancing // null) as $az_rebalancing
+          | select(
+              (
+                if $fixed_count
+                then $entry.value.desired_count < 2
+                else $entry.value.scaling.min_capacity < 2
+                end
+              )
+              or $entry.value.deployment.minimum_healthy_percent != 100
+              or $entry.value.deployment.maximum_percent < 200
+              or $az_rebalancing != "ENABLED"
+            )
+          | {
+              service: $entry.key,
+              mode: (if $fixed_count then "fixed" else "autoscaled" end),
+              desired_count: $entry.value.desired_count,
+              min_capacity: (
+                if $fixed_count
+                then null
+                else $entry.value.scaling.min_capacity
+                end
+              ),
+              minimum_healthy_percent: $entry.value.deployment.minimum_healthy_percent,
+              maximum_percent: $entry.value.deployment.maximum_percent,
+              availability_zone_rebalancing: $az_rebalancing
+            }
+        ]
+      '
+  )"
+
+  if [[ "$(echo "$invalid_services_json" | jq 'length')" -ne 0 ]]; then
+    echo "$invalid_services_json" | jq .
+    fail "One or more deployable production ECS services violate the production availability contract."
+  fi
+
+  success "All deployable production ECS services satisfy the production availability contract"
+}
+
 ecs_runtime_validate_services() {
   local service_name
 
   section "Validating ECS services, task definitions, logs, and task security groups"
+
+  validate_production_service_availability_contract
 
   while IFS= read -r service_name; do
     validate_service "$service_name"
@@ -136,6 +192,25 @@ ecs_runtime_resolve_service_networking() {
   if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
     ALB_SECURITY_GROUP_ID="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -r '.security_group_id // empty')"
   fi
+}
+
+validate_service_availability() {
+  local service_name="$1"
+  local service_response_json="$2"
+  local expected_availability_zone_rebalancing="$3"
+
+  local live_availability_zone_rebalancing
+
+  live_availability_zone_rebalancing="$(
+    echo "$service_response_json" |
+      jq -r '.services[0].availabilityZoneRebalancing // empty'
+  )"
+
+  if [[ "$live_availability_zone_rebalancing" != "$expected_availability_zone_rebalancing" ]]; then
+    fail "ECS Availability Zone rebalancing does not match Terraform: ${service_name} expected=${expected_availability_zone_rebalancing} actual=${live_availability_zone_rebalancing:-<missing>}"
+  fi
+
+  success "ECS Availability Zone rebalancing matches Terraform: ${service_name}"
 }
 
 validate_service_identity() {
@@ -295,10 +370,12 @@ validate_service_networking() {
     echo "$service_response_json" |
       jq -c '[.services[0].networkConfiguration.awsvpcConfiguration.subnets[]?] | sort | unique'
   )"
+  
   service_sg_ids_json="$(
     echo "$service_response_json" |
       jq -c '[.services[0].networkConfiguration.awsvpcConfiguration.securityGroups[]?] | sort | unique'
   )"
+
   assign_public_ip="$(
     echo "$service_response_json" |
       jq -r '.services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp // empty'
@@ -489,6 +566,7 @@ validate_task_definition() {
   fi
 
   container_port="$(echo "$port_mappings_json" | jq -r '.[0].containerPort')"
+
   SERVICE_CONTAINER_PORTS["$service_name"]="$container_port"
 
   validate_service_logging \
@@ -552,6 +630,7 @@ validate_service_security_groups() {
     [[ "$(echo "$task_sg_json" | jq -r '.SecurityGroups[0].VpcId')" != "$VPC_ID" ]]; then
     fail "Task security group is missing or belongs to the wrong VPC: ${service_name}"
   fi
+
   validate_service_database_access \
     "$service_name" \
     "$database_access" \
@@ -588,6 +667,7 @@ validate_service_security_groups() {
     echo "$APPLICATION_LOAD_BALANCER_JSON" |
       jq -r --arg service "$service_name" 'if type == "object" and (.target_groups | has($service)) then "true" else "false" end'
   )"
+
   live_load_balancers_json="$(echo "$service_response_json" | jq -c '.services[0].loadBalancers // []')"
 
   if [[ "$expected_ingress_enabled" == "true" && "$has_target_group" != "true" ]]; then
@@ -603,6 +683,7 @@ validate_service_security_groups() {
       echo "$APPLICATION_LOAD_BALANCER_JSON" |
         jq -r --arg service "$service_name" '.target_groups[$service].arn'
     )"
+
     # shellcheck disable=SC2034 # Consumed by ingress.sh.
     SERVICE_TARGET_GROUP_ARNS["$service_name"]="$expected_target_group_arn"
 
@@ -652,8 +733,12 @@ validate_service() {
   local expected_task_role_arn
   local service_response_json
   local container_port
+  local expected_availability_zone_rebalancing
 
-  expected_service_json="$(echo "$ECS_SERVICES_JSON" | jq -c --arg service "$service_name" '.[$service]')"
+  expected_service_json="$(
+    echo "$ECS_SERVICES_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
 
   expected_service_configuration_json="$(
     echo "$ECS_SERVICE_CONFIGURATION_JSON" |
@@ -685,30 +770,70 @@ validate_service() {
       jq -r '.deployment.health_check_grace_period_seconds'
   )"
 
-  expected_service_arn="$(echo "$expected_service_json" | jq -r '.arn')"
-  expected_service_name="$(echo "$expected_service_json" | jq -r '.name')"
-  expected_platform_version="$(echo "$expected_service_json" | jq -r '.platform_version')"
+  expected_service_arn="$(
+    echo "$expected_service_json" |
+      jq -r '.arn'
+  )"
+
+  expected_service_name="$(
+    echo "$expected_service_json" |
+      jq -r '.name'
+  )"
+
+  expected_platform_version="$(
+    echo "$expected_service_json" |
+      jq -r '.platform_version'
+  )"
+
   expected_task_definition_arn="$(
     echo "$TASK_DEFINITION_ARNS_JSON" |
       jq -r --arg service "$service_name" '.[$service]'
   )"
-  expected_task_sg_id="$(echo "$TASK_SECURITY_GROUP_IDS_JSON" | jq -r --arg service "$service_name" '.[$service]')"
+
+  expected_task_sg_id="$(
+    echo "$TASK_SECURITY_GROUP_IDS_JSON" |
+      jq -r --arg service "$service_name" '.[$service]'
+  )"
 
   database_access="$(
     echo "$expected_service_configuration_json" |
       jq -r '.database_access'
   )"
 
-  expected_ingress_enabled="$(echo "$expected_service_configuration_json" | jq -r '.ingress_enabled')"
+  expected_ingress_enabled="$(
+    echo "$expected_service_configuration_json" |
+      jq -r '.ingress_enabled'
+  )"
 
-  expected_log_group_json="$(echo "$ECS_LOG_GROUPS_JSON" | jq -c --arg service "$service_name" '.[$service]')"
-  expected_log_group_name="$(echo "$expected_log_group_json" | jq -r '.name')"
-  expected_log_group_arn="$(echo "$expected_log_group_json" | jq -r '.arn')"
+  expected_log_group_json="$(
+    echo "$ECS_LOG_GROUPS_JSON" |
+      jq -c --arg service "$service_name" '.[$service]'
+  )"
+  
+  expected_log_group_name="$(
+    echo "$expected_log_group_json" |
+      jq -r '.name'
+  )"
+
+  expected_log_group_arn="$(
+    echo "$expected_log_group_json" |
+      jq -r '.arn'
+  )"
+
   expected_execution_role_arn="$(
     echo "$ECS_EXECUTION_ROLES_JSON" |
       jq -r --arg service "$service_name" '.[$service].arn'
   )"
-  expected_task_role_arn="$(echo "$ECS_TASK_ROLES_JSON" | jq -r --arg service "$service_name" '.[$service].arn')"
+
+  expected_task_role_arn="$(
+    echo "$ECS_TASK_ROLES_JSON" |
+      jq -r --arg service "$service_name" '.[$service].arn'
+  )"
+
+  expected_availability_zone_rebalancing="$(
+    echo "$expected_service_json" |
+      jq -r '.availability_zone_rebalancing'
+  )"
 
   info "Validating ECS service: ${service_name}"
 
@@ -767,4 +892,9 @@ validate_service() {
     "$service_response_json" \
     "$expected_ingress_enabled" \
     "$container_port"
+
+  validate_service_availability \
+    "$service_name" \
+    "$service_response_json" \
+    "$expected_availability_zone_rebalancing"
 }

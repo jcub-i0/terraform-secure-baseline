@@ -315,6 +315,12 @@ locals {
     if service.ingress != null
   }
 
+  effective_ecs_availability_zone_rebalancing = (
+    local.is_production_profile
+    ? "ENABLED"
+    : null
+  )
+
   # ---------------------------------------------------------------------------
   # Networking
   # ---------------------------------------------------------------------------
