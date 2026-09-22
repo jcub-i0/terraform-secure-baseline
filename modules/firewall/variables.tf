@@ -65,3 +65,8 @@ variable "centralized_logs_bucket_arn" {
 variable "centralized_logs_bucket_name" {
   type = string
 }
+
+variable "delete_protection" {
+  description = "Whether AWS Network Firewall deletion protection is enabled."
+  type        = bool
+}

@@ -5,7 +5,7 @@ resource "aws_backup_vault" "main" {
   name        = "${var.name_prefix}-backup-vault"
   kms_key_arn = var.backup_vault_cmk_arn
 
-  force_destroy = true # CHANGE THIS IN PROD
+  force_destroy = var.force_destroy
 
   tags = {
     Name        = "${var.name_prefix}-daily-backup"

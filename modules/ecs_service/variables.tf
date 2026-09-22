@@ -235,3 +235,8 @@ variable "availability_zone_rebalancing" {
     error_message = "availability_zone_rebalancing must be null, ENABLED, or DISABLED."
   }
 }
+
+variable "force_delete" {
+  description = "Whether ECS services may be forcibly deleted without first scaling to zero."
+  type        = bool
+}

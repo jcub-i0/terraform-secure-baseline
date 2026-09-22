@@ -31,7 +31,7 @@ resource "aws_lb" "load_balancer" {
 
   subnets = var.public_subnet_ids
 
-  enable_deletion_protection = false # CHANGE THIS IN PROD
+  enable_deletion_protection = var.enable_deletion_protection
   drop_invalid_header_fields = true
 
   tags = {

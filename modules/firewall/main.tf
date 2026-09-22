@@ -97,7 +97,7 @@ resource "aws_networkfirewall_firewall" "egress" {
   firewall_policy_arn = aws_networkfirewall_firewall_policy.egress.arn
   vpc_id              = var.vpc_id
 
-  delete_protection                 = false # CHANGE THIS IN PROD
+  delete_protection                 = var.delete_protection
   firewall_policy_change_protection = false # CHANGE THIS IN PROD
   subnet_change_protection          = false # CHANGE THIS IN PROD
 

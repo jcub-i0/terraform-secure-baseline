@@ -206,6 +206,20 @@ output "effective_manage_guardduty_locally" {
   value       = var.manage_guardduty_locally
 }
 
+output "lifecycle_protection" {
+  description = "Effective destructive-lifecycle posture used by validation."
+
+  value = {
+    production_retirement_mode          = local.effective_production_retirement_mode
+    rds_deletion_protection             = local.effective_rds_deletion_protection
+    alb_deletion_protection             = local.effective_alb_deletion_protection
+    network_firewall_delete_protection  = local.effective_network_firewall_delete_protection
+    ecr_force_delete                    = local.effective_ecr_force_delete
+    ecs_service_force_delete            = local.effective_ecs_service_force_delete
+    backup_vault_force_destroy          = local.effective_backup_vault_force_destroy
+  }
+}
+
 output "ecr_repositories" {
   description = "Managed ECR repository metadata keyed by repository name"
   value       = module.ecr.repositories

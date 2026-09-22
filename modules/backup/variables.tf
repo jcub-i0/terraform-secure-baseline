@@ -35,3 +35,8 @@ variable "backup_tag_key" {
   type        = string
   default     = "Backup"
 }
+
+variable "force_destroy" {
+  description = "Whether recovery points may be automatically deleted so the Backup vault can be destroyed."
+  type        = bool
+}

@@ -86,3 +86,8 @@ variable "services" {
     error_message = "Each ALB service must define at least one host_headers or path_patterns routing condition."
   }
 }
+
+variable "enable_deletion_protection" {
+  description = "Whether deletion protection is enabled on the Application Load Balancer."
+  type        = bool
+}

@@ -414,8 +414,36 @@ locals {
     )
   )
 
+  effective_production_retirement_mode = (
+    local.is_production_profile &&
+    var.production_retirement_mode
+  )
+
   effective_rds_deletion_protection = (
-    local.is_production_profile
+    local.is_production_profile &&
+    var.production_retirement_mode
+  )
+
+  effective_alb_deletion_protection = (
+    local.is_production_profile &&
+    !local.effective_production_retirement_mode
+  )
+
+  effective_network_firewall_delete_protection = (
+    local.is_production_profile &&
+    !local.effective_production_retirement_mode
+  )
+
+  effective_ecr_force_delete = (
+    !local.is_production_profile
+  )
+
+  effective_ecs_service_force_delete = (
+    !local.is_production_profile
+  )
+
+  effective_backup_vault_force_destroy = (
+    !local.is_production_profile
   )
 
   effective_rds_skip_final_snapshot = (
