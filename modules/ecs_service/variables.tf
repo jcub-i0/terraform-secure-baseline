@@ -225,7 +225,7 @@ variable "availability_zone_rebalancing" {
 
   validation {
     condition = (
-      var.availability_zone_rebalancing != null ||
+      var.availability_zone_rebalancing == null ||
       contains(
         ["ENABLED", "DISABLED"],
         var.availability_zone_rebalancing
