@@ -352,7 +352,7 @@ module "ecs_service" {
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
   logs_cmk_arn              = module.security.logs_cmk_arn
 
-  services = local.ecs_runtime_services
+  services     = local.ecs_runtime_services
   force_delete = local.effective_ecr_force_delete
 
   execution_policy_ids     = module.iam.ecs_task_execution_policy_ids
