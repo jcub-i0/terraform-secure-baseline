@@ -285,8 +285,8 @@ Do not re-plan after approval.
 |---|---|---|
 | ✅ **R1 - Production Resilience Contract** | Lock AZ, RDS, ECS availability, lifecycle-protection, retirement, Restore Testing, and validation semantics before resource changes | `ROADMAP-v1.11.0.md`, `baseline/variables.tf`, `baseline/locals.tf`, environment interfaces |
 | ✅ **R2 - Three-AZ Production Topology** | Make production networking three-AZ and propagate the full topology to firewall, endpoints, RDS, ECS, and ALB | `modules/networking/`, `modules/firewall/`, `modules/vpc_endpoints/`, `baseline/`, environments |
-| **R3 - RDS Resilience & Lifecycle** | Enforce production Multi-AZ, deletion protection, final-snapshot behavior, automated-backup retention, and exact RDS validation | `modules/storage/`, `baseline/`, workload outputs, `validate-backup.sh` |
-| **R4 - ECS Production Availability** | Enforce redundant service capacity, strict deployment-health semantics, and explicit AZ rebalancing | `modules/ecs_service/`, `baseline/`, ECS runtime validators |
+| ✅ **R3 - RDS Resilience & Lifecycle** | Enforce production Multi-AZ, deletion protection, final-snapshot behavior, automated-backup retention, and exact RDS validation | `modules/storage/`, `baseline/`, workload outputs, `validate-backup.sh` |
+| ✅ **R4 - ECS Production Availability** | Enforce redundant service capacity, strict deployment-health semantics, and explicit AZ rebalancing | `modules/ecs_service/`, `baseline/`, ECS runtime validators |
 | **R5 - Production Lifecycle Protection** | Replace development-friendly production force-delete settings while preserving dev/minimal teardown | storage, ALB, firewall, ECR, ECS service, Backup modules |
 | **R6 - Backup Restore Verification** | Add Terraform-owned AWS Backup Restore Testing for RDS and prove the recovery path | `modules/backup/`, `modules/iam/backup.tf`, storage/baseline outputs, `validate-backup.sh` |
 | **R7 - Exact Resilience Validation** | Extend existing validators to prove the complete v1.11 contract without changing validation-layer count | workload validators and ECS runtime helpers |

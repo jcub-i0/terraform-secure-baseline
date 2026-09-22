@@ -1,5 +1,7 @@
 name: Terraform Destroy
 
+run-name: Terraform destroy - ${{ inputs.environment }}
+
 on:
     workflow_dispatch:
         inputs:
@@ -7,142 +9,680 @@ on:
                 description: "Environment to destroy"
                 required: true
                 type: choice
-                options:
-                    - dev
-                    - staging
-                    - prod
+                options: [dev, staging, prod]
             confirm:
-                description: "Type DESTROY to destroy infrastructure"
+                description: "Type DESTROY to authorize destroy planning"
                 required: true
+                type: string
 
-permissions:
-    id-token: write
-    contents: read
+permissions: {}
 
 concurrency:
-    group: terraform-destroy-${{ inputs.environment }}
+    group: terraform-workload-${{ inputs.environment }}
     cancel-in-progress: false
 
+env:
+    AWS_PAGER: ""
+    TF_IN_AUTOMATION: "true"
+    TF_INPUT: "false"
+    TERRAFORM_VERSION: "1.15.8"
+
+    DESTROY_ARTIFACT_NAME: terraform-destroy-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+    DESTROY_ARTIFACT_DIR: terraform-destroy-plan-artifact
+    DESTROY_PLAN_BASENAME: baseline-destroy
+
+    IDC_ARTIFACT_NAME: identity-center-cleanup-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+    IDC_ARTIFACT_DIR: identity-center-cleanup-plan-artifact
+    IDC_PLAN_BASENAME: identity-center-cleanup
+
 jobs:
-    identity-center-cleanup:
-      if: ${{inputs.confirm == 'DESTROY'}}
-      runs-on: ubuntu-latest
-      environment: control-plane
-
-      env:
-        TF_VAR_identity_center_workloads: ${{ vars.IDENTITY_CENTER_WORKLOADS }}
-        TF_VAR_identity_center_secops: ${{ vars.IDENTITY_CENTER_SECOPS }}
-
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v6
-
-        - name: Configure AWS credentials for Control Plane
-          uses: aws-actions/configure-aws-credentials@v6
-          with:
-            role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
-            aws-region: ${{ vars.PRIMARY_REGION }}
-
-        - name: Verify control-plane identity
-          run: aws sts get-caller-identity
-
-        - name: Setup Terraform
-          uses: hashicorp/setup-terraform@v4
-
-        - name: Prepare Identity Center cleanup inputs
-          shell: bash
-          env:
-            TARGET_ENVIRONMENT: ${{ inputs.environment }}
-          run: |
-            set -euo pipefail
-
-            if ! jq -e --arg environment "${TARGET_ENVIRONMENT}" '
-              type == "object" and
-              has($environment) and
-              (.[$environment] | type == "object")
-            ' <<< "${TF_VAR_identity_center_workloads}" >/dev/null; then
-              echo "::error::IDENTITY_CENTER_WORKLOADS does not contain a valid '${TARGET_ENVIRONMENT}' configuration."
-              exit 1
-            fi
-
-            updated_workloads="$(
-              jq -c --arg environment "${TARGET_ENVIRONMENT}" '
-                .[$environment].enable_secops_analyst = false |
-                .[$environment].enable_secops_engineer = false
-              ' <<< "${TF_VAR_identity_center_workloads}"
-            )"
-
-            echo "TF_VAR_identity_center_workloads=${updated_workloads}" >> "${GITHUB_ENV}"
-
-        - name: Terraform Init Identity Center
-          working-directory: ./bootstrap/control_plane/identity_center
-          run: terraform init
-
-        - name: Identity Center Cleanup Plan
-          working-directory: ./bootstrap/control_plane/identity_center
-          shell: bash
-          run: |
-            set -euo pipefail
-            terraform plan -input=false -no-color -lock-timeout=5m
-
-        - name: Identity Center Cleanup
-          working-directory: ./bootstrap/control_plane/identity_center
-          shell: bash
-          run: |
-            set -euo pipefail
-            terraform apply -auto-approve -input=false -no-color
-
-    terraform-destroy:
-        needs: identity-center-cleanup
-        if: ${{inputs.confirm == 'DESTROY'}}
+    terraform-destroy-plan:
+        name: Plan ${{ inputs.environment }} destroy
         runs-on: ubuntu-latest
-        environment: ${{inputs.environment}}
+        timeout-minutes: 30
+        environment: ${{ format('{0}-plan', inputs.environment) }}
+        permissions:
+            contents: read
+            id-token: write
+
+        outputs:
+            expected_account_id: ${{ steps.context.outputs.expected_account_id }}
+            primary_region: ${{ steps.context.outputs.primary_region }}
+            deployment_profile: ${{ steps.context.outputs.deployment_profile }}
+            production_retirement_mode: ${{ steps.context.outputs.production_retirement_mode }}
 
         env:
+            WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+            EXPECTED_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+            AWS_REGION: ${{ vars.PRIMARY_REGION }}
+            AWS_DEFAULT_REGION: ${{ vars.PRIMARY_REGION }}
+            PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+
             TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
-            TF_VAR_environment: ${{ vars.ENVIRONMENT }}
+            TF_VAR_environment: ${{ inputs.environment }}
             TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
             TF_VAR_abuseipdb_api_key: ${{ secrets.ABUSEIPDB_API_KEY }}
             TF_VAR_bucket_admin_principals: ${{ vars.BUCKET_ADMIN_PRINCIPALS }}
             TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
             TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+            TF_VAR_deployment_profile: ${{ vars.DEPLOYMENT_PROFILE }}
             TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
-            TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED || 'false' }}
+            TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
+            TF_VAR_production_retirement_mode: ${{ vars.DEPLOYMENT_PROFILE == 'production' && 'true' || 'false' }}
 
         steps:
-            - name: Confirm destroy
-              run: |
-                if [ "${{ github.event.inputs.confirm }}" != "DESTROY" ]; then
-                    echo "Confirmation failed. Aborting."
-                    exit 1
-                fi
-
             - name: Checkout
-              uses: actions/checkout@v6
-
-            - name: Configure AWS credentials
-              uses: aws-actions/configure-aws-credentials@v6
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
               with:
-                role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
-                aws-region: ${{ vars.PRIMARY_REGION }}
+                  persist-credentials: false
 
-            - name: Verify identity
-              run: aws sts get-caller-identity
-
-            - name: Setup Terraform
-              uses: hashicorp/setup-terraform@v4
-
-            - name: Terraform Init
-              working-directory: ./environments/${{ inputs.environment }}
-              run: terraform init
-
-            - name: Print destroy target
-              run: echo "Destroying environment - ${{ inputs.environment }}"
-
-            - name: Terraform Destroy
-              working-directory: ./environments/${{ inputs.environment }}
+            - name: Validate destroy request and workload context
+              id: context
               shell: bash
               run: |
-                set -euo pipefail
-                terraform destroy -auto-approve -input=false -no-color
+                  set -euo pipefail
+
+                  [[ "${{ inputs.confirm }}" == "DESTROY" ]] || {
+                    echo "::error::Type DESTROY exactly to authorize destroy planning."
+                    exit 1
+                  }
+
+                  required=(
+                    EXPECTED_ACCOUNT_ID
+                    AWS_REGION
+                    PLAN_ROLE_GITHUB_ARN
+                    TF_VAR_cloud_name
+                    TF_VAR_environment
+                    TF_VAR_primary_region
+                    TF_VAR_bucket_admin_principals
+                    TF_VAR_tf_state_bucket_arn
+                    TF_VAR_tf_state_bucket_cmk_arn
+                    TF_VAR_deployment_profile
+                    TF_VAR_isolation_allowed
+                  )
+
+                  for name in "${required[@]}"; do
+                    [[ -n "${!name:-}" ]] || {
+                      echo "::error::${name} is not configured."
+                      exit 1
+                    }
+                  done
+
+                  case "${TF_VAR_deployment_profile}" in
+                    production|development|minimal) ;;
+                    *)
+                      echo "::error::DEPLOYMENT_PROFILE must be production, development, or minimal."
+                      exit 1
+                      ;;
+                  esac
+
+                  [[ "${TF_VAR_isolation_allowed}" =~ ^(true|false)$ ]] || {
+                    echo "::error::ISOLATION_ALLOWED must be exactly true or false."
+                    exit 1
+                  }
+
+                  [[ "${TF_VAR_production_retirement_mode}" =~ ^(true|false)$ ]] || {
+                    echo "::error::production_retirement_mode must be exactly true or false."
+                    exit 1
+                  }
+
+                  if [[ "${TF_VAR_deployment_profile}" == "production" &&
+                        "${TF_VAR_production_retirement_mode}" != "true" ]]; then
+                    echo "::error::Production destruction requires production_retirement_mode=true."
+                    exit 1
+                  fi
+
+                  if [[ "${TF_VAR_deployment_profile}" != "production" &&
+                        "${TF_VAR_production_retirement_mode}" != "false" ]]; then
+                    echo "::error::Non-production profiles must not enable production_retirement_mode."
+                    exit 1
+                  fi
+
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::ACCOUNT_ID must contain exactly 12 digits."
+                    exit 1
+                  }
+
+                  if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+                    exit 1
+                  fi
+
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::PLAN_ROLE_GITHUB_ARN belongs to the wrong AWS account."
+                    exit 1
+                  }
+
+                  {
+                    echo "expected_account_id=${EXPECTED_ACCOUNT_ID}"
+                    echo "primary_region=${AWS_REGION}"
+                    echo "deployment_profile=${TF_VAR_deployment_profile}"
+                    echo "production_retirement_mode=${TF_VAR_production_retirement_mode}"
+                  } >> "${GITHUB_OUTPUT}"
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+              with:
+                  role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ vars.PRIMARY_REGION }}
+                  allowed-account-ids: ${{ vars.ACCOUNT_ID }}
+                  role-session-name: tf-destroy-plan-${{ github.run_id }}
+                  unset-current-credentials: true
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
+
+            - name: Initialize, validate, and enforce retirement readiness
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+                  terraform -chdir="${WORKING_DIRECTORY}" validate -no-color
+
+                  if [[ "${TF_VAR_deployment_profile}" != "production" ]]; then
+                    echo "Non-production profile; production retirement gates are not required."
+                    exit 0
+                  fi
+
+                  set +e
+                  terraform -chdir="${WORKING_DIRECTORY}" plan \
+                    -input=false -no-color -lock-timeout=5m -detailed-exitcode
+                  rc=$?
+                  set -e
+
+                  case "${rc}" in
+                    0) echo "Production retirement configuration is converged." ;;
+                    2)
+                      echo "::error::Stage-1 production retirement preparation is not converged."
+                      echo "::error::Run Terraform Apply with production_retirement_mode=true first."
+                      exit 1
+                      ;;
+                    *)
+                      echo "::error::Terraform convergence check failed with exit code ${rc}."
+                      exit "${rc}"
+                      ;;
+                  esac
+
+                  bash scripts/deployment/validate-retirement-readiness.sh \
+                    --environment "${{ inputs.environment }}" \
+                    --region "${AWS_REGION}" \
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+
+            - name: Create exact saved destroy plan
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  context="$(
+                    jq -cn \
+                      --arg operation workload-destroy \
+                      --arg environment "${{ inputs.environment }}" \
+                      --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                      --arg primary_region "${AWS_REGION}" \
+                      --arg deployment_profile "${TF_VAR_deployment_profile}" \
+                      --argjson production_retirement_mode "${TF_VAR_production_retirement_mode}" \
+                      '{operation:$operation, environment:$environment,
+                        expected_account_id:$expected_account_id, primary_region:$primary_region,
+                        deployment_profile:$deployment_profile,
+                        production_retirement_mode:$production_retirement_mode}'
+                  )"
+
+                  bash scripts/deployment/terraform-plan-artifact.sh create \
+                    --mode destroy \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --artifact-directory "${GITHUB_WORKSPACE}/${DESTROY_ARTIFACT_DIR}" \
+                    --artifact-basename "${DESTROY_PLAN_BASENAME}" \
+                    --context-json "${context}"
+
+            - name: Publish destroy plan
+              if: always()
+              shell: bash
+              run: |
+                  {
+                    echo "# Terraform Destroy Plan"
+                    echo
+                    echo "- Environment: \`${{ inputs.environment }}\`"
+                    echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- AWS account: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+                    echo "- Deployment profile: \`${TF_VAR_deployment_profile:-<not resolved>}\`"
+                    echo "- Production retirement mode: \`${TF_VAR_production_retirement_mode:-<not resolved>}\`"
+                    echo "- Status: \`${{ job.status }}\`"
+                    echo
+                  } >> "${GITHUB_STEP_SUMMARY}"
+
+                  plan_text="${GITHUB_WORKSPACE}/${DESTROY_ARTIFACT_DIR}/${DESTROY_PLAN_BASENAME}-plan.txt"
+                  if [[ -f "${plan_text}" ]]; then
+                    {
+                      echo "<details><summary>View exact destroy plan</summary>"
+                      echo
+                      echo '```text'
+                      cat "${plan_text}"
+                      echo '```'
+                      echo
+                      echo "</details>"
+                    } >> "${GITHUB_STEP_SUMMARY}"
+                  fi
+
+            - name: Upload saved destroy plan
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: ${{ env.DESTROY_ARTIFACT_NAME }}
+                  path: ${{ github.workspace }}/${{ env.DESTROY_ARTIFACT_DIR }}
+                  if-no-files-found: error
+                  retention-days: 1
+
+    authorize-destroy:
+        name: Authorize reviewed ${{ inputs.environment }} destroy
+        needs: terraform-destroy-plan
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        environment: ${{ inputs.environment }}
+        permissions: {}
+
+        steps:
+            - name: Record authorization
+              run: |
+                  {
+                    echo "# Destroy Plan Authorized"
+                    echo
+                    echo "- Environment: \`${{ inputs.environment }}\`"
+                    echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- AWS account: \`${{ needs.terraform-destroy-plan.outputs.expected_account_id }}\`"
+                    echo "- Deployment profile: \`${{ needs.terraform-destroy-plan.outputs.deployment_profile }}\`"
+                    echo "- Production retirement mode: \`${{ needs.terraform-destroy-plan.outputs.production_retirement_mode }}\`"
+                  } >> "${GITHUB_STEP_SUMMARY}"
+
+    identity-center-cleanup-plan:
+        name: Plan Identity Center cleanup
+        needs: [terraform-destroy-plan, authorize-destroy]
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        environment: control-plane-plan
+        permissions:
+            contents: read
+            id-token: write
+
+        outputs:
+            account_id: ${{ steps.context.outputs.account_id }}
+            region: ${{ steps.context.outputs.region }}
+
+        env:
+            WORKING_DIRECTORY: ./bootstrap/control_plane/identity_center
+            EXPECTED_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
+            AWS_REGION: ${{ vars.PRIMARY_REGION }}
+            AWS_DEFAULT_REGION: ${{ vars.PRIMARY_REGION }}
+            PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+            TF_VAR_identity_center_workloads: ${{ vars.IDENTITY_CENTER_WORKLOADS }}
+            TF_VAR_identity_center_secops: ${{ vars.IDENTITY_CENTER_SECOPS }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+
+            - name: Validate context and prepare cleanup input
+              id: context
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::Control-plane ACCOUNT_ID must contain exactly 12 digits."
+                    exit 1
+                  }
+
+                  [[ -n "${AWS_REGION:-}" && -n "${PLAN_ROLE_GITHUB_ARN:-}" ]] || {
+                    echo "::error::Control-plane Region or Plan role is not configured."
+                    exit 1
+                  }
+
+                  if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::Control-plane PLAN_ROLE_GITHUB_ARN is invalid."
+                    exit 1
+                  fi
+
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::Control-plane Plan role belongs to the wrong AWS account."
+                    exit 1
+                  }
+
+                  [[ -n "${TF_VAR_identity_center_workloads:-}" ]] ||
+                    { echo "::error::IDENTITY_CENTER_WORKLOADS is not configured."; exit 1; }
+                  [[ -n "${TF_VAR_identity_center_secops:-}" ]] ||
+                    { echo "::error::IDENTITY_CENTER_SECOPS is not configured."; exit 1; }
+
+                  updated="$(
+                    jq -ce --arg environment "${{ inputs.environment }}" '
+                      if type=="object" and has($environment) and (.[$environment]|type=="object")
+                      then .[$environment].enable_secops_analyst=false
+                         | .[$environment].enable_secops_engineer=false
+                      else error("IDENTITY_CENTER_WORKLOADS is missing the target workload")
+                      end
+                    ' <<< "${TF_VAR_identity_center_workloads}"
+                  )"
+
+                  echo "TF_VAR_identity_center_workloads=${updated}" >> "${GITHUB_ENV}"
+                  echo "account_id=${EXPECTED_ACCOUNT_ID}" >> "${GITHUB_OUTPUT}"
+                  echo "region=${AWS_REGION}" >> "${GITHUB_OUTPUT}"
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+              with:
+                  role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ vars.PRIMARY_REGION }}
+                  allowed-account-ids: ${{ vars.ACCOUNT_ID }}
+                  role-session-name: tf-idc-plan-${{ github.run_id }}
+                  unset-current-credentials: true
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
+
+            - name: Initialize and create exact cleanup plan
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+                  terraform -chdir="${WORKING_DIRECTORY}" validate -no-color
+
+                  context="$(
+                    jq -cn \
+                      --arg operation identity-center-cleanup \
+                      --arg target_environment "${{ inputs.environment }}" \
+                      --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                      --arg primary_region "${AWS_REGION}" \
+                      '{operation:$operation, target_environment:$target_environment,
+                        expected_account_id:$expected_account_id, primary_region:$primary_region}'
+                  )"
+
+                  bash scripts/deployment/terraform-plan-artifact.sh create \
+                    --mode apply \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --artifact-directory "${GITHUB_WORKSPACE}/${IDC_ARTIFACT_DIR}" \
+                    --artifact-basename "${IDC_PLAN_BASENAME}" \
+                    --context-json "${context}"
+
+            - name: Publish cleanup plan
+              if: always()
+              shell: bash
+              run: |
+                  {
+                    echo "# Identity Center Cleanup Plan"
+                    echo
+                    echo "- Target workload: \`${{ inputs.environment }}\`"
+                    echo "- Control-plane account: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+                    echo "- Status: \`${{ job.status }}\`"
+                    echo
+                  } >> "${GITHUB_STEP_SUMMARY}"
+
+                  plan_text="${GITHUB_WORKSPACE}/${IDC_ARTIFACT_DIR}/${IDC_PLAN_BASENAME}-plan.txt"
+                  if [[ -f "${plan_text}" ]]; then
+                    {
+                      echo "<details><summary>View exact cleanup plan</summary>"
+                      echo
+                      echo '```text'
+                      cat "${plan_text}"
+                      echo '```'
+                      echo
+                      echo "</details>"
+                    } >> "${GITHUB_STEP_SUMMARY}"
+                  fi
+
+            - name: Upload saved cleanup plan
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: ${{ env.IDC_ARTIFACT_NAME }}
+                  path: ${{ github.workspace }}/${{ env.IDC_ARTIFACT_DIR }}
+                  if-no-files-found: error
+                  retention-days: 1
+
+    identity-center-cleanup-apply:
+        name: Apply reviewed Identity Center cleanup
+        needs: identity-center-cleanup-plan
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        environment: control-plane
+        permissions:
+            contents: read
+            id-token: write
+
+        env:
+            WORKING_DIRECTORY: ./bootstrap/control_plane/identity_center
+            EXPECTED_ACCOUNT_ID: ${{ needs.identity-center-cleanup-plan.outputs.account_id }}
+            AWS_REGION: ${{ needs.identity-center-cleanup-plan.outputs.region }}
+            AWS_DEFAULT_REGION: ${{ needs.identity-center-cleanup-plan.outputs.region }}
+            APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+
+            - name: Validate Apply settings
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::Control-plane account ID is invalid."
+                    exit 1
+                  }
+
+                  if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::Control-plane APPLY_ROLE_GITHUB_ARN is invalid."
+                    exit 1
+                  fi
+
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::Control-plane Apply role belongs to the wrong AWS account."
+                    exit 1
+                  }
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+              with:
+                  role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.EXPECTED_ACCOUNT_ID }}
+                  role-session-name: tf-idc-apply-${{ github.run_id }}
+                  unset-current-credentials: true
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
+
+            - name: Initialize Terraform
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+
+            - name: Download reviewed cleanup plan
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: ${{ env.IDC_ARTIFACT_NAME }}
+                  path: ${{ github.workspace }}/${{ env.IDC_ARTIFACT_DIR }}
+
+            - name: Verify and apply exact cleanup artifact
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  context="$(
+                    jq -cn \
+                      --arg operation identity-center-cleanup \
+                      --arg target_environment "${{ inputs.environment }}" \
+                      --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                      --arg primary_region "${AWS_REGION}" \
+                      '{operation:$operation, target_environment:$target_environment,
+                        expected_account_id:$expected_account_id, primary_region:$primary_region}'
+                  )"
+
+                  bash scripts/deployment/terraform-plan-artifact.sh verify \
+                    --mode apply \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --artifact-directory "${GITHUB_WORKSPACE}/${IDC_ARTIFACT_DIR}" \
+                    --artifact-basename "${IDC_PLAN_BASENAME}" \
+                    --context-json "${context}"
+
+                  terraform -chdir="${WORKING_DIRECTORY}" apply \
+                    -input=false -no-color -lock-timeout=5m \
+                    "${GITHUB_WORKSPACE}/${IDC_ARTIFACT_DIR}/${IDC_PLAN_BASENAME}.tfplan"
+
+    terraform-destroy-apply:
+        name: Apply reviewed ${{ inputs.environment }} destroy plan
+        needs: [terraform-destroy-plan, identity-center-cleanup-apply]
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        environment: ${{ inputs.environment }}
+        permissions:
+            contents: read
+            id-token: write
+
+        env:
+            WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+            EXPECTED_ACCOUNT_ID: ${{ needs.terraform-destroy-plan.outputs.expected_account_id }}
+            AWS_REGION: ${{ needs.terraform-destroy-plan.outputs.primary_region }}
+            AWS_DEFAULT_REGION: ${{ needs.terraform-destroy-plan.outputs.primary_region }}
+            DEPLOYMENT_PROFILE: ${{ needs.terraform-destroy-plan.outputs.deployment_profile }}
+            PRODUCTION_RETIREMENT_MODE: ${{ needs.terraform-destroy-plan.outputs.production_retirement_mode }}
+            APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+
+            - name: Validate Apply settings
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::Expected workload account ID is invalid."
+                    exit 1
+                  }
+
+                  case "${DEPLOYMENT_PROFILE}" in
+                    production|development|minimal) ;;
+                    *)
+                      echo "::error::Saved destroy plan has an invalid deployment profile."
+                      exit 1
+                      ;;
+                  esac
+
+                  [[ "${PRODUCTION_RETIREMENT_MODE}" =~ ^(true|false)$ ]] || {
+                    echo "::error::Saved destroy plan has an invalid retirement-mode value."
+                    exit 1
+                  }
+
+                  if [[ "${DEPLOYMENT_PROFILE}" == "production" &&
+                        "${PRODUCTION_RETIREMENT_MODE}" != "true" ]]; then
+                    echo "::error::Production destroy plan is not bound to retirement mode."
+                    exit 1
+                  fi
+
+                  if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::APPLY_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+                    exit 1
+                  fi
+
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::APPLY_ROLE_GITHUB_ARN belongs to the wrong AWS account."
+                    exit 1
+                  }
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+              with:
+                  role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.EXPECTED_ACCOUNT_ID }}
+                  role-session-name: tf-destroy-apply-${{ github.run_id }}
+                  unset-current-credentials: true
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
+
+            - name: Initialize Terraform
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+
+            - name: Download reviewed destroy plan
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: ${{ env.DESTROY_ARTIFACT_NAME }}
+                  path: ${{ github.workspace }}/${{ env.DESTROY_ARTIFACT_DIR }}
+
+            - name: Verify readiness and apply exact destroy artifact
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  context="$(
+                    jq -cn \
+                      --arg operation workload-destroy \
+                      --arg environment "${{ inputs.environment }}" \
+                      --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                      --arg primary_region "${AWS_REGION}" \
+                      --arg deployment_profile "${DEPLOYMENT_PROFILE}" \
+                      --argjson production_retirement_mode "${PRODUCTION_RETIREMENT_MODE}" \
+                      '{operation:$operation, environment:$environment,
+                        expected_account_id:$expected_account_id, primary_region:$primary_region,
+                        deployment_profile:$deployment_profile,
+                        production_retirement_mode:$production_retirement_mode}'
+                  )"
+
+                  bash scripts/deployment/terraform-plan-artifact.sh verify \
+                    --mode destroy \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --artifact-directory "${GITHUB_WORKSPACE}/${DESTROY_ARTIFACT_DIR}" \
+                    --artifact-basename "${DESTROY_PLAN_BASENAME}" \
+                    --context-json "${context}"
+
+                  if [[ "${DEPLOYMENT_PROFILE}" == "production" ]]; then
+                    bash scripts/deployment/validate-retirement-readiness.sh \
+                      --environment "${{ inputs.environment }}" \
+                      --region "${AWS_REGION}" \
+                      --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+                  fi
+
+                  terraform -chdir="${WORKING_DIRECTORY}" apply \
+                    -input=false -no-color -lock-timeout=5m \
+                    "${GITHUB_WORKSPACE}/${DESTROY_ARTIFACT_DIR}/${DESTROY_PLAN_BASENAME}.tfplan"
+
+            - name: Publish destroy result
+              if: always()
+              run: |
+                  {
+                    echo "# Terraform Destroy"
+                    echo
+                    echo "- Environment: \`${{ inputs.environment }}\`"
+                    echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- AWS account: \`${EXPECTED_ACCOUNT_ID}\`"
+                    echo "- Deployment profile: \`${DEPLOYMENT_PROFILE}\`"
+                    echo "- Production retirement mode: \`${PRODUCTION_RETIREMENT_MODE}\`"
+                    echo "- Status: \`${{ job.status }}\`"
+                  } >> "${GITHUB_STEP_SUMMARY}"

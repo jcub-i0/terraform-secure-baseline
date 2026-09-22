@@ -42,3 +42,8 @@ variable "repositories" {
     error_message = "Repository names must use lowercase ECR repository-name syntax."
   }
 }
+
+variable "force_delete" {
+  description = "Whether ECR repositories may be deleted while they still contain images."
+  type        = bool
+}

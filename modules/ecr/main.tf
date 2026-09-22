@@ -3,7 +3,7 @@ resource "aws_ecr_repository" "repositories" {
 
   name                 = "${var.name_prefix}-${each.key}"
   image_tag_mutability = "IMMUTABLE"
-  force_delete         = true # CHANGE THIS IN PROD
+  force_delete         = var.force_delete
 
   encryption_configuration {
     encryption_type = "KMS"

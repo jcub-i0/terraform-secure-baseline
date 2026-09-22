@@ -280,6 +280,8 @@ module "firewall" {
   logs_cmk_arn                    = module.security.logs_cmk_arn
   centralized_logs_bucket_arn     = module.storage.centralized_logs_bucket_arn
   centralized_logs_bucket_name    = module.storage.centralized_logs_bucket_name
+
+  delete_protection = local.effective_network_firewall_delete_protection
 }
 
 module "patch_management" {
@@ -309,6 +311,8 @@ module "ecr" {
 
   kms_key_arn  = module.security.ecr_cmk_arn
   repositories = local.effective_repositories
+
+  force_delete = local.effective_ecr_force_delete
 }
 
 module "ecs_cluster" {
@@ -348,7 +352,8 @@ module "ecs_service" {
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
   logs_cmk_arn              = module.security.logs_cmk_arn
 
-  services = local.ecs_runtime_services
+  services     = local.ecs_runtime_services
+  force_delete = local.effective_ecs_service_force_delete
 
   execution_policy_ids     = module.iam.ecs_task_execution_policy_ids
   security_policy_rule_ids = local.ecs_security_policy_rule_ids
@@ -369,6 +374,8 @@ module "application_load_balancer" {
   ssl_policy      = var.alb_ssl_policy
 
   services = local.ecs_alb_services
+
+  enable_deletion_protection = local.effective_alb_deletion_protection
 }
 
 module "backup" {
@@ -382,4 +389,6 @@ module "backup" {
   backup_vault_cmk_arn      = module.security.backup_vault_cmk_arn
   delete_backups_after_days = local.effective_delete_backups_after_days
   backup_service_role_arn   = module.iam.backup_service_role_arn
+
+  force_destroy = local.effective_backup_vault_force_destroy
 }

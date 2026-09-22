@@ -158,7 +158,7 @@ resource "aws_ecs_service" "services" {
   launch_type      = "FARGATE"
   platform_version = var.platform_version
 
-  force_delete = true # CHANGE THIS IN PROD
+  force_delete = var.force_delete
 
   network_configuration {
     subnets          = var.compute_private_subnet_ids
@@ -213,7 +213,7 @@ resource "aws_ecs_service" "autoscaled_services" {
   launch_type      = "FARGATE"
   platform_version = var.platform_version
 
-  force_delete = true # CHANGE THIS IN PROD
+  force_delete = var.force_delete
 
   lifecycle {
     ignore_changes = [

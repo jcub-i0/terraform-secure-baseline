@@ -54,6 +54,12 @@ variable "egress_mode" {
   }
 }
 
+variable "production_retirement_mode" {
+  description = "Whether production lifecycle protections are intentionally relaxed for a staged environment retirement"
+  type        = bool
+  default     = false
+}
+
 variable "allowed_egress_domains" {
   description = "Environment-approved application egress domains added to the platform-required Network Firewall allowlist. Use exact domains or an initial dot for AWS Network Firewall suffix matching."
   type        = set(string)
