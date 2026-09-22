@@ -16,6 +16,7 @@ This guide covers:
 - Deployment profile and egress mode selection
 - IAM Identity Center deployment
 - Post-deployment validation
+- Production retirement and destruction
 
 For a deeper explanation of the architecture, see:
 
@@ -632,6 +633,14 @@ When the `Terraform Apply` workflow is used, it does not immediately run `terraf
 
 The optional `reconcile_workload_account` input starts the plan-first reconciliation workflow after a successful baseline apply.
 
+Normal production operation must keep `production_retirement_mode = false`. Intentional production teardown uses a separate staged retirement procedure before the Destroy workflow is allowed to remove the workload. Do not switch a production workload to a cheaper deployment profile in order to bypass lifecycle protection.
+
+For the canonical production retirement procedure, see:
+
+```text
+docs/production-retirement.md
+```
+
 Before applying, review the environment's profile settings:
 
 ```hcl
@@ -1048,7 +1057,7 @@ Expected workflows:
 | Terraform Apply | Generates its own saved binary workload plan, readable plan, metadata, and checksum; waits for protected-environment approval; verifies and applies that exact plan without replanning |
 | Deploy Application | Builds/publishes an application image with the dedicated Image Publisher role, resolves the authoritative digest, and creates a one-field release PR; it does not run Terraform Apply |
 | Reconcile Workload Account | Runs `plan-only` or generates a reconciliation plan, waits for approval, applies the exact saved plan, and runs strict bootstrap validation |
-| Terraform Destroy | Cleans up Identity Center attachments, then destroys the selected workload environment |
+| Terraform Destroy | Generates and protects an exact saved destroy plan; production additionally requires the staged retirement/readiness contract before Identity Center cleanup and exact destroy-plan apply |
 | Workload Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
 | Workload Baseline Evidence | Exports the 16-script workload baseline evidence package |
 | Control-Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
@@ -1060,7 +1069,20 @@ Workload Plan jobs use `dev-plan`, `staging-plan`, or `prod-plan`; Apply jobs us
 
 Saved binary plans are short-lived artifacts because Terraform plans can contain sensitive values. Keep repository and workflow-run access limited to trusted operators.
 
-The destroy workflow first updates the Identity Center stack to remove environment-specific policy attachments before destroying the workload environment. This prevents IAM delete conflicts caused by Identity Center-managed roles still attaching baseline-created IAM policies.
+The Destroy workflow follows the same reviewed-plan principle as Apply: it generates a readable saved destroy plan, records metadata/checksum evidence, pauses on the protected environment, verifies the exact artifact after approval, and applies that exact destroy plan without replanning.
+
+For a production-profile workload, Destroy additionally fails closed unless the environment has already converged through the staged retirement procedure in `docs/production-retirement.md`. The workflow must not automatically purge ECR images or AWS Backup recovery points merely to make destruction succeed.
+
+Identity Center cleanup remains a required pre-destroy dependency for workload-created IAM policies. To avoid changing access before an operator approves destruction, the intended order is:
+
+```text
+destroy plan
+  -> human/protected approval
+  -> Identity Center environment cleanup
+  -> apply exact saved destroy plan
+```
+
+Development/minimal teardown does not require production retirement mode.
 
 Evidence workflows use the read-only GitHub Plan roles. On clean runners, they materialize the ignored runtime state-stack backend before initializing the state stack. The evidence workflows require remote state by default.
 
@@ -1193,143 +1215,203 @@ After completion, the platform provides a multi-account AWS security baseline wi
 
 # Destruction / Cleanup Procedure
 
-If you wish to destroy the infrastructure you created, the order in which you run `terraform destroy` is **VERY IMPORTANT**.
-
-**Seriously** - this can **ruin your night.** Be sure to destroy resources in the correct order.
-
 Destroying stacks out of order can cause failures such as:
 
 - IAM policies failing to delete because Identity Center still has them attached
-- GitHub Actions losing access because OIDC roles were destroyed too early
+- GitHub Actions losing access because workload OIDC roles were removed too early
 - Terraform state backend resources being destroyed before dependent stacks are removed
 
-A migrated state stack must not destroy the S3 bucket that currently stores its own active state. Before destroying any workload, control-plane, or security-operations `state` stack, first migrate that stack's state back to local state or to another independent backend and retain an external backup.
+A migrated state stack must never destroy the S3 bucket that currently stores its own active state. Before destroying a workload, control-plane, or security-operations `state` stack, first migrate that stack's state back to local state or another independent backend and retain an external backup.
 
 Do not run `terraform destroy` against a state stack while its active backend still points to the bucket it manages.
 
 ---
 
-## Single Environment Teardown
+## Workload Environment Destruction
 
-If you are only destroying one environment, do **not** destroy the entire Identity Center stack first.
+### Development and minimal profiles
 
-Instead, first update the Identity Center stack to remove that environment’s optional policy attachments or role assignments.
+Development/minimal workloads remain intentionally disposable.
 
-Example for `dev`:
+When using GitHub Actions, use the `Terraform Destroy` workflow so destruction follows the repository's reviewed saved-plan path.
 
-Update the `dev` object in `identity_center_workloads` so optional Analyst and Engineer access is disabled, then apply the Identity Center stack before deleting workload-created IAM policies:
+For a local teardown, first remove any Identity Center optional attachments that depend on workload-created IAM policies, then destroy the environment:
+
+```bash
+terraform -chdir=environments/<env> destroy
+```
+
+Do not destroy `bootstrap/<env>/account` until the workload environment is gone because that stack owns the GitHub OIDC roles used to manage the workload.
+
+### Production profile
+
+A production-profile workload must **not** be destroyed directly from its normal protected state.
+
+Production destruction is a staged operation:
+
+```text
+normal production
+  |
+  v
+Stage 1 - reviewed retirement preparation Apply
+  |
+  v
+retirement/readiness validation
+  |
+  v
+Stage 2 - reviewed exact destroy plan
+  |
+  v
+Identity Center environment cleanup
+  |
+  v
+apply exact saved destroy plan
+```
+
+The canonical runbook is:
+
+```text
+docs/production-retirement.md
+```
+
+Do not:
+
+- change `deployment_profile` from `production` to `development` or `minimal` to bypass safeguards
+- enable broad ECR force deletion
+- enable Backup vault force destruction
+- delete Backup recovery points or ECR images implicitly from the Destroy workflow
+- rely on one destroy operation to disable AWS-native deletion protection and destroy the protected resources in the same unreviewed step
+
+Normal production uses:
+
+```text
+production_retirement_mode = false
+```
+
+Stage 1 deliberately converges:
+
+```text
+production_retirement_mode = true
+```
+
+through the same saved-plan / protected-approval Apply path used for normal infrastructure changes.
+
+The Destroy workflow must then prove that the retirement state is already converged before it creates the production destroy plan.
+
+---
+
+## Identity Center Dependency
+
+For a single workload environment, do **not** destroy the entire Identity Center stack.
+
+Optional workload Analyst/Engineer access can depend on IAM policies created by `environments/<env>`. Those attachments must be removed before Terraform attempts to delete the policies.
+
+Conceptually:
 
 ```hcl
-dev = {
+<env> = {
   # existing account/Region/policy-name values
   enable_secops_analyst  = false
   enable_secops_engineer = false
 }
 ```
 
+For local/manual operation, apply that Identity Center change before the workload destroy:
+
 ```bash
 terraform -chdir=bootstrap/control_plane/identity_center apply
 ```
 
-Then destroy the selected environment in this order:
+For GitHub Actions, the Destroy workflow should perform this environment-specific cleanup **after the saved destroy plan has received protected approval but before the exact destroy plan is applied**.
 
-### Dev
+This keeps the IAM dependency safe without modifying workforce access merely because an unapproved destroy plan was generated.
 
-Run from the repository root:
+---
+
+## Workload Account and State Teardown
+
+After `environments/<env>` has been destroyed:
 
 ```bash
-terraform -chdir=environments/dev destroy
-terraform -chdir=bootstrap/dev/account destroy
+terraform -chdir=bootstrap/<env>/account destroy
+```
 
-STATE_DIR="bootstrap/dev/state"
-terraform -chdir="${STATE_DIR}" state pull   > "${HOME}/tf-secure-baseline-dev-state-pre-destroy.json"
+Then migrate the state stack away from the backend it owns before destroying it:
+
+```bash
+STATE_DIR="bootstrap/<env>/state"
+
+terraform -chdir="${STATE_DIR}" state pull \
+  > "${HOME}/tf-secure-baseline-<env>-state-pre-destroy.json"
+
 mv "${STATE_DIR}/backend.tf" "${STATE_DIR}/backend.tf.pre-destroy"
+
 terraform -chdir="${STATE_DIR}" init -migrate-state
 terraform -chdir="${STATE_DIR}" destroy
 ```
 
-### Staging
-
-Run from the repository root:
-
-```bash
-terraform -chdir=environments/staging destroy
-terraform -chdir=bootstrap/staging/account destroy
-
-STATE_DIR="bootstrap/staging/state"
-terraform -chdir="${STATE_DIR}" state pull   > "${HOME}/tf-secure-baseline-staging-state-pre-destroy.json"
-mv "${STATE_DIR}/backend.tf" "${STATE_DIR}/backend.tf.pre-destroy"
-terraform -chdir="${STATE_DIR}" init -migrate-state
-terraform -chdir="${STATE_DIR}" destroy
-```
-
-### Prod
-
-Run from the repository root:
-
-```bash
-terraform -chdir=environments/prod destroy
-terraform -chdir=bootstrap/prod/account destroy
-
-STATE_DIR="bootstrap/prod/state"
-terraform -chdir="${STATE_DIR}" state pull   > "${HOME}/tf-secure-baseline-prod-state-pre-destroy.json"
-mv "${STATE_DIR}/backend.tf" "${STATE_DIR}/backend.tf.pre-destroy"
-terraform -chdir="${STATE_DIR}" init -migrate-state
-terraform -chdir="${STATE_DIR}" destroy
-```
+Retain the external state backup according to the organization's approved retention procedure.
 
 ---
 
 ## Full Platform Teardown
 
-If you are destroying the entire platform, use this order:
+When destroying the entire platform, use this high-level order.
 
-### 0. Identity Center
+### 0. Prepare Identity Center
 
-From the repository root:
+If the full Identity Center stack will be removed, destroy it before workload-created IAM policies are deleted:
 
 ```bash
 terraform -chdir=bootstrap/control_plane/identity_center destroy
 ```
 
-### Dev
+### 1. Dev
 
-1. `environments/dev`
-2. `bootstrap/dev/account`
-3. Migrate `bootstrap/dev/state` away from its self-managed S3 backend
-4. Destroy `bootstrap/dev/state`
+1. Destroy `environments/dev`.
+2. Destroy `bootstrap/dev/account`.
+3. Migrate `bootstrap/dev/state` away from its self-managed S3 backend.
+4. Destroy `bootstrap/dev/state`.
 
-### Staging
+### 2. Staging
 
-5. `environments/staging`
-6. `bootstrap/staging/account`
-7. Migrate `bootstrap/staging/state` away from its self-managed S3 backend
-8. Destroy `bootstrap/staging/state`
+5. Destroy `environments/staging`.
+6. Destroy `bootstrap/staging/account`.
+7. Migrate `bootstrap/staging/state` away from its self-managed S3 backend.
+8. Destroy `bootstrap/staging/state`.
 
-### Prod
+### 3. Prod
 
-9. `environments/prod`
-10. `bootstrap/prod/account`
-11. Migrate `bootstrap/prod/state` away from its self-managed S3 backend
-12. Destroy `bootstrap/prod/state`
+Before destroying `environments/prod`, complete:
 
-### Security Operations
+```text
+docs/production-retirement.md
+```
 
-13. `bootstrap/security_operations/security_services`
-14. `bootstrap/security_operations/account`
-15. Migrate `bootstrap/security_operations/state` away from its self-managed S3 backend
-16. Destroy `bootstrap/security_operations/state`
+Then:
 
-### Control Plane
+9. Destroy `environments/prod` through the reviewed production Destroy path.
+10. Destroy `bootstrap/prod/account`.
+11. Migrate `bootstrap/prod/state` away from its self-managed S3 backend.
+12. Destroy `bootstrap/prod/state`.
 
-17. `bootstrap/control_plane/organizations`
-18. `bootstrap/control_plane/account`
-19. Migrate `bootstrap/control_plane/state` away from its self-managed S3 backend
-20. Destroy `bootstrap/control_plane/state`
+### 4. Security Operations
+
+13. Destroy `bootstrap/security_operations/security_services`.
+14. Destroy `bootstrap/security_operations/account`.
+15. Migrate `bootstrap/security_operations/state` away from its self-managed S3 backend.
+16. Destroy `bootstrap/security_operations/state`.
+
+### 5. Control Plane
+
+17. Destroy `bootstrap/control_plane/organizations`.
+18. Destroy `bootstrap/control_plane/account`.
+19. Migrate `bootstrap/control_plane/state` away from its self-managed S3 backend.
+20. Destroy `bootstrap/control_plane/state`.
 
 ---
 
-## Important Notes
+## Important Destruction Notes
 
 - Do **not** destroy `bootstrap/<env>/account` before `environments/<env>`.
   - The account stack contains the GitHub OIDC roles used by CI/CD.
@@ -1343,12 +1425,15 @@ terraform -chdir=bootstrap/control_plane/identity_center destroy
 - Do **not** destroy `bootstrap/security_operations/state` before the security-operations account and security-services stacks are gone.
   - Migrate its state away from its self-managed backend first.
 
-- Do **not** destroy `bootstrap/control_plane/account` before other control-plane substacks.
+- Do **not** destroy `bootstrap/control_plane/account` before the other control-plane substacks.
   - It contains the GitHub OIDC roles used to manage the control plane.
 
-- Destroying `bootstrap/control_plane/state` should always be last.
+- Destroying `bootstrap/control_plane/state` should remain last.
   - It contains the backend resources for the control-plane stacks.
   - Migrate its state to local state or another independent backend before destroying the bucket it manages.
+
+- Production ECR repositories and Backup recovery points require an explicit disposition decision before full destruction.
+  - The production Destroy workflow must fail closed rather than purge them automatically.
 
 - Versioned state buckets may retain noncurrent state and lockfile object versions.
   - Preserve an external state backup and follow approved bucket-retention or cleanup controls before final deletion.
