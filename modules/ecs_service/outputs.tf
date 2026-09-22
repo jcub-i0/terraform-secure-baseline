@@ -41,6 +41,7 @@ output "services" {
         deployment_minimum_healthy_percent = service.deployment_minimum_healthy_percent
         deployment_maximum_percent         = service.deployment_maximum_percent
         health_check_grace_period_seconds  = service.health_check_grace_period_seconds
+        availability_zone_rebalancing      = service.availability_zone_rebalancing
       }
     },
     {
@@ -52,6 +53,7 @@ output "services" {
         deployment_minimum_healthy_percent = service.deployment_minimum_healthy_percent
         deployment_maximum_percent         = service.deployment_maximum_percent
         health_check_grace_period_seconds  = service.health_check_grace_period_seconds
+        availability_zone_rebalancing      = service.availability_zone_rebalancing
       }
     },
   )
