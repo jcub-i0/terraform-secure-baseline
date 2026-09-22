@@ -13,6 +13,11 @@ on:
                     - dev
                     - staging
                     - prod
+            production_retirement_mode:
+                description: "Prepare a production-profile workload for deliberate retirement"
+                required: true
+                default: false
+                type: boolean
             reconcile_workload_account:
                 description: "Reconcile the workload account after a successful baseline apply"
                 required: true
@@ -24,7 +29,7 @@ permissions:
     contents: read
 
 concurrency:
-    group: terraform-apply-${{ inputs.environment }}
+    group: terraform-workload-${{ inputs.environment }}
     cancel-in-progress: false
 
 env:
@@ -57,6 +62,7 @@ jobs:
             TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
+            TF_VAR_production_retirement_mode: ${{ inputs.production_retirement_mode }}
 
         steps:
             - name: Checkout
@@ -106,6 +112,23 @@ jobs:
                       exit 1
                       ;;
                   esac
+
+                  if [[ ! "${TF_VAR_production_retirement_mode}" =~ ^(true|false)$ ]]; then
+                    echo "::error::production_retirement_mode must be exactly true or false."
+                    exit 1
+                  fi
+
+                  if [[ "${TF_VAR_production_retirement_mode}" == "true" &&
+                        "${TF_VAR_deployment_profile}" != "production" ]]; then
+                    echo "::error::production_retirement_mode=true requires deployment_profile=production."
+                    exit 1
+                  fi
+
+                  if [[ "${TF_VAR_production_retirement_mode}" == "true" &&
+                        "${{ inputs.reconcile_workload_account }}" == "true" ]]; then
+                    echo "::error::reconcile_workload_account must be false during production retirement."
+                    exit 1
+                  fi
 
                   EXPECTED_ACCOUNT_ID="${ACCOUNT_ID}"
 
@@ -205,6 +228,7 @@ jobs:
                     --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
                     --arg terraform_version "${TERRAFORM_CLI_VERSION}" \
                     --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                    --argjson production_retirement_mode "${TF_VAR_production_retirement_mode}" \
                     '{
                       environment: $environment,
                       commit_sha: $commit_sha,
@@ -212,7 +236,8 @@ jobs:
                       workflow_run_id: $workflow_run_id,
                       workflow_run_attempt: $workflow_run_attempt,
                       terraform_version: $terraform_version,
-                      expected_account_id: $expected_account_id
+                      expected_account_id: $expected_account_id,
+                      production_retirement_mode: $production_retirement_mode
                     }' > "${PLAN_METADATA_FILE}"
 
                   (
@@ -237,6 +262,7 @@ jobs:
                     echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
                     echo "- Terraform version: \`${TERRAFORM_VERSION}\`"
                     echo "- Reconcile after apply: \`${{ inputs.reconcile_workload_account }}\`"
+                    echo "- Production retirement mode: \`${{ inputs.production_retirement_mode }}\`"
                     echo "- Plan job status: \`${{ job.status }}\`"
                     echo
                     echo "The protected apply job will use the exact saved plan from this job."
@@ -392,6 +418,7 @@ jobs:
                     --arg workflow_run_attempt "${GITHUB_RUN_ATTEMPT}" \
                     --arg terraform_version "${TERRAFORM_VERSION}" \
                     --arg expected_account_id "${EXPECTED_ACCOUNT_ID}" \
+                    --argjson production_retirement_mode "${{ inputs.production_retirement_mode }}" \
                     '
                       .environment == $environment and
                       .commit_sha == $commit_sha and
@@ -399,7 +426,8 @@ jobs:
                       .workflow_run_id == $workflow_run_id and
                       .workflow_run_attempt == $workflow_run_attempt and
                       .terraform_version == $terraform_version and
-                      .expected_account_id == $expected_account_id
+                      .expected_account_id == $expected_account_id and
+                      .production_retirement_mode "${{ inputs.production_retirement_mode }}"
                     ' \
                     "${PLAN_METADATA_FILE}" >/dev/null
 
@@ -433,6 +461,7 @@ jobs:
                     echo "- GitHub Environment: \`${{ inputs.environment }}\`"
                     echo "- Commit: \`${GITHUB_SHA}\`"
                     echo "- Expected AWS Account ID: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+                    echo "- Production retirement mode: \`${{ inputs.production_retirement_mode }}\`"
                     echo "- Saved plan artifact: \`${PLAN_ARTIFACT_NAME}\`"
                     echo "- Apply job status: \`${{ job.status }}\`"
                   } >> "${GITHUB_STEP_SUMMARY}"
