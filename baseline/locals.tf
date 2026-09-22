@@ -421,7 +421,7 @@ locals {
 
   effective_rds_deletion_protection = (
     local.is_production_profile &&
-    var.production_retirement_mode
+    !var.production_retirement_mode
   )
 
   effective_alb_deletion_protection = (

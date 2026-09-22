@@ -701,4 +701,22 @@ variable "ecs_services" {
 
     error_message = "An ECS service environment variable name cannot also be defined as a Secrets Manager secret or SSM parameter."
   }
+
+  validation {
+    condition = (
+      var.deployment_profile != "production" ||
+      var.production_retirement_mode ||
+      alltrue([
+        for service in values(var.ecs_services) :
+        service.image_digest == null ||
+        (
+          service.scaling == null
+          ? service.desired_count >= 2
+          : service.scaling.min_capacity >= 2
+        )
+      ])
+    )
+
+    error_message = "Deployable production ECS services require desired_count >= 2 for fixed-count services or min_capacity >= 2 for autoscaled services unless production_retirement_mode is enabled."
+  }
 }

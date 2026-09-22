@@ -20,6 +20,7 @@ module "baseline" {
   inspector_enabled                  = var.inspector_enabled
   inspector_resource_types           = var.inspector_resource_types
   deployment_profile                 = var.deployment_profile
+  production_retirement_mode         = var.production_retirement_mode
   egress_mode                        = var.egress_mode
   allowed_egress_domains             = var.allowed_egress_domains
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns

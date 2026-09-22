@@ -353,7 +353,7 @@ module "ecs_service" {
   logs_cmk_arn              = module.security.logs_cmk_arn
 
   services     = local.ecs_runtime_services
-  force_delete = local.effective_ecr_force_delete
+  force_delete = local.effective_ecs_service_force_delete
 
   execution_policy_ids     = module.iam.ecs_task_execution_policy_ids
   security_policy_rule_ids = local.ecs_security_policy_rule_ids
