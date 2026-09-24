@@ -160,16 +160,19 @@ resource "aws_route_table" "public" {
   for_each = local.az_index_map
   vpc_id   = aws_vpc.main.id
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-
   tags = {
     Name        = "${var.name_prefix}-Public-Route-Table-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
+}
+
+resource "aws_route" "public_default_to_igw" {
+  for_each = local.az_index_map
+
+  route_table_id         = aws_route_table.public[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw.id
 }
 
 resource "aws_route" "public_compute_return_to_firewall" {
