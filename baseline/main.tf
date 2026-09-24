@@ -399,5 +399,7 @@ module "backup" {
   restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
   restore_testing_rds_arn                 = module.storage.rds_arn
   restore_testing_db_subnet_group_name    = module.storage.rds_db_subnet_group_name
-  restore_testing_vpc_security_group_ids  = module.storage.data_sg_id
+  restore_testing_vpc_security_group_ids  = [
+    module.storage.data_sg_id
+  ]
 }
