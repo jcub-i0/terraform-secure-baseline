@@ -38,6 +38,16 @@ output "rds_database_name" {
   value       = aws_db_instance.main.db_name
 }
 
+output "rds_arn" {
+  description = "ARN of the Terraform-managed RDS DB instance"
+  value       = aws_db_instance.main.arn
+}
+
+output "rds_db_subnet_group_name" {
+  description = "Name of the Terraform-managed RDS DB subnet group"
+  value       = aws_db_subnet_group.data.name
+}
+
 output "rds_master_username" {
   description = "Master username configured on the RDS instance"
   value       = aws_db_instance.main.username

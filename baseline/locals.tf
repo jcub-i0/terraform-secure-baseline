@@ -370,6 +370,33 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
+  # Restore testing
+  # ---------------------------------------------------------------------------
+
+  effective_restore_testing_enabled = (
+    local.is_production_profile &&
+    local.effective_backup_enabled
+  )
+
+  effective_restore_testing_schedule = (
+    local.effective_restore_testing_enabled
+    ? "cron(0 8 ? * SUN *)"
+    : null
+  )
+
+  effective_restore_testing_start_window_hours = (
+    local.effective_restore_testing_enabled ? 2 : null
+  )
+
+  effective_restore_testing_selection_window_days = (
+    local.effective_restore_testing_enabled ? 2 : null
+  )
+
+  effective_restore_testing_validation_window_hours = (
+    local.effective_restore_testing_enabled ? 1 : null
+  )
+
+  # ---------------------------------------------------------------------------
   # Cost-sensitive service defaults
   # ---------------------------------------------------------------------------
 
