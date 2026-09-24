@@ -277,30 +277,9 @@ jobs:
                   if-no-files-found: error
                   retention-days: 1
 
-    authorize-destroy:
-        name: Authorize reviewed ${{ inputs.environment }} destroy
-        needs: terraform-destroy-plan
-        runs-on: ubuntu-latest
-        timeout-minutes: 5
-        environment: ${{ inputs.environment }}
-        permissions: {}
-
-        steps:
-            - name: Record authorization
-              run: |
-                  {
-                    echo "# Destroy Plan Authorized"
-                    echo
-                    echo "- Environment: \`${{ inputs.environment }}\`"
-                    echo "- Commit: \`${GITHUB_SHA}\`"
-                    echo "- AWS account: \`${{ needs.terraform-destroy-plan.outputs.expected_account_id }}\`"
-                    echo "- Deployment profile: \`${{ needs.terraform-destroy-plan.outputs.deployment_profile }}\`"
-                    echo "- Production retirement mode: \`${{ needs.terraform-destroy-plan.outputs.production_retirement_mode }}\`"
-                  } >> "${GITHUB_STEP_SUMMARY}"
-
     identity-center-cleanup-plan:
         name: Plan Identity Center cleanup
-        needs: [terraform-destroy-plan, authorize-destroy]
+        needs: [terraform-destroy-plan]
         runs-on: ubuntu-latest
         timeout-minutes: 30
         environment: control-plane-plan
