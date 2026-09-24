@@ -20,6 +20,10 @@
 # - Backup selection uses the expected Backup=true tag-based selection model
 # - Backup service role is configured on the selection
 # - Recovery points and recent backup jobs are reported when backups are enabled
+# - Restore Testing configuration exactly matches Terraform when enabled
+# - Restore Testing targets the exact Terraform-managed RDS instance
+# - RDS Restore Testing uses Terraform-owned private networking metadata
+# - Latest Restore Testing execution, validation, and cleanup state are reported
 #
 # Usage:
 #   ./scripts/validation/validate-backup.sh dev
@@ -178,6 +182,145 @@ success "Effective AWS Backup Terraform contract is valid"
 info "effective_backup_enabled: ${EFFECTIVE_BACKUP_ENABLED}"
 info "effective_backup_schedule: ${EFFECTIVE_BACKUP_SCHEDULE}"
 info "effective_delete_backups_after_days: ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}"
+
+section "Resolving Restore Testing Terraform contract"
+
+if ! terraform_output_exists "$OUTPUTS_JSON" restore_testing; then
+  fail "Missing required Terraform output: restore_testing"
+fi
+
+RESTORE_TESTING_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.restore_testing.value'
+)"
+
+if ! echo "$RESTORE_TESTING_JSON" |
+  jq -e 'type == "object" and (.enabled | type == "boolean")' >/dev/null; then
+  echo "$RESTORE_TESTING_JSON" | jq .
+  fail "restore_testing must be an object with a boolean enabled field."
+fi
+
+RESTORE_TESTING_ENABLED="$(
+  echo "$RESTORE_TESTING_JSON" |
+    jq -r '.enabled'
+)"
+
+require_value_in_list \
+  "$RESTORE_TESTING_ENABLED" \
+  "true false" \
+  "restore_testing.enabled"
+
+# Summary defaults. Enabled deployments overwrite these with Terraform/live AWS
+# values during Restore Testing validation.
+RESTORE_TESTING_PLAN_NAME="<disabled>"
+RESTORE_TESTING_PLAN_ARN="<none>"
+RESTORE_TESTING_SCHEDULE="<disabled>"
+RESTORE_TESTING_START_WINDOW_HOURS="<disabled>"
+RESTORE_TESTING_SELECTION_WINDOW_DAYS="<disabled>"
+RESTORE_TESTING_SELECTION_NAME="<disabled>"
+RESTORE_TESTING_PROTECTED_RESOURCE_ARN="<none>"
+RESTORE_TESTING_VALIDATION_WINDOW_HOURS="<disabled>"
+RESTORE_TEST_JOB_COUNT=0
+LATEST_RESTORE_TEST_JOB_ID="<none>"
+LATEST_RESTORE_TEST_STATUS="<none>"
+LATEST_RESTORE_TEST_RECOVERY_POINT_ARN="<none>"
+LATEST_RESTORE_TEST_CREATED_RESOURCE_ARN="<none>"
+LATEST_RESTORE_TEST_COMPLETION_TIME="<none>"
+LATEST_RESTORE_TEST_VALIDATION_STATUS="<none>"
+LATEST_RESTORE_TEST_DELETION_STATUS="<none>"
+
+if [[ "$RESTORE_TESTING_ENABLED" == "true" ]]; then
+  if [[ "$EFFECTIVE_BACKUP_ENABLED" != "true" ]]; then
+    echo "$RESTORE_TESTING_JSON" | jq .
+    fail "Restore Testing cannot be enabled when effective_backup_enabled=false."
+  fi
+
+  if ! echo "$RESTORE_TESTING_JSON" |
+    jq -e '
+      (.schedule | type == "string" and length > 0)
+      and (.start_window_hours | type == "number" and . >= 1 and floor == .)
+      and (.selection_window_days | type == "number" and . >= 1 and floor == .)
+      and (.validation_window_hours | type == "number" and . >= 1 and floor == .)
+      and (.plan | type == "object")
+      and (.plan.name | type == "string" and length > 0)
+      and (.plan.arn | type == "string" and length > 0)
+      and (.plan.schedule_expression == .schedule)
+      and (.plan.start_window_hours == .start_window_hours)
+      and (
+        .plan.recovery_point_selection as $selection
+        | (
+            ($selection | type == "array" and length == 1)
+            or ($selection | type == "object")
+          )
+      )
+      and (.selection | type == "object")
+      and (.selection.name | type == "string" and length > 0)
+      and (.selection.restore_testing_plan_name == .plan.name)
+      and (.selection.protected_resource_type | type == "string" and length > 0)
+      and (.selection.protected_resource_arns | type == "array" and length == 1)
+      and (.selection.iam_role_arn | type == "string" and length > 0)
+      and (.selection.restore_metadata_overrides | type == "object")
+      and (.selection.validation_window_hours == .validation_window_hours)
+    ' >/dev/null; then
+    echo "$RESTORE_TESTING_JSON" | jq .
+    fail "Enabled restore_testing output does not contain a complete resource-backed contract."
+  fi
+
+  RESTORE_TESTING_PLAN_NAME="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.plan.name'
+  )"
+  RESTORE_TESTING_PLAN_ARN="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.plan.arn'
+  )"
+  RESTORE_TESTING_SCHEDULE="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.schedule'
+  )"
+  RESTORE_TESTING_START_WINDOW_HOURS="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.start_window_hours'
+  )"
+  RESTORE_TESTING_SELECTION_WINDOW_DAYS="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.selection_window_days'
+  )"
+  RESTORE_TESTING_SELECTION_NAME="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.selection.name'
+  )"
+  RESTORE_TESTING_PROTECTED_RESOURCE_ARN="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.selection.protected_resource_arns[0]'
+  )"
+  RESTORE_TESTING_VALIDATION_WINDOW_HOURS="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -r '.validation_window_hours'
+  )"
+
+  success "Enabled Restore Testing Terraform contract is complete"
+else
+  if ! echo "$RESTORE_TESTING_JSON" |
+    jq -e '
+      .schedule == null
+      and .start_window_hours == null
+      and .selection_window_days == null
+      and .validation_window_hours == null
+      and .plan == null
+      and .selection == null
+    ' >/dev/null; then
+    echo "$RESTORE_TESTING_JSON" | jq .
+    fail "Disabled restore_testing contract must contain null policy/resource values."
+  fi
+
+  success "Restore Testing is disabled by the Terraform contract"
+fi
+
+info "restore_testing.enabled: ${RESTORE_TESTING_ENABLED}"
+info "restore_testing.schedule: ${RESTORE_TESTING_SCHEDULE}"
+info "restore_testing.plan: ${RESTORE_TESTING_PLAN_NAME}"
+info "restore_testing.selection: ${RESTORE_TESTING_SELECTION_NAME}"
 
 EXPECTED_BACKUP_VAULT_NAME="${NAME_PREFIX}-backup-vault"
 EXPECTED_BACKUP_PLAN_NAME="${NAME_PREFIX}-backup-plan"
@@ -348,6 +491,16 @@ validate_workload_backup_tags() {
     fail "Expected exactly one environment RDS instance for Backup tag validation: ${expected_rds_identifier}"
   fi
 
+  ENV_RDS_ARN="$(
+    echo "$rds_instances_json" |
+      jq -r '.[0].DBInstanceArn // empty'
+  )"
+
+  if [[ -z "$ENV_RDS_ARN" ]]; then
+    echo "$rds_instances_json" | jq .
+    fail "Unable to resolve the environment RDS ARN."
+  fi
+
   invalid_rds_json="$(
     echo "$rds_instances_json" |
       jq -c \
@@ -373,6 +526,290 @@ validate_workload_backup_tags() {
   fi
 
   success "Environment RDS instance has Backup=${expected_value}: ${expected_rds_identifier}"
+}
+
+validate_restore_testing_live() {
+  section "Validating AWS Backup Restore Testing"
+
+  if [[ "$RESTORE_TESTING_ENABLED" != "true" ]]; then
+    success "Restore Testing is disabled by Terraform; no live Restore Testing configuration is required."
+    return 0
+  fi
+
+  local expected_plan_recovery_selection_json
+  local expected_selection_json
+  local expected_metadata_json
+  local restore_testing_plan_response_json
+  local live_plan_json
+  local restore_testing_selection_response_json
+  local live_selection_json
+  local restore_jobs_json
+  local latest_restore_job_json
+
+  expected_plan_recovery_selection_json="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -c '
+        .plan.recovery_point_selection
+        | if type == "array" then .[0] else . end
+      '
+  )"
+
+  expected_selection_json="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -c '.selection'
+  )"
+
+  expected_metadata_json="$(
+    echo "$expected_selection_json" |
+      jq -c '.restore_metadata_overrides'
+  )"
+
+  # Cross-resource Terraform/live relationship: the Restore Testing contract
+  # must target the exact RDS instance already resolved by this validator.
+  if [[ "$RESTORE_TESTING_PROTECTED_RESOURCE_ARN" != "$ENV_RDS_ARN" ]]; then
+    jq -n \
+      --arg terraform_restore_target "$RESTORE_TESTING_PROTECTED_RESOURCE_ARN" \
+      --arg live_environment_rds "$ENV_RDS_ARN" \
+      '{
+        terraform_restore_target: $terraform_restore_target,
+        live_environment_rds: $live_environment_rds
+      }'
+    fail "Restore Testing does not target the exact live Terraform-managed RDS instance."
+  fi
+
+  restore_testing_plan_response_json="$(
+    aws backup get-restore-testing-plan \
+      "${aws_args[@]}" \
+      --restore-testing-plan-name "$RESTORE_TESTING_PLAN_NAME" \
+      --output json
+  )"
+
+  live_plan_json="$(
+    echo "$restore_testing_plan_response_json" |
+      jq -c '.RestoreTestingPlan'
+  )"
+
+  if ! echo "$live_plan_json" |
+    jq -e \
+      --arg expected_name "$RESTORE_TESTING_PLAN_NAME" \
+      --arg expected_arn "$RESTORE_TESTING_PLAN_ARN" \
+      --arg expected_schedule "$RESTORE_TESTING_SCHEDULE" \
+      --argjson expected_start_window "$RESTORE_TESTING_START_WINDOW_HOURS" \
+      --argjson expected_recovery_selection "$expected_plan_recovery_selection_json" \
+      --arg backup_vault_arn "$BACKUP_VAULT_ARN" '
+        def sorted_strings:
+          if . == null then [] else sort end;
+
+        .RestoreTestingPlanName == $expected_name
+        and .RestoreTestingPlanArn == $expected_arn
+        and .ScheduleExpression == $expected_schedule
+        and .StartWindowHours == $expected_start_window
+        and .RecoveryPointSelection.Algorithm
+          == $expected_recovery_selection.algorithm
+        and (
+          (.RecoveryPointSelection.IncludeVaults | sorted_strings)
+          == ($expected_recovery_selection.include_vaults | sorted_strings)
+        )
+        and (
+          (.RecoveryPointSelection.IncludeVaults | sorted_strings)
+          == ([$backup_vault_arn] | sorted_strings)
+        )
+        and (
+          (.RecoveryPointSelection.RecoveryPointTypes | sorted_strings)
+          == ($expected_recovery_selection.recovery_point_types | sorted_strings)
+        )
+        and .RecoveryPointSelection.SelectionWindowDays
+          == $expected_recovery_selection.selection_window_days
+      ' >/dev/null; then
+    jq -n \
+      --argjson expected "$RESTORE_TESTING_JSON" \
+      --argjson actual "$live_plan_json" '
+        {
+          expected_restore_testing: $expected,
+          actual_restore_testing_plan: $actual
+        }
+      '
+    fail "Live Restore Testing plan does not exactly match Terraform."
+  fi
+
+  success "Live Restore Testing plan exactly matches Terraform"
+
+  restore_testing_selection_response_json="$(
+    aws backup get-restore-testing-selection \
+      "${aws_args[@]}" \
+      --restore-testing-plan-name "$RESTORE_TESTING_PLAN_NAME" \
+      --restore-testing-selection-name "$RESTORE_TESTING_SELECTION_NAME" \
+      --output json
+  )"
+
+  live_selection_json="$(
+    echo "$restore_testing_selection_response_json" |
+      jq -c '.RestoreTestingSelection'
+  )"
+
+  if ! echo "$live_selection_json" |
+    jq -e \
+      --argjson expected "$expected_selection_json" \
+      --argjson expected_metadata "$expected_metadata_json" '
+        def normalize_metadata:
+          with_entries(.key |= ascii_downcase)
+          | if has("vpcsecuritygroupids") then
+              .vpcsecuritygroupids = (
+                .vpcsecuritygroupids
+                | fromjson
+                | sort
+                | tojson
+              )
+            else .
+            end
+          | if has("publiclyaccessible") then
+              .publiclyaccessible |= ascii_downcase
+            else .
+            end
+          | if has("multiaz") then
+              .multiaz |= ascii_downcase
+            else .
+            end;
+
+        .RestoreTestingSelectionName == $expected.name
+        and .RestoreTestingPlanName == $expected.restore_testing_plan_name
+        and .ProtectedResourceType == $expected.protected_resource_type
+        and ((.ProtectedResourceArns // [] | sort)
+          == ($expected.protected_resource_arns // [] | sort))
+        and .IamRoleArn == $expected.iam_role_arn
+        and .ValidationWindowHours == $expected.validation_window_hours
+        and (
+          (.RestoreMetadataOverrides // {} | normalize_metadata)
+          == ($expected_metadata | normalize_metadata)
+        )
+      ' >/dev/null; then
+    jq -n \
+      --argjson expected "$expected_selection_json" \
+      --argjson actual "$live_selection_json" '
+        {
+          expected_restore_testing_selection: $expected,
+          actual_restore_testing_selection: $actual
+        }
+      '
+    fail "Live Restore Testing selection does not exactly match Terraform."
+  fi
+
+  success "Live Restore Testing selection exactly matches Terraform"
+  success "Restore Testing uses the exact RDS ARN, Backup role, and Terraform-owned private restore metadata"
+
+  section "Reporting Restore Testing execution state"
+
+  restore_jobs_json="$(
+    aws backup list-restore-jobs \
+      "${aws_args[@]}" \
+      --by-restore-testing-plan-arn "$RESTORE_TESTING_PLAN_ARN" \
+      --output json
+  )"
+
+  RESTORE_TEST_JOB_COUNT="$(
+    echo "$restore_jobs_json" |
+      jq '.RestoreJobs | length'
+  )"
+
+  latest_restore_job_json="$(
+    echo "$restore_jobs_json" |
+      jq -c '
+        [.RestoreJobs[]?]
+        | sort_by(.CreationDate // "")
+        | last // null
+      '
+  )"
+
+  if [[ "$latest_restore_job_json" == "null" ]]; then
+    warn "No Restore Testing jobs exist yet. Configuration is valid, but live restore qualification has not occurred."
+    return 0
+  fi
+
+  LATEST_RESTORE_TEST_JOB_ID="$(
+    echo "$latest_restore_job_json" |
+      jq -r '.RestoreJobId // "<none>"'
+  )"
+  LATEST_RESTORE_TEST_STATUS="$(
+    echo "$latest_restore_job_json" |
+      jq -r '.Status // "<none>"'
+  )"
+  LATEST_RESTORE_TEST_RECOVERY_POINT_ARN="$(
+    echo "$latest_restore_job_json" |
+      jq -r '.RecoveryPointArn // "<none>"'
+  )"
+  LATEST_RESTORE_TEST_CREATED_RESOURCE_ARN="$(
+    echo "$latest_restore_job_json" |
+      jq -r '.CreatedResourceArn // "<none>"'
+  )"
+  LATEST_RESTORE_TEST_COMPLETION_TIME="$(
+    echo "$latest_restore_job_json" |
+      jq -r '.CompletionDate // "<none>"'
+  )"
+  LATEST_RESTORE_TEST_VALIDATION_STATUS="$(
+    echo "$latest_restore_job_json" |
+      jq -r '.ValidationStatus // "<none>"'
+  )"
+  LATEST_RESTORE_TEST_DELETION_STATUS="$(
+    echo "$latest_restore_job_json" |
+      jq -r '.DeletionStatus // "<none>"'
+  )"
+
+  case "$LATEST_RESTORE_TEST_STATUS" in
+    COMPLETED)
+      success "Latest Restore Testing job completed successfully: ${LATEST_RESTORE_TEST_JOB_ID}"
+      ;;
+    PENDING|RUNNING)
+      warn "Latest Restore Testing job is still ${LATEST_RESTORE_TEST_STATUS}: ${LATEST_RESTORE_TEST_JOB_ID}"
+      ;;
+    FAILED|ABORTED)
+      echo "$latest_restore_job_json" | jq .
+      fail "Latest Restore Testing job is ${LATEST_RESTORE_TEST_STATUS}: ${LATEST_RESTORE_TEST_JOB_ID}"
+      ;;
+    *)
+      echo "$latest_restore_job_json" | jq .
+      warn "Latest Restore Testing job has an unexpected status: ${LATEST_RESTORE_TEST_STATUS}"
+      ;;
+  esac
+
+  case "$LATEST_RESTORE_TEST_VALIDATION_STATUS" in
+    FAILED|TIMED_OUT)
+      warn "Latest Restore Testing validation status is ${LATEST_RESTORE_TEST_VALIDATION_STATUS}; R6.4 reports this state but does not enforce application-level validation."
+      ;;
+    VALIDATING)
+      warn "Latest Restore Testing validation is still in progress."
+      ;;
+    SUCCESSFUL)
+      success "Latest Restore Testing validation status is SUCCESSFUL"
+      ;;
+    "<none>")
+      info "Latest Restore Testing job has no validation result yet."
+      ;;
+    *)
+      warn "Latest Restore Testing validation status is unexpected: ${LATEST_RESTORE_TEST_VALIDATION_STATUS}"
+      ;;
+  esac
+
+  case "$LATEST_RESTORE_TEST_DELETION_STATUS" in
+    FAILED)
+      warn "Restore Testing cleanup reports FAILED. R6.5 live qualification must resolve and prove cleanup."
+      ;;
+    DELETING)
+      warn "Restore Testing temporary resource cleanup is still in progress."
+      ;;
+    SUCCESSFUL)
+      success "Restore Testing reports successful cleanup of the temporary restored resource"
+      ;;
+    "<none>")
+      info "Latest Restore Testing job has no deletion status yet."
+      ;;
+    *)
+      warn "Latest Restore Testing deletion status is unexpected: ${LATEST_RESTORE_TEST_DELETION_STATUS}"
+      ;;
+  esac
+
+  info "Latest Restore Testing recovery point: ${LATEST_RESTORE_TEST_RECOVERY_POINT_ARN}"
+  info "Latest Restore Testing created resource: ${LATEST_RESTORE_TEST_CREATED_RESOURCE_ARN}"
+  info "Latest Restore Testing completion time: ${LATEST_RESTORE_TEST_COMPLETION_TIME}"
 }
 
 section "Validating backup vault"
@@ -427,6 +864,8 @@ LIVE_BACKUP_PLAN_COUNT="$(
     jq 'length'
 )"
 
+validate_restore_testing_live
+
 section "Validating backup enablement contract"
 
 if [[ "$EFFECTIVE_BACKUP_ENABLED" != "true" ]]; then
@@ -459,6 +898,19 @@ Backup plan count:                        ${LIVE_BACKUP_PLAN_COUNT}
 Expected workload Backup tag value:       ${EXPECTED_RESOURCE_BACKUP_TAG_VALUE}
 Environment EC2 resources checked:        ${ENV_EC2_RESOURCE_COUNT}
 Environment RDS resources checked:        ${ENV_RDS_RESOURCE_COUNT}
+
+Restore Testing enabled:                  ${RESTORE_TESTING_ENABLED}
+Restore Testing plan:                     ${RESTORE_TESTING_PLAN_NAME}
+Restore Testing plan ARN:                 ${RESTORE_TESTING_PLAN_ARN}
+Restore Testing schedule:                 ${RESTORE_TESTING_SCHEDULE}
+Restore Testing start window hours:       ${RESTORE_TESTING_START_WINDOW_HOURS}
+Restore Testing selection:                ${RESTORE_TESTING_SELECTION_NAME}
+Restore Testing protected resource:       ${RESTORE_TESTING_PROTECTED_RESOURCE_ARN}
+Restore Testing validation window hours:  ${RESTORE_TESTING_VALIDATION_WINDOW_HOURS}
+Latest Restore Testing job ID:             ${LATEST_RESTORE_TEST_JOB_ID}
+Latest Restore Testing job status:         ${LATEST_RESTORE_TEST_STATUS}
+Latest Restore Testing validation status:  ${LATEST_RESTORE_TEST_VALIDATION_STATUS}
+Latest Restore Testing deletion status:    ${LATEST_RESTORE_TEST_DELETION_STATUS}
 SUMMARY
 
   section "Validation Result"
@@ -848,6 +1300,24 @@ Historical completed jobs missing recovery points:  ${MISSING_COMPLETED_RECOVERY
 Latest in-progress backup jobs:                     ${LATEST_IN_PROGRESS_BACKUP_JOB_COUNT}
 Latest failed backup jobs:                          ${LATEST_FAILED_BACKUP_JOB_COUNT}
 Older failed backup jobs:                           ${OLDER_FAILED_BACKUP_JOB_COUNT}
+
+Restore Testing enabled:                            ${RESTORE_TESTING_ENABLED}
+Restore Testing plan:                               ${RESTORE_TESTING_PLAN_NAME}
+Restore Testing plan ARN:                           ${RESTORE_TESTING_PLAN_ARN}
+Restore Testing schedule:                           ${RESTORE_TESTING_SCHEDULE}
+Restore Testing start window hours:                 ${RESTORE_TESTING_START_WINDOW_HOURS}
+Restore Testing selection window days:              ${RESTORE_TESTING_SELECTION_WINDOW_DAYS}
+Restore Testing selection:                          ${RESTORE_TESTING_SELECTION_NAME}
+Restore Testing protected resource:                 ${RESTORE_TESTING_PROTECTED_RESOURCE_ARN}
+Restore Testing validation window hours:            ${RESTORE_TESTING_VALIDATION_WINDOW_HOURS}
+Restore Testing jobs listed:                        ${RESTORE_TEST_JOB_COUNT}
+Latest Restore Testing job ID:                      ${LATEST_RESTORE_TEST_JOB_ID}
+Latest Restore Testing job status:                  ${LATEST_RESTORE_TEST_STATUS}
+Latest Restore Testing recovery point:              ${LATEST_RESTORE_TEST_RECOVERY_POINT_ARN}
+Latest Restore Testing created resource:            ${LATEST_RESTORE_TEST_CREATED_RESOURCE_ARN}
+Latest Restore Testing completion time:             ${LATEST_RESTORE_TEST_COMPLETION_TIME}
+Latest Restore Testing validation status:           ${LATEST_RESTORE_TEST_VALIDATION_STATUS}
+Latest Restore Testing deletion status:             ${LATEST_RESTORE_TEST_DELETION_STATUS}
 SUMMARY
 
 if [[ "${#BACKUP_RULE_SUMMARY_ROWS[@]}" -gt 0 ]]; then
