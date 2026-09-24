@@ -267,3 +267,8 @@ output "ecr_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt workload ECR repositories."
   value       = module.baseline.ecr_cmk_arn
 }
+
+output "restore_testing" {
+  description = "Effective and resource-backed AWS Backup Restore Testing configuration used by validation."
+  value       = module.baseline.restore_testing
+}

@@ -360,3 +360,31 @@ output "s3_prefix_list_id" {
   description = "AWS-managed S3 prefix list ID associated with the workload S3 Gateway Endpoint."
   value       = module.vpc_endpoints.s3_prefix_list_id
 }
+
+output "restore_testing" {
+  description = "Effective and resource-backed AWS Backup Restore Testing configuration used by validation."
+
+  value = {
+    enabled = local.effective_restore_testing_enabled
+
+    schedule = (
+      local.effective_restore_testing_schedule
+    )
+
+    start_window_hours = (
+      local.effective_restore_testing_start_window_hours
+    )
+
+    selection_window_days = (
+      local.effective_restore_testing_selection_window_days
+    )
+
+    validation_window_hours = (
+      local.effective_restore_testing_validation_window_hours
+    )
+
+    plan = module.backup.restore_testing_plan
+
+    selection = module.backup.restore_testing_selection
+  }
+}
