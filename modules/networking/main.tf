@@ -165,6 +165,32 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.igw.id
   }
 
+  dynamic "route" {
+    for_each = var.egress_mode == "network_firewall" ? [1] : []
+
+    content {
+      cidr_block = var.subnet_cidrs.compute_private[each.value]
+
+      vpc_endpoint_id = (
+        var.firewall_endpoint_ids_by_az[each.key]
+      )
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        var.egress_mode != "network_firewall" ||
+        contains(
+          keys(var.firewall_endpoint_ids_by_az),
+          each.key,
+        )
+      )
+
+      error_message = "'firewall_endpoint_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
+    }
+  }
+
   tags = {
     Name        = "${var.name_prefix}-Public-Route-Table-${each.key}"
     Environment = var.environment
@@ -172,19 +198,11 @@ resource "aws_route_table" "public" {
   }
 }
 
-resource "aws_route" "public_compute_return_to_firewall" {
-  for_each = var.egress_mode == "network_firewall" ? local.az_index_map : {}
-
-  route_table_id         = aws_route_table.public[each.key].id
-  destination_cidr_block = var.subnet_cidrs.compute_private[each.value]
-
-  vpc_endpoint_id = var.firewall_endpoint_ids_by_az[each.key]
+removed {
+  from = aws_route.public_compute_return_to_firewall
 
   lifecycle {
-    precondition {
-      condition     = contains(keys(var.firewall_endpoint_ids_by_az), each.key)
-      error_message = "'firewall_endpoint_ids_by_az' must contain an endpoint ID for each AZ when 'egress_mode' is 'network_firewall'"
-    }
+    destroy = false
   }
 }
 
