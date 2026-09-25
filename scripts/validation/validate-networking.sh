@@ -258,30 +258,67 @@ if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
 fi
 
 for required_output in \
+  deployment_profile \
   network_topology \
+  lifecycle_protection \
   effective_egress_mode \
   effective_allowed_egress_domains; do
+
   if ! terraform_output_exists "$OUTPUTS_JSON" "$required_output"; then
     fail "Missing required Terraform output: ${required_output}"
   fi
 done
 
 DEPLOYMENT_PROFILE="$(
-  if terraform_output_exists "$OUTPUTS_JSON" deployment_profile; then
-    get_terraform_output_value "$OUTPUTS_JSON" deployment_profile
-  else
-    printf '%s' "unknown"
-  fi
+  get_terraform_output_value "$OUTPUTS_JSON" deployment_profile
 )"
+
+require_value_in_list \
+  "$DEPLOYMENT_PROFILE" \
+  "production development minimal" \
+  "deployment_profile"
 
 if ! NETWORK_TOPOLOGY_JSON="$(
   echo "$OUTPUTS_JSON" |
-    jq -S -ce '.network_topology.value | if type == "object" then . else error("network_topology must be an object") end'
+    jq -S -ce '
+      .network_topology.value
+      | if type == "object"
+        then .
+        else error("network_topology must be an object")
+        end
+    '
 )"; then
   fail "Unable to resolve network_topology from Terraform outputs."
 fi
 
-EXPECTED_AZS_JSON="$(topology_field availability_zones | jq -c 'sort')"
+if ! LIFECYCLE_PROTECTION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -S -ce '
+      .lifecycle_protection.value
+      | if type == "object"
+        then .
+        else error("lifecycle_protection must be an object")
+        end
+    '
+)"; then
+  fail "Unable to resolve lifecycle_protection from Terraform outputs."
+fi
+
+EXPECTED_NETWORK_FIREWALL_DELETE_PROTECTION="$(
+  echo "$LIFECYCLE_PROTECTION_JSON" |
+    jq -r '.network_firewall_delete_protection'
+)"
+
+require_value_in_list \
+  "$EXPECTED_NETWORK_FIREWALL_DELETE_PROTECTION" \
+  "true false" \
+  "lifecycle_protection.network_firewall_delete_protection"
+
+EXPECTED_AZS_JSON="$(
+  topology_field availability_zones |
+    jq -c 'sort'
+)"
+
 EXPECTED_AZ_COUNT="$(echo "$EXPECTED_AZS_JSON" | jq 'length')"
 
 EXPECTED_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field public_subnet_ids_by_az)"
@@ -517,6 +554,7 @@ MATCHING_FIREWALL_COUNT="$(
 info "Matching Network Firewall count: $MATCHING_FIREWALL_COUNT"
 
 LIVE_FIREWALL_ENDPOINT_IDS_BY_AZ_JSON="{}"
+LIVE_NETWORK_FIREWALL_DELETE_PROTECTION="<not-applicable>"
 
 case "$EFFECTIVE_EGRESS_MODE" in
   network_firewall)
@@ -542,6 +580,28 @@ case "$EFFECTIVE_EGRESS_MODE" in
         jq '{firewall: .Firewall, firewall_status: .FirewallStatus}'
       fail "Network Firewall is not READY/IN_SYNC in the expected VPC."
     fi
+
+    LIVE_NETWORK_FIREWALL_DELETE_PROTECTION="$(
+      echo "$NETWORK_FIREWALL_DESCRIPTION_JSON" |
+        jq -r '.Firewall.DeleteProtection'
+    )"
+
+    if [[ "$LIVE_NETWORK_FIREWALL_DELETE_PROTECTION" != \
+      "$EXPECTED_NETWORK_FIREWALL_DELETE_PROTECTION" ]]; then
+
+      jq -n \
+        --argjson expected "$EXPECTED_NETWORK_FIREWALL_DELETE_PROTECTION" \
+        --argjson actual "$LIVE_NETWORK_FIREWALL_DELETE_PROTECTION" '
+          {
+            expected_delete_protection: $expected,
+            live_delete_protection: $actual
+          }
+        '
+
+      fail "Network Firewall deletion protection does not match Terraform."
+    fi
+
+    success "Network Firewall deletion protection matches Terraform: ${LIVE_NETWORK_FIREWALL_DELETE_PROTECTION}"
 
     LIVE_FIREWALL_ENDPOINT_IDS_BY_AZ_JSON="$(
       echo "$NETWORK_FIREWALL_DESCRIPTION_JSON" |
@@ -876,27 +936,29 @@ esac
 section "Networking Summary"
 
 cat <<SUMMARY
-Environment:                ${ENV_NAME}
-Deployment profile:         ${DEPLOYMENT_PROFILE}
-AWS profile:                ${AWS_PROFILE:-<default>}
-AWS region:                 ${AWS_REGION}
-Name prefix:                ${NAME_PREFIX}
-VPC ID:                     ${VPC_ID}
-effective_egress_mode:      ${EFFECTIVE_EGRESS_MODE}
-Expected AZ count:          ${EXPECTED_AZ_COUNT}
-Expected AZs:               ${EXPECTED_AZS_JSON}
-Effective firewall domains: ${EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT}
+Environment:                  ${ENV_NAME}
+Deployment profile:           ${DEPLOYMENT_PROFILE}
+AWS profile:                  ${AWS_PROFILE:-<default>}
+AWS region:                   ${AWS_REGION}
+Name prefix:                  ${NAME_PREFIX}
+VPC ID:                       ${VPC_ID}
+effective_egress_mode:        ${EFFECTIVE_EGRESS_MODE}
+Expected AZ count:            ${EXPECTED_AZ_COUNT}
+Expected AZs:                 ${EXPECTED_AZS_JSON}
+Expected firewall protection: ${EXPECTED_NETWORK_FIREWALL_DELETE_PROTECTION}
+Live firewall protection:     ${LIVE_NETWORK_FIREWALL_DELETE_PROTECTION}
+Effective firewall domains:   ${EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT}
 
-NAT Gateway count:          ${NAT_GATEWAY_COUNT}
-Matching Network Firewalls: ${MATCHING_FIREWALL_COUNT}
-Compute route tables:       ${COMPUTE_RT_COUNT}
-Compute private subnets:    ${COMPUTE_SUBNET_COUNT}
-Compute default routes:     ${DEFAULT_ROUTE_COUNT}
-Firewall route tables:      ${FIREWALL_RT_COUNT}
-Firewall default routes:    ${FIREWALL_DEFAULT_ROUTE_COUNT}
-Public route tables:        ${PUBLIC_RT_COUNT}
-Public default routes:      ${PUBLIC_DEFAULT_ROUTE_COUNT}
-Public compute returns:     ${PUBLIC_COMPUTE_RETURN_ROUTE_COUNT}
+NAT Gateway count:            ${NAT_GATEWAY_COUNT}
+Matching Network Firewalls:   ${MATCHING_FIREWALL_COUNT}
+Compute route tables:         ${COMPUTE_RT_COUNT}
+Compute private subnets:      ${COMPUTE_SUBNET_COUNT}
+Compute default routes:       ${DEFAULT_ROUTE_COUNT}
+Firewall route tables:        ${FIREWALL_RT_COUNT}
+Firewall default routes:      ${FIREWALL_DEFAULT_ROUTE_COUNT}
+Public route tables:          ${PUBLIC_RT_COUNT}
+Public default routes:        ${PUBLIC_DEFAULT_ROUTE_COUNT}
+Public compute returns:       ${PUBLIC_COMPUTE_RETURN_ROUTE_COUNT}
 SUMMARY
 
 section "Validation Result"
