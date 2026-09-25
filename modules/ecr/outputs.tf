@@ -7,6 +7,7 @@ output "repositories" {
       name           = repository.name
       repository_url = repository.repository_url
       registry_id    = repository.registry_id
+      force_delete   = repository.force_delete
     }
   }
 }
