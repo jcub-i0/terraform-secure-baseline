@@ -10,7 +10,9 @@
 # - effective_backup_enabled, effective_backup_schedule, and
 #   effective_delete_backups_after_days match the resolved backup contract
 # - AWS caller identity is valid
-# - Backup vault exists and remains encrypted regardless of backup enablement
+# - Backup vault identity, encryption, and force-destroy posture match Terraform
+# - RDS live resilience configuration exactly matches Terraform
+# - RDS deletion-time lifecycle intent is resource-backed by Terraform outputs
 # - Workload EC2 and RDS Backup tags exactly match effective_backup_enabled
 # - Backup plan and selection are absent when backups are disabled
 # - Backup plan exists when backups are enabled
@@ -108,9 +110,16 @@ fi
 
 success "Terraform outputs are readable"
 
-if ! terraform_output_exists "$OUTPUTS_JSON" effective_backup_enabled; then
-  fail "Missing required Terraform output: effective_backup_enabled"
-fi
+for required_output in \
+  effective_backup_enabled \
+  rds_configuration \
+  backup_vault_configuration \
+  lifecycle_protection \
+  restore_testing; do
+  if ! terraform_output_exists "$OUTPUTS_JSON" "$required_output"; then
+    fail "Missing required Terraform output: ${required_output}"
+  fi
+done
 
 EFFECTIVE_BACKUP_ENABLED="$(
   get_terraform_output_value "$OUTPUTS_JSON" effective_backup_enabled
@@ -183,11 +192,147 @@ info "effective_backup_enabled: ${EFFECTIVE_BACKUP_ENABLED}"
 info "effective_backup_schedule: ${EFFECTIVE_BACKUP_SCHEDULE}"
 info "effective_delete_backups_after_days: ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}"
 
-section "Resolving Restore Testing Terraform contract"
+section "Resolving RDS and Backup vault Terraform contracts"
 
-if ! terraform_output_exists "$OUTPUTS_JSON" restore_testing; then
-  fail "Missing required Terraform output: restore_testing"
+RDS_CONFIGURATION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.rds_configuration.value'
+)"
+
+if ! echo "$RDS_CONFIGURATION_JSON" |
+  jq -e '
+    type == "object"
+    and (.identifier | type == "string" and length > 0)
+    and (.arn | type == "string" and length > 0)
+    and ((.multi_az | type) == "boolean")
+    and (.db_subnet_group_name | type == "string" and length > 0)
+    and (
+      (.vpc_security_group_ids | type) == "array"
+      and (.vpc_security_group_ids | length) > 0
+      and all(.vpc_security_group_ids[]; type == "string" and length > 0)
+    )
+    and ((.deletion_protection | type) == "boolean")
+    and (
+      (.backup_retention_period | type) == "number"
+      and .backup_retention_period >= 0
+      and (.backup_retention_period | floor) == .backup_retention_period
+    )
+    and ((.publicly_accessible | type) == "boolean")
+    and ((.storage_encrypted | type) == "boolean")
+    and ((.skip_final_snapshot | type) == "boolean")
+    and ((.delete_automated_backups | type) == "boolean")
+    and (
+      if .skip_final_snapshot
+      then .final_snapshot_identifier == null
+      else (
+        (.final_snapshot_identifier | type) == "string"
+        and (.final_snapshot_identifier | length) > 0
+      )
+      end
+    )
+  ' >/dev/null; then
+  echo "$RDS_CONFIGURATION_JSON" | jq .
+  fail "rds_configuration does not contain a complete resource-backed RDS contract."
 fi
+
+BACKUP_VAULT_CONFIGURATION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.backup_vault_configuration.value'
+)"
+
+if ! echo "$BACKUP_VAULT_CONFIGURATION_JSON" |
+  jq -e '
+    type == "object"
+    and (.name | type == "string" and length > 0)
+    and (.arn | type == "string" and length > 0)
+    and (.kms_key_arn | type == "string" and length > 0)
+    and ((.force_destroy | type) == "boolean")
+  ' >/dev/null; then
+  echo "$BACKUP_VAULT_CONFIGURATION_JSON" | jq .
+  fail "backup_vault_configuration does not contain a complete resource-backed vault contract."
+fi
+
+LIFECYCLE_PROTECTION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -c '.lifecycle_protection.value'
+)"
+
+if ! echo "$LIFECYCLE_PROTECTION_JSON" |
+  jq -e '
+    type == "object"
+    and ((.rds_deletion_protection | type) == "boolean")
+    and ((.backup_vault_force_destroy | type) == "boolean")
+  ' >/dev/null; then
+  echo "$LIFECYCLE_PROTECTION_JSON" | jq .
+  fail "lifecycle_protection lacks the RDS or Backup vault lifecycle fields required by validation."
+fi
+
+EXPECTED_RDS_IDENTIFIER="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.identifier')"
+EXPECTED_RDS_ARN="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.arn')"
+EXPECTED_RDS_MULTI_AZ="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.multi_az')"
+EXPECTED_RDS_DB_SUBNET_GROUP_NAME="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.db_subnet_group_name')"
+EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON="$(
+  echo "$RDS_CONFIGURATION_JSON" |
+    jq -c '.vpc_security_group_ids | sort | unique'
+)"
+EXPECTED_RDS_DELETION_PROTECTION="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.deletion_protection')"
+EXPECTED_RDS_BACKUP_RETENTION_PERIOD="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.backup_retention_period')"
+EXPECTED_RDS_PUBLICLY_ACCESSIBLE="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.publicly_accessible')"
+EXPECTED_RDS_STORAGE_ENCRYPTED="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.storage_encrypted')"
+EXPECTED_RDS_SKIP_FINAL_SNAPSHOT="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.skip_final_snapshot')"
+EXPECTED_RDS_DELETE_AUTOMATED_BACKUPS="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.delete_automated_backups')"
+EXPECTED_RDS_FINAL_SNAPSHOT_IDENTIFIER="$(
+  echo "$RDS_CONFIGURATION_JSON" |
+    jq -r '.final_snapshot_identifier // "<none>"'
+)"
+
+EXPECTED_BACKUP_VAULT_NAME="$(echo "$BACKUP_VAULT_CONFIGURATION_JSON" | jq -r '.name')"
+EXPECTED_BACKUP_VAULT_ARN="$(echo "$BACKUP_VAULT_CONFIGURATION_JSON" | jq -r '.arn')"
+EXPECTED_BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_CONFIGURATION_JSON" | jq -r '.kms_key_arn')"
+EXPECTED_BACKUP_VAULT_FORCE_DESTROY="$(echo "$BACKUP_VAULT_CONFIGURATION_JSON" | jq -r '.force_destroy')"
+
+EXPECTED_LIFECYCLE_RDS_DELETION_PROTECTION="$(
+  echo "$LIFECYCLE_PROTECTION_JSON" |
+    jq -r '.rds_deletion_protection'
+)"
+EXPECTED_LIFECYCLE_BACKUP_VAULT_FORCE_DESTROY="$(
+  echo "$LIFECYCLE_PROTECTION_JSON" |
+    jq -r '.backup_vault_force_destroy'
+)"
+
+if [[ "$EXPECTED_RDS_DELETION_PROTECTION" != "$EXPECTED_LIFECYCLE_RDS_DELETION_PROTECTION" ]]; then
+  jq -n \
+    --arg rds_configuration "$EXPECTED_RDS_DELETION_PROTECTION" \
+    --arg lifecycle_protection "$EXPECTED_LIFECYCLE_RDS_DELETION_PROTECTION" '
+      {
+        rds_configuration_deletion_protection: $rds_configuration,
+        lifecycle_protection_rds_deletion_protection: $lifecycle_protection
+      }
+    '
+  fail "RDS deletion protection disagrees between rds_configuration and lifecycle_protection."
+fi
+
+if [[ "$EXPECTED_BACKUP_VAULT_FORCE_DESTROY" != "$EXPECTED_LIFECYCLE_BACKUP_VAULT_FORCE_DESTROY" ]]; then
+  jq -n \
+    --arg backup_vault_configuration "$EXPECTED_BACKUP_VAULT_FORCE_DESTROY" \
+    --arg lifecycle_protection "$EXPECTED_LIFECYCLE_BACKUP_VAULT_FORCE_DESTROY" '
+      {
+        backup_vault_configuration_force_destroy: $backup_vault_configuration,
+        lifecycle_protection_backup_vault_force_destroy: $lifecycle_protection
+      }
+    '
+  fail "Backup vault force_destroy disagrees between backup_vault_configuration and lifecycle_protection."
+fi
+
+success "RDS and Backup vault Terraform contracts are valid and lifecycle-consistent"
+info "RDS identifier: ${EXPECTED_RDS_IDENTIFIER}"
+info "RDS Multi-AZ: ${EXPECTED_RDS_MULTI_AZ}"
+info "RDS deletion protection: ${EXPECTED_RDS_DELETION_PROTECTION}"
+info "RDS skip final snapshot: ${EXPECTED_RDS_SKIP_FINAL_SNAPSHOT}"
+info "RDS delete automated backups: ${EXPECTED_RDS_DELETE_AUTOMATED_BACKUPS}"
+info "Backup vault force_destroy: ${EXPECTED_BACKUP_VAULT_FORCE_DESTROY}"
+
+section "Resolving Restore Testing Terraform contract"
 
 RESTORE_TESTING_JSON="$(
   echo "$OUTPUTS_JSON" |
@@ -322,7 +467,6 @@ info "restore_testing.schedule: ${RESTORE_TESTING_SCHEDULE}"
 info "restore_testing.plan: ${RESTORE_TESTING_PLAN_NAME}"
 info "restore_testing.selection: ${RESTORE_TESTING_SELECTION_NAME}"
 
-EXPECTED_BACKUP_VAULT_NAME="${NAME_PREFIX}-backup-vault"
 EXPECTED_BACKUP_PLAN_NAME="${NAME_PREFIX}-backup-plan"
 EXPECTED_BACKUP_SELECTION_NAME="${NAME_PREFIX}-backup-selection"
 EXPECTED_BACKUP_RULE_NAME="daily-backups"
@@ -331,13 +475,6 @@ EXPECTED_BACKUP_TAG_VALUE="true"
 
 BACKUP_VAULT_NAME="$EXPECTED_BACKUP_VAULT_NAME"
 BACKUP_PLAN_ID=""
-
-if terraform_output_exists "$OUTPUTS_JSON" backup_vault_name; then
-  BACKUP_VAULT_NAME="$(get_terraform_output_value "$OUTPUTS_JSON" backup_vault_name)"
-  success "backup_vault_name output found: $BACKUP_VAULT_NAME"
-else
-  info "backup_vault_name output not found. Using expected name: $BACKUP_VAULT_NAME"
-fi
 
 section "Checking AWS caller identity"
 
@@ -392,6 +529,76 @@ resolve_backup_plan_ids_by_name() {
     '
 }
 
+validate_rds_configuration_live() {
+  local rds_instance_json="$1"
+  local actual_rds_vpc_security_group_ids_json
+
+  section "Validating exact RDS resilience configuration"
+
+  actual_rds_vpc_security_group_ids_json="$(
+    echo "$rds_instance_json" |
+      jq -c '[.VpcSecurityGroups[]?.VpcSecurityGroupId] | sort | unique'
+  )"
+
+  if ! echo "$rds_instance_json" |
+    jq -e \
+      --arg identifier "$EXPECTED_RDS_IDENTIFIER" \
+      --arg arn "$EXPECTED_RDS_ARN" \
+      --arg subnet_group "$EXPECTED_RDS_DB_SUBNET_GROUP_NAME" \
+      --argjson expected_vpc_security_group_ids "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" \
+      --argjson multi_az "$EXPECTED_RDS_MULTI_AZ" \
+      --argjson deletion_protection "$EXPECTED_RDS_DELETION_PROTECTION" \
+      --argjson backup_retention_period "$EXPECTED_RDS_BACKUP_RETENTION_PERIOD" \
+      --argjson publicly_accessible "$EXPECTED_RDS_PUBLICLY_ACCESSIBLE" \
+      --argjson storage_encrypted "$EXPECTED_RDS_STORAGE_ENCRYPTED" '
+        .DBInstanceIdentifier == $identifier
+        and .DBInstanceArn == $arn
+        and .MultiAZ == $multi_az
+        and .DBSubnetGroup.DBSubnetGroupName == $subnet_group
+        and (
+          ([.VpcSecurityGroups[]?.VpcSecurityGroupId] | sort | unique)
+          == $expected_vpc_security_group_ids
+        )
+        and .DeletionProtection == $deletion_protection
+        and .BackupRetentionPeriod == $backup_retention_period
+        and .PubliclyAccessible == $publicly_accessible
+        and .StorageEncrypted == $storage_encrypted
+      ' >/dev/null; then
+    jq -n \
+      --argjson expected "$RDS_CONFIGURATION_JSON" \
+      --argjson actual "$(
+        echo "$rds_instance_json" |
+          jq -c '{
+            identifier: .DBInstanceIdentifier,
+            arn: .DBInstanceArn,
+            multi_az: .MultiAZ,
+            db_subnet_group_name: .DBSubnetGroup.DBSubnetGroupName,
+            vpc_security_group_ids: ([.VpcSecurityGroups[]?.VpcSecurityGroupId] | sort | unique),
+            deletion_protection: .DeletionProtection,
+            backup_retention_period: .BackupRetentionPeriod,
+            publicly_accessible: .PubliclyAccessible,
+            storage_encrypted: .StorageEncrypted
+          }'
+      )" '
+        {
+          expected_rds_configuration: $expected,
+          live_rds_configuration: $actual
+        }
+      '
+    fail "Live RDS resilience configuration does not exactly match Terraform."
+  fi
+
+  if [[ "$actual_rds_vpc_security_group_ids_json" != "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" ]]; then
+    fail "Live RDS VPC security-group set does not exactly match Terraform."
+  fi
+
+  success "Live RDS resilience configuration exactly matches Terraform"
+  success "Terraform-owned RDS deletion-time lifecycle intent is resource-backed and internally consistent"
+  info "RDS skip_final_snapshot: ${EXPECTED_RDS_SKIP_FINAL_SNAPSHOT}"
+  info "RDS delete_automated_backups: ${EXPECTED_RDS_DELETE_AUTOMATED_BACKUPS}"
+  info "RDS final_snapshot_identifier: ${EXPECTED_RDS_FINAL_SNAPSHOT_IDENTIFIER}"
+}
+
 validate_workload_backup_tags() {
   local expected_value="$1"
   local ec2_response_json
@@ -400,7 +607,7 @@ validate_workload_backup_tags() {
   local rds_response_json
   local rds_instances_json
   local invalid_rds_json
-  local expected_rds_identifier
+  local rds_instance_json
 
   section "Validating workload Backup tags"
 
@@ -462,23 +669,18 @@ validate_workload_backup_tags() {
 
   success "All environment EC2 compute instances have Backup=${expected_value}: ${ENV_EC2_RESOURCE_COUNT}"
 
-  expected_rds_identifier="${NAME_PREFIX}-saas-db"
-
-  rds_response_json="$(
+  if ! rds_response_json="$(
     aws rds describe-db-instances \
       "${aws_args[@]}" \
-      --output json
-  )"
+      --db-instance-identifier "$EXPECTED_RDS_IDENTIFIER" \
+      --output json 2>/dev/null
+  )"; then
+    fail "Terraform expects RDS instance ${EXPECTED_RDS_IDENTIFIER}, but it could not be described in live AWS."
+  fi
 
   rds_instances_json="$(
     echo "$rds_response_json" |
-      jq -c \
-        --arg identifier "$expected_rds_identifier" '
-          [
-            .DBInstances[]?
-            | select(.DBInstanceIdentifier == $identifier)
-          ]
-        '
+      jq -c '.DBInstances // []'
   )"
 
   ENV_RDS_RESOURCE_COUNT="$(
@@ -488,18 +690,32 @@ validate_workload_backup_tags() {
 
   if [[ "$ENV_RDS_RESOURCE_COUNT" -ne 1 ]]; then
     echo "$rds_instances_json" | jq .
-    fail "Expected exactly one environment RDS instance for Backup tag validation: ${expected_rds_identifier}"
+    fail "Expected exactly one live RDS instance for Terraform identifier: ${EXPECTED_RDS_IDENTIFIER}"
   fi
 
-  ENV_RDS_ARN="$(
+  rds_instance_json="$(
     echo "$rds_instances_json" |
-      jq -r '.[0].DBInstanceArn // empty'
+      jq -c '.[0]'
   )"
 
-  if [[ -z "$ENV_RDS_ARN" ]]; then
-    echo "$rds_instances_json" | jq .
-    fail "Unable to resolve the environment RDS ARN."
+  ENV_RDS_ARN="$(
+    echo "$rds_instance_json" |
+      jq -r '.DBInstanceArn // empty'
+  )"
+
+  if [[ "$ENV_RDS_ARN" != "$EXPECTED_RDS_ARN" ]]; then
+    jq -n \
+      --arg expected "$EXPECTED_RDS_ARN" \
+      --arg actual "$ENV_RDS_ARN" '
+        {
+          expected_rds_arn: $expected,
+          live_rds_arn: $actual
+        }
+      '
+    fail "Live RDS ARN does not match rds_configuration."
   fi
+
+  validate_rds_configuration_live "$rds_instance_json"
 
   invalid_rds_json="$(
     echo "$rds_instances_json" |
@@ -525,7 +741,7 @@ validate_workload_backup_tags() {
     fail "The environment RDS instance does not have Backup=${expected_value}."
   fi
 
-  success "Environment RDS instance has Backup=${expected_value}: ${expected_rds_identifier}"
+  success "Environment RDS instance has Backup=${expected_value}: ${EXPECTED_RDS_IDENTIFIER}"
 }
 
 validate_restore_testing_live() {
@@ -563,6 +779,33 @@ validate_restore_testing_live() {
     echo "$expected_selection_json" |
       jq -c '.restore_metadata_overrides'
   )"
+
+  if ! echo "$expected_metadata_json" |
+    jq -e \
+      --arg subnet_group "$EXPECTED_RDS_DB_SUBNET_GROUP_NAME" \
+      --argjson vpc_security_group_ids "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" '
+        .dbSubnetGroupName == $subnet_group
+        and (
+          (.vpcSecurityGroupIds | fromjson | sort | unique)
+          == $vpc_security_group_ids
+        )
+        and (.publiclyAccessible | ascii_downcase) == "false"
+        and (.multiAz | ascii_downcase) == "false"
+      ' >/dev/null; then
+    jq -n \
+      --arg expected_subnet_group "$EXPECTED_RDS_DB_SUBNET_GROUP_NAME" \
+      --argjson expected_vpc_security_group_ids "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" \
+      --argjson restore_metadata "$expected_metadata_json" '
+        {
+          expected_source_rds_subnet_group: $expected_subnet_group,
+          expected_source_rds_vpc_security_group_ids: $expected_vpc_security_group_ids,
+          restore_testing_metadata: $restore_metadata
+        }
+      '
+    fail "Restore Testing private-network metadata does not align with rds_configuration."
+  fi
+
+  success "Restore Testing private-network metadata aligns with the Terraform-owned RDS configuration"
 
   # Cross-resource Terraform/live relationship: the Restore Testing contract
   # must target the exact RDS instance already resolved by this validator.
@@ -834,22 +1077,38 @@ BACKUP_VAULT_KMS_KEY_ARN="$(echo "$BACKUP_VAULT_JSON" | jq -r '.EncryptionKeyArn
 BACKUP_VAULT_KMS_KEY_ID="${BACKUP_VAULT_KMS_KEY_ARN##*/}"
 [[ -z "$BACKUP_VAULT_KMS_KEY_ARN" ]] && BACKUP_VAULT_KMS_KEY_ID="<none>"
 
-if [[ "$(echo "$BACKUP_VAULT_JSON" | jq -r '.BackupVaultName // empty')" != "$BACKUP_VAULT_NAME" ]]; then
-  echo "$BACKUP_VAULT_JSON" | jq '{BackupVaultName, BackupVaultArn, EncryptionKeyArn}'
-  fail "Backup vault identity does not match the expected Terraform naming contract."
+if ! echo "$BACKUP_VAULT_JSON" |
+  jq -e \
+    --arg name "$EXPECTED_BACKUP_VAULT_NAME" \
+    --arg arn "$EXPECTED_BACKUP_VAULT_ARN" \
+    --arg kms_key_arn "$EXPECTED_BACKUP_VAULT_KMS_KEY_ARN" '
+      .BackupVaultName == $name
+      and .BackupVaultArn == $arn
+      and .EncryptionKeyArn == $kms_key_arn
+    ' >/dev/null; then
+  jq -n \
+    --argjson expected "$BACKUP_VAULT_CONFIGURATION_JSON" \
+    --argjson actual "$(
+      echo "$BACKUP_VAULT_JSON" |
+        jq -c '{
+          name: .BackupVaultName,
+          arn: .BackupVaultArn,
+          kms_key_arn: .EncryptionKeyArn
+        }'
+    )" '
+      {
+        expected_backup_vault_configuration: $expected,
+        live_backup_vault_configuration: $actual
+      }
+    '
+  fail "Live Backup vault identity or KMS encryption does not exactly match Terraform."
 fi
 
-if [[ -z "$BACKUP_VAULT_ARN" ]]; then
-  fail "Backup vault ARN could not be resolved."
-fi
-
-if [[ -z "$BACKUP_VAULT_KMS_KEY_ARN" ]]; then
-  fail "Backup vault does not report a KMS encryption key."
-fi
-
-success "Backup vault ARN and KMS encryption are configured"
+success "Live Backup vault identity and KMS encryption exactly match Terraform"
+success "Backup vault force_destroy matches the Terraform lifecycle contract: ${EXPECTED_BACKUP_VAULT_FORCE_DESTROY}"
 info "Backup vault ARN: ${BACKUP_VAULT_ARN}"
 info "Backup vault KMS key: ${BACKUP_VAULT_KMS_KEY_ARN}"
+info "Backup vault force_destroy: ${EXPECTED_BACKUP_VAULT_FORCE_DESTROY}"
 info "Vault recovery points reported: ${BACKUP_VAULT_RECOVERY_POINT_COUNT}"
 
 EXPECTED_RESOURCE_BACKUP_TAG_VALUE="$EFFECTIVE_BACKUP_ENABLED"
@@ -892,9 +1151,24 @@ effective_delete_backups_after_days:      ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}
 
 Backup validation mode:                   disabled
 Retained backup vault:                    ${BACKUP_VAULT_NAME}
+Backup vault ARN:                         ${BACKUP_VAULT_ARN}
 Backup vault KMS key ID:                  ${BACKUP_VAULT_KMS_KEY_ID}
+Backup vault force_destroy:               ${EXPECTED_BACKUP_VAULT_FORCE_DESTROY}
 Vault recovery points reported:           ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
 Backup plan count:                        ${LIVE_BACKUP_PLAN_COUNT}
+
+RDS identifier:                           ${EXPECTED_RDS_IDENTIFIER}
+RDS ARN:                                  ${EXPECTED_RDS_ARN}
+RDS Multi-AZ:                             ${EXPECTED_RDS_MULTI_AZ}
+RDS deletion protection:                  ${EXPECTED_RDS_DELETION_PROTECTION}
+RDS DB subnet group:                      ${EXPECTED_RDS_DB_SUBNET_GROUP_NAME}
+RDS VPC security groups:                  ${EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON}
+RDS backup retention days:                ${EXPECTED_RDS_BACKUP_RETENTION_PERIOD}
+RDS publicly accessible:                  ${EXPECTED_RDS_PUBLICLY_ACCESSIBLE}
+RDS storage encrypted:                    ${EXPECTED_RDS_STORAGE_ENCRYPTED}
+RDS skip final snapshot:                  ${EXPECTED_RDS_SKIP_FINAL_SNAPSHOT}
+RDS delete automated backups:             ${EXPECTED_RDS_DELETE_AUTOMATED_BACKUPS}
+RDS final snapshot identifier:            ${EXPECTED_RDS_FINAL_SNAPSHOT_IDENTIFIER}
 Expected workload Backup tag value:       ${EXPECTED_RESOURCE_BACKUP_TAG_VALUE}
 Environment EC2 resources checked:        ${ENV_EC2_RESOURCE_COUNT}
 Environment RDS resources checked:        ${ENV_RDS_RESOURCE_COUNT}
@@ -1281,8 +1555,24 @@ effective_backup_schedule:                          ${EFFECTIVE_BACKUP_SCHEDULE}
 effective_delete_backups_after_days:                 ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}
 
 Backup vault name:                                  ${BACKUP_VAULT_NAME}
+Backup vault ARN:                                   ${BACKUP_VAULT_ARN}
 Backup vault KMS key ID:                            ${BACKUP_VAULT_KMS_KEY_ID}
+Backup vault force_destroy:                         ${EXPECTED_BACKUP_VAULT_FORCE_DESTROY}
 Vault recovery points reported:                     ${BACKUP_VAULT_RECOVERY_POINT_COUNT}
+
+RDS identifier:                                     ${EXPECTED_RDS_IDENTIFIER}
+RDS ARN:                                            ${EXPECTED_RDS_ARN}
+RDS Multi-AZ:                                       ${EXPECTED_RDS_MULTI_AZ}
+RDS deletion protection:                            ${EXPECTED_RDS_DELETION_PROTECTION}
+RDS DB subnet group:                                ${EXPECTED_RDS_DB_SUBNET_GROUP_NAME}
+RDS VPC security groups:                            ${EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON}
+RDS backup retention days:                          ${EXPECTED_RDS_BACKUP_RETENTION_PERIOD}
+RDS publicly accessible:                            ${EXPECTED_RDS_PUBLICLY_ACCESSIBLE}
+RDS storage encrypted:                              ${EXPECTED_RDS_STORAGE_ENCRYPTED}
+RDS skip final snapshot:                            ${EXPECTED_RDS_SKIP_FINAL_SNAPSHOT}
+RDS delete automated backups:                       ${EXPECTED_RDS_DELETE_AUTOMATED_BACKUPS}
+RDS final snapshot identifier:                      ${EXPECTED_RDS_FINAL_SNAPSHOT_IDENTIFIER}
+
 Backup plan name:                                   ${BACKUP_PLAN_NAME}
 Backup plan ID:                                     ${BACKUP_PLAN_ID}
 Backup plan rule count:                             ${BACKUP_RULE_COUNT}

@@ -393,3 +393,8 @@ output "restore_testing" {
     selection = module.backup.restore_testing_selection
   }
 }
+
+output "backup_vault_configuration" {
+  description = "Validator-relevant Terraform-managed Backup vault configuration."
+  value       = module.backup.backup_vault_configuration
+}
