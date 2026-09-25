@@ -40,6 +40,8 @@ ecs_runtime_load_contract() {
   INTERFACE_ENDPOINT_IDS_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" interface_endpoint_ids)"
   # shellcheck disable=SC2034 # Consumed by future GuardDuty runtime validation and summary helpers.
   GUARDDUTY_RUNTIME_COVERAGE_NOTIFICATION_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" guardduty_ecs_runtime_coverage_notification)"
+  NETWORK_TOPOLOGY_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" network_topology)"
+  LIFECYCLE_PROTECTION_JSON="$(ecs_runtime_json_object_output "$OUTPUTS_JSON" lifecycle_protection)"
 
   for output_name in \
     vpc_id \
@@ -72,6 +74,48 @@ ecs_runtime_load_contract() {
   RDS_PORT="$(get_terraform_output_value "$OUTPUTS_JSON" rds_port)"
   # shellcheck disable=SC2034 # Consumed by alarms.sh.
   SECOPS_TOPIC_ARN="$(get_terraform_output_value "$OUTPUTS_JSON" secops_topic_arn)"
+
+  if ! EXPECTED_COMPUTE_SUBNET_IDS_JSON="$(
+    echo "$NETWORK_TOPOLOGY_JSON" |
+      jq -ce '
+        .compute_private_subnet_ids_by_az
+        | if type == "object" and length > 0
+          then [.[]] | sort | unique
+          else error("network_topology.compute_private_subnet_ids_by_az must be a non-empty object")
+          end
+      '
+  )"; then
+    fail "Unable to resolve Terraform-owned compute-private subnet set."
+  fi
+
+  info "Expected compute-private subnets: ${EXPECTED_COMPUTE_SUBNET_IDS_JSON}"
+
+  if ! EXPECTED_PUBLIC_SUBNET_IDS_JSON="$(
+    echo "$NETWORK_TOPOLOGY_JSON" |
+      jq -ce '
+        .public_subnet_ids_by_az
+        | if type == "object" and length > 0
+          then [.[]] | sort | unique
+          else error("network_topology.public_subnet_ids_by_az must be a non-empty object")
+          end
+      '
+  )"; then
+    fail "Unable to resolve Terraform-owned public subnet set."
+  fi
+
+  info "Expected public subnets: ${EXPECTED_PUBLIC_SUBNET_IDS_JSON}"
+
+  EXPECTED_ALB_DELETION_PROTECTION="$(
+    echo "$LIFECYCLE_PROTECTION_JSON" |
+      jq -r '.alb_deletion_protection'
+  )"
+
+  require_value_in_list \
+    "$EXPECTED_ALB_DELETION_PROTECTION" \
+    "true false" \
+    "lifecycle_protection.alb_deletion_protection"
+
+  info "Expected ALB deletion protection: ${EXPECTED_ALB_DELETION_PROTECTION}"
 
   APPLICATION_LOAD_BALANCER_JSON="$(
     echo "$OUTPUTS_JSON" |

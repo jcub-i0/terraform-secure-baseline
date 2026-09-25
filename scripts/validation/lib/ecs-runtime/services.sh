@@ -141,24 +141,8 @@ ecs_runtime_validate_services() {
 }
 
 ecs_runtime_resolve_service_networking() {
-  local compute_subnets_json
 
   section "Resolving accepted live networking identities"
-
-  compute_subnets_json="$(
-    aws ec2 describe-subnets \
-      "${AWS_ARGS[@]}" \
-      --filters \
-      "Name=vpc-id,Values=${VPC_ID}" \
-      "Name=tag:Name,Values=${NAME_PREFIX}-Compute-Private-*" \
-      --output json
-  )"
-
-  COMPUTE_SUBNET_IDS_JSON="$(echo "$compute_subnets_json" | jq -c '[.Subnets[].SubnetId] | sort | unique')"
-
-  if [[ "$(echo "$COMPUTE_SUBNET_IDS_JSON" | jq 'length')" -eq 0 ]]; then
-    fail "No compute-private subnets were resolved for ECS service placement validation"
-  fi
 
   INTERFACE_ENDPOINT_SGS_JSON="$(
     aws ec2 describe-security-groups \
@@ -381,9 +365,9 @@ validate_service_networking() {
       jq -r '.services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp // empty'
   )"
 
-  if [[ "$service_subnet_ids_json" != "$COMPUTE_SUBNET_IDS_JSON" ]]; then
+  if [[ "$service_subnet_ids_json" != "$EXPECTED_COMPUTE_SUBNET_IDS_JSON" ]]; then
     jq -n \
-      --argjson expected "$COMPUTE_SUBNET_IDS_JSON" \
+      --argjson expected "$EXPECTED_COMPUTE_SUBNET_IDS_JSON" \
       --argjson actual "$service_subnet_ids_json" \
       '{expected_compute_subnets: $expected, actual_service_subnets: $actual}'
     fail "ECS service does not use the exact compute-private subnet set: ${service_name}"
