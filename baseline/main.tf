@@ -75,11 +75,13 @@ module "compute" {
 module "storage" {
   source = "../modules/storage"
 
-  name_prefix = local.name_prefix
-  environment = var.environment
-  vpc_id      = module.networking.vpc_id
-  account_id  = var.account_id
-  random_id   = var.random_id
+  cloud_name     = var.cloud_name
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  primary_region = var.primary_region
+  vpc_id         = module.networking.vpc_id
+  account_id     = var.account_id
+  random_id      = var.random_id
 
   rds_multi_az                  = local.effective_rds_multi_az
   rds_deletion_protection       = local.effective_rds_deletion_protection

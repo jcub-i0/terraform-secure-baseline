@@ -1,3 +1,13 @@
+variable "cloud_name" {
+  description = "Cloud/platform name used in shared resource prefixes."
+  type        = string
+}
+
+variable "primary_region" {
+  description = "Primary AWS region for the workload."
+  type        = string
+}
+
 variable "name_prefix" {
   type = string
 }
