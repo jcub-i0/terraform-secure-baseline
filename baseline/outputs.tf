@@ -43,6 +43,11 @@ output "rds_master_secret_arn" {
   value       = module.storage.rds_master_secret_arn
 }
 
+output "rds_configuration" {
+  description = "Validator-relevant Terraform-managed RDS configuration."
+  value       = module.storage.rds_configuration
+}
+
 output "data_sg_id" {
   description = "ID of the RDS/data security group"
   value       = module.storage.data_sg_id
