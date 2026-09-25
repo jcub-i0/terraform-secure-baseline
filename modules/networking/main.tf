@@ -198,14 +198,6 @@ resource "aws_route_table" "public" {
   }
 }
 
-removed {
-  from = aws_route.public_compute_return_to_firewall
-
-  lifecycle {
-    destroy = false
-  }
-}
-
 ## PUBLIC ROUTE TABLE ASSOCIATION
 resource "aws_route_table_association" "public" {
   for_each = local.az_index_map

@@ -75,11 +75,13 @@ module "compute" {
 module "storage" {
   source = "../modules/storage"
 
-  name_prefix = local.name_prefix
-  environment = var.environment
-  vpc_id      = module.networking.vpc_id
-  account_id  = var.account_id
-  random_id   = var.random_id
+  cloud_name     = var.cloud_name
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  primary_region = var.primary_region
+  vpc_id         = module.networking.vpc_id
+  account_id     = var.account_id
+  random_id      = var.random_id
 
   rds_multi_az                  = local.effective_rds_multi_az
   rds_deletion_protection       = local.effective_rds_deletion_protection
@@ -391,4 +393,15 @@ module "backup" {
   backup_service_role_arn   = module.iam.backup_service_role_arn
 
   force_destroy = local.effective_backup_vault_force_destroy
+
+  restore_testing_enabled                 = local.effective_restore_testing_enabled
+  restore_testing_schedule                = local.effective_restore_testing_schedule
+  restore_testing_start_window_hours      = local.effective_restore_testing_start_window_hours
+  restore_testing_selection_window_days   = local.effective_restore_testing_selection_window_days
+  restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
+  restore_testing_rds_arn                 = module.storage.rds_arn
+  restore_testing_db_subnet_group_name    = module.storage.rds_db_subnet_group_name
+  restore_testing_vpc_security_group_ids = [
+    module.storage.data_sg_id
+  ]
 }
