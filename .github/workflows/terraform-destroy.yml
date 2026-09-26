@@ -11,9 +11,14 @@ on:
                 type: choice
                 options: [dev, staging, prod]
             confirm:
-                description: "Type DESTROY to authorize destroy planning"
+                description: "Type DESTROY to authorize the destroy workflow"
                 required: true
                 type: string
+            delete_durable_retirement_data:
+                description: "Permanently delete Terraform-managed ECR images and Backup recovery points during prod retirement"
+                required: true
+                default: false
+                type: boolean
 
 permissions: {}
 
@@ -36,11 +41,12 @@ env:
     IDC_PLAN_BASENAME: identity-center-cleanup
 
 jobs:
-    terraform-destroy-plan:
-        name: Plan ${{ inputs.environment }} destroy
+    terraform-destroy-preflight:
+        name: Preflight ${{ inputs.environment }} destroy
         runs-on: ubuntu-latest
         timeout-minutes: 30
         environment: ${{ format('{0}-plan', inputs.environment) }}
+
         permissions:
             contents: read
             id-token: write
@@ -57,6 +63,7 @@ jobs:
             AWS_REGION: ${{ vars.PRIMARY_REGION }}
             AWS_DEFAULT_REGION: ${{ vars.PRIMARY_REGION }}
             PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+            DELETE_DURABLE_RETIREMENT_DATA: ${{ inputs.delete_durable_retirement_data }}
 
             TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
             TF_VAR_environment: ${{ inputs.environment }}
@@ -84,7 +91,7 @@ jobs:
                   set -euo pipefail
 
                   [[ "${{ inputs.confirm }}" == "DESTROY" ]] || {
-                    echo "::error::Type DESTROY exactly to authorize destroy planning."
+                    echo "::error::Type DESTROY exactly to authorize the destroy workflow."
                     exit 1
                   }
 
@@ -127,16 +134,32 @@ jobs:
                     exit 1
                   }
 
-                  if [[ "${TF_VAR_deployment_profile}" == "production" &&
-                        "${TF_VAR_production_retirement_mode}" != "true" ]]; then
-                    echo "::error::Production destruction requires production_retirement_mode=true."
+                  [[ "${DELETE_DURABLE_RETIREMENT_DATA}" =~ ^(true|false)$ ]] || {
+                    echo "::error::delete_durable_retirement_data must be exactly true or false."
                     exit 1
-                  fi
+                  }
 
-                  if [[ "${TF_VAR_deployment_profile}" != "production" &&
-                        "${TF_VAR_production_retirement_mode}" != "false" ]]; then
-                    echo "::error::Non-production profiles must not enable production_retirement_mode."
-                    exit 1
+                  if [[ "${TF_VAR_deployment_profile}" == "production" ]]; then
+                    [[ "${TF_VAR_production_retirement_mode}" == "true" ]] || {
+                      echo "::error::Production destruction requires production_retirement_mode=true."
+                      exit 1
+                    }
+
+                    [[ "${DELETE_DURABLE_RETIREMENT_DATA}" == "true" ]] || {
+                      echo "::error::Production destruction requires explicit authorization to delete durable ECR/Backup data."
+                      echo "::error::Set delete_durable_retirement_data=true and approve the protected cleanup job."
+                      exit 1
+                    }
+                  else
+                    [[ "${TF_VAR_production_retirement_mode}" == "false" ]] || {
+                      echo "::error::Non-production profiles must not enable production_retirement_mode."
+                      exit 1
+                    }
+
+                    [[ "${DELETE_DURABLE_RETIREMENT_DATA}" == "false" ]] || {
+                      echo "::error::delete_durable_retirement_data is production-only and must remain false for non-production."
+                      exit 1
+                    }
                   fi
 
                   [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
@@ -167,6 +190,274 @@ jobs:
                   role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
                   aws-region: ${{ vars.PRIMARY_REGION }}
                   allowed-account-ids: ${{ vars.ACCOUNT_ID }}
+                  role-session-name: tf-destroy-preflight-${{ github.run_id }}
+                  unset-current-credentials: true
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
+
+            - name: Initialize and validate Terraform
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+                  terraform -chdir="${WORKING_DIRECTORY}" validate -no-color
+
+            - name: Verify production retirement convergence
+              if: ${{ env.TF_VAR_deployment_profile == 'production' }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  set +e
+                  terraform -chdir="${WORKING_DIRECTORY}" plan \
+                    -input=false -no-color -lock-timeout=5m -detailed-exitcode
+                  rc=$?
+                  set -e
+
+                  case "${rc}" in
+                    0)
+                      echo "Production retirement configuration is converged."
+                      ;;
+                    2)
+                      echo "::error::Stage-1 production retirement preparation is not converged."
+                      echo "::error::Run Terraform Apply with production_retirement_mode=true first."
+                      exit 1
+                      ;;
+                    *)
+                      echo "::error::Terraform convergence check failed with exit code ${rc}."
+                      exit "${rc}"
+                      ;;
+                  esac
+
+            - name: Inventory production durable retirement data
+              if: ${{ env.TF_VAR_deployment_profile == 'production' }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  bash scripts/deployment/cleanup-retirement-durable-data.sh \
+                    --environment "${{ inputs.environment }}" \
+                    --mode plan \
+                    --region "${AWS_REGION}" \
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+
+            - name: Publish preflight summary
+              if: always()
+              shell: bash
+              run: |
+                  {
+                    echo "# Terraform Destroy Preflight"
+                    echo
+                    echo "- Environment: \`${{ inputs.environment }}\`"
+                    echo "- Commit: \`${GITHUB_SHA}\`"
+                    echo "- AWS account: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
+                    echo "- Deployment profile: \`${TF_VAR_deployment_profile:-<not resolved>}\`"
+                    echo "- Production retirement mode: \`${TF_VAR_production_retirement_mode:-<not resolved>}\`"
+                    echo "- Durable-data deletion authorized: \`${DELETE_DURABLE_RETIREMENT_DATA:-<not resolved>}\`"
+                    echo "- Status: \`${{ job.status }}\`"
+                  } >> "${GITHUB_STEP_SUMMARY}"
+
+    production-durable-cleanup:
+        name: Approve and delete prod durable retirement data
+        needs: terraform-destroy-preflight
+        if: ${{ needs.terraform-destroy-preflight.outputs.deployment_profile == 'production' && inputs.delete_durable_retirement_data }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+
+        # Reusing the prod environment intentionally creates a protected,
+        # separately approved deployment before durable data is deleted.
+        environment: ${{ inputs.environment }}
+
+        permissions:
+            contents: read
+            id-token: write
+
+        env:
+            WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+            EXPECTED_ACCOUNT_ID: ${{ needs.terraform-destroy-preflight.outputs.expected_account_id }}
+            AWS_REGION: ${{ needs.terraform-destroy-preflight.outputs.primary_region }}
+            AWS_DEFAULT_REGION: ${{ needs.terraform-destroy-preflight.outputs.primary_region }}
+            DEPLOYMENT_PROFILE: ${{ needs.terraform-destroy-preflight.outputs.deployment_profile }}
+            PRODUCTION_RETIREMENT_MODE: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
+            APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+
+            - name: Validate durable cleanup authorization
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  [[ "${{ inputs.confirm }}" == "DESTROY" ]] || {
+                    echo "::error::Destroy confirmation changed or is invalid."
+                    exit 1
+                  }
+
+                  [[ "${{ inputs.delete_durable_retirement_data }}" == "true" ]] || {
+                    echo "::error::Durable-data deletion was not explicitly authorized."
+                    exit 1
+                  }
+
+                  [[ "${DEPLOYMENT_PROFILE}" == "production" ]] || {
+                    echo "::error::Durable-data cleanup may only run for deployment_profile=production."
+                    exit 1
+                  }
+
+                  [[ "${PRODUCTION_RETIREMENT_MODE}" == "true" ]] || {
+                    echo "::error::Durable-data cleanup requires production_retirement_mode=true."
+                    exit 1
+                  }
+
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::Expected workload account ID is invalid."
+                    exit 1
+                  }
+
+                  if [[ ! "${APPLY_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::APPLY_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+                    exit 1
+                  fi
+
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::APPLY_ROLE_GITHUB_ARN belongs to the wrong AWS account."
+                    exit 1
+                  }
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+              with:
+                  role-to-assume: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.EXPECTED_ACCOUNT_ID }}
+                  role-session-name: tf-retirement-durable-cleanup-${{ github.run_id }}
+                  unset-current-credentials: true
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+                  terraform_wrapper: false
+
+            - name: Initialize Terraform
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  aws sts get-caller-identity
+                  terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+
+            - name: Delete approved durable retirement data
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  bash scripts/deployment/cleanup-retirement-durable-data.sh \
+                    --environment "${{ inputs.environment }}" \
+                    --mode apply \
+                    --confirm DELETE-DURABLE-DATA \
+                    --region "${AWS_REGION}" \
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+
+            - name: Verify production retirement readiness
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  bash scripts/deployment/validate-retirement-readiness.sh \
+                    --environment "${{ inputs.environment }}" \
+                    --region "${AWS_REGION}" \
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+
+    terraform-destroy-plan:
+        name: Plan ${{ inputs.environment }} destroy
+        needs:
+            - terraform-destroy-preflight
+            - production-durable-cleanup
+        if: ${{ always() && needs.terraform-destroy-preflight.result == 'success' && (needs.production-durable-cleanup.result == 'success' || needs.production-durable-cleanup.result == 'skipped') }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        environment: ${{ format('{0}-plan', inputs.environment) }}
+
+        permissions:
+            contents: read
+            id-token: write
+
+        outputs:
+            expected_account_id: ${{ steps.context.outputs.expected_account_id }}
+            primary_region: ${{ steps.context.outputs.primary_region }}
+            deployment_profile: ${{ steps.context.outputs.deployment_profile }}
+            production_retirement_mode: ${{ steps.context.outputs.production_retirement_mode }}
+
+        env:
+            WORKING_DIRECTORY: ./environments/${{ inputs.environment }}
+            EXPECTED_ACCOUNT_ID: ${{ needs.terraform-destroy-preflight.outputs.expected_account_id }}
+            AWS_REGION: ${{ needs.terraform-destroy-preflight.outputs.primary_region }}
+            AWS_DEFAULT_REGION: ${{ needs.terraform-destroy-preflight.outputs.primary_region }}
+            PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+
+            TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
+            TF_VAR_environment: ${{ inputs.environment }}
+            TF_VAR_primary_region: ${{ needs.terraform-destroy-preflight.outputs.primary_region }}
+            TF_VAR_abuseipdb_api_key: ${{ secrets.ABUSEIPDB_API_KEY }}
+            TF_VAR_bucket_admin_principals: ${{ vars.BUCKET_ADMIN_PRINCIPALS }}
+            TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
+            TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
+            TF_VAR_deployment_profile: ${{ needs.terraform-destroy-preflight.outputs.deployment_profile }}
+            TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
+            TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
+            TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
+            TF_VAR_production_retirement_mode: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+
+            - name: Carry forward destroy context
+              id: context
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  [[ "${EXPECTED_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]] || {
+                    echo "::error::Expected workload account ID is invalid."
+                    exit 1
+                  }
+
+                  if [[ ! "${PLAN_ROLE_GITHUB_ARN}" =~ ^arn:[^:]+:iam::([0-9]{12}):role/.+ ]]; then
+                    echo "::error::PLAN_ROLE_GITHUB_ARN is not a valid IAM role ARN."
+                    exit 1
+                  fi
+
+                  [[ "${BASH_REMATCH[1]}" == "${EXPECTED_ACCOUNT_ID}" ]] || {
+                    echo "::error::PLAN_ROLE_GITHUB_ARN belongs to the wrong AWS account."
+                    exit 1
+                  }
+
+                  {
+                    echo "expected_account_id=${EXPECTED_ACCOUNT_ID}"
+                    echo "primary_region=${AWS_REGION}"
+                    echo "deployment_profile=${TF_VAR_deployment_profile}"
+                    echo "production_retirement_mode=${TF_VAR_production_retirement_mode}"
+                  } >> "${GITHUB_OUTPUT}"
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+              with:
+                  role-to-assume: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.EXPECTED_ACCOUNT_ID }}
                   role-session-name: tf-destroy-plan-${{ github.run_id }}
                   unset-current-credentials: true
 
@@ -176,7 +467,7 @@ jobs:
                   terraform_version: ${{ env.TERRAFORM_VERSION }}
                   terraform_wrapper: false
 
-            - name: Initialize, validate, and enforce retirement readiness
+            - name: Initialize and validate Terraform
               shell: bash
               run: |
                   set -euo pipefail
@@ -185,10 +476,11 @@ jobs:
                   terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
                   terraform -chdir="${WORKING_DIRECTORY}" validate -no-color
 
-                  if [[ "${TF_VAR_deployment_profile}" != "production" ]]; then
-                    echo "Non-production profile; production retirement gates are not required."
-                    exit 0
-                  fi
+            - name: Reconfirm production retirement readiness
+              if: ${{ env.TF_VAR_deployment_profile == 'production' }}
+              shell: bash
+              run: |
+                  set -euo pipefail
 
                   set +e
                   terraform -chdir="${WORKING_DIRECTORY}" plan \
@@ -197,10 +489,11 @@ jobs:
                   set -e
 
                   case "${rc}" in
-                    0) echo "Production retirement configuration is converged." ;;
+                    0)
+                      echo "Production retirement configuration remains converged."
+                      ;;
                     2)
-                      echo "::error::Stage-1 production retirement preparation is not converged."
-                      echo "::error::Run Terraform Apply with production_retirement_mode=true first."
+                      echo "::error::Production retirement configuration changed after durable-data cleanup."
                       exit 1
                       ;;
                     *)
@@ -252,6 +545,7 @@ jobs:
                     echo "- AWS account: \`${EXPECTED_ACCOUNT_ID:-<not resolved>}\`"
                     echo "- Deployment profile: \`${TF_VAR_deployment_profile:-<not resolved>}\`"
                     echo "- Production retirement mode: \`${TF_VAR_production_retirement_mode:-<not resolved>}\`"
+                    echo "- Durable-data cleanup authorized: \`${{ inputs.delete_durable_retirement_data }}\`"
                     echo "- Status: \`${{ job.status }}\`"
                     echo
                   } >> "${GITHUB_STEP_SUMMARY}"
