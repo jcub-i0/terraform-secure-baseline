@@ -9,9 +9,12 @@ ecs_runtime_validate_ingress() {
   local expected_alb_certificate_arn
   local expected_alb_ssl_policy
   local alb_response_json
+  local alb_attributes_json
   local alb_sg_json
   local rules_response_json
   local service_name
+
+  LIVE_ALB_DELETION_PROTECTION="<not-applicable>"
 
   section "Validating conditional shared Application Load Balancer"
 
@@ -43,6 +46,47 @@ ecs_runtime_validate_ingress() {
         --load-balancer-arns "$expected_alb_arn" \
         --output json
     )"
+
+    alb_attributes_json="$(
+      aws elbv2 describe-load-balancer-attributes \
+        "${AWS_ARGS[@]}" \
+        --load-balancer-arn "$expected_alb_arn" \
+        --output json
+    )"
+
+    if ! LIVE_ALB_DELETION_PROTECTION="$(
+      echo "$alb_attributes_json" |
+        jq -er '
+          [
+            .Attributes[]
+            | select(.Key == "deletion_protection.enabled")
+            | .Value
+          ]
+          | if length == 1
+            then .[0]
+            else error("Expected exactly one deletion_protection.enabled attribute")
+            end
+        '
+    )"; then
+      fail "Unable to resolve live ALB deletion protection."
+    fi
+
+    if [[ "$LIVE_ALB_DELETION_PROTECTION" != \
+      "$EXPECTED_ALB_DELETION_PROTECTION" ]]; then
+
+      jq -n \
+        --arg expected "$EXPECTED_ALB_DELETION_PROTECTION" \
+        --arg actual "$LIVE_ALB_DELETION_PROTECTION" '
+          {
+            expected_deletion_protection: $expected,
+            live_deletion_protection: $actual
+          }
+        '
+
+      fail "ALB deletion protection does not match Terraform."
+    fi
+
+    success "ALB deletion protection matches Terraform: ${LIVE_ALB_DELETION_PROTECTION}"
 
     validate_alb_identity \
       "$alb_response_json" \
@@ -86,8 +130,6 @@ validate_alb_identity() {
   local alb_response_json="$1"
   local expected_alb_arn="$2"
   local expected_alb_dns_name="$3"
-  local public_subnets_json
-  local expected_public_subnets_json
   local actual_alb_subnets_json
 
   if ! echo "$alb_response_json" |
@@ -109,28 +151,29 @@ validate_alb_identity() {
     fail "Shared ALB identity, type, scheme, VPC, state, or SG is invalid"
   fi
 
-  public_subnets_json="$(
-    aws ec2 describe-subnets \
-      "${AWS_ARGS[@]}" \
-      --filters \
-      "Name=vpc-id,Values=${VPC_ID}" \
-      "Name=tag:Name,Values=${NAME_PREFIX}-Public-*" \
-      --output json
-  )"
-
-  expected_public_subnets_json="$(echo "$public_subnets_json" | jq -c '[.Subnets[].SubnetId] | sort | unique')"
   actual_alb_subnets_json="$(
     echo "$alb_response_json" |
-      jq -c '[.LoadBalancers[0].AvailabilityZones[].SubnetId] | sort | unique'
+      jq -c '
+        [.LoadBalancers[0].AvailabilityZones[].SubnetId]
+        | sort
+        | unique
+      '
   )"
 
-  if [[ "$(echo "$expected_public_subnets_json" | jq 'length')" -eq 0 ]]; then
-    fail "No public subnets were resolved for ALB placement validation"
+  if [[ "$EXPECTED_PUBLIC_SUBNET_IDS_JSON" != "$actual_alb_subnets_json" ]]; then
+    jq -n \
+      --argjson expected "$EXPECTED_PUBLIC_SUBNET_IDS_JSON" \
+      --argjson actual "$actual_alb_subnets_json" '
+        {
+          expected_public_subnets: $expected,
+          actual_alb_subnets: $actual
+        }
+      '
+
+    fail "Shared ALB does not use the exact Terraform-owned public subnet set."
   fi
 
-  if [[ "$expected_public_subnets_json" != "$actual_alb_subnets_json" ]]; then
-    fail "Shared ALB does not use the exact public subnet set"
-  fi
+  success "Shared ALB uses the exact Terraform-owned public subnet set"
 }
 
 validate_alb_security_group() {

@@ -448,8 +448,10 @@ data "aws_iam_policy_document" "centralized_logs" {
   }
 
   # NETWORK FIREWALL LOG DELIVERY - ACL CHECK
+  # Keep AWS's canonical log-delivery SID so the service recognizes this
+  # statement and does not append a duplicate bucket-policy statement.
   statement {
-    sid     = "AllowFirewallLogDeliveryAclCheck"
+    sid     = "AWSLogDeliveryAclCheck"
     effect  = "Allow"
     actions = ["s3:GetBucketAcl"]
 
@@ -476,8 +478,10 @@ data "aws_iam_policy_document" "centralized_logs" {
   }
 
   # NETWORK FIREWALL LOG DELIVERY - WRITE
+  # Keep AWS's canonical log-delivery SID so the service recognizes this
+  # statement and does not append a duplicate bucket-policy statement.
   statement {
-    sid     = "AllowFirewallLogDeliveryWrite"
+    sid     = "AWSLogDeliveryWrite"
     effect  = "Allow"
     actions = ["s3:PutObject"]
 

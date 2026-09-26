@@ -272,3 +272,13 @@ output "restore_testing" {
   description = "Effective and resource-backed AWS Backup Restore Testing configuration used by validation."
   value       = module.baseline.restore_testing
 }
+
+output "rds_configuration" {
+  description = "Validator-relevant Terraform-managed RDS configuration."
+  value       = module.baseline.rds_configuration
+}
+
+output "backup_vault_configuration" {
+  description = "Validator-relevant Terraform-managed Backup vault configuration."
+  value       = module.baseline.backup_vault_configuration
+}

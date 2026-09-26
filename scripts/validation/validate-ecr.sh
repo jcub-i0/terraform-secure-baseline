@@ -9,7 +9,10 @@
 # inventory. An empty map is a valid configuration and requires no live ECR
 # calls.
 #
-# Checks for configured repositories:
+# Checks:
+# - Terraform-owned ECR lifecycle protection is valid even when no repositories exist
+# - Configured repositories expose resource-backed force_delete and match the
+#   lifecycle_protection contract
 # - Repository name, ARN, and registry ID match Terraform output
 # - Image tags are immutable
 # - Repository encryption uses a configured KMS key
@@ -83,9 +86,40 @@ if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
   fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
 fi
 
-if ! terraform_output_exists "$OUTPUTS_JSON" ecr_repositories; then
-  fail "Missing required Terraform output: ecr_repositories"
+for required_output in \
+  ecr_repositories \
+  lifecycle_protection; do
+  if ! terraform_output_exists "$OUTPUTS_JSON" "$required_output"; then
+    fail "Missing required Terraform output: ${required_output}"
+  fi
+done
+
+if ! LIFECYCLE_PROTECTION_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -ce '
+      .lifecycle_protection.value
+      | if type == "object"
+        and (.ecr_force_delete | type) == "boolean"
+        then .
+        else error("lifecycle_protection must contain boolean ecr_force_delete")
+        end
+    '
+)"; then
+  fail "Unable to resolve ECR lifecycle protection from Terraform outputs."
 fi
+
+EXPECTED_ECR_FORCE_DELETE="$(
+  echo "$LIFECYCLE_PROTECTION_JSON" |
+    jq -r '.ecr_force_delete'
+)"
+
+require_value_in_list \
+  "$EXPECTED_ECR_FORCE_DELETE" \
+  "true false" \
+  "lifecycle_protection.ecr_force_delete"
+
+success "Terraform ECR lifecycle protection is valid"
+info "Expected ECR force_delete: ${EXPECTED_ECR_FORCE_DELETE}"
 
 ECR_REPOSITORIES_JSON="$(echo "$OUTPUTS_JSON" | jq -c '.ecr_repositories.value')"
 
@@ -99,18 +133,54 @@ if ! echo "$ECR_REPOSITORIES_JSON" |
       and (.value.name | type) == "string"
       and (.value.arn | type) == "string"
       and (.value.repository_url | type) == "string"
-      and ((.value.registry_id | type) == "string")
+      and (.value.registry_id | type) == "string"
+      and (.value.force_delete | type) == "boolean"
     )
   ' >/dev/null; then
-  fail "ecr_repositories is not a valid repository metadata map"
+  echo "$ECR_REPOSITORIES_JSON" | jq .
+  fail "ecr_repositories is not a valid resource-backed repository metadata map"
 fi
 
 ECR_REPOSITORY_COUNT="$(echo "$ECR_REPOSITORIES_JSON" | jq 'length')"
 success "ecr_repositories output is valid: ${ECR_REPOSITORY_COUNT} configured"
 
+ECR_FORCE_DELETE_DRIFT_JSON="$(
+  echo "$ECR_REPOSITORIES_JSON" |
+    jq -c \
+      --argjson expected "$EXPECTED_ECR_FORCE_DELETE" '
+        [
+          to_entries[]
+          | select(.value.force_delete != $expected)
+          | {
+              repository: .key,
+              expected_force_delete: $expected,
+              resource_force_delete: .value.force_delete
+            }
+        ]
+      '
+)"
+
+if [[ "$ECR_FORCE_DELETE_DRIFT_JSON" != "[]" ]]; then
+  echo "$ECR_FORCE_DELETE_DRIFT_JSON" | jq .
+  fail "One or more Terraform-managed ECR repositories do not match lifecycle_protection.ecr_force_delete."
+fi
+
+success "Terraform-managed ECR repository force_delete posture matches lifecycle_protection"
+
 if [[ "$ECR_REPOSITORY_COUNT" -eq 0 ]]; then
+  section "ECR Summary"
+
+  cat <<SUMMARY
+Environment:                    ${ENV_NAME}
+AWS profile:                    ${AWS_PROFILE:-<default>}
+AWS region:                     ${AWS_REGION}
+Configured repositories:        ${ECR_REPOSITORY_COUNT}
+Expected ECR force_delete:      ${EXPECTED_ECR_FORCE_DELETE}
+Live ECR validation:            skipped (no repositories configured)
+SUMMARY
+
   section "ECR Validation Result"
-  success "No ECR repositories are configured; live ECR validation is not required"
+  success "ECR lifecycle protection validation completed successfully for: ${ENV_NAME}"
   exit 0
 fi
 
@@ -150,8 +220,15 @@ while IFS= read -r repository_entry; do
   expected_name="$(echo "$repository_entry" | jq -r '.value.name')"
   expected_arn="$(echo "$repository_entry" | jq -r '.value.arn')"
   expected_registry_id="$(echo "$repository_entry" | jq -r '.value.registry_id')"
+  expected_force_delete="$(echo "$repository_entry" | jq -r '.value.force_delete')"
 
   info "Validating ECR repository key ${repository_key}: ${expected_name}"
+
+  if [[ "$expected_force_delete" != "$EXPECTED_ECR_FORCE_DELETE" ]]; then
+    fail "Terraform ECR repository ${expected_name} force_delete does not match lifecycle_protection: expected=${EXPECTED_ECR_FORCE_DELETE} actual=${expected_force_delete}"
+  fi
+
+  success "Repository force_delete matches Terraform lifecycle protection: ${expected_name}=${expected_force_delete}"
 
   if [[ "$expected_registry_id" != "$ACCOUNT_ID" ]]; then
     fail "Terraform repository ${repository_key} registry ID ${expected_registry_id} does not match the active AWS account ${ACCOUNT_ID}"
@@ -258,6 +335,7 @@ AWS region:                     ${AWS_REGION}
 AWS account ID:                 ${ACCOUNT_ID}
 Configured repositories:        ${ECR_REPOSITORY_COUNT}
 Validated repositories:         ${VALIDATED_REPOSITORY_COUNT}
+Expected ECR force_delete:      ${EXPECTED_ECR_FORCE_DELETE}
 Expected ECR CMK ARN:           ${EXPECTED_ECR_CMK_ARN}
 SUMMARY
 

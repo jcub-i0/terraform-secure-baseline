@@ -65,6 +65,11 @@ ALB request scaling policies:       ${alb_request_scaling_policy_count}
 Task-deficit alarms:                ${task_deficit_alarm_count}
 Ingress-health alarms:              ${ingress_health_alarm_count}
 
+Expected compute subnets:           ${EXPECTED_COMPUTE_SUBNET_IDS_JSON}
+Expected public subnets:            ${EXPECTED_PUBLIC_SUBNET_IDS_JSON}
+Expected ALB deletion protection:   ${EXPECTED_ALB_DELETION_PROTECTION}
+Live ALB deletion protection:       ${LIVE_ALB_DELETION_PROTECTION}
+
 Effective egress mode:              ${EFFECTIVE_EGRESS_MODE}
 CloudWatch retention days:          ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS}
 Application Load Balancer present:  $([[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]] && echo false || echo true)

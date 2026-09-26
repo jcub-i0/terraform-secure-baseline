@@ -60,3 +60,14 @@ output "restore_testing_selection" {
     )
   } : null
 }
+
+output "backup_vault_configuration" {
+  description = "Validator-relevant Terraform-managed Backup vault configuration."
+
+  value = {
+    name          = aws_backup_vault.main.name
+    arn           = aws_backup_vault.main.arn
+    kms_key_arn   = aws_backup_vault.main.kms_key_arn
+    force_destroy = aws_backup_vault.main.force_destroy
+  }
+}

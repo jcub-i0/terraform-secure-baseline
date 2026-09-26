@@ -43,6 +43,11 @@ output "rds_master_secret_arn" {
   value       = module.storage.rds_master_secret_arn
 }
 
+output "rds_configuration" {
+  description = "Validator-relevant Terraform-managed RDS configuration."
+  value       = module.storage.rds_configuration
+}
+
 output "data_sg_id" {
   description = "ID of the RDS/data security group"
   value       = module.storage.data_sg_id
@@ -387,4 +392,9 @@ output "restore_testing" {
 
     selection = module.backup.restore_testing_selection
   }
+}
+
+output "backup_vault_configuration" {
+  description = "Validator-relevant Terraform-managed Backup vault configuration."
+  value       = module.backup.backup_vault_configuration
 }

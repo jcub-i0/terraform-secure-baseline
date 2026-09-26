@@ -335,10 +335,6 @@ LIVE_ENDPOINT_SUBNET_IDS_BY_AZ_JSON="$(
       )
     '
 )"
-LIVE_ENDPOINT_SUBNET_IDS_JSON="$(
-  echo "$ENDPOINT_SUBNETS_JSON" |
-    jq -c '[.Subnets[].SubnetId] | sort | unique'
-)"
 
 if [[ "$ENDPOINT_SUBNET_COUNT" -ne "$EXPECTED_AZ_COUNT" || "$LIVE_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" != "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" ]]; then
   jq -n \
