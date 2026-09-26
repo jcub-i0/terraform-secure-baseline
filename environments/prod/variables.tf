@@ -202,7 +202,7 @@ variable "secops_emails" {
 variable "isolation_allowed" {
   description = "Whether EC2 instances may be automatically isolated by the incident-response Lambda"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "ec2_auto_isolation_severities" {
