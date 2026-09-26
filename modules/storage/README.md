@@ -818,8 +818,8 @@ Expected policy controls include:
 - `AWSConfigWrite`
 - `AWSCloudTrailAclCheck`
 - `AWSCloudTrailWrite`
-- `AllowFirewallLogDeliveryAclCheck`
-- `AllowFirewallLogDeliveryWrite`
+- `AWSLogDeliveryAclCheck`
+- `AWSLogDeliveryWrite`
 
 ---
 
