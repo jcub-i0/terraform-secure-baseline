@@ -14,6 +14,7 @@ set -euo pipefail
 # - production force-delete/force-destroy behavior remains disabled;
 # - RDS/ALB/Network Firewall native deletion protection is disabled live;
 # - RDS final-snapshot and automated-backup retention behavior remains intact;
+# - Terraform derives zero-capacity ECS retirement state;
 # - ECS services are fully quiesced;
 # - ECS Application Auto Scaling cannot restore capacity;
 # - Terraform-managed ECR repositories are empty; and
@@ -203,6 +204,7 @@ required_outputs=(
   ecr_repositories
   ecs_cluster
   ecs_services
+  ecs_service_configuration
   ecs_autoscaling_targets
 )
 
@@ -225,6 +227,7 @@ PRODUCTION_RETIREMENT_MODE="$(
 ECR_REPOSITORIES_JSON="$(output_json ecr_repositories)"
 ECS_CLUSTER_JSON="$(output_json ecs_cluster)"
 ECS_SERVICES_JSON="$(output_json ecs_services)"
+ECS_SERVICE_CONFIGURATION_JSON="$(output_json ecs_service_configuration)"
 ECS_AUTOSCALING_TARGETS_JSON="$(output_json ecs_autoscaling_targets)"
 
 if output_exists application_load_balancer; then
@@ -252,6 +255,87 @@ if ! echo "$LIFECYCLE_JSON" |
 fi
 
 success "Terraform reports the required production retirement posture"
+
+section "Checking Terraform ECS retirement contract"
+
+if ! echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+  jq -e '
+    type == "object"
+    and all(.[];
+      (.desired_count | type) == "number"
+      and .desired_count == 0
+      and (
+        .scaling == null
+        or (
+          (.scaling | type) == "object"
+          and (.scaling.min_capacity | type) == "number"
+          and (.scaling.max_capacity | type) == "number"
+          and .scaling.min_capacity == 0
+          and .scaling.max_capacity == 0
+        )
+      )
+    )
+  ' >/dev/null; then
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+    jq '[
+      to_entries[]
+      | {
+          service: .key,
+          desired_count: .value.desired_count,
+          scaling: (
+            if .value.scaling == null
+            then null
+            else {
+              min_capacity: .value.scaling.min_capacity,
+              max_capacity: .value.scaling.max_capacity
+            }
+            end
+          )
+        }
+    ]'
+  fail "Terraform ECS retirement contract is not zero-capacity for every deployable service."
+fi
+
+ECS_SERVICE_KEYS_JSON="$(echo "$ECS_SERVICES_JSON" | jq -c 'keys | sort')"
+ECS_CONFIGURATION_KEYS_JSON="$(echo "$ECS_SERVICE_CONFIGURATION_JSON" | jq -c 'keys | sort')"
+
+if [[ "$ECS_SERVICE_KEYS_JSON" != "$ECS_CONFIGURATION_KEYS_JSON" ]]; then
+  jq -n \
+    --argjson services "$ECS_SERVICE_KEYS_JSON" \
+    --argjson configuration "$ECS_CONFIGURATION_KEYS_JSON" '
+      {
+        ecs_services: $services,
+        ecs_service_configuration: $configuration,
+        missing_configuration: ($services - $configuration),
+        unexpected_configuration: ($configuration - $services)
+      }
+    '
+  fail "Terraform ECS service metadata and retirement configuration membership differ."
+fi
+
+EXPECTED_AUTOSCALED_SERVICE_KEYS_JSON="$(
+  echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+    jq -c '[to_entries[] | select(.value.scaling != null) | .key] | sort'
+)"
+AUTOSCALING_TARGET_KEYS_JSON="$(
+  echo "$ECS_AUTOSCALING_TARGETS_JSON" | jq -c 'keys | sort'
+)"
+
+if [[ "$EXPECTED_AUTOSCALED_SERVICE_KEYS_JSON" != "$AUTOSCALING_TARGET_KEYS_JSON" ]]; then
+  jq -n \
+    --argjson expected "$EXPECTED_AUTOSCALED_SERVICE_KEYS_JSON" \
+    --argjson actual "$AUTOSCALING_TARGET_KEYS_JSON" '
+      {
+        expected_autoscaled_services: $expected,
+        autoscaling_targets: $actual,
+        missing_targets: ($expected - $actual),
+        unexpected_targets: ($actual - $expected)
+      }
+    '
+  fail "Terraform ECS autoscaling-target membership does not match the effective retirement configuration."
+fi
+
+success "Terraform derives zero-capacity ECS retirement state for every deployable service"
 
 # -----------------------------------------------------------------------------
 # Terraform state evidence for provider-only deletion behavior
@@ -852,6 +936,7 @@ ALB expected:                  $(if [[ "$APPLICATION_LOAD_BALANCER_JSON" == "nul
 Network Firewall expected:     $(if [[ "$EFFECTIVE_EGRESS_MODE" == "network_firewall" ]]; then echo "yes"; else echo "no"; fi)
 
 ECS services:                  ${EXPECTED_ECS_COUNT}
+ECS retirement config entries: $(echo "$ECS_SERVICE_CONFIGURATION_JSON" | jq 'length')
 ECS autoscaling targets:       $(echo "$ECS_AUTOSCALING_TARGETS_JSON" | jq 'length')
 ECR repositories:              ${EXPECTED_ECR_COUNT}
 
