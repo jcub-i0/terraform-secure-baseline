@@ -327,7 +327,7 @@ infrastructure changes.
 11. Production deletion/lifecycle behavior is profile-derived rather than exposed as independent per-resource operator toggles.
 12. Normal production uses RDS deletion protection, ALB deletion protection, Network Firewall delete protection, `ECR force_delete = false`, `ECS force_delete = false`, and `Backup vault force_destroy = false`.
 13. Intentional production retirement uses one explicit retirement signal rather than changing the deployment profile. The accepted public name is `production_retirement_mode`, default `false`.
-14. `production_retirement_mode = true` may relax only native deletion protections required for deliberate retirement; it must not automatically force-delete ECR images or Backup recovery points.
+14. `production_retirement_mode = true` derives ECS retirement capacity (`desired_count = 0` and autoscaling `min_capacity = 0`, `max_capacity = 0`) and may relax only the native deletion protections required for deliberate retirement; it must not automatically force-delete ECR images or Backup recovery points.
 15. Production RDS retirement still requires a final snapshot and retains automated backups regardless of retirement mode.
 16. AWS Backup Restore Testing is the accepted generic RDS recovery-verification mechanism for v1.11.
 17. Restore Testing proves infrastructure restorability only; application/business-data validation is outside the generic baseline contract.
@@ -802,16 +802,25 @@ Conceptually:
 production_retirement_mode = true
 ```
 
-may allow Terraform to remove the native protections that must be disabled
-before deliberate retirement.
+derives:
+  ECS fixed desired_count = 0
+  ECS autoscaling min/max = 0/0
 
-It should not automatically:
+relaxes:
+  RDS native deletion protection
+  ALB deletion protection
+  Network Firewall delete protection
 
-```text
-force-delete ECR image history
-force-delete Backup recovery points
-turn every durable production resource into disposable state
-```
+preserves:
+  ECR force_delete=false
+  ECS force_delete=false
+  Backup force_destroy=false
+  RDS final snapshot
+  RDS automated backups
+
+Stage-1 Apply:
+  update/read/no-op only
+  no create/delete/replace actions
 
 ### Network Firewall scope
 
@@ -841,10 +850,80 @@ Use live AWS values for AWS-native deletion protection.
 Use Terraform configuration/state evidence for provider-only `force_delete` /
 `force_destroy` semantics.
 
+`validate-production-retirement-plan.sh` must validate the exact saved Stage-1
+plan before approval/apply. A valid production retirement Stage-1 plan may
+contain only:
+
+```text
+read
+no-op
+update
+```
+
+Any resource create, delete, or replacement action must fail closed before the
+plan can be approved or applied.
+
+The Stage-1 plan validator must also prove the planned Terraform outputs resolve
+to the accepted retirement posture:
+
+```text
+deployment_profile = production
+production_retirement_mode = true
+
+RDS deletion protection             false
+ALB deletion protection             false
+Network Firewall delete protection  false
+
+ECR force_delete                    false
+ECS force_delete                    false
+Backup vault force_destroy          false
+
+fixed ECS desired_count             0
+autoscaled ECS desired_count        0
+autoscaled min_capacity             0
+autoscaled max_capacity             0
+```
+
+`validate-retirement-readiness.sh` remains the read-only Stage-2 gate after
+Stage 1 has converged. It must prove both Terraform-owned effective retirement
+state and live AWS state:
+
+```text
+Terraform ecs_service_configuration
+  desired_count = 0
+  scaling = null or min/max = 0/0
+
+Terraform ecs_autoscaling_targets
+  exact membership
+  min/max = 0/0
+
+Live ECS
+  desiredCount = 0
+  runningCount = 0
+  pendingCount = 0
+
+Live Application Auto Scaling
+  exact membership
+  MinCapacity = 0
+  MaxCapacity = 0
+
+Live RDS / ALB / Network Firewall
+  deletion protection disabled
+```
+
+The readiness gate must continue proving that durable production resources are
+explicitly prepared for destruction rather than silently force-deleted.
+
 ### R5 exit criteria
 
 - Normal production cannot casually delete critical resources.
 - Production retirement requires deliberate intent.
+- Retirement mode derives ECS zero-capacity state without changing the canonical
+  workload definition.
+- Stage-1 retirement plans are update/read/no-op only and fail closed on
+  create/delete/replace actions.
+- Terraform-owned retirement capacity and live ECS/Application Auto Scaling
+  state converge to zero before destruction.
 - Dev/minimal teardown remains practical.
 - No broad production force-delete escape hatch is introduced.
 
@@ -1100,14 +1179,23 @@ through development settings.
 15. Confirm RDS returns to `available`.
 16. Execute an RDS AWS Backup Restore Testing job.
 17. Confirm restore success and cleanup.
-18. Validate production lifecycle-protection state.
+18. Validate normal production lifecycle-protection state.
 19. Run `validate-ecs-runtime.sh`.
 20. Run `validate-backup.sh`.
 21. Run the full workload baseline.
 22. Export workload evidence.
 23. Run a development destroy regression.
-24. Confirm the final production Terraform plan reports no changes.
-25. Reconcile documentation and release notes.
+24. Confirm the final normal-production Terraform plan reports no changes.
+25. Enable `production_retirement_mode = true` and create the exact Stage-1 plan.
+26. Run `validate-production-retirement-plan.sh` and prove the saved Stage-1 plan contains only update/read/no-op actions.
+27. Apply that exact reviewed Stage-1 plan.
+28. Confirm Terraform-derived ECS retirement capacity is `0/0/0`.
+29. Run `validate-retirement-readiness.sh` and prove live ECS/Application Auto Scaling are fully quiesced and native deletion protections are disabled.
+30. Run the approved durable-data cleanup path.
+31. Create and review the exact production destroy plan.
+32. Destroy the production qualification environment without manual AWS mutations.
+33. Confirm retirement/destroy cleanup completed successfully.
+34. Reconcile documentation and release notes.
 
 ### Release gate
 
@@ -1136,7 +1224,12 @@ through development settings.
 | `validate-backup.sh` | PASS |
 | Full workload baseline | 16/16 PASS |
 | Workload evidence export | PASS |
-| Final Terraform plan | No changes |
+| Final normal-production Terraform plan | No changes |
+| Stage-1 retirement plan actions | update/read/no-op only |
+| Terraform retirement ECS capacity | 0/0/0 |
+| `validate-production-retirement-plan.sh` | PASS |
+| `validate-retirement-readiness.sh` | PASS |
+| Production retirement/destroy regression | PASS without manual AWS mutation |
 
 ## Deferred Beyond v1.11.0
 
@@ -1190,11 +1283,13 @@ The reference deployment should prove the platform rather than redefine it.
 
 v1.11.0 is complete when the production profile requires a three-AZ
 application/network substrate with separate `ingress_public` and `egress_public`
-roles, production ECS services have redundant capacity
-with explicit Availability Zone rebalancing, the existing RDS DB instance is
-Multi-AZ and protected against casual deletion, production ALB/Network
-Firewall/ECR/ECS/Backup lifecycle behavior is explicitly hardened, AWS Backup
-successfully restores the RDS workload through Restore Testing, exact read-only
-validation proves the configured and live resilience contract, development
-teardown remains practical, the full workload baseline reports `16/16 PASS`,
-and the final Terraform plan reports no changes.
+roles, production ECS services have redundant capacity with explicit
+Availability Zone rebalancing, the existing RDS DB instance is Multi-AZ and
+protected against casual deletion, production ALB/Network Firewall/ECR/ECS/Backup
+lifecycle behavior is explicitly hardened, AWS Backup successfully restores the
+RDS workload through Restore Testing, exact read-only validation proves the
+configured and live resilience contract, development teardown remains practical,
+the full workload baseline reports `16/16 PASS`, the final normal-production
+Terraform plan reports no changes, and the production retirement/destroy path
+completes from a validated non-destructive Stage-1 plan without manual AWS
+mutation.

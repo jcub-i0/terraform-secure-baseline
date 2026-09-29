@@ -213,6 +213,16 @@ jobs:
                     --artifact-basename "${PLAN_BASENAME}" \
                     --context-json "${context}"
 
+            - name: Validate production retirement Stage 1 plan
+              if: ${{ inputs.production_retirement_mode }}
+              shell: bash
+              run: |
+                set -euo pipefail
+
+                bash scripts/deployment/validate-production-retirement-plan.sh \
+                  --working-directory "${WORKING_DIRECTORY}" \
+                  --plan-file "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_BASENAME}.tfplan"
+
             - name: Publish plan summary
               if: always()
               shell: bash
