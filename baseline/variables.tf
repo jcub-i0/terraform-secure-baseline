@@ -579,7 +579,7 @@ variable "ecs_services" {
       )
     ])
 
-    error_message = "When ECS scaling is configured, min_capacity must be at least 1, max_capacity must be greater than or equal to min_capacity, and desired_count must fall within the configured capacity range."
+    error_message = "When ECS scaling is configured and production_retirement_mode is false, min_capacity must be at least 1, max_capacity must be greater than or equal to min_capacity, and desired_count must fall within the configured capacity range."
   }
 
   validation {
