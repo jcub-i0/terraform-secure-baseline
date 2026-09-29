@@ -13,7 +13,7 @@ variable "vpc_id" {
 }
 
 variable "ingress_public_subnet_ids" {
-  description = "Public subnet IDs used by the Internet-facing Application Load Balancer"
+  description = "Ingress-public subnet IDs used by the Internet-facing Application Load Balancer"
   type        = set(string)
 
   validation {
