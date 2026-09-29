@@ -90,20 +90,20 @@ ecs_runtime_load_contract() {
 
   info "Expected compute-private subnets: ${EXPECTED_COMPUTE_SUBNET_IDS_JSON}"
 
-  if ! EXPECTED_PUBLIC_SUBNET_IDS_JSON="$(
+  if ! EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_JSON="$(
     echo "$NETWORK_TOPOLOGY_JSON" |
       jq -ce '
-        .public_subnet_ids_by_az
+        .ingress_public_subnet_ids_by_az
         | if type == "object" and length > 0
           then [.[]] | sort | unique
-          else error("network_topology.public_subnet_ids_by_az must be a non-empty object")
+          else error("network_topology.ingress_public_subnet_ids_by_az must be a non-empty object")
           end
       '
   )"; then
-    fail "Unable to resolve Terraform-owned public subnet set."
+    fail "Unable to resolve Terraform-owned ingress-public subnet set."
   fi
 
-  info "Expected public subnets: ${EXPECTED_PUBLIC_SUBNET_IDS_JSON}"
+  info "Expected ingress-public subnets: ${EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_JSON}"
 
   EXPECTED_ALB_DELETION_PROTECTION="$(
     echo "$LIFECYCLE_PROTECTION_JSON" |

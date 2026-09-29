@@ -12,13 +12,13 @@ variable "vpc_id" {
   type = string
 }
 
-variable "public_subnet_ids" {
-  description = "Public subnet IDs used by the Internet-facing Application Load Balancer"
+variable "ingress_public_subnet_ids" {
+  description = "Ingress-public subnet IDs used by the Internet-facing Application Load Balancer"
   type        = set(string)
 
   validation {
-    condition     = length(var.public_subnet_ids) >= 2
-    error_message = "public_subnet_ids must contain at least two public subnet IDs"
+    condition     = length(var.ingress_public_subnet_ids) >= 2
+    error_message = "ingress_public_subnet_ids must contain at least two public subnet IDs"
   }
 }
 

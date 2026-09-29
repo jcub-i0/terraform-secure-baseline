@@ -66,7 +66,7 @@ Task-deficit alarms:                ${task_deficit_alarm_count}
 Ingress-health alarms:              ${ingress_health_alarm_count}
 
 Expected compute subnets:           ${EXPECTED_COMPUTE_SUBNET_IDS_JSON}
-Expected public subnets:            ${EXPECTED_PUBLIC_SUBNET_IDS_JSON}
+Expected ingress-public subnets:    ${EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_JSON}
 Expected ALB deletion protection:   ${EXPECTED_ALB_DELETION_PROTECTION}
 Live ALB deletion protection:       ${LIVE_ALB_DELETION_PROTECTION}
 

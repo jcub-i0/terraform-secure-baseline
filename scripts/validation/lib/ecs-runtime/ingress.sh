@@ -160,20 +160,20 @@ validate_alb_identity() {
       '
   )"
 
-  if [[ "$EXPECTED_PUBLIC_SUBNET_IDS_JSON" != "$actual_alb_subnets_json" ]]; then
+  if [[ "$EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_JSON" != "$actual_alb_subnets_json" ]]; then
     jq -n \
-      --argjson expected "$EXPECTED_PUBLIC_SUBNET_IDS_JSON" \
+      --argjson expected "$EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_JSON" \
       --argjson actual "$actual_alb_subnets_json" '
         {
-          expected_public_subnets: $expected,
+          expected_ingress_public_subnets: $expected,
           actual_alb_subnets: $actual
         }
       '
 
-    fail "Shared ALB does not use the exact Terraform-owned public subnet set."
+    fail "Shared ALB does not use the exact Terraform-owned ingress-public subnet set."
   fi
 
-  success "Shared ALB uses the exact Terraform-owned public subnet set"
+  success "Shared ALB uses the exact Terraform-owned ingress-public subnet set"
 }
 
 validate_alb_security_group() {

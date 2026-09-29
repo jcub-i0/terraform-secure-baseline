@@ -18,17 +18,33 @@ resource "aws_vpc" "main" {
 }
 
 # CREATE SUBNETS
-## PUBLIC SUBNETS
-resource "aws_subnet" "public" {
+## INGRESS PUBLIC SUBNETS
+resource "aws_subnet" "ingress_public" {
   for_each = local.az_index_map
 
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.subnet_cidrs.public[each.value]
+  cidr_block              = var.subnet_cidrs.ingress_public[each.value]
   availability_zone       = each.key
   map_public_ip_on_launch = false
 
   tags = {
-    Name        = "${var.name_prefix}-Public-Subnet-${each.key}"
+    Name        = "${var.name_prefix}-Ingress-Public-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+## EGRESS PUBLIC SUBNETS
+resource "aws_subnet" "egress_public" {
+  for_each = local.az_index_map
+
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.subnet_cidrs.egress_public[each.value]
+  availability_zone       = each.key
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name        = "${var.name_prefix}-Egress-Public-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -143,7 +159,7 @@ resource "aws_nat_gateway" "natgw" {
   for_each = local.nat_enabled ? local.az_index_map : {}
 
   allocation_id = aws_eip.nat[each.key].id
-  subnet_id     = aws_subnet.public[each.key].id
+  subnet_id     = aws_subnet.egress_public[each.key].id
 
   depends_on = [aws_internet_gateway.igw]
 
@@ -155,8 +171,24 @@ resource "aws_nat_gateway" "natgw" {
 }
 
 # CREATE AND ASSOCIATE ROUTE TABLES
-## PUBLIC ROUTE TABLE
-resource "aws_route_table" "public" {
+## PUBLIC ROUTE TABLES
+resource "aws_route_table" "ingress_public" {
+  for_each = local.az_index_map
+  vpc_id   = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name        = "${var.name_prefix}-Ingress-Public-RT-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+resource "aws_route_table" "egress_public" {
   for_each = local.az_index_map
   vpc_id   = aws_vpc.main.id
 
@@ -192,18 +224,25 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name        = "${var.name_prefix}-Public-Route-Table-${each.key}"
+    Name        = "${var.name_prefix}-Egress-Public-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
 }
 
 ## PUBLIC ROUTE TABLE ASSOCIATION
-resource "aws_route_table_association" "public" {
+resource "aws_route_table_association" "ingress_public" {
   for_each = local.az_index_map
 
-  route_table_id = aws_route_table.public[each.key].id
-  subnet_id      = aws_subnet.public[each.key].id
+  route_table_id = aws_route_table.ingress_public[each.key].id
+  subnet_id      = aws_subnet.ingress_public[each.key].id
+}
+
+resource "aws_route_table_association" "egress_public" {
+  for_each = local.az_index_map
+
+  route_table_id = aws_route_table.egress_public[each.key].id
+  subnet_id      = aws_subnet.egress_public[each.key].id
 }
 
 ## PRIVATE ROUTE TABLES
