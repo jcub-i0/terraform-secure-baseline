@@ -368,8 +368,11 @@ module "application_load_balancer" {
   name_prefix = local.name_prefix
   environment = var.environment
 
-  vpc_id            = module.networking.vpc_id
-  public_subnet_ids = toset(module.networking.public_subnet_ids_list)
+  vpc_id = module.networking.vpc_id
+
+  ingress_public_subnet_ids = toset(
+    module.networking.ingress_public_subnet_ids_list
+  )
 
   certificate_arn = var.alb_certificate_arn
   ingress_cidrs   = var.alb_ingress_cidrs

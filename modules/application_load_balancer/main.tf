@@ -29,7 +29,7 @@ resource "aws_lb" "load_balancer" {
     aws_security_group.load_balancer.id,
   ]
 
-  subnets = var.public_subnet_ids
+  subnets = var.ingress_public_subnet_ids
 
   enable_deletion_protection = var.enable_deletion_protection
   drop_invalid_header_fields = true

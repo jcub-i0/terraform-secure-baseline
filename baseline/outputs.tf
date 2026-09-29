@@ -86,8 +86,12 @@ output "network_topology" {
       keys(module.networking.compute_private_subnet_ids_map)
     )
 
-    public_subnet_ids_by_az = (
-      module.networking.public_subnet_ids_map
+    ingress_public_subnet_ids_by_az = (
+      module.networking.ingress_public_subnet_ids_map
+    )
+
+    egress_public_subnet_ids_by_az = (
+      module.networking.egress_public_subnet_ids_map
     )
 
     compute_private_subnet_ids_by_az = (

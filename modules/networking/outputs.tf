@@ -8,11 +8,6 @@ output "nat_gateway_ids_map" {
   value       = { for az, natgw in aws_nat_gateway.natgw : az => natgw.id }
 }
 
-output "public_subnet_ids_map" {
-  description = "map(string) of Public Subnet IDs by AZ"
-  value       = { for az, subnet in aws_subnet.public : az => subnet.id }
-}
-
 output "compute_private_subnet_ids_map" {
   description = "map(string) of Compute Private Subnet IDs"
   value       = { for az, subnet in aws_subnet.compute_private : az => subnet.id }
@@ -48,15 +43,33 @@ output "endpoint_private_subnet_ids_map" {
   value       = { for az, subnet in aws_subnet.endpoint_private : az => subnet.id }
 }
 
-output "endpoint_private_route_table_ids_map" {
-  description = "map(string) of Endpoint Private Route Table IDs"
-  value       = { for az, rt in aws_route_table.endpoint_private : az => rt.id }
+output "ingress_public_subnet_ids_map" {
+  value = {
+    for az, subnet in aws_subnet.ingress_public :
+    az => subnet.id
+  }
+}
+
+output "egress_public_subnet_ids_map" {
+  value = {
+    for az, subnet in aws_subnet.egress_public :
+    az => subnet.id
+  }
 }
 
 # For resources that need list(string) (i.e. RDS)
-output "public_subnet_ids_list" {
-  description = "list(string) of Public Subnet IDs"
-  value       = [for subnet in aws_subnet.public : subnet.id]
+output "ingress_public_subnet_ids_list" {
+  value = [
+    for subnet in aws_subnet.ingress_public :
+    subnet.id
+  ]
+}
+
+output "egress_public_subnet_ids_list" {
+  value = [
+    for subnet in aws_subnet.egress_public :
+    subnet.id
+  ]
 }
 
 output "compute_private_subnet_ids_list" {
