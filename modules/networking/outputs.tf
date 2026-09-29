@@ -101,3 +101,8 @@ output "endpoint_private_subnet_ids_list" {
   description = "list(string) of Endpoint Private Subnet IDs"
   value       = [for subnet in aws_subnet.endpoint_private : subnet.id]
 }
+
+output "internet_gateway_id" {
+  description = "ID of the Internet Gateway"
+  value       = aws_internet_gateway.igw.id
+}
