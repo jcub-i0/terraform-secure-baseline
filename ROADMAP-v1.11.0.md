@@ -22,7 +22,8 @@ The intended result is:
   rebalancing;
 - profile-aware deletion protection for critical production resources;
 - real RDS recovery verification through AWS Backup Restore Testing;
-- exact read-only resilience validation; and
+- exact read-only resilience validation;
+- deterministic Terraform CLI/provider resolution across local and CI execution; and
 - live qualification followed by a no-change Terraform plan.
 
 ReconoSense-specific assumptions remain outside this release.
@@ -43,7 +44,9 @@ v1.11.0 should include:
    Firewall, ECR, ECS services, and the Backup vault.
 6. AWS Backup Restore Testing for the Terraform-managed RDS instance.
 7. Exact resilience validation inside the existing workload-baseline layer.
-8. Live production-profile qualification, documentation reconciliation, and
+8. Deterministic Terraform CLI/provider selection with committed dependency
+   lockfiles across every Terraform root.
+9. Live production-profile qualification, documentation reconciliation, and
    release.
 
 v1.11.0 should **not** migrate the database to Aurora or an RDS Multi-AZ DB
@@ -290,6 +293,43 @@ apply exact reviewed plan
 
 Do not re-plan after approval.
 
+### Terraform toolchain and provider resolution are deterministic
+
+R8 teardown exposed a provider/state-schema compatibility failure when Terraform
+state written by a newer AWS provider was read by an older local provider. v1.11
+must therefore make Terraform CLI and provider selection deterministic rather
+than relying on open-ended minimum-version constraints.
+
+The accepted repository-wide toolchain is:
+
+```text
+Terraform CLI          1.15.8
+hashicorp/aws          6.66.0
+hashicorp/random       3.8.0
+hashicorp/time         0.13.1
+```
+
+Every Terraform root under `bootstrap/` and `environments/` must:
+
+```text
+declare the exact Terraform CLI version
+declare exact direct-provider constraints
+commit its .terraform.lock.hcl
+use the committed lockfile during normal terraform init
+```
+
+The workload roots may also resolve transitive providers such as
+`hashicorp/archive`; those versions remain locked by the committed dependency
+lockfile.
+
+Normal CI and operator workflows must not perform implicit provider upgrades.
+Provider or Terraform CLI upgrades are deliberate maintenance changes that
+update the exact constraints and affected lockfiles together in a reviewed PR.
+
+Terraform-enabled GitHub Actions workflows should use Terraform `1.15.8` and a
+SHA-pinned `hashicorp/setup-terraform` action so CI does not silently diverge
+from the locally declared toolchain.
+
 ## Milestones
 
 | Milestone | Purpose | Expected repository areas |
@@ -301,7 +341,7 @@ Do not re-plan after approval.
 | ✅ **R5 - Production Lifecycle Protection** | Replace development-friendly production force-delete settings while preserving dev/minimal teardown | storage, ALB, firewall, ECR, ECS service, Backup modules |
 | ✅ **R6 - Backup Restore Verification** | Add Terraform-owned AWS Backup Restore Testing for RDS and prove the recovery path | `modules/backup/`, `modules/iam/backup.tf`, storage/baseline outputs, `validate-backup.sh` |
 | ✅ **R7 - Exact Resilience Validation** | Extend existing validators to prove the complete v1.11 contract without changing validation-layer count | workload validators and ECS runtime helpers |
-| **R8 - Live Qualification & Release** | Exercise three-AZ topology, ECS replacement, RDS failover, RDS restore testing, dev teardown regression, evidence, docs, and final no-change plan | qualification/evidence, docs, module READMEs, README/CHANGELOG |
+| **R8 - Live Qualification & Release** | Exercise corrected networking, deterministic Terraform/provider resolution, ECS replacement, RDS failover/restore, retirement/destroy regression, evidence, docs, and final no-change plan | Terraform roots/lockfiles, workflows, qualification/evidence, docs, module READMEs, README/CHANGELOG |
 
 ## R1 - Production Resilience Contract ✅
 
@@ -1160,47 +1200,105 @@ DEPLOYMENT_PROFILE=production
 The production profile itself should be qualified rather than approximated
 through development settings.
 
+### R8 corrective finding: Terraform/provider determinism
+
+During teardown, local Terraform emitted state decode warnings for CloudWatch
+metric alarms because the provider selected locally did not match the provider
+schema that had written the state. The repository previously allowed
+`hashicorp/aws >= 6.44.0` and ignored `.terraform.lock.hcl`, so local and CI
+execution could legitimately resolve different provider releases.
+
+Before rebuilding workload environments, the repository must lock one tested
+toolchain:
+
+```text
+Terraform CLI          = 1.15.8
+hashicorp/aws          = 6.66.0
+hashicorp/random       = 3.8.0
+hashicorp/time         = 0.13.1
+```
+
+The deterministic contract is:
+
+```text
+all Terraform roots
+  -> exact Terraform version constraint
+  -> exact direct-provider constraints
+  -> committed .terraform.lock.hcl
+
+Terraform-enabled CI
+  -> Terraform 1.15.8
+  -> SHA-pinned setup-terraform action
+
+normal terraform init
+  -> consumes committed dependency selections
+  -> no implicit provider upgrade
+```
+
+A deliberate toolchain/provider upgrade must update the exact constraint and
+affected lockfiles together and be reviewed as its own dependency change.
+
 ### Qualification sequence
 
-1. Confirm production resolves to at least three AZs.
-2. Apply the three-AZ topology.
-3. Confirm all expected subnet families span the three AZs.
-4. Confirm NAT/Network Firewall egress and return routing remains AZ-local and `ingress_public` contains no compute-private firewall override.
-5. Confirm Interface Endpoints span the expected endpoint-private subnets.
-6. Confirm the RDS DB subnet group includes all production data subnets.
-7. Confirm production RDS is Multi-AZ and deletion-protected.
-8. Deploy the minimal HTTP ECS service with three tasks.
-9. Confirm tasks are distributed across the three production AZs.
-10. Confirm ECS AZ rebalancing is enabled.
-11. Confirm the ALB spans the exact production `ingress_public` subnet set and targets are healthy.
-12. Stop one ECS application task and confirm replacement/steady state.
-13. Confirm GuardDuty Runtime Monitoring remains healthy.
-14. Perform a controlled RDS Multi-AZ failover.
-15. Confirm RDS returns to `available`.
-16. Execute an RDS AWS Backup Restore Testing job.
-17. Confirm restore success and cleanup.
-18. Validate normal production lifecycle-protection state.
-19. Run `validate-ecs-runtime.sh`.
-20. Run `validate-backup.sh`.
-21. Run the full workload baseline.
-22. Export workload evidence.
-23. Run a development destroy regression.
-24. Confirm the final normal-production Terraform plan reports no changes.
-25. Enable `production_retirement_mode = true` and create the exact Stage-1 plan.
-26. Run `validate-production-retirement-plan.sh` and prove the saved Stage-1 plan contains only update/read/no-op actions.
-27. Apply that exact reviewed Stage-1 plan.
-28. Confirm Terraform-derived ECS retirement capacity is `0/0/0`.
-29. Run `validate-retirement-readiness.sh` and prove live ECS/Application Auto Scaling are fully quiesced and native deletion protections are disabled.
-30. Run the approved durable-data cleanup path.
-31. Create and review the exact production destroy plan.
-32. Destroy the production qualification environment without manual AWS mutations.
-33. Confirm retirement/destroy cleanup completed successfully.
-34. Reconcile documentation and release notes.
+1. Confirm every Terraform root declares Terraform `1.15.8` and the accepted
+   exact direct-provider versions.
+2. Confirm every Terraform root has a committed `.terraform.lock.hcl` and that
+   the AWS provider resolves to `6.66.0`.
+3. Confirm Terraform-enabled GitHub Actions workflows use Terraform `1.15.8`
+   and the SHA-pinned `setup-terraform` action.
+4. Run `terraform init` and `terraform validate` across all Terraform roots and
+   confirm the committed lockfiles do not drift.
+5. Confirm production resolves to at least three AZs.
+6. Apply the three-AZ topology.
+7. Confirm all expected subnet families span the three AZs.
+8. Confirm NAT/Network Firewall egress and return routing remains AZ-local and
+   `ingress_public` contains no compute-private firewall override.
+9. Confirm Interface Endpoints span the expected endpoint-private subnets.
+10. Confirm the RDS DB subnet group includes all production data subnets.
+11. Confirm production RDS is Multi-AZ and deletion-protected.
+12. Deploy the minimal HTTP ECS service with three tasks.
+13. Confirm tasks are distributed across the three production AZs.
+14. Confirm ECS AZ rebalancing is enabled.
+15. Confirm the ALB spans the exact production `ingress_public` subnet set and
+    targets are healthy.
+16. Stop one ECS application task and confirm replacement/steady state.
+17. Confirm GuardDuty Runtime Monitoring remains healthy.
+18. Perform a controlled RDS Multi-AZ failover.
+19. Confirm RDS returns to `available`.
+20. Execute an RDS AWS Backup Restore Testing job.
+21. Confirm restore success and cleanup.
+22. Validate normal production lifecycle-protection state.
+23. Run `validate-ecs-runtime.sh`.
+24. Run `validate-backup.sh`.
+25. Run the full workload baseline.
+26. Export workload evidence.
+27. Run a development destroy regression.
+28. Confirm the final normal-production Terraform plan reports no changes.
+29. Enable `production_retirement_mode = true` and create the exact Stage-1 plan.
+30. Run `validate-production-retirement-plan.sh` and prove the saved Stage-1
+    plan contains only update/read/no-op actions.
+31. Apply that exact reviewed Stage-1 plan.
+32. Confirm Terraform-derived ECS retirement capacity is `0/0/0`.
+33. Run `validate-retirement-readiness.sh` and prove live ECS/Application Auto
+    Scaling are fully quiesced and native deletion protections are disabled.
+34. Run the approved durable-data cleanup path.
+35. Create and review the exact production destroy plan.
+36. Destroy the production qualification environment without manual AWS
+    mutations.
+37. Confirm retirement/destroy cleanup completed successfully.
+38. Reconcile documentation and release notes.
 
 ### Release gate
 
 | Test | Required result |
 |---|---|
+| Terraform CLI version | 1.15.8 |
+| AWS provider version | 6.66.0 |
+| Random provider version | 3.8.0 where required |
+| Time provider version | 0.13.1 where required |
+| Terraform dependency lockfiles | committed for every Terraform root |
+| Terraform root init/validate with committed locks | PASS / no lockfile drift |
+| Terraform-enabled CI toolchain | Terraform 1.15.8 + SHA-pinned setup action |
 | Production Availability Zones | >= 3 |
 | Three-AZ seven-family subnet topology | PASS |
 | Ingress/egress public role separation | PASS |
@@ -1288,8 +1386,10 @@ Availability Zone rebalancing, the existing RDS DB instance is Multi-AZ and
 protected against casual deletion, production ALB/Network Firewall/ECR/ECS/Backup
 lifecycle behavior is explicitly hardened, AWS Backup successfully restores the
 RDS workload through Restore Testing, exact read-only validation proves the
-configured and live resilience contract, development teardown remains practical,
-the full workload baseline reports `16/16 PASS`, the final normal-production
+configured and live resilience contract, Terraform `1.15.8` and the accepted
+provider versions are deterministic across local and CI execution through exact
+constraints and committed lockfiles, development teardown remains practical, the
+full workload baseline reports `16/16 PASS`, the final normal-production
 Terraform plan reports no changes, and the production retirement/destroy path
 completes from a validated non-destructive Stage-1 plan without manual AWS
 mutation.
