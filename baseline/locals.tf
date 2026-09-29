@@ -236,12 +236,32 @@ locals {
       container_port = service.container_port
       cpu            = service.cpu
       memory         = service.memory
-      desired_count  = service.desired_count
-      scaling        = service.scaling
       deployment     = service.deployment
 
       execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
       task_role_arn      = module.iam.ecs_task_roles[service_name].arn
+
+      desired_count = (
+        local.effective_production_retirement_mode
+        ? 0
+        : service.desired_count
+      )
+
+      scaling = (
+        service.scaling == null
+        ? null
+        : (
+          local.effective_production_retirement_mode
+          ? merge(
+            service.scaling,
+            {
+              min_capacity = 0
+              max_capcity  = 0
+            }
+          )
+          : service.scaling
+        )
+      )
 
       target_group_arn = (
         service.ingress != null
