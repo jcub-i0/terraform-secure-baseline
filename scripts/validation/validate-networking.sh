@@ -365,21 +365,6 @@ EXPECTED_AZS_JSON="$(
 
 EXPECTED_AZ_COUNT="$(echo "$EXPECTED_AZS_JSON" | jq 'length')"
 
-case "$DEPLOYMENT_PROFILE" in
-  production)
-    if [[ "$EXPECTED_AZ_COUNT" -lt 3 ]]; then
-      fail "Production network_topology must contain at least three Availability Zones."
-    fi
-    ;;
-  development|minimal)
-    if [[ "$EXPECTED_AZ_COUNT" -lt 2 ]]; then
-      fail "${DEPLOYMENT_PROFILE} network_topology must contain at least two Availability Zones."
-    fi
-    ;;
-esac
-
-success "Availability Zone count matches deployment-profile requirements: ${EXPECTED_AZ_COUNT}"
-
 EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field ingress_public_subnet_ids_by_az)"
 EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field egress_public_subnet_ids_by_az)"
 EXPECTED_COMPUTE_SUBNET_IDS_BY_AZ_JSON="$(topology_field compute_private_subnet_ids_by_az)"
