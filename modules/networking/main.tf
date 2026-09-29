@@ -18,7 +18,7 @@ resource "aws_vpc" "main" {
 }
 
 # CREATE SUBNETS
-## PUBLIC SUBNETS
+## INGRESS PUBLIC SUBNETS
 resource "aws_subnet" "ingress_public" {
   for_each = local.az_index_map
 
@@ -34,6 +34,7 @@ resource "aws_subnet" "ingress_public" {
   }
 }
 
+## EGRESS PUBLIC SUBNETS
 resource "aws_subnet" "egress_public" {
   for_each = local.az_index_map
 
