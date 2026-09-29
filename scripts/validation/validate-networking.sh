@@ -375,6 +375,18 @@ EXPECTED_FIREWALL_SUBNET_IDS_BY_AZ_JSON="$(topology_field firewall_private_subne
 EXPECTED_NAT_GATEWAY_IDS_BY_AZ_JSON="$(topology_field nat_gateway_ids_by_az)"
 EXPECTED_FIREWALL_ENDPOINT_IDS_BY_AZ_JSON="$(topology_field firewall_endpoint_ids_by_az)"
 
+if ! EXPECTED_INTERNET_GATEWAY_ID="$(
+  topology_field internet_gateway_id |
+    jq -r '
+      if type == "string" and length > 0
+      then .
+      else error("network_topology.internet_gateway_id must be a non-empty string")
+      end
+    '
+)"; then
+  fail "Unable to resolve Terraform-owned Internet Gateway ID from network_topology."
+fi
+
 EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
 require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
 success "effective_egress_mode is valid: $EFFECTIVE_EGRESS_MODE"
@@ -483,23 +495,36 @@ if [[ "$INTERNET_GATEWAY_COUNT" -ne 1 ]]; then
   fail "Expected exactly one Internet Gateway attached to the workload VPC."
 fi
 
-INTERNET_GATEWAY_ID="$(
+LIVE_INTERNET_GATEWAY_ID="$(
   echo "$INTERNET_GATEWAYS_JSON" |
     jq -r '.InternetGateways[0].InternetGatewayId // empty'
 )"
 
-[[ -n "$INTERNET_GATEWAY_ID" ]] ||
-  fail "Unable to resolve the Terraform workload Internet Gateway ID."
+[[ -n "$LIVE_INTERNET_GATEWAY_ID" ]] ||
+  fail "Unable to resolve the live workload Internet Gateway ID."
+
+if [[ "$LIVE_INTERNET_GATEWAY_ID" != "$EXPECTED_INTERNET_GATEWAY_ID" ]]; then
+  jq -n \
+    --arg expected "$EXPECTED_INTERNET_GATEWAY_ID" \
+    --arg live "$LIVE_INTERNET_GATEWAY_ID" '
+      {
+        expected_internet_gateway_id: $expected,
+        live_internet_gateway_id: $live
+      }
+    '
+
+  fail "Live Internet Gateway does not match Terraform network_topology."
+fi
+
+success "Live Internet Gateway matches Terraform: ${LIVE_INTERNET_GATEWAY_ID}"
 
 EXPECTED_IGW_IDS_BY_AZ_JSON="$(
   jq -cn \
     --argjson azs "$EXPECTED_AZS_JSON" \
-    --arg igw "$INTERNET_GATEWAY_ID" '
+    --arg igw "$EXPECTED_INTERNET_GATEWAY_ID" '
       reduce $azs[] as $az ({}; .[$az] = $igw)
     '
 )"
-
-success "Resolved workload Internet Gateway: ${INTERNET_GATEWAY_ID}"
 
 section "Checking exact Terraform-owned subnet topology"
 
@@ -1265,7 +1290,8 @@ Effective firewall domains:    ${EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT}
 Total Terraform subnets:       ${EXPECTED_SUBNET_COUNT}
 NAT Gateway count:             ${NAT_GATEWAY_COUNT}
 Matching Network Firewalls:    ${MATCHING_FIREWALL_COUNT}
-Internet Gateway:              ${INTERNET_GATEWAY_ID}
+Expected Internet Gateway:     ${EXPECTED_INTERNET_GATEWAY_ID}
+Live Internet Gateway:         ${LIVE_INTERNET_GATEWAY_ID}
 
 Compute route tables:          ${COMPUTE_RT_COUNT}
 Compute private subnets:       ${COMPUTE_SUBNET_COUNT}
