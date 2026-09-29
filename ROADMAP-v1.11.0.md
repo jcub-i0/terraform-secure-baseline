@@ -64,10 +64,11 @@ us-east-1b
 us-east-1c
 ```
 
-The existing subnet families remain:
+The workload subnet topology uses distinct public ingress and egress roles:
 
 ```text
-public
+ingress_public
+egress_public
 compute_private
 data_private
 serverless_private
@@ -75,10 +76,20 @@ endpoint_private
 firewall_private
 ```
 
-Networking already loops over `var.azs`. v1.11 should extend that design instead
-of creating a parallel topology model.
+`ingress_public` is dedicated to the internet-facing Application Load Balancer.
+Its route tables provide Internet Gateway reachability but must not override the
+VPC-local path from the ALB to `compute_private`.
 
-Development and minimal should remain capable of a lower-cost two-AZ posture.
+`egress_public` is dedicated to NAT Gateways. In `network_firewall` mode, its
+route tables own the same-AZ `compute_private` return routes through Network
+Firewall so inspected outbound flows remain symmetric.
+
+The ALB and NAT Gateways must not share a public subnet/route-table role.
+Networking continues to loop over `var.azs` rather than introducing a parallel
+topology model.
+
+Development and minimal should remain capable of a lower-cost two-AZ posture
+while preserving the same seven-family role separation.
 
 ### RDS remains an `aws_db_instance`
 
@@ -414,14 +425,18 @@ R2 may now introduce the three-AZ topology and its workload interfaces without r
 ## R2 - Three-AZ Production Topology
 
 R2 extends the current AZ-looping networking model to three production
-Availability Zones.
+Availability Zones. R8 live qualification later exposed that the original
+shared `public` subnet role was incompatible with stateful Network Firewall
+routing, so the corrected topology preserves the AZ-looping model while
+separating public ingress from public egress.
 
 ### Subnet topology
 
-Production should create one subnet per configured AZ for each existing family:
+Production should create one subnet per configured AZ for each family:
 
 ```text
-public
+ingress_public
+egress_public
 compute_private
 data_private
 serverless_private
@@ -429,9 +444,12 @@ endpoint_private
 firewall_private
 ```
 
-### Network Firewall and NAT
+`ingress_public` and `egress_public` are distinct routing domains. They must not
+share route tables.
 
-Production `network_firewall` routing remains AZ-local:
+### Network Firewall, NAT, and ALB routing
+
+Production `network_firewall` egress remains AZ-local:
 
 ```text
 compute-private subnet
@@ -443,13 +461,56 @@ same-AZ Network Firewall endpoint
 same-AZ firewall-private route table
         |
         v
-same-AZ NAT Gateway
+same-AZ NAT Gateway in egress-public
         |
         v
 Internet Gateway
 ```
 
-Do not introduce cross-AZ NAT routing as part of the third-AZ change.
+The inspected return path remains symmetric:
+
+```text
+Internet
+   |
+   v
+same-AZ NAT Gateway in egress-public
+   |
+   v
+egress-public route table
+   |
+   v
+same-AZ Network Firewall endpoint
+   |
+   v
+compute-private subnet
+```
+
+ALB ingress is intentionally outside that stateful egress path:
+
+```text
+Internet
+   |
+   v
+Internet Gateway
+   |
+   v
+ingress-public subnet
+   |
+   v
+Application Load Balancer
+   |
+   v
+VPC-local routing
+   |
+   v
+compute-private ECS target
+```
+
+Each `ingress_public` route table has an Internet Gateway default route and must
+not contain explicit `compute_private` routes through Network Firewall. This
+keeps ALB-to-ECS traffic VPC-local in both directions.
+
+Do not introduce cross-AZ NAT or Network Firewall routing.
 
 ### Downstream consumers
 
@@ -458,19 +519,28 @@ The complete production topology must flow into:
 ```text
 RDS DB subnet group       -> all data-private subnets
 ECS services              -> all compute-private subnets
-ALB                       -> all public subnets
+ALB                       -> all ingress-public subnets
+NAT Gateways              -> matching same-AZ egress-public subnets
 Interface VPC endpoints   -> all endpoint-private subnets
 Network Firewall          -> all firewall-private subnets
 ```
 
-### CIDR migration safety
+### CIDR allocation
 
-Existing first/second-AZ CIDRs must remain unchanged.
+The corrected defaults preserve the original public CIDRs for NAT egress and
+allocate separate ranges for ALB ingress:
 
-Append the third CIDR rather than reorder the current list.
+```text
+production:
+  egress_public   = 10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24
+  ingress_public  = 10.0.3.0/24, 10.0.4.0/24, 10.0.5.0/24
 
-This should preserve existing AZ-keyed resources and create only the new
-third-AZ instances.
+development/minimal:
+  egress_public   = 10.0.0.0/24, 10.0.1.0/24
+  ingress_public  = 10.0.2.0/24, 10.0.3.0/24
+```
+
+Existing private-family CIDR allocations remain unchanged.
 
 ### R2 validation
 
@@ -479,8 +549,14 @@ Networking validation should prove:
 - exact effective AZ set;
 - one subnet of each expected family per AZ;
 - expected NAT inventory;
+- NAT placement in the matching same-AZ `egress_public` subnet;
 - expected Network Firewall endpoints;
-- AZ-local routes; and
+- AZ-local compute-to-firewall-to-NAT routing;
+- same-AZ `compute_private` return routes exist only on `egress_public` route
+  tables in `network_firewall` mode;
+- `ingress_public` route tables contain no explicit `compute_private` routes;
+- each ingress-/egress-public route table has the expected Internet Gateway
+  default route; and
 - exact route-table associations.
 
 VPC endpoint validation should prove exact endpoint-private subnet placement.
@@ -488,9 +564,9 @@ VPC endpoint validation should prove exact endpoint-private subnet placement.
 ### R2 exit criteria
 
 - Production spans at least three distinct AZs.
-- Existing first/second-AZ resources remain stable.
-- Third-AZ networking converges cleanly.
-- Firewall/NAT routing remains AZ-local.
+- Public ingress and NAT egress use separate subnet/route-table roles.
+- ALB-to-ECS routing remains VPC-local.
+- Firewall/NAT egress and return routing remains AZ-local and symmetric.
 - Dev/minimal two-AZ deployment remains supported.
 
 ## R3 - RDS Resilience & Lifecycle
@@ -900,10 +976,13 @@ Add:
 
 ```text
 production AZ set/count
-subnet inventory
-NAT inventory
+seven-family subnet inventory
+ingress-public / egress-public separation
+NAT placement in egress-public
 Network Firewall endpoint inventory
-AZ-local routing
+AZ-local compute/firewall/NAT routing
+egress-public compute return routing
+ingress-public absence of compute-to-firewall overrides
 Network Firewall delete protection
 ```
 
@@ -926,7 +1005,7 @@ AZ rebalancing
 production minimum capacity
 production deployment-health contract
 three-AZ compute subnet use
-ALB public-subnet coverage
+ALB ingress-public subnet coverage
 ALB deletion protection
 ```
 
@@ -1007,14 +1086,14 @@ through development settings.
 1. Confirm production resolves to at least three AZs.
 2. Apply the three-AZ topology.
 3. Confirm all expected subnet families span the three AZs.
-4. Confirm NAT/Network Firewall routing remains AZ-local.
+4. Confirm NAT/Network Firewall egress and return routing remains AZ-local and `ingress_public` contains no compute-private firewall override.
 5. Confirm Interface Endpoints span the expected endpoint-private subnets.
 6. Confirm the RDS DB subnet group includes all production data subnets.
 7. Confirm production RDS is Multi-AZ and deletion-protected.
 8. Deploy the minimal HTTP ECS service with three tasks.
 9. Confirm tasks are distributed across the three production AZs.
 10. Confirm ECS AZ rebalancing is enabled.
-11. Confirm the ALB spans all production public subnets and targets are healthy.
+11. Confirm the ALB spans the exact production `ingress_public` subnet set and targets are healthy.
 12. Stop one ECS application task and confirm replacement/steady state.
 13. Confirm GuardDuty Runtime Monitoring remains healthy.
 14. Perform a controlled RDS Multi-AZ failover.
@@ -1035,7 +1114,9 @@ through development settings.
 | Test | Required result |
 |---|---|
 | Production Availability Zones | >= 3 |
-| Three-AZ subnet topology | PASS |
+| Three-AZ seven-family subnet topology | PASS |
+| Ingress/egress public role separation | PASS |
+| ALB ingress-public subnet placement | PASS |
 | AZ-local NAT/Firewall routing | PASS |
 | Production RDS Multi-AZ | ENABLED |
 | RDS deletion protection | ENABLED |
@@ -1108,7 +1189,8 @@ The reference deployment should prove the platform rather than redefine it.
 ## Final v1.11.0 Definition
 
 v1.11.0 is complete when the production profile requires a three-AZ
-application/network substrate, production ECS services have redundant capacity
+application/network substrate with separate `ingress_public` and `egress_public`
+roles, production ECS services have redundant capacity
 with explicit Availability Zone rebalancing, the existing RDS DB instance is
 Multi-AZ and protected against casual deletion, production ALB/Network
 Firewall/ECR/ECS/Backup lifecycle behavior is explicitly hardened, AWS Backup
