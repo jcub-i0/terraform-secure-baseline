@@ -2,13 +2,20 @@
 
 ## Overview
 
-The `networking` module provisions the core VPC, subnet, gateway, and route-table foundation for a workload environment. It creates one VPC, six subnet tiers across the configured Availability Zones, an Internet Gateway, conditional NAT Gateway infrastructure, per-AZ route tables, and egress-mode-specific routes.
+The `networking` module provisions the core VPC, subnet, gateway, and route-table foundation for a workload environment. It creates one VPC, seven subnet families across the configured Availability Zones, an Internet Gateway, conditional NAT Gateway infrastructure, per-AZ route tables, and egress-mode-specific routes.
+
+The public edge is intentionally split into two routing roles:
+
+- `ingress_public` — dedicated to internet-facing Application Load Balancers. Its route tables provide Internet Gateway reachability and preserve VPC-local routing to private workload targets.
+- `egress_public` — dedicated to NAT Gateways. In `network_firewall` mode, its route tables own the same-AZ compute-private return routes through AWS Network Firewall.
 
 The module supports three private-compute egress modes:
 
-- `network_firewall` — compute-private default traffic is routed to an AWS Network Firewall endpoint in the same Availability Zone, firewall-private traffic is routed to a NAT Gateway, and a return route for the compute-private CIDR is added to each public route table.
-- `nat_only` — compute-private default traffic is routed directly to a NAT Gateway.
+- `network_firewall` — compute-private default traffic is routed to an AWS Network Firewall endpoint in the same Availability Zone, firewall-private traffic is routed to the same-AZ NAT Gateway in `egress_public`, and the matching `egress_public` route table returns that compute-private CIDR through the same-AZ firewall endpoint.
+- `nat_only` — compute-private default traffic is routed directly to the same-AZ NAT Gateway in `egress_public`.
 - `vpc_endpoints_only` — NAT Gateways and NAT Elastic IPs are not created, and compute-private route tables receive no default internet route.
+
+The ALB and NAT Gateways never share a subnet or route-table role.
 
 The repository also contains `modules/networking/security_policy`. That is a separate child module for security-group policy. This README only acknowledges that boundary and does not document the child module's rules or interfaces.
 
@@ -19,7 +26,8 @@ The repository also contains `modules/networking/security_policy`. That is a sep
 This parent module owns:
 
 - The main workload VPC
-- Public subnets
+- Ingress-public subnets
+- Egress-public subnets
 - Compute-private subnets
 - Data-private subnets
 - Serverless-private subnets
@@ -28,7 +36,8 @@ This parent module owns:
 - Internet Gateway
 - Conditional NAT Elastic IPs
 - Conditional NAT Gateways
-- Public route tables
+- Ingress-public route tables
+- Egress-public route tables
 - Compute-private route tables
 - Firewall-private route tables
 - Endpoint-private route tables
@@ -44,17 +53,20 @@ This parent module does not define the security-group rules contained in `module
 
 ## Architecture
 
-The module creates the following subnet tiers in every Availability Zone listed in `var.azs`:
+The module creates the following seven subnet families in every Availability Zone listed in `var.azs`:
 
 ```text
 VPC
-├── public
+├── ingress_public
+├── egress_public
 ├── compute_private
 ├── data_private
 ├── serverless_private
 ├── firewall_private
 └── endpoint_private
 ```
+
+`ingress_public` and `egress_public` are separate routing domains. `ingress_public` is for ALB ingress only; `egress_public` is for NAT Gateway egress only.
 
 Each subnet disables automatic public IPv4 assignment:
 
@@ -73,12 +85,12 @@ locals {
 Conceptually:
 
 ```text
-var.azs[0] -> var.subnet_cidrs.<tier>[0]
-var.azs[1] -> var.subnet_cidrs.<tier>[1]
+var.azs[0] -> var.subnet_cidrs.<family>[0]
+var.azs[1] -> var.subnet_cidrs.<family>[1]
 ...
 ```
 
-Because the module indexes each subnet CIDR list by Availability Zone position, each required subnet tier must provide enough CIDRs for all configured Availability Zones.
+Because the module indexes each subnet CIDR list by Availability Zone position, each required subnet family must provide enough CIDRs for all configured Availability Zones.
 
 ---
 
@@ -109,11 +121,12 @@ Terraform   = true
 
 ### Subnets
 
-The module creates one subnet per configured Availability Zone for each of the following tiers:
+The module creates one subnet per configured Availability Zone for each of the following families:
 
-| Tier | Terraform resource | CIDR source | Public IP auto-assignment |
+| Family | Terraform resource | CIDR source | Public IP auto-assignment |
 |---|---|---|---|
-| Public | `aws_subnet.public` | `var.subnet_cidrs.public` | Disabled |
+| Ingress public | `aws_subnet.ingress_public` | `var.subnet_cidrs.ingress_public` | Disabled |
+| Egress public | `aws_subnet.egress_public` | `var.subnet_cidrs.egress_public` | Disabled |
 | Compute private | `aws_subnet.compute_private` | `var.subnet_cidrs.compute_private` | Disabled |
 | Data private | `aws_subnet.data_private` | `var.subnet_cidrs.data_private` | Disabled |
 | Serverless private | `aws_subnet.serverless_private` | `var.subnet_cidrs.serverless_private` | Disabled |
@@ -123,7 +136,8 @@ The module creates one subnet per configured Availability Zone for each of the f
 Subnet naming follows these patterns:
 
 ```text
-<name_prefix>-Public-Subnet-<az>
+<name_prefix>-Ingress-Public-<az>
+<name_prefix>-Egress-Public-<az>
 <name_prefix>-Compute-Private-<az>
 <name_prefix>-Data-Private-<az>
 <name_prefix>-Serverless-Private-<az>
@@ -178,7 +192,7 @@ resource "aws_nat_gateway" "natgw"
 Each NAT Gateway:
 
 - Uses the Elastic IP for the same Availability Zone
-- Is placed in the public subnet for the same Availability Zone
+- Is placed in the `egress_public` subnet for the same Availability Zone
 - Depends on the Internet Gateway
 
 NAT Gateways are therefore created in:
@@ -198,10 +212,11 @@ vpc_endpoints_only
 
 ## Route Tables and Routing
 
-The module always creates one route table per configured Availability Zone for each subnet tier:
+The module always creates one route table per configured Availability Zone for each subnet family:
 
 ```text
-public
+ingress_public
+egress_public
 compute_private
 firewall_private
 endpoint_private
@@ -209,37 +224,49 @@ data_private
 serverless_private
 ```
 
-The routes inside those route tables depend on the subnet tier and, for compute/firewall paths, the selected `egress_mode`.
+The routes inside those route tables depend on the subnet family and, for compute/firewall/egress-public paths, the selected `egress_mode`.
 
-### Public Route Tables
+### Ingress-Public Route Tables
 
-The module creates one public route table per Availability Zone:
+The module creates one ingress-public route table per Availability Zone:
 
 ```hcl
-resource "aws_route_table" "public"
+resource "aws_route_table" "ingress_public"
 ```
 
-Every public route table has a default route to the Internet Gateway:
+Every ingress-public route table has exactly the normal Internet Gateway default path:
 
 ```text
 0.0.0.0/0 -> Internet Gateway
 ```
 
-Every public route table is associated with the public subnet in the same Availability Zone.
+Each route table is associated with the `ingress_public` subnet in the same Availability Zone.
 
-When `egress_mode = "network_firewall"`, the module also creates:
+The module does **not** add explicit compute-private routes to ingress-public route tables. ALB-to-ECS traffic therefore uses VPC-local routing rather than being redirected through Network Firewall.
+
+### Egress-Public Route Tables
+
+The module creates one egress-public route table per Availability Zone:
 
 ```hcl
-resource "aws_route" "public_compute_return_to_firewall"
+resource "aws_route_table" "egress_public"
 ```
 
-For each Availability Zone, that route sends the corresponding compute-private CIDR to the configured Network Firewall endpoint:
+Every egress-public route table has a default route to the Internet Gateway and is associated with the same-AZ `egress_public` subnet that hosts the NAT Gateway:
+
+```text
+0.0.0.0/0 -> Internet Gateway
+```
+
+When `egress_mode = "network_firewall"`, the route table also contains exactly one same-AZ return route for the corresponding compute-private CIDR:
 
 ```text
 <compute-private CIDR for AZ> -> Network Firewall endpoint for AZ
 ```
 
-The resource has a lifecycle precondition requiring `var.firewall_endpoint_ids_by_az` to contain an endpoint ID for that Availability Zone.
+That return route is defined inside `aws_route_table.egress_public` and has a lifecycle precondition requiring `var.firewall_endpoint_ids_by_az` to contain an endpoint ID for the Availability Zone.
+
+In `nat_only` and `vpc_endpoints_only`, no explicit compute-private return route is added to `egress_public`.
 
 ### Compute-Private Route Tables
 
@@ -359,29 +386,68 @@ This module does not add a default internet route to serverless-private route ta
 
 ### `network_firewall`
 
-Resources and routes created by this module:
+The inspected egress and return paths remain same-AZ and symmetric:
 
 ```text
-Public subnet
-    |
-    +-- NAT Gateway
-    |
-    +-- Public route table
-            |
-            +-- 0.0.0.0/0 -> Internet Gateway
-            +-- compute-private CIDR -> Network Firewall endpoint
+Outbound:
 
 Compute-private subnet
     |
-    +-- Compute-private route table
-            |
-            +-- 0.0.0.0/0 -> Network Firewall endpoint
-
-Firewall-private subnet
+    v
+Compute-private route table
     |
-    +-- Firewall-private route table
-            |
-            +-- 0.0.0.0/0 -> NAT Gateway
+    | 0.0.0.0/0
+    v
+same-AZ Network Firewall endpoint
+    |
+    v
+Firewall-private route table
+    |
+    | 0.0.0.0/0
+    v
+same-AZ NAT Gateway in egress_public
+    |
+    v
+Egress-public route table
+    |
+    | 0.0.0.0/0
+    v
+Internet Gateway
+
+Return:
+
+Internet Gateway
+    |
+    v
+same-AZ NAT Gateway in egress_public
+    |
+    v
+Egress-public route table
+    |
+    | compute-private CIDR
+    v
+same-AZ Network Firewall endpoint
+    |
+    v
+Compute-private subnet
+```
+
+The separate ALB ingress path does not enter this stateful egress path:
+
+```text
+Internet Gateway
+    |
+    v
+Ingress-public subnet / route table
+    |
+    v
+Application Load Balancer
+    |
+    v
+VPC-local routing
+    |
+    v
+Compute-private target
 ```
 
 `firewall_endpoint_ids_by_az` must contain a Network Firewall endpoint ID for every configured Availability Zone.
@@ -391,11 +457,17 @@ Firewall-private subnet
 Resources and routes created by this module:
 
 ```text
-Public subnet
+Egress-public subnet
     |
     +-- NAT Gateway
     |
-    +-- Public route table
+    +-- Egress-public route table
+            |
+            +-- 0.0.0.0/0 -> Internet Gateway
+
+Ingress-public subnet
+    |
+    +-- Ingress-public route table
             |
             +-- 0.0.0.0/0 -> Internet Gateway
 
@@ -403,10 +475,10 @@ Compute-private subnet
     |
     +-- Compute-private route table
             |
-            +-- 0.0.0.0/0 -> NAT Gateway
+            +-- 0.0.0.0/0 -> same-AZ NAT Gateway
 ```
 
-No Network Firewall route resources are created.
+No Network Firewall route resources are created, and neither public route-table family contains an explicit compute-private-to-firewall route.
 
 ### `vpc_endpoints_only`
 
@@ -417,7 +489,8 @@ In this mode:
 - Compute-private route tables receive no default route
 - Firewall-private route tables receive no default route
 - Network Firewall route resources are not created
-- Public route tables still exist and retain their `0.0.0.0/0 -> Internet Gateway` route
+- Ingress-public and egress-public route tables still exist and retain their `0.0.0.0/0 -> Internet Gateway` routes
+- Neither public route-table family contains an explicit compute-private return route
 - Endpoint-private, data-private, and serverless-private route tables continue to have no default internet route from this module
 
 ---
@@ -452,7 +525,8 @@ Any other value fails Terraform variable validation.
 `main.tf` directly references these keys:
 
 ```text
-public
+ingress_public
+egress_public
 compute_private
 data_private
 serverless_private
@@ -460,11 +534,12 @@ firewall_private
 endpoint_private
 ```
 
-A representative structure is:
+A representative two-AZ non-production structure is:
 
 ```hcl
 subnet_cidrs = {
-  public             = ["10.0.0.0/24", "10.0.1.0/24"]
+  egress_public      = ["10.0.0.0/24", "10.0.1.0/24"]
+  ingress_public     = ["10.0.2.0/24", "10.0.3.0/24"]
   compute_private    = ["10.0.16.0/24", "10.0.17.0/24"]
   data_private       = ["10.0.32.0/24", "10.0.33.0/24"]
   serverless_private = ["10.0.48.0/24", "10.0.49.0/24"]
@@ -472,6 +547,8 @@ subnet_cidrs = {
   endpoint_private   = ["10.0.128.0/24", "10.0.129.0/24"]
 }
 ```
+
+The baseline's production defaults use three Availability Zones and add one CIDR to each family; the `egress_public` defaults remain `10.0.0.0/24` through `10.0.2.0/24`, while `ingress_public` uses `10.0.3.0/24` through `10.0.5.0/24`.
 
 The module does not declare a variable-validation block for the map keys or list lengths. Because `main.tf` indexes each list using the AZ index, missing keys or insufficient CIDR entries will fail when Terraform evaluates the corresponding resource expressions.
 
@@ -486,19 +563,22 @@ firewall_endpoint_ids_by_az = {
 }
 ```
 
-Both Network Firewall-dependent route resources enforce a precondition that the map contain the current Availability Zone key.
+Both Network Firewall-dependent routing paths enforce a precondition that the map contain the current Availability Zone key.
 
 For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because those route resources are not created.
 
 ---
 
+---
+
 ## Outputs
 
-### VPC
+### VPC and Internet Gateway
 
 | Output | Value |
 |---|---|
 | `vpc_id` | Main VPC ID |
+| `internet_gateway_id` | Internet Gateway ID |
 
 ### NAT Gateway Outputs
 
@@ -512,7 +592,8 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 
 | Output | Value |
 |---|---|
-| `public_subnet_ids_map` | Public subnet IDs keyed by AZ |
+| `ingress_public_subnet_ids_map` | Ingress-public subnet IDs keyed by AZ |
+| `egress_public_subnet_ids_map` | Egress-public subnet IDs keyed by AZ |
 | `compute_private_subnet_ids_map` | Compute-private subnet IDs keyed by AZ |
 | `data_private_subnet_ids_map` | Data-private subnet IDs keyed by AZ |
 | `serverless_private_subnet_ids_map` | Serverless-private subnet IDs keyed by AZ |
@@ -523,7 +604,8 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 
 | Output | Value |
 |---|---|
-| `public_subnet_ids_list` | List of public subnet IDs |
+| `ingress_public_subnet_ids_list` | List of ingress-public subnet IDs |
+| `egress_public_subnet_ids_list` | List of egress-public subnet IDs |
 | `compute_private_subnet_ids_list` | List of compute-private subnet IDs |
 | `data_private_subnet_ids_list` | List of data-private subnet IDs |
 | `serverless_private_subnet_ids_list` | List of serverless-private subnet IDs |
@@ -540,7 +622,9 @@ Use the map outputs when Availability Zone identity matters. The list outputs ar
 | `serverless_private_route_table_ids_map` | Serverless-private route table IDs keyed by AZ |
 | `endpoint_private_route_table_ids_map` | Endpoint-private route table IDs keyed by AZ |
 
-The module does not currently export public, data-private, or firewall-private route table IDs.
+The module does not currently export ingress-public, egress-public, data-private, or firewall-private route table IDs.
+
+---
 
 ---
 
@@ -551,7 +635,8 @@ The module uses `name_prefix` and Availability Zone names for resource tags.
 | Resource | `Name` tag pattern |
 |---|---|
 | VPC | `<name_prefix>-Main` |
-| Public subnet | `<name_prefix>-Public-Subnet-<az>` |
+| Ingress-public subnet | `<name_prefix>-Ingress-Public-<az>` |
+| Egress-public subnet | `<name_prefix>-Egress-Public-<az>` |
 | Compute-private subnet | `<name_prefix>-Compute-Private-<az>` |
 | Data-private subnet | `<name_prefix>-Data-Private-<az>` |
 | Serverless-private subnet | `<name_prefix>-Serverless-Private-<az>` |
@@ -560,7 +645,8 @@ The module uses `name_prefix` and Availability Zone names for resource tags.
 | Internet Gateway | `<name_prefix>-IGW` |
 | NAT Elastic IP | `<name_prefix>-NAT-EIP-<az>` |
 | NAT Gateway | `<name_prefix>-NAT-Gateway-<az>` |
-| Public route table | `<name_prefix>-Public-Route-Table-<az>` |
+| Ingress-public route table | `<name_prefix>-Ingress-Public-RT-<az>` |
+| Egress-public route table | `<name_prefix>-Egress-Public-RT-<az>` |
 | Compute-private route table | `<name_prefix>-Compute-Private-RT-<az>` |
 | Firewall-private route table | `<name_prefix>-Firewall-Private-RT-<az>` |
 | Endpoint-private route table | `<name_prefix>-Endpoint-Private-RT-<az>` |
@@ -594,17 +680,21 @@ modules/networking/security_policy/README.md
 
 ---
 
+---
+
 ## Operational Invariants
 
 The current parent module enforces or establishes the following behavior:
 
 - VPC DNS support and DNS hostnames are enabled.
-- All six subnet tiers disable automatic public IP assignment.
-- Public route tables always route `0.0.0.0/0` to the Internet Gateway.
+- All seven subnet families disable automatic public IP assignment.
+- Ingress-public and egress-public route tables always route `0.0.0.0/0` to the Terraform-owned Internet Gateway.
+- Ingress-public route tables do not contain explicit compute-private routes; ALB-to-private-target traffic remains VPC-local.
 - NAT Elastic IPs and NAT Gateways exist only when `egress_mode` is not `vpc_endpoints_only`.
+- Every NAT Gateway is placed in the `egress_public` subnet for the same Availability Zone.
 - `network_firewall` routes compute-private default traffic to per-AZ firewall endpoints and firewall-private default traffic to per-AZ NAT Gateways.
-- `network_firewall` also installs per-AZ public return routes for the corresponding compute-private CIDRs through the firewall endpoint.
-- `nat_only` routes compute-private default traffic directly to the per-AZ NAT Gateway.
+- `network_firewall` installs the corresponding per-AZ compute-private return route only on the same-AZ `egress_public` route table.
+- `nat_only` routes compute-private default traffic directly to the per-AZ NAT Gateway and adds no public compute-return override.
 - `vpc_endpoints_only` gives compute-private route tables no default route from this module.
 - Endpoint-private, data-private, and serverless-private route tables receive no default internet route from this module.
 - Network Firewall endpoint mappings fail closed in `network_firewall` mode if an expected Availability Zone key is missing.
@@ -615,7 +705,7 @@ The current parent module enforces or establishes the following behavior:
 
 - `firewall_endpoint_ids_by_az` is conditionally required only for `network_firewall`.
 - NAT infrastructure is conditional; it is not created in `vpc_endpoints_only`.
-- The parent module always creates the public, compute-private, firewall-private, endpoint-private, data-private, and serverless-private route tables even when some of them have no default route.
+- The parent module always creates ingress-public, egress-public, compute-private, firewall-private, endpoint-private, data-private, and serverless-private route tables even when some of them have no default route.
 - The parent module does not create Network Firewall endpoints; it consumes their IDs when firewall routing is selected.
 - The parent module does not define the `security_policy` submodule's security-group rules.
 - `cloud_name` is currently a required declared input but is not referenced by the attached parent-module resource or output definitions.

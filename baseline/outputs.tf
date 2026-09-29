@@ -118,6 +118,10 @@ output "network_topology" {
       module.networking.nat_gateway_ids_map
     )
 
+    internet_gateway_id = (
+      module.networking.internet_gateway_id
+    )
+
     firewall_endpoint_ids_by_az = (
       local.effective_egress_mode == "network_firewall"
       ? module.firewall[0].firewall_endpoint_ids_by_az

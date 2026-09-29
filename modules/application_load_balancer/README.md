@@ -26,7 +26,7 @@ The module creates:
 - One target group per configured service
 - One listener rule per configured service
 
-The ALB is internet-facing and placed in the workload environment's public subnets.
+The ALB is internet-facing and placed only in the workload environment's `ingress_public` subnets.
 
 ## Inputs
 
@@ -35,10 +35,11 @@ The ALB is internet-facing and placed in the workload environment's public subne
 | `name_prefix` | `string` | Yes | — | Baseline naming prefix used to construct ALB-related resource names. |
 | `environment` | `string` | Yes | — | Workload environment identity used for tagging. |
 | `vpc_id` | `string` | Yes | — | VPC ID in which the ALB and target groups are created. |
-| `public_subnet_ids` | `set(string)` | Yes | — | Public subnet IDs used by the internet-facing ALB. At least two subnet IDs are required. |
+| `ingress_public_subnet_ids` | `set(string)` | Yes | — | Ingress-public subnet IDs used by the internet-facing ALB. At least two subnet IDs are required. |
 | `certificate_arn` | `string` | Yes when instantiated | — | ACM certificate ARN used by the HTTPS listener. |
 | `ingress_cidrs` | `set(string)` | Yes | — | IPv4 CIDR blocks allowed to reach the ALB over HTTPS. |
 | `ssl_policy` | `string` | No | `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` | TLS security policy used by the HTTPS listener. |
+| `enable_deletion_protection` | `bool` | Yes | — | Whether ALB deletion protection is enabled. Baseline supplies the profile/retirement-resolved value. |
 | `services` | `map(object(...))` | No | `{}` | Per-service target-group and HTTPS routing configuration keyed by ECS service name. |
 
 ## Service Configuration
@@ -182,19 +183,19 @@ The ALB is created as:
 - Internet-facing
 - Application Load Balancer type
 - HTTPS-only
-- Attached to the workload public subnets
+- Attached to the workload `ingress_public` subnets
 - Configured to drop invalid HTTP header fields
-- Deletion protection disabled for the current ephemeral development/test workflow
+- Deletion protection controlled by the required `enable_deletion_protection` input
 
-The Terraform configuration includes:
+At the baseline integration layer, deletion protection is profile-derived:
 
-```hcl
-enable_deletion_protection = false # CHANGE THIS IN PROD
+```text
+production + retirement mode false -> enabled
+production + retirement mode true  -> disabled
+development/minimal                 -> disabled
 ```
 
-The current workload environments are regularly applied and destroyed for development, testing, and cost control.
-
-Persistent production use must reconsider ALB deletion protection before deployment.
+The ALB module itself does not infer deployment profiles; it applies the already-resolved boolean supplied by `baseline`.
 
 ## Conditional Baseline Integration
 
@@ -388,7 +389,7 @@ module "application_load_balancer" {
   environment = "dev"
   vpc_id      = "vpc-0123456789abcdef0"
 
-  public_subnet_ids = [
+  ingress_public_subnet_ids = [
     "subnet-aaaaaaaaaaaaaaaaa",
     "subnet-bbbbbbbbbbbbbbbbb",
   ]

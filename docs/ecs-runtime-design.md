@@ -23,7 +23,7 @@ Do not move ECR into bootstrap, introduce a second service map, or split foundat
 
 ## Network placement
 
-Fargate tasks use `awsvpc`, run in `compute_private` subnets, and receive no public IP. An optional shared internet-facing ALB uses public subnets. Interface VPC Endpoints, including `ecr.api`, `ecr.dkr`, and `guardduty-data`, use `endpoint_private` subnets. ECR image layers use the S3 Gateway Endpoint. GuardDuty Runtime Monitoring telemetry uses the Terraform-owned `guardduty-data` Interface Endpoint rather than a GuardDuty-created duplicate endpoint.
+Fargate tasks use `awsvpc`, run in `compute_private` subnets, and receive no public IP. An optional shared internet-facing ALB uses only the Terraform-owned `ingress_public` subnet set. NAT Gateways use the separate `egress_public` subnet family, so ALB-to-task traffic remains VPC-local instead of sharing the stateful Network Firewall return-routing domain. Interface VPC Endpoints, including `ecr.api`, `ecr.dkr`, and `guardduty-data`, use `endpoint_private` subnets. ECR image layers use the S3 Gateway Endpoint. GuardDuty Runtime Monitoring telemetry uses the Terraform-owned `guardduty-data` Interface Endpoint rather than a GuardDuty-created duplicate endpoint.
 
 Application HTTPS egress follows the effective workload egress mode: `development` defaults to `nat_only`, `production` defaults to `network_firewall`, and `minimal` defaults to `vpc_endpoints_only`. The task-security-policy path is derived from the same effective mode rather than using a separate ECS egress model.
 
@@ -252,7 +252,7 @@ Launch readiness is resource-granular: IAM execution-policy IDs and security-pol
 
 ## Application Load Balancer
 
-`modules/application_load_balancer` creates zero or one shared internet-facing HTTPS ALB. Baseline includes a service in the ALB map only when the service is deployable **and** its `ingress` object is non-null.
+`modules/application_load_balancer` creates zero or one shared internet-facing HTTPS ALB in the exact Terraform-owned `ingress_public` subnet set. Baseline includes a service in the ALB map only when the service is deployable **and** its `ingress` object is non-null.
 
 The listener uses a caller-supplied ACM certificate and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09`. Its default action is a fixed 404 response. Each ingress-enabled deployable service receives an `ip` target group and one explicit listener rule with at least one host-header or path-pattern condition.
 
@@ -341,7 +341,7 @@ The runtime validator verifies:
 - service steady state and completed primary rollout;
 - compatible Fargate platform version;
 - canonical task definition remaining application-only;
-- immutable application image, logging, task networking, and conditional database/ALB relationships;
+- immutable application image and logging, exact compute-private task networking, exact ALB `ingress_public` placement, and conditional database/ALB relationships;
 - injected GuardDuty agent state on protected running tasks;
 - GuardDuty ECS coverage state;
 - Application Auto Scaling targets/policies; and

@@ -241,7 +241,7 @@ selected immutable digest
   -> optional ALB routing
 ```
 
-Fargate tasks run in compute-private subnets with `awsvpc`, no public IP, and one task security group per service. Private ECR API/registry traffic uses `ecr.api` and `ecr.dkr` Interface Endpoints in endpoint-private subnets, while ECR image layers use the S3 Gateway Endpoint. Optional ingress uses a shared internet-facing HTTPS ALB in public subnets.
+Fargate tasks run in compute-private subnets with `awsvpc`, no public IP, and one task security group per service. Private ECR API/registry traffic uses `ecr.api` and `ecr.dkr` Interface Endpoints in endpoint-private subnets, while ECR image layers use the S3 Gateway Endpoint. Optional ingress uses a shared internet-facing HTTPS ALB in `ingress_public` subnets; NAT Gateways use the separate `egress_public` subnets.
 
 Task images are constructed only from the managed repository URL and a reviewed immutable digest:
 
@@ -375,27 +375,33 @@ Automatic containment currently applies to the established EC2 isolation workflo
 
 Each workload environment is deployed into a segmented VPC.
 
-The VPC includes subnet tiers such as:
+The VPC uses seven subnet families:
 
-- Public subnets
+- Ingress-public subnets for internet-facing ALB placement
+- Egress-public subnets for NAT Gateway placement
 - Private compute subnets
 - Private data subnets
 - Private serverless subnets
 - Private firewall subnets
 - Private VPC endpoint subnets
 
+The two public roles are separate routing domains: ALB ingress must remain VPC-local to private targets, while NAT return routing may traverse Network Firewall in `network_firewall` mode.
+
 Application and compute workloads are placed in private subnets and do not receive public IP addresses.
 
-For production-style inspected egress, the typical outbound path is:
+For production-style inspected egress, the outbound path is AZ-local:
 
 ```text
-Private Compute Subnets
+Compute-private subnet
     |
     v
-AWS Network Firewall
+same-AZ Network Firewall endpoint
     |
     v
-NAT Gateway
+Firewall-private route table
+    |
+    v
+same-AZ NAT Gateway in egress-public
     |
     v
 Internet Gateway
@@ -404,13 +410,33 @@ Internet Gateway
 Internet
 ```
 
+The return path remains symmetric:
+
+```text
+Internet
+    |
+    v
+same-AZ NAT Gateway in egress-public
+    |
+    v
+Egress-public route table
+    |
+    v
+same-AZ Network Firewall endpoint
+    |
+    v
+Compute-private subnet
+```
+
+ALB ingress uses the separate `ingress_public` route-table family and reaches ECS targets through VPC-local routing; ingress-public route tables do not contain compute-private routes through Network Firewall.
+
 For lower-cost development egress, the typical outbound path is:
 
 ```text
-Private Compute Subnets
+Compute-private subnet
     |
     v
-NAT Gateway
+same-AZ NAT Gateway in egress-public
     |
     v
 Internet Gateway
@@ -443,16 +469,19 @@ This reduces unnecessary internet exposure and improves control over workload co
 
 ### Network Firewall Mode
 
-When the effective egress mode is `network_firewall`, private compute traffic is routed through AWS Network Firewall before reaching NAT Gateway.
+When the effective egress mode is `network_firewall`, private compute traffic is routed through the same-AZ AWS Network Firewall endpoint before reaching the same-AZ NAT Gateway in `egress_public`; the `egress_public` return route sends the same compute CIDR back through that firewall endpoint.
 
 ```text
-Private Compute Subnets
+Compute-private
     |
     v
-AWS Network Firewall policy enforcement
+same-AZ Network Firewall endpoint
     |
     v
-NAT Gateway
+Firewall-private
+    |
+    v
+same-AZ NAT Gateway in egress-public
     |
     v
 Internet Gateway
@@ -462,13 +491,13 @@ This allows the environment to enforce centralized outbound inspection and domai
 
 ### NAT-Only Mode
 
-When the effective egress mode is `nat_only`, Network Firewall is not deployed and private compute traffic routes directly to NAT Gateway.
+When the effective egress mode is `nat_only`, Network Firewall is not deployed and private compute traffic routes directly to the same-AZ NAT Gateway in `egress_public`.
 
 ```text
-Private Compute Subnets
+Compute-private
     |
     v
-NAT Gateway
+same-AZ NAT Gateway in egress-public
     |
     v
 Internet Gateway
@@ -499,7 +528,7 @@ The baseline deploys Interface VPC Endpoints into dedicated private endpoint sub
 
 These endpoint subnets:
 
-- Are separate from compute, data, serverless, public, and firewall subnets
+- Are separate from compute, data, serverless, firewall, ingress-public, and egress-public subnets
 - Have their own route tables
 - Do not require a default internet route
 - Host Interface Endpoint ENIs

@@ -53,6 +53,14 @@ normalize_route_tables_json() {
     route_table_id: .RouteTableId,
     name: ((.Tags[]? | select(.Key == "Name") | .Value) // ""),
     az: (((.Tags[]? | select(.Key == "Name") | .Value) // "") | sub("^" + $az_name_prefix; "")),
+    associated_subnet_ids: (
+      [
+        .Associations[]?
+        | select(.SubnetId != null)
+        | .SubnetId
+      ]
+      | sort
+    ),
     routes: [
       .Routes[]?
       | . + {
@@ -167,6 +175,42 @@ validate_route_table_az_inventory() {
   fi
 
   success "${route_table_label} route-table AZ inventory matches Terraform: ${actual_count} route table(s)"
+}
+
+validate_route_table_subnet_associations_by_az() {
+  local route_table_label="$1"
+  local route_tables_json="$2"
+  local expected_subnets_json="$3"
+  local drift_json
+
+  drift_json="$(
+    jq -n \
+      --argjson route_tables "$route_tables_json" \
+      --argjson expected_subnets "$expected_subnets_json" '
+        [
+          $route_tables[]
+          | . as $route_table
+          | ($expected_subnets[$route_table.az] // null) as $expected_subnet
+          | select(
+              $expected_subnet == null
+              or .associated_subnet_ids != [$expected_subnet]
+            )
+          | {
+              az: .az,
+              route_table_id: .route_table_id,
+              expected_subnet_id: $expected_subnet,
+              associated_subnet_ids: .associated_subnet_ids
+            }
+        ]
+      '
+  )"
+
+  if [[ "$drift_json" != "[]" ]]; then
+    echo "$drift_json" | jq .
+    fail "${route_table_label} route-table associations do not exactly match Terraform-owned same-AZ subnets."
+  fi
+
+  success "${route_table_label} route tables are associated with the exact Terraform-owned same-AZ subnet"
 }
 
 validate_default_routes_by_az() {
@@ -321,7 +365,8 @@ EXPECTED_AZS_JSON="$(
 
 EXPECTED_AZ_COUNT="$(echo "$EXPECTED_AZS_JSON" | jq 'length')"
 
-EXPECTED_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field public_subnet_ids_by_az)"
+EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field ingress_public_subnet_ids_by_az)"
+EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field egress_public_subnet_ids_by_az)"
 EXPECTED_COMPUTE_SUBNET_IDS_BY_AZ_JSON="$(topology_field compute_private_subnet_ids_by_az)"
 EXPECTED_DATA_SUBNET_IDS_BY_AZ_JSON="$(topology_field data_private_subnet_ids_by_az)"
 EXPECTED_SERVERLESS_SUBNET_IDS_BY_AZ_JSON="$(topology_field serverless_private_subnet_ids_by_az)"
@@ -329,6 +374,18 @@ EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON="$(topology_field endpoint_private_subne
 EXPECTED_FIREWALL_SUBNET_IDS_BY_AZ_JSON="$(topology_field firewall_private_subnet_ids_by_az)"
 EXPECTED_NAT_GATEWAY_IDS_BY_AZ_JSON="$(topology_field nat_gateway_ids_by_az)"
 EXPECTED_FIREWALL_ENDPOINT_IDS_BY_AZ_JSON="$(topology_field firewall_endpoint_ids_by_az)"
+
+if ! EXPECTED_INTERNET_GATEWAY_ID="$(
+  topology_field internet_gateway_id |
+    jq -r '
+      if type == "string" and length > 0
+      then .
+      else error("network_topology.internet_gateway_id must be a non-empty string")
+      end
+    '
+)"; then
+  fail "Unable to resolve Terraform-owned Internet Gateway ID from network_topology."
+fi
 
 EFFECTIVE_EGRESS_MODE="$(get_terraform_output_value "$OUTPUTS_JSON" effective_egress_mode)"
 require_value_in_list "$EFFECTIVE_EGRESS_MODE" "network_firewall nat_only vpc_endpoints_only" "effective_egress_mode"
@@ -419,6 +476,56 @@ fi
 
 success "Resolved VPC ID: $VPC_ID"
 
+section "Resolving Internet Gateway"
+
+INTERNET_GATEWAYS_JSON="$(
+  aws ec2 describe-internet-gateways \
+    "${aws_args[@]}" \
+    --filters "Name=attachment.vpc-id,Values=${VPC_ID}" \
+    --output json
+)"
+
+INTERNET_GATEWAY_COUNT="$(
+  echo "$INTERNET_GATEWAYS_JSON" |
+    jq '.InternetGateways | length'
+)"
+
+if [[ "$INTERNET_GATEWAY_COUNT" -ne 1 ]]; then
+  echo "$INTERNET_GATEWAYS_JSON" | jq '.InternetGateways'
+  fail "Expected exactly one Internet Gateway attached to the workload VPC."
+fi
+
+LIVE_INTERNET_GATEWAY_ID="$(
+  echo "$INTERNET_GATEWAYS_JSON" |
+    jq -r '.InternetGateways[0].InternetGatewayId // empty'
+)"
+
+[[ -n "$LIVE_INTERNET_GATEWAY_ID" ]] ||
+  fail "Unable to resolve the live workload Internet Gateway ID."
+
+if [[ "$LIVE_INTERNET_GATEWAY_ID" != "$EXPECTED_INTERNET_GATEWAY_ID" ]]; then
+  jq -n \
+    --arg expected "$EXPECTED_INTERNET_GATEWAY_ID" \
+    --arg live "$LIVE_INTERNET_GATEWAY_ID" '
+      {
+        expected_internet_gateway_id: $expected,
+        live_internet_gateway_id: $live
+      }
+    '
+
+  fail "Live Internet Gateway does not match Terraform network_topology."
+fi
+
+success "Live Internet Gateway matches Terraform: ${LIVE_INTERNET_GATEWAY_ID}"
+
+EXPECTED_IGW_IDS_BY_AZ_JSON="$(
+  jq -cn \
+    --argjson azs "$EXPECTED_AZS_JSON" \
+    --arg igw "$EXPECTED_INTERNET_GATEWAY_ID" '
+      reduce $azs[] as $az ({}; .[$az] = $igw)
+    '
+)"
+
 section "Checking exact Terraform-owned subnet topology"
 
 ALL_SUBNETS_JSON="$(
@@ -429,9 +536,14 @@ ALL_SUBNETS_JSON="$(
 )"
 
 validate_subnet_family \
-  "public" \
-  "${NAME_PREFIX}-Public-Subnet-" \
-  "$EXPECTED_PUBLIC_SUBNET_IDS_BY_AZ_JSON"
+  "ingress-public" \
+  "${NAME_PREFIX}-Ingress-Public-" \
+  "$EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON"
+
+validate_subnet_family \
+  "egress-public" \
+  "${NAME_PREFIX}-Egress-Public-" \
+  "$EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON"
 
 validate_subnet_family \
   "compute-private" \
@@ -457,6 +569,51 @@ validate_subnet_family \
   "firewall-private" \
   "${NAME_PREFIX}-Firewall-Private-" \
   "$EXPECTED_FIREWALL_SUBNET_IDS_BY_AZ_JSON"
+
+EXPECTED_ALL_SUBNET_IDS_JSON="$(
+  jq -cn \
+    --argjson ingress "$EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson egress "$EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson compute "$EXPECTED_COMPUTE_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson data "$EXPECTED_DATA_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson serverless "$EXPECTED_SERVERLESS_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson endpoint "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" \
+    --argjson firewall "$EXPECTED_FIREWALL_SUBNET_IDS_BY_AZ_JSON" '
+      [
+        $ingress[],
+        $egress[],
+        $compute[],
+        $data[],
+        $serverless[],
+        $endpoint[],
+        $firewall[]
+      ]
+      | sort
+      | unique
+    '
+)"
+
+LIVE_ALL_SUBNET_IDS_JSON="$(
+  echo "$ALL_SUBNETS_JSON" |
+    jq -c '[.Subnets[].SubnetId] | sort | unique'
+)"
+
+if [[ "$LIVE_ALL_SUBNET_IDS_JSON" != "$EXPECTED_ALL_SUBNET_IDS_JSON" ]]; then
+  jq -n \
+    --argjson expected "$EXPECTED_ALL_SUBNET_IDS_JSON" \
+    --argjson live "$LIVE_ALL_SUBNET_IDS_JSON" '
+      {
+        expected_subnet_ids: $expected,
+        live_subnet_ids: $live,
+        missing: ($expected - $live),
+        unexpected: ($live - $expected)
+      }
+    '
+  fail "Live VPC subnet inventory does not exactly match the seven-family Terraform topology."
+fi
+
+EXPECTED_SUBNET_COUNT="$(echo "$EXPECTED_ALL_SUBNET_IDS_JSON" | jq 'length')"
+success "Live VPC contains exactly the Terraform-owned seven-family subnet inventory: ${EXPECTED_SUBNET_COUNT} subnet(s)"
 
 COMPUTE_SUBNETS_JSON="$(
   echo "$ALL_SUBNETS_JSON" |
@@ -509,7 +666,7 @@ NAT_PLACEMENT_DRIFT_JSON="$(
   jq -n \
     --argjson live "$NAT_GATEWAYS_JSON" \
     --argjson expected_nats "$EXPECTED_NAT_GATEWAY_IDS_BY_AZ_JSON" \
-    --argjson expected_public_subnets "$EXPECTED_PUBLIC_SUBNET_IDS_BY_AZ_JSON" '
+    --argjson expected_egress_subnets "$EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON" '
       [
         $expected_nats
         | to_entries[]
@@ -518,11 +675,11 @@ NAT_PLACEMENT_DRIFT_JSON="$(
             $live.NatGateways[]
             | select(.NatGatewayId == $expected.value)
           ) as $actual
-        | select($actual.SubnetId != $expected_public_subnets[$expected.key])
+        | select($actual.SubnetId != $expected_egress_subnets[$expected.key])
         | {
             az: $expected.key,
             nat_gateway_id: $expected.value,
-            expected_public_subnet_id: $expected_public_subnets[$expected.key],
+            expected_egress_public_subnet_id: $expected_egress_subnets[$expected.key],
             actual_subnet_id: $actual.SubnetId
           }
       ]
@@ -531,10 +688,10 @@ NAT_PLACEMENT_DRIFT_JSON="$(
 
 if [[ "$NAT_PLACEMENT_DRIFT_JSON" != "[]" ]]; then
   echo "$NAT_PLACEMENT_DRIFT_JSON" | jq .
-  fail "One or more NAT Gateways are not in the Terraform-owned public subnet for the same AZ."
+  fail "One or more NAT Gateways are not in the Terraform-owned same-AZ egress-public subnet."
 fi
 
-success "Live NAT Gateway inventory and placement exactly match Terraform"
+success "Live NAT Gateway inventory and same-AZ egress-public placement exactly match Terraform"
 
 section "Checking AWS Network Firewall"
 
@@ -735,7 +892,14 @@ COMPUTE_ROUTE_TABLES_NORMALIZED_JSON="$(
     normalize_route_tables_json "${NAME_PREFIX}-Compute-Private-RT-"
 )"
 
-validate_route_table_az_inventory "compute-private" "$COMPUTE_ROUTE_TABLES_NORMALIZED_JSON"
+validate_route_table_az_inventory \
+  "compute-private" \
+  "$COMPUTE_ROUTE_TABLES_NORMALIZED_JSON"
+
+validate_route_table_subnet_associations_by_az \
+  "Compute-private" \
+  "$COMPUTE_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_COMPUTE_SUBNET_IDS_BY_AZ_JSON"
 
 DEFAULT_ROUTE_COUNT="$(
   echo "$COMPUTE_ROUTE_TABLES_NORMALIZED_JSON" |
@@ -791,7 +955,14 @@ FIREWALL_ROUTE_TABLES_NORMALIZED_JSON="$(
     normalize_route_tables_json "${NAME_PREFIX}-Firewall-Private-RT-"
 )"
 
-validate_route_table_az_inventory "firewall-private" "$FIREWALL_ROUTE_TABLES_NORMALIZED_JSON"
+validate_route_table_az_inventory \
+  "firewall-private" \
+  "$FIREWALL_ROUTE_TABLES_NORMALIZED_JSON"
+
+validate_route_table_subnet_associations_by_az \
+  "Firewall-private" \
+  "$FIREWALL_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_FIREWALL_SUBNET_IDS_BY_AZ_JSON"
 
 FIREWALL_DEFAULT_ROUTE_COUNT="$(
   echo "$FIREWALL_ROUTE_TABLES_NORMALIZED_JSON" |
@@ -818,77 +989,239 @@ case "$EFFECTIVE_EGRESS_MODE" in
     ;;
 esac
 
-section "Checking public route tables"
+section "Checking data private route tables"
 
-PUBLIC_ROUTE_TABLES_JSON="$(
+DATA_ROUTE_TABLES_JSON="$(
   aws ec2 describe-route-tables \
     "${aws_args[@]}" \
     --filters \
       "Name=vpc-id,Values=${VPC_ID}" \
-      "Name=tag:Name,Values=${NAME_PREFIX}-Public-Route-Table-*" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Data-Private-RT-*" \
     --output json
 )"
 
-PUBLIC_RT_COUNT="$(echo "$PUBLIC_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+DATA_RT_COUNT="$(echo "$DATA_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
 
-if [[ "$PUBLIC_RT_COUNT" -eq 0 ]]; then
-  fail "No public route tables found using tag pattern: ${NAME_PREFIX}-Public-Route-Table-*"
+if [[ "$DATA_RT_COUNT" -eq 0 ]]; then
+  fail "No data private route tables found using tag pattern: ${NAME_PREFIX}-Data-Private-RT-*"
 fi
 
-PUBLIC_ROUTE_TABLES_NORMALIZED_JSON="$(
-  echo "$PUBLIC_ROUTE_TABLES_JSON" |
-    normalize_route_tables_json "${NAME_PREFIX}-Public-Route-Table-"
+DATA_ROUTE_TABLES_NORMALIZED_JSON="$(
+  echo "$DATA_ROUTE_TABLES_JSON" |
+    normalize_route_tables_json "${NAME_PREFIX}-Data-Private-RT-"
 )"
 
-validate_route_table_az_inventory "public" "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON"
+validate_route_table_az_inventory \
+  "data-private" \
+  "$DATA_ROUTE_TABLES_NORMALIZED_JSON"
 
-PUBLIC_DEFAULT_ROUTE_DRIFT_JSON="$(
-  jq -n \
-    --argjson route_tables "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" '
-      [
-        $route_tables[]
-        | . as $route_table
-        | ([.routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")]) as $default_routes
-        | select(
-            ($default_routes | length) != 1
-            or $default_routes[0].target_type != "internet_gateway"
-          )
-        | {
-            az: .az,
-            route_table_id: .route_table_id,
-            default_routes: $default_routes
-          }
-      ]
-    '
+validate_route_table_subnet_associations_by_az \
+  "Data-private" \
+  "$DATA_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_DATA_SUBNET_IDS_BY_AZ_JSON"
+
+section "Checking serverless private route tables"
+
+SERVERLESS_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Serverless-Private-RT-*" \
+    --output json
 )"
 
-PUBLIC_DEFAULT_ROUTE_COUNT="$(
-  echo "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" |
+SERVERLESS_RT_COUNT="$(echo "$SERVERLESS_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+
+if [[ "$SERVERLESS_RT_COUNT" -eq 0 ]]; then
+  fail "No serverless private route tables found using tag pattern: ${NAME_PREFIX}-Serverless-Private-RT-*"
+fi
+
+SERVERLESS_ROUTE_TABLES_NORMALIZED_JSON="$(
+  echo "$SERVERLESS_ROUTE_TABLES_JSON" |
+    normalize_route_tables_json "${NAME_PREFIX}-Serverless-Private-RT-"
+)"
+
+validate_route_table_az_inventory \
+  "serverless-private" \
+  "$SERVERLESS_ROUTE_TABLES_NORMALIZED_JSON"
+
+validate_route_table_subnet_associations_by_az \
+  "Serverless-private" \
+  "$SERVERLESS_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_SERVERLESS_SUBNET_IDS_BY_AZ_JSON"
+
+section "Checking endpoint private route tables"
+
+ENDPOINT_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Endpoint-Private-RT-*" \
+    --output json
+)"
+
+ENDPOINT_RT_COUNT="$(echo "$ENDPOINT_ROUTE_TABLES_JSON" | jq '.RouteTables | length')"
+
+if [[ "$ENDPOINT_RT_COUNT" -eq 0 ]]; then
+  fail "No endpoint private route tables found using tag pattern: ${NAME_PREFIX}-Endpoint-Private-RT-*"
+fi
+
+ENDPOINT_ROUTE_TABLES_NORMALIZED_JSON="$(
+  echo "$ENDPOINT_ROUTE_TABLES_JSON" |
+    normalize_route_tables_json "${NAME_PREFIX}-Endpoint-Private-RT-"
+)"
+
+validate_route_table_az_inventory \
+  "endpoint-private" \
+  "$ENDPOINT_ROUTE_TABLES_NORMALIZED_JSON"
+
+validate_route_table_subnet_associations_by_az \
+  "Endpoint-private" \
+  "$ENDPOINT_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON"
+
+section "Checking ingress-public route tables"
+
+INGRESS_PUBLIC_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Ingress-Public-RT-*" \
+    --output json
+)"
+
+INGRESS_PUBLIC_RT_COUNT="$(
+  echo "$INGRESS_PUBLIC_ROUTE_TABLES_JSON" |
+    jq '.RouteTables | length'
+)"
+
+if [[ "$INGRESS_PUBLIC_RT_COUNT" -eq 0 ]]; then
+  fail "No ingress-public route tables found using tag pattern: ${NAME_PREFIX}-Ingress-Public-RT-*"
+fi
+
+INGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON="$(
+  echo "$INGRESS_PUBLIC_ROUTE_TABLES_JSON" |
+    normalize_route_tables_json "${NAME_PREFIX}-Ingress-Public-RT-"
+)"
+
+validate_route_table_az_inventory \
+  "ingress-public" \
+  "$INGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON"
+
+validate_route_table_subnet_associations_by_az \
+  "Ingress-public" \
+  "$INGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON"
+
+validate_default_routes_by_az \
+  "Ingress-public" \
+  "$INGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_IGW_IDS_BY_AZ_JSON" \
+  "internet_gateway"
+
+INGRESS_PUBLIC_DEFAULT_ROUTE_COUNT="$(
+  echo "$INGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" |
     jq '[.[] | .routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")] | length'
 )"
 
-if [[ "$PUBLIC_DEFAULT_ROUTE_DRIFT_JSON" != "[]" ]]; then
-  echo "$PUBLIC_DEFAULT_ROUTE_DRIFT_JSON" | jq .
-  fail "Every public route table must have exactly one Internet Gateway default route."
-fi
-
-success "Every public route table has exactly one Internet Gateway default route"
-
-PUBLIC_COMPUTE_RETURN_ROUTE_COUNT="$(
+INGRESS_PUBLIC_COMPUTE_ROUTE_COUNT="$(
   jq -n \
-    --argjson route_tables "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
-    --argjson compute_subnets "$COMPUTE_SUBNET_CIDRS_JSON" \
-    '[$compute_subnets[].cidr] as $compute_cidrs |
-     [$route_tables[] | .routes[]? | select(.DestinationCidrBlock as $dest | $compute_cidrs | index($dest))] | length'
+    --argjson route_tables "$INGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+    --argjson compute_subnets "$COMPUTE_SUBNET_CIDRS_JSON" '
+      [$compute_subnets[].cidr] as $compute_cidrs
+      | [
+          $route_tables[]
+          | .routes[]?
+          | select(
+              .DestinationCidrBlock as $destination
+              | $compute_cidrs
+              | index($destination)
+            )
+        ]
+      | length
+    '
 )"
 
-info "Public compute return route count: $PUBLIC_COMPUTE_RETURN_ROUTE_COUNT"
+if [[ "$INGRESS_PUBLIC_COMPUTE_ROUTE_COUNT" -ne 0 ]]; then
+  echo "$INGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" | jq .
+  fail "Ingress-public route tables must not contain explicit compute-private routes."
+fi
+
+success "Ingress-public route tables contain no compute-private routing overrides"
+
+section "Checking egress-public route tables"
+
+EGRESS_PUBLIC_ROUTE_TABLES_JSON="$(
+  aws ec2 describe-route-tables \
+    "${aws_args[@]}" \
+    --filters \
+      "Name=vpc-id,Values=${VPC_ID}" \
+      "Name=tag:Name,Values=${NAME_PREFIX}-Egress-Public-RT-*" \
+    --output json
+)"
+
+EGRESS_PUBLIC_RT_COUNT="$(
+  echo "$EGRESS_PUBLIC_ROUTE_TABLES_JSON" |
+    jq '.RouteTables | length'
+)"
+
+if [[ "$EGRESS_PUBLIC_RT_COUNT" -eq 0 ]]; then
+  fail "No egress-public route tables found using tag pattern: ${NAME_PREFIX}-Egress-Public-RT-*"
+fi
+
+EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON="$(
+  echo "$EGRESS_PUBLIC_ROUTE_TABLES_JSON" |
+    normalize_route_tables_json "${NAME_PREFIX}-Egress-Public-RT-"
+)"
+
+validate_route_table_az_inventory \
+  "egress-public" \
+  "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON"
+
+validate_route_table_subnet_associations_by_az \
+  "Egress-public" \
+  "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON"
+
+validate_default_routes_by_az \
+  "Egress-public" \
+  "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+  "$EXPECTED_IGW_IDS_BY_AZ_JSON" \
+  "internet_gateway"
+
+EGRESS_PUBLIC_DEFAULT_ROUTE_COUNT="$(
+  echo "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" |
+    jq '[.[] | .routes[]? | select(.DestinationCidrBlock == "0.0.0.0/0")] | length'
+)"
+
+EGRESS_PUBLIC_COMPUTE_RETURN_ROUTE_COUNT="$(
+  jq -n \
+    --argjson route_tables "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+    --argjson compute_subnets "$COMPUTE_SUBNET_CIDRS_JSON" '
+      [$compute_subnets[].cidr] as $compute_cidrs
+      | [
+          $route_tables[]
+          | .routes[]?
+          | select(
+              .DestinationCidrBlock as $destination
+              | $compute_cidrs
+              | index($destination)
+            )
+        ]
+      | length
+    '
+)"
+
+info "Egress-public compute return route count: ${EGRESS_PUBLIC_COMPUTE_RETURN_ROUTE_COUNT}"
 
 case "$EFFECTIVE_EGRESS_MODE" in
   network_firewall)
-    PUBLIC_RETURN_ROUTE_DRIFT_JSON="$(
+    EGRESS_PUBLIC_RETURN_ROUTE_DRIFT_JSON="$(
       jq -n \
-        --argjson route_tables "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
+        --argjson route_tables "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" \
         --argjson compute_subnets "$COMPUTE_SUBNET_CIDRS_JSON" \
         --argjson expected_targets "$EXPECTED_FIREWALL_ENDPOINT_IDS_BY_AZ_JSON" '
           [
@@ -908,7 +1241,7 @@ case "$EFFECTIVE_EGRESS_MODE" in
             | {
                 az: $subnet.az,
                 compute_cidr: $subnet.cidr,
-                public_route_table_id: $route_table.route_table_id,
+                egress_public_route_table_id: $route_table.route_table_id,
                 expected_firewall_endpoint_id: $expected_target,
                 matching_routes: $matching_routes
               }
@@ -916,19 +1249,24 @@ case "$EFFECTIVE_EGRESS_MODE" in
         '
     )"
 
-    if [[ "$PUBLIC_RETURN_ROUTE_DRIFT_JSON" != "[]" ]]; then
-      echo "$PUBLIC_RETURN_ROUTE_DRIFT_JSON" | jq .
-      fail "Public return routing for compute-private CIDRs is not AZ-local through the Terraform-owned Network Firewall endpoints."
+    if [[ "$EGRESS_PUBLIC_RETURN_ROUTE_DRIFT_JSON" != "[]" ]]; then
+      echo "$EGRESS_PUBLIC_RETURN_ROUTE_DRIFT_JSON" | jq .
+      fail "Egress-public return routing for compute-private CIDRs is not AZ-local through the Terraform-owned Network Firewall endpoints."
     fi
 
-    success "Public route tables return each compute CIDR through the Terraform-owned same-AZ Network Firewall endpoint"
+    if [[ "$EGRESS_PUBLIC_COMPUTE_RETURN_ROUTE_COUNT" -ne "$EXPECTED_AZ_COUNT" ]]; then
+      echo "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" | jq .
+      fail "Expected exactly one egress-public compute-private return route per Availability Zone."
+    fi
+
+    success "Egress-public route tables return each compute CIDR through the Terraform-owned same-AZ Network Firewall endpoint"
     ;;
   nat_only|vpc_endpoints_only)
-    if [[ "$PUBLIC_COMPUTE_RETURN_ROUTE_COUNT" -eq 0 ]]; then
-      success "No public compute return routes found as expected for ${EFFECTIVE_EGRESS_MODE}"
+    if [[ "$EGRESS_PUBLIC_COMPUTE_RETURN_ROUTE_COUNT" -eq 0 ]]; then
+      success "No egress-public compute return routes found as expected for ${EFFECTIVE_EGRESS_MODE}"
     else
-      echo "$PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" | jq .
-      fail "Expected no explicit public compute return routes for ${EFFECTIVE_EGRESS_MODE}."
+      echo "$EGRESS_PUBLIC_ROUTE_TABLES_NORMALIZED_JSON" | jq .
+      fail "Expected no explicit egress-public compute return routes for ${EFFECTIVE_EGRESS_MODE}."
     fi
     ;;
 esac
@@ -936,29 +1274,41 @@ esac
 section "Networking Summary"
 
 cat <<SUMMARY
-Environment:                  ${ENV_NAME}
-Deployment profile:           ${DEPLOYMENT_PROFILE}
-AWS profile:                  ${AWS_PROFILE:-<default>}
-AWS region:                   ${AWS_REGION}
-Name prefix:                  ${NAME_PREFIX}
-VPC ID:                       ${VPC_ID}
-effective_egress_mode:        ${EFFECTIVE_EGRESS_MODE}
-Expected AZ count:            ${EXPECTED_AZ_COUNT}
-Expected AZs:                 ${EXPECTED_AZS_JSON}
-Expected firewall protection: ${EXPECTED_NETWORK_FIREWALL_DELETE_PROTECTION}
-Live firewall protection:     ${LIVE_NETWORK_FIREWALL_DELETE_PROTECTION}
-Effective firewall domains:   ${EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT}
+Environment:                   ${ENV_NAME}
+Deployment profile:            ${DEPLOYMENT_PROFILE}
+AWS profile:                   ${AWS_PROFILE:-<default>}
+AWS region:                    ${AWS_REGION}
+Name prefix:                   ${NAME_PREFIX}
+VPC ID:                        ${VPC_ID}
+effective_egress_mode:         ${EFFECTIVE_EGRESS_MODE}
+Expected AZ count:             ${EXPECTED_AZ_COUNT}
+Expected AZs:                  ${EXPECTED_AZS_JSON}
+Expected firewall protection:  ${EXPECTED_NETWORK_FIREWALL_DELETE_PROTECTION}
+Live firewall protection:      ${LIVE_NETWORK_FIREWALL_DELETE_PROTECTION}
+Effective firewall domains:    ${EFFECTIVE_ALLOWED_EGRESS_DOMAIN_COUNT}
 
-NAT Gateway count:            ${NAT_GATEWAY_COUNT}
-Matching Network Firewalls:   ${MATCHING_FIREWALL_COUNT}
-Compute route tables:         ${COMPUTE_RT_COUNT}
-Compute private subnets:      ${COMPUTE_SUBNET_COUNT}
-Compute default routes:       ${DEFAULT_ROUTE_COUNT}
-Firewall route tables:        ${FIREWALL_RT_COUNT}
-Firewall default routes:      ${FIREWALL_DEFAULT_ROUTE_COUNT}
-Public route tables:          ${PUBLIC_RT_COUNT}
-Public default routes:        ${PUBLIC_DEFAULT_ROUTE_COUNT}
-Public compute returns:       ${PUBLIC_COMPUTE_RETURN_ROUTE_COUNT}
+Total Terraform subnets:       ${EXPECTED_SUBNET_COUNT}
+NAT Gateway count:             ${NAT_GATEWAY_COUNT}
+Matching Network Firewalls:    ${MATCHING_FIREWALL_COUNT}
+Expected Internet Gateway:     ${EXPECTED_INTERNET_GATEWAY_ID}
+Live Internet Gateway:         ${LIVE_INTERNET_GATEWAY_ID}
+
+Compute route tables:          ${COMPUTE_RT_COUNT}
+Compute private subnets:       ${COMPUTE_SUBNET_COUNT}
+Compute default routes:        ${DEFAULT_ROUTE_COUNT}
+Firewall route tables:         ${FIREWALL_RT_COUNT}
+Firewall default routes:       ${FIREWALL_DEFAULT_ROUTE_COUNT}
+Data route tables:             ${DATA_RT_COUNT}
+Serverless route tables:       ${SERVERLESS_RT_COUNT}
+Endpoint route tables:         ${ENDPOINT_RT_COUNT}
+
+Ingress-public route tables:   ${INGRESS_PUBLIC_RT_COUNT}
+Ingress-public default routes: ${INGRESS_PUBLIC_DEFAULT_ROUTE_COUNT}
+Ingress-public compute routes: ${INGRESS_PUBLIC_COMPUTE_ROUTE_COUNT}
+
+Egress-public route tables:    ${EGRESS_PUBLIC_RT_COUNT}
+Egress-public default routes:  ${EGRESS_PUBLIC_DEFAULT_ROUTE_COUNT}
+Egress-public compute returns: ${EGRESS_PUBLIC_COMPUTE_RETURN_ROUTE_COUNT}
 SUMMARY
 
 section "Validation Result"
