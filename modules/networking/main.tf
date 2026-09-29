@@ -181,7 +181,7 @@ resource "aws_route_table" "ingress_public" {
   }
 
   tags = {
-    Name        = "${var.name_prefix}-Ingress-Public-${each.key}"
+    Name        = "${var.name_prefix}-Ingress-Public-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
@@ -223,7 +223,7 @@ resource "aws_route_table" "egress_public" {
   }
 
   tags = {
-    Name        = "${var.name_prefix}-Egress-Public-${each.key}"
+    Name        = "${var.name_prefix}-Egress-Public-RT-${each.key}"
     Environment = var.environment
     Terraform   = "true"
   }
