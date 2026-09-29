@@ -256,7 +256,7 @@ locals {
             service.scaling,
             {
               min_capacity = 0
-              max_capcity  = 0
+              max_capacity  = 0
             }
           )
           : service.scaling
