@@ -227,16 +227,19 @@ Inbound exposure is minimized, and outbound traffic is controlled through explic
 
 The exact outbound path depends on the selected `deployment_profile` and effective `egress_mode`.
 
-Production-style inspected egress:
+Production-style inspected egress keeps the firewall/NAT path same-AZ:
 
 ```text
-Private Compute Subnets
+Compute-private subnet
     |
     v
-AWS Network Firewall
+same-AZ AWS Network Firewall endpoint
     |
     v
-NAT Gateway
+Firewall-private route table
+    |
+    v
+same-AZ NAT Gateway in egress-public
     |
     v
 Internet Gateway
@@ -245,13 +248,15 @@ Internet Gateway
 Internet
 ```
 
+The internet-facing ALB uses a separate `ingress_public` subnet/route-table role. Its path to private workload targets remains VPC-local and is not redirected through the stateful Network Firewall egress path.
+
 Lower-cost NAT-only egress:
 
 ```text
-Private Compute Subnets
+Compute-private subnet
     |
     v
-NAT Gateway
+same-AZ NAT Gateway in egress-public
     |
     v
 Internet Gateway
@@ -281,7 +286,7 @@ The baseline uses controls such as:
 
 - AWS Network Firewall
 - NAT Gateway
-- Route table segmentation
+- Route table segmentation, including separate ingress-public and egress-public roles
 - VPC endpoints
 - Security groups
 - Explicit service access paths
@@ -363,7 +368,7 @@ The current endpoint set supports private access to services including:
 
 Interface VPC Endpoints are deployed into dedicated private endpoint subnets.
 
-This keeps endpoint ENIs separate from compute, data, serverless, firewall, and public subnet tiers. The Terraform-managed `guardduty-data` endpoint is also created before workload EC2 so GuardDuty Runtime Monitoring can use the existing endpoint instead of introducing an endpoint outside the Terraform dependency graph.
+This keeps endpoint ENIs separate from compute, data, serverless, firewall, ingress-public, and egress-public subnet families. The Terraform-managed `guardduty-data` endpoint is also created before workload EC2 so GuardDuty Runtime Monitoring can use the existing endpoint instead of introducing an endpoint outside the Terraform dependency graph.
 
 The S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
@@ -744,7 +749,7 @@ Access control is implemented through:
 Network control is implemented through:
 
 - Private subnet placement
-- Public subnet public IP auto-assignment disabled
+- Ingress-public and egress-public subnet public IP auto-assignment disabled
 - Configurable egress modes
 - AWS Network Firewall, when enabled
 - NAT Gateway, when required
