@@ -574,6 +574,7 @@ jobs:
     identity-center-cleanup-plan:
         name: Plan Identity Center cleanup
         needs: [terraform-destroy-plan]
+        if: ${{ always() && needs.terraform-destroy-plan.result == 'success' }}
         runs-on: ubuntu-latest
         timeout-minutes: 30
         environment: control-plane-plan
@@ -723,6 +724,7 @@ jobs:
     identity-center-cleanup-apply:
         name: Apply reviewed Identity Center cleanup
         needs: identity-center-cleanup-plan
+        if: ${{ always() && needs.identity-center-cleanup-plan.result == 'success' }}
         runs-on: ubuntu-latest
         timeout-minutes: 30
         environment: control-plane
@@ -820,6 +822,7 @@ jobs:
     terraform-destroy-apply:
         name: Apply reviewed ${{ inputs.environment }} destroy plan
         needs: [terraform-destroy-plan, identity-center-cleanup-apply]
+        if: ${{ always() && needs.terraform-destroy-plan.result == 'success' && needs.identity-center-cleanup-apply.result == 'success' }}
         runs-on: ubuntu-latest
         timeout-minutes: 60
         environment: ${{ inputs.environment }}
