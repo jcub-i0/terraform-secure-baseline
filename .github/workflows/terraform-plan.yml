@@ -85,8 +85,8 @@ jobs:
       TF_VAR_securityhub_cspm_account_policies: ${{ vars.SECURITYHUB_CSPM_ACCOUNT_POLICIES }}
       TF_VAR_enable_guardduty_organization_configuration: ${{ vars.ENABLE_GUARDDUTY_ORGANIZATION_CONFIGURATION }}
       TF_VAR_enable_securityhub_v2_organization_policy: ${{ vars.ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY }}
-      TF_VAR_alb_certificate_arn: ${{ vars.ALB_CERTIFICATE_ARN }}
-      TF_VAR_alb_ingress_cidrs: ${{ vars.ALB_INGRESS_CIDRS }}
+      ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
+      ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
 
     steps:
       - name: Checkout
@@ -165,7 +165,7 @@ jobs:
             exit 1
           fi
 
-      - name: Validate workload isolation setting
+      - name: Validate workload Plan settings
         if: >-
           (github.event_name != 'workflow_dispatch' ||
           matrix.environment == inputs.target_environment) &&
@@ -199,6 +199,21 @@ jobs:
               exit 1
               ;;
           esac
+
+          if [[ -n "${ALB_CERTIFICATE_ARN:-}" ]]; then
+            echo "TF_VAR_alb_certificate_arn=${ALB_CERTIFICATE_ARN}" >> "${GITHUB_ENV}"
+          fi
+
+          if [[ -n "${ALB_INGRESS_CIDRS:-}" ]]; then
+            if ! jq -e \
+              'type == "array" and all(.[]; type == "string" and length > 0)' \
+              <<< "${ALB_INGRESS_CIDRS}" >/dev/null; then
+              echo "::error::ALB_INGRESS_CIDRS must be a JSON array of non-empty strings."
+              exit 1
+            fi
+
+            echo "TF_VAR_alb_ingress_cidrs=${ALB_INGRESS_CIDRS}" >> "${GITHUB_ENV}"
+          fi
 
       - name: Terraform Init
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
