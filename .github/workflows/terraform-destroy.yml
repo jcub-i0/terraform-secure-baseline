@@ -77,6 +77,8 @@ jobs:
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
             TF_VAR_production_retirement_mode: ${{ vars.DEPLOYMENT_PROFILE == 'production' && 'true' || 'false' }}
+            TF_VAR_alb_certificate_arn: ${{ vars.ALB_CERTIFICATE_ARN }}
+            TF_VAR_alb_ingress_cidrs: ${{ vars.ALB_INGRESS_CIDRS }}
 
         steps:
             - name: Checkout
@@ -417,6 +419,8 @@ jobs:
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
             TF_VAR_production_retirement_mode: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
+            TF_VAR_alb_certificate_arn: ${{ vars.ALB_CERTIFICATE_ARN }}
+            TF_VAR_alb_ingress_cidrs: ${{ vars.ALB_INGRESS_CIDRS }}
 
         steps:
             - name: Checkout
