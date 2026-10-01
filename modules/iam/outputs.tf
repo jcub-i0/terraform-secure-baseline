@@ -4,11 +4,21 @@ output "instance_profile_name" {
 }
 
 output "cloudtrail_role_arn" {
-  value = aws_iam_role.cloudtrail.arn
+  description = "CloudTrail CloudWatch Logs delivery role ARN, exposed only after its inline delivery policy is attached."
+  value       = aws_iam_role.cloudtrail.arn
+
+  depends_on = [
+    aws_iam_role_policy.cloudtrail
+  ]
 }
 
 output "flowlogs_role_arn" {
-  value = aws_iam_role.flowlogs.arn
+  description = "VPC Flow Logs CloudWatch Logs delivery role ARN, exposed only after its inline delivery policy is attached."
+  value       = aws_iam_role.flowlogs.arn
+
+  depends_on = [
+    aws_iam_role_policy.flowlogs
+  ]
 }
 
 output "config_role_arn" {
@@ -33,11 +43,21 @@ output "config_remediation_role_arn" {
 }
 
 output "firehose_flow_logs_role_arn" {
-  value = aws_iam_role.firehose_flow_logs.arn
+  description = "Firehose flow-log delivery role ARN, exposed only after its inline delivery policy is attached."
+  value       = aws_iam_role.firehose_flow_logs.arn
+
+  depends_on = [
+    aws_iam_role_policy.firehose_flow_logs
+  ]
 }
 
 output "cw_to_firehose_role_arn" {
-  value = aws_iam_role.cw_to_firehose.arn
+  description = "CloudWatch Logs to Firehose role ARN, exposed only after its inline delivery policy is attached."
+  value       = aws_iam_role.cw_to_firehose.arn
+
+  depends_on = [
+    aws_iam_role_policy.cw_to_firehose
+  ]
 }
 
 output "eventbridge_putevents_to_secops_role_arn" {
