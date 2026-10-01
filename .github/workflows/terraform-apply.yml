@@ -72,8 +72,8 @@ jobs:
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
             TF_VAR_production_retirement_mode: ${{ inputs.production_retirement_mode }}
-            TF_VAR_alb_certificate_arn: ${{ vars.ALB_CERTIFICATE_ARN }}
-            TF_VAR_alb_ingress_cidrs: ${{ vars.ALB_INGRESS_CIDRS }}
+            ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
+            ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
 
         steps:
             - name: Checkout
@@ -152,6 +152,21 @@ jobs:
                     echo "::error::PLAN_ROLE_GITHUB_ARN belongs to the wrong AWS account."
                     exit 1
                   }
+
+                  if [[ -n "${ALB_CERTIFICATE_ARN:-}" ]]; then
+                    echo "TF_VAR_alb_certificate_arn=${ALB_CERTIFICATE_ARN}" >> "${GITHUB_ENV}"
+                  fi
+
+                  if [[ -n "${ALB_INGRESS_CIDRS:-}" ]]; then
+                    if ! jq -e \
+                      'type == "array" and all(.[]; type == "string" and length > 0)' \
+                      <<< "${ALB_INGRESS_CIDRS}" >/dev/null; then
+                      echo "::error::ALB_INGRESS_CIDRS must be a JSON array of non-empty strings."
+                      exit 1
+                    fi
+
+                    echo "TF_VAR_alb_ingress_cidrs=${ALB_INGRESS_CIDRS}" >> "${GITHUB_ENV}"
+                  fi
 
                   {
                     echo "expected_account_id=${EXPECTED_ACCOUNT_ID}"
