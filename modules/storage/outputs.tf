@@ -33,20 +33,6 @@ output "rds_port" {
   value       = aws_db_instance.main.port
 }
 
-output "rds_configuration" {
-  description = "Validator-relevant Terraform-managed RDS configuration."
-
-  value = {
-    identifier     = aws_db_instance.main.identifier
-    arn            = aws_db_instance.main.arn
-    instance_class = aws_db_instance.main.instance_class
-
-    multi_az = aws_db_instance.main.multi_az
-
-    # ...existing fields...
-  }
-}
-
 output "rds_database_name" {
   description = "Initial database name configured on the RDS instance"
   value       = aws_db_instance.main.db_name
@@ -70,6 +56,7 @@ output "rds_configuration" {
     arn        = aws_db_instance.main.arn
 
     multi_az = aws_db_instance.main.multi_az
+    instance_class = aws_db_instance.main.instance_class
 
     db_subnet_group_name = (
       aws_db_instance.main.db_subnet_group_name
