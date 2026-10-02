@@ -35,7 +35,7 @@ resource "aws_db_instance" "main" {
 
   engine         = "postgres"
   engine_version = "17.10"
-  instance_class = "db.t4g.micro"
+  instance_class = var.rds_instance_class
 
   allocated_storage     = 50
   max_allocated_storage = 200

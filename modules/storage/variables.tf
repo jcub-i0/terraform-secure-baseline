@@ -24,6 +24,11 @@ variable "db_port" {
   type = string
 }
 
+variable "rds_instance_class" {
+  description = "RDS DB instance class."
+  type        = string
+}
+
 variable "compute_sg_id" {
   type = string
 }

@@ -79,6 +79,7 @@ jobs:
             TF_VAR_production_retirement_mode: ${{ vars.DEPLOYMENT_PROFILE == 'production' && 'true' || 'false' }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
+            RDS_INSTANCE_CLASS: ${{ vars.RDS_INSTANCE_CLASS }}
 
         steps:
             - name: Checkout
@@ -192,6 +193,15 @@ jobs:
                     fi
 
                     echo "TF_VAR_alb_ingress_cidrs=${ALB_INGRESS_CIDRS}" >> "${GITHUB_ENV}"
+                  fi
+
+                  if [[ -n "${RDS_INSTANCE_CLASS:-}" ]]; then
+                    if [[ ! "${RDS_INSTANCE_CLASS}" =~ ^db\.[a-z0-9]+(\.[a-z0-9]+)*$ ]]; then
+                      echo "::error::RDS_INSTANCE_CLASS must use RDS DB instance-class syntax such as db.t4g.micro."
+                      exit 1
+                    fi
+
+                    echo "TF_VAR_rds_instance_class=${RDS_INSTANCE_CLASS}" >> "${GITHUB_ENV}"
                   fi
 
                   {
@@ -436,6 +446,7 @@ jobs:
             TF_VAR_production_retirement_mode: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
+            RDS_INSTANCE_CLASS: ${{ vars.RDS_INSTANCE_CLASS }}
 
         steps:
             - name: Checkout
@@ -477,6 +488,15 @@ jobs:
                     fi
 
                     echo "TF_VAR_alb_ingress_cidrs=${ALB_INGRESS_CIDRS}" >> "${GITHUB_ENV}"
+                  fi
+
+                  if [[ -n "${RDS_INSTANCE_CLASS:-}" ]]; then
+                    if [[ ! "${RDS_INSTANCE_CLASS}" =~ ^db\.[a-z0-9]+(\.[a-z0-9]+)*$ ]]; then
+                      echo "::error::RDS_INSTANCE_CLASS must use RDS DB instance-class syntax such as db.t4g.micro."
+                      exit 1
+                    fi
+
+                    echo "TF_VAR_rds_instance_class=${RDS_INSTANCE_CLASS}" >> "${GITHUB_ENV}"
                   fi
 
                   {
