@@ -87,6 +87,7 @@ jobs:
       TF_VAR_enable_securityhub_v2_organization_policy: ${{ vars.ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY }}
       ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
       ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
+      RDS_INSTANCE_CLASS: ${{ vars.RDS_INSTANCE_CLASS }}
 
     steps:
       - name: Checkout
@@ -213,6 +214,15 @@ jobs:
             fi
 
             echo "TF_VAR_alb_ingress_cidrs=${ALB_INGRESS_CIDRS}" >> "${GITHUB_ENV}"
+          fi
+
+          if [[ -n "${RDS_INSTANCE_CLASS:-}" ]]; then
+            if [[ ! "${RDS_INSTANCE_CLASS}" =~ ^db\.[a-z0-9]+(\.[a-z0-9]+)*$ ]]; then
+              echo "::error::RDS_INSTANCE_CLASS must use RDS DB instance-class syntax such as db.t4g.micro."
+              exit 1
+            fi
+
+            echo "TF_VAR_rds_instance_class=${RDS_INSTANCE_CLASS}" >> "${GITHUB_ENV}"
           fi
 
       - name: Terraform Init
