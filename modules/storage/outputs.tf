@@ -55,7 +55,7 @@ output "rds_configuration" {
     identifier = aws_db_instance.main.identifier
     arn        = aws_db_instance.main.arn
 
-    multi_az = aws_db_instance.main.multi_az
+    multi_az       = aws_db_instance.main.multi_az
     instance_class = aws_db_instance.main.instance_class
 
     db_subnet_group_name = (
