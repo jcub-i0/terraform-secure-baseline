@@ -88,6 +88,7 @@ module "storage" {
   rds_skip_final_snapshot       = local.effective_rds_skip_final_snapshot
   rds_delete_automated_backups  = local.effective_rds_delete_automated_backups
   rds_final_snapshot_identifier = local.effective_rds_final_snapshot_identifier
+  rds_instance_class            = var.rds_instance_class
 
   db_port     = var.db_port
   db_username = var.db_username

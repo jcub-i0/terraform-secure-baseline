@@ -302,6 +302,12 @@ variable "rds_multi_az" {
   }
 }
 
+variable "rds_instance_class" {
+  description = "RDS DB instance class."
+  type        = string
+  default     = "db.t4g.micro"
+}
+
 variable "inspector_enabled" {
   description = "Whether to enable Amazon Inspector. Set to null to use the deployment_profile default."
   type        = bool

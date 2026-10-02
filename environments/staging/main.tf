@@ -17,6 +17,7 @@ module "baseline" {
   enable_rules                       = var.enable_rules
   backup_enabled                     = var.backup_enabled
   rds_multi_az                       = var.rds_multi_az
+  rds_instance_class                 = var.rds_instance_class
   inspector_enabled                  = var.inspector_enabled
   inspector_resource_types           = var.inspector_resource_types
   deployment_profile                 = var.deployment_profile
