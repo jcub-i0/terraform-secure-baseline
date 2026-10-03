@@ -84,10 +84,13 @@ normalize_route_tables_json() {
 validate_subnet_family() {
   local family_label="$1"
   local tag_name_prefix="$2"
-  local expected_map_json="$3"
+  local expected_ids_by_az_json="$3"
+  local expected_cidrs_by_az_json="$4"
   local live_family_json
-  local live_map_json
+  local live_ids_by_az_json
+  local live_cidrs_by_az_json
   local expected_count
+  local expected_cidr_count
   local live_count
   local public_ip_mapping_count
 
@@ -104,30 +107,56 @@ validate_subnet_family() {
       '
   )"
 
-  live_map_json="$(
+  live_ids_by_az_json="$(
     echo "$live_family_json" |
       jq -S -c 'reduce .[] as $subnet ({}; .[$subnet.AvailabilityZone] = $subnet.SubnetId)'
   )"
 
-  expected_count="$(echo "$expected_map_json" | jq 'length')"
+  live_cidrs_by_az_json="$(
+    echo "$live_family_json" |
+      jq -S -c 'reduce .[] as $subnet ({}; .[$subnet.AvailabilityZone] = $subnet.CidrBlock)'
+  )"
+
+  expected_count="$(echo "$expected_ids_by_az_json" | jq 'length')"
+  expected_cidr_count="$(echo "$expected_cidrs_by_az_json" | jq 'length')"
   live_count="$(echo "$live_family_json" | jq 'length')"
 
-  if [[ "$live_count" -ne "$expected_count" || "$live_map_json" != "$expected_map_json" ]]; then
+  if [[ "$expected_cidr_count" -ne "$expected_count" ]]; then
     jq -n \
       --arg family "$family_label" \
-      --argjson expected "$expected_map_json" \
-      --argjson live "$live_map_json" \
+      --argjson expected_ids_by_az "$expected_ids_by_az_json" \
+      --argjson expected_cidrs_by_az "$expected_cidrs_by_az_json" '
+        {
+          family: $family,
+          expected_subnet_ids_by_az: $expected_ids_by_az,
+          expected_subnet_cidrs_by_az: $expected_cidrs_by_az
+        }
+      '
+    fail "${family_label} Terraform subnet ID/CIDR maps do not have matching AZ inventories."
+  fi
+
+  if [[ "$live_count" -ne "$expected_count" ||
+        "$live_ids_by_az_json" != "$expected_ids_by_az_json" ||
+        "$live_cidrs_by_az_json" != "$expected_cidrs_by_az_json" ]]; then
+    jq -n \
+      --arg family "$family_label" \
+      --argjson expected_ids "$expected_ids_by_az_json" \
+      --argjson live_ids "$live_ids_by_az_json" \
+      --argjson expected_cidrs "$expected_cidrs_by_az_json" \
+      --argjson live_cidrs "$live_cidrs_by_az_json" \
       --argjson expected_count "$expected_count" \
       --argjson live_count "$live_count" '
         {
           family: $family,
           expected_count: $expected_count,
           live_count: $live_count,
-          expected_subnet_ids_by_az: $expected,
-          live_subnet_ids_by_az: $live
+          expected_subnet_ids_by_az: $expected_ids,
+          live_subnet_ids_by_az: $live_ids,
+          expected_subnet_cidrs_by_az: $expected_cidrs,
+          live_subnet_cidrs_by_az: $live_cidrs
         }
       '
-    fail "${family_label} subnet inventory does not exactly match Terraform network_topology."
+    fail "${family_label} subnet ID/CIDR inventory does not exactly match Terraform network_topology."
   fi
 
   public_ip_mapping_count="$(
@@ -144,7 +173,7 @@ validate_subnet_family() {
     fail "One or more ${family_label} subnets auto-assign public IPv4 addresses."
   fi
 
-  success "${family_label} subnet inventory exactly matches Terraform: ${live_count} subnet(s)"
+  success "${family_label} subnet ID/CIDR inventory exactly matches Terraform: ${live_count} subnet(s)"
 }
 
 validate_route_table_az_inventory() {
@@ -365,6 +394,50 @@ EXPECTED_AZS_JSON="$(
 
 EXPECTED_AZ_COUNT="$(echo "$EXPECTED_AZS_JSON" | jq 'length')"
 
+if ! EXPECTED_MAIN_VPC_CIDR="$(
+  topology_field main_vpc_cidr |
+    jq -r '
+      if type == "string" and length > 0
+      then .
+      else error("network_topology.main_vpc_cidr must be a non-empty string")
+      end
+    '
+)"; then
+  fail "Unable to resolve Terraform-owned main VPC CIDR from network_topology."
+fi
+
+EXPECTED_SUBNET_CIDRS_BY_AZ_JSON="$(topology_field subnet_cidrs_by_az)"
+
+if ! echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" |
+  jq -e \
+    --argjson expected_azs "$EXPECTED_AZS_JSON" '
+      type == "object"
+      and (keys | sort) == [
+        "compute_private",
+        "data_private",
+        "egress_public",
+        "endpoint_private",
+        "firewall_private",
+        "ingress_public",
+        "serverless_private"
+      ]
+      and all(.[];
+        type == "object"
+        and ((keys | sort) == $expected_azs)
+        and all(.[]; type == "string" and length > 0)
+      )
+    ' >/dev/null; then
+  fail "network_topology.subnet_cidrs_by_az must contain the exact seven subnet families with one CIDR for every expected Availability Zone."
+fi
+
+EXPECTED_INGRESS_PUBLIC_SUBNET_CIDRS_BY_AZ_JSON="$(echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" | jq -S -c '.ingress_public')"
+EXPECTED_EGRESS_PUBLIC_SUBNET_CIDRS_BY_AZ_JSON="$(echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" | jq -S -c '.egress_public')"
+EXPECTED_COMPUTE_SUBNET_CIDRS_BY_AZ_JSON="$(echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" | jq -S -c '.compute_private')"
+EXPECTED_DATA_SUBNET_CIDRS_BY_AZ_JSON="$(echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" | jq -S -c '.data_private')"
+EXPECTED_SERVERLESS_SUBNET_CIDRS_BY_AZ_JSON="$(echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" | jq -S -c '.serverless_private')"
+EXPECTED_ENDPOINT_SUBNET_CIDRS_BY_AZ_JSON="$(echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" | jq -S -c '.endpoint_private')"
+EXPECTED_FIREWALL_SUBNET_CIDRS_BY_AZ_JSON="$(echo "$EXPECTED_SUBNET_CIDRS_BY_AZ_JSON" | jq -S -c '.firewall_private')"
+
 EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field ingress_public_subnet_ids_by_az)"
 EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON="$(topology_field egress_public_subnet_ids_by_az)"
 EXPECTED_COMPUTE_SUBNET_IDS_BY_AZ_JSON="$(topology_field compute_private_subnet_ids_by_az)"
@@ -476,6 +549,42 @@ fi
 
 success "Resolved VPC ID: $VPC_ID"
 
+VPC_DESCRIPTION_JSON="$(
+  aws ec2 describe-vpcs \
+    "${aws_args[@]}" \
+    --vpc-ids "$VPC_ID" \
+    --output json
+)"
+
+if [[ "$(echo "$VPC_DESCRIPTION_JSON" | jq '.Vpcs | length')" -ne 1 ]]; then
+  echo "$VPC_DESCRIPTION_JSON" | jq '.Vpcs'
+  fail "Expected exactly one live VPC for Terraform-owned VPC ID: ${VPC_ID}"
+fi
+
+LIVE_MAIN_VPC_CIDR="$(
+  echo "$VPC_DESCRIPTION_JSON" |
+    jq -r '.Vpcs[0].CidrBlock // empty'
+)"
+
+[[ -n "$LIVE_MAIN_VPC_CIDR" ]] ||
+  fail "Unable to resolve the live main VPC CIDR for ${VPC_ID}."
+
+if [[ "$LIVE_MAIN_VPC_CIDR" != "$EXPECTED_MAIN_VPC_CIDR" ]]; then
+  jq -n \
+    --arg vpc_id "$VPC_ID" \
+    --arg expected "$EXPECTED_MAIN_VPC_CIDR" \
+    --arg live "$LIVE_MAIN_VPC_CIDR" '
+      {
+        vpc_id: $vpc_id,
+        expected_main_vpc_cidr: $expected,
+        live_main_vpc_cidr: $live
+      }
+    '
+  fail "Live main VPC CIDR does not exactly match Terraform network_topology.main_vpc_cidr."
+fi
+
+success "Live main VPC CIDR exactly matches Terraform: ${LIVE_MAIN_VPC_CIDR}"
+
 section "Resolving Internet Gateway"
 
 INTERNET_GATEWAYS_JSON="$(
@@ -538,37 +647,44 @@ ALL_SUBNETS_JSON="$(
 validate_subnet_family \
   "ingress-public" \
   "${NAME_PREFIX}-Ingress-Public-" \
-  "$EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON"
+  "$EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON" \
+  "$EXPECTED_INGRESS_PUBLIC_SUBNET_CIDRS_BY_AZ_JSON"
 
 validate_subnet_family \
   "egress-public" \
   "${NAME_PREFIX}-Egress-Public-" \
-  "$EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON"
+  "$EXPECTED_EGRESS_PUBLIC_SUBNET_IDS_BY_AZ_JSON" \
+  "$EXPECTED_EGRESS_PUBLIC_SUBNET_CIDRS_BY_AZ_JSON"
 
 validate_subnet_family \
   "compute-private" \
   "${NAME_PREFIX}-Compute-Private-" \
-  "$EXPECTED_COMPUTE_SUBNET_IDS_BY_AZ_JSON"
+  "$EXPECTED_COMPUTE_SUBNET_IDS_BY_AZ_JSON" \
+  "$EXPECTED_COMPUTE_SUBNET_CIDRS_BY_AZ_JSON"
 
 validate_subnet_family \
   "data-private" \
   "${NAME_PREFIX}-Data-Private-" \
-  "$EXPECTED_DATA_SUBNET_IDS_BY_AZ_JSON"
+  "$EXPECTED_DATA_SUBNET_IDS_BY_AZ_JSON" \
+  "$EXPECTED_DATA_SUBNET_CIDRS_BY_AZ_JSON"
 
 validate_subnet_family \
   "serverless-private" \
   "${NAME_PREFIX}-Serverless-Private-" \
-  "$EXPECTED_SERVERLESS_SUBNET_IDS_BY_AZ_JSON"
+  "$EXPECTED_SERVERLESS_SUBNET_IDS_BY_AZ_JSON" \
+  "$EXPECTED_SERVERLESS_SUBNET_CIDRS_BY_AZ_JSON"
 
 validate_subnet_family \
   "endpoint-private" \
   "${NAME_PREFIX}-Endpoint-Private-" \
-  "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON"
+  "$EXPECTED_ENDPOINT_SUBNET_IDS_BY_AZ_JSON" \
+  "$EXPECTED_ENDPOINT_SUBNET_CIDRS_BY_AZ_JSON"
 
 validate_subnet_family \
   "firewall-private" \
   "${NAME_PREFIX}-Firewall-Private-" \
-  "$EXPECTED_FIREWALL_SUBNET_IDS_BY_AZ_JSON"
+  "$EXPECTED_FIREWALL_SUBNET_IDS_BY_AZ_JSON" \
+  "$EXPECTED_FIREWALL_SUBNET_CIDRS_BY_AZ_JSON"
 
 EXPECTED_ALL_SUBNET_IDS_JSON="$(
   jq -cn \
@@ -631,12 +747,8 @@ COMPUTE_SUBNETS_JSON="$(
 COMPUTE_SUBNET_COUNT="$(echo "$COMPUTE_SUBNETS_JSON" | jq 'length')"
 
 COMPUTE_SUBNET_CIDRS_JSON="$(
-  echo "$COMPUTE_SUBNETS_JSON" |
-    jq '[.[] | {
-      az: .AvailabilityZone,
-      cidr: .CidrBlock,
-      subnet_id: .SubnetId
-    }]'
+  echo "$EXPECTED_COMPUTE_SUBNET_CIDRS_BY_AZ_JSON" |
+    jq -c 'to_entries | map({az: .key, cidr: .value})'
 )"
 
 section "Checking NAT Gateways"
@@ -1280,6 +1392,8 @@ AWS profile:                   ${AWS_PROFILE:-<default>}
 AWS region:                    ${AWS_REGION}
 Name prefix:                   ${NAME_PREFIX}
 VPC ID:                        ${VPC_ID}
+Expected main VPC CIDR:        ${EXPECTED_MAIN_VPC_CIDR}
+Live main VPC CIDR:            ${LIVE_MAIN_VPC_CIDR}
 effective_egress_mode:         ${EFFECTIVE_EGRESS_MODE}
 Expected AZ count:             ${EXPECTED_AZ_COUNT}
 Expected AZs:                  ${EXPECTED_AZS_JSON}
