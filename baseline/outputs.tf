@@ -1,6 +1,6 @@
 output "primary_region" {
   description = "AWS Region resolved from the workload provider."
-  value       = data.aws_region.current.id
+  value       = data.aws_region.current.region
 }
 
 output "vpc_id" {
