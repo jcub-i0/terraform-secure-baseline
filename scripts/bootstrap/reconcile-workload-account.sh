@@ -43,7 +43,9 @@ Terraform input requirements:
     environment_apply_github
 
   The resolved environment and environment_apply_github values must match
-  the target passed to this script.
+  the target passed to this script. AWS_REGION must be set to the workload
+  service region; Terraform backend region is resolved independently from
+  the workload/account backend files.
 
   See bootstrap/<env>/account/terraform.tfvars.example for the complete
   account-stack configuration.
@@ -71,11 +73,13 @@ Options:
 Examples:
   # Use terraform.tfvars, *.auto.tfvars, TF_VAR_* values, and defaults.
   AWS_PROFILE=dev \
+  AWS_REGION="<WORKLOAD-SERVICE-REGION>" \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev
 
   # Use an explicit variable file and apply the saved plan.
   AWS_PROFILE=dev \
+  AWS_REGION="<WORKLOAD-SERVICE-REGION>" \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev \
     --var-file=terraform.tfvars \
@@ -83,18 +87,21 @@ Examples:
 
   # Save a plan for later review and application.
   AWS_PROFILE=dev \
+  AWS_REGION="<WORKLOAD-SERVICE-REGION>" \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev \
     --plan-file=/tmp/dev-account-reconciliation.tfplan
 
   # Apply an existing reviewed plan.
   AWS_PROFILE=dev \
+  AWS_REGION="<WORKLOAD-SERVICE-REGION>" \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev \
     --apply-plan=/tmp/dev-account-reconciliation.tfplan
 
   # Pass an individual variable explicitly.
   AWS_PROFILE=dev \
+  AWS_REGION="<WORKLOAD-SERVICE-REGION>" \
   EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   ./scripts/bootstrap/reconcile-workload-account.sh dev \
     --var='branches_apply_github=["main"]'
@@ -393,20 +400,22 @@ if [[ "$ENV_BACKEND_REGION" != "$ACCOUNT_BACKEND_REGION" ]]; then
 fi
 
 success \
-  "Workload and account backends use the same region: ${ENV_BACKEND_REGION}"
+  "Workload and account backends use the same state region: ${ENV_BACKEND_REGION}"
 
-AWS_REGION="${AWS_REGION:-$ENV_BACKEND_REGION}"
+STATE_REGION="$ENV_BACKEND_REGION"
+
+[[ -n "${AWS_REGION:-}" ]] ||
+  fail "AWS_REGION must be explicitly set to the workload service region for account reconciliation."
+
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
+
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 EXPECTED_GITHUB_REPOSITORY_INPUT="$(
   printf '%s' \
     "${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
 )"
-
-if [[ "$AWS_REGION" != "$ENV_BACKEND_REGION" ]]; then
-  fail \
-    "AWS_REGION (${AWS_REGION}) does not match backend region (${ENV_BACKEND_REGION})"
-fi
 
 AWS_ARGS=(--region "$AWS_REGION")
 
@@ -426,7 +435,8 @@ info "Repository root: ${REPO_ROOT}"
 info "Target environment: ${TARGET}"
 info "Workload stack: ${ENV_DIR}"
 info "Bootstrap account stack: ${ACCOUNT_DIR}"
-info "AWS region: ${AWS_REGION}"
+info "AWS service region: ${AWS_REGION}"
+info "State backend region: ${STATE_REGION}"
 info "AWS profile: ${AWS_PROFILE:-default credential chain}"
 info "Execution mode: ${EXECUTION_MODE}"
 
@@ -629,14 +639,9 @@ if [[ "$RESOLVED_ENVIRONMENT" != "$TARGET" ]]; then
     "Resolved environment (${RESOLVED_ENVIRONMENT}) must match target (${TARGET})"
 fi
 
-if [[ "$RESOLVED_PRIMARY_REGION" != "$ENV_BACKEND_REGION" ]]; then
+if [[ "$RESOLVED_PRIMARY_REGION" != "$AWS_REGION" ]]; then
   fail \
-    "Resolved primary_region (${RESOLVED_PRIMARY_REGION}) does not match workload backend region (${ENV_BACKEND_REGION})"
-fi
-
-if [[ "$RESOLVED_PRIMARY_REGION" != "$ACCOUNT_BACKEND_REGION" ]]; then
-  fail \
-    "Resolved primary_region (${RESOLVED_PRIMARY_REGION}) does not match account backend region (${ACCOUNT_BACKEND_REGION})"
+    "Resolved primary_region (${RESOLVED_PRIMARY_REGION}) does not match AWS_REGION (${AWS_REGION})"
 fi
 
 if [[ "$RESOLVED_ENABLE_GITHUB_OIDC" != "true" ]]; then
@@ -690,7 +695,8 @@ Terraform reconciliation plan:
 
   Target:               ${TARGET}
   AWS account:          ${ACTIVE_ACCOUNT_ID}
-  AWS region:           ${AWS_REGION}
+  AWS service region:   ${AWS_REGION}
+  State backend region: ${STATE_REGION}
   GitHub repository:    ${RESOLVED_GITHUB_REPOSITORY}
   Lambda CMK:           ${LAMBDA_CMK_ARN}
   Secrets Manager CMK:  ${SECRETS_MANAGER_CMK_ARN}
@@ -707,7 +713,8 @@ if [[ "$APPLY" != "true" ]]; then
   cat <<SUMMARY
 Environment:                        ${TARGET}
 AWS profile:                        ${AWS_PROFILE:-<default>}
-AWS region:                         ${AWS_REGION}
+AWS service region:                 ${AWS_REGION}
+State backend region:               ${STATE_REGION}
 AWS account ID:                     ${ACTIVE_ACCOUNT_ID}
 GitHub repository:                  ${RESOLVED_GITHUB_REPOSITORY}
 Execution mode:                     plan-only
@@ -729,6 +736,7 @@ NEXT_STEPS
 Apply the exact saved plan with:
 
   AWS_PROFILE=${AWS_PROFILE:-<profile>} \\
+  AWS_REGION=${AWS_REGION} \\
   EXPECTED_ACCOUNT_ID=${ACTIVE_ACCOUNT_ID} \\
   ./scripts/bootstrap/reconcile-workload-account.sh ${TARGET} \\
     --apply-plan="${PLAN_FILE}"
@@ -739,6 +747,7 @@ NEXT_STEPS
 Rerun with --apply and reuse the same --var and --var-file options, if any:
 
   AWS_PROFILE=${AWS_PROFILE:-<profile>} \\
+  AWS_REGION=${AWS_REGION} \\
   EXPECTED_ACCOUNT_ID=${ACTIVE_ACCOUNT_ID} \\
   ./scripts/bootstrap/reconcile-workload-account.sh ${TARGET} --apply
 
@@ -800,7 +809,8 @@ section "Reconciliation summary"
 cat <<SUMMARY
 Environment:                         ${TARGET}
 AWS profile:                         ${AWS_PROFILE:-<default>}
-AWS region:                          ${AWS_REGION}
+AWS service region:                  ${AWS_REGION}
+State backend region:                ${STATE_REGION}
 AWS account ID:                      ${ACTIVE_ACCOUNT_ID}
 GitHub repository:                   ${RESOLVED_GITHUB_REPOSITORY}
 Execution mode:                      ${EXECUTION_MODE}

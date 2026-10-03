@@ -2,6 +2,8 @@
 # STATE MODULE
 ###############
 
+data "aws_region" "current" {}
+
 # KMS KEY FOR STATE S3 BUCKET
 resource "aws_kms_key" "state" {
   description             = "CMK for the the State S3 bucket"
@@ -41,7 +43,7 @@ resource "aws_kms_key" "state" {
         Condition = {
           StringEquals = {
             "kms:CallerAccount" = var.account_id
-            "kms:ViaService"    = "s3.${var.primary_region}.amazonaws.com"
+            "kms:ViaService"    = "s3.${data.aws_region.current.region}.amazonaws.com"
           }
         }
       },

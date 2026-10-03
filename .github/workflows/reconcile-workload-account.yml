@@ -500,13 +500,23 @@ jobs:
           STATE_BUCKET_ARN: ${{ vars.TF_STATE_BUCKET_ARN }}
           STATE_CMK_ARN: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
           STATE_BACKEND_KEY: ${{ vars.STATE_STACK_BACKEND_KEY }}
-          AWS_REGION: ${{ vars.PRIMARY_REGION }}
         run: |
           set -euo pipefail
 
           STATE_DIR="bootstrap/${TARGET_ENVIRONMENT}/state"
           BACKEND_FILE="${STATE_DIR}/backend.tf"
+          BACKEND_TEMPLATE="${STATE_DIR}/backend.tf.migrated.example"
           STATE_BUCKET="${STATE_BUCKET_ARN#arn:aws:s3:::}"
+
+          [[ -f "${BACKEND_TEMPLATE}" ]] ||
+            { echo "::error::State backend template not found: ${BACKEND_TEMPLATE}"; exit 1; }
+
+          STATE_REGION="$(
+            sed -nE \
+              's/^[[:space:]]*region[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
+              "${BACKEND_TEMPLATE}" |
+              head -n 1
+          )"
 
           [[ -n "${STATE_BUCKET}" ]] ||
             { echo "::error::Unable to resolve state bucket name"; exit 1; }
@@ -514,12 +524,15 @@ jobs:
           [[ -n "${STATE_BACKEND_KEY}" ]] ||
             { echo "::error::STATE_STACK_BACKEND_KEY is required"; exit 1; }
 
+          [[ -n "${STATE_REGION}" ]] ||
+            { echo "::error::Unable to resolve state region from ${BACKEND_TEMPLATE}"; exit 1; }
+
           cat > "${BACKEND_FILE}" <<EOF
           terraform {
             backend "s3" {
               bucket       = "${STATE_BUCKET}"
               key          = "${STATE_BACKEND_KEY}"
-              region       = "${AWS_REGION}"
+              region       = "${STATE_REGION}"
               encrypt      = true
               kms_key_id   = "${STATE_CMK_ARN}"
               use_lockfile = true

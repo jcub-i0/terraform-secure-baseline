@@ -14,11 +14,6 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "primary_region" {
-  type    = string
-  default = "us-east-1"
-}
-
 variable "account_id" {
   description = "ID of the AWS account managing this environment"
   type        = string
