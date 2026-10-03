@@ -8,8 +8,11 @@ variable "environment" {
   type        = string
 }
 
-variable "primary_region" {
-  type = string
+variable "state_region" {
+  description = "AWS Region hosting the Terraform state bucket and KMS key."
+  type        = string
+  default     = "us-east-1"
+  nullable    = false
 }
 
 variable "bucket_admin_principals" {
