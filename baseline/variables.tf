@@ -577,6 +577,18 @@ variable "alb_certificate_arn" {
 
     error_message = "alb_certificate_arn must be provided when any deployable ECS service configures ingress."
   }
+
+  validation {
+    condition = (
+      var.alb_certificate_arn == null ||
+      try(
+        split(":", var.alb_certificate_arn)[3] == var.primary_region,
+        false
+      )
+    )
+
+    error_message = "alb_certificate_arn must reference an ACM certificate in primary_region."
+  }
 }
 
 variable "alb_ingress_cidrs" {

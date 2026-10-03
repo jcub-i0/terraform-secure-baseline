@@ -11,6 +11,58 @@
 
 data "aws_partition" "current" {}
 
+data "aws_region" "current" {
+  lifecycle {
+    postcondition {
+      condition     = self.region == var.primary_region
+      error_message = "primary_region must match the AWS provider region."
+    }
+
+    postcondition {
+      condition = (
+        !local.effective_guardduty_fargate_runtime_monitoring_enabled ||
+        contains(
+          keys(local.guardduty_fargate_agent_ecr_account_ids),
+          self.region
+        )
+      )
+
+      error_message = "GuardDuty Fargate Runtime Monitoring is enabled, but the AWS provider region is not supported by the baseline's GuardDuty agent ECR account mapping."
+    }
+  }
+}
+
+data "aws_availability_zones" "standard" {
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+
+  lifecycle {
+    postcondition {
+      condition = (
+        length(self.names) >= (
+          var.deployment_profile == "production" ? 3 : 2
+        )
+      )
+
+      error_message = "The selected primary_region does not expose enough standard Availability Zones for the deployment profile."
+    }
+
+    postcondition {
+      condition = (
+        var.azs == null ||
+        alltrue([
+          for az in var.azs :
+          contains(self.names, az)
+        ])
+      )
+
+      error_message = "Every explicit azs entry must be a standard Availability Zone in primary_region."
+    }
+  }
+}
+
 ###############
 # MODULE CALLS
 ###############
@@ -78,7 +130,7 @@ module "storage" {
   cloud_name     = var.cloud_name
   name_prefix    = local.name_prefix
   environment    = var.environment
-  primary_region = var.primary_region
+  primary_region = data.aws_region.current.region
   vpc_id         = module.networking.vpc_id
   account_id     = var.account_id
   random_id      = var.random_id
@@ -112,7 +164,7 @@ module "iam" {
   name_prefix    = local.name_prefix
   environment    = var.environment
   account_id     = var.account_id
-  primary_region = var.primary_region
+  primary_region = data.aws_region.current.region
 
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   secops_topic_arn         = module.monitoring.secops_topic_arn
@@ -142,7 +194,7 @@ module "security" {
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   account_id                   = var.account_id
-  primary_region               = var.primary_region
+  primary_region               = data.aws_region.current.region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   manage_securityhub_cspm_locally = var.manage_securityhub_cspm_locally
@@ -216,7 +268,7 @@ module "automation" {
   account_id     = var.account_id
   name_prefix    = local.name_prefix
   environment    = var.environment
-  primary_region = var.primary_region
+  primary_region = data.aws_region.current.region
 
   vpc_id                        = module.networking.vpc_id
   serverless_private_subnet_ids = module.networking.serverless_private_subnet_ids_list
@@ -251,7 +303,7 @@ module "vpc_endpoints" {
   vpc_id         = module.networking.vpc_id
   environment    = var.environment
   account_id     = var.account_id
-  primary_region = var.primary_region
+  primary_region = data.aws_region.current.region
 
   compute_private_subnet_ids_map       = module.networking.compute_private_subnet_ids_map
   serverless_private_subnet_ids_map    = module.networking.serverless_private_subnet_ids_map
@@ -338,7 +390,7 @@ module "ecs_service" {
 
   name_prefix    = local.name_prefix
   environment    = var.environment
-  primary_region = var.primary_region
+  primary_region = data.aws_region.current.region
 
   availability_zone_rebalancing = (
     local.effective_ecs_availability_zone_rebalancing

@@ -1,3 +1,8 @@
+output "primary_region" {
+  description = "AWS Region resolved from the workload provider."
+  value       = module.baseline.primary_region
+}
+
 output "vpc_id" {
   description = "ID of the main VPC"
   value       = module.baseline.vpc_id

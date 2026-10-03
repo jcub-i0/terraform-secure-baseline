@@ -146,7 +146,7 @@ locals {
 
   ecs_log_group_arns = {
     for service_name in keys(local.deployable_ecs_services) :
-    service_name => "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:log-group:/aws/ecs/${local.name_prefix}/${service_name}"
+    service_name => "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.id}:${var.account_id}:log-group:/aws/ecs/${local.name_prefix}/${service_name}"
   }
 
   guardduty_fargate_agent_ecr_account_ids = {
@@ -185,15 +185,22 @@ locals {
     "us-west-2"      = "733349766148"
   }
 
+  guardduty_fargate_region_supported = contains(
+    keys(local.guardduty_fargate_agent_ecr_account_ids),
+    data.aws_region.current.region
+  )
+
   guardduty_fargate_agent_ecr_account_id = (
-    local.effective_guardduty_fargate_runtime_monitoring_enabled
-    ? local.guardduty_fargate_agent_ecr_account_ids[var.primary_region]
+    local.effective_guardduty_fargate_runtime_monitoring_enabled &&
+    local.guardduty_fargate_region_supported
+    ? local.guardduty_fargate_agent_ecr_account_ids[data.aws_region.current.region]
     : null
   )
 
   guardduty_fargate_agent_ecr_repository_arn = (
-    local.effective_guardduty_fargate_runtime_monitoring_enabled
-    ? "arn:${data.aws_partition.current.partition}:ecr:${var.primary_region}:${local.guardduty_fargate_agent_ecr_account_id}:repository/aws-guardduty-agent-fargate"
+    local.effective_guardduty_fargate_runtime_monitoring_enabled &&
+    local.guardduty_fargate_region_supported
+    ? "arn:${data.aws_partition.current.partition}:ecr:${data.aws_region.current.region}:${local.guardduty_fargate_agent_ecr_account_id}:repository/aws-guardduty-agent-fargate"
     : null
   )
 
@@ -344,17 +351,21 @@ locals {
   # ---------------------------------------------------------------------------
   # Networking
   # ---------------------------------------------------------------------------
-  profile_default_azs = (
-    local.is_production_profile
-    ? [
-      "us-east-1a",
-      "us-east-1b",
-      "us-east-1c",
-    ]
-    : [
-      "us-east-1a",
-      "us-east-1b",
-    ]
+  profile_default_az_count = (
+    local.is_production_profile ? 3 : 2
+  )
+
+  standard_availability_zones = sort(
+    data.aws_availability_zones.standard.names
+  )
+
+  profile_default_azs = slice(
+    local.standard_availability_zones,
+    0,
+    min(
+      local.profile_default_az_count,
+      length(local.standard_availability_zones)
+    )
   )
 
   effective_azs = (
