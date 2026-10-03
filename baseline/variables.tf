@@ -163,11 +163,17 @@ variable "azs" {
 
     error_message = "production requires at least three Availability Zones; development and minimal require at least two."
   }
+}
+
+variable "subnet_cidrs" {
+  description = "Optional /24 CIDR blocks for each workload subnet family. Null derives the profile-default topology from main_vpc_cidr."
+  type        = map(list(string))
+  default     = null
 
   validation {
     condition = (
-      var.azs == null ||
       var.subnet_cidrs != null ||
+      var.azs == null ||
       length(var.azs) == (
         var.deployment_profile == "production" ? 3 : 2
       )
@@ -175,12 +181,6 @@ variable "azs" {
 
     error_message = "When subnet_cidrs is null, azs must contain exactly three Availability Zones for production or exactly two for development/minimal. Supply subnet_cidrs explicitly to use additional Availability Zones."
   }
-}
-
-variable "subnet_cidrs" {
-  description = "Optional /24 CIDR blocks for each workload subnet family. Null derives the profile-default topology from main_vpc_cidr."
-  type        = map(list(string))
-  default     = null
 
   validation {
     condition = var.subnet_cidrs == null ? true : (
