@@ -68,8 +68,10 @@ ecs_runtime_validate_identity
 ecs_runtime_validate_cluster
 ecs_runtime_resolve_service_networking
 
-# Validated task ports and attachments are consumed by ingress validation.
+# Validated task ports and attachments are consumed by sourced ECS runtime helpers.
+# shellcheck disable=SC2034 # Populated and consumed by sourced ecs-runtime helpers.
 declare -A SERVICE_CONTAINER_PORTS=()
+# shellcheck disable=SC2034 # Populated and consumed by sourced ecs-runtime helpers.
 declare -A SERVICE_TARGET_GROUP_ARNS=()
 
 ecs_runtime_validate_services
