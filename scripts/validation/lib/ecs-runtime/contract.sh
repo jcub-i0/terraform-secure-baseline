@@ -13,7 +13,13 @@ ecs_runtime_load_contract() {
   env_dir="$(get_environment_dir "$repo_root" "$ENV_NAME")"
   require_directory "$env_dir"
 
-  OUTPUTS_JSON="$(terraform_output_json "$env_dir")"
+  if ! OUTPUTS_JSON="$(terraform_output_json "$env_dir")"; then
+    fail "Unable to resolve Terraform outputs (including primary_region) from ${env_dir}."
+  fi
+
+  AWS_REGION="$(resolve_workload_region "$env_dir" "$OUTPUTS_JSON")"
+  export AWS_REGION
+  export AWS_DEFAULT_REGION="$AWS_REGION"
 
   if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
     fail "No Terraform outputs found for ${env_dir}. Has this environment been applied?"

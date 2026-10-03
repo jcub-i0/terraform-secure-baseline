@@ -8,7 +8,7 @@
 # Usage:
 #   ./scripts/validation/validate-baseline.sh dev
 #
-# Optional:
+# Optional (AWS_REGION must match Terraform primary_region):
 #   AWS_PROFILE=dev AWS_REGION=us-east-1 ./scripts/validation/validate-baseline.sh dev
 #
 # Optional override:
@@ -25,7 +25,6 @@ source "${SCRIPT_DIR}/lib/common.sh"
 ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
@@ -36,6 +35,12 @@ if [[ -z "$ENV_NAME" ]]; then
 fi
 
 require_env_name "$ENV_NAME"
+
+REPO_ROOT="$(get_repo_root)"
+ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
+AWS_REGION="$(resolve_workload_region "$ENV_DIR")"
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 section "${CLOUD_NAME} Full Validation Suite"
 

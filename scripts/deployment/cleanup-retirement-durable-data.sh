@@ -64,7 +64,8 @@ Options:
   --confirm <token>            Required for --mode apply. Must be exactly:
                                DELETE-DURABLE-DATA
   --region <region>            AWS Region. Default: $AWS_REGION,
-                               $AWS_DEFAULT_REGION, or us-east-1.
+                               $AWS_DEFAULT_REGION, or Terraform primary_region.
+                               Must match Terraform primary_region.
   --profile <profile>          AWS CLI profile. Default: $AWS_PROFILE.
   --expected-account-id <id>   Required 12-digit workload account ID.
                                Default: $EXPECTED_ACCOUNT_ID.
@@ -79,7 +80,7 @@ USAGE
 ENVIRONMENT=""
 MODE="plan"
 CONFIRM=""
-AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
+AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
@@ -150,10 +151,6 @@ if [[ "$MODE" == "apply" && "$CONFIRM" != "DELETE-DURABLE-DATA" ]]; then
   fail "--mode apply requires --confirm DELETE-DURABLE-DATA."
 fi
 
-aws_args=()
-[[ -z "$AWS_PROFILE" ]] || aws_args+=(--profile "$AWS_PROFILE")
-[[ -z "$AWS_REGION" ]] || aws_args+=(--region "$AWS_REGION")
-
 section "Production Retirement Durable-Data ${MODE^}"
 section "Checking local prerequisites"
 
@@ -174,11 +171,35 @@ info "Environment: ${ENVIRONMENT}"
 info "Environment dir: ${ENV_DIR}"
 info "Mode: ${MODE}"
 info "AWS profile: ${AWS_PROFILE:-<default>}"
-info "AWS region: ${AWS_REGION}"
 
 section "Resolving Terraform retirement contract"
 
-OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"
+if ! OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"; then
+  fail "Unable to resolve Terraform outputs (including primary_region) from ${ENV_DIR}."
+fi
+
+# Use the same deployed region as the retirement contract and reject stale inputs.
+if ! TERRAFORM_REGION="$(
+  jq -ers 'select(length == 1) | .[0].primary_region.value | select(type == "string" and test("\\A[a-z0-9]+(-[a-z0-9]+)+-[0-9]+\\z"))' <<< "$OUTPUTS_JSON"
+)"; then
+  fail "Unable to resolve Terraform primary_region from ${ENV_DIR}: expected a non-empty AWS region string."
+fi
+
+if [[ -n "$AWS_REGION" && "$AWS_REGION" != "$TERRAFORM_REGION" ]]; then
+  fail "AWS region mismatch: requested ${AWS_REGION}, but Terraform primary_region is ${TERRAFORM_REGION}."
+fi
+
+AWS_REGION="$TERRAFORM_REGION"
+
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
+
+info "AWS region: ${AWS_REGION}"
+
+aws_args=()
+
+[[ -z "$AWS_PROFILE" ]] || aws_args+=(--profile "$AWS_PROFILE")
+[[ -z "$AWS_REGION" ]] || aws_args+=(--region "$AWS_REGION")
 
 [[ -n "$OUTPUTS_JSON" && "$OUTPUTS_JSON" != "{}" ]] ||
   fail "No Terraform outputs found for ${ENV_DIR}. Has retirement Stage 1 been applied?"

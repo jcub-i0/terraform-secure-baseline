@@ -106,7 +106,7 @@ Optional:
   --cloud-name <name>            Baseline cloud name.
                                  Default: $CLOUD_NAME or tf-secure-baseline
   --region <region>              AWS Region.
-                                 Default: $AWS_REGION or us-east-1
+                                 Required unless $AWS_REGION is set.
   --profile <profile>            AWS CLI profile.
                                  Default: $AWS_PROFILE
   --expected-account-id <id>     Expected 12-digit AWS account ID.
@@ -167,7 +167,7 @@ IMAGE_TAG=""
 PLATFORM="linux/amd64"
 
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_REGION="${AWS_REGION:-}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
@@ -256,7 +256,9 @@ require_non_empty "$SERVICE" "service"
 require_non_empty "$REPOSITORY_KEY" "repository-name"
 require_non_empty "$BUILD_CONTEXT" "build-context"
 require_non_empty "$CLOUD_NAME" "cloud-name"
-require_non_empty "$AWS_REGION" "region"
+[[ -n "$AWS_REGION" ]] || fail "AWS region is required: supply --region or AWS_REGION."
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 require_environment "$ENVIRONMENT"
 

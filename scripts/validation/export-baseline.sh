@@ -11,7 +11,6 @@ source "${SCRIPT_DIR}/lib/common.sh"
 ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 if [[ -z "$ENV_NAME" ]]; then
@@ -19,6 +18,12 @@ if [[ -z "$ENV_NAME" ]]; then
 fi
 
 require_env_name "$ENV_NAME"
+
+REPO_ROOT="$(get_repo_root)"
+ENV_DIR="$(get_environment_dir "$REPO_ROOT" "$ENV_NAME")"
+AWS_REGION="$(resolve_workload_region "$ENV_DIR")"
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
@@ -33,7 +38,6 @@ fi
 VALIDATION_TIME="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
 TIMESTAMP="$(date +"%Y-%m-%dT%H%M%S")"
 
-REPO_ROOT="$(get_repo_root)"
 OUTPUT_DIR="${REPO_ROOT}/validation-results/${ENV_NAME}/baseline/${TIMESTAMP}"
 RELATIVE_OUTPUT_DIR="validation-results/${ENV_NAME}/baseline/${TIMESTAMP}"
 SUMMARY_JSON="${OUTPUT_DIR}/summary.json"

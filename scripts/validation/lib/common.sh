@@ -167,6 +167,37 @@ get_aws_caller_arn() {
   fi
 }
 
+# Resolve against deployed state, never the AWS profile or backend region.
+# An optional output snapshot avoids reading state twice in standalone validators.
+# Diagnostics go to stderr; stdout contains only the region.
+resolve_workload_region() {
+  local env_dir="$1"
+  local outputs_json="${2:-}"
+  local terraform_region
+
+  require_command terraform
+  require_command jq
+  require_directory "$env_dir"
+
+  if [[ -z "$outputs_json" ]]; then
+    if ! outputs_json="$(terraform_output_json "$env_dir")"; then
+      fail "Unable to resolve Terraform primary_region from ${env_dir}."
+    fi
+  fi
+
+  if ! terraform_region="$(
+    jq -ers 'select(length == 1) | .[0].primary_region.value | select(type == "string" and test("\\A[a-z0-9]+(-[a-z0-9]+)+-[0-9]+\\z"))' <<< "$outputs_json"
+  )"; then
+    fail "Unable to resolve Terraform primary_region from ${env_dir}: expected a non-empty AWS region string."
+  fi
+
+  if [[ "${AWS_REGION+x}" == "x" && "$AWS_REGION" != "$terraform_region" ]]; then
+    fail "AWS_REGION mismatch. Terraform primary_region is ${terraform_region}, but AWS_REGION is ${AWS_REGION:-<empty>}."
+  fi
+
+  printf '%s\n' "$terraform_region"
+}
+
 # -----------------------------------------------------------------------------
 # Terraform helpers
 # -----------------------------------------------------------------------------

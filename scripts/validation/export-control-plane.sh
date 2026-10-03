@@ -9,7 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
+# This layer has its own regional scope; do not infer it from workload state.
+[[ -n "${AWS_REGION:-}" ]] || fail "AWS_REGION must be explicitly set for control-plane validation."
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
