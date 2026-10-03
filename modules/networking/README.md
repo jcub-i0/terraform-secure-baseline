@@ -577,6 +577,7 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 
 | Output | Value |
 |---|---|
+| `vpc_id` | Main VPC ID |
 | `main_vpc_id` | Main VPC ID |
 | `internet_gateway_id` | Internet Gateway ID |
 
