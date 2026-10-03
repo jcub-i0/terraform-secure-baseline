@@ -9,6 +9,12 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "main_vpc_cidr" {
+  description = "Optional workload VPC CIDR override. Null defers to the baseline-owned 10.0.0.0/16 default."
+  type        = string
+  default     = null
+}
+
 variable "azs" {
   description = "Optional Availability Zone override. Null uses the deployment_profile default."
   type        = list(string)

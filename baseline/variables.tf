@@ -121,9 +121,22 @@ variable "random_id" {
 }
 
 variable "main_vpc_cidr" {
-  description = "CIDR block for the primary VPC"
-  default     = "10.0.0.0/16"
+  description = "Canonical IPv4 /16 CIDR block for the workload VPC. Default subnet families are derived from this CIDR."
   type        = string
+  default     = "10.0.0.0/16"
+  nullable    = false
+
+  validation {
+    condition = try(
+      var.main_vpc_cidr == trimspace(var.main_vpc_cidr) &&
+      tonumber(split("/", var.main_vpc_cidr)[1]) == 16 &&
+      length(regexall("\\.", split("/", var.main_vpc_cidr)[0])) == 3 &&
+      cidrhost(var.main_vpc_cidr, 0) == split("/", var.main_vpc_cidr)[0],
+      false
+    )
+
+    error_message = "main_vpc_cidr must be a canonical IPv4 /16 CIDR such as 10.0.0.0/16 or 172.16.0.0/16."
+  }
 }
 
 variable "azs" {

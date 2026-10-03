@@ -82,6 +82,15 @@ output "network_topology" {
   description = "Terraform-managed workload network topology keyed by subnet class and Availability Zone"
 
   value = {
+
+    subnet_cidrs_by_az = {
+      for family, cidrs in local.effective_subnet_cidrs :
+      family => {
+        for index, az in local.effective_azs :
+        az => cidrs[index]
+      }
+    }
+
     availability_zones = sort(
       keys(module.networking.compute_private_subnet_ids_map)
     )
