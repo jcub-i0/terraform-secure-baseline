@@ -132,6 +132,9 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
+STATE_REGION=""
+state_aws_args=()
+
 # -----------------------------------------------------------------------------
 # Local helpers
 # -----------------------------------------------------------------------------
@@ -347,10 +350,19 @@ validate_backend_state_config() {
     fail "Account and workload backends use the same state key: ${account_backend_key}"
   fi
 
-  if [[ "$account_backend_region" == "$AWS_REGION" ]]; then
-    success "Backend region matches AWS_REGION: ${AWS_REGION}"
+  STATE_REGION="$account_backend_region"
+  state_aws_args=()
+
+  if [[ -n "$AWS_PROFILE" ]]; then
+    state_aws_args+=(--profile "$AWS_PROFILE")
+  fi
+
+  state_aws_args+=(--region "$STATE_REGION")
+
+  if [[ "$STATE_REGION" == "$AWS_REGION" ]]; then
+    success "State backend region matches bootstrap service region: ${AWS_REGION}"
   else
-    warn "Backend region (${account_backend_region}) differs from AWS_REGION (${AWS_REGION}). AWS API validation will still use AWS_REGION."
+    info "State backend region (${STATE_REGION}) differs from bootstrap service region (${AWS_REGION}); this is supported."
   fi
 
   TF_STATE_BUCKET_NAME="$account_backend_bucket"
@@ -456,11 +468,11 @@ validate_state_stack_remote_backend() {
       "State stack backend region mismatch. State: ${state_backend_region}; account: ${account_backend_region}; workload: ${env_backend_region}"
   fi
 
-  if [[ "$state_backend_region" == "$AWS_REGION" ]]; then
-    success "State stack backend region matches AWS_REGION: ${AWS_REGION}"
+  if [[ "$state_backend_region" == "$STATE_REGION" ]]; then
+    success "State stack backend region matches resolved state region: ${STATE_REGION}"
   else
     handle_state_stack_remote_issue \
-      "State stack backend region (${state_backend_region}) differs from AWS_REGION (${AWS_REGION})"
+      "State stack backend region (${state_backend_region}) differs from resolved state region (${STATE_REGION})"
   fi
 
   if [[ "$state_backend_key" != "$account_backend_key" &&
@@ -472,7 +484,7 @@ validate_state_stack_remote_backend() {
   fi
 
   if aws s3api head-object \
-    "${aws_args[@]}" \
+    "${state_aws_args[@]}" \
     --bucket "$state_backend_bucket" \
     --key "$state_backend_key" >/dev/null 2>&1; then
     success "State stack object exists and is readable: s3://${state_backend_bucket}/${state_backend_key}"
@@ -521,7 +533,7 @@ check_s3_state_bucket() {
   section "Checking bootstrap state S3 bucket"
 
   aws s3api head-bucket \
-    "${aws_args[@]}" \
+    "${state_aws_args[@]}" \
     --bucket "$bucket_name" >/dev/null
   success "State bucket exists: ${bucket_name}"
 
@@ -531,7 +543,7 @@ check_s3_state_bucket() {
   local versioning_status
   versioning_status="$(
     aws s3api get-bucket-versioning \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --bucket "$bucket_name" \
       --query 'Status' \
       --output text
@@ -546,7 +558,7 @@ check_s3_state_bucket() {
   local public_access_block_json
   public_access_block_json="$(
     aws s3api get-public-access-block \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --bucket "$bucket_name" \
       --output json
   )"
@@ -572,7 +584,7 @@ check_s3_state_bucket() {
   local encryption_json
   encryption_json="$(
     aws s3api get-bucket-encryption \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --bucket "$bucket_name" \
       --output json
   )"
@@ -600,7 +612,7 @@ check_s3_state_bucket() {
 
   TF_STATE_BUCKET_CMK_ARN="$(
     aws kms describe-key \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --key-id "$bucket_kms_key_id" \
       --query 'KeyMetadata.Arn' \
       --output text 2>/dev/null || true
@@ -618,7 +630,7 @@ check_kms_key() {
   local key_json
   key_json="$(
     aws kms describe-key \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --key-id "$kms_key_arn" \
       --output json
   )"
@@ -1543,7 +1555,8 @@ section "Bootstrap validation summary"
 cat <<SUMMARY
 Environment:                       ${ENV_NAME}
 AWS profile:                       ${AWS_PROFILE:-<default>}
-AWS region:                        ${AWS_REGION}
+AWS service region:                ${AWS_REGION}
+State backend region:              ${STATE_REGION}
 AWS account ID:                    ${ACTIVE_ACCOUNT_ID}
 Name prefix:                       ${NAME_PREFIX}
 State bucket:                      ${TF_STATE_BUCKET_NAME}

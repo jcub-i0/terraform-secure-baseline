@@ -112,6 +112,9 @@ if [[ -n "$AWS_REGION" ]]; then
   aws_args+=(--region "$AWS_REGION")
 fi
 
+STATE_REGION=""
+state_aws_args=()
+
 # -----------------------------------------------------------------------------
 # Local helpers
 # -----------------------------------------------------------------------------
@@ -269,6 +272,31 @@ get_backend_string_value() {
     head -n 1
 }
 
+resolve_state_region() {
+  local backend_file="$1"
+
+  STATE_REGION="$(
+    get_backend_string_value \
+      "$backend_file" \
+      region
+  )"
+
+  require_non_empty \
+    "$STATE_REGION" \
+    "control-plane state region from ${backend_file}"
+
+  state_aws_args=()
+
+  if [[ -n "$AWS_PROFILE" ]]; then
+    state_aws_args+=(--profile "$AWS_PROFILE")
+  fi
+
+  state_aws_args+=(--region "$STATE_REGION")
+
+  info "Control-plane service region: ${AWS_REGION}"
+  info "Control-plane state region: ${STATE_REGION}"
+}
+
 handle_state_stack_remote_issue() {
   local message="$1"
 
@@ -344,15 +372,15 @@ validate_state_stack_remote_backend() {
       "Control-plane state backend bucket mismatch. Backend: ${backend_bucket}; state output: ${expected_bucket_name}"
   fi
 
-  if [[ "$backend_region" == "$AWS_REGION" ]]; then
-    success "Control-plane state backend region matches AWS_REGION: ${AWS_REGION}"
+  if [[ "$backend_region" == "$STATE_REGION" ]]; then
+    success "Control-plane state backend region matches resolved state region: ${STATE_REGION}"
   else
     handle_state_stack_remote_issue \
-      "Control-plane state backend region mismatch. Backend: ${backend_region}; AWS_REGION: ${AWS_REGION}"
+      "Control-plane state backend region mismatch. Backend: ${backend_region}; expected state region: ${STATE_REGION}"
   fi
 
   if aws s3api head-object \
-    "${aws_args[@]}" \
+    "${state_aws_args[@]}" \
     --bucket "$backend_bucket" \
     --key "$backend_key" >/dev/null 2>&1; then
     success "Control-plane state object exists and is readable: s3://${backend_bucket}/${backend_key}"
@@ -377,14 +405,14 @@ check_s3_state_bucket() {
   section "Checking Terraform state S3 bucket"
 
   aws s3api head-bucket \
-    "${aws_args[@]}" \
+    "${state_aws_args[@]}" \
     --bucket "$bucket_name" >/dev/null
   success "State bucket exists: ${bucket_name}"
 
   local versioning_status
   versioning_status="$(
     aws s3api get-bucket-versioning \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --bucket "$bucket_name" \
       --query 'Status' \
       --output text
@@ -399,7 +427,7 @@ check_s3_state_bucket() {
   local public_access_block_json
   public_access_block_json="$(
     aws s3api get-public-access-block \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --bucket "$bucket_name" \
       --output json
   )"
@@ -425,7 +453,7 @@ check_s3_state_bucket() {
   local encryption_json
   encryption_json="$(
     aws s3api get-bucket-encryption \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --bucket "$bucket_name" \
       --output json
   )"
@@ -466,7 +494,7 @@ check_kms_key() {
   local key_json
   key_json="$(
     aws kms describe-key \
-      "${aws_args[@]}" \
+      "${state_aws_args[@]}" \
       --key-id "$kms_key_arn" \
       --output json
   )"
@@ -1327,6 +1355,7 @@ success "Control-plane stack directories exist"
 validate_backend_locking "${ACCOUNT_DIR}/backend.tf" "bootstrap/control_plane/account"
 validate_backend_locking "${ORGANIZATIONS_DIR}/backend.tf" "bootstrap/control_plane/organizations"
 validate_backend_locking "${IDENTITY_CENTER_DIR}/backend.tf" "bootstrap/control_plane/identity_center"
+resolve_state_region "${ACCOUNT_DIR}/backend.tf"
 
 section "Checking AWS caller identity"
 
@@ -1409,7 +1438,8 @@ section "Control Plane Summary"
 
 cat <<SUMMARY
 AWS profile:                       ${AWS_PROFILE:-<default>}
-AWS region:                        ${AWS_REGION}
+AWS service region:                ${AWS_REGION}
+State backend region:              ${STATE_REGION}
 Control-plane account ID:          ${AWS_ACCOUNT_ID}
 Name prefix:                       ${NAME_PREFIX}
 
