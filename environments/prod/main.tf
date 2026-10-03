@@ -6,6 +6,7 @@ module "baseline" {
 
   cloud_name                         = var.cloud_name
   environment                        = var.environment
+  main_vpc_cidr                      = var.main_vpc_cidr
   azs                                = var.azs
   subnet_cidrs                       = var.subnet_cidrs
   account_id                         = data.aws_caller_identity.current.account_id
