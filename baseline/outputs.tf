@@ -1,3 +1,8 @@
+output "primary_region" {
+  description = "AWS Region resolved from the workload provider."
+  value       = data.aws_region.current.region
+}
+
 output "vpc_id" {
   description = "ID of the main VPC"
   value       = module.networking.vpc_id
