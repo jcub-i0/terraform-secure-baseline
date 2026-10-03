@@ -9,7 +9,7 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {
   lifecycle {
     postcondition {
-      condition     = self.region == data.aws_region.current.region
+      condition     = self.region == var.primary_region
       error_message = "primary_region must match the AWS provider region."
     }
   }
