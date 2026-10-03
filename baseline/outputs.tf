@@ -83,13 +83,11 @@ output "network_topology" {
 
   value = {
 
-    subnet_cidrs_by_az = {
-      for family, cidrs in local.effective_subnet_cidrs :
-      family => {
-        for index, az in local.effective_azs :
-        az => cidrs[index]
-      }
-    }
+    main_vpc_cidr = module.networking.main_vpc_cidr
+
+    subnet_cidrs_by_az = (
+      module.networking.subnet_cidrs_by_az
+    )
 
     availability_zones = sort(
       keys(module.networking.compute_private_subnet_ids_map)
