@@ -5,7 +5,7 @@ output "security_operations_account_id" {
 
 output "securityhub_home_region" {
   description = "Security Hub home Region"
-  value       = var.primary_region
+  value       = data.aws_region.current.region
 }
 
 output "central_security_features_enabled" {

@@ -6,6 +6,15 @@ data "aws_organizations_organizational_units" "root" {
 
 data "aws_caller_identity" "current" {}
 
+data "aws_region" "current" {
+  lifecycle {
+    postcondition {
+      condition     = self.region == data.aws_region.current.region
+      error_message = "primary_region must match the AWS provider region."
+    }
+  }
+}
+
 check "target_account" {
   assert {
     condition     = data.aws_caller_identity.current.account_id == var.account_id
@@ -18,7 +27,7 @@ check "target_account" {
 ##########################################
 
 data "aws_guardduty_detector" "main" {
-  region = var.primary_region
+  region = data.aws_region.current.region
 }
 
 check "guardduty_detector_enabled" {
@@ -35,7 +44,7 @@ check "guardduty_detector_enabled" {
 resource "aws_guardduty_organization_configuration" "main" {
   count = var.enable_guardduty_organization_configuration ? 1 : 0
 
-  region      = var.primary_region
+  region      = data.aws_region.current.region
   detector_id = data.aws_guardduty_detector.main.id
 
   auto_enable_organization_members = "ALL"
@@ -44,7 +53,7 @@ resource "aws_guardduty_organization_configuration" "main" {
 resource "aws_guardduty_organization_configuration_feature" "main" {
   for_each = var.enable_guardduty_organization_configuration ? var.guardduty_organization_features : {}
 
-  region      = var.primary_region
+  region      = data.aws_region.current.region
   detector_id = data.aws_guardduty_detector.main.id
 
   name        = each.key
@@ -63,12 +72,12 @@ resource "aws_guardduty_organization_configuration_feature" "main" {
 locals {
   name_prefix = "${var.cloud_name}-${var.environment}"
   securityhub_standard_catalog = {
-    aws_fsbp    = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
-    aws_tagging = "arn:aws:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0"
+    aws_fsbp    = "arn:aws:securityhub:${data.aws_region.current.region}::standards/aws-foundational-security-best-practices/v/1.0.0"
+    aws_tagging = "arn:aws:securityhub:${data.aws_region.current.region}::standards/aws-resource-tagging-standard/v/1.0.0"
     cis_1_2     = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0"
-    cis_5_0     = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0"
-    nist_800_53 = "arn:aws:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0"
-    pci_dss     = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
+    cis_5_0     = "arn:aws:securityhub:${data.aws_region.current.region}::standards/cis-aws-foundations-benchmark/v/5.0.0"
+    nist_800_53 = "arn:aws:securityhub:${data.aws_region.current.region}::standards/nist-800-53/v/5.0.0"
+    pci_dss     = "arn:aws:securityhub:${data.aws_region.current.region}::standards/pci-dss/v/4.0.1"
   }
 
   securityhub_cspm_policies = {
@@ -241,7 +250,7 @@ resource "aws_securityhub_configuration_policy_association" "account" {
 ##########################################
 
 resource "aws_securityhub_account_v2" "main" {
-  region = var.primary_region
+  region = data.aws_region.current.region
 
   tags = {
     Name        = "${local.name_prefix}-securityhub-v2"
@@ -265,7 +274,7 @@ resource "aws_organizations_policy" "securityhub_v2_workloads" {
     securityhub = {
       enable_in_regions = {
         "@@assign" = [
-          var.primary_region
+          data.aws_region.current.region
         ]
       }
 
