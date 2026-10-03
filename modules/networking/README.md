@@ -577,7 +577,7 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 
 | Output | Value |
 |---|---|
-| `vpc_id` | Main VPC ID |
+| `main_vpc_id` | Main VPC ID |
 | `internet_gateway_id` | Internet Gateway ID |
 
 ### NAT Gateway Outputs
@@ -592,6 +592,7 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 
 | Output | Value |
 |---|---|
+| `subnet_cidrs_by_az` | Resource-backed subnet CIDRs keyed by family and AZ |
 | `ingress_public_subnet_ids_map` | Ingress-public subnet IDs keyed by AZ |
 | `egress_public_subnet_ids_map` | Egress-public subnet IDs keyed by AZ |
 | `compute_private_subnet_ids_map` | Compute-private subnet IDs keyed by AZ |
