@@ -578,6 +578,7 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 | Output | Value |
 |---|---|
 | `vpc_id` | Main VPC ID |
+| `main_vpc_id` | Main VPC ID |
 | `internet_gateway_id` | Internet Gateway ID |
 
 ### NAT Gateway Outputs
@@ -592,6 +593,7 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 
 | Output | Value |
 |---|---|
+| `subnet_cidrs_by_az` | Resource-backed subnet CIDRs keyed by family and AZ |
 | `ingress_public_subnet_ids_map` | Ingress-public subnet IDs keyed by AZ |
 | `egress_public_subnet_ids_map` | Egress-public subnet IDs keyed by AZ |
 | `compute_private_subnet_ids_map` | Compute-private subnet IDs keyed by AZ |
@@ -605,12 +607,9 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 | Output | Value |
 |---|---|
 | `ingress_public_subnet_ids_list` | List of ingress-public subnet IDs |
-| `egress_public_subnet_ids_list` | List of egress-public subnet IDs |
 | `compute_private_subnet_ids_list` | List of compute-private subnet IDs |
 | `data_private_subnet_ids_list` | List of data-private subnet IDs |
 | `serverless_private_subnet_ids_list` | List of serverless-private subnet IDs |
-| `firewall_private_subnet_ids_list` | List of firewall-private subnet IDs |
-| `endpoint_private_subnet_ids_list` | List of endpoint-private subnet IDs |
 
 Use the map outputs when Availability Zone identity matters. The list outputs are intended for consumers that require `list(string)` rather than an AZ-keyed map.
 

@@ -363,27 +363,35 @@ locals {
     : local.profile_default_azs
   )
 
-  profile_default_subnet_cidrs = (
+  profile_default_subnet_netnums = (
     local.is_production_profile
     ? {
-      egress_public      = ["10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24"]
-      ingress_public     = ["10.0.3.0/24", "10.0.4.0/24", "10.0.5.0/24"]
-      compute_private    = ["10.0.16.0/24", "10.0.17.0/24", "10.0.18.0/24"]
-      data_private       = ["10.0.32.0/24", "10.0.33.0/24", "10.0.34.0/24"]
-      serverless_private = ["10.0.48.0/24", "10.0.49.0/24", "10.0.50.0/24"]
-      firewall_private   = ["10.0.64.0/24", "10.0.65.0/24", "10.0.66.0/24"]
-      endpoint_private   = ["10.0.128.0/24", "10.0.129.0/24", "10.0.130.0/24"]
+      egress_public      = [0, 1, 2]
+      ingress_public     = [3, 4, 5]
+      compute_private    = [16, 17, 18]
+      data_private       = [32, 33, 34]
+      serverless_private = [48, 49, 50]
+      firewall_private   = [64, 65, 66]
+      endpoint_private   = [128, 129, 130]
     }
     : {
-      egress_public      = ["10.0.0.0/24", "10.0.1.0/24"]
-      ingress_public     = ["10.0.2.0/24", "10.0.3.0/24"]
-      compute_private    = ["10.0.16.0/24", "10.0.17.0/24"]
-      data_private       = ["10.0.32.0/24", "10.0.33.0/24"]
-      serverless_private = ["10.0.48.0/24", "10.0.49.0/24"]
-      firewall_private   = ["10.0.64.0/24", "10.0.65.0/24"]
-      endpoint_private   = ["10.0.128.0/24", "10.0.129.0/24"]
+      egress_public      = [0, 1]
+      ingress_public     = [2, 3]
+      compute_private    = [16, 17]
+      data_private       = [32, 33]
+      serverless_private = [48, 49]
+      firewall_private   = [64, 65]
+      endpoint_private   = [128, 129]
     }
   )
+
+  profile_default_subnet_cidrs = {
+    for family, netnums in local.profile_default_subnet_netnums :
+    family => [
+      for netnum in netnums :
+      cidrsubnet(var.main_vpc_cidr, 8, netnum)
+    ]
+  }
 
   effective_subnet_cidrs = (
     var.subnet_cidrs != null

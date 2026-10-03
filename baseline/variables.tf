@@ -121,9 +121,22 @@ variable "random_id" {
 }
 
 variable "main_vpc_cidr" {
-  description = "CIDR block for the primary VPC"
-  default     = "10.0.0.0/16"
+  description = "Canonical IPv4 /16 CIDR block for the workload VPC. Default subnet families are derived from this CIDR."
   type        = string
+  default     = "10.0.0.0/16"
+  nullable    = false
+
+  validation {
+    condition = try(
+      var.main_vpc_cidr == trimspace(var.main_vpc_cidr) &&
+      tonumber(split("/", var.main_vpc_cidr)[1]) == 16 &&
+      length(regexall("\\.", split("/", var.main_vpc_cidr)[0])) == 3 &&
+      cidrhost(var.main_vpc_cidr, 0) == split("/", var.main_vpc_cidr)[0],
+      false
+    )
+
+    error_message = "main_vpc_cidr must be a canonical IPv4 /16 CIDR such as 10.0.0.0/16 or 172.16.0.0/16."
+  }
 }
 
 variable "azs" {
@@ -153,9 +166,94 @@ variable "azs" {
 }
 
 variable "subnet_cidrs" {
-  description = "CIDR blocks for each workload subnet family. Set to null to use deployment_profile defaults."
+  description = "Optional /24 CIDR blocks for each workload subnet family. Null derives the profile-default topology from main_vpc_cidr."
   type        = map(list(string))
   default     = null
+
+  validation {
+    condition = (
+      var.subnet_cidrs != null ||
+      var.azs == null ||
+      length(var.azs) == (
+        var.deployment_profile == "production" ? 3 : 2
+      )
+    )
+
+    error_message = "When subnet_cidrs is null, azs must contain exactly three Availability Zones for production or exactly two for development/minimal. Supply subnet_cidrs explicitly to use additional Availability Zones."
+  }
+
+  validation {
+    condition = var.subnet_cidrs == null ? true : (
+      sort(keys(var.subnet_cidrs)) == sort([
+        "egress_public",
+        "ingress_public",
+        "compute_private",
+        "data_private",
+        "serverless_private",
+        "firewall_private",
+        "endpoint_private",
+      ])
+    )
+
+    error_message = "subnet_cidrs must contain exactly these seven families: egress_public, ingress_public, compute_private, data_private, serverless_private, firewall_private, and endpoint_private."
+  }
+
+  validation {
+    condition = var.subnet_cidrs == null ? true : try(
+      alltrue([
+        for family in [
+          "egress_public",
+          "ingress_public",
+          "compute_private",
+          "data_private",
+          "serverless_private",
+          "firewall_private",
+          "endpoint_private",
+        ] :
+        length(var.subnet_cidrs[family]) == (
+          var.azs != null
+          ? length(var.azs)
+          : (
+            var.deployment_profile == "production"
+            ? 3
+            : 2
+          )
+        )
+      ]),
+      false
+    )
+
+    error_message = "Each subnet_cidrs family must contain exactly one CIDR for every effective Availability Zone."
+  }
+
+  validation {
+    condition = var.subnet_cidrs == null ? true : alltrue([
+      for cidr in flatten(values(var.subnet_cidrs)) :
+      try(
+        tonumber(split("/", cidr)[1]) == 24 &&
+        cidrhost(cidr, 0) == split("/", cidr)[0] &&
+        contains(
+          [
+            for netnum in range(256) :
+            cidrsubnet(var.main_vpc_cidr, 8, netnum)
+          ],
+          cidr
+        ),
+        false
+      )
+    ])
+
+    error_message = "Every subnet_cidrs entry must be a canonical IPv4 /24 contained within main_vpc_cidr."
+  }
+
+  validation {
+    condition = var.subnet_cidrs == null ? true : (
+      length(distinct(flatten(values(var.subnet_cidrs)))) ==
+      length(flatten(values(var.subnet_cidrs)))
+    )
+
+    error_message = "subnet_cidrs must not contain duplicate or overlapping /24 CIDRs."
+  }
 }
 
 variable "db_port" {

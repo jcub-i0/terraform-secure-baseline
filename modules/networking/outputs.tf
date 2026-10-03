@@ -2,6 +2,52 @@ output "vpc_id" {
   value = aws_vpc.main.id
 }
 
+output "main_vpc_cidr" {
+  description = "CIDR block of the main workload VPC."
+  value       = aws_vpc.main.cidr_block
+}
+
+output "subnet_cidrs_by_az" {
+  description = "Terraform-managed subnet CIDRs keyed by subnet family and Availability Zone."
+
+  value = {
+    ingress_public = {
+      for az, subnet in aws_subnet.ingress_public :
+      az => subnet.cidr_block
+    }
+
+    egress_public = {
+      for az, subnet in aws_subnet.egress_public :
+      az => subnet.cidr_block
+    }
+
+    compute_private = {
+      for az, subnet in aws_subnet.compute_private :
+      az => subnet.cidr_block
+    }
+
+    data_private = {
+      for az, subnet in aws_subnet.data_private :
+      az => subnet.cidr_block
+    }
+
+    serverless_private = {
+      for az, subnet in aws_subnet.serverless_private :
+      az => subnet.cidr_block
+    }
+
+    firewall_private = {
+      for az, subnet in aws_subnet.firewall_private :
+      az => subnet.cidr_block
+    }
+
+    endpoint_private = {
+      for az, subnet in aws_subnet.endpoint_private :
+      az => subnet.cidr_block
+    }
+  }
+}
+
 # For resources using for_each patterns
 output "nat_gateway_ids_map" {
   description = "map(string) of NATGW IDs by AZ"
@@ -70,13 +116,6 @@ output "ingress_public_subnet_ids_list" {
   ]
 }
 
-output "egress_public_subnet_ids_list" {
-  value = [
-    for subnet in aws_subnet.egress_public :
-    subnet.id
-  ]
-}
-
 output "compute_private_subnet_ids_list" {
   description = "list(string) of Compute Private Subnet IDs"
   value       = [for subnet in aws_subnet.compute_private : subnet.id]
@@ -90,16 +129,6 @@ output "data_private_subnet_ids_list" {
 output "serverless_private_subnet_ids_list" {
   description = "list(string) of Serverless Private Subnet IDs"
   value       = [for subnet in aws_subnet.serverless_private : subnet.id]
-}
-
-output "firewall_private_subnet_ids_list" {
-  description = "list(string) of Firewall Private Subnet IDs"
-  value       = [for subnet in aws_subnet.firewall_private : subnet.id]
-}
-
-output "endpoint_private_subnet_ids_list" {
-  description = "list(string) of Endpoint Private Subnet IDs"
-  value       = [for subnet in aws_subnet.endpoint_private : subnet.id]
 }
 
 output "internet_gateway_id" {
