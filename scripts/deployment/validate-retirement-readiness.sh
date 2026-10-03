@@ -68,7 +68,7 @@ Options:
   --environment <env>          Workload environment.
   --region <region>            AWS Region.
                                Default: $AWS_REGION, $AWS_DEFAULT_REGION,
-                               or us-east-1.
+                               or Terraform primary_region; must match Terraform.
   --profile <profile>          AWS CLI profile.
                                Default: $AWS_PROFILE.
   --expected-account-id <id>   Expected 12-digit AWS account ID.
@@ -85,7 +85,7 @@ USAGE
 # -----------------------------------------------------------------------------
 
 ENVIRONMENT=""
-AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
+AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
@@ -138,10 +138,6 @@ if [[ -n "$EXPECTED_ACCOUNT_ID" ]] &&
   fail "Expected AWS account ID must contain exactly 12 digits."
 fi
 
-aws_args=()
-[[ -z "$AWS_PROFILE" ]] || aws_args+=(--profile "$AWS_PROFILE")
-[[ -z "$AWS_REGION" ]] || aws_args+=(--region "$AWS_REGION")
-
 STATE_JSON_FILE=""
 
 cleanup() {
@@ -173,9 +169,28 @@ info "Repository root: ${REPO_ROOT}"
 info "Environment: ${ENVIRONMENT}"
 info "Environment dir: ${ENV_DIR}"
 info "AWS profile: ${AWS_PROFILE:-<default>}"
+
+if ! OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"; then
+  fail "Unable to resolve Terraform outputs (including primary_region) from ${ENV_DIR}."
+fi
+
+# Use the same deployed region as the retirement contract and reject stale inputs.
+if ! TERRAFORM_REGION="$(
+  jq -ers 'select(length == 1) | .[0].primary_region.value | select(type == "string" and test("\\A[a-z0-9]+(-[a-z0-9]+)+-[0-9]+\\z"))' <<< "$OUTPUTS_JSON"
+)"; then
+  fail "Unable to resolve Terraform primary_region from ${ENV_DIR}: expected a non-empty AWS region string."
+fi
+if [[ -n "$AWS_REGION" && "$AWS_REGION" != "$TERRAFORM_REGION" ]]; then
+  fail "AWS region mismatch: requested ${AWS_REGION}, but Terraform primary_region is ${TERRAFORM_REGION}."
+fi
+AWS_REGION="$TERRAFORM_REGION"
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 info "AWS region: ${AWS_REGION}"
 
-OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"
+aws_args=()
+[[ -z "$AWS_PROFILE" ]] || aws_args+=(--profile "$AWS_PROFILE")
+[[ -z "$AWS_REGION" ]] || aws_args+=(--region "$AWS_REGION")
 
 [[ -n "$OUTPUTS_JSON" && "$OUTPUTS_JSON" != "{}" ]] ||
   fail "No Terraform outputs found for ${ENV_DIR}. Has Stage 1 been applied?"

@@ -31,7 +31,6 @@ source "${SCRIPT_DIR}/lib/ecs-runtime/guardduty.sh"
 ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
 export AWS_PAGER=""
@@ -41,16 +40,6 @@ if [[ -z "$ENV_NAME" ]]; then
 fi
 
 require_env_name "$ENV_NAME"
-
-AWS_ARGS=()
-
-if [[ -n "$AWS_PROFILE" ]]; then
-  AWS_ARGS+=(--profile "$AWS_PROFILE")
-fi
-
-if [[ -n "$AWS_REGION" ]]; then
-  AWS_ARGS+=(--region "$AWS_REGION")
-fi
 
 section "${CLOUD_NAME} ECS Runtime Validation"
 
@@ -64,6 +53,17 @@ require_command git
 success "Required commands are available"
 
 ecs_runtime_load_contract
+
+AWS_ARGS=()
+
+if [[ -n "$AWS_PROFILE" ]]; then
+  AWS_ARGS+=(--profile "$AWS_PROFILE")
+fi
+
+if [[ -n "$AWS_REGION" ]]; then
+  AWS_ARGS+=(--region "$AWS_REGION")
+fi
+
 ecs_runtime_validate_identity
 ecs_runtime_validate_cluster
 ecs_runtime_resolve_service_networking

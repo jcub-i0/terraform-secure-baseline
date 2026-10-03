@@ -13,7 +13,7 @@
 #   - bootstrap/control_plane/identity_center instance, groups, permission sets,
 #     and optional account assignments
 #
-# Usage:
+# Usage (AWS_REGION is required; us-east-1 below is only an example):
 #   AWS_PROFILE=control-plane \
 #   AWS_REGION=us-east-1 \
 #   EXPECTED_ACCOUNT_ID=<control-plane-account-id> \
@@ -45,7 +45,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
+# This layer has its own regional scope; do not infer it from workload state.
+[[ -n "${AWS_REGION:-}" ]] || fail "AWS_REGION must be explicitly set for control-plane validation."
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 CONTROL_PLANE_ENV_NAME="${CONTROL_PLANE_ENV_NAME:-control-plane}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"

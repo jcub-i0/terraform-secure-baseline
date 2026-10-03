@@ -17,10 +17,7 @@
 # - Security Hub V2 administrator state, SECURITYHUB_POLICY attachment, and
 #   effective workload policies
 #
-# Usage:
-#   AWS_PROFILE=security-operations ./scripts/validation/validate-security-operations.sh
-#
-# Optional:
+# Example (AWS_REGION is required; use the deployed Security Hub home region):
 #   AWS_PROFILE=security-operations AWS_REGION=us-east-1 \
 #     ./scripts/validation/validate-security-operations.sh
 #
@@ -43,7 +40,10 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
+# This layer has its own regional scope; do not infer it from workload state.
+[[ -n "${AWS_REGION:-}" ]] || fail "AWS_REGION must be explicitly set for security-operations validation."
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 WORKLOADS_OU_NAME="${WORKLOADS_OU_NAME:-Workloads}"
 WORKLOAD_ACCOUNT_NAMES="${WORKLOAD_ACCOUNT_NAMES:-dev staging prod}"

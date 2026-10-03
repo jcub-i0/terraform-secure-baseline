@@ -19,7 +19,7 @@
 # Usage:
 #   ./scripts/validation/validate-iam.sh dev
 #
-# Optional:
+# Optional (AWS_REGION must match Terraform primary_region):
 #   AWS_PROFILE=tf-secure-baseline-dev AWS_REGION=us-east-1 ./scripts/validation/validate-iam.sh dev
 #
 # Optional override:
@@ -39,24 +39,12 @@ ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
 
 if [[ -z "$ENV_NAME" ]]; then
   fail "Usage: $0 <dev|staging|prod>"
 fi
 
 require_env_name "$ENV_NAME"
-
-aws_args=()
-if [[ -n "$AWS_PROFILE" ]]; then
-  aws_args+=(--profile "$AWS_PROFILE")
-fi
-
-# IAM is global, but keeping region in AWS CLI calls is harmless and helps
-# profiles that rely on a configured region.
-if [[ -n "$AWS_REGION" ]]; then
-  aws_args+=(--region "$AWS_REGION")
-fi
 
 section "${CLOUD_NAME} IAM Validation"
 
@@ -84,12 +72,29 @@ info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
 info "Name prefix: $NAME_PREFIX"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
-info "AWS_REGION: $AWS_REGION"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
 
-OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"
+if ! OUTPUTS_JSON="$(terraform_output_json "$ENV_DIR")"; then
+  fail "Unable to resolve Terraform outputs (including primary_region) from ${ENV_DIR}."
+fi
+
+AWS_REGION="$(resolve_workload_region "$ENV_DIR" "$OUTPUTS_JSON")"
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
+info "AWS_REGION: $AWS_REGION"
+
+aws_args=()
+if [[ -n "$AWS_PROFILE" ]]; then
+  aws_args+=(--profile "$AWS_PROFILE")
+fi
+
+# IAM is global, but keeping region in AWS CLI calls is harmless and helps
+# profiles that rely on a configured region.
+if [[ -n "$AWS_REGION" ]]; then
+  aws_args+=(--region "$AWS_REGION")
+fi
 
 if [[ -z "$OUTPUTS_JSON" || "$OUTPUTS_JSON" == "{}" ]]; then
   fail "No Terraform outputs found for ${ENV_DIR}. Has this environment been applied?"
