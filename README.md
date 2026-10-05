@@ -1,6 +1,6 @@
 # terraform-secure-baseline
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
 Opinionated Terraform baseline for deploying secure, cost-efficient AWS environments for early-to-mid-stage SaaS businesses handling customer data.
 
@@ -656,8 +656,10 @@ The goal is to provide a secure-by-default foundation that can be adapted and ex
 
 ## License
 
-Copyright © 2026 Jacob Molland.
+Copyright © 2026 Nano Nexus Holdings LLC. All rights reserved.
 
-This project is licensed under the Apache License 2.0.
+Terraform Secure Baseline is proprietary software. No license or permission to use, copy, modify, distribute, sublicense, or deploy the software is granted except as expressly provided in the [LICENSE](LICENSE) file or in a separate written agreement with Nano Nexus Holdings LLC.
 
-Terraform Secure Baseline is developed and maintained under the Nano Nexus Consulting brand, operated by Nano Nexus Holdings LLC. See [LICENSE](LICENSE) for details.
+Revisions of the project that were previously distributed under the Apache License 2.0 remain subject to the license terms that applied when those revisions were distributed. The current proprietary license does not revoke or restrict rights previously and validly granted under Apache License 2.0.
+
+Terraform Secure Baseline is owned and maintained by Nano Nexus Holdings LLC. See [LICENSE](LICENSE) for the complete terms.
