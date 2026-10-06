@@ -110,7 +110,11 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
-  # ECS
+  # ECS / Fargate workload derivation
+  # ---------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # ECS service and ECR repository materialization
   # ---------------------------------------------------------------------------
 
   deployable_ecs_services = {
@@ -132,6 +136,10 @@ locals {
     local.ecs_required_repositories,
   )
 
+  # ---------------------------------------------------------------------------
+  # ECS ALB and log metadata
+  # ---------------------------------------------------------------------------
+
   ecs_alb_services = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
@@ -148,6 +156,10 @@ locals {
     for service_name in keys(local.deployable_ecs_services) :
     service_name => "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${var.account_id}:log-group:/aws/ecs/${local.name_prefix}/${service_name}"
   }
+
+  # ---------------------------------------------------------------------------
+  # GuardDuty Fargate agent regional ECR metadata
+  # ---------------------------------------------------------------------------
 
   guardduty_fargate_agent_ecr_account_ids = {
     "af-south-1"     = "197869348890"
@@ -204,6 +216,10 @@ locals {
     : null
   )
 
+  # ---------------------------------------------------------------------------
+  # ECS IAM module inputs
+  # ---------------------------------------------------------------------------
+
   ecs_iam_services = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
@@ -234,6 +250,10 @@ locals {
       task_execution_kms_key_arns = service.task_execution_kms_key_arns
     }
   }
+
+  # ---------------------------------------------------------------------------
+  # ECS runtime module inputs
+  # ---------------------------------------------------------------------------
 
   ecs_runtime_services = {
     for service_name, service in local.deployable_ecs_services :
@@ -293,6 +313,10 @@ locals {
     }
   }
 
+  # ---------------------------------------------------------------------------
+  # ECS security-policy inputs and readiness dependencies
+  # ---------------------------------------------------------------------------
+
   ecs_security_policy_services = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
@@ -324,6 +348,10 @@ locals {
     ]))
   }
 
+  # ---------------------------------------------------------------------------
+  # ECS operational monitoring inputs
+  # ---------------------------------------------------------------------------
+
   ecs_task_deficit_monitoring_services = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
@@ -342,6 +370,10 @@ locals {
     if service.ingress != null
   }
 
+  # ---------------------------------------------------------------------------
+  # ECS production availability defaults
+  # ---------------------------------------------------------------------------
+
   effective_ecs_availability_zone_rebalancing = (
     local.is_production_profile
     ? "ENABLED"
@@ -349,8 +381,13 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
-  # Networking
+  # Networking topology
   # ---------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # Availability Zone selection
+  # ---------------------------------------------------------------------------
+
   profile_default_az_count = (
     local.is_production_profile ? 3 : 2
   )
@@ -373,6 +410,10 @@ locals {
     ? var.azs
     : local.profile_default_azs
   )
+
+  # ---------------------------------------------------------------------------
+  # Derived subnet CIDRs
+  # ---------------------------------------------------------------------------
 
   profile_default_subnet_netnums = (
     local.is_production_profile
@@ -411,7 +452,7 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
-  # Restore testing
+  # AWS Backup Restore Testing
   # ---------------------------------------------------------------------------
 
   effective_restore_testing_enabled = (
@@ -438,7 +479,11 @@ locals {
   )
 
   # ---------------------------------------------------------------------------
-  # Cost-sensitive service defaults
+  # Profile-derived service and lifecycle defaults
+  # ---------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # AWS Backup defaults
   # ---------------------------------------------------------------------------
 
   effective_backup_enabled = (
@@ -471,6 +516,10 @@ locals {
     : null
   )
 
+  # ---------------------------------------------------------------------------
+  # RDS resilience defaults
+  # ---------------------------------------------------------------------------
+
   profile_default_rds_multi_az = local.is_production_profile
 
   effective_rds_multi_az = (
@@ -481,6 +530,10 @@ locals {
       local.profile_default_rds_multi_az,
     )
   )
+
+  # ---------------------------------------------------------------------------
+  # Production retirement and lifecycle protection
+  # ---------------------------------------------------------------------------
 
   effective_production_retirement_mode = (
     local.is_production_profile &&
@@ -528,6 +581,10 @@ locals {
     : "${local.name_prefix}-saas-db-final-${var.random_id}"
   )
 
+  # ---------------------------------------------------------------------------
+  # Amazon Inspector defaults
+  # ---------------------------------------------------------------------------
+
   effective_inspector_enabled = (
     var.inspector_enabled != null
     ? var.inspector_enabled
@@ -538,6 +595,10 @@ locals {
     var.inspector_resource_types,
     length(local.effective_repositories) > 0 ? ["ECR"] : [],
   ))
+
+  # ---------------------------------------------------------------------------
+  # GuardDuty Fargate Runtime Monitoring defaults
+  # ---------------------------------------------------------------------------
 
   profile_default_guardduty_fargate_runtime_monitoring_enabled = (
     !local.is_minimal_profile
