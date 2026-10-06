@@ -342,6 +342,19 @@ jobs:
           echo "AWS account: ${ACTIVE_ACCOUNT_ID}"
           echo "Caller ARN: ${CALLER_ARN}"
 
+      - name: Install Amazon ECR Docker Credential Helper
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v docker-credential-ecr-login >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes amazon-ecr-credential-helper
+          fi
+
+          command -v docker-credential-ecr-login >/dev/null 2>&1
+          echo "[PASS] Amazon ECR Docker Credential Helper is available"
+
       - name: Publish application image
         shell: bash
         env:

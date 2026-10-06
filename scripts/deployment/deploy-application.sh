@@ -319,6 +319,9 @@ success "aws CLI found"
 require_command docker
 success "docker found"
 
+require_command docker-credential-ecr-login
+success "Amazon ECR Docker credential helper found"
+
 require_command jq
 success "jq found"
 
@@ -370,6 +373,7 @@ AWS_ARGS=()
 
 if [[ -n "$AWS_PROFILE" ]]; then
   AWS_ARGS+=(--profile "$AWS_PROFILE")
+  export AWS_PROFILE
 fi
 
 AWS_ARGS+=(--region "$AWS_REGION")
@@ -516,22 +520,46 @@ success "Application image built successfully"
 # Authenticate and push
 # -----------------------------------------------------------------------------
 
-section "Authenticating Docker to Amazon ECR"
+section "Configuring Docker authentication for Amazon ECR"
 
-aws ecr get-login-password \
-  "${AWS_ARGS[@]}" |
-  docker login \
-    --username AWS \
-    --password-stdin \
-    "$REGISTRY_HOST"
+DOCKER_AUTH_CONFIG_DIR="$(mktemp -d)"
 
-success "Docker authenticated to ECR"
+cleanup_docker_auth_config() {
+  rm -rf "$DOCKER_AUTH_CONFIG_DIR"
+}
+
+trap cleanup_docker_auth_config EXIT
+
+chmod 700 "$DOCKER_AUTH_CONFIG_DIR"
+
+jq -n \
+  --arg registry "$REGISTRY_HOST" \
+  '{
+    credHelpers: {
+      ($registry): "ecr-login"
+    }
+  }' > "${DOCKER_AUTH_CONFIG_DIR}/config.json"
+
+chmod 600 "${DOCKER_AUTH_CONFIG_DIR}/config.json"
+
+# Do not persist ECR authorization tokens to the credential helper's local
+# filesystem cache. The helper resolves short-lived ECR credentials from the
+# active AWS credential chain for each Docker operation.
+export AWS_ECR_DISABLE_CACHE=true
+
+success "Docker configured to use the Amazon ECR credential helper"
+info "Docker credential configuration is isolated to a temporary directory"
+info "ECR authorization-token file caching is disabled"
 
 section "Publishing application image"
 
-docker push "$TAGGED_IMAGE_URI"
+DOCKER_CONFIG="$DOCKER_AUTH_CONFIG_DIR" \
+  docker push "$TAGGED_IMAGE_URI"
 
 success "Application image pushed to ECR"
+
+cleanup_docker_auth_config
+trap - EXIT
 
 # -----------------------------------------------------------------------------
 # Resolve authoritative ECR digest
