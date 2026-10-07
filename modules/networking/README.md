@@ -544,7 +544,7 @@ In this mode:
 | `name_prefix` | `string` | none | Yes | Prefix used in resource names and tags. |
 | `main_vpc_cidr` | `string` | none | Yes | CIDR block assigned to the main VPC. |
 | `environment` | `string` | none | Yes | Environment value applied to resource tags. |
-| `cloud_name` | `string` | none | Yes | Declared module input. The RC1 `main.tf` and `outputs.tf` do not currently reference this value. |
+| `cloud_name` | `string` | none | Yes | Declared module input. `main.tf` and `outputs.tf` do not currently reference this value. |
 | `azs` | `list(string)` | none | Yes | Availability Zones used to create per-AZ subnets, route tables, NAT resources, and route associations. |
 | `subnet_cidrs` | `map(list(string))` | none | Yes | CIDR lists for each subnet tier, indexed according to `azs`. |
 | `firewall_endpoint_ids_by_az` | `map(string)` | `{}` | Conditional | Network Firewall endpoint IDs keyed by Availability Zone. Required for every configured AZ when `egress_mode = "network_firewall"`. |

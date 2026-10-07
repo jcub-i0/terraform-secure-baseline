@@ -204,7 +204,7 @@ The script derives the state bucket from the backend files, then validates the l
 
 DynamoDB state locking is not part of the architecture. This project uses Terraform S3 native locking with `use_lockfile = true`. Reading that declaration and checking policy access do not constitute a live lock-contention test.
 
-### v1.4.0 Migration Note
+### State-stack migration note
 
 Existing deployments that previously kept `bootstrap/<env>/state` or `bootstrap/control_plane/state` locally must migrate each state stack deliberately:
 

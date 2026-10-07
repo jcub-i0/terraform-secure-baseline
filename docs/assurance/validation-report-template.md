@@ -331,7 +331,7 @@ validation-results/<env>/baseline/<timestamp>/
 
 The current workload baseline export contains 16 validators. The generated package and `summary.json` remain the source of truth for each evidence run.
 
-### v1.11 Topology and Lifecycle Context
+### Topology and Lifecycle Context
 
 | Assertion / context | Result / Value | Evidence | Limit |
 |---|---|---|---|

@@ -255,7 +255,7 @@ The example account configuration uses environment-based Apply trust. A GitHub j
 
 This root has its own saved state, separate from the infrastructure it manages. The tracked [backend.tf](backend.tf) contains:
 
-| Backend setting | RC1 value |
+| Backend setting | Configured value |
 |---|---|
 | Bucket | `tf-secure-baseline-security-operations-state` |
 | Key | `security-operations/account.tfstate` |

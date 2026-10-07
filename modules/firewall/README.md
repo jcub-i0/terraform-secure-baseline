@@ -329,7 +329,7 @@ automated infrastructure deployment using Terraform.
 
 RC1 separates resource deletion protection from policy/subnet-change protection:
 
-| Setting | RC1 module behavior | Baseline behavior |
+| Setting | Module behavior | Baseline behavior |
 |---|---|---|
 | `delete_protection` | Required caller input | `true` for normal production; `false` for retirement and non-production |
 | `firewall_policy_change_protection` | Literal `false` | Not overridden by deployment profile |

@@ -85,7 +85,7 @@ prod
 
 The root validation permits only these keys, but does not require all three to be present or require account IDs to be distinct. The complete-platform validator and the standalone Identity Center Plan workflow expect `dev`, `staging`, and `prod`. A Terraform-valid subset is therefore not automatically a supported complete-platform evidence configuration. Removing a key also removes that module instance's managed access resources.
 
-### Operator bus identity in RC1
+### Operator bus identity
 
 The actual caller and workload resource disagree:
 

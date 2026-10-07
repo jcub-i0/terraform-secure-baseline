@@ -613,7 +613,7 @@ Validation scripts failed:  0/16
 
 This counts top-level script exits, not every assertion. Warnings and inapplicable branches can coexist with `16/16`. The runner does not write a timestamped package; `export-baseline.sh` reruns the same scripts and writes one. Use the exporter for an evidence-producing pass rather than assuming it packages a prior runner log.
 
-### v1.11 configuration coverage and separate acceptance
+### Configuration coverage and separate acceptance
 
 The topology comparison includes the exact VPC CIDR, full seven-family subnet inventory/CIDRs, IGW, NAT/firewall identities, same-AZ routing and deletion-protection intent. RDS/Backup checks include `rds_configuration`, `backup_vault_configuration`, `lifecycle_protection`, and `restore_testing`; they do not constitute SQL, failover or completed restore validation. See section 19 for exact boundaries.
 

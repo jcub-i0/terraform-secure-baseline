@@ -118,7 +118,7 @@ When `egress_mode = "vpc_endpoints_only"`, NAT Gateways and Network Firewall are
 
 ---
 
-## v1.11 Topology, Regions, and Resilience
+## Topology, Regions, and Resilience
 
 ### Service region versus Terraform state region
 

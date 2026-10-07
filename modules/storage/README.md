@@ -514,7 +514,7 @@ Do not describe the entire storage module as protected against production destru
 | `name_prefix` | `string` | Required | Resource naming prefix |
 | `environment` | `string` | Required | Tags and master-username suffix |
 | `vpc_id` | `string` | Required | VPC for the data security group |
-| `db_port` | `string` | Required | Declared interface input; not wired to an RDS port argument in RC1 |
+| `db_port` | `string` | Required | Declared interface input; not wired to an RDS port argument |
 | `rds_instance_class` | `string` | Required | Database instance class |
 | `compute_sg_id` | `string` | Required | Retained interface input; resource definitions here do not consume it |
 | `data_private_subnet_ids_list` | `list(string)` | Required | Exact subnet IDs for the DB subnet group |

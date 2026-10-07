@@ -273,7 +273,7 @@ After a workload rebuild, reconcile current workload CMKs and verify bootstrap a
 
 This root has its own saved state, separate from the infrastructure it manages. The tracked [backend.tf](backend.tf) contains:
 
-| Backend setting | RC1 value |
+| Backend setting | Configured value |
 |---|---|
 | Bucket | `tf-secure-baseline-dev-state` |
 | Key | `bootstrap/account/dev.tfstate` |

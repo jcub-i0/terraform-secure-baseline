@@ -131,7 +131,7 @@ securityhub_cspm_account_policies = {
 
 The frozen catalog resolves these keys (not an automatically updated standards catalog):
 
-| Key | Standard/version selected by RC1 |
+| Key | Configured standard |
 |---|---|
 | `aws_fsbp` | AWS Foundational Security Best Practices `1.0.0` |
 | `aws_tagging` | AWS Resource Tagging Standard `1.0.0` |

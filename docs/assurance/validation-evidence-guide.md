@@ -375,7 +375,7 @@ Supporting workload validators provide the rest of the Runtime Monitoring eviden
 
 AWS Backup evidence is also profile-aware. `validate-backup.sh` treats the encrypted environment backup vault as retained in both enabled and disabled states. When scheduled backup is disabled, effective schedule/retention resolve to null, the plan/selection must be absent, and workload EC2/RDS resources must use `Backup=false`. When enabled, schedule, retention, plan, selection, and `Backup=true` resource tags must match Terraform exactly.
 
-### v1.11 topology and availability evidence
+### Topology and availability evidence
 
 `validate-networking.sh` checks Terraform-derived VPC/subnet identity and CIDRs, seven subnet families, AZ associations, mode-specific routes, ingress/egress separation, and same-AZ NAT/firewall relationships. Production defaults to three AZs; development/minimal to two. The baseline accepts a canonical `/16` and derives `/24` families, but a successful default-CIDR run is not a non-default-CIDR portability test.
 
@@ -484,7 +484,7 @@ Retirement is outside the normal-state 16-validator workload acceptance contract
 | Boundary | Evidence and limit |
 |---|---|
 | Stage-1 preparation | Exact saved plan, `validate-production-retirement-plan.sh` result, protected Apply; the guard rejects create/delete/replacement but is not an attribute-level allowlist |
-| Durable-data decision | Preflight inventory, explicit `delete_durable_retirement_data=true`, and cleanup approval; RC1's helper is `prod`-only and authorization is required even for empty scoped data |
+| Durable-data decision | Preflight inventory, explicit `delete_durable_retirement_data=true`, and cleanup approval; the cleanup helper is `prod`-only and authorization is required even for empty scoped data |
 | Durable cleanup | `cleanup-retirement-durable-data.sh --mode apply` run and post-cleanup inventory; it re-inventories rather than applying a frozen item manifest |
 | Live readiness | `validate-retirement-readiness.sh`: live native protections, zero ECS desired/running/pending counts and scaling bounds, empty scoped ECR/vault and no active Backup jobs, plus RDS deletion-time intent |
 | Identity Center | Separate cleanup plan and protected control-plane apply before final workload-destroy approval; persistent configuration reconciliation is separate |
