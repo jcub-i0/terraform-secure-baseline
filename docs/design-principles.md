@@ -6,6 +6,8 @@ This document describes the design principles behind `tf-secure-baseline`.
 
 It explains why the platform is structured the way it is, what tradeoffs were made, and what security outcomes the baseline is intended to support.
 
+This revision describes `v1.11.0-rc1` at `728166fa17bf42fe06bf540729c6aba1e70e05d5`. Principles express design intent; the implementation boundaries below qualify what the frozen code actually provides. They are not evidence of a final release or a completed client deployment.
+
 This document is not a deployment guide. For deployment instructions, see:
 
 ```text
@@ -93,7 +95,7 @@ Control-plane resources are separated from workload infrastructure.
 
 The control plane manages:
 
-- AWS Organizations structure and account placement
+- AWS Organizations/OU structure and delegated-security prerequisites; existing member-account placement is checked rather than automatically performed
 - IAM Identity Center access
 - Organization-level trusted-service and delegated-administrator prerequisites
 - Security Hub V2 organization-policy prerequisites
@@ -125,9 +127,7 @@ Workload baseline stacks manage:
 
 In the centralized deployment, workload Terraform explicitly defers local Security Hub CSPM, GuardDuty, and Security Hub V2 ownership to the security-operations layer.
 
-This separation prevents workload changes from accidentally impacting foundational access and governance resources.
-
-It also prevents Terraform from destroying the roles or state resources it depends on to operate.
+This separation reduces accidental lifecycle coupling; it is not a guarantee that permissions or cross-root dependencies cannot affect another layer. Workload teardown still needs Identity Center dependency cleanup. State bucket/CMK `prevent_destroy` guards and explicit backend migration provide separate protections; root separation alone cannot make self-managed infrastructure undeletable.
 
 ---
 
@@ -158,7 +158,7 @@ The active file is generated only after the backend resources exist and is ignor
 scripts/bootstrap/migrate-state-stack.sh
 ```
 
-checks the AWS account, validates the backend template against the state-stack output, backs up local state, refuses to overwrite an existing remote state object, runs `terraform init -migrate-state`, and verifies the resulting remote state.
+checks the AWS account, validates the backend template against the state-stack output, backs up local state, refuses a destination object identified as existing, runs `terraform init -migrate-state`, and verifies the resulting remote state. Operators still need to distinguish an unused key from a failed/denied object lookup.
 
 State locking uses Terraform S3 native lockfiles with:
 
@@ -189,6 +189,8 @@ The Image Publisher role uses exact branch-based OIDC subjects. Its job must not
 Workload deployment follows plan-before-approval semantics. The standalone Terraform Plan workflow is informational; the Terraform Apply workflow creates its own binary plan, readable plan, metadata, and checksum, then applies that exact artifact after protected approval without replanning. `DEPLOYMENT_PROFILE` and other critical Plan inputs are validated before planning.
 
 Static AWS keys are not part of the intended CI/CD model.
+
+The image publisher uses the ECR Docker Credential Helper with temporary push-only configuration and helper token-file caching disabled. That removes this script's explicit `docker login` storage path, not every possible credential exposure on a runner. Likewise, an `environment:` declaration only identifies the GitHub environment; required reviewers and deployment restrictions need separate configuration and evidence.
 
 ## 5. Human Access Through IAM Identity Center
 
@@ -276,6 +278,8 @@ VPC Endpoints for supported AWS services
 
 This makes private networking the default and public exposure the exception.
 
+The optional ALB has an HTTPS frontend but HTTP target groups and health checks; private placement is not end-to-end transport encryption. The fixed endpoint set and security groups supply network paths, not application authorization or custom endpoint-policy isolation.
+
 ---
 
 ## 7. Controlled Egress
@@ -320,9 +324,7 @@ The baseline supports profiles such as:
 | `development` | `nat_only` | Enabled | Disabled | Enabled | 30 days | Lower-cost development and testing |
 | `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
 
-Profiles define defaults, not hard limits.
-
-Explicit variables can override profile defaults when needed.
+Profiles combine defaults with policy. Supported inputs can override egress, Config, Backup, Inspector, and retention where exposed by the caller. Production RDS Multi-AZ, minimum production availability, profile-derived force-deletion behavior, and the retirement boundary are not unrestricted cost toggles. GuardDuty Fargate enrollment follows the profile without an independent public override.
 
 For example, a development environment can still use Network Firewall by setting:
 
@@ -420,12 +422,14 @@ The logging design emphasizes:
 - KMS encryption
 - Versioning
 - Restricted bucket policies
-- Object Lock, where enabled
+- Explicitly documented Object Lock limitations: the RC1 workload logs bucket does not enable it
 - Lifecycle retention
 - Profile-aware CloudWatch retention
 - Long-term forensic usefulness
 
 Logs are treated as security evidence, not just operational telemetry.
+
+In the frozen implementation, each workload owns its logs bucket. Its `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` values are not changed by the production profile. Administrative policy changes and workload destruction remain material retention risks; the 2555-day lifecycle policy is not immutable retention. Required external evidence preservation is an operator responsibility, not an implemented archive-copy workflow.
 
 ---
 
@@ -468,7 +472,7 @@ This enables rapid response without requiring humans to manually execute every a
 
 Containment can happen automatically when a high-confidence security condition is detected, but authorization fails closed. The EC2 isolation EventBridge path is limited to `HIGH`/`CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings for `AwsEc2Instance`. The Lambda independently revalidates the GuardDuty product and the canonical `ec2_auto_isolation_severities` set, which defaults to `CRITICAL`, and still requires the instance to have `IsolationAllowed=true`.
 
-The reusable environment default is `false`; development explicitly opts in while staging and production remain opted out. Attached EBS snapshots are requested before quarantine, and recovery should require human review.
+The reusable baseline default is `false`, but root and CI settings must be inspected independently: RC1's production root declares `isolation_allowed=true` as its default. Do not assume an environment name guarantees opt-out. Align explicit local and GitHub inputs with the approved response policy. Attached EBS snapshots are requested before quarantine; a request is not evidence that snapshot creation completed. Recovery should require human review.
 
 For example:
 
@@ -510,6 +514,8 @@ Examples:
 
 This reduces the chance that one compromised credential can perform every action.
 
+Least privilege is a design goal, not a uniform property of every role. RC1's Terraform Apply role attaches `AdministratorAccess`, and its Plan role can write state objects and use relevant KMS/secret permissions. Reviewer protection, role trust, account scope, and actual permissions must all be assessed. A read-only validation operation does not prove a read-only credential.
+
 ---
 
 ## 16. Environment-Specific Permissions
@@ -534,6 +540,8 @@ This avoids circular dependencies and preserves environment isolation.
 ---
 
 ## 17. Immutable and Encrypted State
+
+The heading describes the integrity objective, not a WORM implementation. Terraform state is necessarily updated; RC1 uses encryption, versioning, locking, and restricted administration rather than S3 Object Lock. Do not treat version history as an undeletable or independent backup.
 
 Terraform state is sensitive because it can contain resource identifiers, outputs, and sometimes secrets or references to sensitive infrastructure.
 
@@ -569,7 +577,7 @@ EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2
 
 Operators maintain one canonical `ecs_services` map. A service can be registered with `image_digest = null`; baseline still derives its repository requirement while filtering per-service runtime resources until an immutable digest is selected. This avoids a second service inventory and avoids splitting Terraform state merely to bootstrap ECR.
 
-The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. v1.9 intentionally supports target tracking only: CPU, memory, and conditional ALB requests per target.
+The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. The runtime retains the target-tracking-only model introduced in v1.9: CPU, memory, and conditional ALB requests per target.
 
 Deployment health is likewise explicit in the canonical contract through minimum healthy percentage, maximum percentage, and task-startup health-check grace period. AWS-managed target-tracking alarms remain AWS-managed; Terraform-owned task-deficit and ingress unhealthy-target alarms are separate operational notification controls.
 
@@ -595,7 +603,7 @@ Examples include:
 - GitHub OIDC instead of static credentials
 - Profile defaults that keep production security controls enabled
 - Egress defaults that route production workloads through Network Firewall
-- Automatic EC2 isolation disabled unless an environment explicitly opts in
+- An explicit EC2 isolation authorization tag and severity policy; root defaults and CI overrides must be reviewed rather than inferred from environment names
 - Strict first-boot failure when package metadata cannot be refreshed safely
 
 The platform can be customized, but defaults should guide users toward safer outcomes.
@@ -637,6 +645,10 @@ Production enables backup by default, while lower-cost profiles can disable back
 
 This supports operational resilience after incidents, mistakes, or misconfigurations while keeping development costs manageable.
 
+v1.11 makes resilience and intentional retirement explicit. Production defaults to three AZs, enforces Multi-AZ on the single RDS DB instance, enables ECS AZ rebalancing, and requires at least two fixed tasks or an autoscaling minimum of two for deployable services outside retirement. The production example chooses three; actual per-AZ placement still needs live evidence.
+
+RDS-native 14-day automated backups, the AWS Backup plan, and scheduled RDS Restore Testing are separate controls. Restore Testing is enabled when the profile is production and AWS Backup is enabled; the temporary test restore is private and Single-AZ. Configuration equality does not prove application data recovery or cleanup. No cross-Region/cross-account recovery or achieved recovery objective is implied.
+
 ---
 
 ## 22. Audit and Assurance Readiness
@@ -673,6 +685,28 @@ These dependencies do not prove route, NAT Gateway, firewall, DNS, or repository
 
 ---
 
+## 24. One Authority for Region and Topology
+
+Service/provider `primary_region`, state-resource `state_region`, and explicit S3 backend `region` are distinct responsibilities. Workload validation reads the deployed service Region and rejects a conflicting `AWS_REGION`; administrative-layer entry points require their service Region explicitly. The backend-centric migration helper instead checks the backend Region. Changing an input is not a migration of state or data.
+
+The baseline accepts a canonical IPv4 `/16` and derives the seven `/24` subnet families from it. Eligible AZs are discovered in the provider Region; production defaults to three and lower-cost profiles to two. Explicit larger AZ sets require matching explicit subnet maps. This eliminates hard-coded default-address assumptions without promising a disruption-free topology change or multi-Region disaster recovery.
+
+## 25. Retirement Is a Separate Authorization Boundary
+
+Normal production protects RDS, ALB, and Network Firewall deletion and keeps ECR/ECS force deletion and Backup-vault force destruction disabled. Retirement mode derives zero runtime capacity and relaxes the necessary native deletion protections without weakening RDS final-snapshot or automated-backup intent.
+
+The workflow separately reviews Stage-1 preparation, durable ECR/Backup deletion, Identity Center dependency cleanup, and the exact workload destroy plan. The durable-cleanup helper is limited to `prod`, re-inventories during apply, and does not replay a frozen item manifest. Earlier cleanup is not rolled back by rejecting final destruction. The Stage-1 guard rejects create/delete/replacement actions but is not an attribute-level whitelist of every permitted in-place change.
+
+Autoscaled services retain `ignore_changes=[desired_count]`; only live readiness proves they reached zero desired/running/pending tasks and zero scaling bounds. State-resource teardown remains outside workload retirement, and moving active state does not remove literal `prevent_destroy` guards. Follow the [retirement runbook](production-retirement.md), not a generic force-destroy recipe.
+
+## 26. Evidence Must Match the Claim
+
+Use resource-backed outputs and exact live checks where implemented, but retain their limits. `16/16` counts successful top-level workload scripts, not universal control coverage, zero warnings, proven application behavior, or a fresh recovery exercise. An empty registered runtime can pass without testing task instrumentation. RDS lifecycle flags stored in Terraform are deletion-time intent, not proof a final snapshot already exists.
+
+Record the source commit, effective inputs, selected image digests, target account/Region, caller identity, and each run's artifacts. Keep historical behavioral qualification distinct from later configuration regressions. A tag does not retroactively move evidence to its commit. The [evidence guide](assurance/validation-evidence-guide.md) and [report template](assurance/validation-report-template.md) provide the recording boundary.
+
+RC1 pins Terraform `1.15.8`, the AWS provider `6.66.0`, and per-root provider lockfiles. These improve repeatability without freezing every dependency or proving a run used the pinned configuration. Retain the actual version and lockfile evidence with the run.
+
 ## Threat Model Assumptions
 
 The baseline is designed to reduce risk from common cloud security threats.
@@ -704,7 +738,7 @@ The baseline supports data protection through:
 
 - S3 encryption
 - S3 versioning
-- S3 Object Lock for log storage
+- Explicit log-retention policy, with S3 Object Lock absent in RC1
 - KMS-backed encryption
 - Restricted bucket policies
 - Backup vault encryption
@@ -784,7 +818,7 @@ Recovery and resilience are supported through:
 - Pre-EC2 isolation snapshots
 - EC2 rollback
 - Patch management
-- Immutable logs
+- Encrypted/versioned logs with known deletion and administrative limits
 - Terraform state separation
 
 ---
@@ -960,7 +994,7 @@ Its design favors:
 - Private infrastructure
 - Centralized identity
 - Delegated security administration
-- Immutable logging
+- Encrypted/versioned logging without an implied WORM guarantee
 - Event-driven detection and response
 - Configurable egress control
 - Dedicated private endpoint access
@@ -968,3 +1002,7 @@ Its design favors:
 - Practical audit readiness
 
 The goal is to provide a strong security foundation that can be understood, operated, and extended by small technical teams without requiring them to design every control from scratch.
+
+## Implementation references
+
+See the RC1 [baseline inputs](../baseline/variables.tf), [profile/topology/lifecycle derivation](../baseline/locals.tf), [GitHub OIDC policies](../modules/github_oidc/main.tf), [state safeguards](../modules/state/main.tf), [storage limitations](../modules/storage/main.tf), [production root inputs](../environments/prod/variables.tf), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). These qualify the design goals; they do not establish completed operating-effectiveness tests.
