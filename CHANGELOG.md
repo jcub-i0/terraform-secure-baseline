@@ -78,8 +78,8 @@ Sources: [profile and lifecycle derivation](baseline/locals.tf),
 
 Sources: [retirement procedure](docs/production-retirement.md),
 [Destroy workflow](.github/workflows/terraform-destroy.yml),
-[Stage-1 plan validator](scripts/validation/validate-production-retirement-plan.sh), and
-[readiness validator](scripts/validation/validate-retirement-readiness.sh).
+[Stage-1 plan validator](scripts/deployment/validate-production-retirement-plan.sh), and
+[readiness validator](scripts/deployment/validate-retirement-readiness.sh).
 
 ### Publication, Tooling, and Distribution Defaults
 
