@@ -339,7 +339,6 @@ Only deletion protection is profile/retirement-driven. The remaining `CHANGE THI
 
 Production retirement must relax deletion protection through the reviewed Stage-1 Apply before the saved destroy plan is applied. Follow the [retirement runbook](../../docs/production-retirement.md); do not change the deployment profile to bypass protection.
 
-
 ## Inputs
 
 These are the actual low-level module inputs, not a second set of deployment-profile defaults.
