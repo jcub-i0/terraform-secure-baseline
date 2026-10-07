@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This directory contains safe, read-only validation scripts for `tf-secure-baseline`.
+This directory contains the read-only AWS inspection entry points and local evidence exporters for `tf-secure-baseline`. This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`), not an assertion that every deployment or historical qualification ran at that commit.
 
 The validation scripts are intended to confirm that deployed Terraform stacks and AWS resources match the expected baseline architecture. They are useful for:
 
@@ -63,6 +63,12 @@ git
 
 Some scripts may require additional AWS CLI permissions depending on the resources being checked.
 
+Use Bash (not `sh`), AWS CLI, Git, `jq`, and the RC1 Terraform CLI **1.15.8** with the tracked lockfiles. Standard shell utilities are also used; this list is not a complete portable installation manifest. Commands below run from the repository root. Replace angle-bracket values before execution and select the correct account/profile for each layer. No example authorizes a production mutation.
+
+Initialize the selected Terraform backends before validation. A fresh checkout of an already-migrated state root needs its reviewed runtime `backend.tf` materialized from the tracked template; merely initializing the root without that backend can read the wrong state location. Follow the [bootstrap reference](../bootstrap/README.md) and [quickstart](../../docs/quickstart.md). Do not run `init -upgrade` to solve an evidence run's version mismatch.
+
+Validators can read sensitive Terraform state and write temporary local files. Exporters additionally write reports/logs. “Read-only” describes their intended AWS inspection behavior, not an absence of local writes or an IAM read-only guarantee: Plan roles also have state-related authority. A GitHub Environment declaration is not proof that required reviewers were configured.
+
 ---
 
 ## Common Environment Variables
@@ -71,9 +77,9 @@ Most scripts use the following environment variables:
 
 | Variable | Purpose | Required |
 |---|---|---|
-| `AWS_PROFILE` | AWS CLI profile for the target account | Recommended |
-| `AWS_REGION` | AWS region to validate | Recommended |
-| `ENV_NAME` | Environment the validation script applies to. Most environment-specific scripts also accept this as the first positional argument. | Recommended |
+| `AWS_PROFILE` | Named local profile for the target account; omit for GitHub OIDC/default-chain execution | Optional; identify the actual caller |
+| `AWS_REGION` | Workload: optional equality assertion against applied `primary_region`; administrative layers: explicit service Region | Required for bootstrap/control plane/security operations |
+| Workload positional argument | `dev`, `staging`, or `prod`; scripts assign internal `ENV_NAME` from `$1`. Exporting `ENV_NAME` is not an alternative to that argument. | Required for workload entry points |
 | `EXPECTED_ACCOUNT_ID` | Expected AWS account ID for safety checks | Recommended |
 | `EXPECTED_GITHUB_REPOSITORY` | Expected GitHub repository in `<owner>/<repo>` form for OIDC trust validation. Required for strict Image Publisher repository/branch trust validation. | Bootstrap / control plane |
 | `CLOUD_NAME` | Cloud/project prefix, defaults to `tf-secure-baseline` | Optional |
@@ -81,13 +87,18 @@ Most scripts use the following environment variables:
 | `REQUIRE_STATE_STACK_REMOTE` | Makes migrated state-stack backend findings fail instead of warn. Defaults to `false` in direct script/exporter runs; GitHub evidence workflows default it to `true`. | Optional |
 | `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE` | Requires the workload GitHub Image Publisher role to exist. Defaults to `false`; when the role output is present, the role is still validated even if this flag is `false`. | Workload bootstrap only |
 | `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` | Non-empty JSON array of branches expected in Image Publisher OIDC trust. Falls back to `BRANCHES_IMAGE_PUBLISHER_GITHUB`, then `["main"]`. | Workload bootstrap only |
-| `STRICT_GITHUB_SUBJECT_CHECKS` | Controls strict GitHub OIDC subject checking. Defaults to `true`; use relaxed behavior only for deliberate transitional troubleshooting. | Bootstrap / control plane |
+| `STRICT_GITHUB_SUBJECT_CHECKS` | Workload-bootstrap Plan/Apply subject checks; defaults to `true`. This is not a control-plane strictness input. | Workload bootstrap only |
 | `IDENTITY_CENTER_WORKLOADS` | JSON map containing the `dev`, `staging`, and `prod` Identity Center workload configurations. Required by the control-plane validator and exporter. | Control plane only |
 | `IDENTITY_CENTER_SECOPS` | JSON object containing the security-operations Identity Center configuration. Required by the control-plane validator and exporter. | Control plane only |
 | `WORKLOADS_OU_NAME` | Workloads OU name used by centralized-security validation. Defaults to `Workloads`. | Security operations / control plane |
 | `WORKLOAD_ACCOUNT_NAMES` | Space-delimited workload account names used by the security-operations exporter. Defaults to `dev staging prod`. | Security operations only |
+| `STRICT_WORKLOAD_CMK_POLICY_CHECKS` | Current workload CMK references in bootstrap IAM; default `true` | Workload bootstrap only |
+| `REQUIRE_BOOTSTRAP_GITHUB_OIDC` / `REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE` | Required bootstrap OIDC/Apply-role checks; each defaults to `true` | Workload bootstrap only |
+| `STRICT_ACCOUNT_OU_CHECKS` / `STRICT_IDENTITY_CENTER_ASSIGNMENTS` | Required topology/assignment findings fail by default (`true`) | Control plane only |
+| `CHECK_OPTIONAL_SECOPS_GROUPS` | Additional optional-group checks; default `false` | Control plane only |
+| `REQUIRE_CONTROL_PLANE_GITHUB_OIDC` | Control-plane OIDC checks; default `true` | Control plane only |
 
-Recommended defaults:
+Example service-region context (replace `us-east-1` with the intended service Region, not the backend Region):
 
 ```bash
 export AWS_PAGER=""
@@ -105,6 +116,21 @@ NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 
 This allows client or custom deployments to override `CLOUD_NAME` without editing script internals. Set `NAME_PREFIX` directly only when validating resources that intentionally do not follow the default `${CLOUD_NAME}-${ENV_NAME}` naming convention.
 
+### Region authority and execution context
+
+The workload runner, workload exporters, and individual workload validators resolve the service Region from the **applied** `environments/<env>` output `primary_region`. The shared `resolve_workload_region` helper rejects a conflicting supplied `AWS_REGION`, including an explicitly empty value. The AWS profile's default Region, `AWS_DEFAULT_REGION`, and the S3 backend Region are not substitutes for that output. Use `unset AWS_REGION`, not `AWS_REGION=""`, when deliberately allowing the workload helper to resolve it; an unreadable or unapplied workload root still fails.
+
+Workload-bootstrap, control-plane, and security-operations validators/exporters instead require an explicit, non-empty service `AWS_REGION`. They do not discover their scope from workload state. Bootstrap/control-plane state checks use the separately resolved backend Region for their state S3/KMS queries. Keep these concepts distinct:
+
+| Setting or evidence | Meaning |
+|---|---|
+| Workload `primary_region` output | Provider-backed, applied workload service Region used by workload validation |
+| Administrative `AWS_REGION` | Explicit service Region for bootstrap/control-plane/security-operations validation |
+| State-root `state_region` | Terraform provider input for provisioning the state resources |
+| S3 backend `region` | Region configured for the selected state bucket/backend; not changed by a workload Region override |
+
+Set the correct profile and expected account before reading state. A successful Region comparison is not a cross-Region deployment, replication, or disaster-recovery qualification. Changing `TF_VAR_primary_region` without changing the applied state does not retarget a validation run.
+
 ---
 
 ## Workload Bootstrap Validation
@@ -115,7 +141,7 @@ This script validates:
 
 - `bootstrap/<env>/state` exists
 - `bootstrap/<env>/account` exists
-- the active AWS account matches `EXPECTED_ACCOUNT_ID`
+- the active AWS account matches `EXPECTED_ACCOUNT_ID` when supplied; supply it explicitly for acceptance evidence
 - `bootstrap/<env>/state/backend.tf` declares the migrated S3 backend when remote-state validation is enabled
 - the state, account, and workload backends use `use_lockfile = true`
 - backend files resolve a shared Terraform state bucket and region with distinct state object keys
@@ -176,7 +202,7 @@ use_lockfile = true
 
 The script derives the state bucket from the backend files, then validates the live S3 bucket and KMS encryption configuration through AWS APIs.
 
-DynamoDB state locking is not expected for the current architecture. This project uses Terraform S3 native locking with `use_lockfile = true`; DynamoDB-based locking for the S3 backend is deprecated.
+DynamoDB state locking is not part of the RC1 architecture. This project uses Terraform S3 native locking with `use_lockfile = true`. Reading that declaration and checking policy access do not constitute a live lock-contention test.
 
 ### v1.4.0 Migration Note
 
@@ -236,8 +262,8 @@ The Image Publisher role is owned by `bootstrap/<env>/account`, so its IAM trust
 If `image_publisher_role_github_arn` is present in the account-stack outputs, `validate-bootstrap.sh` validates the role even when it is not explicitly required. Set the following for release/client-facing evidence when application image publication is enabled:
 
 ```bash
-REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true
-EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]'
+export REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true
+export EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]'
 ```
 
 `REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true` requires `REQUIRE_BOOTSTRAP_GITHUB_OIDC=true`. The expected branch value must be a non-empty JSON array of non-empty strings. If `EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES` is unset, the validator/exporter uses `BRANCHES_IMAGE_PUBLISHER_GITHUB` when available and otherwise defaults to `["main"]`.
@@ -281,7 +307,6 @@ Deployments that intentionally do not enable application image publication shoul
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
-ENV_NAME="dev" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 REQUIRE_STATE_STACK_REMOTE=true \
 ./scripts/validation/validate-bootstrap.sh dev
@@ -292,7 +317,6 @@ REQUIRE_STATE_STACK_REMOTE=true \
 ```bash
 AWS_PROFILE=staging \
 AWS_REGION=us-east-1 \
-ENV_NAME="staging" \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 REQUIRE_STATE_STACK_REMOTE=true \
@@ -304,7 +328,6 @@ REQUIRE_STATE_STACK_REMOTE=true \
 ```bash
 AWS_PROFILE=prod \
 AWS_REGION=us-east-1 \
-ENV_NAME="prod" \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 REQUIRE_STATE_STACK_REMOTE=true \
@@ -321,7 +344,6 @@ Use advisory mode only when stale/missing workload CMK policy references should 
 STRICT_WORKLOAD_CMK_POLICY_CHECKS=false \
 AWS_PROFILE=dev \
 AWS_REGION=us-east-1 \
-ENV_NAME="<ENV-NAME>" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
 REQUIRE_STATE_STACK_REMOTE=true \
@@ -335,7 +357,17 @@ For validated client handoff evidence, leave `STRICT_WORKLOAD_CMK_POLICY_CHECKS`
 `validate-bootstrap.sh` is read-only and does not run `terraform init`. For manual GitHub workflow usage, initialize the remote-backed stacks first so Terraform outputs can be read from the S3 backend:
 
 ```bash
-terraform -chdir=bootstrap/dev/state init -input=false
+export AWS_PROFILE="dev"
+export AWS_REGION="us-east-1"
+export EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>"
+# Verify this account and the reviewed backend template first.
+aws sts get-caller-identity
+
+# Only for an already-migrated state root; do not overwrite an existing backend.
+if [[ ! -e bootstrap/dev/state/backend.tf ]]; then
+  cp bootstrap/dev/state/backend.tf.migrated.example bootstrap/dev/state/backend.tf
+fi
+./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
 terraform -chdir=bootstrap/dev/account init -input=false
 terraform -chdir=environments/dev init -input=false
 
@@ -355,7 +387,7 @@ For a publisher-enabled workload release, also require the Image Publisher role 
 
 Under GitHub OIDC, `AWS_PROFILE` is intentionally not set. The report should identify the credential source as `GitHub OIDC environment credentials`.
 
-For strict workload CMK evidence, the expected deployment sequence is:
+For strict workload CMK evidence, the expected deployment sequence is below. After the initial state apply, migrate and verify the state root with `migrate-state-stack.sh` **before** treating remote-state evidence as complete. Reconciliation mutates IAM when applied and is not part of validation itself.
 
 ```text
 1. Apply bootstrap/<env>/state.
@@ -379,7 +411,7 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/validation/validate-baseline.sh dev
 ```
 
-Run once per deployed workload environment:
+Run for each deployed workload environment from its separately configured profile/account/Region context. The following are alternatives, not a loop to execute under one unchanged profile:
 
 ```bash
 ./scripts/validation/validate-baseline.sh dev
@@ -415,7 +447,13 @@ Validation scripts passed:  16/16
 Validation scripts failed:  0/16
 ```
 
-The v1.9 live qualification completed with all 16 workload validators passing, strict workload-bootstrap validation passing, and a converged Terraform plan with no changes. The qualification also exercised CPU and memory scale-out/scale-in, conditional ALB request scaling, fixed-versus-autoscaled desired-count ownership, digest release while scaled, deployment-health settings, and ECS operational alarms. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
+The runner invokes the scripts **sequentially**, continues after a child fails, and returns a failure after the final summary if any child failed or was missing/not executable. An earlier prerequisite or Region-resolution failure can stop it before the loop. `16/16` counts top-level script exit codes, not individual assertions, warning-free operation, executed application traffic, or completed recovery tests.
+
+`validate-baseline.sh` prints its results; `export-baseline.sh` independently reruns the same child scripts and writes the timestamped evidence package. It does not package a previous runner invocation. For a single evidence-producing pass, use the exporter; use direct validators for focused diagnostics.
+
+The historical v1.9 qualification narrative records all 16 workload validators passing, strict workload-bootstrap validation passing, and a converged Terraform plan with no changes. The qualification also exercised CPU and memory scale-out/scale-in, conditional ALB request scaling, fixed-versus-autoscaled desired-count ownership, digest release while scaled, deployment-health settings, and ECS operational alarms. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
+
+That historical statement is not an exact-RC1 rerun. Record the implementation/deployment commit, validator checkout, selected digests and configuration for each new evidence set; a release tag does not retroactively re-date earlier tests.
 
 ---
 
@@ -445,6 +483,18 @@ Examples:
 
 Use individual scripts when validating a specific area after a targeted change.
 
+### Exact topology and lifecycle checks
+
+`validate-networking.sh` reads `network_topology`, `lifecycle_protection`, and the effective egress/domain outputs. It compares the live main VPC CIDR and attached Internet Gateway with Terraform, then validates each of the seven subnet families by count, AZ, subnet ID, CIDR, and disabled public-IP auto-assignment. It also compares the **entire live VPC subnet-ID set** with the union of those families, so an extra subnet is not accepted merely because all expected subnets exist.
+
+The default topology is three AZs for `production` and two for `development`/`minimal`, with seven families in every selected AZ, including firewall-private subnets even when Network Firewall is absent. These are profile defaults, not a hard-coded universal 21/14-subnet check: supported explicit AZ/subnet inputs are reflected in the applied topology. The baseline derives canonical `/24` subnets from its canonical IPv4 `/16` input when `subnet_cidrs` is null.
+
+The routing checks cover same-AZ subnet/route-table associations and the expected IGW, NAT and firewall targets. In `network_firewall` mode, compute default traffic reaches the same-AZ firewall, firewall default traffic reaches the same-AZ NAT, and the compute-CIDR return override exists only on the matching **egress-public** route table. Ingress-public traffic retains VPC-local access to ALB targets rather than taking that return path. Network Firewall must be `READY`/`IN_SYNC`, with expected ready attachments and deletion protection matching Terraform.
+
+NAT inventory is read with an `available,pending` filter and checked against Terraform IDs and same-AZ egress-public placement. That inventory comparison alone must not be relabeled as an independent assertion that every NAT Gateway is already `available`; inspect availability separately when qualifying usable egress. The checks do not transmit application traffic or establish that every possible firewall policy setting was audited.
+
+The domain-target set is compared exactly without rebuilding Terraform's allowlist composition. A successful target-set comparison is not a TLS-decryption test or proof that every protocol/traffic path traverses the firewall. In `vpc_endpoints_only`, the public subnet families and IGW still exist; private compute has no general internet default route.
+
 ### Networking domain validation
 
 `validate-networking.sh` reads `effective_egress_mode` and `effective_allowed_egress_domains` from the selected workload environment's Terraform outputs. Terraform owns composition of the effective Network Firewall allowlist; the script does not recreate platform and caller domain-union logic.
@@ -463,6 +513,8 @@ For every configured repository, it compares the live name, ARN, and registry ID
 
 ### Inspector effective resource types
 
+When Inspector is enabled, the expected scan-type set is the effective Terraform output. A profile's cost choice is not inferred from repository names by the validator.
+
 `validate-security-workload.sh` uses `effective_inspector_resource_types` as its only expected Inspector resource set and fails for both missing and unexpectedly enabled live scan types, including EC2, ECR, Lambda, Lambda code, and code repositories. It does not reconstruct the repository-to-ECR composition policy.
 
 ### ECS runtime and IAM validation
@@ -470,7 +522,7 @@ For every configured repository, it compares the live name, ARN, and registry ID
 `validate-ecs-runtime.sh` is the single ECS runtime entry point. Its sourced modules
 under `lib/ecs-runtime/` separate shared helpers (`common.sh`), Terraform outputs
 and membership checks (`contract.sh`), cluster and Container Insights checks
-(`cluster.sh`), service/task/network checks (`services.sh`), Application Auto Scaling
+(`cluster.sh`), service/task/network checks (`services.sh`), injected-agent/coverage checks (`guardduty.sh`), Application Auto Scaling
 (`autoscaling.sh`), conditional ALB checks (`ingress.sh`), operational alarms
 (`alarms.sh`), and final counts/output (`summary.sh`). These modules are internal;
 the baseline runner still invokes one ECS runtime validator. Operational alarms
@@ -488,13 +540,74 @@ The validator also compares `minimum_healthy_percent`, `maximum_percent`, and `h
 
 The environment cluster check validates the Terraform-owned Container Insights performance log group when Container Insights is enabled: exact name and ARN, effective retention, and exact `logs_cmk_arn`. When Container Insights is disabled, the resource-backed log-group output must be `null`.
 
-When an ALB is present, the validator compares the resource-backed ALB, listener, ACM certificate, TLS policy, load-balancer ARN suffix, and target-group metadata with live AWS. It also requires public-subnet placement, the fixed 404 default, `ip` target groups, and meaningful forwarding listener rules.
+When an ALB is present, the validator compares the resource-backed ALB, listener, ACM certificate, TLS policy, load-balancer ARN suffix, and target-group metadata with live AWS. It also requires exact Terraform-owned **ingress-public** placement, the fixed 404 default, `ip` target groups, and meaningful forwarding listener rules. The ALB frontend is HTTPS, while RC1 target groups and their health checks use HTTP; the configuration check is not end-to-end TLS or an application authorization test.
 
 Operational alarms are validated independently of the conditional ALB stage. The expected Terraform-owned inventory consists only of task-deficit and ingress unhealthy-target alarms; AWS-managed target-tracking alarms are deliberately outside this operational inventory. Task-deficit alarms must implement the Container Insights `DesiredTaskCount - RunningTaskCount` contract, and ingress alarms must implement `AWS/ApplicationELB` `UnHealthyHostCount` with the resource-backed ALB/target-group suffix dimensions. `OK` passes, `INSUFFICIENT_DATA` warns while metric evaluation completes, and `ALARM` fails validation.
 
 `validate-iam.sh` owns the ECS IAM assertions. For each service it validates the separate execution and task roles, ECS task trust restrictions, the custom repository- and log-group-scoped execution policy, optional ARN-identifiable Secrets Manager and SSM permissions, absence of managed-policy attachments and `iam:PassRole`, and an initially policy-free application task role. It compares the live execution-policy `kms:Decrypt` resources exactly with `ecs_service_configuration[*].task_execution_kms_key_arns`; an empty expected set requires the decrypt action to be absent.
 
 The runtime validator compares the live cluster Container Insights setting with `ecs_cluster.container_insights`, database rule presence/absence with `ecs_service_configuration`, and live service/logging/ALB settings with their resource-backed outputs. Internal SG readiness IDs remain intentionally internal. Repository keys are never treated as ECS service identities. A registered canonical service whose `image_digest` is null is not present in the deployable runtime output maps and therefore does not require live per-service resources.
+
+#### Production availability and empty-runtime limits
+
+For deployable production services outside retirement, the canonical floor is two fixed tasks or an autoscaling minimum of two. The normal runtime validator additionally requires `minimum_healthy_percent = 100`, `maximum_percent >= 200`, and AZ rebalancing `ENABLED`. A three-AZ subnet set and the sample's three-task choice do not independently prove one live task per AZ; capture actual placement and ALB target health separately when qualifying that configuration.
+
+For protected profiles, `guardduty.sh` validates exactly one running injected agent per protected running task and checks `AUTO_MANAGED`/`HEALTHY` coverage with no unresolved issues. It accepts the documented exact/prefixed agent names. With no deployable services, live coverage is not required; with no protected running tasks, protected healthy coverage is not required yet. A PASS with an empty runtime does not exercise instrumentation. The application-container check accepts `UNKNOWN` health when no ECS-native health check exists and rejects `UNHEALTHY`; that is not proof of an application transaction or database connection.
+
+For `minimal`, agents are not required and healthy coverage is not required; when the coverage branch is applicable, absence is valid or the returned expected-cluster record must use `DISABLED` management. Supporting IAM, endpoint and EventBridge validators cover the agent's authority, Terraform-owned endpoint reuse, and configured notification path. Configuration equality is not a test that a real coverage event reached a human recipient.
+
+### SQS inspection limits
+
+`validate-sqs.sh` checks the required named queues, accepts configured SSE-KMS **or** SQS-managed encryption, checks SNS producer subscription/policy relationships where declared, and reports redrive configuration and approximate message counts. Do not describe it as an exact KMS-key, exact `maxReceiveCount`, complete queue-policy, or zero-DLQ-depth validator. A printed count or redrive policy is not automatically a blocking assertion. Review the raw values and any related alarm/delivery evidence separately.
+
+### RDS, AWS Backup, and Restore Testing validation
+
+`validate-backup.sh` is also the RDS resilience validator; there is no separate `validate-rds.sh` and no seventeenth workload entry point. Required outputs include `rds_configuration`, `backup_vault_configuration`, `lifecycle_protection`, `restore_testing`, and `effective_backup_enabled`. Only the supported disabled Backup schedule/retention outputs are treated as null when Terraform omits them; missing required contract objects are not silently ignored.
+
+| Check | Evidence established |
+|---|---|
+| Live RDS | Expected DB identifier/ARN, Multi-AZ, DB subnet-group **name**, exact VPC SG set, deletion protection, native backup retention, public accessibility, and storage-encryption flag |
+| RDS deletion-time intent | Resource-backed `skip_final_snapshot`, `delete_automated_backups`, and final-snapshot identifier consistency; these are not all live RDS API settings |
+| Backup vault | Live name/ARN/encryption and Terraform `force_destroy` consistency with `lifecycle_protection`; `force_destroy` is Terraform deletion behavior, not a live vault API flag |
+| Scheduled Backup | Effective enablement, plan/selection presence or absence, rule schedule/retention/vault, service-role/tag selection, and EC2/RDS `Backup` tags |
+| Enabled Restore Testing | Exact plan/selection, protected RDS ARN, role, schedule/windows, source vault and private restore metadata |
+| Restore execution reporting | Latest restore job, validation result and temporary-resource deletion status; each status has a different acceptance rule |
+
+RDS-native automated backups are separate from the AWS Backup schedule and Restore Testing. RC1's production database is a PostgreSQL **DB instance**, not Aurora or a Multi-AZ DB cluster. The production source is Multi-AZ; the temporary Restore Testing override is private and Single-AZ. Neither a three-AZ subnet group nor its name proves three database servers.
+
+This is not an exhaustive RDS configuration validator. In particular, it does not compare every engine/version, DB instance class, storage/parameter-group setting, or exact member-subnet set, and it does not log in to PostgreSQL or force failover. The `instance_class` output alone is not proof that the live `DBInstanceClass` was compared.
+
+When Restore Testing is disabled, the validator returns without requiring live Restore Testing configuration. It does **not** inventory all live restore plans and prove their absence. When enabled, interpret the latest job as follows:
+
+| Reported state | Current script behavior | Evidence limit |
+|---|---|---|
+| No restore jobs | Warning; configuration can pass | No restore execution established by this run |
+| Restore `PENDING` / `RUNNING` | Warning | Restore has not completed |
+| Restore `COMPLETED` | Execution success | Not by itself application validation or cleanup success |
+| Restore `FAILED` / `ABORTED` | Failure | Restore execution failed |
+| Application validation `FAILED` / `TIMED_OUT` | Warning | Must be reviewed separately; not an accepted application recovery result |
+| Temporary-resource deletion `FAILED` | Warning | Cleanup has not been proven successful |
+| Unknown/in-progress validation or cleanup status | Informational message or warning | Retain the exact status and follow up; do not infer completion |
+
+A `validate-backup.sh` PASS may therefore coexist with an unexecuted restore, failed application validation, or unresolved cleanup. Keep the raw log and record the reviewer's recovery/cleanup acceptance separately. See the [Backup module](../../modules/backup/README.md), [storage reference](../../modules/storage/README.md), and [evidence guide](../../docs/assurance/validation-evidence-guide.md).
+
+### Production retirement is a separate validation posture
+
+Normal production runtime validation expects nonzero production capacity. Do not weaken it to make a deliberately retired environment pass. The retirement helpers remain under `scripts/deployment/`, outside the four evidence layers and 16 workload-validator count:
+
+| Helper | Operation and boundary |
+|---|---|
+| `validate-production-retirement-plan.sh` | Read-only check of the exact saved Stage-1 plan: only read/no-op/in-place updates, expected retirement outputs, and zero planned service/scaling capacity; not a whitelist of every permissible attribute change |
+| `cleanup-retirement-durable-data.sh --mode plan` | Read-only durable ECR/Backup inventory; does not authorize deletion |
+| `cleanup-retirement-durable-data.sh --mode apply` | Explicitly authorized **mutation**, not validation; re-inventories before deleting scoped images/recovery points |
+| `validate-retirement-readiness.sh` | Read-only live gate: native protections relaxed, RDS final-snapshot intent preserved, ECS desired/running/pending zero, scaling unable to restore capacity, empty ECR/vault and no active Backup jobs |
+| `terraform-plan-artifact.sh` | Creates/verifies exact-plan artifacts within its GitHub workflow contract; it does not apply Terraform |
+
+The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, separately planned/approved Identity Center cleanup, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
+
+The complete RC1 durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
+
+Use the [production retirement runbook](../../docs/production-retirement.md) for the exact approval chain. Retain separate Stage-1, cleanup, readiness, Identity Center, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
 
 ---
 
@@ -588,7 +701,7 @@ The account IDs used for AWS Organizations and Identity Center assignment checks
 For strict release or client-facing evidence, run with:
 
 ```bash
-REQUIRE_STATE_STACK_REMOTE=true
+export REQUIRE_STATE_STACK_REMOTE=true
 ```
 
 The validator confirms that `bootstrap/control_plane/state/backend.tf` declares S3 with `use_lockfile = true`, that the configured state object exists and is readable, that the bucket matches the state stack output, and that `terraform state pull` succeeds.
@@ -609,7 +722,7 @@ SecOps-Administrator
 To validate optional Analyst and Engineer groups, set:
 
 ```bash
-CHECK_OPTIONAL_SECOPS_GROUPS=true
+export CHECK_OPTIONAL_SECOPS_GROUPS=true
 ```
 
 The validator uses the corresponding `enable_secops_analyst` and `enable_secops_engineer` values from `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` to determine whether each optional group is required.
@@ -696,6 +809,8 @@ The validator checks selected live AWS state and Terraform state for:
 
 The security-operations validator does not replace complete organization topology checks or workload-local checks. Use `validate-control-plane.sh` for the former and `validate-baseline.sh` / `validate-security-workload.sh` for the latter.
 
+Its evidence is scoped to `bootstrap/security_operations/security_services` and the required live governance dependencies; it is not a complete validation of the security-operations state/account substacks. The Terraform-managed GuardDuty organization feature subset must match exactly, and additional AWS-returned features/configurations outside that subset must remain `NONE`.
+
 ---
 
 ## Exporting Validation Evidence
@@ -709,6 +824,12 @@ per-script validation logs
 ```
 
 Generated evidence is environment-specific and should generally not be committed to the repository.
+
+Review raw logs as well as the summary. The baseline exporter records per-script PASS/FAIL from exit status and does not aggregate every warning or maintain a completed-test ledger. Its `manual_validation_remaining` array is static guidance, not a record of which tests you actually performed. A prerequisite failure can leave an incomplete package or no package; do not reuse the newest older directory as evidence of a failed new run.
+
+Keep companion provenance for the validator checkout SHA, deployment SHA, selected image digests, effective profile and topology, service/backend Regions, toolchain/lockfile identity, workflow run/attempt, approvals, and acceptance exceptions. These are not automatically supplied as a complete signed manifest in the baseline summary. Preserve generated summaries/logs unchanged and use the [evidence guide](../../docs/assurance/validation-evidence-guide.md) and [report template](../../docs/assurance/validation-report-template.md) for reviewer records.
+
+The credential-source label is inferred from environment variables. Verify actual caller identity and workflow authentication separately rather than treating that string as proof of how credentials were obtained.
 
 ### Workload Bootstrap Evidence
 
@@ -825,10 +946,10 @@ validate-security-operations.log
 
 For a complete release/client-facing evidence pass, follow the platform boundaries rather than treating one report as sufficient:
 
-1. `validate-control-plane.sh` and `export-control-plane.sh`
-2. `validate-security-operations.sh` and `export-security-operations.sh`
-3. `validate-bootstrap.sh <env>` and `export-bootstrap.sh <env>` for each workload account
-4. `validate-baseline.sh <env>` and `export-baseline.sh <env>` for each deployed workload account
+1. `export-control-plane.sh` (or direct control-plane validation for diagnostics)
+2. `export-security-operations.sh`
+3. `export-bootstrap.sh <env>` for each deployed workload account after reconciliation
+4. `export-baseline.sh <env>` for each deployed workload account
 5. Review all generated summaries and logs together
 6. Complete approved live/manual tests
 
@@ -849,6 +970,10 @@ The following activities remain live/manual or review-based:
 - tamper-detection simulation
 - break-glass role assumption
 - destroy-safety review and approved teardown execution
+- actual ECS task placement/replacement and application target/transaction checks
+- controlled RDS failover, completed restore execution, application validation and temporary-resource cleanup
+- custom-CIDR deployment/destroy regression and a final no-change plan with matching inputs
+- separate production Stage-1, durable cleanup, readiness and approved destroy records
 - policy/procedure review
 - formal audit evidence review
 
@@ -860,7 +985,7 @@ Track these separately in the validation checklist or assurance documentation.
 
 ### PASS
 
-A `PASS` means the script confirmed the expected condition.
+An individual `[PASS]` line confirms its stated assertion. A whole-script PASS means the process exited successfully through its applicable branches. It may coexist with warnings, optional omissions, or no running application. A suite `16/16` result is therefore not an exhaustive security or recovery acceptance decision.
 
 ### WARN
 
@@ -872,6 +997,10 @@ Examples:
 - optional Identity Center groups not configured
 - intentionally relaxed strictness checks during transitional troubleshooting
 - environment-specific exceptions
+- an ECS operational alarm in `INSUFFICIENT_DATA`
+- no Restore Testing job yet, in-progress restore, or failed application validation/cleanup reported as warnings by the current Backup validator
+
+Retain the exact warning and disposition; do not change a generated result to hide it. Reviewer acceptance can remain outstanding even when all scripts exit successfully.
 
 ### FAIL
 
@@ -897,7 +1026,7 @@ Failures should be fixed before using the environment as validated evidence.
 
 ## Safety Notes
 
-The validation scripts are designed to be safe and read-only.
+The validation entry points inspect AWS and Terraform without intentionally changing deployed resources. Evidence exporters and Terraform reads can create local files containing sensitive configuration. Their use of an existing credential chain does not guarantee that the caller has only read permissions.
 
 They should not:
 
@@ -906,15 +1035,25 @@ They should not:
 - run `terraform init`
 - migrate state
 - modify IAM policies
-- assume privileged roles
+- explicitly run privileged role-assumption tests (credential-chain resolution is separate)
 - trigger live security automation
 - delete or replay DLQ messages
 
 Review each script before extending it to ensure this read-only safety property is preserved.
 
+Backend initialization/migration, reconciliation apply, SSM sessions, SQS `receive-message`, CloudTrail stop/start, role-assumption tests, and retirement cleanup are separate operator/workflow actions, not part of the read-only validator contract. In particular, receiving an SQS message affects visibility/receive state even without deleting it. Keep those operations explicitly approved and separate from evidence-only runs.
+
 ---
 
 ## Troubleshooting
+
+### Missing or mismatched service Region
+
+For workload validation, first confirm the selected root is initialized against its intended backend and has an applied `primary_region` output. A stale `AWS_REGION` must be corrected or unset; an explicitly empty value is still a mismatch. Do not “fix” the comparison by changing backend Region or masking errors with a different profile. Administrative validators/exporters require explicit service `AWS_REGION`; `AWS_DEFAULT_REGION` alone is insufficient.
+
+### Normal validation fails during retirement
+
+The normal production ECS checks are not designed to accept zero-capacity retirement as healthy production. Use the Stage-1 saved-plan and live readiness validators in the retirement runbook. Preserve the last normal-state evidence from before retirement; do not rerun normal validation after destruction and interpret missing resources as a release regression.
 
 ### Backend Configuration Changed
 
@@ -952,13 +1091,23 @@ Point the backend at the correct state key before applying.
 
 `validate-bootstrap.sh` reads the migrated state stack to validate backend readability and compare `tf_state_bucket_name`; it also reads outputs from the account and workload stacks.
 
-Before running bootstrap validation from a fresh checkout or GitHub workflow, initialize the remote-backed stacks:
+Before running bootstrap validation from a fresh checkout, select the correct profile/account/service Region, materialize the reviewed state backend without overwriting an existing one, and verify an **already-migrated** state root:
 
 ```bash
-terraform -chdir=bootstrap/<env>/state init -input=false
-terraform -chdir=bootstrap/<env>/account init -input=false
-terraform -chdir=environments/<env> init -input=false
+ENVIRONMENT="dev"  # Choose dev, staging, or prod in its configured account shell.
+: "${AWS_PROFILE:?Set the matching local profile}"
+: "${AWS_REGION:?Set the explicit service Region}"
+: "${EXPECTED_ACCOUNT_ID:?Set the expected workload account ID}"
+STATE_DIR="bootstrap/${ENVIRONMENT}/state"
+if [[ ! -e "${STATE_DIR}/backend.tf" ]]; then
+  cp "${STATE_DIR}/backend.tf.migrated.example" "${STATE_DIR}/backend.tf"
+fi
+./scripts/bootstrap/migrate-state-stack.sh "${ENVIRONMENT}" --verify-only
+terraform -chdir="bootstrap/${ENVIRONMENT}/account" init -input=false
+terraform -chdir="environments/${ENVIRONMENT}" init -input=false
 ```
+
+`--verify-only` is not a state migration but does initialize/read local backend files. On GitHub evidence runners, the workflow performs its own backend materialization and initialization. Do not set a local profile on the OIDC runner.
 
 If output reads still fail, confirm that the selected AWS principal has access to the configured S3 backend bucket, state object key, `.tflock` object, and state CMK.
 
@@ -969,7 +1118,7 @@ If `validate-bootstrap.sh` fails because the GitHub Apply role does not referenc
 For transitional validation only, set:
 
 ```bash
-STRICT_WORKLOAD_CMK_POLICY_CHECKS=false
+export STRICT_WORKLOAD_CMK_POLICY_CHECKS=false
 ```
 
 This keeps the checks enabled but reports stale/missing workload CMK policy references as warnings instead of failures.
@@ -979,7 +1128,7 @@ This keeps the checks enabled but reports stale/missing workload CMK policy refe
 If `validate-bootstrap.sh` fails in the Image Publisher trust or policy section, first confirm that the account stack actually exposes the role and that the expected branch configuration matches Terraform:
 
 ```bash
-terraform -chdir=bootstrap/<env>/account output -json | \
+terraform -chdir="bootstrap/${ENVIRONMENT:?Select dev, staging, or prod}/account" output -json | \
   jq -r '.image_publisher_role_github_arn.value // "<not enabled>"'
 ```
 
@@ -990,10 +1139,14 @@ Do not use `deploy-application.sh` to repair bootstrap IAM validation. The deplo
 For release/client-facing evidence where the publisher is expected, use:
 
 ```bash
+AWS_PROFILE="${AWS_PROFILE:?Set the workload profile}" \
+AWS_REGION="${AWS_REGION:?Set the service Region}" \
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:?Set the workload account ID}" \
+EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:?Set owner/repo}" \
 REQUIRE_STATE_STACK_REMOTE=true \
 REQUIRE_BOOTSTRAP_GITHUB_IMAGE_PUBLISHER_ROLE=true \
 EXPECTED_GITHUB_IMAGE_PUBLISHER_BRANCHES='["main"]' \
-./scripts/validation/export-bootstrap.sh <env>
+./scripts/validation/export-bootstrap.sh "${ENVIRONMENT:?Select dev, staging, or prod}"
 ```
 
 ---
