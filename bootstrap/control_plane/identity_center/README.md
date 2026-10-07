@@ -224,7 +224,6 @@ Do not apply a plan with unresolved warnings, unexpected removals, or mismatched
 
 Use the schema examples below only as starting values. Preserve every account entry, role flag, and policy name required by the intended access configuration when editing a deployed stack.
 
-
 ---
 
 ## Inputs
