@@ -728,7 +728,7 @@ bootstrap/dev/state
     -> remote backend key: bootstrap/state/dev.tfstate
 
 bootstrap/dev/account
-    -> remote backend key: bootstrap/dev.tfstate
+    -> remote backend key: bootstrap/account/dev.tfstate
 
 environments/dev
     -> remote backend key: baseline/dev.tfstate
