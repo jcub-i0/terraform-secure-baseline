@@ -1,233 +1,223 @@
-# Terraform State Stack
+# Security-Operations State Stack
 
 ## Overview
 
-The `state` stack is responsible for provisioning the foundational backend infrastructure used by all other Terraform stacks in this repository.
+`bootstrap/security_operations/state` provisions the S3/KMS backend for the delegated security-operations account. It does not provision a shared backend for every workload account. `dev`, `staging`, `prod`, and the other administrative account have their own state roots.
 
-It deploys:
-- Centralized Terraform state storage (S3)
-- State locking (DynamoDB)
-- Encryption (KMS/CMK)
+The stack creates an S3 state bucket and a dedicated AWS KMS customer-managed key. Locking is configured by the consuming Terraform backends with:
 
-This stack represents the root of trust for your entire infrastructure.
+```hcl
+use_lockfile = true
+```
 
----
+There is no DynamoDB table in the current state module.
 
-## ⚠️ CRITICAL WARNING ⚠️
+## Safety Model
 
-🚨 **THIS STACK MUST NEVER BE DESTROYED!** 🚨
+Treat state resources as critical infrastructure. Both the S3 bucket and the state CMK have literal `prevent_destroy = true` guards in `modules/state/main.tf`. Bucket versioning, SSE-KMS, S3 Block Public Access, bucket-owner-enforced ownership, and selected bucket-policy denies provide additional controls.
 
-Destroying this stack will:
-- Delete, corrupt, or orphan Terraform state
-- Break all Terraform operations
-- Make safe infrastructure management impossible
-- Potentially require full environment rebuild
+Backend separation alone does not guarantee that Terraform cannot destroy its own backend. The operational rule is:
 
-This stack contains the backend for:
-- `bootstrap` stack (CI/CD execution plane)
-- `baseline` stack (infrastructure plane)
-- Any future environments (dev, staging, prod)
+> Never destroy resources that still contain this root's active Terraform state.
 
-This stack is the **foundation of all Terraform operations** in this environment.
+Moving state to an independent backend is necessary before any state-resource retirement, but is not sufficient: the literal bucket and CMK destruction guards remain. The workload `production_retirement_mode` input does not control these guards.
 
-It must be deployed **first**, and only once per account.
-
-**There is NO safe recovery from accidental destruction.**
-
-Treat this stack as:
-- Permanent
-- Protected
-- Highly sensitive
-
----
+State corruption or loss requires recovery from verified state copies and available object versions. Do not promise either automatic recovery or inevitable total loss; the outcome depends on the retained evidence and backups.
 
 ## Architecture
 
-This stack exists in a separate control plane layer:
+The account's backend is shared by distinct roots, each with a unique state object key:
 
-- `state` stack ➔ `bootstrap` and `baseline` stacks
-  - `bootstrap` stack ➔ `github_oidc` module
-  - `baseline` stack ➔ All infrastructure (VPC, Lambda, S3, etc.)
+```text
+bootstrap/security_operations/state
+    |
+    +--> S3 state bucket + state CMK
+             |
+             +--> bootstrap/security_operations/state
+             +--> bootstrap/security_operations/account
+             +--> bootstrap/security_operations/security_services
+```
 
-This separation ensures:
-- Terraform cannot destroy its own backend
-- CI/CD remains stable
-- Infrastructure lifecycle is safe
-
----
-
-## State Management
-
-Unlike other stacks:
-
-- This stack initially uses local state
-- It bootstraps the remote backend used by all other stacks
-
-After deployment:
-- `bootstrap` and `baseline` use the S3 backend created here
-- This stack may optionally be migrated to remote state later
-
----
+The initial apply uses local state. After the bucket and key exist, `migrate-state-stack.sh security-operations` migrates this state root into the bucket it created. Long-lived local state is not the intended steady state.
 
 ## Inputs
 
-| Name                     | Description                                      | Required |
-|--------------------------|--------------------------------------------------|----------|
-| `cloud_name`             | Name of env; used as prefix for resource naming  | Yes      |
-| `environment`            | Environment name (e.g., dev, prod)               | Yes      |
-| `account_id`             | AWS account ID                                   | Yes      |
-| `primary_region`         | AWS region                                       | Yes      |
-| `bucket_admin_principals`| ARNs allowed to modify bucket protections        | Yes      |
+| Input | Type | Default | Purpose |
+|---|---|---|---|
+| `cloud_name` | `string` | Required | Project name used by the root to build `name_prefix` |
+| `environment` | `string` | Required | Naming identity; the normal value for this account is `security-operations` |
+| `state_region` | `string` | `"us-east-1"` | Region hosting the state bucket and CMK; cannot be null |
+| `bucket_admin_principals` | `list(string)` | Required | Non-empty principal list exempted from selected bucket-control denies |
 
----
+The root derives the account ID from `data.aws_caller_identity.account_id` and passes it to `modules/state`. There is no root `account_id` input and no root `primary_region` input.
+
+A principal exempted from a bucket-policy deny still needs an applicable permission grant. Use the actual administrative principals for the account; a root-principal ARN in a policy is not an instruction to use root credentials for routine deployment.
+
+### State and service Regions
+
+The state root's provider uses `var.state_region`. The `region` in an S3 backend is an independent, explicit backend setting; it must identify the Region containing the existing state bucket. The account/security-services stacks have a separate service-region context (`primary_region` where declared); administrative workflow Regions must also be reviewed independently.
+
+The migration helper resolves the backend Region from `backend.tf.migrated.example`. An explicitly set `AWS_REGION` must match that Region. Do not export a different service Region into a migration invocation.
+
+Changing `state_region` or `primary_region` does not migrate existing state. A backend migration and any resource-location changes require their own reviewed plan.
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| `tf_state_bucket_arn` | Name of the state S3 bucket |
-| `tf_state_bucket_name` | ARN of the state S3 bucket |
-| `tf_state_bucket_cmk_arn` | ARN of the KMS key |
-
----
+| Output | Description |
+|---|---|
+| `account_id` | AWS account ID resolved from the active provider identity |
+| `tf_state_bucket_name` | State S3 bucket name |
+| `tf_state_bucket_arn` | State S3 bucket ARN |
+| `tf_state_bucket_cmk_arn` | State KMS key ARN |
 
 ## Files
 
-| File             | Purpose                                  |
-|------------------|------------------------------------------|
-| main.tf          | Calls the `state` module                   |
-| variables.tf     | Input variables                          |
-| outputs.tf       | Exposes backend resource values          |
-| README.md        | Documentation                            |
+| File | Purpose |
+|---|---|
+| `main.tf` | Resolves the account identity and calls `modules/state` |
+| `variables.tf` | Defines this root's four inputs |
+| `providers.tf` | Configures the state-region provider and required tool/provider versions |
+| `.terraform.lock.hcl` | Committed provider selections and checksums |
+| `outputs.tf` | Exposes account identity and backend resource values |
+| `terraform.tfvars.example` | Starting point for reviewed local inputs |
+| `backend.tf.migrated.example` | Tracked template for this root's migrated backend |
+| `backend.tf` | Local active backend file created by migration; ignored by Git |
 
----
+The frozen provider requirements are Terraform `1.15.8` and AWS provider `6.66.0`. Retain the lockfile. Do not run an incidental `init -upgrade` as part of documentation reconciliation or routine deployment.
 
 ## Deployment and Integration with Other Stacks
 
-The following steps assume you are using the `bootstrap` stack, which enables OIDC between AWS and GitHub.
+Run the following from the repository root with access to the intended delegated security-operations account. These commands are for an initial deployment, not for repairing an uncertain or partially migrated backend.
 
-If you are not using this feature, ignore any references to the `bootstrap` stack
-> For example, for:
-> ```bash
-> cd ../bootstrap
-> terraform init
-> cd ../baseline
-> terraform init
-> ```
-> Run this instead:
-> ```bash
-> cd ../baseline
-> terraform init
-> ```
-
-### Step 1: Navigate to the `state` stack and initialize it
+### 1. Set and verify the execution context
 
 ```bash
-cd state
-terraform init
-```
-> The `state` stack intentionally uses **local state** during initial deployment to bootstrap the remote backend
+export AWS_PROFILE="security-operations" # Replace if your local profile has a different name.
+export EXPECTED_ACCOUNT_ID="<12-digit-account-id>"
+export STATE_REGION="us-east-1" # Must match state_region and the backend template.
 
-### Step 2: Apply
+aws sts get-caller-identity \
+  --profile "${AWS_PROFILE}" \
+  --region "${STATE_REGION}"
+```
+
+Confirm that the returned account ID equals `EXPECTED_ACCOUNT_ID`. The variable is checked by the migration helper, not automatically consumed as a Terraform provider restriction by this root.
+
+### 2. Review local inputs and the destination template
+
+Copy the example only when a local input file does not already exist:
 
 ```bash
-terraform apply
+test ! -e bootstrap/security_operations/state/terraform.tfvars &&
+  cp bootstrap/security_operations/state/terraform.tfvars.example \
+    bootstrap/security_operations/state/terraform.tfvars
 ```
 
-This creates:
-- S3 state bucket
-- DynamoDB lock table
-- KMS key used by the state bucket
+Review every value. Ensure `state_region` matches the intended state-resource location. Review `bucket_admin_principals` and any environment-supplied Terraform variables.
 
-### Step 3: Capture outputs for downstream stacks
-
-After apply, note the following outputs:
-- `tf_state_bucket_name`
-- `tf_state_bucket_arn`
-- `tf_state_bucket_cmk_arn`
-
-### Step 4: Configure backend for `bootstrap` and `baseline` stacks
-
-Update `bootstrap/backend.tf`:
+The tracked backend template currently uses:
 
 ```hcl
 terraform {
   backend "s3" {
-    bucket        = "<tf_state_bucket_name>"
-    key           = "security-operations/state.tfstate"
-    region        = "<primary_region>"
-    encrypt       = true
-    use_lockfile  = true
+    bucket       = "tf-secure-baseline-security-operations-state"
+    key          = "security-operations/state.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 ```
 
-Update `baseline/backend.tf`:
+For a different deployment, adapt the template to the actual bucket and Region before migration. The bucket must match `tf_state_bucket_name` after apply, and the key must be unique to this root. Do not reuse the state key for an account or service root.
 
-```hcl
-terraform {
-  backend "s3" {
-    bucket  = "<tf_state_bucket_name>"
-    key     = "tf-state-baseline"
-    region  = "<primary_region>"
-    encrypt = true
-    dynamodb_table = "<tf_state_lock_table_name>"
-  }
-}
-```
-> These `provider` / `terraform` blocks may already be configured correctly if using default variables
+### 3. Bootstrap with local state
 
-Then initialize the `bootstrap` and `baseline` stacks:
+For a new state stack, do not create the active `backend.tf` before the S3 backend exists. Do not remove an existing backend file merely to make this initial-deployment example applicable.
 
 ```bash
-cd ../bootstrap
-terraform init
-cd ../baseline
-terraform init
+terraform -chdir=bootstrap/security_operations/state init
+terraform -chdir=bootstrap/security_operations/state validate
+terraform -chdir=bootstrap/security_operations/state plan
 ```
 
-### Step 5: Proceed with Normal Deployment Flow
+Review the account, naming, Region, and the planned state resources. Then apply:
 
-At this point:
-- `bootstrap` stack can be deployed
-> Refer to `/bootstrap/README.md` file for instructions on configuring the `bootstrap` stack
-- `baseline` stack can be deployed
-> Refer to `/baseline/README.md` file for instructions on configuring the `baseline` stack
-- All stacks will use the centralized remote state created by this `state` stack
+```bash
+terraform -chdir=bootstrap/security_operations/state apply
+terraform -chdir=bootstrap/security_operations/state output
+```
 
----
+This initial apply creates backend resources; it does not deploy the dependent roots or migrate this root's state.
+
+### 4. Migrate this root into S3
+
+```bash
+AWS_PROFILE="${AWS_PROFILE}" \
+AWS_REGION="${STATE_REGION}" \
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID}" \
+./scripts/bootstrap/migrate-state-stack.sh security-operations
+```
+
+The helper requires the default workspace, an existing non-empty local state, and no active `backend.tf`. It reads the tracked template, checks the identity and bucket output, saves external pre-migration state copies and resource addresses, refuses a destination object it can already read, creates `backend.tf`, and runs interactive `terraform init -migrate-state` without `-force-copy`.
+
+Review the migration destination before answering the Terraform prompt. Ensure the caller can determine whether the destination key already exists; an access error must not be treated as independent proof that a key is unused.
+
+After migration, the helper verifies the remote object and pulled state, checks the bucket output, compares resource addresses, and retains a post-migration state copy. The default backup directory is `${HOME}/.tf-secure-baseline/state-backups`; `BACKUP_DIR` can override it. Keep these copies outside the repository and restrict access to them.
+
+### 5. Verify an existing migration
+
+```bash
+AWS_PROFILE="${AWS_PROFILE}" \
+AWS_REGION="${STATE_REGION}" \
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID}" \
+./scripts/bootstrap/migrate-state-stack.sh security-operations --verify-only
+```
+
+This does not perform a second migration. It does run `terraform init`, checks the default workspace, and uses temporary local files. The active `backend.tf` must match the tracked template byte-for-byte.
+
+If migration fails, do not blindly rerun it or force-copy state. The helper leaves `backend.tf` in place and prints the recovery guidance and backup location. Determine whether state was actually copied before altering backend configuration.
+
+### 6. Configure dependent roots
+
+Use the backend outputs in the actual roots listed under Architecture. Review each tracked backend file for the correct bucket, state Region, native lockfile setting, and distinct object key before initializing it.
+
+Do not run the reusable `baseline/` directory as a standalone workload root. Workloads are rooted at `environments/<env>`, and their backends belong to their respective workload accounts.
+
+## Security-Operations Validation Boundary
+
+Use the migration helper's `--verify-only` mode for this state root. Review state/account plans using their own effective inputs and the intended identity.
+
+The separate service validator targets centralized security governance:
+
+```bash
+AWS_PROFILE="${AWS_PROFILE}" \
+AWS_REGION="<security-operations-service-region>" \
+EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID}" \
+./scripts/validation/validate-security-operations.sh
+```
+
+Run it after the centralized security-services root is ready. A successful security-services validation must not be presented as an exhaustive validation of this state stack. Likewise, state migration success does not prove GuardDuty or Security Hub organization configuration.
 
 ## Operational Guidelines
 
-### DO:
-- Protect this stack from deletion
-- Restrict access to trusted operators only
-- Back up local state if not migrated
-- Treat as critical infrastructure
+Keep the state bucket's versioning, encryption, public-access protection, and destruction guards intact. Retain the committed lockfile and use the root's required versions. Keep active state-stack `backend.tf`, local input files, state files, plan files, and state backups out of source control.
 
-### DO NOT:
-- Run `terraform destroy` from within this stack
-- Modify backend resources outside Terraform
-- Share access broadly
-- Recreate or duplicate the state bucket
-- Recreate manually unless absolutely necessary
+Do not edit a template or active backend to redirect an established stack without reviewing its current state location. Never point two roots at the same state key. The migration helper performs the initial local-to-S3 migration; it is not a general-purpose cross-account/Region migration or state-retirement tool.
 
----
+## Teardown and Recovery
 
-## Future Enhancements
+State resources are not part of ordinary workload retirement. Before even planning their retirement, inventory all dependent roots, preserve external state backups, and move this root's active state to an independent backend or local state. Verify that independent state before proceeding.
 
-Optional improvements:
-- Remote backend for this stack (tf-state-state)
-- Cross-region replication for DR
-- Monitoring and alerting on state access
-- Access logging / CloudTrail data events
+The literal `prevent_destroy = true` guards on the bucket and CMK still block normal destruction after that move. RC1 provides no input that removes those guards. Any approved exception needs a separate, reviewed change and retained-object disposition plan. Do not remove resource definitions, force-delete bucket contents, or disable key protections simply to get past an error.
 
----
+A successful workload destroy does not authorize deletion of this account's state bucket. For the management and security accounts, separately assess the organization-wide responsibilities of the dependent roots before retiring anything.
 
-## Summary
+## Related Documentation
 
-This stack is **NOT** just another Terraform deployment.
+This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It describes implementation, not a new live test.
 
-It is the foundation of your entire platform.
-
-Handle it accordingly.
+- [Root inputs](variables.tf), [provider](providers.tf), [module call](main.tf), and [outputs](outputs.tf)
+- [State module](../../../modules/state/README.md)
+- [Migration and reconciliation tooling](../../../scripts/bootstrap/README.md)
+- [Account architecture](../README.md)

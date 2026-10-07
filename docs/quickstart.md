@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This guide provides the fastest practical path to deploying `tf-secure-baseline`.
+This guide describes the deployment path for `tf-secure-baseline` at **v1.11.0-rc1**, commit `728166fa17bf42fe06bf540729c6aba1e70e05d5`. It is not a claim that a final v1.11.0 release has already been published.
+
+Examples are for an authorized deployment with reviewed account-specific configuration. Public source visibility is not deployment permission; see [LICENSE](../LICENSE). This guide does not change the license or resolve ownership notices.
 
 It is intended to help users deploy the platform in the correct order and understand which stacks must be applied locally before GitHub Actions can manage the rest of the environment.
 
@@ -67,7 +69,7 @@ The `state` stacks are applied locally first because they create the remote back
 
 Before deploying an environment baseline, decide which deployment profile and egress mode should be used.
 
-Deployment profiles provide cost/security defaults for each environment.
+Deployment profiles provide cost/security defaults and production resilience policy. The table below shows defaults, not proof of live controls or a complete compliance program. Inspect effective Terraform outputs and the supported overrides before relying on any setting.
 
 | `deployment_profile` | Default `egress_mode` | AWS Config | Backup scheduling | Inspector | GuardDuty Fargate Runtime Monitoring | CloudWatch retention | Intended use |
 |---|---|---:|---:|---:|---:|---:|---|
@@ -75,7 +77,7 @@ Deployment profiles provide cost/security defaults for each environment.
 | `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days | Lower-cost development and testing with production-aligned runtime detection |
 | `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
 
-GuardDuty Fargate Runtime Monitoring is derived directly from `deployment_profile` in v1.10; there is no independent top-level Runtime Monitoring enable/disable input. `production` and `development` set the workload ECS cluster to `GuardDutyManaged=true`, while `minimal` sets `GuardDutyManaged=false`.
+GuardDuty Fargate Runtime Monitoring is derived directly from `deployment_profile` in RC1; there is no independent top-level Runtime Monitoring enable/disable input. `production` and `development` set the workload ECS cluster to `GuardDutyManaged=true`, while `minimal` sets `GuardDutyManaged=false`.
 
 The Backup column refers to scheduled AWS Backup behavior. The encrypted environment backup vault and backup CMK are retained even when scheduling is disabled. When backups are disabled, the effective schedule and retention outputs are `null`, the backup plan/selection are absent, and workload EC2/RDS resources use `Backup=false`. Production defaults to `cron(0 5 * * ? *)` with 30-day retention. If backups are explicitly enabled for a non-production profile, the same default schedule is used with 7-day retention unless overridden.
 
@@ -92,7 +94,7 @@ Recommended starting values:
 | Environment | Recommended `deployment_profile` | Recommended `egress_mode` |
 |---|---|---|
 | `dev` | `development` | `auto` |
-| `staging` | `development` or `production` | `auto` |
+| `staging` | `development` for this quickstart; review retirement limitations before choosing `production` | `auto` |
 | `prod` | `production` | `auto` |
 
 When `egress_mode = "auto"`, the effective egress mode is selected from the deployment profile.
@@ -116,17 +118,88 @@ When `egress_mode = "vpc_endpoints_only"`, NAT Gateways and Network Firewall are
 
 ---
 
+## v1.11 Topology, Regions, and Resilience
+
+### Service region versus Terraform state region
+
+These are distinct contracts:
+
+| Setting | Authority and effect |
+|---|---|
+| Workload/account `primary_region` | AWS service/provider region; provider-backed assertions reject a mismatch where implemented |
+| State-root `state_region` | Region used to create the state S3 bucket and CMK; default `us-east-1` |
+| S3 backend `region` | Explicit backend configuration; it is not automatically rewritten when either Terraform variable changes |
+| Validator/reconciliation `AWS_REGION` | Service region for those operations; state checks use independently resolved backend context |
+| Migration helper `AWS_REGION` | Backend-region context; when supplied, it must match the tracked migration template |
+
+All five RC1 state templates use `us-east-1`. A service-region change does not move state, the bucket, or the CMK. State/account/workload roots must use their intended backend bucket with distinct keys. See the [state module](../modules/state/README.md) and [bootstrap helper reference](../scripts/bootstrap/README.md).
+
+In the commands below, `SERVICE_REGION` and `STATE_REGION` are **shell example variables**, not additional GitHub settings. Set them for the account/stack in the current terminal. `us-east-1` is the example used here, not evidence of alternate-region or multi-region disaster-recovery qualification:
+
+```bash
+export SERVICE_REGION="us-east-1"
+export STATE_REGION="us-east-1"
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$SERVICE_REGION"
+umask 077
+```
+
+Set `primary_region` in each service/account root's actual Terraform inputs and `state_region` in each state root's inputs. Keep them consistent with the intended provider/backend context. Setting a shell variable alone does not rewrite an existing `terraform.tfvars` or backend file. Review inherited `TF_VAR_*` values when switching accounts.
+
+### Workload CIDR and Availability Zones
+
+The workload roots defer a null `main_vpc_cidr` to the baseline's `10.0.0.0/16` default. The baseline accepts a canonical IPv4 **/16** and derives seven **/24** subnet families when `subnet_cidrs=null`:
+
+```text
+ingress_public       ALB placement and VPC-local traffic to targets
+egress_public        NAT placement and same-AZ firewall return routing
+compute_private      EC2 and ECS/Fargate tasks
+data_private         RDS DB subnet group
+serverless_private   VPC-attached response Lambdas
+firewall_private     Network Firewall endpoints
+endpoint_private     Interface VPC Endpoints
+```
+
+Production defaults to three AZs (21 subnets); development/minimal default to two (14 subnets). Baseline sorts the provider's standard AZ names filtered by `opt-in-status=opt-in-not-required`, then selects the profile count. Explicit AZs must be unique and belong to that eligible set. Additional AZs require matching explicit subnet CIDRs for all seven families.
+
+For a new development portability deployment, a valid input excerpt is:
+
+```hcl
+primary_region     = "us-east-1"
+deployment_profile = "development"
+main_vpc_cidr      = "172.16.0.0/16"
+azs                = null
+subnet_cidrs       = null
+```
+
+Apply it through the actual effective variable inputs, not a second conflicting service map. All explicit subnet CIDRs must remain unique canonical /24s inside the chosen /16. Changing CIDRs, subnet roles, or AZ ordering in an existing environment is not a guaranteed non-disruptive migration; review replacements before applying.
+
+In `network_firewall` mode the compute default route and egress-public return route use the same-AZ firewall endpoint, with same-AZ NAT. The ALB uses the separate ingress-public tier and reaches tasks over VPC-local routing. The baseline does not claim all private-tier or AWS-service traffic traverses Network Firewall. See the [networking reference](../modules/networking/README.md).
+
+### Production behavior and limits
+
+Normal production resolves RDS Multi-AZ and enables native RDS/ALB/Network Firewall deletion protection where those resources exist; ECR/ECS force deletion and Backup vault force destruction resolve to `false`. RDS remains a PostgreSQL DB instance, not Aurora or a Multi-AZ DB cluster. RDS-native automated-backup retention remains 14 days; AWS Backup scheduling/retention is a separate contract.
+
+Restore Testing is derived from production and effective backup enablement. The configured test restores privately with `multiAz=false`, using the source RDS subnet group and data SG; this does not change the source database's production Multi-AZ posture. A configured restore plan is not evidence of an executed restore or application-data correctness. See [Backup](../modules/backup/README.md).
+
+Deployable production ECS services require at least **two** fixed tasks or an autoscaling minimum of two outside retirement. The shipped production sample chooses three. Baseline enables service AZ rebalancing; one live task in every AZ must be checked separately. Normal runtime validation requires deployment-health settings `100` minimum and at least `200` maximum.
+
+The production profile does not enable every possible protection. In particular, the logs bucket retains `force_destroy=true`, `prevent_destroy=false`, and Object Lock disabled; Network Firewall policy/subnet change protections remain disabled. See [storage limits](../modules/storage/README.md) and [firewall limits](../modules/firewall/README.md).
+
+**Retirement scope:** baseline production policy is profile-driven, but the complete RC1 retirement workflow/durable cleanup supports **environment `prod` only**. Do not assume a production-profile `staging` or `dev` deployment has the same end-to-end automated teardown path. Do not bypass the limitation by changing its profile during destruction.
+
 ## Prerequisites
 
 This configuration requires **five AWS accounts**: `control-plane`, `security-operations`, `dev`, `staging`, and `prod`.
 
-Upon initial deployment, each AWS account must have an Admin-level IAM user with access keys configured. These access keys will be used by the AWS CLI. **We do NOT recommend using `root` user access keys.**
+Initial bootstrap needs an authorized AWS credential chain with sufficient administrative permissions in each target account. A dedicated IAM user with long-lived keys is **not** a repository requirement: an existing federated/assumed-role profile can be used. Do not use root access keys. Access through an Identity Center instance that has not yet been established cannot be assumed for the first bootstrap.
 
-> Note: This example uses IAM user access keys for simplicity during initial bootstrap. If your organization uses AWS SSO or another federation method, configure the profiles using that method instead.
+> Use the credential method approved by your organization and verify the actual caller before every stack change. Naming a profile does not prove its account or permissions.
 
 Install and configure:
 
-- Terraform
+- Terraform **1.15.8**, matching RC1 root constraints and workflow tooling
+- The committed root-specific provider lockfiles; AWS is pinned to **6.66.0** in the inspected RC1 roots
 - Git CLI
 - `jq`
 - A GitHub account with the following environments, if using `GitHub OIDC`:
@@ -140,7 +213,10 @@ Install and configure:
   - prod
   - prod-plan
 - AWS CLI
-- Admin-level IAM permissions in each account to create AWS resources
+- Administrative authority appropriate to each bootstrap root
+- For application image publication: Docker and `docker-credential-ecr-login`, in addition to AWS CLI and `jq`
+
+Configure required reviewers and applicable branch restrictions on the protected GitHub Environments. A workflow’s `environment:` assignment selects an environment; the YAML alone does not prove human approval is required in repository settings. Keep lockfiles tracked and do not use `terraform init -upgrade` as a routine bootstrap step.
 
 ---
 
@@ -149,7 +225,11 @@ Install and configure:
 ```bash
 git clone https://github.com/jcub-i0/terraform-secure-baseline.git
 cd terraform-secure-baseline
+git checkout --detach v1.11.0-rc1
+test "$(git rev-parse HEAD)" = "728166fa17bf42fe06bf540729c6aba1e70e05d5"
 ```
+
+This pins the implementation used by this guide. Subsequent documentation-only commits can be layered onto that source; do not move the RC1 tag.
 
 ---
 
@@ -158,13 +238,18 @@ cd terraform-secure-baseline
 The repository tracks `terraform.tfvars.example` templates instead of runtime `terraform.tfvars` files. Before running Terraform locally in a root that provides a template, copy it to `terraform.tfvars` and replace the example values with the correct deployment-specific configuration:
 
 ```bash
-cp environments/dev/terraform.tfvars.example \
-  environments/dev/terraform.tfvars
+if [[ ! -e environments/dev/terraform.tfvars ]]; then
+  cp environments/dev/terraform.tfvars.example environments/dev/terraform.tfvars
+else
+  printf '%s\n' 'Existing dev Terraform inputs retained; review them instead of overwriting.'
+fi
 ```
 
 Repeat this for each Terraform root you plan to deploy. The resulting `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its values separately through workflow matrices, GitHub variables, and GitHub secrets.
 
-For local workload deployment, set `isolation_allowed` explicitly. The current policy is `true` for development and `false` for staging and production; the reusable variable default remains fail closed at `false`. Automatic EC2 isolation is additionally limited to GuardDuty findings and uses `ec2_auto_isolation_severities = ["CRITICAL"]` by default; only `HIGH` and `CRITICAL` are accepted values.
+For local workload deployment, set `isolation_allowed` explicitly according to the approved environment policy. Do not infer a universal value from the profile or old instructions: the reusable baseline defaults to `false`, but the RC1 production environment root defaults to `true`. Workflow planning requires an explicit `ISOLATION_ALLOWED=true` or `false`. The canonical severity input defaults to `["CRITICAL"]` and accepts only `HIGH`/`CRITICAL`; review the response-automation contract before enabling automatic containment.
+
+Templates contain example account IDs and names, not credentials or permission to use those accounts. Review existing backend files as well as `terraform.tfvars.example`; naming inputs do not automatically rewrite tracked backends. Preserve the one canonical `container-workloads.auto.tfvars.json` per workload and do not introduce a conflicting `ecs_services` value in another input source.
 
 ---
 
@@ -179,14 +264,14 @@ This reduces the chance of applying Terraform in the wrong account and also make
 Whenever this guide says:
 
 ```bash
-export AWS_PROFILE=<env>
+export AWS_PROFILE="dev"  # Substitute the intended account profile.
 ```
 
 interpret it as:
 
 > Run the following commands from the terminal dedicated to that environment.
 
-You may still run `export AWS_PROFILE=<env>` inside the dedicated terminal as an additional safety check.
+Set `AWS_PROFILE`, `AWS_REGION`, and `AWS_DEFAULT_REGION` explicitly in that terminal, and verify the caller with STS. Separate terminals reduce accidental context reuse but are not an authorization control.
 
 Example profile names:
 
@@ -202,24 +287,15 @@ prod
 
 ### Create a Profile
 
-Example: create an AWS CLI profile for the `dev` account.
+Use an existing organization-approved AWS CLI profile or configure the appropriate federation/assumed-role method for that account. This guide does not require new IAM user keys.
+
+For an account whose approved bootstrap process specifically uses IAM user keys, the CLI configuration command is:
 
 ```bash
 aws configure --profile dev
 ```
 
-Answer the prompts using credentials for the target account:
-
-```text
-AWS Access Key ID: <admin-iam-user-access-key>
-AWS Secret Access Key: <admin-iam-user-secret-access-key>
-Default region name: us-east-1
-Default output format: json
-```
-
-Repeat this process for each AWS account.
-
-> Note: This example uses IAM user access keys for simplicity during initial bootstrap. If your organization uses AWS SSO or another federation method, configure the profiles using that method instead.
+Supply the authorized account's credentials and intended default region, not root keys. For federated credentials, use that profile's supported login process instead. The rest of this guide relies on the resulting credential chain, not one particular credential source.
 
 ---
 
@@ -235,7 +311,9 @@ aws sts get-caller-identity --profile staging
 aws sts get-caller-identity --profile prod
 ```
 
-Confirm each command returns the expected AWS account ID.
+Confirm each command returns the expected AWS account ID and caller ARN. Stop on a mismatch. `EXPECTED_ACCOUNT_ID` is enforced by scripts that consume it; exporting that variable alone does not add an account assertion to every direct Terraform command.
+
+Unless a section explicitly says migration/backend context, local examples use `AWS_REGION="$SERVICE_REGION"` and Terraform inputs with the same `primary_region`. State-root provisioning uses its own `state_region`. Plain interactive `terraform apply` below creates a fresh plan and asks for approval; it does not apply a separate earlier unsaved `terraform plan`. GitHub Actions is the supported reviewed saved-plan path described later.
 
 ---
 
@@ -253,12 +331,14 @@ Review that template before deployment and confirm its bucket, key, and region m
 
 It is strongly recommended to include both the administrative Terraform IAM principal and the account root principal in `bucket_admin_principals`.
 
-This variable defines which principals are allowed to modify protected state bucket controls, including the bucket policy, versioning configuration, and encryption configuration. If this list is empty or does not include the correct administrative principal, Terraform or account administrators may lose the ability to modify these settings.
+This variable identifies principals exempted from the state bucket’s policy/versioning/encryption-change denies; it does not itself grant their IAM permissions. Include the actual administrative principal. A root principal in a bucket policy is not a request to create or use root access keys. The root input rejects an empty list.
 
 From the repository root:
 
 ```bash
 export AWS_PROFILE=control-plane
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<control-plane-account-id>:user/baseline-admin","arn:aws:iam::<control-plane-account-id>:root"]'
 
 terraform -chdir=bootstrap/control_plane/state init
@@ -278,16 +358,18 @@ Then migrate the state stack itself into the newly created backend:
 ```bash
 AWS_PROFILE=control-plane \
 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+AWS_REGION="${STATE_REGION}" \
 ./scripts/bootstrap/migrate-state-stack.sh control-plane
 ```
 
-The helper validates the AWS identity and template, creates external backups, refuses to overwrite an existing remote state object, runs interactive `terraform init -migrate-state`, and verifies the remote state.
+The helper validates the AWS identity and template, creates external backups, checks the destination key, runs interactive `terraform init -migrate-state`, and verifies remote state/resource addresses. It refuses a destination object that `head-object` can read, but an access error is not independent proof that the key is unused; resolve permission ambiguity before approving migration. It requires the default workspace and compares the active backend file with the tracked template. See [state migration details](../scripts/bootstrap/README.md).
 
 Verify an already-migrated stack at any time with:
 
 ```bash
 AWS_PROFILE=control-plane \
 EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
+AWS_REGION="${STATE_REGION}" \
 ./scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only
 ```
 
@@ -332,7 +414,7 @@ The control-plane `account` stack should generally be treated as manual/local-on
 
 The `organizations` stack defines the AWS Organizations structure and centralized-security prerequisites.
 
-The expected OU structure is:
+The intended OU/account placement is:
 
 ```text
 Root
@@ -352,7 +434,9 @@ Before applying this stack, ensure:
 - `security-operations`, `dev`, `staging`, and `prod` are active organization member accounts
 - the intended account IDs and account names are configured correctly
 
-This stack also owns the organization-level prerequisites for centralized security, including Security Hub and GuardDuty trusted service access, delegated-administrator registration, GuardDuty Malware Protection trusted access, and Security Hub V2 `SECURITYHUB_POLICY` prerequisites.
+This stack owns the Organization resource, OUs, and organization-level prerequisites for centralized security, including Security Hub and GuardDuty trusted access/delegated administration, GuardDuty Malware Protection trusted access, and Security Hub V2 prerequisites. It does **not** declare member-account creation or account-move resources. Arrange the existing accounts under the intended OUs and verify placement through control-plane validation.
+
+If the Organization, OUs, or other managed resources already exist outside this Terraform state, establish the appropriate reviewed adoption/import plan first. The stack is not a discovery-only wrapper around an existing Organization, and its Organization resource has `prevent_destroy=true`. Do not blindly apply or destroy it as part of a workload deployment.
 
 From the repository root:
 
@@ -377,12 +461,15 @@ Then apply and migrate the state stack:
 
 ```bash
 export AWS_PROFILE=security-operations
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<security-operations-account-id>:user/baseline-admin","arn:aws:iam::<security-operations-account-id>:root"]'
 
 terraform -chdir=bootstrap/security_operations/state init
 terraform -chdir=bootstrap/security_operations/state apply
 
 EXPECTED_ACCOUNT_ID="<SECURITY-OPERATIONS-ACCOUNT-ID>" \
+AWS_REGION="${STATE_REGION}" \
 ./scripts/bootstrap/migrate-state-stack.sh security-operations
 ```
 
@@ -402,6 +489,8 @@ This stack creates the security-operations GitHub OIDC roles. It remains separat
 
 ```bash
 export AWS_PROFILE=security-operations
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 terraform -chdir=bootstrap/security_operations/account init
 terraform -chdir=bootstrap/security_operations/account apply
@@ -425,7 +514,7 @@ enable_guardduty_organization_configuration    = true
 enable_securityhub_v2_organization_policy      = true
 ```
 
-Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. The v1.10 default centralized GuardDuty contract is:
+Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. The centralized GuardDuty contract retained in RC1 is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -440,6 +529,8 @@ Apply locally:
 
 ```bash
 export AWS_PROFILE=security-operations
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 terraform -chdir=bootstrap/security_operations/security_services init
 terraform -chdir=bootstrap/security_operations/security_services plan
@@ -474,12 +565,15 @@ Run these commands from the repository root.
 
 ```bash
 export AWS_PROFILE=dev
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<dev-account-id>:user/baseline-admin","arn:aws:iam::<dev-account-id>:root"]'
 
 terraform -chdir=bootstrap/dev/state init
 terraform -chdir=bootstrap/dev/state apply
 
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
+AWS_REGION="${STATE_REGION}" \
 ./scripts/bootstrap/migrate-state-stack.sh dev
 ```
 
@@ -487,12 +581,15 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 
 ```bash
 export AWS_PROFILE=staging
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<staging-account-id>:user/baseline-admin","arn:aws:iam::<staging-account-id>:root"]'
 
 terraform -chdir=bootstrap/staging/state init
 terraform -chdir=bootstrap/staging/state apply
 
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
+AWS_REGION="${STATE_REGION}" \
 ./scripts/bootstrap/migrate-state-stack.sh staging
 ```
 
@@ -500,12 +597,15 @@ EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 
 ```bash
 export AWS_PROFILE=prod
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 export TF_VAR_bucket_admin_principals='["arn:aws:iam::<prod-account-id>:user/baseline-admin","arn:aws:iam::<prod-account-id>:root"]'
 
 terraform -chdir=bootstrap/prod/state init
 terraform -chdir=bootstrap/prod/state apply
 
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+AWS_REGION="${STATE_REGION}" \
 ./scripts/bootstrap/migrate-state-stack.sh prod
 ```
 
@@ -529,8 +629,8 @@ The roles are intentionally separated:
 
 | Role | Primary purpose | Trust model |
 |---|---|---|
-| Plan role | Read/plan Terraform changes and evidence | Repository/branch or pull-request conditions used by the Plan path |
-| Apply role | Apply reviewed workload plans | Protected GitHub Environment for the workload |
+| Plan role | Terraform planning and validation/evidence operations | `repo:<owner>/<repo>:environment:<env>-plan` |
+| Apply role | Apply reviewed workload plans | Configure the matching `<env>` GitHub Environment subject for this workflow path; the module also supports branch trust when no Apply environment is supplied |
 | Image Publisher role | Publish/query application images in the environment ECR registry | Exact branch-based GitHub OIDC subjects |
 
 The Image Publisher role is not an application deployment role. It does not receive broad ECS, IAM, Terraform state, or administrator permissions.
@@ -541,6 +641,8 @@ Run the account stack from the repository root for each workload environment:
 
 ```bash
 export AWS_PROFILE=dev
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 terraform -chdir=bootstrap/dev/account init
 terraform -chdir=bootstrap/dev/account apply
 ```
@@ -549,6 +651,8 @@ terraform -chdir=bootstrap/dev/account apply
 
 ```bash
 export AWS_PROFILE=staging
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 terraform -chdir=bootstrap/staging/account init
 terraform -chdir=bootstrap/staging/account apply
 ```
@@ -557,6 +661,8 @@ terraform -chdir=bootstrap/staging/account apply
 
 ```bash
 export AWS_PROFILE=prod
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 terraform -chdir=bootstrap/prod/account init
 terraform -chdir=bootstrap/prod/account apply
 ```
@@ -609,11 +715,15 @@ The `Deploy Application` publisher job deliberately does **not** declare a GitHu
 
 The release/PR job is a separate authority. It receives GitHub repository write permissions (`contents: write` and `pull-requests: write`) but no AWS credentials and no `id-token`. The repository must allow GitHub Actions to create pull requests if automatic release-PR creation is desired.
 
-Workload Plan environments also require an explicit `ISOLATION_ALLOWED` value of exactly `true` or `false`. The current policy is `true` for `dev-plan` and `false` for `staging-plan` and `prod-plan`. The protected Apply job consumes the reviewed saved plan and does not re-resolve this input.
+Workload Plan environments also require an explicit `ISOLATION_ALLOWED` value of exactly `true` or `false`. Select this value deliberately for each deployment; repository documentation is not evidence of the live GitHub Environment variable settings. The protected Apply job consumes the reviewed saved plan and does not re-resolve this input.
 
 The Apply environment also requires `STATE_STACK_BACKEND_KEY` when workload-account reconciliation materializes the state-stack backend for strict post-apply validation.
 
-Secrets may include `ABUSEIPDB_API_KEY`. Keep all account IDs, role ARNs, region values, state settings, and deployment-profile choices aligned with the target environment.
+Workload plan-producing jobs also read optional `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, `ALB_CERTIFICATE_ARN`, and `ALB_INGRESS_CIDRS`. The workflow exports the supplied values to the corresponding Terraform inputs. Keep these consistent across normal Apply, standalone Plan, and Destroy; in particular, a custom-CIDR deployment must not be destroyed using a reconstructed default configuration. `ALB_INGRESS_CIDRS` is a JSON array, not a shell list. With no supplied CIDR override, the baseline default is `10.0.0.0/16`.
+
+`STATE_STACK_BACKEND_KEY` is the state root's own key, distinct from the workload/account keys. Reconciliation materializes that backend using the **state template's region**, not `PRIMARY_REGION`. RC1 does not introduce a parallel GitHub `STATE_REGION` setting.
+
+Secrets may include `ABUSEIPDB_API_KEY`. Keep all account IDs, role ARNs, region values, state settings, and deployment-profile choices aligned with the target environment. Do not publish secret input values or binary plans as public documentation evidence.
 
 # Phase 10 - Deploy Environment Baseline
 
@@ -656,6 +766,8 @@ Run these commands from the repository root.
 
 ```bash
 export AWS_PROFILE=dev
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 terraform -chdir=environments/dev init
 terraform -chdir=environments/dev plan
@@ -666,6 +778,8 @@ terraform -chdir=environments/dev apply
 
 ```bash
 export AWS_PROFILE=staging
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 terraform -chdir=environments/staging init
 terraform -chdir=environments/staging plan
@@ -676,6 +790,8 @@ terraform -chdir=environments/staging apply
 
 ```bash
 export AWS_PROFILE=prod
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 terraform -chdir=environments/prod init
 terraform -chdir=environments/prod plan
@@ -687,7 +803,6 @@ Record environment outputs needed by the `bootstrap/control_plane/identity_cente
 ```text
 logs_s3_readonly_policy_name
 logs_cmk_decrypt_policy_name
-secops_event_bus_arn
 ```
 
 If using GitHub OIDC, the account reconciliation helper later reads `lambda_cmk_arn` and `secrets_manager_cmk_arn` directly from the workload Terraform state. Those CMK values do not need to be copied manually.
@@ -710,6 +825,12 @@ effective_manage_guardduty_locally
 effective_manage_securityhub_v2_locally
 ecs_cluster
 guardduty_ecs_runtime_coverage_notification
+primary_region
+network_topology
+rds_configuration
+backup_vault_configuration
+restore_testing
+lifecycle_protection
 ```
 
 These outputs confirm how profile defaults and explicit overrides resolved for the environment. In the centralized deployment, the three `effective_manage_*_locally` security-service outputs should be `false`.
@@ -735,13 +856,16 @@ A service can be **registered but unreleased** by setting its digest to `null`:
       "image_digest": null,
       "container_port": 8080,
       "cpu": 256,
-      "memory": 512
+      "memory": 512,
+      "desired_count": 3
     }
   }
 }
 ```
 
 With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, application log group, Application Auto Scaling target/policy, or ECS operational alarm is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
+
+The shipped RC1 `test` entries are registered-but-unreleased with `image_digest=null`, including production. The production sample retains `desired_count=3` for a later release, but a fresh baseline apply does not start those tasks. Select an actual published digest through the reviewed application release path before claiming live ECS/ALB coverage.
 
 ### GuardDuty Fargate Runtime Monitoring
 
@@ -761,22 +885,22 @@ The private prerequisites remain Terraform-owned:
 
 ```text
 ECS task SG
-  -> ecr.api / ecr.dkr Interface Endpoints
-  -> S3 Gateway Endpoint
-  -> guardduty-data Interface Endpoint
+  +-- HTTPS -> ecr.api / ecr.dkr Interface Endpoints
+  +-- HTTPS -> S3 prefix-list path through the S3 Gateway Endpoint
+  +-- HTTPS -> guardduty-data Interface Endpoint
 ```
 
 The Terraform task definition remains application-only. GuardDuty service-manages the runtime agent injected into protected tasks. Live ECS may report that container as `aws-gd-agent` or an AWS-generated `aws-guardduty-agent-<suffix>` name.
 
 A new protected service deployment should receive Runtime Monitoring instrumentation once the centralized GuardDuty policy, task execution IAM, networking, and cluster tag are in place. Existing tasks are not silently retrofitted, so adopting Runtime Monitoring for an already-running service requires one deliberate new deployment. Terraform does not permanently force a deployment on every apply.
 
-After deployment, `validate-ecs-runtime.sh` verifies the live cluster tag, injected agent, application container, and GuardDuty ECS coverage. Protected running tasks must report `AUTO_MANAGED`, `HEALTHY`, and no unresolved coverage issues. For `minimal`, injected agents and healthy coverage are not required.
+After deployment, `validate-ecs-runtime.sh` verifies the live cluster tag, injected agent, application container, and GuardDuty ECS coverage. Protected tasks must have valid running instrumentation, and the cluster’s GuardDuty coverage must report `AUTO_MANAGED`, `HEALTHY`, and no unresolved issues. For `minimal`, injected agents and healthy coverage are not required.
 
 ### Optional ECS scaling and deployment health
 
 A deployable service remains fixed-count when `scaling` is omitted or `null`; Terraform owns `desired_count` exactly. To enable Application Auto Scaling, add a `scaling` object. The configured `desired_count` then becomes bootstrap capacity and must be within the configured min/max range; Application Auto Scaling owns subsequent live desired-count changes.
 
-Example:
+Example **development** scaling configuration. Replace the digest placeholder with an actual published 64-character lowercase hexadecimal digest. For production, use at least two for the fixed count or scaling minimum, with bootstrap capacity inside the bounds:
 
 ```json
 {
@@ -807,7 +931,7 @@ Example:
 }
 ```
 
-At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. v1.10 retains the v1.9 target-tracking-only scaling contract.
+At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. RC1 retains the target-tracking-only scaling contract introduced in v1.9.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. When Container Insights is enabled, each deployable service receives a task-deficit alarm. Each deployable ingress service receives an ALB unhealthy-target alarm. Both notify the SecOps SNS topic on ALARM and OK transitions.
 
@@ -841,11 +965,13 @@ Terraform never builds or pushes application images. The deployed task definitio
 
 The publisher job has AWS OIDC/ECR authority and only `contents: read`. The release/PR job has GitHub repository write authority but no AWS credentials or OIDC token. This keeps image publication authority separate from source-control mutation authority.
 
-Build contexts supplied to `Deploy Application` must resolve inside the checked-out repository. See `scripts/deployment/README.md` for the workflow inputs, metadata contract, safety checks, local script usage, and release-PR behavior.
+Build contexts supplied to `Deploy Application` must resolve inside the checkout. RC1 installs the Amazon ECR Docker credential helper in the publisher job. The publication script uses a temporary helper-only Docker configuration for the push, disables the helper’s token-file cache, and removes that temporary directory on normal exit/failure. It does not use `docker login`; this does not erase unrelated credentials already present in a local Docker configuration, and abrupt process/host termination is not guaranteed to execute cleanup.
+
+Local publication requires `docker-credential-ecr-login` and an explicit `--region` or `AWS_REGION`; a named `--profile` is exported for helper use. See [deployment scripts](../scripts/deployment/README.md) for the supported inputs and boundaries. Publication success is not proof of ECS deployment.
 
 For a deployable service, Fargate tasks run in compute-private subnets with `awsvpc`, no public IP, per-service task security groups, separate task execution/application task roles, deployment circuit breaking, and automatic rollback. Per-service application log groups use `/aws/ecs/<name-prefix>/<service>`. The cluster module owns `/aws/ecs/containerinsights/<cluster-name>/performance` when Container Insights is enabled; both log types use the effective CloudWatch retention policy and workload logs CMK where applicable.
 
-When ingress is configured, also provide `alb_certificate_arn` and at least one `alb_ingress_cidrs` value. Each deployable ingress service supplies a unique listener-rule priority and at least one host-header or path-pattern condition. The shared ALB is HTTPS-only and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` unless explicitly overridden.
+When ingress is configured, also provide `alb_certificate_arn` and at least one `alb_ingress_cidrs` value. Each deployable ingress service supplies a unique listener-rule priority and at least one host-header or path-pattern condition. The shared ALB’s client listener is HTTPS-only and defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` unless overridden. Its target groups and health checks use **HTTP** to tasks; this is not end-to-end TLS. The certificate must be in `primary_region`, and baseline supplies the exact ingress-public subnet set.
 
 # Phase 11 - Reconcile Environment Account Stacks (Skip if not using `GitHub OIDC`)
 
@@ -872,19 +998,25 @@ The `Terraform Apply` workflow can invoke `plan-and-apply` automatically when it
 
 The helper uses Terraform's normal variable-loading behavior for the account stack, including `terraform.tfvars`, `*.auto.tfvars`, exported `TF_VAR_*` variables, defaults, and optional `--var` or `--var-file` arguments. It overrides only `lambda_cmk_arn` and `secrets_manager_cmk_arn` with the current workload outputs.
 
-For an exact plan review across two local invocations, save the plan explicitly with `--plan-file`, then apply that same file with `--apply-plan`.
+For an exact plan review across two local invocations, save the plan explicitly with `--plan-file`, then apply that same file with `--apply-plan`. `AWS_REGION` is required and must match the planned service `primary_region`; it need not match the separately resolved state backend region.
+
+Preserve the account’s existing role enablement and branch inputs, especially `enable_image_publisher_role_github` and `branches_image_publisher_github`. The GitHub reconciliation workflow supplies publisher settings explicitly; a local run uses the actual local Terraform inputs. It must not accidentally disable the publisher role. The strict bootstrap validator checks publisher trust and ECR policy when the role is present; the old manual-only limitation no longer applies.
 
 ### Dev
 
 ```bash
-DEV_RECONCILIATION_PLAN="/tmp/tf-secure-baseline-dev-account-reconciliation.tfplan"
+umask 077
+DEV_RECONCILIATION_DIR="$(mktemp -d)"
+DEV_RECONCILIATION_PLAN="${DEV_RECONCILIATION_DIR}/account-reconciliation.tfplan"
 
 AWS_PROFILE=dev \
+AWS_REGION="${SERVICE_REGION}" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh dev \
   --plan-file="${DEV_RECONCILIATION_PLAN}"
 
 AWS_PROFILE=dev \
+AWS_REGION="${SERVICE_REGION}" \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh dev \
   --apply-plan="${DEV_RECONCILIATION_PLAN}"
@@ -893,14 +1025,18 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ### Staging
 
 ```bash
-STAGING_RECONCILIATION_PLAN="/tmp/tf-secure-baseline-staging-account-reconciliation.tfplan"
+umask 077
+STAGING_RECONCILIATION_DIR="$(mktemp -d)"
+STAGING_RECONCILIATION_PLAN="${STAGING_RECONCILIATION_DIR}/account-reconciliation.tfplan"
 
 AWS_PROFILE=staging \
+AWS_REGION="${SERVICE_REGION}" \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh staging \
   --plan-file="${STAGING_RECONCILIATION_PLAN}"
 
 AWS_PROFILE=staging \
+AWS_REGION="${SERVICE_REGION}" \
 EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh staging \
   --apply-plan="${STAGING_RECONCILIATION_PLAN}"
@@ -909,14 +1045,18 @@ EXPECTED_ACCOUNT_ID="<STAGING-ACCOUNT-ID>" \
 ### Prod
 
 ```bash
-PROD_RECONCILIATION_PLAN="/tmp/tf-secure-baseline-prod-account-reconciliation.tfplan"
+umask 077
+PROD_RECONCILIATION_DIR="$(mktemp -d)"
+PROD_RECONCILIATION_PLAN="${PROD_RECONCILIATION_DIR}/account-reconciliation.tfplan"
 
 AWS_PROFILE=prod \
+AWS_REGION="${SERVICE_REGION}" \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh prod \
   --plan-file="${PROD_RECONCILIATION_PLAN}"
 
 AWS_PROFILE=prod \
+AWS_REGION="${SERVICE_REGION}" \
 EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
 ./scripts/bootstrap/reconcile-workload-account.sh prod \
   --apply-plan="${PROD_RECONCILIATION_PLAN}"
@@ -950,12 +1090,14 @@ IDENTITY_CENTER_WORKLOADS
 IDENTITY_CENTER_SECOPS
 ```
 
-For local deployment, copy `bootstrap/control_plane/identity_center/terraform.tfvars.example` to `terraform.tfvars` and populate the workload account IDs, Regions, expected workload policy names, and security-operations account ID.
+For local deployment, create `bootstrap/control_plane/identity_center/terraform.tfvars` from its example only when no local file already exists. Populate the workload account IDs, Regions, expected workload policy names, and security-operations account ID. Review rather than overwrite an existing configuration.
 
 Then apply:
 
 ```bash
 export AWS_PROFILE=control-plane
+export AWS_REGION="$SERVICE_REGION"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 
 terraform -chdir=bootstrap/control_plane/identity_center init
 terraform -chdir=bootstrap/control_plane/identity_center plan
@@ -989,11 +1131,11 @@ Recommended validation order:
 
 1. Verify every migrated state stack:
    ```bash
-   AWS_PROFILE=control-plane ./scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only
-   AWS_PROFILE=security-operations ./scripts/bootstrap/migrate-state-stack.sh security-operations --verify-only
-   AWS_PROFILE=dev ./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
-   AWS_PROFILE=staging ./scripts/bootstrap/migrate-state-stack.sh staging --verify-only
-   AWS_PROFILE=prod ./scripts/bootstrap/migrate-state-stack.sh prod --verify-only
+   AWS_PROFILE=control-plane AWS_REGION="${STATE_REGION}" ./scripts/bootstrap/migrate-state-stack.sh control-plane --verify-only
+   AWS_PROFILE=security-operations AWS_REGION="${STATE_REGION}" ./scripts/bootstrap/migrate-state-stack.sh security-operations --verify-only
+   AWS_PROFILE=dev AWS_REGION="${STATE_REGION}" ./scripts/bootstrap/migrate-state-stack.sh dev --verify-only
+   AWS_PROFILE=staging AWS_REGION="${STATE_REGION}" ./scripts/bootstrap/migrate-state-stack.sh staging --verify-only
+   AWS_PROFILE=prod AWS_REGION="${STATE_REGION}" ./scripts/bootstrap/migrate-state-stack.sh prod --verify-only
    ```
 2. Run the **Export Control Plane Evidence** workflow and confirm Organizations topology, account placement, delegated-administrator prerequisites, and Identity Center are green.
 3. Run the **Export Security Operations Evidence** workflow and confirm Security Hub CSPM, Security Hub V2, and the centralized GuardDuty contract are green, including `RUNTIME_MONITORING = ALL`, `ECS_FARGATE_AGENT_MANAGEMENT = ALL`, `EC2_AGENT_MANAGEMENT = ALL`, and `EKS_ADDON_MANAGEMENT = NONE`.
@@ -1014,12 +1156,22 @@ Recommended validation order:
 15. For protected `production`/`development` ECS services, confirm `GuardDutyManaged=true`, exactly one injected GuardDuty agent is `RUNNING`, the application remains valid, GuardDuty coverage is `AUTO_MANAGED` and `HEALTHY` with no unresolved issues, exact agent ECR authority is present, and the coverage-state EventBridge notification path matches Terraform. For `minimal`, confirm `GuardDutyManaged=false`, no agent ECR authority, and valid disabled-state coverage semantics.
 16. When ECS services are configured, also confirm steady state with digest-pinned images, private task networking, exact logging encryption, declared database/ALB relationships, fixed-versus-autoscaled desired-count ownership, exact scaling/deployment settings, and expected ECS operational alarms.
 17. Confirm SNS subscriptions are confirmed.
-18. Run Lambda tests:
+18. Run separately approved Lambda behavioral tests in an appropriate test context; they are not the read-only validation suite:
     - `docs/lambda_tests/ec2_isolation.md`
     - `docs/lambda_tests/ec2_rollback.md`
     - `docs/lambda_tests/ip_enrichment.md`
 
 ---
+
+## Evidence and release qualification boundaries
+
+Keep the four validation/evidence layers separate: control plane, centralized security operations, workload bootstrap, and workload baseline. A `16/16` workload pass does not prove the other three layers passed, nor that every possible RDS attribute or application behavior was checked.
+
+For production, retain the effective input set, implementation SHA, profile, region/CIDR/AZ topology, selected image digest, live task placement, target health, validator logs, and no-change plan. The shipped null digest is intentionally different from the digest-selected service used in application qualification.
+
+`validate-backup.sh` can pass with warnings when a fresh environment has no restore-test jobs or no current recovery points. Treat restore configuration, actual restore execution, temporary-resource cleanup, and application-data correctness as different claims. Earlier R8 failover/restore/task-replacement evidence must keep its original provenance; do not relabel it as an exact-RC1 test.
+
+A final normal-operation no-change plan should use the same effective configuration as the deployment. It does not replace separately approved retirement/destroy qualification. Do not run destructive or fault-injection tests merely because an account-wide informational command completed.
 
 ## Deployment Order Summary
 
@@ -1057,11 +1209,11 @@ Expected workflows:
 | Terraform Apply | Generates its own saved binary workload plan, readable plan, metadata, and checksum; waits for protected-environment approval; verifies and applies that exact plan without replanning |
 | Deploy Application | Builds/publishes an application image with the dedicated Image Publisher role, resolves the authoritative digest, and creates a one-field release PR; it does not run Terraform Apply |
 | Reconcile Workload Account | Runs `plan-only` or generates a reconciliation plan, waits for approval, applies the exact saved plan, and runs strict bootstrap validation |
-| Terraform Destroy | Generates and protects an exact saved destroy plan; production additionally requires the staged retirement/readiness contract before Identity Center cleanup and exact destroy-plan apply |
-| Workload Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
-| Workload Baseline Evidence | Exports the 16-script workload baseline evidence package |
-| Control-Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
-| Security Operations Evidence | Validates centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance from `security-operations-plan` |
+| Terraform Destroy | Runs preflight; production adds separately approved durable cleanup/readiness; then workload destroy planning, separate Identity Center cleanup plan/apply, and final approved exact destroy apply |
+| Export Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
+| Export Baseline Evidence | Exports the 16-script workload baseline evidence package |
+| Export Control Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
+| Export Security Operations Evidence | Validates centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance from `security-operations-plan` |
 
 The standalone `Terraform Plan` workflow remains useful for pull requests, pushes, and independent review. `Terraform Apply` generates its own plan in the same workflow run so the protected Apply job can consume the exact artifact that was presented for approval.
 
@@ -1071,20 +1223,24 @@ Saved binary plans are short-lived artifacts because Terraform plans can contain
 
 The Destroy workflow follows the same reviewed-plan principle as Apply: it generates a readable saved destroy plan, records metadata/checksum evidence, pauses on the protected environment, verifies the exact artifact after approval, and applies that exact destroy plan without replanning.
 
-For a production-profile workload, Destroy additionally fails closed unless the environment has already converged through the staged retirement procedure in `docs/production-retirement.md`. The workflow must not automatically purge ECR images or AWS Backup recovery points merely to make destruction succeed.
+For `prod` with `deployment_profile=production`, Destroy first requires converged Stage-1 retirement and explicit `delete_durable_retirement_data=true`. It inventories durable data, obtains the protected cleanup approval, deletes the scoped ECR images/Backup recovery points, and verifies readiness before producing the workload destroy plan.
 
-Identity Center cleanup remains a required pre-destroy dependency for workload-created IAM policies. To avoid changing access before an operator approves destruction, the intended order is:
+The subsequent dependency order is:
 
 ```text
-destroy plan
-  -> human/protected approval
-  -> Identity Center environment cleanup
-  -> apply exact saved destroy plan
+saved workload destroy plan
+  -> Identity Center cleanup plan
+  -> control-plane approval and exact cleanup apply
+  -> workload destroy approval
+  -> artifact verification and production readiness recheck
+  -> exact workload destroy apply
 ```
 
-Development/minimal teardown does not require production retirement mode.
+The Identity Center approval is separate from the final workload approval. A later rejection does not undo earlier access changes or durable-data deletion. Cleanup applies a fresh inventory; it does not replay the preflight item list as a checksummed deletion artifact. The [retirement runbook](production-retirement.md) describes the complete boundaries and abort behavior.
 
-Evidence workflows use the read-only GitHub Plan roles. On clean runners, they materialize the ignored runtime state-stack backend before initializing the state stack. The evidence workflows require remote state by default.
+Development/minimal teardown sets `delete_durable_retirement_data=false` and does not require production retirement mode, but the workflow still includes the Identity Center cleanup dependency.
+
+Evidence jobs use Plan-role credentials and read-only validation commands. That description does not imply the IAM role has no write permissions whatsoever: Terraform planning/backend operations have their own state/lock permissions. On clean runners the relevant state/backend files must be materialized before initialization; bootstrap/control-plane evidence requires remote-state proof by default.
 
 ---
 
@@ -1097,7 +1253,8 @@ The first state-stack apply is local because the S3 backend does not exist yet.
 After that initial apply, run:
 
 ```bash
-./scripts/bootstrap/migrate-state-stack.sh <dev|staging|prod|control-plane>
+AWS_REGION="$STATE_REGION" ./scripts/bootstrap/migrate-state-stack.sh dev
+# Other supported targets: staging, prod, control-plane, security-operations.
 ```
 
 The helper creates the ignored runtime `backend.tf`, migrates the local state, and verifies the remote object.
@@ -1190,6 +1347,7 @@ Notable cost drivers include:
 - Security Hub
 - Inspector
 - KMS requests
+- RDS instance capacity, including production Multi-AZ and temporary Restore Testing databases
 - Backup storage
 - ECS/Fargate runtime capacity and Application Load Balancers when services are deployed
 
@@ -1215,15 +1373,11 @@ After completion, the platform provides a multi-account AWS security baseline wi
 
 # Destruction / Cleanup Procedure
 
-Destroying stacks out of order can cause failures such as:
+Workload retirement, optional account-role removal, and administrative state/platform decommissioning are different operations. Do not treat one successful workload destroy as permission or proof that the entire platform can be removed safely.
 
-- IAM policies failing to delete because Identity Center still has them attached
-- GitHub Actions losing access because workload OIDC roles were removed too early
-- Terraform state backend resources being destroyed before dependent stacks are removed
+Destroying stacks out of order can leave IAM dependencies, remove the GitHub roles needed for cleanup, or orphan active state. Preserve required application data, images, audit logs, recovery artifacts, keys, and external state backups before authorizing deletion.
 
-A migrated state stack must never destroy the S3 bucket that currently stores its own active state. Before destroying a workload, control-plane, or security-operations `state` stack, first migrate that stack's state back to local state or another independent backend and retain an external backup.
-
-Do not run `terraform destroy` against a state stack while its active backend still points to the bucket it manages.
+A state root must never destroy the S3 bucket holding its own active state. Moving that state to an independent backend is necessary but **not sufficient**: [modules/state](../modules/state/README.md) has literal `prevent_destroy=true` on both its bucket and CMK. Workload `production_retirement_mode` does not disable those guards.
 
 ---
 
@@ -1231,209 +1385,141 @@ Do not run `terraform destroy` against a state stack while its active backend st
 
 ### Development and minimal profiles
 
-Development/minimal workloads remain intentionally disposable.
+Use the reviewed `Terraform Destroy` workflow with the intended environment, `confirm=DESTROY`, and `delete_durable_retirement_data=false`. Keep the exact deployed inputs, including a non-default `MAIN_VPC_CIDR`, aligned with the plan path.
 
-When using GitHub Actions, use the `Terraform Destroy` workflow so destruction follows the repository's reviewed saved-plan path.
-
-For a local teardown, first remove any Identity Center optional attachments that depend on workload-created IAM policies, then destroy the environment:
+Local teardown is a separate operator-controlled path. Resolve the intended AWS caller and Terraform root, remove only the relevant optional Identity Center policy dependencies, and review the full destroy plan before approving. A conceptual local command after those prerequisites is:
 
 ```bash
-terraform -chdir=environments/<env> destroy
+ENV_NAME="dev"  # Substitute the reviewed development/minimal target.
+AWS_PROFILE="$ENV_NAME" AWS_REGION="$SERVICE_REGION" \
+  terraform -chdir="environments/${ENV_NAME}" destroy
 ```
 
-Do not destroy `bootstrap/<env>/account` until the workload environment is gone because that stack owns the GitHub OIDC roles used to manage the workload.
+This command is not a substitute for the protected GitHub workflow or production retirement. Do not remove the workload account/OIDC stack first.
 
 ### Production profile
 
-A production-profile workload must **not** be destroyed directly from its normal protected state.
-
-Production destruction is a staged operation:
+The complete RC1 automated retirement path supports **`prod`**. Its order is:
 
 ```text
-normal production
-  |
-  v
-Stage 1 - reviewed retirement preparation Apply
-  |
-  v
-retirement/readiness validation
-  |
-  v
-Stage 2 - reviewed exact destroy plan
-  |
-  v
-Identity Center environment cleanup
-  |
-  v
-apply exact saved destroy plan
+normal production (production_retirement_mode=false)
+  -> Terraform Apply with production_retirement_mode=true
+  -> exact Stage-1 plan and non-destructive plan guard
+  -> protected approval and exact Stage-1 apply
+  -> read-only durable-data inventory
+  -> Terraform Destroy preflight and convergence check
+  -> separately approved durable cleanup
+  -> readiness validation
+  -> saved workload destroy plan
+  -> separately planned/approved Identity Center cleanup
+  -> final workload-destroy approval
+  -> artifact verification and readiness recheck
+  -> exact saved destroy-plan apply
 ```
 
-The canonical runbook is:
+Use [docs/production-retirement.md](production-retirement.md) as the canonical runbook. It documents the separate approval points and current helper scope.
+
+Stage 1 derives service capacity zero while keeping the canonical image selection and service definition. It relaxes the native RDS/ALB/Network Firewall deletion protections but keeps ECR/ECS force deletion and Backup vault force destruction disabled. RDS final snapshots and automated-backup retention remain required.
+
+The production Destroy request requires:
 
 ```text
-docs/production-retirement.md
+environment                    = prod
+confirm                        = DESTROY
+delete_durable_retirement_data = true
 ```
 
-Do not:
+That explicit cleanup authorization is required even when the scoped repositories/vault are already empty. The cleanup helper permanently deletes the current scoped inventory; it does not archive assets for you. Decide retention and perform separately approved preservation first.
 
-- change `deployment_profile` from `production` to `development` or `minimal` to bypass safeguards
-- enable broad ECR force deletion
-- enable Backup vault force destruction
-- delete Backup recovery points or ECR images implicitly from the Destroy workflow
-- rely on one destroy operation to disable AWS-native deletion protection and destroy the protected resources in the same unreviewed step
-
-Normal production uses:
-
-```text
-production_retirement_mode = false
-```
-
-Stage 1 deliberately converges:
-
-```text
-production_retirement_mode = true
-```
-
-through the same saved-plan / protected-approval Apply path used for normal infrastructure changes.
-
-The Destroy workflow must then prove that the retirement state is already converged before it creates the production destroy plan.
+Do not change the deployment profile, delete the service entry, or set its digest to `null` merely to bypass retirement. Do not claim the cleanup is covered by the later Terraform destroy-plan approval. Rejecting a later job does not restore assets already deleted by an earlier approved job.
 
 ---
 
 ## Identity Center Dependency
 
-For a single workload environment, do **not** destroy the entire Identity Center stack.
+For one workload, do not destroy the whole Identity Center stack. Optional Analyst/Engineer access can depend on workload-created IAM policies.
 
-Optional workload Analyst/Engineer access can depend on IAM policies created by `environments/<env>`. Those attachments must be removed before Terraform attempts to delete the policies.
+The workflow derives cleanup inputs by setting these fields to `false` for the selected workload inside `identity_center_workloads`:
 
-Conceptually:
-
-```hcl
-<env> = {
-  # existing account/Region/policy-name values
-  enable_secops_analyst  = false
-  enable_secops_engineer = false
-}
+```text
+enable_secops_analyst
+enable_secops_engineer
 ```
 
-For local/manual operation, apply that Identity Center change before the workload destroy:
+It plans and applies that control-plane change under its own approval **before the final workload-destroy approval**. Review the complete cleanup plan for unrelated changes; it is still a plan of the shared Identity Center root.
 
-```bash
-terraform -chdir=bootstrap/control_plane/identity_center apply
-```
+These effective input changes do not persistently rewrite the `IDENTITY_CENTER_WORKLOADS` GitHub variable or local configuration. Reconcile the intended long-term settings so a later Identity Center apply does not unexpectedly recreate dependencies on retired workload policies.
 
-For GitHub Actions, the Destroy workflow should perform this environment-specific cleanup **after the saved destroy plan has received protected approval but before the exact destroy plan is applied**.
-
-This keeps the IAM dependency safe without modifying workforce access merely because an unapproved destroy plan was generated.
+Keep the Identity Center stack and its backend available until all GitHub workload-destroy workflows that depend on it have completed. Do not follow a “destroy Identity Center first, then run the normal workload Destroy workflows” recipe.
 
 ---
 
 ## Workload Account and State Teardown
 
-After `environments/<env>` has been destroyed:
+After a workload has been destroyed and all uses of its OIDC roles have ended, review the account-stack removal separately. Do not delete those roles while a workflow still needs them.
+
+Before any state-root decommissioning, retain a private external state backup. For example, from the correct account context:
 
 ```bash
-terraform -chdir=bootstrap/<env>/account destroy
+ENV_NAME="dev"  # Substitute the reviewed target.
+STATE_DIR="bootstrap/${ENV_NAME}/state"
+umask 077
+STATE_BACKUP_DIR="$(mktemp -d "${HOME}/tf-state-backup.XXXXXX")"
+terraform -chdir="$STATE_DIR" state pull > "$STATE_BACKUP_DIR/state.json"
+test -s "$STATE_BACKUP_DIR/state.json"
+printf 'Private state backup: %s\n' "$STATE_BACKUP_DIR"
 ```
 
-Then migrate the state stack away from the backend it owns before destroying it:
+This is **only a backup**, not an instruction to migrate or destroy the backend. It can contain sensitive information; retain it under the approved access/retention policy.
 
-```bash
-STATE_DIR="bootstrap/<env>/state"
-
-terraform -chdir="${STATE_DIR}" state pull \
-  > "${HOME}/tf-secure-baseline-<env>-state-pre-destroy.json"
-
-mv "${STATE_DIR}/backend.tf" "${STATE_DIR}/backend.tf.pre-destroy"
-
-terraform -chdir="${STATE_DIR}" init -migrate-state
-terraform -chdir="${STATE_DIR}" destroy
-```
-
-Retain the external state backup according to the organization's approved retention procedure.
+An approved state teardown must independently establish that dependent roots are handled, active state has moved off the bucket, the independent state is verified, the literal Terraform guards and AWS policy/versioned-object constraints are deliberately addressed, and retained data/keys remain recoverable. RC1 has no generic “retire state” toggle or reverse-migration/decommissioning helper that automates that whole process. See the relevant state-root README and [state module reference](../modules/state/README.md).
 
 ---
 
 ## Full Platform Teardown
 
-When destroying the entire platform, use this high-level order.
+This is a dependency checklist, **not** a fully qualified one-command platform destruction procedure. Workload lifecycle qualification does not establish that Organization, delegated-administrator, Identity Center, account-role, and state-resource teardown has been exercised as one complete platform operation.
 
 ### 0. Prepare Identity Center
 
-If the full Identity Center stack will be removed, destroy it before workload-created IAM policies are deleted:
-
-```bash
-terraform -chdir=bootstrap/control_plane/identity_center destroy
-```
+Review the selected workload’s optional policy dependencies, but keep the shared Identity Center stack available for the normal Destroy workflow’s cleanup plan/apply. Complete those workload workflows before considering whole-stack removal.
 
 ### 1. Dev
 
-1. Destroy `environments/dev`.
-2. Destroy `bootstrap/dev/account`.
-3. Migrate `bootstrap/dev/state` away from its self-managed S3 backend.
-4. Destroy `bootstrap/dev/state`.
+Complete reviewed workload destruction, then separately assess whether its account roles or state backend should be retained. Do not remove a backend still used by another root.
 
 ### 2. Staging
 
-5. Destroy `environments/staging`.
-6. Destroy `bootstrap/staging/account`.
-7. Migrate `bootstrap/staging/state` away from its self-managed S3 backend.
-8. Destroy `bootstrap/staging/state`.
+Apply the same dependency rule. A production-profile staging environment does not gain a supported prod-only durable-cleanup workflow simply by selecting that profile; establish a separate approved path rather than bypassing the restriction.
 
 ### 3. Prod
 
-Before destroying `environments/prod`, complete:
-
-```text
-docs/production-retirement.md
-```
-
-Then:
-
-9. Destroy `environments/prod` through the reviewed production Destroy path.
-10. Destroy `bootstrap/prod/account`.
-11. Migrate `bootstrap/prod/state` away from its self-managed S3 backend.
-12. Destroy `bootstrap/prod/state`.
+Complete the [production retirement runbook](production-retirement.md), including explicit durable-data disposition. Retained RDS recovery artifacts, audit logs, state backups, and encryption/access dependencies need separate post-destroy review.
 
 ### 4. Security Operations
 
-13. Destroy `bootstrap/security_operations/security_services`.
-14. Destroy `bootstrap/security_operations/account`.
-15. Migrate `bootstrap/security_operations/state` away from its self-managed S3 backend.
-16. Destroy `bootstrap/security_operations/state`.
+Retiring centralized security governance is not part of workload destroy. Review organization/delegated-administrator dependencies and workforce access before planning changes to `security_services`, then its account roles and state backend.
 
 ### 5. Control Plane
 
-17. Destroy `bootstrap/control_plane/organizations`.
-18. Destroy `bootstrap/control_plane/account`.
-19. Migrate `bootstrap/control_plane/state` away from its self-managed S3 backend.
-20. Destroy `bootstrap/control_plane/state`.
+Keep shared identity and governance available while dependent operations require them. The Organization resource itself has `prevent_destroy=true`; a routine `terraform destroy` is not an implemented Organization-retirement procedure. State bucket and CMK guards remain separate. Plan any final decommissioning as an explicitly approved administrative operation, not as an automatic extension of v1.11 workload retirement.
 
 ---
 
 ## Important Destruction Notes
 
-- Do **not** destroy `bootstrap/<env>/account` before `environments/<env>`.
-  - The account stack contains the GitHub OIDC roles used by CI/CD.
+- Keep workload OIDC roles until the workload workflows are finished; keep backend resources until every dependent root and active state has been handled.
+- Do not remove the whole Identity Center stack before workflows that still plan/apply its environment-specific cleanup.
+- Preserve state externally before backend changes. Moving state does not relax the state module’s literal guards or empty a versioned bucket.
+- Production native deletion protection, provider force-deletion flags, and explicitly approved data cleanup are separate mechanisms.
+- The logs bucket’s `force_destroy=true` and disabled Object Lock are separate storage limits; the ECR/Backup cleanup helper is not an audit-log preservation service.
+- A failed or cancelled later approval does not undo earlier approved cleanup. Inspect current state and re-plan through the reviewed path rather than applying stale artifacts.
 
-- Do **not** destroy `bootstrap/<env>/state` before all stacks using that backend are destroyed.
-  - The state stack contains the Terraform backend resources.
+## Source and Further Reading
 
-- Do **not** destroy `bootstrap/security_operations/account` before `bootstrap/security_operations/security_services`.
-  - It contains the security-operations GitHub OIDC roles.
-
-- Do **not** destroy `bootstrap/security_operations/state` before the security-operations account and security-services stacks are gone.
-  - Migrate its state away from its self-managed backend first.
-
-- Do **not** destroy `bootstrap/control_plane/account` before the other control-plane substacks.
-  - It contains the GitHub OIDC roles used to manage the control plane.
-
-- Destroying `bootstrap/control_plane/state` should remain last.
-  - It contains the backend resources for the control-plane stacks.
-  - Migrate its state to local state or another independent backend before destroying the bucket it manages.
-
-- Production ECR repositories and Backup recovery points require an explicit disposition decision before full destruction.
-  - The production Destroy workflow must fail closed rather than purge them automatically.
-
-- Versioned state buckets may retain noncurrent state and lockfile object versions.
-  - Preserve an external state backup and follow approved bucket-retention or cleanup controls before final deletion.
+- [Baseline defaults](../baseline/locals.tf) and [canonical validation](../baseline/variables.tf)
+- [Workload example inputs](../environments/prod/variables.tf) and [toolchain constraints](../environments/prod/providers.tf)
+- [GitHub OIDC trust](../modules/github_oidc/main.tf)
+- [Terraform Apply](../.github/workflows/terraform-apply.yml) and [Terraform Destroy](../.github/workflows/terraform-destroy.yml)
+- [Bootstrap scripts](../scripts/bootstrap/README.md) and [deployment scripts](../scripts/deployment/README.md)
+- [State module](../modules/state/README.md), [storage module](../modules/storage/README.md), and [Backup](../modules/backup/README.md)

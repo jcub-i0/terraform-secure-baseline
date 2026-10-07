@@ -15,6 +15,8 @@ The module is designed for long-running Fargate services using private `compute_
 
 Services are keyed by stable service name through the `services` map.
 
+This reference describes `v1.11.0-rc1`. The low-level `services` map consumes already-resolved runtime values; operators normally configure the canonical `ecs_services` map in `environments/<env>/container-workloads.auto.tfvars.json`. Do not confuse module inputs with baseline profile defaults.
+
 A service is either:
 
 - **fixed-count** when `scaling = null`; Terraform owns `desired_count`; or
@@ -55,7 +57,7 @@ Application Auto Scaling creates and manages the CloudWatch alarms associated wi
 |---|---|---:|---|---|
 | `name_prefix` | `string` | Yes | — | Baseline naming prefix used to construct ECS service resources. |
 | `environment` | `string` | Yes | — | Workload environment identity used for tagging. |
-| `primary_region` | `string` | Yes | — | AWS Region used by ECS services and the `awslogs` log driver. |
+| `primary_region` | `string` | Yes | — | Region used by the `awslogs` configuration. Baseline supplies the active provider region; this input does not configure an AWS provider or state backend. |
 | `vpc_id` | `string` | Yes | — | VPC ID used when creating ECS task security groups. |
 | `cluster_arn` | `string` | Yes | — | ARN of the ECS cluster that hosts the services. |
 | `cluster_name` | `string` | Yes | — | ECS cluster name used to construct Application Auto Scaling resource IDs. |
@@ -66,12 +68,16 @@ Application Auto Scaling creates and manages the CloudWatch alarms associated wi
 | `logs_cmk_arn` | `string` | Yes | — | ARN of the customer-managed KMS key used to encrypt ECS CloudWatch log groups. |
 | `execution_policy_ids` | `map(string)` | No | `{}` | ECS task execution IAM policy IDs keyed by service name and used as launch-readiness dependencies. |
 | `security_policy_rule_ids` | `map(set(string))` | No | `{}` | Cross-component security-group rule IDs keyed by service name and used as launch-readiness dependencies. |
+| `availability_zone_rebalancing` | `string` | No | `null` | Explicit ECS service AZ rebalancing: `ENABLED`, `DISABLED`, or `null`. Baseline supplies `ENABLED` for production and `null` otherwise. |
+| `force_delete` | `bool` | Yes | — | Whether ECS service deletion may bypass first scaling the service to zero. Baseline supplies `false` for production, including retirement, and `true` otherwise. |
+
+`execution_policy_ids` and `security_policy_rule_ids` default to empty maps but must each contain every configured service key. A non-empty `services` map therefore needs matching readiness inputs.
 
 ## Service Configuration
 
 The `services` map is keyed by stable ECS service name.
 
-Example autoscaled ingress service:
+Example **non-production** autoscaled ingress service, showing only the `services` input. Replace the illustrative image and resource identifiers and supply the other required module inputs and readiness maps; this is not a complete module call:
 
 ```hcl
 services = {
@@ -153,7 +159,7 @@ When `scaling` is non-null, the object supports:
 
 The canonical `baseline` interface enforces that:
 
-- `min_capacity >= 1`
+- `min_capacity >= 1` during normal operation (`0` is accepted when retirement mode is enabled)
 - `max_capacity >= min_capacity`
 - `desired_count` falls within the configured capacity range
 - at least one target-tracking metric is configured
@@ -161,7 +167,7 @@ The canonical `baseline` interface enforces that:
 - cooldown values are zero or greater
 - `alb_requests_per_target` is used only with configured ingress
 
-The low-level module additionally requires both `target_group_arn` and `alb_request_resource_label` when ALB request-count scaling is configured.
+The low-level module requires both `target_group_arn` and `alb_request_resource_label` when ALB request-count scaling is configured. It does not independently reproduce all canonical baseline scaling or production-profile checks. For deployable services in normal production, baseline additionally requires fixed `desired_count >= 2` or autoscaled `min_capacity >= 2`; registered entries with a null digest are excluded from that production minimum check.
 
 ### Deployment configuration
 
@@ -247,7 +253,7 @@ Fargate services run in the supplied compute-private subnets with:
 assign_public_ip = false
 ```
 
-This module does not place ECS tasks in public subnets and does not assign public IP addresses.
+Baseline supplies only its compute-private subnets. The module sets `assign_public_ip = false`, but a direct caller remains responsible for supplying the intended subnet set; the input itself is not an AZ/subnet-role discovery mechanism.
 
 ## CloudWatch Logging
 
@@ -324,7 +330,7 @@ The execution role is used by the ECS/Fargate runtime for platform-level actions
 
 The task role represents application-runtime AWS permissions.
 
-Both roles remain owned by `modules/iam`.
+Both roles remain owned by `modules/iam` in baseline composition. Creating a task role does not itself grant application AWS permissions; RC1 does not add a generic application task-policy interface here.
 
 ## Launch Readiness
 
@@ -332,7 +338,7 @@ ECS services must not launch before their execution IAM policies and cross-compo
 
 The module uses:
 
-```hcl
+```text
 terraform_data.ecs_execution_policy_ready
 terraform_data.ecs_security_policy_ready
 ```
@@ -356,7 +362,7 @@ security_policy_rule_ids = {
 }
 ```
 
-Input validation requires readiness-map coverage for every configured ECS service.
+Input validation requires readiness-map key coverage for every configured ECS service. Dependency ordering does not by itself verify IAM policy content or live network connectivity; those are separate validation concerns.
 
 This pattern preserves resource-granular dependency ordering:
 
@@ -434,7 +440,9 @@ Target-tracking policies are created only for the metrics configured on the serv
 - `ECSServiceAverageMemoryUtilization`
 - `ALBRequestCountPerTarget`
 
-v1.9 uses target tracking only. Step scaling is not implemented by this module.
+The target-tracking model introduced in v1.9 remains the RC1 model. Step scaling and scheduled scaling actions are not implemented by this module.
+
+Changing a service between fixed-count and autoscaled modes changes its Terraform resource address. This module contains no automatic state-migration instruction for that transition; review the actual plan rather than assuming an in-place mode change.
 
 AWS creates CloudWatch alarms for target-tracking policies. Those alarms remain AWS-managed and are separate from the Terraform-owned operational alarms created by `modules/monitoring`.
 
@@ -498,23 +506,35 @@ deployment_circuit_breaker {
 }
 ```
 
-This allows failed deployments to roll back automatically rather than remaining indefinitely in a failed rollout state.
+These flags enable the ECS deployment circuit breaker and request rollback. They are not proof that a particular rollback has executed successfully; retain runtime evidence for that claim.
+
+## Production Availability
+
+The baseline selects three standard AZs by default and supplies all effective compute-private subnets. Both ECS service resources receive `availability_zone_rebalancing = "ENABLED"` under the production profile. A direct module caller can supply `ENABLED`, `DISABLED`, or `null`; `null` is not a claim that AWS reports `DISABLED`.
+
+The production minimum is **two**, not three: canonical input validation requires at least two fixed tasks or an autoscaling minimum of two for digest-selected services outside retirement. The shipped production sample chooses three tasks. Neither the number of configured subnets nor rebalancing intent proves one live task per AZ; use live task placement evidence when that distribution is required.
+
+The normal production runtime validator additionally requires `minimum_healthy_percent = 100`, `maximum_percent >= 200`, and AZ rebalancing `ENABLED`, alongside the capacity minimum. The canonical Terraform input validation checks the general percentage ranges; do not describe all of the validator's stricter production checks as low-level module input constraints.
 
 ## Development/Test Destruction Posture
 
-The current workload environments are routinely applied and destroyed for development, testing, and cost control.
+There is no longer a hard-coded `force_delete = true` for every service. Both ECS service resources consume the required `force_delete` input:
 
-ECS services therefore use:
+| Baseline posture | `force_delete` |
+|---|---:|
+| Normal production | `false` |
+| Production retirement | `false` |
+| Development/minimal | `true` |
 
-```hcl
-force_delete = true # CHANGE THIS IN PROD
-```
+The module has no `prevent_destroy` guard. `force_delete=false` is not a blanket prohibition on deleting a service; the approved production path first proves the service is quiesced.
 
-This supports routine teardown of the current ephemeral workload environments.
+### Production retirement
 
-Persistent production usage must reconsider this setting before deployment.
+Baseline keeps the canonical service entry and selected digest, but derives runtime `desired_count=0`; for autoscaled services it also derives `min_capacity=0` and `max_capacity=0`. Do not delete the canonical service or set its digest to `null` as a substitute for Stage-1 retirement: that removes resources rather than preparing an in-place retirement plan.
 
-The module does not introduce `prevent_destroy` protection.
+The autoscaled resource retains `ignore_changes=[desired_count]` during retirement. Setting the derived bootstrap value to zero is not independent proof that live desired count was changed. The retirement-readiness script checks the actual ECS `desiredCount`, `runningCount`, and `pendingCount` are all zero, along with zero live scaling bounds and the absence of scheduled scaling actions for the relevant targets.
+
+Use the [production retirement runbook](../../docs/production-retirement.md), not normal-operation runtime validation, to qualify the zero-capacity retirement posture. The complete RC1 durable-cleanup workflow is limited to the `prod` environment even though baseline production policy is profile-driven.
 
 ## Tags
 
@@ -573,6 +593,7 @@ platform_version
 deployment_minimum_healthy_percent
 deployment_maximum_percent
 health_check_grace_period_seconds
+availability_zone_rebalancing
 ```
 
 ### `autoscaling_targets`
@@ -706,6 +727,8 @@ When `services` is empty:
 - No Application Auto Scaling targets are created
 - No target-tracking scaling policies are created
 
+The two `terraform_data` readiness resources remain even with an empty service map. The shared cluster is owned elsewhere and also remains in baseline composition. Empty per-service validation is not evidence that a running application or its GuardDuty instrumentation was tested.
+
 This allows ECS runtime capability to be wired into the baseline without requiring every workload environment to run ECS services.
 
 Baseline passes only deployable canonical services to this module. A canonical `ecs_services` entry with `image_digest = null` is registered but unreleased: its derived ECR repository remains, while this module receives no entry for it and therefore creates no per-service runtime or scaling resources. Selecting a valid exact digest materializes the service from the same canonical entry.
@@ -729,9 +752,27 @@ The current baseline supplies:
 - Fixed-count versus autoscaled ownership through `scaling`
 - Deployment-health configuration through `deployment`
 - Runtime environment and secret configuration
+- Profile-derived service AZ rebalancing and force-deletion policy
+- Retirement-derived zero capacity without modifying canonical application settings
 
 The canonical baseline validates scaling bounds, target metrics, cooldowns, ALB-request/ingress coupling, and deployment-health ranges before deriving this module's deployable service map.
 
 Runtime validation is handled by `scripts/validation/validate-ecs-runtime.sh` inside the existing workload baseline validation layer. The validator compares the Terraform output contract with live ECS, Application Auto Scaling, ALB, logging, networking, deployment configuration, and Terraform-owned operational alarm state.
 
 The validator treats fixed-count desired count as exact. For autoscaled services, it validates the live desired count against configured scaling bounds rather than the bootstrap `desired_count`, because Application Auto Scaling owns subsequent count changes.
+
+## Container and Validation Limits
+
+RC1 renders one essential application container per task definition. It does not expose generic sidecars, container dependency graphs, command overrides, or container `healthCheck` configuration. GuardDuty-managed agent injection is a separate AWS-managed runtime mechanism, not generic multi-container configuration support.
+
+The module also does not implement bounded/one-off jobs, scheduled Fargate tasks, application database migrations, or application-level recovery tests. The ALB health-check path belongs to the optional target group; it must not be confused with a task-definition container health check.
+
+The existing workload suite remains 16 validators. `validate-ecs-runtime.sh` checks normal runtime contracts and GuardDuty coverage; `validate-iam.sh` checks the relevant role/policy contract. Neither an input check nor a normal steady-state pass replaces live failure-injection evidence or the retirement gates.
+
+## Implementation Sources
+
+- [Resource definitions](main.tf), [input declarations](variables.tf), and [outputs](outputs.tf)
+- [Canonical baseline inputs](../../baseline/variables.tf) and [runtime derivation](../../baseline/locals.tf)
+- [Baseline module calls](../../baseline/main.tf)
+- [Runtime service validation](../../scripts/validation/lib/ecs-runtime/services.sh)
+- [Retirement readiness](../../scripts/deployment/validate-retirement-readiness.sh)

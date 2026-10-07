@@ -1,468 +1,246 @@
 # Production Retirement
 
-## Purpose
+## Purpose and Supported Scope
 
-This runbook defines the approved procedure for intentionally retiring a `tf-secure-baseline` workload that uses:
+This runbook describes the implemented retirement path for `environments/prod` with `deployment_profile = "production"`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It is an operator procedure, not a claim that a new live qualification was performed at that exact commit.
 
-```text
-deployment_profile = "production"
-```
+Production retirement differs from ordinary development/minimal teardown. It separates a reviewed Terraform retirement preparation from explicitly authorized durable-data deletion, Identity Center dependency cleanup, and the final reviewed workload destroy.
 
-Production retirement is deliberately different from ordinary development or minimal teardown.
+**Scope limitation:** baseline resilience/lifecycle policy is selected by `deployment_profile`, not the name `prod`. However, `cleanup-retirement-durable-data.sh` explicitly accepts only `environment=prod` in RC1. Both the retirement Apply's inventory job and the production Destroy path invoke that helper. Do not represent this complete workflow as supported for a production-profile `dev` or `staging` environment. The Stage-1 plan validator and readiness validator have broader input scope, but that does not remove the cleanup helper's restriction.
 
-The goals are to:
-
-- make destructive intent explicit
-- preserve the exact reviewed-plan Terraform workflow
-- disable only the AWS-native deletion protections required for retirement
-- gracefully quiesce ECS workloads
-- preserve the production RDS final-snapshot and automated-backup contract
-- prevent implicit deletion of ECR images or AWS Backup recovery points
-- ensure final destruction applies the exact plan that received protected approval
-
-This runbook applies to `environments/<env>` when its effective deployment profile is `production`.
-
-Workload account and self-managed state-stack destruction happen only after the workload environment has been removed and remain documented in `docs/quickstart.md`.
-
----
+Workload destruction does not destroy the account or self-managed state roots. Those are separate, later operations with their own dependencies and protection decisions.
 
 ## Safety Model
 
 Normal production uses:
 
-```text
+```hcl
 production_retirement_mode = false
 ```
 
-Normal production keeps:
+| Control | Normal production | Retirement preparation |
+|---|---|---|
+| RDS deletion protection | Enabled | Disabled |
+| ALB deletion protection, when present | Enabled | Disabled |
+| Network Firewall delete protection, when present | Enabled | Disabled |
+| ECR `force_delete` | `false` | Remains `false` |
+| ECS service `force_delete` | `false` | Remains `false` |
+| Backup vault `force_destroy` | `false` | Remains `false` |
+| RDS `skip_final_snapshot` | `false` | Remains `false` |
+| RDS `delete_automated_backups` | `false` | Remains `false` |
+| Effective ECS desired capacity | Normal configured capacity | `0` |
+| Effective ECS autoscaling bounds, when configured | Normal min/max | `0` / `0` |
+
+Set `production_retirement_mode = true` through the retirement Apply. Do not switch `deployment_profile` to `development` or `minimal` to bypass production controls.
+
+Retirement mode derives zero-capacity runtime inputs; it does not require editing the canonical service's ordinary `desired_count` or scaling limits. It also does not delete ECR images or AWS Backup recovery points. Those are handled by a separate approved cleanup operation.
+
+Do not set a deployed service's `image_digest` to `null` as a quiescence mechanism. That removes it from the deployable service map and can plan resource deletions; the Stage-1 guard rejects delete/create/replacement actions. Keep the deployed service registered with its selected digest throughout retirement preparation.
+
+## Actual Workflow and Approval Order
+
+The implementation uses the following sequence:
 
 ```text
-RDS deletion protection             enabled
-ALB deletion protection             enabled
-Network Firewall delete protection  enabled
+Terraform Apply: production_retirement_mode=true
+  internal saved retirement plan
+    -> Stage-1 plan validation
+    -> workload-environment approval
+    -> verify and apply exact saved plan
+    -> read-only durable-data inventory
 
-ECR force_delete                    disabled
-ECS service force_delete            disabled
-Backup vault force_destroy          disabled
-
-RDS final snapshot                  required
-RDS automated backups on deletion   retained
+Terraform Destroy: confirm=DESTROY, delete_durable_retirement_data=true
+  preflight: identity, inputs, retirement no-change plan, inventory
+    -> workload-environment approval for durable cleanup
+    -> inventory again and delete scoped durable data
+    -> retirement-readiness validation
+    -> reconfirm no change and readiness
+    -> create saved workload destroy plan
+    -> create saved Identity Center cleanup plan
+    -> control-plane environment approval
+    -> verify and apply exact Identity Center cleanup plan
+    -> workload-environment approval for final destroy
+    -> verify saved destroy artifact and recheck readiness
+    -> apply exact saved workload destroy plan
 ```
 
-Intentional retirement sets:
+The workflows reference protected environments, but repository administrators must actually configure the required reviewer/deployment protection rules in GitHub. Declaring an `environment:` in YAML is not itself evidence that a human approval rule is configured.
+
+**Earlier steps are not rolled back by rejecting a later approval.** Durable-data deletion happens before creation of the final destroy plan. Identity Center cleanup has its own approval and is applied before the final workload-destroy job reaches its approval. Do not document either operation as waiting for the final workload-destroy approval.
+
+## Stage 0 — Decide Durable Asset Disposition
+
+Before approving deletion, identify required application images, recovery points, and retention obligations. Copy/retain required assets outside the repositories/vault that will be destroyed, or stop the retirement. The workflow is not an archival/copy tool.
+
+Production ECR repositories use `force_delete = false`, and the Backup vault uses `force_destroy = false`. Terraform therefore does not implicitly purge their contents to make deletion succeed. The explicit cleanup script inventories **all image digests in Terraform-listed ECR repositories and all recovery points in the Terraform-listed Backup vault**, not only the sample service's active image or one RDS recovery point. Treat that entire scope as the deletion authorization boundary.
+
+The final RDS snapshot requirement and retention of RDS automated backups are separate from AWS Backup vault cleanup. `delete_automated_backups = false` is not indefinite archival retention. Decide how retained snapshots, backups, and their necessary encryption keys will be managed after workload deletion. The cleanup script does not implement that retention program.
+
+Coordinate with image publishers, operators, and scheduled jobs. The workload Apply/Destroy concurrency group does not prevent external AWS changes, local Terraform commands, or a separately scoped image-publishing workflow from creating new data during retirement. Do not disable mandatory production backup policy merely to make a check pass.
+
+## Stage 1 — Prepare Production for Retirement
+
+### 1. Verify the configuration used for the deployment
+
+Use the reviewed source revision and the same effective workload configuration that owns the live resources. Preserve the service digest and normal canonical capacity settings while enabling retirement mode.
+
+Confirm the `prod-plan` and `prod` GitHub Environment settings. Relevant inputs include `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, the Plan/Apply role ARNs, `DEPLOYMENT_PROFILE`, state bucket/key information required by the roots, and the workload's other inputs. Keep `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, and ALB certificate/ingress settings consistent with the deployment. A local-only `TF_VAR_*` override is not automatically available in Actions.
+
+The workflows pin Terraform `1.15.8`; use the committed provider lockfiles and root requirements. This procedure does not authorize provider upgrades or topology changes.
+
+### 2. Start Terraform Apply with retirement enabled
+
+Dispatch **Terraform Apply** with:
 
 ```text
+environment                = prod
 production_retirement_mode = true
 ```
 
-Terraform may then disable only the AWS-native deletion protections required for retirement:
+The workflow creates a saved plan using `terraform-plan-artifact.sh`. It runs `validate-production-retirement-plan.sh` against that same binary plan before the protected Apply job.
 
-```text
-RDS deletion protection             disabled
-ALB deletion protection             disabled
-Network Firewall delete protection  disabled
-```
+### 3. Review the Stage-1 plan and guard result
 
-These protections remain:
+The guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement or unsupported actions and requires planned outputs showing production profile, retirement mode, the specified deletion-protection/force-delete posture, and zero effective ECS capacity (including zero min/max for autoscaled services).
 
-```text
-ECR force_delete                    false
-ECS service force_delete            false
-Backup vault force_destroy          false
+This is not a whitelist of every allowed in-place attribute change. Review the full readable plan for unrelated updates, credential changes, or security-policy changes; a passing action-type check does not authorize them. Verify that the RDS final-snapshot and automated-backup behavior remains intact.
 
-RDS final snapshot requirement      preserved
-RDS automated-backup retention      preserved
-```
-
-Do not change `deployment_profile` to `development` or `minimal` to bypass production safeguards.
-
----
-
-## Two Reviewed Terraform Stages
-
-Production retirement uses two separately reviewed operations:
-
-```text
-Stage 1
-retirement preparation plan
-  -> protected approval
-  -> apply exact saved plan
-  -> prove retirement state converged
-
-Stage 2
-saved destroy plan
-  -> protected approval
-  -> Identity Center dependency cleanup
-  -> apply exact saved destroy plan
-```
-
-Do not combine these into one unreviewed destroy action.
-
----
-
-# Stage 0 - Decide Durable Asset Disposition
-
-Before production is destroyed, decide what should happen to durable data Terraform intentionally refuses to purge automatically.
-
-## ECR images
-
-Production ECR repositories use:
-
-```text
-force_delete = false
-```
-
-A repository containing images can block destruction.
-
-Before Stage 2, explicitly decide whether required images should be:
-
-- retained elsewhere
-- copied/promoted to an archival or successor repository
-- deliberately deleted from the Terraform-managed repository
-
-The Destroy workflow must not automatically purge images.
-
-## AWS Backup recovery points
-
-The production Backup vault uses:
-
-```text
-force_destroy = false
-```
-
-Recovery points can block deletion of the vault.
-
-Before Stage 2, explicitly decide whether recovery points should be:
-
-- retained/copied according to the organization's recovery-retention policy
-- deliberately deleted after the retention decision is approved
-
-The Destroy workflow must not automatically delete recovery points.
-
-## RDS final recovery point
-
-Production retirement retains:
-
-```text
-skip_final_snapshot       = false
-delete_automated_backups  = false
-```
-
-Retirement mode must not weaken these controls.
-
----
-
-# Stage 1 - Prepare Production for Retirement
-
-## 1. Quiesce application services
-
-Production ECS services must reach zero capacity before normal `force_delete = false` service deletion.
-
-For fixed-count services, retirement configuration should resolve to:
-
-```text
-desired_count = 0
-```
-
-For autoscaled services, retirement configuration must prevent Application Auto Scaling from restoring capacity and resolve the service to zero.
-
-Use Terraform-owned configuration. Do not stop tasks manually in AWS as a substitute for converged retirement state.
-
-## 2. Enable retirement intent
-
-Run the normal `Terraform Apply` workflow with:
-
-```text
-environment                = <production-profile environment>
-production_retirement_mode = true
-```
-
-The workflow must continue to use:
-
-```text
-internal Plan
-  -> readable plan
-  -> saved binary plan
-  -> metadata + checksum
-  -> protected approval
-  -> apply exact saved plan
-```
-
-## 3. Review the Stage-1 plan
-
-Expected changes can include:
-
-```text
-RDS deletion protection
-  true -> false
-
-ALB deletion protection
-  true -> false
-
-Network Firewall delete protection
-  true -> false
-
-ECS desired/minimum capacity
-  running production capacity -> zero
-```
-
-The plan must not enable production force deletion for:
-
-```text
-ECR
-ECS services
-AWS Backup vault
-```
-
-The plan must preserve:
-
-```text
-RDS final snapshot required
-RDS automated backups retained
-```
-
-Stop and investigate any unrelated replacement or broad security-posture change.
-
-## 4. Approve and apply the exact Stage-1 plan
-
-Approve only after review.
-
-The Apply job must verify and apply the exact saved artifact.
-
-Do not re-plan after approval.
-
-## 5. Prove Stage-1 convergence
-
-Before Stage 2, a normal plan using:
-
-```text
-production_retirement_mode = true
-```
-
-must report no changes.
-
-The Destroy workflow should enforce this with `terraform plan -detailed-exitcode`:
-
-```text
-0 -> retirement configuration converged
-2 -> retirement preparation incomplete; stop
-1 -> Terraform error; stop
-```
-
----
-
-# Stage 1 Readiness Checks
-
-Before the production destroy plan is generated, read-only checks should prove:
-
-```text
-RDS deletion protection
-  false
-
-ALB deletion protection, when ALB exists
-  false
-
-Network Firewall delete protection, when firewall exists
-  false
-
-ECS services
-  desiredCount == 0
-
-Application Auto Scaling
-  cannot restore service capacity
-
-ECR repositories
-  contain no images that would block repository deletion
-
-AWS Backup vault
-  contains no recovery points that would block vault deletion
-```
-
-The recommended implementation is:
-
-```text
-scripts/deployment/validate-retirement-readiness.sh
-```
-
-The Destroy workflow should call a repository script rather than embed a large set of AWS CLI checks directly in workflow YAML.
-
-Any failed readiness check stops the workflow before the saved destroy plan is produced.
-
----
-
-# Stage 2 - Reviewed Production Destroy
-
-## 1. Start the Terraform Destroy workflow
-
-Supply:
-
-```text
-environment = <target environment>
-confirm     = DESTROY
-```
-
-For production, Terraform must evaluate with:
-
-```text
-deployment_profile         = production
-production_retirement_mode = true
-```
-
-The workflow must never silently change the deployment profile.
-
-## 2. Validate identity and inputs
-
-Before planning, verify:
-
-- expected AWS account ID
-- active caller account ID
-- Plan role ARN account
-- Apply role ARN account
-- deployment profile
-- Terraform version
-- state backend configuration
-- retirement-mode requirements
-
-Use the same fail-closed identity model as Terraform Apply.
-
-## 3. Reconfirm Stage-1 convergence
-
-Run a normal plan first.
-
-Production may continue only when it reports:
-
-```text
-No changes
-```
-
-Do not rely on a destroy plan to first turn deletion protection off.
-
-## 4. Run retirement-readiness validation
-
-Confirm all Stage-1 readiness conditions still hold.
-
-Do not generate a production destroy plan while ECS, ECR, Backup, or AWS-native deletion protection remains blocking.
-
-## 5. Generate the saved destroy plan
-
-Generate:
+For a separately generated saved Stage-1 plan, the guard's actual invocation is:
 
 ```bash
-terraform plan \
-  -destroy \
-  -input=false \
-  -no-color \
-  -lock-timeout=5m \
-  -out=baseline-destroy.tfplan
+bash scripts/deployment/validate-production-retirement-plan.sh \
+  --working-directory environments/prod \
+  --plan-file /absolute/path/to/reviewed-stage1.tfplan
 ```
 
-Produce alongside it:
+That validator reads the plan and never applies it. Do not fabricate a placeholder plan file or substitute a new plan after approval.
+
+### 4. Approve and apply that exact plan
+
+Review before approving the workload environment. The Apply job verifies artifact checksums, metadata, workflow context, and Terraform version, then applies the saved binary plan without replanning.
+
+The retirement Apply's subsequent inventory job is read-only. It does not empty ECR repositories or the Backup vault.
+
+### 5. Establish retirement convergence
+
+A normal plan with the same inputs and `production_retirement_mode=true` must report no changes. The Destroy workflow enforces this using `-detailed-exitcode`:
 
 ```text
-readable destroy-plan text
-plan metadata JSON
-SHA-256 checksum
+0 -> no changes; retirement configuration is converged
+2 -> pending changes; stop and complete/review Stage 1
+other nonzero -> Terraform failure; stop
 ```
 
-Metadata should identify at least:
+Also require actual ECS service quiescence, not only zero planned capacity. For every deployed service, readiness requires an active service whose live `desiredCount`, `runningCount`, and `pendingCount` are all zero. Autoscaling target membership must match Terraform, live and Terraform min/max must be zero, and scheduled scaling actions must not be present for those targets.
+
+A readiness failure caused only by remaining ECR images or recovery points is expected before approved cleanup. Do not make a successful full readiness result a prerequisite to the very cleanup that empties those assets.
+
+## Stage 2 — Reviewed Production Destroy
+
+### 1. Supply explicit destroy and cleanup authorization
+
+Dispatch **Terraform Destroy** with:
 
 ```text
-environment
-repository
-commit SHA
-workflow run ID / attempt
-Terraform version
-expected AWS account ID
-deployment profile
-production retirement mode
+environment                   = prod
+confirm                       = DESTROY
+delete_durable_retirement_data = true
 ```
 
-Upload the files as a short-lived artifact.
+In RC1, `delete_durable_retirement_data=true` is mandatory for a production-profile destroy **even when the repositories and vault are already empty**. Its workflow input defaults to false, so set it deliberately. Non-production-profile destruction requires this flag to remain false.
 
-Saved plans can contain sensitive configuration; keep retention short and restrict workflow-run access.
+The Destroy workflow evaluates retirement mode as true for production and checks that the prior retirement Apply has already converged. It does not apply Stage-1 changes on the operator's behalf.
 
-## 6. Review the destroy plan
+### 2. Review the read-only preflight inventory
 
-Review the complete destroy plan before protected approval.
+`terraform-destroy-preflight` uses the workload Plan environment. It validates identity/input context, initializes and validates Terraform, requires a no-change retirement plan, and calls the cleanup helper in `--mode plan`.
 
-The plan must not depend on force-deleting ECR images, ECS services, or Backup recovery points.
+Review all listed repositories, image digests, vault recovery points, and active backup jobs against the approved disposition decision. The inventory is not a saved Terraform plan.
 
-## 7. Protected approval
+### 3. Approve durable-data cleanup
 
-The Destroy Apply job must pause on the protected workload environment.
-
-Do not modify external dependencies merely because an unapproved destroy plan was generated.
-
----
-
-# Identity Center Cleanup After Approval
-
-Some Identity Center assignments can reference IAM policies created by the workload baseline.
-
-Those attachments must be removed before Terraform attempts to delete the workload-created policies.
-
-Approved order:
+`production-durable-cleanup` uses the workload Apply environment and its Apply role. After the environment gate, it runs:
 
 ```text
-saved destroy plan generated
-        |
-        v
-human / protected approval
-        |
-        v
-environment-specific Identity Center cleanup
-        |
-        v
-verify saved destroy artifact
-        |
-        v
-apply exact saved destroy plan
+cleanup-retirement-durable-data.sh
+  --environment prod
+  --mode apply
+  --confirm DELETE-DURABLE-DATA
+  --region <workload-service-region>
+  --expected-account-id <workload-account-id>
 ```
 
-Do not move Identity Center cleanup after workload deletion; IAM policy attachments may block destruction.
+The helper re-reads Terraform outputs, checks the production retirement posture and AWS identity, and re-inventories the scoped repositories/vault. It refuses mutation while active Backup jobs are present, deletes the inventoried image digests and recovery points, verifies emptiness, and checks again for active Backup jobs.
 
-Do not perform the cleanup before approval; otherwise workforce access changes even if the operator rejects the destroy.
+**The apply-mode inventory is fresh.** RC1 does not accept and replay a checksummed saved inventory from preflight. Approval authorizes the scoped cleanup operation, not an immutable item list equivalent to the Terraform saved-plan contract. Coordinate writers and inspect the cleanup job's actual inventory. Do not claim stronger approval binding than the implementation provides.
 
-The cleanup remains environment-specific. Do not destroy the entire Identity Center stack when retiring one workload.
+The workflow then runs `validate-retirement-readiness.sh`.
 
----
+### 4. Reconfirm readiness and generate the workload destroy plan
 
-# Apply the Exact Destroy Plan
+`terraform-destroy-plan` depends on preflight and cleanup. For production, it reruns the no-change convergence check and readiness validation before creating the saved destroy artifact.
 
-After approval and required Identity Center cleanup:
+Readiness checks include:
 
-1. download the saved destroy artifact
-2. verify the checksum
-3. verify plan metadata
-4. verify commit/environment/account/Terraform-version identity
-5. assume the protected Apply role
-6. verify active AWS identity
-7. apply the exact saved plan
+- Terraform's production retirement posture and disabled force-delete controls;
+- resource-backed RDS final-snapshot/automated-backup intent;
+- live RDS, ALB, and Network Firewall deletion protection, as applicable;
+- availability of the selected final RDS snapshot identifier;
+- zero live ECS desired/running/pending capacity and zero scaling bounds;
+- exact scalable-target membership and absence of scheduled scaling actions;
+- empty Terraform-owned ECR repositories and Backup vault; and
+- absence of active Backup jobs.
+
+It is read-only with respect to AWS infrastructure, but reads Terraform state and uses temporary local files. It does not perform cleanup.
+
+For an operator check after cleanup:
 
 ```bash
-terraform apply \
-  -input=false \
-  -no-color \
-  baseline-destroy.tfplan
+AWS_PROFILE=prod \
+AWS_REGION=us-east-1 \
+EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+bash scripts/deployment/validate-retirement-readiness.sh \
+  --environment prod
 ```
 
-Do not run:
+Use the actual service Region. A supplied Region that disagrees with Terraform's `primary_region` output is rejected.
 
-```bash
-terraform destroy -auto-approve
+The artifact helper creates:
+
+```text
+baseline-destroy.tfplan
+baseline-destroy-plan.txt
+baseline-destroy-plan-metadata.json
+baseline-destroy-plan.sha256
 ```
 
-at this stage.
+Destroy-mode validation permits only delete/no-op/read resource actions and requires at least one deletion. The workflow retains this artifact for one day. Treat the binary and readable plans as sensitive; checksums do not encrypt them.
 
-Do not generate another plan after approval.
+### 5. Review and approve Identity Center cleanup
 
----
+After the workload destroy plan exists, `identity-center-cleanup-plan` runs in `control-plane-plan`. It takes the configured `IDENTITY_CENTER_WORKLOADS` map and sets only the target workload's `enable_secops_analyst` and `enable_secops_engineer` inputs to false. It also requires the configured `IDENTITY_CENTER_SECOPS` input.
 
-# Workflow Concurrency
+It generates a separate saved plan for `bootstrap/control_plane/identity_center`. Review the complete plan: a narrowly changed input is not a guarantee that unrelated pre-existing drift cannot appear in that root's plan. Do not approve unexpected changes to other workloads or central administration.
 
-Terraform Apply and Terraform Destroy for the same workload must not run concurrently.
+`identity-center-cleanup-apply` then uses the `control-plane` environment gate, verifies that cleanup artifact, and applies the exact saved plan. This removes the applicable dependencies before workload-created IAM policies are deleted; it is not a destroy of the whole Identity Center stack.
 
-Both workflows should use one shared environment-scoped concurrency key:
+The workflow changes the effective input for that run; it does not persistently rewrite the GitHub `IDENTITY_CENTER_WORKLOADS` variable or commit a configuration change. Reconcile the authoritative map with the intended post-retirement state through the normal reviewed configuration process so a later unrelated apply does not attempt to restore retired assignments.
+
+### 6. Approve and apply the workload destroy plan
+
+Only after successful Identity Center cleanup does `terraform-destroy-apply` become eligible. It has its own workload-environment gate. It downloads the existing destroy artifact, verifies checksums and exact context, rechecks production readiness, and applies the saved `.tfplan` without generating a new plan.
+
+Do not replace this step with `terraform destroy -auto-approve` or a newly generated unreviewed plan. If state or resources change and the saved plan becomes unusable, investigate and obtain a new reviewed plan; do not bypass verification.
+
+## Artifact and Approval Boundaries
+
+`terraform-plan-artifact.sh` handles saved-plan files, readable text, metadata, and checksums. It requires GitHub Actions context including commit, repository, run ID/attempt, ref, actor, and workflow ref. It verifies the context object supplied by its calling workflow and the Terraform CLI version. It never applies Terraform and does not itself enforce AWS identity or configure GitHub approval rules.
+
+Do not describe the checksums as cryptographic approval signatures or immutable approval of the durable cleanup inventory. Those are different mechanisms.
+
+## Workflow Concurrency
+
+Workload Apply and Destroy use the shared key:
 
 ```yaml
 concurrency:
@@ -470,100 +248,37 @@ concurrency:
   cancel-in-progress: false
 ```
 
-Avoid separate keys such as:
+Do not change them to independent Apply/Destroy keys. This key does not lock out other workflows or local operators working on the same state or on Identity Center. Coordinate those operations as well.
 
-```text
-terraform-apply-prod
-terraform-destroy-prod
-```
+## Post-Destroy Steps
 
-because they do not block each other.
+Record the workflow run, source commit, plan artifacts, readiness result, deletion result, and disposition of retained recovery assets. A successful workload root destroy is not evidence that all account resources, historical snapshots, or state backends are gone.
 
----
+Only consider removing `bootstrap/prod/account` after its roles and access are no longer required. The state root is handled last and only from independent state with retained external backups. Its bucket and CMK remain guarded by literal `prevent_destroy = true`; workload retirement does not remove these guards or supply a turnkey state teardown.
 
-# Post-Destroy Steps
+See the [workload state procedure](../bootstrap/prod/state/README.md) and [state module](../modules/state/README.md) for those boundaries.
 
-After the workload root has been successfully destroyed:
+## Abort / Recovery
 
-1. destroy `bootstrap/<env>/account` only when GitHub OIDC access is no longer required
-2. retain an external workload-state backup
-3. migrate `bootstrap/<env>/state` away from the backend it manages
-4. destroy the state stack only after it no longer uses its own bucket as the active backend
+If only Stage 1 has been applied, cancel retirement through a reviewed Apply with `production_retirement_mode=false`. The canonical normal service configuration is the source for capacity; verify actual live capacity, especially for autoscaled services, and restore normal protection/validation before treating the environment as operational.
 
-See:
+After durable cleanup has executed, changing retirement mode back does not recreate deleted images or recovery points. Confirm that the required image and recovery assets still exist in an approved location before attempting service recovery. If Identity Center cleanup already applied, separately restore intended assignments through a reviewed Identity Center plan where appropriate.
 
-```text
-docs/quickstart.md
-```
+If final destruction fails part-way, inspect the failed resource and Terraform state, preserve evidence, and generate/review a new plan for the remaining work. Do not enable force-delete flags or manually remove unrelated resources simply to turn the workflow green. Previously applied cleanup is not rolled back by a failed or rejected final destroy.
 
-for the account/state teardown sequence.
+## Production Retirement Exit Criteria
 
----
+Stage 1 is complete when the reviewed saved plan passes its guard and applies, the retirement inputs converge to no change, and actual ECS/scaling capacity is quiescent. Remaining durable data is inventoried but has not been implicitly deleted.
 
-# Abort / Recovery
+Final retirement is complete when scoped durable deletion has been explicitly approved and verified, readiness has passed, the separately reviewed Identity Center cleanup has applied, the exact reviewed workload destroy plan has applied, and retained assets/state/account responsibilities are recorded. Account/state deletion is not a prerequisite to calling the workload root destroyed.
 
-If Stage 1 is applied but Stage 2 is cancelled:
+## Implementation References
 
-- decide whether retirement is still intended
-- do not leave the environment indefinitely in retirement mode by accident
-- if retirement is cancelled, restore canonical application capacity
-- run `Terraform Apply` with:
-
-```text
-production_retirement_mode = false
-```
-
-Review and apply that rollback through the normal saved-plan path.
-
-The environment is not back in normal production posture until the rollback has converged and validation/evidence passes.
-
-If Stage 2 fails part-way:
-
-- do not immediately rerun with force-deletion controls
-- inspect the failed resource and Terraform state
-- resolve the specific blocker
-- generate a new destroy plan
-- review and approve the new exact plan
-
-Never apply a stale saved destroy plan after infrastructure or state has changed.
-
----
-
-# Production Retirement Exit Criteria
-
-Stage 1 is complete when:
-
-- [ ] `production_retirement_mode = true` is active
-- [ ] RDS deletion protection is disabled
-- [ ] ALB deletion protection is disabled when an ALB exists
-- [ ] Network Firewall delete protection is disabled when a firewall exists
-- [ ] ECS production services are quiesced to zero
-- [ ] Application Auto Scaling cannot restore ECS capacity
-- [ ] ECR image disposition is complete
-- [ ] Backup recovery-point disposition is complete
-- [ ] RDS final-snapshot behavior remains enabled
-- [ ] RDS automated-backup retention remains enabled
-- [ ] a normal Terraform plan reports no changes
-- [ ] retirement-readiness validation passes
-
-Stage 2 is complete when:
-
-- [ ] a saved destroy plan has been generated
-- [ ] human/protected approval has been granted
-- [ ] environment-specific Identity Center dependencies have been removed
-- [ ] destroy-plan metadata and checksum have been verified
-- [ ] the exact reviewed destroy plan has been applied
-- [ ] the workload root no longer manages live environment resources
-- [ ] account/state-stack teardown follows the documented dependency order
-
----
-
-## Related Documentation
-
-```text
-docs/quickstart.md
-ROADMAP-v1.11.0.md
-.github/workflows/terraform-apply.yml
-.github/workflows/terraform-destroy.yml
-scripts/deployment/README.md
-```
+- [Baseline lifecycle and capacity derivation](../baseline/locals.tf)
+- [Terraform Apply](../.github/workflows/terraform-apply.yml)
+- [Terraform Destroy](../.github/workflows/terraform-destroy.yml)
+- [Saved-plan artifact helper](../scripts/deployment/terraform-plan-artifact.sh)
+- [Stage-1 plan validator](../scripts/deployment/validate-production-retirement-plan.sh)
+- [Durable-data cleanup](../scripts/deployment/cleanup-retirement-durable-data.sh)
+- [Retirement readiness](../scripts/deployment/validate-retirement-readiness.sh)
+- [Deployment script reference](../scripts/deployment/README.md)

@@ -17,6 +17,8 @@ This includes:
 
 This module supports the baseline’s data protection, logging, auditability, and private-by-default architecture.
 
+This reference describes `v1.11.0-rc1`. The module consumes resolved inputs; [baseline composition](../../baseline/main.tf) owns profile defaults and production retirement. The resource declarations below are identification excerpts, not complete standalone HCL configurations.
+
 ---
 
 ## Purpose
@@ -51,7 +53,7 @@ resource "aws_security_group" "data"
 
 The security group is created in the target VPC and is used by the RDS instance.
 
-The security group itself is created in this module. Traffic rules for database access should be managed intentionally so that only approved workload security groups can reach the database port.
+The security-group object is created here with `revoke_rules_on_delete = true`; this module creates no traffic rules on it. [Networking security policy](../networking/security_policy/README.md) owns the compute-to-data and conditional ECS-to-data rules. A declared `compute_sg_id` input does not itself create a rule in this module.
 
 ---
 
@@ -77,34 +79,41 @@ Creates the main PostgreSQL RDS instance:
 resource "aws_db_instance" "main"
 ```
 
-Current configuration:
+Configuration in the frozen resource definition (not a report of live AWS state):
 
 | Setting | Value |
 |---|---|
 | Engine | PostgreSQL |
-| Engine version | `16.6` |
-| Instance class | `db.t4g.micro` |
-| Allocated storage | `50 GB` |
-| Maximum allocated storage | `200 GB` |
+| Engine version | Configured as `17.10` |
+| Instance class | Required `var.rds_instance_class` |
+| Allocated storage | `50 GiB` |
+| Maximum allocated storage | `200 GiB` |
 | Storage type | `gp3` |
 | Storage encryption | Enabled |
-| Multi-AZ | Enabled |
+| Multi-AZ | Required `var.rds_multi_az`; production baseline resolves to `true` |
 | Publicly accessible | Disabled |
 | Database name | `appdb` |
 | Backup retention | `14 days` |
 | Backup window | `03:00-04:00` |
 | Maintenance window | `sun:05:00-sun:06:00` |
 | CloudWatch log exports | `postgresql`, `upgrade` |
-| Performance Insights | Enabled |
+| Performance Insights | `performance_insights_enabled = true` |
+| Enhanced Monitoring | Not configured; the `monitoring_interval` line is commented out |
 | Auto minor version upgrade | Enabled |
 
-The instance is tagged with:
+This remains a PostgreSQL **Multi-AZ DB instance** when enabled, not Aurora or an RDS Multi-AZ DB cluster. A three-AZ DB subnet group is not a declaration of three database instances or read replicas.
 
-```text
-Backup = true
+The resource does not specify `kms_key_id` for database storage. Do not identify the database storage key as `logs_cmk_arn` or `secrets_manager_cmk_arn`; those inputs encrypt the log groups/bucket and secret respectively. Likewise, RC1 does not wire `db_port` into an RDS `port` argument. Baseline security-group rules use the configured port, while `rds_port` reports the database's actual endpoint port. Changing only `db_port` is not a supported database-port migration.
+
+The configured engine version and enabled automatic minor-version upgrades are separate settings. Inspect live `EngineVersion` when establishing release evidence; do not infer it solely from this table.
+
+The instance's tag is:
+
+```hcl
+Backup = tostring(var.backup_enabled)
 ```
 
-This allows the broader backup module to select the database for backup coverage if tag-based backup selection is enabled.
+Baseline supplies the effective AWS Backup enablement value. This tag controls tag-based AWS Backup selection; it does not disable RDS-native automated backups, whose retention remains 14 days in this resource.
 
 ---
 
@@ -126,7 +135,7 @@ The log groups are:
 
 Each log group uses:
 
-- 30-day retention
+- Caller-supplied `cloudwatch_retention_days`; baseline defaults are 90 days for production, 30 for development, and 14 for minimal, unless overridden
 - KMS encryption using the logs CMK
 - Environment and Terraform tags
 
@@ -190,7 +199,7 @@ The secret value is stored as JSON:
 }
 ```
 
-The RDS instance then uses the generated password through the write-only RDS password argument.
+The RDS instance uses the generated value through `password_wo`, with `password_wo_version` bound to the secret version’s `secret_string_wo_version`. RC1 sets that version counter to `1` and also declares an ephemeral secret-version read. This does not implement a scheduled secret-rotation workflow or application database-user lifecycle. Secret references and non-secret metadata remain visible in state; the write-only pattern is specific to the password value.
 
 ---
 
@@ -305,9 +314,7 @@ Current lifecycle configuration:
 | Expire current objects | 2555 days |
 | Expire noncurrent versions | 2555 days |
 
-The 2555-day retention period is approximately 7 years.
-
-This supports long-term audit retention while reducing storage cost over time.
+The configured expiration period is approximately seven years. These lifecycle settings are not a guarantee of immutable retention: Object Lock is disabled, the policy can be changed by authorized administrators, and the bucket has separate destructive-lifecycle limitations documented below.
 
 ---
 
@@ -342,7 +349,7 @@ s3:DeleteObject
 s3:DeleteObjectVersion
 ```
 
-This protects log objects from deletion.
+This deny applies to objects and versions while the policy is present. It has no `bucket_admin_principals` exception in the deletion statement; the administrator exception is on policy/versioning changes. Do not equate this policy with Object Lock or a guarantee that logs survive workload destruction.
 
 ---
 
@@ -350,7 +357,7 @@ This protects log objects from deletion.
 
 The bucket policy denies bucket policy modification unless the caller is listed in:
 
-```hcl
+```text
 var.bucket_admin_principals
 ```
 
@@ -369,7 +376,7 @@ This prevents unauthorized or accidental weakening of the log bucket policy.
 
 The bucket policy denies versioning changes unless the caller is listed in:
 
-```hcl
+```text
 var.bucket_admin_principals
 ```
 
@@ -392,7 +399,7 @@ It denies uploads when:
 - `s3:x-amz-server-side-encryption` is not `aws:kms`
 - The encryption header is missing
 
-This helps enforce encrypted log storage.
+These conditions require the SSE-KMS header but do not constrain every upload to one exact KMS key ARN. The bucket’s default encryption separately selects `logs_cmk_arn`.
 
 ---
 
@@ -427,8 +434,8 @@ CloudTrail/*
 
 CloudTrail access is scoped with the source account condition:
 
-```hcl
-"aws:SourceAccount" = var.account_id
+```text
+aws:SourceAccount = <workload account ID>
 ```
 
 ---
@@ -438,7 +445,7 @@ CloudTrail access is scoped with the source account condition:
 The bucket policy allows AWS log delivery to write firewall logs under:
 
 ```text
-firewall/flow/AWSLogs/<account_id>/*
+<cloud_name>/firewall/flow/AWSLogs/<account_id>/*
 ```
 
 The policy allows the log delivery service principal:
@@ -447,119 +454,86 @@ The policy allows the log delivery service principal:
 delivery.logs.amazonaws.com
 ```
 
-This supports centralized firewall flow log delivery into the logs bucket.
+The write statement requires the workload source account and bucket-owner-full-control ACL and restricts `aws:SourceArn` to `arn:aws:logs:<primary_region>:<account_id>:*`. The [firewall module](../firewall/README.md) supplies the matching `<cloud_name>/firewall/flow` destination prefix. This is workload-local log storage, not a separate cross-account archive.
 
 ---
 
 ## Important Production Notes
 
-Several resources currently include comments indicating settings that should be changed for production. They do not have the production-ready values to enable testing and demos during initial deployment.
+RDS lifecycle behavior is now input-driven. The centralized logs bucket's literal settings are **not** covered by the same production lifecycle policy.
 
 ### RDS Deletion Protection
 
-Current setting:
+Baseline derives `rds_deletion_protection` as follows:
 
-```hcl
-deletion_protection = false
-```
+| Posture | Deletion protection | Multi-AZ |
+|---|---:|---:|
+| Normal production | `true` | `true` |
+| Production retirement | `false` | `true` |
+| Development/minimal | `false` | Defaults to `false`; supported non-production override applies |
 
-For production, this should generally be changed to:
-
-```hcl
-deletion_protection = true
-```
-
-This helps prevent accidental deletion of the RDS instance.
-
----
+The storage module simply applies its supplied booleans. Do not modify resource literals or change the deployment profile to bypass production protections.
 
 ### RDS Final Snapshot
 
-Current setting:
+Production, including retirement, supplies:
 
-```hcl
-skip_final_snapshot = true
+```text
+rds_skip_final_snapshot       = false
+rds_delete_automated_backups  = false
 ```
 
-For production, this should generally be changed to:
+The baseline derives the final snapshot identifier as `<name_prefix>-saas-db-final-<random_id>`. Non-production skips the final snapshot and deletes automated backups on instance deletion by default. When snapshots are skipped the final snapshot identifier resolves to `null`.
 
-```hcl
-skip_final_snapshot = false
-```
-
-This ensures a final snapshot is created before database deletion.
-
----
+Final-snapshot creation and automated-backup retention are deletion-time intent, not live `DescribeDBInstances` flags proving recovery has happened. Preserve the relevant encryption keys and access when planning retention. See [production retirement](../../docs/production-retirement.md) and [Backup/Restore Testing](../backup/README.md).
 
 ### Centralized Logs Bucket Object Lock
 
-Current setting:
-
-```hcl
-object_lock_enabled = false
-```
-
-For production or audit-sensitive environments, consider enabling Object Lock at bucket creation time.
-
-Important:
-
-Object Lock generally must be enabled when the bucket is created. It cannot be casually enabled later on an existing bucket.
-
----
+RC1 explicitly sets `object_lock_enabled = false` and exposes no input for enabling it. This module does not provide an Object Lock retention policy, legal hold, or WORM guarantee. An organization needing those controls needs a separate reviewed design; this documentation does not assert they are supplied by the production profile.
 
 ### Centralized Logs Bucket Force Destroy
 
-Current setting:
+RC1 explicitly sets `force_destroy = true` for this bucket in **every profile**. This is distinct from production ECR `force_delete=false` and Backup vault `force_destroy=false`.
 
-```hcl
-force_destroy = true
-```
-
-For production, this should generally be changed to:
-
-```hcl
-force_destroy = false
-```
-
-This helps prevent Terraform from deleting a non-empty logs bucket.
-
----
+The existing log-deletion bucket policy is a separate permission boundary. The force-destroy flag does not override an AWS policy deny, nor does that deny turn this bucket into an independently retained archive. Decide log retention/disposition before workload deletion.
 
 ### Centralized Logs Bucket Prevent Destroy
 
-Current setting:
+RC1 explicitly sets `prevent_destroy = false` on the logs bucket. Neither selecting production nor leaving `production_retirement_mode=false` changes it. The `# CHANGE THIS IN PROD` comments are unresolved implementation limitations, not automatic profile switches.
 
-```hcl
-prevent_destroy = false
-```
-
-For production, this should generally be changed to:
-
-```hcl
-prevent_destroy = true
-```
-
-This provides an additional Terraform-level guardrail against accidental deletion.
+Do not describe the entire storage module as protected against production destruction. Changes to these S3 controls belong in a separately reviewed implementation change, not a documentation-only release update.
 
 ---
 
 ## Inputs
 
-| Name | Description | Required |
-|---|---|---:|
-| `name_prefix` | Prefix used for resource naming | Yes |
-| `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
-| `vpc_id` | ID of the VPC where the data security group is created | Yes |
-| `db_port` | Database port used by security policy rules | Yes |
-| `compute_sg_id` | Security group ID for compute workloads that may access the database | Yes |
-| `data_private_subnet_ids_list` | List of private data subnet IDs used by the DB subnet group | Yes |
-| `db_username` | Base database username; environment is appended to it | Yes |
-| `logs_cmk_arn` | KMS CMK ARN used for centralized logs and RDS log group encryption | Yes |
-| `account_id` | AWS account ID used in bucket policy conditions and log delivery paths | Yes |
-| `random_id` | Random string used to make the centralized logs bucket name globally unique | Yes |
-| `cloudtrail_arn` | CloudTrail ARN input for integration with logging resources | Yes |
-| `bucket_admin_principals` | List of IAM principal ARNs allowed to modify protected bucket settings | Yes |
-| `secrets_manager_cmk_arn` | KMS CMK ARN used to encrypt the RDS master secret | Yes |
+| Name | Type | Required / default | Purpose |
+|---|---|---|---|
+| `cloud_name` | `string` | Required | Prefix in the firewall log-delivery S3 path |
+| `primary_region` | `string` | Required | Workload region in firewall log-delivery source ARNs; does not configure the provider or state backend |
+| `name_prefix` | `string` | Required | Resource naming prefix |
+| `environment` | `string` | Required | Tags and master-username suffix |
+| `vpc_id` | `string` | Required | VPC for the data security group |
+| `db_port` | `string` | Required | Declared interface input; not wired to an RDS port argument in RC1 |
+| `rds_instance_class` | `string` | Required | Database instance class |
+| `compute_sg_id` | `string` | Required | Retained interface input; resource definitions here do not consume it |
+| `data_private_subnet_ids_list` | `list(string)` | Required | Exact subnet IDs for the DB subnet group |
+| `rds_multi_az` | `bool` | Required | Whether the DB instance is Multi-AZ |
+| `db_username` | `string` | Required | Master-username base; environment is appended |
+| `logs_cmk_arn` | `string` | Required | Log-group and centralized logs-bucket key |
+| `cloudwatch_retention_days` | `string` | Required | RDS log-group retention; the module declares a string, not a number |
+| `account_id` | `string` | Required | Workload account in policy conditions and log paths |
+| `random_id` | `string` | Required | Centralized logs-bucket naming suffix |
+| `cloudtrail_arn` | `string` | Required | Retained interface input; resource definitions here do not consume it |
+| `bucket_admin_principals` | `list(string)` | Required | Principals exempted from protected policy/versioning-change denies |
+| `secrets_manager_cmk_arn` | `string` | Required | RDS master-secret encryption key |
+| `backup_enabled` | `bool` | Required | Resolved enablement used for the RDS Backup tag; this module does not resolve profiles or `null` defaults |
+| `rds_deletion_protection` | `bool` | Required | Native RDS deletion protection |
+| `rds_skip_final_snapshot` | `bool` | Required | Whether deletion skips the final snapshot |
+| `rds_delete_automated_backups` | `bool` | Required | Whether instance deletion removes automated backups |
+| `rds_final_snapshot_identifier` | `string` | Optional; `null` | Final snapshot identifier when final snapshots are enabled |
+
+The baseline resolves these values before calling the module. Most inputs have no module default; a resource example that omits them is not a complete call.
 
 ---
 
@@ -577,31 +551,46 @@ This provides an additional Terraform-level guardrail against accidental deletio
 | `rds_database_name` | Initial database name configured on the RDS instance |
 | `rds_master_username` | Master username configured on the RDS instance |
 | `rds_master_secret_arn` | ARN of the Secrets Manager secret containing the RDS master password; does not expose the secret value |
+| `rds_configuration` | Resource-backed RDS identity, instance class, Multi-AZ, subnet-group name, SG set, retention, encryption/public-access and deletion-time lifecycle metadata |
 
 ---
 
 ## Usage Example
 
+The following is the complete module call from baseline composition, not an independently deployable Terraform root. Its referenced resources, variables, and effective locals must exist in the caller:
+
 ```hcl
 module "storage" {
   source = "../modules/storage"
 
-  name_prefix                  = local.name_prefix
-  environment                  = var.environment
-  vpc_id                       = module.networking.vpc_id
-  account_id                   = data.aws_caller_identity.current.account_id
-  random_id                    = random_id.random_id.hex
+  cloud_name     = var.cloud_name
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  primary_region = data.aws_region.current.region
+  vpc_id         = module.networking.vpc_id
+  account_id     = var.account_id
+  random_id      = var.random_id
 
-  db_port                      = var.db_port
-  db_username                  = var.db_username
+  rds_multi_az                  = local.effective_rds_multi_az
+  rds_deletion_protection       = local.effective_rds_deletion_protection
+  rds_skip_final_snapshot       = local.effective_rds_skip_final_snapshot
+  rds_delete_automated_backups  = local.effective_rds_delete_automated_backups
+  rds_final_snapshot_identifier = local.effective_rds_final_snapshot_identifier
+  rds_instance_class            = var.rds_instance_class
+
+  db_port     = var.db_port
+  db_username = var.db_username
 
   compute_sg_id                = module.compute.compute_sg_id
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
 
-  logs_cmk_arn                 = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn      = module.security.secrets_manager_cmk_arn
-  cloudtrail_arn               = module.logging.cloudtrail_arn
-  bucket_admin_principals      = var.bucket_admin_principals
+  backup_enabled            = local.effective_backup_enabled
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+
+  logs_cmk_arn            = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
+  cloudtrail_arn          = module.logging.cloudtrail_arn
+  bucket_admin_principals = var.bucket_admin_principals
 }
 ```
 
@@ -609,10 +598,34 @@ module "storage" {
 
 ## Validation
 
+The automated RDS resilience checks are inside [validate-backup.sh](../../scripts/validation/validate-backup.sh), including when scheduled AWS Backup is disabled. They compare live identity, Multi-AZ, DB subnet-group **name**, SG set, deletion protection, backup retention, public accessibility, and storage-encryption state with `rds_configuration`. Deletion-time settings are checked as Terraform lifecycle intent. An output field such as `instance_class` is not proof the validator compares it: RC1 does not include `DBInstanceClass`, engine/version, or all database settings in that equality check.
+
+[Networking validation](../../scripts/validation/validate-networking.sh) checks the data subnet family, and compute/ECS validators check their declared SG relationships. Those are not a SQL connectivity test, an exact audit of every RDS subnet-group member, or application recovery verification. The supplemental commands below are **manual inspections**, not additional automated assertions in the 16-script suite.
+
+Run from the repository root against an initialized, deployed workload. Substitute the profile, environment, and account ID; resolve region and identifiers from that root rather than account-wide discovery:
+
+```bash
+export ENV_NAME="prod"
+export AWS_PROFILE="prod"
+export EXPECTED_ACCOUNT_ID="<12-digit-workload-account-id>"
+ENV_DIR="environments/${ENV_NAME}"
+export AWS_REGION="$(terraform -chdir="$ENV_DIR" output -raw primary_region)"
+export AWS_DEFAULT_REGION="$AWS_REGION"
+test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID" || exit 1
+RDS_IDENTIFIER="$(terraform -chdir="$ENV_DIR" output -json rds_configuration | jq -er '.identifier')"
+DB_SUBNET_GROUP_NAME="$(terraform -chdir="$ENV_DIR" output -json rds_configuration | jq -er '.db_subnet_group_name')"
+RDS_SECRET_ID="$(terraform -chdir="$ENV_DIR" output -raw rds_master_secret_arn)"
+CENTRALIZED_LOGS_BUCKET_NAME="$(terraform -chdir="$ENV_DIR" output -raw centralized_logs_bucket_name)"
+./scripts/validation/validate-backup.sh "$ENV_NAME"
+```
+
+These commands do not retrieve the database password. Do not paste secret values into logs or evidence.
+
 ### Confirm RDS Instance Exists
 
 ```bash
 aws rds describe-db-instances \
+  --db-instance-identifier "${RDS_IDENTIFIER}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --query 'DBInstances[].[DBInstanceIdentifier,DBInstanceStatus,Engine,EngineVersion,DBInstanceClass,PubliclyAccessible,StorageEncrypted,MultiAZ]' \
@@ -626,7 +639,7 @@ Expected:
 - Engine is PostgreSQL
 - Publicly accessible is `false`
 - Storage encrypted is `true`
-- Multi-AZ is enabled
+- Multi-AZ equals `rds_configuration.multi_az`; normal production requires `true`
 
 ---
 
@@ -634,6 +647,7 @@ Expected:
 
 ```bash
 aws rds describe-db-subnet-groups \
+  --db-subnet-group-name "${DB_SUBNET_GROUP_NAME}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --query 'DBSubnetGroups[].[DBSubnetGroupName,VpcId,SubnetGroupStatus]' \
@@ -652,6 +666,7 @@ Expected:
 
 ```bash
 aws rds describe-db-instances \
+  --db-instance-identifier "${RDS_IDENTIFIER}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --query 'DBInstances[].{DBInstanceIdentifier:DBInstanceIdentifier,EnabledCloudwatchLogsExports:join(`, `, EnabledCloudwatchLogsExports)}' \
@@ -671,7 +686,7 @@ Expected:
 aws logs describe-log-groups \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --log-group-name-prefix "/aws/rds/instance" \
+  --log-group-name-prefix "/aws/rds/instance/${RDS_IDENTIFIER}/" \
   --query 'logGroups[].[logGroupName,retentionInDays,kmsKeyId]' \
   --output table
 ```
@@ -680,7 +695,7 @@ Expected:
 
 - PostgreSQL log group exists
 - Upgrade log group exists
-- Retention is 30 days
+- Retention equals the workload `effective_cloudwatch_retention_days` output
 - KMS key is configured
 
 ---
@@ -688,10 +703,11 @@ Expected:
 ### Confirm RDS Secret Exists
 
 ```bash
-aws secretsmanager list-secrets \
+aws secretsmanager describe-secret \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --query 'SecretList[?contains(Name, `/database/rds-master-`)].[Name,ARN,KmsKeyId]' \
+  --secret-id "${RDS_SECRET_ID}" \
+  --query '[Name,ARN,KmsKeyId]' \
   --output table
 ```
 
@@ -704,28 +720,16 @@ Expected:
 
 ### Confirm Centralized Logs Bucket Exists
 
-List the S3 buckets in the account:
+Check the exact bucket name obtained from the workload output:
 
 ```bash
-aws s3 ls \
+aws s3api head-bucket \
+  --bucket "${CENTRALIZED_LOGS_BUCKET_NAME}" \
+  --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}"
 ```
 
-Expected:
-
-- The Terraform state bucket is listed.
-- The centralized logs bucket is listed.
-- The centralized logs bucket name includes the expected naming pattern:
-
-```text
-<name_prefix>-centralized-logs-<random_id>
-```
-
-Notes:
-
-- This confirms the bucket is visible to the caller.
-- This command is useful as a quick account-level sanity check.
-- Use the centralized logs bucket name from this output for the more specific bucket validation commands below.
+A successful request establishes that the named bucket is accessible to this caller. It does not independently prove its encryption, retention, or ownership policy. The Terraform state bucket is owned by the separate state stack and is not provisioned by this storage module.
 
 ---
 
@@ -816,6 +820,7 @@ Expected policy controls include:
 - `DenyMissingEncryptionHeader`
 - `AWSConfigAclCheck`
 - `AWSConfigWrite`
+- `AWSConfigBucketExistenceCheck`
 - `AWSCloudTrailAclCheck`
 - `AWSCloudTrailWrite`
 - `AWSLogDeliveryAclCheck`
@@ -879,7 +884,7 @@ An overly restrictive explicit deny can also block Terraform or GitHub Actions f
 
 The `bucket_admin_principals` variable controls which IAM principals are exempt from some bucket policy deny statements.
 
-These principals are allowed to modify protected bucket settings such as:
+These principals are exempted from the listed policy denies, but still need independent IAM authorization to make changes. Relevant protected settings are:
 
 - Bucket policy
 - Versioning configuration
@@ -888,8 +893,8 @@ Include only trusted administrative principals in the `bucket_admin_principals` 
 
 Common examples may include:
 
-- Account admin principal (roll or user)
-- Break-glass principal (roll or user)
+- Account admin principal (role or user)
+- Break-glass principal (role or user)
 - GitHub Apply role, if CI/CD manages this bucket
 - Account root, if intentionally used as an administrative fallback
 
@@ -1020,7 +1025,7 @@ Check:
 
 - Bucket policy allows `delivery.logs.amazonaws.com`
 - Firewall logs are targeting the expected S3 prefix
-- Prefix matches `firewall/flow/AWSLogs/<account_id>/*`
+- Prefix matches `<cloud_name>/firewall/flow/AWSLogs/<account_id>/*`
 - Source account condition matches the workload account ID
 - Uploads include required ACL and KMS encryption headers
 - Logs CMK policy allows AWS log delivery usage
@@ -1072,7 +1077,7 @@ This module follows:
 - Least privilege service delivery
 - Long-term log retention
 - Operational recoverability
-- Production-aligned security defaults
+- Explicit profile-derived RDS lifecycle settings, with separate documented S3 protection limits
 
 ---
 
@@ -1083,5 +1088,12 @@ This module follows:
 - The centralized logs bucket depends on the logs CMK.
 - The RDS master secret depends on the Secrets Manager CMK.
 - The logs bucket is intentionally protected by explicit deny statements.
-- For production, review deletion protection, final snapshots, Object Lock, force destroy, and prevent destroy settings before deployment.
+- Production RDS lifecycle settings are supplied by baseline; logs-bucket Object Lock and destructive-lifecycle limits remain separate and require explicit review.
 - The `data_sg_id` output should be used by the networking/security policy layer to define database access rules.
+
+## Implementation Sources
+
+- [Resource definitions](main.tf), [input declarations](variables.tf), and [outputs](outputs.tf)
+- [Baseline module call](../../baseline/main.tf) and [profile/lifecycle resolution](../../baseline/locals.tf)
+- [RDS/Backup validation](../../scripts/validation/validate-backup.sh)
+- [Production retirement](../../docs/production-retirement.md)

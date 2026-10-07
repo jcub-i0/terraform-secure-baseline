@@ -6,6 +6,8 @@ The `ecs_cluster` module creates one Amazon ECS cluster for a workload environme
 
 It provides the shared cluster-level substrate for the workload's ECS/Fargate services while keeping service-specific concerns in separate modules.
 
+This reference describes the implementation at `v1.11.0-rc1`. The module does not select Availability Zones, set production service capacity, or enable service AZ rebalancing; those responsibilities belong to [baseline composition](../../baseline/locals.tf) and the [ECS service module](../ecs_service/README.md).
+
 ## Resources Created
 
 The module creates:
@@ -55,7 +57,7 @@ The default is:
 container_insights = "enhanced"
 ```
 
-This provides the strongest default observability posture for ECS workloads while still allowing callers to explicitly select `enabled` or `disabled` when appropriate.
+The module accepts `enhanced`, `enabled`, or `disabled`. Baseline retains `enhanced` as the default and passes the effective log-retention setting and workload logs CMK separately.
 
 When Container Insights is enabled, Terraform also creates:
 
@@ -65,7 +67,7 @@ When Container Insights is enabled, Terraform also creates:
 
 The log group uses the supplied retention period and logs CMK. It is absent when `container_insights = "disabled"`. The cluster depends on this resource so the Terraform-owned group exists before the cluster activates Container Insights.
 
-v1.9 task-deficit monitoring uses the Container Insights `DesiredTaskCount` and `RunningTaskCount` metrics. Baseline therefore supplies task-deficit alarm inputs only when `container_insights` is not `disabled`. Disabling Container Insights also disables that Terraform-owned task-deficit alarm path; it does not disable ECS services themselves.
+Task-deficit monitoring, introduced in v1.9, uses the Container Insights `DesiredTaskCount` and `RunningTaskCount` metrics. Baseline therefore supplies task-deficit alarm inputs only when `container_insights` is not `disabled`. Disabling Container Insights also disables that Terraform-owned task-deficit alarm path; it does not disable ECS services themselves.
 
 ## GuardDuty Fargate Runtime Monitoring
 
@@ -85,7 +87,7 @@ Baseline derives the input from `deployment_profile`:
 | `development` | `true` | `GuardDutyManaged=true` |
 | `minimal` | `false` | `GuardDutyManaged=false` |
 
-There is intentionally no independent public top-level Runtime Monitoring toggle in v1.10. The deployment profile owns this cost/security decision.
+There is intentionally no independent public top-level Runtime Monitoring toggle in the RC1 baseline. The deployment profile owns this cost/security decision.
 
 The module exposes both the expected boolean and the resource-backed tag value so validation can compare:
 
@@ -125,7 +127,7 @@ The module exposes:
 | `guardduty_fargate_runtime_monitoring_enabled` | Expected GuardDuty Fargate Runtime Monitoring participation for the cluster. |
 | `guardduty_managed_tag_value` | Resource-backed `GuardDutyManaged` cluster tag value. |
 
-Baseline exposes all four values through the workload-root `ecs_cluster` object.
+Baseline exposes these six values through the workload-root `ecs_cluster` object, using `arn` and `name` for `cluster_arn` and `cluster_name`. The participation boolean is caller-derived intent; the tag is the resource-backed enrollment value. Neither alone proves that a running task is instrumented or coverage is healthy.
 
 The runtime validator compares the live cluster setting and, when enabled, the performance log-group identity, retention, and KMS key with these resource-backed values. It also requires exactly one live `GuardDutyManaged` tag and compares that value with both the Terraform output and the deployment-profile contract.
 
@@ -176,7 +178,7 @@ Those responsibilities belong to other modules, AWS-managed Application Auto Sca
 
 ## Runtime Model
 
-The v1.10 runtime architecture uses one ECS cluster per workload environment with multiple ECS services able to consume the same cluster. The shared cluster also carries the deployment-profile-derived `GuardDutyManaged` participation intent.
+The RC1 runtime architecture uses one ECS cluster per workload environment with multiple ECS services able to consume the same cluster. The shared cluster also carries the deployment-profile-derived `GuardDutyManaged` participation intent.
 
 Conceptually:
 
@@ -211,10 +213,10 @@ module "ecs_cluster" {
   name_prefix = "tf-secure-baseline-dev"
   environment = "dev"
 
-  container_insights                            = "enhanced"
+  container_insights                          = "enhanced"
   guardduty_fargate_runtime_monitoring_enabled = true
-  cloudwatch_retention_days                     = 30
-  logs_cmk_arn              = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
+  cloudwatch_retention_days                   = 30
+  logs_cmk_arn                                = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
 }
 ```
 
@@ -243,3 +245,15 @@ Baseline passes both `cluster_arn` and `cluster_name` to `modules/ecs_service`:
 Baseline also passes the cluster name into `modules/monitoring` for deployable-service task-deficit alarms whenever Container Insights is enabled.
 
 One cluster exists even when `ecs_services = {}`; an empty service map creates no task definitions or ECS services.
+
+## Production Availability and Retirement
+
+The production baseline selects three standard AZs by default and supplies the resulting compute-private subnet set to ECS services. It sets service `availability_zone_rebalancing = "ENABLED"`. The cluster itself is not an AZ placement policy and does not guarantee one running task in each AZ.
+
+During production retirement, baseline derives zero service capacity while retaining the cluster until the reviewed workload destroy. An empty or registered-but-unreleased service inventory is also valid: it does not prove task instrumentation, application health, or resilience under failure. See the [production retirement runbook](../../docs/production-retirement.md).
+
+## Validation and Sources
+
+`validate-ecs-runtime.sh` remains part of the 16-script workload suite. Cluster-setting and log-group checks apply even without a deployable application; protected-task instrumentation and GuardDuty coverage checks have their own runtime conditions.
+
+Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline outputs](../../baseline/outputs.tf), and [ECS runtime validator](../../scripts/validation/validate-ecs-runtime.sh). This document records configuration and ownership; it does not assert an exact-RC1 live qualification run.

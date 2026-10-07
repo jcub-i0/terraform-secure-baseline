@@ -6,9 +6,9 @@ The `application_load_balancer` module creates the shared Application Load Balan
 
 It owns the public-facing ALB, its security group, HTTPS listener, per-service target groups, and HTTPS listener rules. ECS services consume the target groups created by this module but remain owned by `modules/ecs_service`.
 
-The module is intended to be instantiated only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it.
+The RC1 baseline instantiates this module only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it. This condition is owned by `baseline/main.tf`, not by the module: a direct module call with `services = {}` still creates the shared ALB, security group, ingress rule, and listener.
 
-For v1.9, the module also exposes resource-backed ALB and target-group ARN suffixes used by:
+Since v1.9, the module also exposes resource-backed ALB and target-group ARN suffixes used by:
 
 - `ALBRequestCountPerTarget` Application Auto Scaling resource labels; and
 - Terraform-owned unhealthy-target operational alarms.
@@ -77,7 +77,7 @@ Each service entry supports:
 | `path_patterns` | `set(string)` | No | `[]` | URL path patterns used to route requests to the service. |
 | `health_check_path` | `string` | No | `"/health"` | HTTP path used by the target-group health check. |
 
-Each configured service must define at least one `host_headers` or `path_patterns` condition.
+Each configured service must define at least one `host_headers` or `path_patterns` condition. Listener priorities must be unique and between 1 and 50000; container ports must be between 1 and 65535. Resource preconditions limit the rendered ALB name and each rendered target-group name to 32 characters.
 
 If both host-header and path-pattern conditions are configured for the same service, both conditions must match for the listener rule to forward the request.
 
@@ -123,6 +123,8 @@ protocol    = "HTTP"
 The `ip` target type is required for the Fargate/`awsvpc` runtime model because ECS tasks register their task ENI IP addresses rather than EC2 instance IDs.
 
 The ECS service module consumes the target-group ARN and attaches the service to that target group.
+
+HTTPS terminates at the ALB. The configured target-group and health-check protocols are HTTP, so this module does not provide TLS encryption on the ALB-to-task leg. It also does not configure WAF, application authentication, or ALB access-log delivery. These are not implied by the HTTPS-only public listener.
 
 Each target-group output also exposes the resource-backed `arn_suffix`. Baseline uses that suffix for:
 
@@ -197,6 +199,10 @@ development/minimal                 -> disabled
 
 The ALB module itself does not infer deployment profiles; it applies the already-resolved boolean supplied by `baseline`.
 
+Production baseline defaults supply the exact three-AZ `ingress_public` subnet set. The module validates a minimum of two supplied subnet IDs; it does not independently enforce the production AZ count or verify subnet roles. Baseline topology and the live runtime validator provide those integration checks. NAT Gateways belong to the separate `egress_public` family; ALB-to-task traffic stays on VPC-local routing, not the stateful firewall egress return path.
+
+Retirement relaxes ALB deletion protection through the reviewed Stage-1 plan. It does not change the ALB to use egress-public subnets or remove the shared ingress layer merely to stop task capacity. Follow the [production retirement runbook](../../docs/production-retirement.md).
+
 ## Conditional Baseline Integration
 
 The baseline derives this module's service configuration from the canonical `ecs_services` map.
@@ -219,7 +225,7 @@ ecs_services contains one or more deployable services with ingress
     -> one listener rule per ingress-enabled service
 ```
 
-For example:
+For example, this is an ingress-field excerpt, not a complete canonical service definition:
 
 ```hcl
 ecs_services = {
@@ -244,7 +250,7 @@ In this example, only a digest-selected `api` is included in the ALB routing con
 
 The canonical baseline requires ingress whenever a service configures:
 
-```hcl
+```text
 scaling.alb_requests_per_target
 ```
 
@@ -342,7 +348,7 @@ Those responsibilities belong to other modules or the baseline integration layer
 
 ## Runtime Model
 
-The v1.9 runtime architecture uses one shared ALB per workload environment when ingress is required.
+The RC1 runtime architecture retains one shared ALB per workload environment when ingress is required.
 
 Multiple ECS services can be routed through the same listener using explicit host-header and/or path-pattern rules.
 
@@ -381,6 +387,8 @@ The ALB remains ingress infrastructure; scaling and monitoring ownership stay in
 
 ## Example
 
+Illustrative two-AZ development module call. Replace all sample resource IDs, certificate ARN, hostname, and client CIDR with approved values from the same workload deployment. Production baseline composition supplies its own three-AZ subnet set and lifecycle-protection value; do not copy the development boolean into production.
+
 ```hcl
 module "application_load_balancer" {
   source = "../modules/application_load_balancer"
@@ -397,8 +405,10 @@ module "application_load_balancer" {
   certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
 
   ingress_cidrs = [
-    "0.0.0.0/0",
+    "203.0.113.10/32",
   ]
+
+  enable_deletion_protection = false
 
   services = {
     api = {
@@ -437,3 +447,9 @@ For operational ingress monitoring, baseline passes the ALB and target-group ARN
 Workload DNS configuration remains outside the module and current runtime scope.
 
 The module intentionally remains independent of ECS service implementation details, scaling policy implementation, and operational alarm implementation.
+
+## Validation and Sources
+
+Within the workload suite, `validate-ecs-runtime.sh` compares the live ALB deletion-protection attribute, exact ingress-public subnet membership, target-group/listener relationships, and declared security-group paths with Terraform. Operational unhealthy-target alarms are validated separately within that same entry point. A configured ALB is not by itself proof of application correctness or failure recovery.
+
+Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline composition](../../baseline/main.tf), and [ingress validation helper](../../scripts/validation/lib/ecs-runtime/ingress.sh).
