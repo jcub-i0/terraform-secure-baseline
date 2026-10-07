@@ -72,14 +72,38 @@ It provides limited or indirect support for people and physical controls because
 
 ---
 
+## Mapping Method and Evidence Scope
+
+These are **selected thematic associations**, not verbatim Annex A requirements,
+a complete Statement of Applicability, or a finding of conformity. The
+[ISO/IEC 27001 overview](https://www.iso.org/standard/27001) describes an
+organization-wide, risk-based management system; Terraform features do not
+establish that management system or certification.
+
+Use the applicable authoritative standard and the organization's risk assessment,
+system scope, Statement of Applicability, and assessor review to determine which
+controls apply. The descriptions below summarize how repository mechanisms might
+contribute. They do not mark entire controls as implemented or effective.
+
+For each adopted association, record the owner, approved design, actual account
+and Region, evidence period, deployment and validation provenance, observed
+operation, exceptions, and review decision. Keep configured capability,
+point-in-time assertions, behavioral tests, and continuing operating evidence
+separate. See [control narratives](control-narratives.md), the
+[evidence guide](validation-evidence-guide.md), and the
+[report template](validation-report-template.md). Unresolved authorization,
+retention, response, and coverage gaps are not resolved by this mapping.
+
+---
+
 # Control Alignment Overview
 
 | ISO 27001 Area | Control Theme | Baseline Support |
 |---------------|---------------|------------------|
 | A.5 Organizational | Access control, cloud services, incident management, evidence, records | IAM Identity Center, GitHub OIDC, logging, detection, incident workflows |
 | A.6 People | Awareness, responsibilities, access lifecycle | Mostly out of scope; requires organizational process |
-| A.7 Physical | Physical security | Mostly inherited from AWS shared responsibility model |
-| A.8 Technological | Network security, logging, monitoring, cryptography, backup, configuration management | Strong technical support through AWS/Terraform controls |
+| A.7 Physical | Physical security | AWS facility controls and customer responsibilities require separate supplier/scope evidence; not assessed here |
+| A.8 Technological | Network security, logging, monitoring, cryptography, backup, configuration management | Selected technical mechanisms with the coverage and evidence limits described below |
 
 ---
 
@@ -104,7 +128,7 @@ The baseline restricts access through:
 
 - IAM Identity Center groups and permission sets
 - Environment-specific AWS account assignments
-- Least-privilege IAM policies
+- IAM policies with explicitly reviewed privilege and scope
 - GitHub OIDC roles for CI/CD
 - Security group and network controls
 - Private subnet placement
@@ -115,9 +139,15 @@ A.5.15 expects access to information and associated assets to be controlled base
 
 ### Narrative
 
-`tf-secure-baseline` supports access control by centralizing human AWS access through IAM Identity Center and restricting CI/CD access through GitHub OIDC roles.
+The [Identity Center](../../modules/identity_center/main.tf),
+[OIDC](../../modules/github_oidc/main.tf), and network-policy resources provide
+access mechanisms, not a uniform least-privilege guarantee. Apply and the central
+administrator attach `AdministratorAccess`; Plan also has custom state-write and
+selected secret permissions. The Operator bus-name/policy boundary is unresolved.
 
-Access is scoped by environment and workflow so that users and automation receive only the access required for their role.
+Review actual principals, policies, membership, trust subjects, allowed/denied
+access, and business approval. Resource separation and names alone do not prove
+access is limited to the intended business purpose.
 
 ---
 
@@ -125,17 +155,16 @@ Access is scoped by environment and workflow so that users and automation receiv
 
 ### Baseline Control
 
-IAM Identity Center is used to manage human access across AWS accounts.
+The [Identity Center root](../../bootstrap/control_plane/identity_center/main.tf)
+discovers an existing instance and configures groups, permission sets, policy
+attachments, and account assignments. Example **group names** are
+`SecOps-Operator-Dev`, `SecOps-Operator-Staging`, and `SecOps-Operator-Prod`;
+permission-set names use the environment suffix, such as `SecOps-Operator-dev`.
+The central security account requires
+`SecOps-Administrator-security-operations`; Analyst and Engineer are optional.
 
-The control-plane Identity Center stack can define groups such as:
-
-```text
-SecOps-Operator-Dev
-SecOps-Operator-Staging
-SecOps-Operator-Prod
-```
-
-The security-operations account receives the required `SecOps-Administrator` permission set. Optional Analyst and Engineer personas may be enabled separately for workload and security-operations accounts.
+The module does not create human users, manage group membership, or configure
+the upstream identity provider's authentication policy.
 
 ### ISO 27001 Alignment
 
@@ -143,9 +172,12 @@ A.5.16 expects identities to be managed throughout their lifecycle.
 
 ### Narrative
 
-The baseline supports centralized identity management for AWS access.
-
-It does not replace organizational joiner/mover/leaver procedures, but it provides a technical mechanism for assigning access through managed groups and permission sets.
+These resources support structured AWS assignment. Joiner/mover/leaver actions,
+identity proofing, timely removal, membership review, and upstream identity
+controls remain organizational responsibilities. The control-plane validator's
+assignment-presence check does not compare each assignment principal to the
+created group, inspect full policies, or verify membership. Retain those records
+and actual access observations separately.
 
 ---
 
@@ -163,11 +195,18 @@ A.5.17 addresses protection and management of authentication information.
 
 ### Narrative
 
-GitHub OIDC reduces reliance on static AWS credentials for automation.
+GitHub OIDC and Identity Center reduce reliance on static access keys for routine
+operations. Initial bootstrap needs an independently authorized administrative
+credential path; the repository does not require creation of a long-lived IAM
+user key. Secure emergency identities, secret retrieval, runner credentials,
+state backups, and plan artifacts separately.
 
-IAM Identity Center reduces the need for long-lived IAM users for humans.
-
-During initial bootstrap, admin-level IAM user access keys may be used for simplicity, but this should be treated as a bootstrap mechanism rather than the desired long-term access model.
+The [publication script](../../scripts/deployment/deploy-application.sh) uses an
+ECR credential helper with temporary Docker push configuration and token-file
+caching disabled. That limits local persistence, not all credential exposure.
+RDS uses ephemeral/write-only password arguments, while the ordinary AbuseIPDB
+secret-version value has different state/plan exposure. Retain credential issuance,
+revocation, secret-handling, and access-review evidence.
 
 ---
 
@@ -181,7 +220,7 @@ Access rights are structured through:
 - Environment-specific group assignments
 - Separate GitHub Plan, Apply, and Image Publisher roles
 - Separate SecOps roles
-- Least-privilege Lambda execution roles
+- Function-specific Lambda roles, including wildcard-resource response grants
 - Optional customer-managed policy attachments by environment
 
 ### ISO 27001 Alignment
@@ -190,11 +229,16 @@ A.5.18 expects access rights to be provisioned, reviewed, modified, and removed 
 
 ### Narrative
 
-The workload CI/CD model separates Plan, protected Apply, and branch-trusted Image Publisher AWS roles. Application release PR mutation is performed by a separate job with no AWS credentials, reducing unnecessary privilege concentration.
+Separate Plan, Apply, Publisher, and GitHub-only PR jobs make authority reviewable.
+They do not alone establish approved rights or separation of duties. Plan trusts
+an Environment subject; Apply selects Environment or branch subjects, not both as
+an AND condition. Actual GitHub reviewer/branch protections are separately managed.
 
-The baseline supports structured AWS access rights through permission sets and role-based assignments.
-
-Organizations must still perform periodic access reviews and maintain approval workflows outside Terraform.
+The [persona module](../../modules/identity_center/main.tf) includes
+`AdministratorAccess` and Engineer response actions on wildcard resources.
+Customer-managed policy references neither create target-account policies nor
+certify their contents. Retain exact grants, membership, approved provisioning,
+periodic review, removal, and exception handling rather than relying on role names.
 
 ---
 
@@ -225,6 +269,13 @@ A.5.23 addresses establishing and managing information security for cloud servic
 
 It helps define a secure cloud operating baseline but does not replace cloud governance policies, vendor reviews, or contractual controls.
 
+**Implementation boundary:** Review the [adoption guide](../adoption-guide.md)
+for licensing, existing-organization adoption, service prerequisites, actual
+resource cost, ownership, and exit requirements. AWS account separation does not
+supply a full SCP strategy or account vending. Central-security resources and
+workload realization have separate state and validation layers; cloud-provider
+assurance and customer governance are outside this repository's evidence.
+
 ---
 
 ## A.5.24 - Information Security Incident Management Planning and Preparation
@@ -252,9 +303,16 @@ A.5.24 addresses planning and preparation for managing information security inci
 
 The baseline supports incident readiness by providing event-driven detection, notification, and selected response capabilities. Runtime Monitoring extends detection into protected Fargate tasks and reports coverage degradation/recovery to SecOps.
 
-Automatic containment remains EC2-specific in v1.10; ECS/Fargate Runtime Monitoring is a detection and visibility capability.
+Automatic containment remains EC2-specific; ECS/Fargate Runtime Monitoring is a detection and visibility capability.
 
 Organizations must still define incident response roles, escalation paths, communications procedures, severity criteria, and tabletop exercises.
+
+**Evidence:** Exercise the approved response path on a dedicated target, retain
+independent pre-incident state, and plan for partial mutation and shared
+notification failure. The [test guides](../lambda_tests/ec2_isolation.md) are
+procedures, not records that tests ran. A working direct Lambda invocation does
+not prove authentic upstream finding ingestion or intended Operator authorization.
+
 ## A.5.25 - Assessment and Decision on Information Security Events
 
 ### Baseline Control
@@ -279,6 +337,14 @@ A.5.25 addresses assessing information security events and deciding whether they
 The baseline provides telemetry, enrichment, and runtime-coverage context that help teams evaluate events.
 
 A healthy Runtime Monitoring coverage state is evidence that GuardDuty reports coverage for the protected cluster at the time checked; it is not a determination that the workload is free of compromise. Human triage and incident classification remain organizational responsibilities.
+
+**Boundary:** Insight names do not filter by workload environment, and selected
+SNS transformations represent only the first finding/resource. Missing telemetry,
+empty results, `OK` alarms, or absent DLQ messages can coexist with coverage or
+delivery failures. Retain original events, scope/freshness, triage decisions, and
+response records alongside [monitoring](../../modules/monitoring/main.tf)
+configuration.
+
 ## A.5.26 - Response to Information Security Incidents
 
 ### Baseline Control
@@ -297,9 +363,20 @@ A.5.26 addresses responding to information security incidents according to docum
 
 ### Narrative
 
-The EC2 isolation workflow supports rapid containment, while rollback requires controlled human action through the `SecOps-Operator` role.
+The [isolation handler](../../modules/automation/lambda/ec2_isolation.py) requests
+snapshots without waiting for completion, replaces security groups, then writes
+recovery tags and attempts notification. Caught errors can return ordinary
+summaries, so invocation success and empty DLQs do not prove containment.
+Quarantine retains shared-endpoint HTTPS access. All supplied workload roots
+default isolation authorization to true; this needs an explicit policy decision.
 
-This supports incident response execution but does not replace formal incident response procedures.
+The [rollback handler](../../modules/automation/lambda/ec2_rollback.py) does not
+authenticate its supplied approver/ticket fields, does not check detail type, and
+sets `IsolationAllowed=true`. Operator's caller uses an unprefixed bus ARN while
+automation creates a prefixed bus; the bus policy has a wildcard-principal source
+allow. Human approval and Operator exclusivity are not established by those
+mechanisms. Review effective authorization, preserve pre-state, and retain observed
+recovery, partial-failure handling, and organizational approval evidence.
 
 ---
 
@@ -328,6 +405,11 @@ The baseline provides evidence and telemetry that can support post-incident revi
 
 Organizations must still conduct lessons-learned reviews and track corrective actions.
 
+**Boundary:** Collection does not guarantee preservation: workload logs are
+mutable and key deletion can make retained ciphertext unavailable. Learning
+requires incident review, assigned corrective actions, completion records, and
+verification that changes actually reduced the identified risk.
+
 ---
 
 ## A.5.28 - Collection of Evidence
@@ -354,11 +436,19 @@ A.5.28 addresses identification, collection, acquisition, and preservation of ev
 
 ### Narrative
 
-For ECS application releases, supporting technical evidence can include image-publication metadata, the authoritative ECR digest, the one-field release PR, saved Terraform plan metadata/checksum, protected Apply history, and post-deployment workload validation.
+Evidence can include publication metadata and digest, the selected configuration
+change, saved-plan metadata/checksum, actual approvals, apply logs, and
+post-deployment observations. Generated summaries are not a signed chain of
+custody and do not automatically include every deployment commit, image digest,
+input set, or artifact checksum.
 
-Centralized, encrypted, versioned, and object-locked logging supports preservation of technical evidence.
-
-Organizations must still define evidence handling procedures and chain-of-custody expectations.
+The [logs bucket](../../modules/storage/main.tf) uses encryption and versioning
+but has Object Lock disabled and permits force destruction. The
+[workload keys](../../modules/security/main.tf) have no effective production
+destruction guards. Define independent preservation and usable-key retention,
+access controls, collection timestamps, and custody procedures. Review warnings
+and skipped branches; retain earlier tests under their original provenance rather
+than attributing them to a later deployment.
 
 ---
 
@@ -366,17 +456,16 @@ Organizations must still define evidence handling procedures and chain-of-custod
 
 ### Baseline Control
 
-The baseline supports operational resilience through:
+[Production policy](../../baseline/locals.tf) supplies three-AZ network defaults,
+redundant ECS capacity requirements and AZ rebalancing, an RDS PostgreSQL Multi-AZ
+DB instance, default-enabled AWS Backup, and conditional RDS Restore Testing.
+An explicit false backup override is honored and disables Restore Testing as well;
+this is different from the enforced RDS Multi-AZ requirement. RDS-native
+automated backups have a separate 14-day retention setting.
 
-- a retained KMS-encrypted AWS Backup vault in each workload environment;
-- profile-aware backup plans and tag-based selections when scheduled backup is enabled;
-- configurable backup schedule and retention;
-- centralized logs;
-- Terraform-managed infrastructure;
-- controlled EC2 rollback; and
-- patch management.
-
-Production enables scheduled backup by default. Development and minimal disable scheduling by default while retaining the encrypted vault; when disabled, plan/selection resources are absent and workload EC2/RDS resources use `Backup=false`.
+A vault remains declared when non-production scheduling is disabled; that is not
+indefinite preservation of its data or key. EC2 is a set of standalone instances,
+not an Auto Scaling Group with a supplied application recovery mechanism.
 
 ### ISO 27001 Alignment
 
@@ -384,21 +473,26 @@ A.5.30 addresses readiness of ICT systems for business continuity.
 
 ### Narrative
 
-The baseline supports technical recovery readiness and repeatable infrastructure reconstruction.
+The infrastructure contributes to continuity readiness, not business continuity
+acceptance. Test actual task placement/replacement, database failover, restored
+application/data behavior, cleanup, and measured recovery objectives. A Multi-AZ
+DB instance is not a three-node database or cross-Region recovery.
 
-It does not define business continuity plans, recovery time objectives, recovery point objectives, restoration procedures, or continuity exercises. Organizations must test recovery and select retention/scheduling appropriate to their risk requirements.
+[Retirement](../production-retirement.md) separates Stage-1 quiescence, durable
+cleanup, Identity Center cleanup, and final exact workload destruction. Later
+rejection does not reverse earlier changes; the complete cleanup workflow is
+`prod`-only. Retain required data and usable keys outside destruction scope and
+maintain organizational continuity plans, ownership, and exercises.
+
 ## A.5.33 - Protection of Records
 
 ### Baseline Control
 
-Operational and security records are protected using:
-
-- KMS encryption
-- S3 versioning
-- Object Lock
-- Restricted bucket policies
-- Lifecycle retention
-- Centralized log storage
+The workload logs bucket uses KMS-backed encryption, public access blocks,
+versioning, access policies, and lifecycle transitions/expiration. It explicitly
+has `object_lock_enabled=false`, `force_destroy=true`, and no Terraform
+destruction guard. Other CloudWatch log groups have configured retention, not
+universal archival to that bucket. See [storage](../../modules/storage/main.tf).
 
 ### ISO 27001 Alignment
 
@@ -406,7 +500,11 @@ A.5.33 addresses protection of records from loss, destruction, falsification, un
 
 ### Narrative
 
-The centralized logging architecture treats logs as security evidence and protects them from unauthorized alteration or deletion.
+These settings do not provide immutable records or guarantee survival through
+approved destruction. Define record classes, retention/erasure rules, required
+integrity verification, independent preservation, and usable key access. Preserve
+custody and access-review evidence; a lifecycle policy is not proof that records
+cannot be altered or deleted before expiration.
 
 ---
 
@@ -435,6 +533,13 @@ The baseline provides infrastructure safeguards that support PII protection.
 
 It does not implement privacy policies, data inventories, data subject request processes, retention governance, or legal privacy compliance obligations.
 
+**Boundary:** Encryption and private networks do not implement tenant isolation,
+data minimization, application/database authorization, or every transport path.
+The ALB frontend is HTTPS but target traffic is HTTP. Enrichment sends indicators
+to an external provider, and operational findings/logs may contain sensitive data.
+Review actual data flows, third-party disclosure, access and retention policies,
+and privacy obligations for the adopting system.
+
 ---
 
 ## A.5.36 - Compliance with Policies, Rules and Standards for Information Security
@@ -457,9 +562,12 @@ A.5.36 addresses compliance with information security policies, standards, and t
 
 ### Narrative
 
-The baseline helps enforce and validate selected technical standards.
-
-Organizations must still define internal policies, assign control owners, and perform compliance reviews.
+The repository evaluates selected technical conditions; it does not determine
+legal, contractual, ISMS, or policy compliance. Config catalog presence does not
+prove complete recorder coverage or compliant resources. A disabled S3 family does
+not disable the separate automatic remediation when Config remains enabled.
+Retain applicability, scope, evaluation freshness, exceptions, remediation impact,
+and accountable review against the organization's approved policies.
 
 ---
 
@@ -491,6 +599,13 @@ The baseline includes operational documentation for deployment, validation, test
 
 Organizations should adapt these documents into formal internal procedures where required.
 
+**Evidence:** Adopt and approve procedures for the actual environment, record
+operator authorization, and keep executed test results separate from examples.
+The [retirement runbook](../production-retirement.md) and
+[evidence guide](validation-evidence-guide.md) define additional operational
+boundaries. Documentation presence is not evidence that staff followed a procedure
+or that its effects were reviewed.
+
 ---
 
 # A.8 Technological Controls
@@ -505,7 +620,7 @@ Privileged access is controlled through:
 - Environment-specific permission sets
 - GitHub OIDC apply roles
 - Break-glass role monitoring
-- Least-privilege IAM policies
+- IAM policies with explicitly reviewed privilege and scope
 - Separation of plan and apply roles
 
 ### ISO 27001 Alignment
@@ -514,11 +629,15 @@ A.8.2 addresses restricting and managing privileged access rights.
 
 ### Narrative
 
-Privileged access is scoped by environment and workflow.
+Review actual policies rather than assuming least privilege from environment or
+role names. Apply and central Administrator are broadly privileged; Plan can write
+state and read selected secrets. Lambda response roles grant selected EC2 actions
+on wildcard resources without tag-based IAM restrictions.
 
-Use of break-glass access is monitored and alerted.
-
-Organizations must still perform access reviews and maintain approval records.
+Break-glass has an MFA trust condition and administrator authority. Its alert
+pattern matches a request for the role, not necessarily a successful assumption.
+Evidence must include privileged-rights approval/review/removal, real request
+outcomes, recipient delivery, and emergency follow-up.
 
 ---
 
@@ -547,6 +666,12 @@ Access to infrastructure resources is restricted through identity, network, and 
 
 This supports protection of sensitive infrastructure and workload data.
 
+**Boundary:** Private reachability, KMS encryption, and SG references do not
+replace effective IAM/resource-policy evaluation or application authorization.
+The endpoint resources supply no custom endpoint-policy restrictions, and shared
+endpoint access is broader than a single service. Review actual API access and
+both identity/resource policies, including the unresolved rollback bus boundary.
+
 ---
 
 ## A.8.5 - Secure Authentication
@@ -570,20 +695,25 @@ OIDC and Identity Center reduce reliance on static credentials.
 
 Organizations should also enforce MFA, SSO policies, and identity provider controls outside this Terraform baseline.
 
+**Evidence:** Retain the actual identity-provider settings, authentication and
+role-assumption records, OIDC audience/subject restrictions, and emergency
+credential controls. The module does not configure upstream MFA or make a role
+unusable outside an independently enforced approval process.
+
 ---
 
 ## A.8.8 - Management of Technical Vulnerabilities
 
 ### Baseline Control
 
-The baseline supports vulnerability management through:
+Inspector is enabled for the effective selected resource types where configured;
+ECR is added when effective repositories exist. Coverage and findings are distinct
+from account-level enablement.
 
-- Amazon Inspector
-- Security Hub aggregation
-- SSM Patch Manager
-- Patch baselines
-- Maintenance windows
-- SNS notifications
+The [patch module](../../modules/patch_management/main.tf) configures a tagged
+SSM maintenance-window task using `AWS-RunPatchBaseline` Install with
+`RebootIfNeeded`. It does not define a custom patch baseline, application-health
+gates, draining, or quarantine-exclusion targeting.
 
 ### ISO 27001 Alignment
 
@@ -591,9 +721,11 @@ A.8.8 addresses obtaining, evaluating, and addressing technical vulnerabilities.
 
 ### Narrative
 
-Inspector and patch management support technical vulnerability identification and remediation workflows.
-
-Organizations must still define vulnerability SLAs, ownership, exception handling, and reporting procedures.
+Retain per-resource scan coverage/freshness, findings, prioritized remediation,
+exceptions, and per-target patch results, missing/failed counts, reboot state,
+and application recovery. An Online managed node or existing window does not
+prove successful patching. Application secure coding and vulnerability management
+outside these infrastructure services remain separate responsibilities.
 
 ---
 
@@ -616,9 +748,15 @@ A.8.9 addresses establishing and maintaining secure configurations.
 
 ### Narrative
 
-Terraform defines expected infrastructure state, while AWS Config monitors deployed resource configuration.
+Terraform defines selected desired properties with explicit exceptions. EC2
+security-group attachments and incident tags are ignored for drift correction;
+AMI lookup can change a plan without a source change. Config uses a fixed recorder
+scope and selected rules, not complete evaluation of every AWS resource.
 
-This supports configuration consistency and drift detection.
+Retain effective inputs, provider/lockfile context, desired/observed comparisons,
+reviewed exceptions and change records. [Config recording](../../modules/security/config_baseline/main.tf)
+still includes IAM types when IAM rules are disabled and omits KMS keys despite
+enabled KMS rules. Validate actual applicability/results before asserting coverage.
 
 ---
 
@@ -626,7 +764,7 @@ This supports configuration consistency and drift detection.
 
 ### Baseline Control
 
-The baseline supports data leakage prevention through:
+The following mechanisms can support selected exposure and data-movement controls, but are not a complete data leakage prevention implementation:
 
 - Private subnets
 - Controlled egress
@@ -643,9 +781,12 @@ A.8.12 addresses preventing unauthorized disclosure or extraction of information
 
 ### Narrative
 
-The baseline reduces exposure and provides controls around outbound paths.
-
-It does not replace application-layer DLP, endpoint DLP, or data classification processes.
+The network and storage controls can reduce exposure and constrain selected
+outbound paths; they are not a content-aware DLP implementation or an assurance
+that data cannot be exfiltrated. NAT-only egress is not inspected, and non-VPC
+enrichment bypasses workload routes. Domain matching does not inspect encrypted
+payload content. Application/endpoint DLP, authorized transfer controls,
+classification, and data-sharing decisions require separate design and evidence.
 
 ---
 
@@ -664,7 +805,7 @@ AWS Backup support includes:
 Default behavior is:
 
 ```text
-production  -> scheduled backup enabled, 30-day retention
+production  -> scheduled backup enabled by default, 30-day retention
 development -> scheduled backup disabled
 minimal     -> scheduled backup disabled
 ```
@@ -677,30 +818,31 @@ A.8.13 addresses maintaining backup copies of information, software, and systems
 
 ### Narrative
 
-The baseline provides backup infrastructure and validation that can support recovery readiness.
+[Backup configuration](../../modules/backup/main.tf) includes RDS Restore
+Testing when both production profile and effective backup enablement are true,
+distinct from RDS-native backups and source Multi-AZ availability.
+A temporary private Single-AZ restore is used; the module does not supply an
+application-specific data validator.
 
-It does not itself establish backup sufficiency or successful restoration. Organizations must define backup scope, RPO/RTO targets, retention requirements, restoration testing, and recovery procedures.
+Record configuration, completed restore execution, application/data validation,
+and temporary-resource cleanup separately. The backup validator can PASS with
+absent-job, application-validation, or cleanup warnings. Scheduling alone does
+not establish successful recovery or objectives. Verify source scope, retained
+backup copies, required keys and access, actual restoration, retention decisions,
+and approved destructive lifecycle before accepting this association.
+
 ## A.8.15 - Logging
 
 ### Baseline Control
 
-The baseline captures logs from:
+The [logging module](../../modules/logging/main.tf) configures management-event
+CloudTrail collection and VPC Flow Logs with CloudWatch/S3 paths. Config,
+application, Lambda, RDS, and Container Insights records have their own resources
+and retention. There is no universal S3 archival path for every log group.
 
-- CloudTrail
-- AWS Config
-- VPC Flow Logs
-- CloudWatch Logs
-- Lambda logs
-- ECS service application logs
-- ECS Container Insights performance logs when enabled
-
-Logs are stored with protections such as:
-
-- KMS encryption
-- S3 versioning
-- Object Lock
-- Restricted bucket policies
-- Lifecycle retention
+The logs bucket has encryption, versioning, access policy and lifecycle rules,
+but Object Lock is disabled and force destruction is allowed. CloudTrail is not
+configured as an organization trail or general data-event trail.
 
 ### ISO 27001 Alignment
 
@@ -708,11 +850,12 @@ A.8.15 addresses producing, storing, protecting, and analyzing logs.
 
 ### Narrative
 
-The container runtime adds Terraform-owned ECS application log groups under `/aws/ecs/<name-prefix>/<service>` and a Terraform-owned Container Insights performance log group when enabled. The runtime validator checks effective retention and exact workload logs-CMK encryption.
-
-Logging supports investigation, monitoring, and evidence preservation.
-
-The baseline provides technical log collection and protection, while organizations remain responsible for review procedures and alert handling.
+Review collection scope, actual delivery/freshness, record content, access,
+retention, archival and usable key access. Configured log-file validation does not
+perform a digest-chain verification. The logging validator permits delivery and
+missing-retention warnings and does not inspect Firehose archival or fresh objects.
+ECS log checks compare their resource-backed key/retention metadata, not every
+application log's completeness or continuing operation.
 
 ---
 
@@ -741,9 +884,18 @@ A.8.16 addresses monitoring networks, systems, and applications for anomalous be
 
 Centralized GuardDuty and Security Hub governance reduce account-level drift and provide common security visibility, while workload-local Config and Inspector preserve environment-specific configuration and vulnerability evidence.
 
-v1.10 adds protected Fargate runtime instrumentation and explicit coverage-health monitoring. The baseline validates that protected running tasks have one running GuardDuty agent and that GuardDuty reports the expected cluster as `AUTO_MANAGED`, `HEALTHY`, and without unresolved issues.
+The workload runtime includes protected Fargate instrumentation and coverage-health notification. The baseline validates that protected running tasks have one running GuardDuty agent and that GuardDuty reports the expected cluster as `AUTO_MANAGED`, `HEALTHY`, and without unresolved issues.
 
 These are technical monitoring mechanisms; organizations must still define review, escalation, investigation, and response procedures.
+
+**Acceptance boundary:** Empty-runtime validation does not prove live agent
+injection. Coverage health is not proof of no compromise. ECS alarms treat missing
+data as non-breaching and cannot establish application availability from zero
+counts. Coverage events are account/regional ECS scoped, not a baseline-only
+cluster health poll. Notification DLQs protect selected edges, not every SNS
+subscriber; alarms reuse the same topic/key. Retain coverage, signal freshness,
+correlated receipt, triage, response, and independently reviewed gaps.
+
 ## A.8.20 - Network Security
 
 ### Baseline Control
@@ -766,6 +918,13 @@ A.8.20 addresses securing networks and network devices.
 ### Narrative
 
 The baseline uses layered AWS network controls to reduce public exposure and control outbound traffic.
+
+**Scope:** Effective modes differ: firewall inspection, NAT-only, or endpoint-only
+compute routing. Validate the selected mode, full subnet/route inventory, private
+resource placement and exact SG rules, rather than inferring all traffic is
+inspected. Application TLS and intended public ALB ingress require separate
+review. [Baseline composition](../../baseline/main.tf) is the implementation
+authority, not an environment label.
 
 ---
 
@@ -793,19 +952,26 @@ A.8.21 addresses security mechanisms, service levels, and management requirement
 ### Narrative
 
 The baseline defines secure network-service access paths for AWS services and workloads and keeps the Runtime Monitoring telemetry endpoint inside the same Terraform ownership, placement, and validation model as other private service endpoints.
+
+**Boundary:** Endpoint readiness is Terraform resource ordering, not proof of DNS,
+service health, authorization, or package-repository reachability. The SG
+relationship does not restrict an API to a single intended action. Observe actual
+allowed/denied service use and agree service levels outside the Terraform
+configuration.
+
 ## A.8.22 - Segregation of Networks
 
 ### Baseline Control
 
-The baseline separates network zones through subnet tiers:
+The seven subnet families are `ingress_public`, `egress_public`,
+`compute_private`, `data_private`, `serverless_private`, `endpoint_private`, and
+`firewall_private`. Public ALB ingress and NAT egress have separate subnet and
+route-table roles. Production defaults to three AZs; other profiles default to
+two. Environments are separated by workload accounts.
 
-- Public
-- Private compute
-- Private data
-- Private serverless
-- Endpoint subnets
-
-It also separates environments by AWS account.
+The [security-policy layer](../../modules/networking/security_policy/main.tf)
+defines the actual cross-tier traffic rules. Quarantine retains shared endpoint
+HTTPS connectivity.
 
 ### ISO 27001 Alignment
 
@@ -813,7 +979,10 @@ A.8.22 addresses segregation of networks, systems, and information services.
 
 ### Narrative
 
-Network segmentation and account separation reduce blast radius and improve control over sensitive workloads.
+Account and network structure provide segregation mechanisms, not an automatic
+prohibition on every cross-tier or cross-account action. Validate effective routes,
+SGs and identity/resource grants against the intended system boundary. Tenant
+segregation remains an application/data-plane responsibility.
 
 ---
 
@@ -821,12 +990,11 @@ Network segmentation and account separation reduce blast radius and improve cont
 
 ### Baseline Control
 
-The baseline supports controlled outbound web access through:
-
-- AWS Network Firewall
-- Route table control
-- NAT Gateway egress path
-- Future potential domain-based egress profiles
+When the effective mode is `network_firewall`, the
+[firewall](../../modules/firewall/main.tf) applies domain-based filtering on the
+inspected compute path using platform-required and approved application domains.
+This is implemented behavior, not a future-only capability. `nat_only` does not
+apply that inspection; non-VPC enrichment is outside workload firewall routing.
 
 ### ISO 27001 Alignment
 
@@ -834,9 +1002,10 @@ A.8.23 addresses managing access to external websites to reduce exposure to mali
 
 ### Narrative
 
-AWS Network Firewall can support egress filtering patterns.
-
-Current implementation provides controlled egress foundations, but organizations should review and customize firewall rules for their specific web filtering needs.
+Domain allowlisting is not comprehensive malicious-content classification,
+full-URL control, TLS payload inspection, or organization-wide web filtering.
+Review approved destinations, exact routing and rules, observed allowed/denied
+requests, and exceptional service paths for the actual workload.
 
 ---
 
@@ -865,6 +1034,15 @@ KMS-backed encryption helps protect operational data, secrets, logs, backups, an
 
 Organizations must still define cryptographic policies, key ownership, and key rotation procedures.
 
+**Implementation limits:** The workload keys have rotation and deletion windows,
+not effective production destruction guards. Pending deletion makes a key
+unavailable for KMS cryptographic operations. Preserve usable keys for retained
+ciphertext. RDS storage is encrypted without an explicit database key argument;
+the Lambda key concerns environment variables, not proof of code signing.
+ALB-to-task traffic is HTTP, distinct from HTTPS on the frontend. Review actual
+keys/grants, data paths, transport configuration, secrets in artifacts, rotation,
+and disposal against the organization's cryptographic policy.
+
 ---
 
 ## A.8.27 - Secure System Architecture and Engineering Principles
@@ -877,12 +1055,12 @@ The baseline is designed around secure architecture principles such as:
 - Control-plane and delegated-security separation
 - Private-first networking
 - Centralized identity
-- Least privilege
+- Explicit privilege review and documented exceptions
 - Immutable application release selection
 - Profile-driven Fargate Runtime Monitoring
 - Terraform-owned Runtime Monitoring IAM/network prerequisites with GuardDuty-owned live agent lifecycle
 - Event-driven response and coverage-health notification
-- Immutable logging
+- Encrypted and versioned logging with explicit preservation limitations
 - KMS encryption
 - Secure CI/CD
 
@@ -894,9 +1072,16 @@ A.8.27 addresses secure system architecture and engineering principles.
 
 The Terraform architecture provides reusable secure-default patterns while preserving explicit ownership boundaries between organization governance, workload infrastructure, and AWS service-managed runtime instrumentation.
 
-Automatic ECS/Fargate containment is deliberately excluded from v1.10 rather than applying the EC2 isolation model to AWS-managed Fargate task ENIs without a proven fail-closed design.
+Automatic ECS/Fargate containment is not implemented; the EC2 isolation handler is not a supported Fargate containment mechanism.
 
 The architecture should still be reviewed and adapted for each organization’s system and risk context.
+
+**Boundary:** Digest selection does not prove image signing, vulnerability
+acceptance, application authorization, or immutable execution. Review source,
+trust boundaries, broad IAM grants, mutable log/key lifecycle, and partial-response
+behavior. An architecture principle is not evidence that every implementation
+component satisfies it.
+
 ## A.8.28 - Secure Coding
 
 ### Baseline Control
@@ -914,6 +1099,11 @@ A.8.28 addresses applying secure coding principles.
 Secure coding for application workloads is mostly out of scope.
 
 Organizations should implement code review, dependency scanning, SAST/DAST, secrets scanning, and secure SDLC processes separately.
+
+**Evidence:** Review the repository's own Python and shell behavior as well as
+application code. Handled error responses, partial state changes, unchecked
+partial API failures, and external dependencies need explicit tests and defect
+tracking. A syntax check or documentation example is not secure-code assurance.
 
 ---
 
@@ -939,6 +1129,12 @@ A.8.31 addresses separation of development, testing, and production environments
 
 Separate workload accounts create strong boundaries between development, staging, and production. Keeping control-plane and security-operations responsibilities outside the workload accounts further reduces the chance that workload lifecycle activity affects organization governance or centralized security administration.
 
+**Boundary:** Confirm actual account ownership and access paths; names and state
+separation are not IAM denies. Shared human administrators and authorized
+cross-account grants require their own review. Resilience policy follows
+`deployment_profile`, not only the directory name; the complete protected cleanup
+workflow remains limited to `prod`.
+
 ---
 
 ## A.8.32 - Change Management
@@ -961,9 +1157,16 @@ A.8.32 addresses changes to information processing facilities and systems.
 
 ### Narrative
 
-Terraform and GitHub workflows support controlled, reviewable, and repeatable infrastructure changes.
+The [Apply workflow](../../.github/workflows/terraform-apply.yml) creates its
+own saved plan before protected approval and verifies/applies that artifact rather
+than the standalone Plan output. Image publication, digest PR, merge, Apply, and
+post-deployment evidence are separate actions.
 
-Organizations must still define approval requirements, emergency change procedures, and change records.
+Document actual reviewers and GitHub protections, sensitive artifact handling,
+provenance, tests, results, convergence and emergency/out-of-band changes. A
+checksum is not an independent signature or proof of separation of duties.
+Retirement approvals are staged: rejecting final destruction does not undo earlier
+approved data or Identity Center cleanup.
 
 ---
 
@@ -982,6 +1185,14 @@ validation-results/<env>/baseline/<timestamp>/
 
 The four evidence layers distinguish organization/access foundations, centralized security governance, workload bootstrap foundations, and deployed workload realization.
 
+A baseline summary reports 16 child-script exits, not every assertion. Warnings,
+disabled branches, and empty runtime paths remain visible acceptance limits. The
+exporter reruns the scripts; its static manual-work list is not proof that those
+exercises were performed or remain outstanding in an organization's records.
+Record deployment/validation commits, effective inputs/digests, account/Region,
+execution time and evidence location separately. Never attach earlier behavioral
+results to a later deployment without preserving their original provenance.
+
 ## Terraform / CI/CD Evidence
 
 ```text
@@ -996,16 +1207,16 @@ security_operations/security_services state
 ## AWS Evidence
 
 ```text
-CloudTrail status and protected log storage
+CloudTrail scope/status, fresh delivery, performed integrity checks and actual retention/key availability
 AWS Config recorder and rule state
 Security Hub CSPM central configuration, finding aggregation, policies, and associations
 Security Hub V2 effective workload policies
 GuardDuty detector, organization enrollment, exact Runtime Monitoring organization feature state, ECS `GuardDutyManaged` intent, live agent/coverage state, and coverage-health notification configuration
 Inspector account status
 KMS aliases and policies
-S3 encryption/Object Lock configuration
+S3 encryption, versioning, Object Lock disabled-state, lifecycle and destruction configuration
 VPC Flow Logs and VPC endpoint state
-Backup vault, effective scheduled-backup state, plan/selection state, workload `Backup` tags, and patch-management state
+Backup jobs/scope, Restore Testing execution/data validation/cleanup, RDS/ECS availability observations, retained key access, and per-target patch results
 ```
 
 ## Identity / Incident Evidence
@@ -1021,6 +1232,21 @@ Tamper alerts and SNS notifications
 Security Hub / GuardDuty findings
 ```
 
+## Control-Owner Evidence Review
+
+| Themes | Repository authority | Acceptance evidence and unresolved responsibility |
+|---|---|---|
+| Access and privileged identity | [OIDC](../../modules/github_oidc/main.tf), [Identity Center](../../modules/identity_center/main.tf) | Effective grants, assignment principals/membership, approvals, authentication and rights lifecycle; resolve Operator bus authorization and broad-grant decisions |
+| Evidence and records | [Logging](../../modules/logging/main.tf), [storage](../../modules/storage/main.tf), [keys](../../modules/security/main.tf) | Actual delivery, performed integrity verification, retention/custody, independent preservation and usable keys |
+| Incident handling | [Automation](../../modules/automation/main.tf), [response code](../../modules/automation/lambda/) | Authentic event path, approved caller/target, pre-state, partial failures, containment/recovery and human decisions |
+| Configuration and monitoring | [Config](../../modules/security/config_baseline/main.tf), [monitoring](../../modules/monitoring/main.tf) | Evaluated resources/freshness, signal gaps, receipt and triage, remediation impact and exceptions |
+| Networks and data movement | [Baseline](../../baseline/main.tf), [security policy](../../modules/networking/security_policy/main.tf) | Selected routing, intended ingress/egress, API grants, transport and application/tenant boundaries |
+| Continuity and maintenance | [Backup](../../modules/backup/main.tf), [patching](../../modules/patch_management/main.tf) | Scope, successful restoration, application validation, cleanup, measured objectives and per-target maintenance results |
+
+These associations do not replace a Statement of Applicability, risk treatment,
+internal audit, management review, or customer/supplier assurance. The repository
+does not establish that a named organization has performed or accepted them.
+
 ---
 
 # Control Coverage Summary
@@ -1034,15 +1260,15 @@ Security Hub / GuardDuty findings
 | A.5.23 Cloud services | Secure AWS baseline, multi-account architecture |
 | A.5.24-A.5.27 Incident management | Detection, alerting, isolation, rollback, logs |
 | A.5.28 Evidence | Centralized logs, Security Hub, CloudTrail, Config |
-| A.5.30 ICT readiness | Backup, Terraform rebuildability, logging, rollback |
-| A.5.33 Records | Protected logs, Object Lock, retention |
+| A.5.30 ICT readiness | Production RDS/ECS resilience, Backup/Restore Testing and retirement procedures; measured recovery requires exercises |
+| A.5.33 Records | Encryption/versioning and lifecycle settings; no immutable retention or guaranteed key preservation |
 | A.5.34 PII | Encryption, private networking, access control, monitoring |
-| A.8.2 Privileged access | Identity Center, break-glass monitoring, least privilege |
+| A.8.2 Privileged access | Identity Center, OIDC and emergency roles; broad grants and actual approvals require review |
 | A.8.3 Information access restriction | IAM, KMS, S3 policies, network controls |
 | A.8.8 Vulnerabilities | Inspector, Security Hub, patch management |
 | A.8.9 Configuration management | Terraform, AWS Config |
-| A.8.12 Data leakage prevention | Controlled egress, private networking, S3 public access controls |
-| A.8.13 Backup | Retained encrypted backup vaults, profile-aware plans/selections, validated resource backup tags |
+| A.8.12 Data leakage prevention | Exposure/path constraints only; no content-aware DLP implementation |
+| A.8.13 Backup | Backup/Restore Testing configuration and resource tags; execution, data validation, cleanup and key availability need evidence |
 | A.8.15 Logging | CloudTrail, Config, VPC Flow Logs, CloudWatch Logs |
 | A.8.16 Monitoring | GuardDuty/Fargate Runtime Monitoring and coverage health, Security Hub, EventBridge, SNS |
 | A.8.20 Network security | VPC segmentation, firewall, endpoints, security groups |
@@ -1065,12 +1291,12 @@ Security Hub / GuardDuty findings
 - Monitor cloud activity and protected ECS/Fargate runtime coverage
 - Detect security-relevant events and monitoring-coverage degradation
 - Support incident containment and recovery
-- Preserve security evidence
+- Support evidence collection subject to retention and key-lifecycle limitations
 - Encrypt sensitive infrastructure data
 - Support backup and recovery
 - Manage secure configurations through Terraform
 
-These capabilities align with selected ISO/IEC 27001:2022 Annex A organizational and technological control themes.
+These mechanisms are candidate contributions to selected ISO/IEC 27001:2022 Annex A organizational and technological control themes; actual applicability and conformity require organization-specific assessment.
 
 This baseline should be considered an enabling technical foundation within a broader ISMS.
 
