@@ -78,7 +78,8 @@ These are **selected thematic associations**, not verbatim Annex A requirements,
 a complete Statement of Applicability, or a finding of conformity. The
 [ISO/IEC 27001 overview](https://www.iso.org/standard/27001) describes an
 organization-wide, risk-based management system; Terraform features do not
-establish that management system or certification.
+establish that management system or certification. The overview is publicly
+accessible; the complete standard is available separately from ISO.
 
 Use the applicable authoritative standard and the organization's risk assessment,
 system scope, Statement of Applicability, and assessor review to determine which
