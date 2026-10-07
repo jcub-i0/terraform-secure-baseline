@@ -576,7 +576,6 @@ Expected output:
 | `lambda_ip_enrichment_dlq_arn` | `string` | IP Enrichment asynchronous-failure destination ARN | Yes |
 | `ecs_iam_services` | `map(object(...))` | ECS execution-role inputs keyed by service; defaults to `{}` | No |
 
-
 All inputs except `ecs_iam_services` have no declared defaults. In particular, an empty runtime does not remove the three required Lambda DLQ inputs. `cloud_name` and `lambda_ip_enrichment_log_group_arn` are declared context inputs but are not referenced by the current IAM resource expressions. They do not create additional permissions.
 
 The intended service object is:
