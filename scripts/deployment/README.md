@@ -1,8 +1,19 @@
-# Application Deployment Scripts
+# Deployment and Lifecycle Scripts
 
 ## Purpose
 
-`scripts/deployment` contains the application image-publication and immutable digest-promotion tooling used by the ECS/Fargate runtime, including the v1.9 runtime contract. Terraform owns ECR repositories and ECS infrastructure; these scripts build and publish images outside Terraform, resolve the digest recorded by ECR, and prepare the one-field configuration change that selects a release.
+`scripts/deployment` contains the ECS/Fargate image-publication and immutable digest-promotion tooling, the exact-plan artifact helper, and the production retirement/cleanup gates used by v1.11. Terraform owns ECR repositories and ECS infrastructure; the image-publication scripts build and publish images outside Terraform, resolve the digest recorded by ECR, and prepare the one-field configuration change that selects a release.
+
+| Script | Responsibility | Mutation boundary |
+|---|---|---|
+| `deploy-application.sh` | Build and publish an image; resolve its authoritative digest | Writes ECR images and optional local metadata; does not deploy ECS |
+| `update-application-digest.sh` | Select one service image digest | Changes one canonical JSON field locally; does not commit, push, or apply |
+| `terraform-plan-artifact.sh` | Create/verify a saved Terraform plan artifact | Creates local plan files; never applies Terraform |
+| `validate-production-retirement-plan.sh` | Check a saved retirement Stage-1 plan | Reads the plan; does not apply it |
+| `cleanup-retirement-durable-data.sh` | Inventory or explicitly delete production ECR/Backup contents | `plan` inventories; `apply` permanently deletes the scoped durable data |
+| `validate-retirement-readiness.sh` | Check converged retirement state and live AWS readiness | Read-only AWS checks; does not clean up or apply |
+
+The canonical production lifecycle procedure is [Production Retirement](../../docs/production-retirement.md). The image-publication flow below is separate from that destructive lifecycle.
 
 The canonical workload configuration is tracked at:
 
@@ -63,6 +74,7 @@ Representative local use:
 
 ```bash
 AWS_PROFILE=dev \
+AWS_REGION=us-east-1 \
 EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
 ./scripts/deployment/deploy-application.sh publish \
   --environment dev \
@@ -73,7 +85,9 @@ EXPECTED_ACCOUNT_ID="<DEV-ACCOUNT-ID>" \
   --metadata-file /tmp/api-image.json
 ```
 
-The local script requires `aws`, `docker`, and `jq`, and it uses the active AWS CLI credentials. Supplying `EXPECTED_ACCOUNT_ID` is strongly recommended so a publication cannot silently target the wrong workload account.
+The local script requires `aws`, `docker`, `jq`, and `docker-credential-ecr-login` (the Amazon ECR Docker Credential Helper). Git is used for source provenance and the default tag when the build context is a Git working tree. Supply `--region` or `AWS_REGION` explicitly; the example's `us-east-1` is not a fallback. Supplying `EXPECTED_ACCOUNT_ID` is strongly recommended so a publication cannot silently target the wrong workload account.
+
+`--profile` or `AWS_PROFILE` selects a local AWS CLI profile. When non-empty, the script also exports `AWS_PROFILE` for the credential helper. The helper must be available on `PATH` before local publication; the script fails if it is absent rather than falling back to password-file login.
 
 When requested, the metadata JSON records:
 
@@ -87,6 +101,14 @@ When requested, the metadata JSON records:
 - publication timestamp.
 
 The metadata contains no ECR authorization token or AWS credentials.
+
+### ECR authentication and temporary Docker configuration
+
+The publication script does not call `docker login` or `aws ecr get-login-password`. After the image build, it creates a temporary directory with permissions `0700` and a `config.json` with permissions `0600`. That JSON contains only a registry-specific `credHelpers` mapping to `ecr-login`; it contains no embedded authorization token.
+
+The push uses that directory through a command-scoped `DOCKER_CONFIG` override. The script sets `AWS_ECR_DISABLE_CACHE=true` so the helper's ECR authorization-token file cache is disabled. The helper obtains authorization through the active AWS credential chain. The script installs an `EXIT` trap and explicitly removes the temporary directory after a successful push. Cleanup is best-effort on normal shell exit; an uncatchable process/runner termination cannot execute a shell trap.
+
+The preceding `docker build` uses the caller's existing Docker configuration. This change does not erase credentials previously stored in the caller's ordinary Docker configuration, and it does not claim that AWS credentials or ECR tokens never exist in process memory. Publication metadata does not contain those credentials.
 
 ## `update-application-digest.sh`
 
@@ -118,6 +140,8 @@ The manual workflow accepts:
 - build context relative to the checked-out repository root;
 - Dockerfile path relative to that context; and
 - an optional immutable image tag.
+
+The publisher job installs the Ubuntu package `amazon-ecr-credential-helper` when `docker-credential-ecr-login` is not already on `PATH`, and verifies that the helper is available before invoking the publication script. It does not pin a package version in RC1.
 
 The workflow build context must resolve inside the repository checkout. The workflow reads `repository_name` and `cpu_architecture` from the selected canonical service entry and maps `X86_64` to `linux/amd64` or `ARM64` to `linux/arm64`; operators do not enter a parallel repository or platform value.
 
@@ -164,4 +188,47 @@ Successful publication does not imply deployment. Operators must review the rele
 
 ## Ownership Boundary
 
-These scripts and the workflow own image publication metadata and digest handoff. They do not own ECR repository provisioning, ECS runtime resources, task IAM roles, security groups, schema migrations, application tests, release approval policy, or Terraform state. Those concerns remain with their existing platform, application, and organizational owners.
+The image-publication scripts and `Deploy Application` workflow own image publication metadata and digest handoff. They do not own ECR repository provisioning, ECS runtime resources, task IAM roles, security groups, schema migrations, application tests, release approval policy, or Terraform state. Those concerns remain with their existing platform, application, and organizational owners.
+
+## Exact Terraform Plan Artifacts
+
+`terraform-plan-artifact.sh` supports `create` and `verify`, with `--mode apply` or `--mode destroy`. Callers supply `--working-directory`, `--artifact-directory`, `--artifact-basename`, and a non-secret `--context-json` object. Workflows own the AWS identity, policy, approval, and eventual Terraform apply.
+
+For a basename such as `baseline-destroy`, the helper produces:
+
+```text
+baseline-destroy.tfplan
+baseline-destroy-plan.txt
+baseline-destroy-plan-metadata.json
+baseline-destroy-plan.sha256
+```
+
+Creation refuses to overwrite existing artifact files. The checksum manifest covers the binary plan, readable plan, and metadata. Verification checks the manifest, exact metadata/context, Terraform CLI version, and supported destroy-plan actions. Destroy mode requires at least one deletion and permits only `delete`, `no-op`, and `read` resource actions. This is artifact/context validation, not an independent security approval or proof that every resource deletion is appropriate.
+
+The helper requires GitHub Actions identity variables, including `GITHUB_SHA`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`, `GITHUB_REF`, `GITHUB_ACTOR`, and `GITHUB_WORKFLOW_REF`. It is not a general local helper that runs unchanged outside Actions. Do not invent workflow identity variables to label a local plan as CI evidence.
+
+The workload Apply/Destroy and Identity Center cleanup paths use their own saved artifacts. Their plan artifacts are retained for one day in the current workflows. Protect these artifacts and their logs: checksums are not encryption, and plan files can contain sensitive configuration.
+
+## Production Retirement Helpers
+
+Use the [runbook](../../docs/production-retirement.md) for the complete order and approvals. These helpers must not be treated as interchangeable:
+
+- `validate-production-retirement-plan.sh` accepts `--working-directory` and `--plan-file`. It checks allowed resource action types and the planned production/lifecycle/zero-capacity outputs. It does not whitelist every permissible in-place attribute update, so the full plan still needs review.
+- `cleanup-retirement-durable-data.sh` accepts only `prod` in RC1. It requires the expected account ID and checks the deployed production retirement outputs. `--mode plan` inventories; `--mode apply --confirm DELETE-DURABLE-DATA` re-inventories and deletes scoped ECR images and Backup recovery points. The inventory is not a saved Terraform plan or immutable item-level approval artifact. Active Backup jobs prevent apply-mode cleanup.
+- `validate-retirement-readiness.sh` accepts a workload environment, reads its Terraform state/outputs, and checks production posture, live deletion protections, ECS quiescence, zero autoscaling bounds, empty ECR repositories, and an empty Backup vault without active backup jobs. It performs no deletion. It must pass after cleanup and immediately before the final destroy operations.
+
+The latter two helpers derive the service region from deployed `primary_region` and reject conflicting explicit region inputs. Their optional `--region`/`--profile` inputs are unrelated to the Terraform state backend's location. The full RC1 cleanup workflow is not supported for a production-profile `dev` or `staging` environment because of the cleanup helper's explicit `prod` restriction.
+
+Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow requires explicit durable-data authorization and separate protected cleanup, Identity Center cleanup, and final destroy steps. Later cancellation does not undo earlier approved deletions or access changes.
+
+## Implementation References
+
+This page targets v1.11.0 behavior at `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It does not assert a new live publication or retirement test on this exact commit.
+
+- [Image publisher](deploy-application.sh) and [digest update](update-application-digest.sh)
+- [Publication workflow](../../.github/workflows/deploy-application.yml)
+- [Plan artifact helper](terraform-plan-artifact.sh)
+- [Retirement plan guard](validate-production-retirement-plan.sh)
+- [Durable-data cleanup](cleanup-retirement-durable-data.sh)
+- [Retirement readiness](validate-retirement-readiness.sh)
+- [Terraform Apply](../../.github/workflows/terraform-apply.yml) and [Terraform Destroy](../../.github/workflows/terraform-destroy.yml)
