@@ -1163,7 +1163,7 @@ Recommended validation order:
 
 ---
 
-### Evidence and release qualification boundaries
+## Evidence and release qualification boundaries
 
 Keep the four validation/evidence layers separate: control plane, centralized security operations, workload bootstrap, and workload baseline. A `16/16` workload pass does not prove the other three layers passed, nor that every possible RDS attribute or application behavior was checked.
 
