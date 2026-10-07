@@ -8,7 +8,7 @@ It is deployed in the `security-operations` AWS account, which is placed in the 
 
 This layer is intentionally separate from both the AWS Organizations management account and the workload accounts.
 
-Implementation reference: `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). The underscore in the directory name is not the standard logical `environment` value, which is `security-operations`.
+The underscore in the directory name is not the standard logical `environment` value, which is `security-operations`.
 
 ---
 

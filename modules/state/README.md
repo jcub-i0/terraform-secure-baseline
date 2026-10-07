@@ -125,8 +125,6 @@ The module does not implement cross-Region state replication, a general recovery
 
 ## Implementation References
 
-This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`).
-
 - [Resources and policies](main.tf), [inputs](variables.tf), and [outputs](outputs.tf)
 - [Workload state-root procedure](../../bootstrap/dev/state/README.md)
 - [Control-plane state-root procedure](../../bootstrap/control_plane/state/README.md)

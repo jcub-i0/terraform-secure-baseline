@@ -6,7 +6,7 @@ The `modules/identity_center` module creates IAM Identity Center groups, permiss
 
 It is a reusable persona module: the caller decides which SecOps personas are enabled, supplies their group names, and identifies the account that receives each assignment.
 
-This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). See [main.tf](main.tf), [variables.tf](variables.tf), and [outputs.tf](outputs.tf). The target `account_id` is an assignment destination; it does not switch AWS provider credentials into that account.
+See [main.tf](main.tf), [variables.tf](variables.tf), and [outputs.tf](outputs.tf). The target `account_id` is an assignment destination; it does not switch AWS provider credentials into that account.
 
 The control-plane Identity Center stack currently uses this module for:
 

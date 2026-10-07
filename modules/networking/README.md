@@ -15,7 +15,7 @@ The module supports three private-compute egress modes:
 - `nat_only` — compute-private default traffic is routed directly to the same-AZ NAT Gateway in `egress_public`.
 - `vpc_endpoints_only` — NAT Gateways and NAT Elastic IPs are not created, and compute-private route tables receive no default internet route.
 
-The RC1 baseline gives the ALB and NAT Gateways separate subnet and route-table roles. This module creates the subnet families; the ALB itself is owned by `modules/application_load_balancer`.
+The baseline gives the ALB and NAT Gateways separate subnet and route-table roles. This module creates the subnet families; the ALB itself is owned by `modules/application_load_balancer`.
 
 The repository also contains `modules/networking/security_policy`. That is a separate child module for security-group policy. This README only acknowledges that boundary and does not document the child module's rules or interfaces.
 
@@ -98,7 +98,7 @@ Because the module indexes each subnet CIDR list by Availability Zone position, 
 
 The low-level module receives concrete `azs`, `subnet_cidrs`, and `egress_mode` values. It does not accept `deployment_profile`, `primary_region`, `state_region`, or the baseline-only `auto` egress value, and it does not discover AZs itself.
 
-At `v1.11.0-rc1`, [baseline/main.tf](../../baseline/main.tf) asserts that `primary_region` matches the active AWS provider region. Its `data.aws_availability_zones.standard` query filters `opt-in-status` to `opt-in-not-required`; baseline sorts the returned names and selects the first three for production or first two for development/minimal unless `azs` is supplied explicitly.
+[baseline/main.tf](../../baseline/main.tf) asserts that `primary_region` matches the active AWS provider region. Its `data.aws_availability_zones.standard` query filters `opt-in-status` to `opt-in-not-required`; baseline sorts the returned names and selects the first three for production or first two for development/minimal unless `azs` is supplied explicitly.
 
 The baseline contract is:
 
@@ -743,7 +743,7 @@ The current parent module enforces or establishes the following behavior:
 - The parent module always creates ingress-public, egress-public, compute-private, firewall-private, endpoint-private, data-private, and serverless-private route tables even when some of them have no default route.
 - The parent module does not create Network Firewall endpoints; it consumes their IDs when firewall routing is selected.
 - The parent module does not define the `security_policy` submodule's security-group rules.
-- `cloud_name` is currently a required declared input but is not referenced by the RC1 parent-module resource or output definitions.
+- `cloud_name` is currently a required declared input but is not referenced by the parent-module resource or output definitions.
 
 ## Validation and Sources
 

@@ -77,7 +77,7 @@ Deployment profiles provide cost/security defaults and production resilience pol
 | `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days | Lower-cost development and testing with production-aligned runtime detection |
 | `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
 
-GuardDuty Fargate Runtime Monitoring is derived directly from `deployment_profile` in RC1; there is no independent top-level Runtime Monitoring enable/disable input. `production` and `development` set the workload ECS cluster to `GuardDutyManaged=true`, while `minimal` sets `GuardDutyManaged=false`.
+GuardDuty Fargate Runtime Monitoring is derived directly from `deployment_profile`; there is no independent top-level Runtime Monitoring enable/disable input. `production` and `development` set the workload ECS cluster to `GuardDutyManaged=true`, while `minimal` sets `GuardDutyManaged=false`.
 
 The Backup column refers to scheduled AWS Backup behavior. The encrypted environment backup vault and backup CMK are retained even when scheduling is disabled. When backups are disabled, the effective schedule and retention outputs are `null`, the backup plan/selection are absent, and workload EC2/RDS resources use `Backup=false`. Production defaults to `cron(0 5 * * ? *)` with 30-day retention. If backups are explicitly enabled for a non-production profile, the same default schedule is used with 7-day retention unless overridden.
 
@@ -132,7 +132,7 @@ These are distinct contracts:
 | Validator/reconciliation `AWS_REGION` | Service region for those operations; state checks use independently resolved backend context |
 | Migration helper `AWS_REGION` | Backend-region context; when supplied, it must match the tracked migration template |
 
-All five RC1 state templates use `us-east-1`. A service-region change does not move state, the bucket, or the CMK. State/account/workload roots must use their intended backend bucket with distinct keys. See the [state module](../modules/state/README.md) and [bootstrap helper reference](../scripts/bootstrap/README.md).
+All five state templates use `us-east-1`. A service-region change does not move state, the bucket, or the CMK. State/account/workload roots must use their intended backend bucket with distinct keys. See the [state module](../modules/state/README.md) and [bootstrap helper reference](../scripts/bootstrap/README.md).
 
 In the commands below, `SERVICE_REGION` and `STATE_REGION` are **shell example variables**, not additional GitHub settings. Set them for the account/stack in the current terminal. `us-east-1` is the example used here, not evidence of alternate-region or multi-region disaster-recovery qualification:
 
@@ -186,7 +186,7 @@ Deployable production ECS services require at least **two** fixed tasks or an au
 
 The production profile does not enable every possible protection. In particular, the logs bucket retains `force_destroy=true`, `prevent_destroy=false`, and Object Lock disabled; Network Firewall policy/subnet change protections remain disabled. See [storage limits](../modules/storage/README.md) and [firewall limits](../modules/firewall/README.md).
 
-**Retirement scope:** baseline production policy is profile-driven, but the complete RC1 retirement workflow/durable cleanup supports **environment `prod` only**. Do not assume a production-profile `staging` or `dev` deployment has the same end-to-end automated teardown path. Do not bypass the limitation by changing its profile during destruction.
+**Retirement scope:** baseline production policy is profile-driven, but the complete retirement workflow/durable cleanup supports **environment `prod` only**. Do not assume a production-profile `staging` or `dev` deployment has the same end-to-end automated teardown path. Do not bypass the limitation by changing its profile during destruction.
 
 ## Prerequisites
 
@@ -247,7 +247,7 @@ fi
 
 Repeat this for each Terraform root you plan to deploy. The resulting `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its values separately through workflow matrices, GitHub variables, and GitHub secrets.
 
-For local workload deployment, set `isolation_allowed` explicitly according to the approved environment policy. Do not infer a universal value from the profile or old instructions: the reusable baseline defaults to `false`, but the RC1 production environment root defaults to `true`. Workflow planning requires an explicit `ISOLATION_ALLOWED=true` or `false`. The canonical severity input defaults to `["CRITICAL"]` and accepts only `HIGH`/`CRITICAL`; review the response-automation contract before enabling automatic containment.
+For local workload deployment, set `isolation_allowed` explicitly according to the approved environment policy. Do not infer a universal value from the profile or old instructions: the reusable baseline defaults to `false`, but the production environment root defaults to `true`. Workflow planning requires an explicit `ISOLATION_ALLOWED=true` or `false`. The canonical severity input defaults to `["CRITICAL"]` and accepts only `HIGH`/`CRITICAL`; review the response-automation contract before enabling automatic containment.
 
 Templates contain example account IDs and names, not credentials or permission to use those accounts. Review existing backend files as well as `terraform.tfvars.example`; naming inputs do not automatically rewrite tracked backends. Preserve the one canonical `container-workloads.auto.tfvars.json` per workload and do not introduce a conflicting `ecs_services` value in another input source.
 
@@ -514,7 +514,7 @@ enable_guardduty_organization_configuration    = true
 enable_securityhub_v2_organization_policy      = true
 ```
 
-Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. The centralized GuardDuty contract retained in RC1 is:
+Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. The centralized GuardDuty contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -931,7 +931,7 @@ Example **development** scaling configuration. Replace the digest placeholder wi
 }
 ```
 
-At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. RC1 retains the target-tracking-only scaling contract introduced in v1.9.
+At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. The baseline retains the target-tracking-only scaling contract.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. When Container Insights is enabled, each deployable service receives a task-deficit alarm. Each deployable ingress service receives an ALB unhealthy-target alarm. Both notify the SecOps SNS topic on ALARM and OK transitions.
 
@@ -1399,7 +1399,7 @@ This command is not a substitute for the protected GitHub workflow or production
 
 ### Production profile
 
-The complete RC1 automated retirement path supports **`prod`**. Its order is:
+The complete automated retirement path supports **`prod`**. Its order is:
 
 ```text
 normal production (production_retirement_mode=false)
@@ -1502,7 +1502,7 @@ Retiring centralized security governance is not part of workload destroy. Review
 
 ### 5. Control Plane
 
-Keep shared identity and governance available while dependent operations require them. The Organization resource itself has `prevent_destroy=true`; a routine `terraform destroy` is not an implemented Organization-retirement procedure. State bucket and CMK guards remain separate. Plan any final decommissioning as an explicitly approved administrative operation, not as an automatic extension of v1.11 workload retirement.
+Keep shared identity and governance available while dependent operations require them. The Organization resource itself has `prevent_destroy=true`; a routine `terraform destroy` is not an implemented Organization-retirement procedure. State bucket and CMK guards remain separate. Plan any final decommissioning as an explicitly approved administrative operation, not as an automatic extension of workload retirement.
 
 ---
 

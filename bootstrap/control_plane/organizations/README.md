@@ -6,7 +6,7 @@ This Terraform root manages the AWS Organizations structure used by `tf-secure-b
 
 It runs in the AWS Organizations management (`control-plane`) account.
 
-This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). The authority is this root's [implementation](main.tf), [inputs](variables.tf), [outputs](outputs.tf), and [backend](backend.tf), not the names of its feature flags alone.
+The authority is this root's [implementation](main.tf), [inputs](variables.tf), [outputs](outputs.tf), and [backend](backend.tf), not the names of its feature flags alone.
 
 ---
 

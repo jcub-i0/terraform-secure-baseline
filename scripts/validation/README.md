@@ -202,7 +202,7 @@ use_lockfile = true
 
 The script derives the state bucket from the backend files, then validates the live S3 bucket and KMS encryption configuration through AWS APIs.
 
-DynamoDB state locking is not part of the RC1 architecture. This project uses Terraform S3 native locking with `use_lockfile = true`. Reading that declaration and checking policy access do not constitute a live lock-contention test.
+DynamoDB state locking is not part of the architecture. This project uses Terraform S3 native locking with `use_lockfile = true`. Reading that declaration and checking policy access do not constitute a live lock-contention test.
 
 ### v1.4.0 Migration Note
 
@@ -534,13 +534,13 @@ For configured services it validates Fargate service placement, the resource-bac
 
 Desired-count ownership is conditional on the canonical scaling contract. A fixed service (`scaling = null`) must have a live ECS `desiredCount` exactly equal to Terraform. An autoscaled service may differ from its configured bootstrap `desired_count`, but the live value must remain within `min_capacity` and `max_capacity`.
 
-Application Auto Scaling validation requires the exact target inventory for the environment cluster and exact target attributes, including min/max capacity, `ecs:service:DesiredCount`, ECS namespace, resource identity, and unsuspended scaling state. The policy inventory must also match Terraform exactly. CPU, memory, and conditional ALB request-count policies must be `TargetTrackingScaling`, with exact targets, scale-in/out cooldowns, predefined metric types, and—when applicable—the resource-backed ALB request resource label. Customized metric specifications are not accepted by the v1.9 contract.
+Application Auto Scaling validation requires the exact target inventory for the environment cluster and exact target attributes, including min/max capacity, `ecs:service:DesiredCount`, ECS namespace, resource identity, and unsuspended scaling state. The policy inventory must also match Terraform exactly. CPU, memory, and conditional ALB request-count policies must be `TargetTrackingScaling`, with exact targets, scale-in/out cooldowns, predefined metric types, and—when applicable—the resource-backed ALB request resource label. Customized metric specifications are not accepted by the contract.
 
 The validator also compares `minimum_healthy_percent`, `maximum_percent`, and `health_check_grace_period_seconds` exactly with the canonical deployment configuration.
 
 The environment cluster check validates the Terraform-owned Container Insights performance log group when Container Insights is enabled: exact name and ARN, effective retention, and exact `logs_cmk_arn`. When Container Insights is disabled, the resource-backed log-group output must be `null`.
 
-When an ALB is present, the validator compares the resource-backed ALB, listener, ACM certificate, TLS policy, load-balancer ARN suffix, and target-group metadata with live AWS. It also requires exact Terraform-owned **ingress-public** placement, the fixed 404 default, `ip` target groups, and meaningful forwarding listener rules. The ALB frontend is HTTPS, while RC1 target groups and their health checks use HTTP; the configuration check is not end-to-end TLS or an application authorization test.
+When an ALB is present, the validator compares the resource-backed ALB, listener, ACM certificate, TLS policy, load-balancer ARN suffix, and target-group metadata with live AWS. It also requires exact Terraform-owned **ingress-public** placement, the fixed 404 default, `ip` target groups, and meaningful forwarding listener rules. The ALB frontend is HTTPS, while target groups and their health checks use HTTP; the configuration check is not end-to-end TLS or an application authorization test.
 
 Operational alarms are validated independently of the conditional ALB stage. The expected Terraform-owned inventory consists only of task-deficit and ingress unhealthy-target alarms; AWS-managed target-tracking alarms are deliberately outside this operational inventory. Task-deficit alarms must implement the Container Insights `DesiredTaskCount - RunningTaskCount` contract, and ingress alarms must implement `AWS/ApplicationELB` `UnHealthyHostCount` with the resource-backed ALB/target-group suffix dimensions. `OK` passes, `INSUFFICIENT_DATA` warns while metric evaluation completes, and `ALARM` fails validation.
 
@@ -605,7 +605,7 @@ Normal production runtime validation expects nonzero production capacity. Do not
 
 The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, separately planned/approved Identity Center cleanup, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
 
-The complete RC1 durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
+The complete durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
 
 Use the [production retirement runbook](../../docs/production-retirement.md) for the exact approval chain. Retain separate Stage-1, cleanup, readiness, Identity Center, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
 

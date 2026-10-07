@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `vpc_endpoints` module provisions private AWS service access for one supplied workload VPC. This reference describes `v1.11.0-rc1`; the module does not create or select the AWS account, provider region, VPC, or subnet topology.
+The `vpc_endpoints` module provisions private AWS service access for one supplied workload VPC. The module does not create or select the AWS account, provider region, VPC, or subnet topology.
 
 This module creates:
 
@@ -97,7 +97,7 @@ existing S3 Gateway Endpoint.
 
 `guardduty-data` is intentionally part of the Terraform-managed Interface Endpoint set.
 
-The endpoint supports GuardDuty Runtime Monitoring telemetry for eligible workload resources, including the ECS/Fargate Runtime Monitoring path retained in v1.11. The baseline does not leave endpoint creation to GuardDuty automation.
+The endpoint supports GuardDuty Runtime Monitoring telemetry for eligible workload resources, including the ECS/Fargate Runtime Monitoring path. The baseline does not leave endpoint creation to GuardDuty automation.
 
 The endpoint is treated like the rest of the workload VPC infrastructure:
 

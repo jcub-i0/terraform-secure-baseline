@@ -17,7 +17,7 @@ This includes:
 
 This module supports the baseline’s data protection, logging, auditability, and private-by-default architecture.
 
-This reference describes `v1.11.0-rc1`. The module consumes resolved inputs; [baseline composition](../../baseline/main.tf) owns profile defaults and production retirement. The resource declarations below are identification excerpts, not complete standalone HCL configurations.
+The module consumes resolved inputs; [baseline composition](../../baseline/main.tf) owns profile defaults and production retirement. The resource declarations below are identification excerpts, not complete standalone HCL configurations.
 
 ---
 

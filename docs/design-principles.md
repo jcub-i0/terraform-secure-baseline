@@ -6,7 +6,7 @@ This document describes the design principles behind `tf-secure-baseline`.
 
 It explains why the platform is structured the way it is, what tradeoffs were made, and what security outcomes the baseline is intended to support.
 
-This revision describes `v1.11.0-rc1` at `728166fa17bf42fe06bf540729c6aba1e70e05d5`. Principles express design intent; the implementation boundaries below qualify what the frozen code actually provides. They are not evidence of a final release or a completed client deployment.
+Principles express design intent; the implementation boundaries below qualify what the frozen code actually provides. They are not evidence of a final release or a completed client deployment.
 
 This document is not a deployment guide. For deployment instructions, see:
 
@@ -422,7 +422,7 @@ The logging design emphasizes:
 - KMS encryption
 - Versioning
 - Restricted bucket policies
-- Explicitly documented Object Lock limitations: the RC1 workload logs bucket does not enable it
+- Explicitly documented Object Lock limitations: the workload logs bucket does not enable it
 - Lifecycle retention
 - Profile-aware CloudWatch retention
 - Long-term forensic usefulness
@@ -577,7 +577,7 @@ EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2
 
 Operators maintain one canonical `ecs_services` map. A service can be registered with `image_digest = null`; baseline still derives its repository requirement while filtering per-service runtime resources until an immutable digest is selected. This avoids a second service inventory and avoids splitting Terraform state merely to bootstrap ECR.
 
-The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. The runtime retains the target-tracking-only model introduced in v1.9: CPU, memory, and conditional ALB requests per target.
+The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. The runtime retains the target-tracking-only model: CPU, memory, and conditional ALB requests per target.
 
 Deployment health is likewise explicit in the canonical contract through minimum healthy percentage, maximum percentage, and task-startup health-check grace period. AWS-managed target-tracking alarms remain AWS-managed; Terraform-owned task-deficit and ingress unhealthy-target alarms are separate operational notification controls.
 
@@ -645,7 +645,7 @@ Production enables backup by default, while lower-cost profiles can disable back
 
 This supports operational resilience after incidents, mistakes, or misconfigurations while keeping development costs manageable.
 
-v1.11 makes resilience and intentional retirement explicit. Production defaults to three AZs, enforces Multi-AZ on the single RDS DB instance, enables ECS AZ rebalancing, and requires at least two fixed tasks or an autoscaling minimum of two for deployable services outside retirement. The production example chooses three; actual per-AZ placement still needs live evidence.
+The baseline makes resilience and intentional retirement explicit. Production defaults to three AZs, enforces Multi-AZ on the single RDS DB instance, enables ECS AZ rebalancing, and requires at least two fixed tasks or an autoscaling minimum of two for deployable services outside retirement. The production example chooses three; actual per-AZ placement still needs live evidence.
 
 RDS-native 14-day automated backups, the AWS Backup plan, and scheduled RDS Restore Testing are separate controls. Restore Testing is enabled when the profile is production and AWS Backup is enabled; the temporary test restore is private and Single-AZ. Configuration equality does not prove application data recovery or cleanup. No cross-Region/cross-account recovery or achieved recovery objective is implied.
 
@@ -738,7 +738,7 @@ The baseline supports data protection through:
 
 - S3 encryption
 - S3 versioning
-- Explicit log-retention policy, with S3 Object Lock absent in RC1
+- Explicit log-retention policy, with S3 Object Lock absent
 - KMS-backed encryption
 - Restricted bucket policies
 - Backup vault encryption

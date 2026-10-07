@@ -4,7 +4,7 @@
 
 The `account` substack at `bootstrap/dev/account` provisions the **GitHub OIDC execution plane** for the `dev` AWS account.
 
-Implementation reference: `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). This is an account-specific reference, not a workload deployment root.
+This is an account-specific reference, not a workload deployment root.
 
 It deploys:
 

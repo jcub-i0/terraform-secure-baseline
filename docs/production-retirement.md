@@ -6,7 +6,7 @@ This runbook describes the implemented retirement path for `environments/prod` w
 
 Production retirement differs from ordinary development/minimal teardown. It separates a reviewed Terraform retirement preparation from explicitly authorized durable-data deletion, Identity Center dependency cleanup, and the final reviewed workload destroy.
 
-**Scope limitation:** baseline resilience/lifecycle policy is selected by `deployment_profile`, not the name `prod`. However, `cleanup-retirement-durable-data.sh` explicitly accepts only `environment=prod` in RC1. Both the retirement Apply's inventory job and the production Destroy path invoke that helper. Do not represent this complete workflow as supported for a production-profile `dev` or `staging` environment. The Stage-1 plan validator and readiness validator have broader input scope, but that does not remove the cleanup helper's restriction.
+**Scope limitation:** baseline resilience/lifecycle policy is selected by `deployment_profile`, not the name `prod`. However, `cleanup-retirement-durable-data.sh` explicitly accepts only `environment=prod`. Both the retirement Apply's inventory job and the production Destroy path invoke that helper. Do not represent this complete workflow as supported for a production-profile `dev` or `staging` environment. The Stage-1 plan validator and readiness validator have broader input scope, but that does not remove the cleanup helper's restriction.
 
 Workload destruction does not destroy the account or self-managed state roots. Those are separate, later operations with their own dependencies and protection decisions.
 
@@ -147,7 +147,7 @@ confirm                       = DESTROY
 delete_durable_retirement_data = true
 ```
 
-In RC1, `delete_durable_retirement_data=true` is mandatory for a production-profile destroy **even when the repositories and vault are already empty**. Its workflow input defaults to false, so set it deliberately. Non-production-profile destruction requires this flag to remain false.
+`delete_durable_retirement_data=true` is mandatory for a production-profile destroy **even when the repositories and vault are already empty**. Its workflow input defaults to false, so set it deliberately. Non-production-profile destruction requires this flag to remain false.
 
 The Destroy workflow evaluates retirement mode as true for production and checks that the prior retirement Apply has already converged. It does not apply Stage-1 changes on the operator's behalf.
 

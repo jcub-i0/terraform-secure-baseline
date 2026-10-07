@@ -193,7 +193,7 @@ Retirement uses the separate reviewed Apply, durable cleanup, Identity Center cl
 
 ## Application Auto Scaling
 
-For every deployable service whose canonical `scaling` object is non-null, `modules/ecs_service` creates one `aws_appautoscaling_target` for `ecs:service:DesiredCount` using the configured minimum and maximum capacities. The module retains the target-tracking-only scaling model introduced in v1.9.
+For every deployable service whose canonical `scaling` object is non-null, `modules/ecs_service` creates one `aws_appautoscaling_target` for `ecs:service:DesiredCount` using the configured minimum and maximum capacities. The module retains the target-tracking-only scaling model.
 
 Optional target-tracking policies are materialized from the same scaling object:
 
@@ -290,7 +290,7 @@ An ingress unhealthy-target alarm is created for every deployable ingress servic
 
 Task-deficit alarms are absent when Container Insights is disabled. Ingress alarms are conditional on ingress and are validated independently of the general ALB validation stage.
 
-The Terraform-owned EventBridge coverage-health signal introduced in v1.10 remains part of v1.11. The rule lives on the default event bus and matches:
+The baseline includes a Terraform-owned EventBridge coverage-health signal. The rule lives on the default event bus and matches:
 
 ```text
 source      = aws.guardduty
@@ -350,7 +350,7 @@ Workload Plan/Apply paths pass and validate `DEPLOYMENT_PROFILE`. Missing or inv
 
 ## Validation contract
 
-ECS/Fargate remains inside the existing workload-baseline validation layer. There are four validation/evidence layers total and 16 validators in the workload baseline suite. v1.11 retirement helpers are separate deployment gates, not a fifth evidence layer or a seventeenth workload validator.
+ECS/Fargate remains inside the existing workload-baseline validation layer. There are four validation/evidence layers total and 16 validators in the workload baseline suite. Retirement helpers are separate deployment gates, not a fifth evidence layer or a seventeenth workload validator.
 
 `validate-ecr.sh` verifies repository identity, immutable tags, KMS encryption against the exact workload ECR CMK, the approved untagged-only lifecycle rule, and Terraform-backed profile lifecycle intent. `force_delete` is a Terraform/provider deletion behavior, not an ECR service attribute that can independently be read back as that flag.
 
@@ -426,7 +426,7 @@ Use the [evidence guide](assurance/validation-evidence-guide.md) and [report tem
 
 Inspector ECR scanning remains workload-local under `modules/security`. Central GuardDuty organization ownership remains in `bootstrap/security_operations/security_services`.
 
-The centralized GuardDuty organization contract introduced in v1.10 and retained in RC1 is:
+The centralized GuardDuty organization contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -471,7 +471,7 @@ target-tracking CloudWatch alarms created from that policy.
 
 ### Organization-wide secure default
 
-The centralized GuardDuty contract retained in v1.11 is:
+The centralized GuardDuty contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -650,13 +650,13 @@ For `minimal`, validation proves:
 - healthy GuardDuty ECS/Fargate coverage is not required.
 
 `validate-ecs-runtime.sh` remains the single workload-baseline ECS validator
-entry point. The v1.11 workload suite retains 16 top-level validators and four
+entry point. The workload suite retains 16 top-level validators and four
 validation/evidence layers. Empty or inapplicable branches do not constitute
 executed task tests.
 
 ### Containment remains separate
 
-Automatic ECS/Fargate task containment remains outside the implemented v1.11
+Automatic ECS/Fargate task containment remains outside the implemented
 contract and requires a separate response design. Runtime detection and coverage
 must not be coupled to an unproven containment mechanism.
 

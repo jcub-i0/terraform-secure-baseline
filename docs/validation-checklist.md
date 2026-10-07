@@ -425,7 +425,7 @@ staging-plan  ISOLATION_ALLOWED=false
 prod-plan     ISOLATION_ALLOWED=false
 ```
 
-Do not infer those values from the workload root defaults: the reusable baseline defaults `isolation_allowed=false`, but the RC1 production root defaults it to `true`. Select and align the effective local and CI value explicitly. The actual `IsolationAllowed` tag, not the environment name, gates containment.
+Do not infer those values from the workload root defaults: the reusable baseline defaults `isolation_allowed=false`, but the production root defaults it to `true`. Select and align the effective local and CI value explicitly. The actual `IsolationAllowed` tag, not the environment name, gates containment.
 
 Apply uses the reviewed saved plan and does not re-resolve this variable. Destroy uses a safe `false` fallback when the value is absent.
 
@@ -1246,7 +1246,7 @@ Expected profile behavior:
 | `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days |
 | `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days |
 
-If `egress_mode`, `enable_config`, `backup_enabled`, `backup_schedule`, `delete_backups_after_days`, `cloudwatch_retention_days`, or related overrides are explicitly set, the effective outputs should reflect those overrides. Runtime Monitoring is not independently overridden in RC1; it follows `deployment_profile`. When backups are disabled, `effective_backup_schedule` and `effective_delete_backups_after_days` resolve to `null` and may be omitted from `terraform output -json` because Terraform omits root outputs whose evaluated value is null.
+If `egress_mode`, `enable_config`, `backup_enabled`, `backup_schedule`, `delete_backups_after_days`, `cloudwatch_retention_days`, or related overrides are explicitly set, the effective outputs should reflect those overrides. Runtime Monitoring is not independently overridden; it follows `deployment_profile`. When backups are disabled, `effective_backup_schedule` and `effective_delete_backups_after_days` resolve to `null` and may be omitted from `terraform output -json` because Terraform omits root outputs whose evaluated value is null.
 
 ---
 
@@ -1337,7 +1337,7 @@ Expected:
 - The distribution upgrade and required package installation complete.
 - Relevant package versions and reboot-required state are recorded.
 - A bootstrap or repository failure prevents a successful cloud-init completion.
-- The `IsolationAllowed` tag matches the deliberately selected effective Terraform/CI input. Do not infer it from the environment name; RC1 production-root and reusable-baseline defaults differ.
+- The `IsolationAllowed` tag matches the deliberately selected effective Terraform/CI input. Do not infer it from the environment name; production-root and reusable-baseline defaults differ.
 
 Verify the policy tag:
 
@@ -1474,7 +1474,7 @@ Cluster validation also checks the exact Container Insights setting and, when en
 
 The same validator checks task-SG relationships to Interface Endpoints and the S3 prefix list, effective-mode HTTPS egress, database SG presence/absence, and conditional shared-ALB relationships. It validates Terraform-owned task-deficit alarms for deployable services when Container Insights is enabled and ingress unhealthy-target alarms for deployable ingress services. AWS-managed target-tracking alarms are not treated as Terraform operational alarms. Operational alarm state is interpreted as `OK` = pass, `INSUFFICIENT_DATA` = warning, and `ALARM` = failure.
 
-RC1 Runtime Monitoring validation derives the expected state directly from `deployment_profile`. `production` and `development` require `GuardDutyManaged=true`; `minimal` requires `GuardDutyManaged=false`. The Terraform task definition must remain application-only even when GuardDuty injects a live agent.
+Runtime Monitoring validation derives the expected state directly from `deployment_profile`. `production` and `development` require `GuardDutyManaged=true`; `minimal` requires `GuardDutyManaged=false`. The Terraform task definition must remain application-only even when GuardDuty injects a live agent.
 
 For protected running tasks, live ECS must contain exactly one GuardDuty agent container and that agent must be `RUNNING`. AWS may report the agent as the exact name `aws-gd-agent` or as an AWS-generated name beginning `aws-guardduty-agent-`; both are valid. The canonical application container must remain valid and unexpected extra containers fail validation.
 
@@ -1621,7 +1621,7 @@ Expected:
 
 - S3 Gateway Endpoint exists.
 - Route table IDs include the private route tables intentionally passed to the VPC endpoints module.
-- For RC1, the S3 association set must equal the union of endpoint-private, compute-private, and serverless-private route tables. Mere inclusion of some compute/serverless tables is insufficient.
+- The S3 association set must equal the union of endpoint-private, compute-private, and serverless-private route tables. Mere inclusion of some compute/serverless tables is insufficient.
 
 ---
 
@@ -1914,7 +1914,7 @@ For the centrally governed workload environments, those values are expected to b
 
 When GuardDuty is centrally governed, the workload account should have an enabled detector/member state associated with the `security-operations` delegated administrator; organization feature policy is validated from the security-operations account rather than recreated locally.
 
-The RC1 centralized Runtime Monitoring contract retained from v1.10 is:
+The centralized Runtime Monitoring contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -2833,7 +2833,7 @@ Normal production runtime validation expects nonzero production capacity. Do not
 
 The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, separately planned/approved Identity Center cleanup, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
 
-The complete RC1 durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
+The complete durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
 
 Use the [production retirement runbook](production-retirement.md) for the exact approval chain. Retain separate Stage-1, cleanup, readiness, Identity Center, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
 

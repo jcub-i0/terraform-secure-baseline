@@ -115,7 +115,7 @@ This model provides:
 - Separate Terraform state per account/environment
 - Cleaner access and governance boundaries
 - Production-aligned account segmentation
-- Profile-driven Multi-AZ workload topology in one service Region; cross-Region replication and failover are not implemented by this release
+- Profile-driven Multi-AZ workload topology in one service Region; cross-Region replication and failover are not implemented
 
 ---
 
@@ -192,7 +192,7 @@ Environment stacks can include:
 
 In the centralized multi-account deployment, `dev`, `staging`, and `prod` set `manage_securityhub_cspm_locally = false`, `manage_guardduty_locally = false`, and `manage_securityhub_v2_locally = false`. AWS Config, Inspector, workload logging, remediation, and response automation remain workload-local.
 
-Workload environments have separate Terraform roots and state; their ordinary lifecycle does not destroy the centralized security-services root. This is not dependency-free teardown: optional Identity Center attachments must be handled, production must pass the retirement gates, and the RC1 durable-cleanup workflow is limited to `prod`.
+Workload environments have separate Terraform roots and state; their ordinary lifecycle does not destroy the centralized security-services root. This is not dependency-free teardown: optional Identity Center attachments must be handled, production must pass the retirement gates, and the durable-cleanup workflow is limited to `prod`.
 
 ---
 
@@ -265,7 +265,7 @@ Security-group objects remain owned by the resource modules, while cross-compone
 
 The canonical `scaling` object defines ownership of ECS desired capacity. With `scaling = null`, Terraform owns the service's `desired_count` exactly. With scaling configured, `desired_count` is bootstrap capacity only; Application Auto Scaling owns subsequent live desired-count changes within the configured minimum and maximum. Separate fixed and autoscaled ECS resources preserve this ownership boundary so Terraform does not undo legitimate runtime scaling.
 
-The runtime retains the target-tracking-only scaling model introduced in v1.9. Services may target average ECS CPU, average ECS memory, and—when ingress exists—ALB requests per target. The ALB request resource label is constructed from Terraform-owned ALB and target-group ARN suffix outputs instead of being recreated from resource names by validation scripts.
+The runtime retains the target-tracking-only scaling model. Services may target average ECS CPU, average ECS memory, and—when ingress exists—ALB requests per target. The ALB request resource label is constructed from Terraform-owned ALB and target-group ARN suffix outputs instead of being recreated from resource names by validation scripts.
 
 Canonical deployment settings control ECS minimum healthy percentage, maximum percentage, and task-startup health-check grace period. The grace period applies to unhealthy load-balancer, VPC Lattice, and container health checks. Deployment circuit breaking with rollback remains enabled.
 
@@ -279,7 +279,7 @@ The normal runtime validator also requires production deployment minimum healthy
 
 ### GuardDuty Fargate Runtime Monitoring
 
-The GuardDuty Runtime Monitoring contract introduced in v1.10 remains part of v1.11, preserving Terraform ownership of workload infrastructure.
+The GuardDuty Runtime Monitoring contract preserves Terraform ownership of workload infrastructure.
 
 The organization-level policy is owned by `bootstrap/security_operations/security_services`:
 
@@ -377,7 +377,7 @@ The `baseline` is designed around the following principles:
 
 These principles guide the structure of the Terraform modules, account layout, IAM model, deployment profiles, egress modes, and security automation workflows.
 
-Automatic containment currently applies to the established EC2 isolation workflow. ECS/Fargate has runtime detection and coverage visibility, but automatic ECS/Fargate containment remains outside the implemented v1.11 scope.
+Automatic containment currently applies to the established EC2 isolation workflow. ECS/Fargate has runtime detection and coverage visibility, but automatic ECS/Fargate containment remains outside the implemented scope.
 
 ---
 
@@ -517,7 +517,7 @@ same-AZ NAT Gateway in egress-public
 Internet Gateway
 ```
 
-This provides workload-local HTTP-host/TLS-SNI domain filtering on the configured compute internet-egress path. It does not decrypt TLS or inspect ALB-to-task, VPC-local, or endpoint traffic merely because the firewall exists. Native firewall deletion protection follows production retirement intent; policy-change and subnet-change protection remain `false` in RC1.
+This provides workload-local HTTP-host/TLS-SNI domain filtering on the configured compute internet-egress path. It does not decrypt TLS or inspect ALB-to-task, VPC-local, or endpoint traffic merely because the firewall exists. Native firewall deletion protection follows production retirement intent; policy-change and subnet-change protection remain `false`.
 
 ### NAT-Only Mode
 
@@ -646,7 +646,7 @@ Workload Plan/Apply paths validate `DEPLOYMENT_PROFILE` and fail closed if it is
 
 The publisher uses the Amazon ECR Docker Credential Helper, a temporary helper-only Docker configuration for `docker push`, and `AWS_ECR_DISABLE_CACHE=true`. It does not run `docker login` in this path. This does not scrub pre-existing Docker credentials or establish that tokens never exist in process memory. See the [deployment tooling reference](../scripts/deployment/README.md).
 
-Layer-specific evidence workflows read deployed workload/control configuration and write local reports. Their Plan roles also have state-object/KMS permissions; the workload Plan policy is not equivalent to a general read-only IAM policy. The Apply role has broad account administration authority in RC1. OIDC and protected environments limit authentication and workflow entry, not every permission available after assumption. Required reviewers must be configured in GitHub; `environment:` in YAML does not itself prove a human approval rule exists.
+Layer-specific evidence workflows read deployed workload/control configuration and write local reports. Their Plan roles also have state-object/KMS permissions; the workload Plan policy is not equivalent to a general read-only IAM policy. The Apply role has broad account administration authority. OIDC and protected environments limit authentication and workflow entry, not every permission available after assumption. Required reviewers must be configured in GitHub; `environment:` in YAML does not itself prove a human approval rule exists.
 
 ## Production retirement architecture
 

@@ -218,7 +218,7 @@ A successful workload destroy does not authorize deletion of this account's stat
 
 ## Related Documentation
 
-This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It describes implementation, not a new live test.
+This page describes implementation, not a new live test.
 
 - [Root inputs](variables.tf), [provider](providers.tf), [module call](main.tf), and [outputs](outputs.tf)
 - [State module](../../../modules/state/README.md)

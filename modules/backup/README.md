@@ -437,8 +437,6 @@ Production adds protected vault lifecycle and Terraform-owned RDS Restore Testin
 
 ## Implementation References
 
-This page targets v1.11.0, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`).
-
 - [Resources](main.tf), [inputs](variables.tf), and [outputs](outputs.tf)
 - [Baseline module call](../../baseline/main.tf) and [effective settings](../../baseline/locals.tf)
 - [Backup and RDS validator](../../scripts/validation/validate-backup.sh)

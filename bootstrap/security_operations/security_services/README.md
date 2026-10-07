@@ -11,7 +11,7 @@ service-linked/delegation resources. This stack owns the delegated
 administrator-side Security Hub CSPM, GuardDuty, and Security Hub V2
 configuration.
 
-This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). See [main.tf](main.tf), [variables.tf](variables.tf), [outputs.tf](outputs.tf), and [backend.tf](backend.tf). Implementation, declared rollout intent, live policy realization, and workload behavior are different evidence layers.
+See [main.tf](main.tf), [variables.tf](variables.tf), [outputs.tf](outputs.tf), and [backend.tf](backend.tf). Implementation, declared rollout intent, live policy realization, and workload behavior are different evidence layers.
 
 ## Responsibilities
 
@@ -22,7 +22,7 @@ This stack currently manages:
 - Security Hub CSPM central organization configuration;
 - per-account Security Hub CSPM configuration policies and associations;
 - GuardDuty configuration referencing an existing detector discovered through a data source (not detector creation or ownership);
-- GuardDuty organization member enrollment and protection-plan configuration, retaining the Runtime Monitoring automated-agent contract in RC1;
+- GuardDuty organization member enrollment and protection-plan configuration, retaining the Runtime Monitoring automated-agent contract;
 - Security Hub V2 enablement in the `security-operations` account; and
 - the Security Hub V2 AWS Organizations policy attached to the root-level
   `Workloads` OU.

@@ -172,8 +172,6 @@ The state module's bucket and CMK retain literal `prevent_destroy = true` guards
 
 ## Implementation References
 
-This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`).
-
 - [Migration implementation](migrate-state-stack.sh)
 - [Account reconciliation implementation](reconcile-workload-account.sh)
 - [Workload bootstrap validator](../validation/validate-bootstrap.sh)

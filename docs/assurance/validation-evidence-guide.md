@@ -230,7 +230,7 @@ The Markdown summaries are intended for human review. The JSON summaries are int
 
 `export-baseline.sh` invokes all 16 top-level validators and records one PASS/FAIL result per script from its exit status. It continues collecting other script results after a child fails. It does not count every individual assertion, classify every warning in JSON, or prove that every conditional branch executed. Missing/non-executable child scripts fail. A prerequisite or identity failure before collection can leave no complete package; absence of a report is not PASS or not applicable.
 
-The generated baseline JSON includes account/Region, naming, credential-source label, validation time, script counts, results, and a static `manual_validation_remaining` list. That list is guidance, not a live completion tracker or an exhaustive v1.11 qualification ledger. The baseline summary does not automatically record a Git commit, deployment image digests, provider-lockfile hash, backend identity, or a signed evidence manifest. Other layer exporters have their own schemas; do not assume all four JSON layouts are identical.
+The generated baseline JSON includes account/Region, naming, credential-source label, validation time, script counts, results, and a static `manual_validation_remaining` list. That list is guidance, not a live completion tracker or an exhaustive qualification ledger. The baseline summary does not automatically record a Git commit, deployment image digests, provider-lockfile hash, backend identity, or a signed evidence manifest. Other layer exporters have their own schemas; do not assume all four JSON layouts are identical.
 
 Keep original generated summaries/logs unchanged. Put reviewer-supplied provenance and acceptance decisions in a companion record or the [report template](validation-report-template.md), not in invented exporter fields.
 
@@ -333,7 +333,7 @@ Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/
 
 The automated workload baseline suite runs 16 read-only validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
-The v1.11 evidence contract retains the ECS runtime/security checks introduced in v1.9/v1.10 and adds exact topology, production-availability, RDS resilience, and Restore Testing configuration checks within the same 16-script suite.
+The evidence contract includes the ECS runtime/security checks and exact topology, production-availability, RDS resilience, and Restore Testing configuration checks within the same 16-script suite.
 
 `validate-ecs-runtime.sh` verifies:
 
@@ -453,7 +453,7 @@ Coverage includes:
 - Security Hub V2 organization policy attachment to `Workloads`; and
 - effective Security Hub V2 policy for configured workload accounts.
 
-The GuardDuty Runtime Monitoring organization contract retained in v1.11 is:
+The GuardDuty Runtime Monitoring organization contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -497,7 +497,7 @@ Rejecting a later approval does not undo earlier durable deletion or Identity Ce
 
 The validation suite is intentionally read-only and layer-specific. A check omitted from one report may still be automated by another evidence workflow.
 
-Additional v1.11 behavioral evidence includes controlled ECS replacement, actual RDS failover and recovery, Restore Testing execution/application validation/cleanup, and retirement/destroy execution. Automated retirement-plan/readiness gates exist, but reading their code or running a normal workload exporter does not execute the lifecycle. Perform only the specifically authorized exercises; do not rerun destructive tests merely to populate a template.
+Additional behavioral evidence includes controlled ECS replacement, actual RDS failover and recovery, Restore Testing execution/application validation/cleanup, and retirement/destroy execution. Automated retirement-plan/readiness gates exist, but reading their code or running a normal workload exporter does not execute the lifecycle. Perform only the specifically authorized exercises; do not rerun destructive tests merely to populate a template.
 
 Across a full evidence set, the following activities still require live, privileged, destructive, or human review rather than these read-only validators:
 

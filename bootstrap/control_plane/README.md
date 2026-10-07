@@ -6,7 +6,7 @@ The control plane is the centralized governance and access layer for `tf-secure-
 
 It does **not** deploy workload application infrastructure or own the delegated administrator-side configuration of centralized security services.
 
-Implementation reference: `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). `bootstrap/control_plane` is a directory of independent roots, not itself a Terraform deployment root. Use the repository-root paths below.
+`bootstrap/control_plane` is a directory of independent roots, not itself a Terraform deployment root. Use the repository-root paths below.
 
 ---
 
