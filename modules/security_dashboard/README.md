@@ -4,9 +4,17 @@
 
 The `security_dashboard` module creates a curated set of operational security views in AWS Security Hub using custom insights.
 
-These insights provide a lightweight security-operations dashboard for reviewing active findings, prioritizing investigation, and monitoring workload security posture.
+The insights support investigation of findings already visible in Security Hub.
+They do not generate findings, enable security services, validate Runtime
+Monitoring coverage, or create alarms. `environment` changes the insight names;
+none of the filters constrain findings by that environment, resource tag, or
+baseline name prefix. Actual account/Region and finding-aggregation visibility
+must be established separately from the display name.
 
-The module creates views for:
+All six insights are created unconditionally. Five exclude `RESOLVED` workflow
+status; that is not the same as requiring `NEW` or excluding `SUPPRESSED`.
+The Failed Controls insight does not filter workflow status at all. The exact
+filters and groupings are implemented in [main.tf](main.tf):
 
 - High and critical findings across integrated Security Hub products
 - Active GuardDuty findings
@@ -62,7 +70,9 @@ Grouped by:
 SeverityLabel
 ```
 
-This view is intended for priority incident triage.
+This is a saved filter, not an adjudication that each result still requires
+response. Findings marked SUPPRESSED can remain included because only RESOLVED
+is excluded.
 
 ---
 
@@ -134,7 +144,9 @@ Grouped by:
 SeverityLabel
 ```
 
-This insight is intentionally product-agnostic. An EC2 finding may originate from GuardDuty, Inspector, Security Hub controls, or another integrated product.
+This filters resource type, not the compute instances owned by this baseline.
+There is no environment-tag, VPC, instance-ID, or account-ID filter in the
+insight itself.
 
 ---
 
@@ -189,7 +201,10 @@ Grouped by:
 GeneratorId
 ```
 
-This provides a focused view of active failed Security Hub controls.
+This groups active failed Security Hub findings by `GeneratorId`; it is not a
+control-evaluation history or a count of repeated failures over time. There is
+no workflow-status condition here, so an ACTIVE finding with RESOLVED workflow
+can still appear if its compliance status is FAILED.
 
 ---
 
@@ -234,6 +249,10 @@ Detection / posture sources
 
 ### GuardDuty investigation
 
+Insight severity/resource filtering is not the automatic-isolation gate.
+Do not infer `IsolationAllowed`, handler eligibility, or Operator authorization
+from an insight result. See [automation](../automation/README.md).
+
 ```text
 GuardDuty finding
     -> imported into Security Hub
@@ -260,6 +279,12 @@ A HIGH or CRITICAL Inspector finding affecting EC2 can also appear in the EC2 Hi
 
 ## Deployment
 
+The sole input in [variables.tf](variables.tf) is required `environment` of type
+`string`, without a default. This module inherits its AWS provider; it neither
+selects a Region from the environment name nor verifies a target account.
+The existing baseline call below supplies an environment label, not a finding
+filter.
+
 The baseline instantiates this module for each workload environment.
 
 Current baseline integration:
@@ -276,7 +301,10 @@ module "security_dashboard" {
 }
 ```
 
-The explicit dependency ensures the workload security layer is established before Terraform creates the Security Hub insights.
+The dependency orders locally managed resources, but it does not poll external
+central-policy realization when local Security Hub account creation is disabled.
+Confirm that the target account's hub is effective before applying insights;
+changing the ownership mode is not a workaround for a pending central setup.
 
 The reusable module itself has one input:
 
@@ -317,7 +345,10 @@ securityhub_insight_arns = {
 }
 ```
 
-These values identify the Terraform-managed insights. The module does not expose finding data or use these ARNs to trigger automation.
+The output map contains exactly the six keys shown above. These are child-module
+ARNs, not query results or proof that every insight is populated. The supplied
+workload roots do not expose this map as a public output; do not assume a
+root-level `terraform output securityhub_insight_arns` command exists.
 
 ---
 
@@ -341,7 +372,9 @@ Central GuardDuty organization governance is owned by the `security-operations` 
 
 ## Security Considerations
 
-This module is read-only from an operational-response perspective: it creates Security Hub Insights but does not modify affected resources, publish notifications, or invoke responders.
+Creating/updating an insight changes the saved view configuration, not the
+underlying resources or findings. Reading insight results is not remediation,
+coverage validation, or proof that an empty view means a secure workload.
 
 The insights support:
 
@@ -391,6 +424,93 @@ It does **not** own:
 - EC2 isolation or rollback
 - Finding workflow-state mutation
 - Automated remediation
+
+---
+
+## Validation
+
+The workload security validator checks service enablement and selected
+relationships; it does not compare the six insight filters or test their
+results. Inspect saved definitions and observations separately.
+
+Run these local examples from the repository root with an initialized, applied
+workload root and Bash, AWS CLI, Terraform, and `jq` available. Set a named
+workload `AWS_PROFILE`, the intended service `AWS_REGION`, and an independently
+known `EXPECTED_ACCOUNT_ID` first. `ENVIRONMENT` defaults to `dev`; select it
+explicitly when inspecting another workload. The `${VAR:?message}` expressions
+stop on missing values; their messages are not replacement placeholders.
+
+These examples require a named local profile. That is not a requirement to add
+`AWS_PROFILE` to GitHub OIDC jobs or other default-credential-chain executions.
+The service Region is checked against applied Terraform output; it does not
+change the independently configured state-backend Region.
+
+```bash
+set -euo pipefail
+: "${AWS_PROFILE:?Set the local workload profile}"
+: "${AWS_REGION:?Set the intended service Region}"
+: "${EXPECTED_ACCOUNT_ID:?Set the independently known workload account ID}"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+case "$ENVIRONMENT" in dev|staging|prod) ;; *) echo "Invalid workload" >&2; exit 1 ;; esac
+[[ "$EXPECTED_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "Invalid account ID" >&2; exit 1; }
+export AWS_PROFILE AWS_REGION EXPECTED_ACCOUNT_ID
+export AWS_DEFAULT_REGION="$AWS_REGION" AWS_PAGER=""
+
+CALLER_ACCOUNT_ID="$(aws sts get-caller-identity \
+  --profile "$AWS_PROFILE" --region "$AWS_REGION" --query Account --output text)"
+[[ "$CALLER_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]] || {
+  echo "Unexpected AWS account; stopping" >&2; exit 1;
+}
+ACCOUNT_ID="$CALLER_ACCOUNT_ID"
+ENV_DIR="environments/${ENVIRONMENT}"
+OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"
+read_output_string() {
+  jq -er --arg key "$1" '
+    .[$key].value | if type == "string" and length > 0
+    then . else error("Missing or invalid string output: " + $key) end
+  ' <<< "$OUTPUTS_JSON"
+}
+APPLIED_REGION="$(read_output_string primary_region)"
+[[ "$AWS_REGION" == "$APPLIED_REGION" ]] || {
+  echo "Service Region differs from applied primary_region; stopping" >&2; exit 1;
+}
+NAME_PREFIX="$(read_output_string name_prefix)"
+export NAME_PREFIX
+```
+
+This preflight confirms selected context, not every permission, resource, or
+configuration. Do not treat a successful API read as proof of delivery or
+operating effectiveness.
+
+Read only the selected insight ARN from applied state; do not persist the full
+state JSON, which can contain sensitive values:
+
+```bash
+INSIGHT_ARN="$(terraform -chdir="$ENV_DIR" show -json | jq -er '
+  def modules: ., (.child_modules[]? | modules);
+  [.values.root_module | modules | .resources[]? |
+    select(.mode == "managed" and
+      .address == "module.baseline.module.security_dashboard.aws_securityhub_insight.high_critical") |
+    .values.arn] |
+  if length == 1 and (.[0] | type == "string" and length > 0)
+  then .[0] else error("Expected exact insight resource in applied state") end
+')"
+aws securityhub get-insights --profile "$AWS_PROFILE" --region "$AWS_REGION" \
+  --insight-arns "$INSIGHT_ARN" --output json
+aws securityhub get-insight-results --profile "$AWS_PROFILE" --region "$AWS_REGION" \
+  --insight-arn "$INSIGHT_ARN" --output json
+```
+
+Check the exact returned ARN, name, `GroupByAttribute`, and complete filters.
+Repeat for the other five resource addresses in `main.tf` when qualifying the
+whole module. The one-resource example is not six-insight validation.
+
+Results represent the service's returned view at inspection time, not a
+historical completeness test. An empty result can reflect no matching findings,
+wrong scope, inactive integrations, or other missing inputs. Confirm service
+coverage and finding visibility before treating it as a favorable control
+result. Retain timestamps and definitions alongside results; do not manufacture
+live evidence from a configured insight.
 
 ---
 

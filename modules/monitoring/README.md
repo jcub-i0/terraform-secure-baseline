@@ -54,7 +54,11 @@ Creates an encrypted compliance notification SNS topic.
 | Encryption | `var.logs_cmk_arn` |
 | Primary producer | AWS Config |
 
-The compliance SNS topic is intended for compliance-oriented notifications, such as AWS Config events.
+The compliance SNS topic is intended for AWS Config notifications. It also has
+an account-root administration/publish statement; it is not an exclusive
+Config publisher boundary. The Config service-publish statement itself has no
+`SourceAccount` or `SourceArn` condition. Review identity policies and the KMS
+policy alongside the topic policy when evaluating effective authorization.
 
 ### Compliance SQS Queue
 
@@ -68,9 +72,13 @@ Creates an encrypted compliance SQS queue subscribed to the compliance SNS topic
 | Message retention | 14 days |
 | Producer | Compliance SNS topic |
 
-The compliance SQS queue provides durable retention for compliance notification events published by AWS Config and related compliance publishers.
+The compliance SQS queue retains delivered notifications for its configured
+retention period. Its SNS subscription does not enable raw message delivery;
+the security-notification subscription does. Consumers must not assume the two
+queues have identical body formats. This compliance queue has neither a
+consumer nor a source-queue redrive policy in this module.
 
-The queue is intentionally not consumed by an automated remediation workflow in the current release. It is intended for:
+The queue is intentionally not consumed by an automated remediation workflow by this module. It is intended for:
 
 - manual SecOps/compliance review
 - inspection and replay of compliance notifications
@@ -112,7 +120,10 @@ Creates email subscriptions for each address in `var.secops_emails`.
 | Protocol | `email` |
 | Destination | Each configured SecOps email address |
 
-Email subscriptions must be confirmed by the recipient before alerts are delivered.
+Email subscriptions must be confirmed by the recipient before alerts are
+delivered. `secops_emails` is converted to a set, so duplicate addresses collapse
+and an empty list creates no email subscriptions. Terraform does not confirm
+subscriptions, acknowledge human receipt, or supply an on-call response service.
 
 ### Security Notifications SQS Queue
 
@@ -128,7 +139,10 @@ Creates an encrypted SQS queue subscribed to the security notifications SNS topi
 | Redrive target | Security notifications DLQ |
 | Max receive count | 5 |
 
-This queue provides a durable, machine-readable copy of security notifications for future SIEM ingestion, ticketing, replay, evidence collection, or client-owned consumers.
+The SNS subscription sets `raw_message_delivery = true`; the queue receives the
+published message rather than an SNS JSON envelope. There is no consumer in
+this module. Messages can accumulate and expire without ever being received,
+so the existence of a DLQ is not a backlog or no-consumer alarm.
 
 ### Security Notifications SQS DLQ
 
@@ -140,7 +154,7 @@ Creates a DLQ for the security notifications SQS queue.
 | Name format | `<name_prefix>-security-notifications-dlq` |
 | Encryption | `var.logs_cmk_arn` |
 | Message retention | 14 days |
-| Failure path covered | Messages that reached the security notifications SQS queue but failed downstream processing repeatedly |
+| Failure path covered | Messages redriven after repeated receives without deletion |
 
 A CloudWatch alarm notifies SecOps when messages are visible in this DLQ.
 
@@ -175,10 +189,20 @@ The module uses two different DLQ patterns for security notifications.
 
 | DLQ | Covers | Example failure |
 |---|---|---|
-| `security-notifications-eventbridge-dlq` | EventBridge could not deliver an event to the security notifications SNS topic | EventBridge target delivery to SNS failed after retries |
-| `security-notifications-dlq` | A message reached the security notifications SQS queue but failed downstream processing repeatedly | A future queue consumer fails to process the same message more than 5 times |
+| `security-notifications-eventbridge-dlq` | EventBridge could not deliver an event to the security notifications SNS topic | EventBridge target delivery failed according to the recorded delivery error |
+| `security-notifications-dlq` | Repeated receives without deletion caused source-queue redrive | Messages repeatedly received without deletion exceed the configured receive threshold |
 
 These queues protect different delivery edges and should not be merged.
+`maxReceiveCount` tracks receives without deletion; SQS does not inspect a
+consumer's application-level success. Manual receives can also affect that
+count. Do not treat queue inspection using `receive-message` as read-only.
+
+Neither SNS subscription declares a subscription `redrive_policy`. The
+EventBridge DLQ covers delivery **to SNS**, not SNS delivery failures to email or
+SQS. The source-queue DLQ applies only after a message reached that queue.
+[AWS documents subscription DLQs separately](https://docs.aws.amazon.com/sns/latest/dg/sns-dead-letter-queues.html).
+A configured chain therefore does not prove every failed notification is
+retained or every subscriber receives it.
 
 High-level flow:
 
@@ -223,7 +247,12 @@ Creates an EventBridge target that sends high and critical Security Hub findings
 | Retry attempts | 3 |
 | Max event age | 3600 seconds |
 
-The target uses an input transformer to produce a human-readable alert message with finding severity, title, product, account, region, workflow status, record state, and affected resource details.
+The transformer selects `detail.findings[0]` and that finding's
+`Resources[0]`. It is a summary of the first finding/resource, not a lossless
+copy or proof that every finding in the event is represented. Keep the source
+finding/event for investigation. The external rule requires HIGH/CRITICAL and
+NEW findings; this notification target does not add isolation eligibility or
+an ACTIVE-record requirement of its own.
 
 ### Break-Glass Role Usage
 
@@ -240,7 +269,11 @@ Creates an EventBridge rule and SNS target for break-glass role assumption event
 | Retry attempts | 3 |
 | Max event age | 3600 seconds |
 
-The rule matches CloudTrail events for `sts.amazonaws.com` `AssumeRole` activity where the requested role ARN matches `var.break_glass_admin_role_arn`.
+The rule matches CloudTrail `AssumeRole` activity for the exact requested role
+ARN. It does not filter out `errorCode`/`errorMessage` or require a successful
+response. Although the message template says the role was assumed, verify the
+original event before classifying an attempt as a successful session.
+This is a default-bus regional rule, not a cross-Region STS forwarding system.
 
 Break-glass usage should be treated as critical unless it is tied to an approved emergency.
 
@@ -254,7 +287,7 @@ The monitoring module authorizes that rule to publish to the security notificati
 
 ### GuardDuty ECS Runtime Coverage Health
 
-v1.10 creates a default-bus EventBridge rule for GuardDuty ECS Runtime Monitoring coverage-state changes:
+The module creates a default-bus EventBridge rule for GuardDuty ECS Runtime Monitoring coverage-state changes:
 
 | Attribute | Value |
 |---|---|
@@ -280,7 +313,15 @@ The input transformer preserves:
 - GuardDuty `lastUpdatedAt`; and
 - EventBridge event time.
 
-Both unhealthy and healthy events are routed so the notification path records coverage degradation and recovery. This rule reports GuardDuty Runtime Monitoring coverage health; it does not stop tasks or implement automatic ECS/Fargate containment.
+Both healthy and unhealthy event types are routed. The rule is created even
+when there are no deployable services or Runtime Monitoring participation is
+disabled. It filters the resource account and ECS resource type, but not an
+individual cluster name/ARN. It can match other ECS clusters' coverage events
+received on that account's regional bus.
+
+This is event routing, not a coverage poll, signal-absence alarm, deployment of
+the GuardDuty agent, or automatic containment. A configured rule or absence of
+notifications does not establish healthy coverage.
 
 ## CloudWatch Metric Filters and Alarms
 
@@ -293,7 +334,12 @@ The module creates CloudWatch Log Metric Filters against the CloudTrail CloudWat
 | CloudTrail stop/delete activity | `CloudTrail-Disabled` | `CloudTrailDisabled` | `<name_prefix>-CloudTrailDisabled` |
 | IAM policy changes | `IamPolicyChanges` | `IamPolicyChanges` | `<name_prefix>-IamPolicyChanges` |
 
-All of these alarms route to the security notifications SNS topic.
+All four alarms use `Sum`, a 300-second period, one evaluation period, and a
+threshold of at least one. They configure `alarm_actions` only; no explicit
+`ok_actions` or `treat_missing_data` is declared for these four alarms, and their
+metric transformations have no `default_value`. Do not apply the ECS/DLQ
+`notBreaching` configuration to this different alarm family. Alarm transitions
+are not a one-message-per-matching-event delivery contract.
 
 ### Root Activity
 
@@ -303,13 +349,15 @@ Root activity should be rare and reviewed whenever it occurs.
 
 ### Unauthorized API Calls
 
-Detects `UnauthorizedOperation` and `AccessDenied` API errors.
+Matches the exact error-code strings `UnauthorizedOperation` and `AccessDenied`.
+It is not a wildcard match for all authorization-failure variants.
 
 This can indicate suspicious enumeration, failed privilege attempts, misconfigured roles, or normal least-privilege tuning events.
 
 ### CloudTrail Disabled
 
-Detects `StopLogging` and `DeleteTrail` events.
+Matches the event names `StopLogging` and `DeleteTrail`. This metric filter does
+not additionally constrain `eventSource`, success status, or a particular trail.
 
 This is a high-priority alert because CloudTrail tampering can indicate attempted defense evasion.
 
@@ -324,13 +372,16 @@ Detects selected IAM policy and role trust policy changes, including:
 - `DetachRolePolicy`
 - `UpdateAssumeRolePolicy`
 
-These events may indicate privilege creation, privilege expansion, permission removal, cleanup activity, or trust policy changes that affect who can assume a role.
+The filter also requires `eventSource = iam.amazonaws.com`. This exact list
+omits other changes such as policy-version creation and does not prove that
+all IAM mutations are detected. Expected administrative changes can also
+match; no approval-system lookup or success filter is configured.
 
 ---
 
 ## ECS Operational Health Alarms
 
-The v1.9 runtime adds two Terraform-owned ECS operational alarm families. They are intentionally separate from Application Auto Scaling target-tracking alarms.
+The module creates two Terraform-owned ECS operational alarm families. They are intentionally separate from Application Auto Scaling target-tracking alarms.
 
 ### ECS Task Deficit
 
@@ -370,7 +421,8 @@ comparison          = GreaterThanThreshold
 treat_missing_data  = notBreaching
 ```
 
-Both `alarm_actions` and `ok_actions` notify the SecOps SNS topic.
+Both `alarm_actions` and `ok_actions` notify the SecOps SNS topic. The configured
+missing-data treatment is not an independent telemetry-loss detector.
 
 Baseline supplies task-deficit monitoring entries for every deployable ECS service only when Container Insights is not disabled. If `container_insights = "disabled"`, baseline passes an empty task-deficit monitoring map because the required Container Insights task-count metrics are not part of that configuration.
 
@@ -408,7 +460,8 @@ comparison          = GreaterThanThreshold
 treat_missing_data  = notBreaching
 ```
 
-Both `alarm_actions` and `ok_actions` notify the SecOps SNS topic.
+Both `alarm_actions` and `ok_actions` notify the SecOps SNS topic. The configured
+missing-data treatment is not an independent telemetry-loss detector.
 
 Baseline supplies this map only for deployable ECS services with non-null ingress. The ALB and target-group dimensions come from Terraform resource outputs rather than string reconstruction.
 
@@ -417,6 +470,13 @@ Baseline supplies this map only for deployable ECS services with non-null ingres
 CPU, memory, and ALB request-count target-tracking policies are owned by `modules/ecs_service` through Application Auto Scaling.
 
 AWS creates the CloudWatch alarms used internally by those target-tracking policies. This module does not create, edit, rename, repurpose, or include those AWS-managed alarms in its Terraform-owned operational alarm inventory.
+
+Neither operational family proves application transactions, database access,
+AZ distribution, or a minimum number of registered targets. Desired and running
+counts can both be zero without a task deficit. An empty target group or missing
+metric data must not be accepted solely because an unhealthy-target alarm is
+not in ALARM. Check capacity, target registration, metric freshness, and live
+health separately.
 
 The Terraform-owned alarms in this module answer different operational questions:
 
@@ -439,7 +499,10 @@ Creates an alarm for messages visible in the security notifications SQS DLQ.
 | Period | 300 seconds |
 | Alarm action | Security notifications SNS topic |
 
-This alarm indicates that a message reached the security notifications SQS queue but was repeatedly not processed successfully by a consumer.
+This alarm reports visible messages in the DLQ; inspect their origin and
+receive history before attributing them to a particular consumer failure.
+It uses one evaluation period, `> 0`, and `notBreaching` for missing data,
+with an ALARM action only.
 
 ### Security Notifications EventBridge DLQ Alarm
 
@@ -455,7 +518,10 @@ Creates an alarm for messages visible in the security notifications EventBridge 
 | Period | 300 seconds |
 | Alarm action | Security notifications SNS topic |
 
-This alarm indicates that EventBridge failed to deliver one or more security notification events to the security notifications SNS topic after retry handling.
+The EventBridge DLQ alarm uses one evaluation period, `>= 1`, and `notBreaching`
+for missing data, and sends both ALARM and OK actions to the SecOps topic.
+Both DLQ alarms depend on the same topic and logs CMK as normal alerts; they
+are not an independent fallback channel when that path is unavailable.
 
 ---
 
@@ -479,9 +545,29 @@ This alarm indicates that EventBridge failed to deliver one or more security not
 | `ecs_task_deficit_services` | ECS services monitored for desired-versus-running task deficits; map values contain `cluster_name` and `service_name` | No; defaults to `{}` |
 | `ecs_ingress_services` | Ingress-enabled ECS services monitored for unhealthy ALB targets; map values contain load-balancer and target-group ARN suffixes | No; defaults to `{}` |
 
-The GuardDuty coverage rule uses existing required inputs (`name_prefix`, `account_id`, and the module-owned SecOps topic/DLQ) and does not add a separate GuardDuty-specific input variable.
+There are 15 inputs in [variables.tf](variables.tf): 12 required strings,
+required `secops_emails` of type `list(string)`, and the two optional maps below.
+The three Lambda-role ARN inputs remain required but are not referenced in this
+module's `main.tf`; passing them does not add role-specific topic grants.
+
+```hcl
+ecs_task_deficit_services = {
+  # service-key = { cluster_name = "...", service_name = "..." }
+}
+ecs_ingress_services = {
+  # service-key = { load_balancer_arn_suffix = "...", target_group_arn_suffix = "..." }
+}
+```
+
+The declared map values contain only those required string fields; both maps
+default to `{}`. This child has no deployment-profile input, service-count
+validation, Region input, or automated caller-account assertion. The GuardDuty
+rule uses the required account/name inputs and module-owned SNS/DLQ resources.
 
 ## Outputs
+
+These six child-module outputs identify configured resources, not delivery
+receipts, subscriber acceptance, or persisted alarm history.
 
 | Name | Description |
 |---|---|
@@ -493,6 +579,9 @@ The GuardDuty coverage rule uses existing required inputs (`name_prefix`, `accou
 | `guardduty_ecs_runtime_coverage_notification` | Resource-backed GuardDuty coverage rule/target/DLQ metadata used by workload validation |
 
 ## Usage Example
+
+This complete call belongs in `baseline/`, with the surrounding modules and
+locals already defined. It is not a standalone root.
 
 ```hcl
 module "monitoring" {
@@ -524,33 +613,101 @@ Baseline derives both ECS monitoring maps from the canonical deployable `ecs_ser
 
 ## Validation
 
-Use the automated validation scripts for normal validation.
+Use the automated scripts for their specific checks, not as an assertion that
+every producer, subscriber, filter, and delivery failure has been exercised.
+
+Run these local examples from the repository root with an initialized, applied
+workload root and Bash, AWS CLI, Terraform, and `jq` available. Set a named
+workload `AWS_PROFILE`, the intended service `AWS_REGION`, and an independently
+known `EXPECTED_ACCOUNT_ID` first. `ENVIRONMENT` defaults to `dev`; select it
+explicitly when inspecting another workload. The `${VAR:?message}` expressions
+stop on missing values; their messages are not replacement placeholders.
+
+These examples require a named local profile. That is not a requirement to add
+`AWS_PROFILE` to GitHub OIDC jobs or other default-credential-chain executions.
+The service Region is checked against applied Terraform output; it does not
+change the independently configured state-backend Region.
 
 ```bash
-./scripts/validation/validate-sns.sh dev
-./scripts/validation/validate-sqs.sh dev
-./scripts/validation/validate-eventbridge.sh dev
-./scripts/validation/validate-ecs-runtime.sh dev
+set -euo pipefail
+: "${AWS_PROFILE:?Set the local workload profile}"
+: "${AWS_REGION:?Set the intended service Region}"
+: "${EXPECTED_ACCOUNT_ID:?Set the independently known workload account ID}"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+case "$ENVIRONMENT" in dev|staging|prod) ;; *) echo "Invalid workload" >&2; exit 1 ;; esac
+[[ "$EXPECTED_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "Invalid account ID" >&2; exit 1; }
+export AWS_PROFILE AWS_REGION EXPECTED_ACCOUNT_ID
+export AWS_DEFAULT_REGION="$AWS_REGION" AWS_PAGER=""
+
+CALLER_ACCOUNT_ID="$(aws sts get-caller-identity \
+  --profile "$AWS_PROFILE" --region "$AWS_REGION" --query Account --output text)"
+[[ "$CALLER_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]] || {
+  echo "Unexpected AWS account; stopping" >&2; exit 1;
+}
+ACCOUNT_ID="$CALLER_ACCOUNT_ID"
+ENV_DIR="environments/${ENVIRONMENT}"
+OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"
+read_output_string() {
+  jq -er --arg key "$1" '
+    .[$key].value | if type == "string" and length > 0
+    then . else error("Missing or invalid string output: " + $key) end
+  ' <<< "$OUTPUTS_JSON"
+}
+APPLIED_REGION="$(read_output_string primary_region)"
+[[ "$AWS_REGION" == "$APPLIED_REGION" ]] || {
+  echo "Service Region differs from applied primary_region; stopping" >&2; exit 1;
+}
+NAME_PREFIX="$(read_output_string name_prefix)"
+export NAME_PREFIX
 ```
 
-Expected coverage:
+This preflight confirms selected context, not every permission, resource, or
+configuration. Do not treat a successful API read as proof of delivery or
+operating effectiveness.
 
-| Script | Main checks |
+```bash
+./scripts/validation/validate-sns.sh "$ENVIRONMENT"
+./scripts/validation/validate-sqs.sh "$ENVIRONMENT"
+./scripts/validation/validate-eventbridge.sh "$ENVIRONMENT"
+./scripts/validation/validate-ecs-runtime.sh "$ENVIRONMENT"
+```
+
+| Evidence | Acceptance boundary |
 |---|---|
-| `validate-sns.sh` | Security and compliance SNS topics, encryption, subscription counts, pending confirmations |
-| `validate-sqs.sh` | Compliance queue, security notification queue, security notification DLQ, security notification EventBridge DLQ, encryption, SNS-to-SQS wiring |
-| `validate-eventbridge.sh` | EventBridge rules, targets, target DLQs, retry policies, Security Hub/SecOps routing, and the exact GuardDuty ECS Runtime coverage rule/transformer contract |
-| `validate-ecs-runtime.sh` | Exact ECS runtime contract, GuardDuty Runtime integration metadata, live agent/coverage state, Application Auto Scaling targets/policies, deployment settings, and Terraform-owned task-deficit/ingress-health operational alarms |
+| SNS/SQS validation | Inspect warnings and reported counts/policies; resource presence or encryption does not prove recipient delivery, an empty DLQ, or a working consumer. |
+| EventBridge validation | Applies its configured rule/target checks, including the GuardDuty coverage contract; it does not publish a test event or prove end-to-end receipt. |
+| ECS runtime validation | Checks service-specific operational alarm configuration/state where applicable; an empty-runtime path does not test application health or agent coverage. |
+| CloudTrail metric filters | Review all four filters, alarm actions, exact event coverage, and data freshness separately; do not infer full coverage from the SNS/SQS validators. |
 
-`validate-ecs-runtime.sh` treats AWS-managed target-tracking alarms separately from the Terraform-owned operational alarm inventory.
+Inspect notification subscriptions without receiving or deleting queue messages:
 
-Detailed manual validation commands belong in the validation runbook rather than this module README.
-
-Recommended companion doc path:
-
-```text
-docs/validationmonitoring-validation.md
+```bash
+SECOPS_TOPIC_ARN="$(read_output_string secops_topic_arn)"
+aws sns get-topic-attributes --profile "$AWS_PROFILE" --region "$AWS_REGION" \
+  --topic-arn "$SECOPS_TOPIC_ARN" --output json
+aws sns list-subscriptions-by-topic --profile "$AWS_PROFILE" --region "$AWS_REGION" \
+  --topic-arn "$SECOPS_TOPIC_ARN" --output json
+aws logs describe-metric-filters --profile "$AWS_PROFILE" --region "$AWS_REGION" \
+  --log-group-name "/aws/cloudtrail/${NAME_PREFIX}" --output json
 ```
+
+Review the effective topic policy, encryption key, subscriber identities,
+confirmation states, raw-message settings, and any separately added redrive
+policies. The list response does not itself contain all subscription attributes;
+read an actual confirmed subscription explicitly when needed:
+
+```bash
+: "${SUBSCRIPTION_ARN:?Set one reviewed confirmed subscription ARN}"
+aws sns get-subscription-attributes --profile "$AWS_PROFILE" --region "$AWS_REGION" \
+  --subscription-arn "$SUBSCRIPTION_ARN" --output json
+```
+
+For an approved end-to-end notification test, record producer acceptance,
+delivery to each intended endpoint, consumer handling, and any DLQ outcome
+separately. No publishing or queue-consuming test is performed by these reads.
+Use the [validation checklist](../../docs/validation-checklist.md),
+[script reference](../../scripts/validation/README.md), and
+[evidence guide](../../docs/assurance/validation-evidence-guide.md).
 
 ## Alert Routing Summary
 
@@ -692,7 +849,13 @@ If CloudTrail is not delivering to that log group, root activity, unauthorized A
 
 ### KMS Dependency
 
-SNS topics and SQS queues are encrypted with the logs CMK.
+SNS topics and SQS queues are encrypted with the logs CMK. Their resource
+policies and key policy are separate permission layers. The security SNS
+policy contains an EventBridge allow for the source account without a rule-ARN
+condition; additional exact-rule allows do not narrow that broader statement.
+The CloudWatch service allow also lacks source conditions. The shared
+EventBridge DLQ policy, in contrast, enumerates four rule ARNs. Do not describe
+the entire notification chain as one exact producer allowlist.
 
 If notifications are not delivered, check both resource policies and KMS permissions for the services involved, including SNS, SQS, CloudWatch, EventBridge, AWS Config, and authorized Lambda publishers.
 
@@ -702,11 +865,9 @@ DLQ messages are not automatically replayed by this module.
 
 A visible message in a security notification DLQ should be treated as an operational signal requiring review. Operators should inspect the message, identify the failed delivery or processing path, fix the underlying issue, and then decide whether manual replay or archival is appropriate.
 
-Recommended companion runbook path:
-
-```text
-docs/runbooks/notification-dlq-response.md
-```
+Use the [validation checklist](../../docs/validation-checklist.md) for scoped
+inspection and approval boundaries. This module does not ship an automated
+replay consumer or an independent fallback notification service.
 
 ---
 
@@ -749,7 +910,9 @@ Check:
 
 ### EventBridge Security Notification DLQ Has Messages
 
-This means EventBridge could not deliver one or more security notification events to the security notifications SNS topic.
+For EventBridge-produced failure records, this indicates a failure on the
+EventBridge-to-SNS edge. Inspect the record's error details; not every error
+necessarily exhausts the maximum configured retry count.
 
 Check:
 
@@ -761,7 +924,8 @@ Check:
 
 ### Security Notifications SQS DLQ Has Messages
 
-This means a message reached the security notifications SQS queue but was repeatedly not processed successfully by a consumer.
+This shows a message in the DLQ, not a verified explanation of application
+failure. Inspect its origin, receive history, and any manual redrive activity.
 
 Check:
 
@@ -813,11 +977,8 @@ Check:
 - DLQ alarms route to the security notifications SNS topic.
 - SNS topic publishing is restricted through topic policy statements.
 - SQS queue writes are restricted to expected SNS topics or EventBridge rules.
-- Break-glass role usage generates a critical alert.
-- Root user activity generates an alert.
-- Unauthorized API calls generate an alert.
-- CloudTrail stop/delete activity generates an alert.
-- Selected IAM policy changes generate an alert.
+- Break-glass AssumeRole attempts and selected CloudTrail events are configured for alerting; verify original events and delivery rather than assuming success or receipt.
+- The exact filter/action inventories are limited and do not cover every identity or security-control change.
 - ECS task-deficit and ingress unhealthy-target alarms are Terraform-owned and notify the SecOps topic on both ALARM and OK transitions.
 - Application Auto Scaling target-tracking alarms remain AWS-managed and are not modified by this module.
 - GuardDuty ECS Runtime Monitoring coverage-state changes are routed through the same encrypted SecOps SNS and EventBridge DLQ architecture rather than a parallel notification system.
@@ -828,10 +989,10 @@ This module follows:
 
 - Centralized security alerting
 - Encrypted notification paths
-- Durable notification delivery
+- Retained notification copies and separately reviewed failure paths
 - Event-driven monitoring
 - Alarmed failure retention
-- Least privilege publishing
+- Explicit publisher grants with the scope limits described above
 - Human-readable security notifications
 - Separation of detection and notification routing
 - Separation of autoscaling control alarms from Terraform-owned operational alarms
