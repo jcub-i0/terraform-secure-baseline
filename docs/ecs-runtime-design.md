@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document describes the implemented ECS/Fargate runtime at `v1.11.0-rc1`, commit `728166fa17bf42fe06bf540729c6aba1e70e05d5`, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The v1.10 qualification section below is historical; the RC1 tag is not proof that those tests were repeated at this commit.
+This document describes the implemented ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 

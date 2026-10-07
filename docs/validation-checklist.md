@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This checklist describes deployment inspection and separately approved live qualification for `tf-secure-baseline` at `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). Automated results establish selected configuration/health assertions, not exhaustive control effectiveness or completion of every live test.
+This checklist describes deployment inspection and separately approved live qualification for `tf-secure-baseline`. Automated results establish selected configuration/health assertions, not exhaustive control effectiveness or completion of every live test.
 
 Use this checklist after completing the deployment steps in:
 

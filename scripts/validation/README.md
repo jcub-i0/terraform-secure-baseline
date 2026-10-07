@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This directory contains the read-only AWS inspection entry points and local evidence exporters for `tf-secure-baseline`. This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`), not an assertion that every deployment or historical qualification ran at that commit.
+This directory contains the read-only AWS inspection entry points and local evidence exporters for `tf-secure-baseline`. This reference is not proof of completed testing; use the tested commit, effective configuration, and retained evidence for each deployment or historical qualification.
 
 The validation scripts are intended to confirm that deployed Terraform stacks and AWS resources match the expected baseline architecture. They are useful for:
 

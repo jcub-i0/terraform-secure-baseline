@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This guide describes the deployment path for `tf-secure-baseline` at **v1.11.0-rc1**, commit `728166fa17bf42fe06bf540729c6aba1e70e05d5`. It is not a claim that a final v1.11.0 release has already been published.
+This guide describes the deployment path for `tf-secure-baseline`.
 
 Examples are for an authorized deployment with reviewed account-specific configuration. Public source visibility is not deployment permission; see [LICENSE](../LICENSE). This guide does not change the license or resolve ownership notices.
 

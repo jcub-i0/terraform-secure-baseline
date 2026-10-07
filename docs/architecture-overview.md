@@ -6,7 +6,7 @@ This document describes the high-level architecture implemented by `tf-secure-ba
 
 It focuses on system relationships, trust boundaries, and operational flow rather than low-level Terraform implementation details.
 
-The v1.11.0 documentation target is the frozen `v1.11.0-rc1` implementation at `728166fa17bf42fe06bf540729c6aba1e70e05d5`. This describes implemented architecture, not a claim that the final release has been published or that every qualification exercise ran at this exact commit.
+This document describes implemented architecture, not proof that every qualification exercise has been completed. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
 `tf-secure-baseline` is designed for SaaS companies and engineering teams running workloads that handle PII or other sensitive data and need a secure, repeatable cloud foundation aligned with **SOC 2 / ISO 27001-style** security expectations.
 

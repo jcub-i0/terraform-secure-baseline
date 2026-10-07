@@ -2,7 +2,7 @@
 
 ## Purpose and Supported Scope
 
-This runbook describes the implemented retirement path for `environments/prod` with `deployment_profile = "production"`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It is an operator procedure, not a claim that a new live qualification was performed at that exact commit.
+This runbook describes the implemented retirement path for `environments/prod` with `deployment_profile = "production"`. It is an operator procedure, not evidence that a new live qualification was performed.
 
 Production retirement differs from ordinary development/minimal teardown. It separates a reviewed Terraform retirement preparation from explicitly authorized durable-data deletion, Identity Center dependency cleanup, and the final reviewed workload destroy.
 

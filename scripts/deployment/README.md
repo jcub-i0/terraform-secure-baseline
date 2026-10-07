@@ -223,7 +223,7 @@ Production retirement mode does not enable ECR/ECS force deletion or Backup vaul
 
 ## Implementation References
 
-This page targets v1.11.0 behavior at `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It does not assert a new live publication or retirement test on this exact commit.
+This page does not assert a new live publication or retirement test. Test claims depend on the tested commit, effective configuration, and retained evidence.
 
 - [Image publisher](deploy-application.sh) and [digest update](update-application-digest.sh)
 - [Publication workflow](../../.github/workflows/deploy-application.yml)

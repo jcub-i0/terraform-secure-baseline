@@ -6,7 +6,7 @@ This document describes the design principles behind `tf-secure-baseline`.
 
 It explains why the platform is structured the way it is, what tradeoffs were made, and what security outcomes the baseline is intended to support.
 
-Principles express design intent; the implementation boundaries below qualify what the frozen code actually provides. They are not evidence of a final release or a completed client deployment.
+Principles express design intent; the implementation boundaries below qualify what the code actually provides. These principles are not evidence of a completed deployment or successful live qualification.
 
 This document is not a deployment guide. For deployment instructions, see:
 
