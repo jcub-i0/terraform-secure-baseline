@@ -803,7 +803,6 @@ Interpret the direct reads below against the intended ownership mode, complete
 applied input set, and observed results. Script PASS, configured standards,
 and absence of findings do not establish compliance or effective protection.
 
-
 ### Confirm SSM Document Public Sharing Is Disabled
 
 ```bash
