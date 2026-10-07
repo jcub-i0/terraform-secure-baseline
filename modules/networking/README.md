@@ -15,7 +15,7 @@ The module supports three private-compute egress modes:
 - `nat_only` — compute-private default traffic is routed directly to the same-AZ NAT Gateway in `egress_public`.
 - `vpc_endpoints_only` — NAT Gateways and NAT Elastic IPs are not created, and compute-private route tables receive no default internet route.
 
-The ALB and NAT Gateways never share a subnet or route-table role.
+The RC1 baseline gives the ALB and NAT Gateways separate subnet and route-table roles. This module creates the subnet families; the ALB itself is owned by `modules/application_load_balancer`.
 
 The repository also contains `modules/networking/security_policy`. That is a separate child module for security-group policy. This README only acknowledges that boundary and does not document the child module's rules or interfaces.
 
@@ -93,6 +93,48 @@ var.azs[1] -> var.subnet_cidrs.<family>[1]
 Because the module indexes each subnet CIDR list by Availability Zone position, each required subnet family must provide enough CIDRs for all configured Availability Zones.
 
 ---
+
+## Baseline AZ and CIDR Derivation
+
+The low-level module receives concrete `azs`, `subnet_cidrs`, and `egress_mode` values. It does not accept `deployment_profile`, `primary_region`, `state_region`, or the baseline-only `auto` egress value, and it does not discover AZs itself.
+
+At `v1.11.0-rc1`, [baseline/main.tf](../../baseline/main.tf) asserts that `primary_region` matches the active AWS provider region. Its `data.aws_availability_zones.standard` query filters `opt-in-status` to `opt-in-not-required`; baseline sorts the returned names and selects the first three for production or first two for development/minimal unless `azs` is supplied explicitly.
+
+The baseline contract is:
+
+| Input/condition | Baseline behavior |
+|---|---|
+| `main_vpc_cidr` | Canonical IPv4 /16; default `10.0.0.0/16` |
+| `azs = null` | Three discovered AZs for production; two for development/minimal |
+| Explicit `azs` | Unique eligible AZs in the selected provider region; at least three for production or two otherwise |
+| `subnet_cidrs = null` | Derive every family from `main_vpc_cidr`; explicit AZ count must equal the profile default |
+| Explicit `subnet_cidrs` | Exact seven family keys, matching AZ-list lengths, canonical unique /24s inside the main /16 |
+| Additional AZs | Supply both explicit AZs and a matching explicit subnet-CIDR map |
+
+Default subnet numbers are independent of the selected /16:
+
+| Family | Development/minimal netnums | Production netnums |
+|---|---|---|
+| `egress_public` | `0, 1` | `0, 1, 2` |
+| `ingress_public` | `2, 3` | `3, 4, 5` |
+| `compute_private` | `16, 17` | `16, 17, 18` |
+| `data_private` | `32, 33` | `32, 33, 34` |
+| `serverless_private` | `48, 49` | `48, 49, 50` |
+| `firewall_private` | `64, 65` | `64, 65, 66` |
+| `endpoint_private` | `128, 129` | `128, 129, 130` |
+
+For a new development deployment, this baseline input excerpt derives 14 subnets from a non-default /16:
+
+```hcl
+deployment_profile = "development"
+main_vpc_cidr      = "172.16.0.0/16"
+azs                = null
+subnet_cidrs       = null
+```
+
+For example, compute becomes `172.16.16.0/24` and `172.16.17.0/24`; endpoint-private becomes `172.16.128.0/24` and `172.16.129.0/24`. With production defaults there are 21 subnets. These counts describe default topology, not maximum supported AZ counts.
+
+Changing the VPC CIDR, AZ order, or subnet assignments in an existing deployment is not a non-disruptive migration mechanism. Review replacements and dependent-resource changes in the exact plan. The region assertion and AZ discovery do not prove alternate-region live qualification or provide multi-region disaster recovery. S3 backend region/state-resource `state_region` remain separate from the workload service region.
 
 ## Resources Created
 
@@ -502,7 +544,7 @@ In this mode:
 | `name_prefix` | `string` | none | Yes | Prefix used in resource names and tags. |
 | `main_vpc_cidr` | `string` | none | Yes | CIDR block assigned to the main VPC. |
 | `environment` | `string` | none | Yes | Environment value applied to resource tags. |
-| `cloud_name` | `string` | none | Yes | Declared module input. The attached `main.tf` and `outputs.tf` do not currently reference this value. |
+| `cloud_name` | `string` | none | Yes | Declared module input. The RC1 `main.tf` and `outputs.tf` do not currently reference this value. |
 | `azs` | `list(string)` | none | Yes | Availability Zones used to create per-AZ subnets, route tables, NAT resources, and route associations. |
 | `subnet_cidrs` | `map(list(string))` | none | Yes | CIDR lists for each subnet tier, indexed according to `azs`. |
 | `firewall_endpoint_ids_by_az` | `map(string)` | `{}` | Conditional | Network Firewall endpoint IDs keyed by Availability Zone. Required for every configured AZ when `egress_mode = "network_firewall"`. |
@@ -548,7 +590,7 @@ subnet_cidrs = {
 }
 ```
 
-The baseline's production defaults use three Availability Zones and add one CIDR to each family; the `egress_public` defaults remain `10.0.0.0/24` through `10.0.2.0/24`, while `ingress_public` uses `10.0.3.0/24` through `10.0.5.0/24`.
+Those CIDRs illustrate `main_vpc_cidr = "10.0.0.0/16"`; they are not hard-coded defaults in this module. Baseline derives each default /24 with `cidrsubnet(var.main_vpc_cidr, 8, netnum)` and passes the resolved lists here. The production defaults use three AZs; for the example /16, `egress_public` is `10.0.0.0/24` through `10.0.2.0/24`, while `ingress_public` is `10.0.3.0/24` through `10.0.5.0/24`.
 
 The module does not declare a variable-validation block for the map keys or list lengths. Because `main.tf` indexes each list using the AZ index, missing keys or insufficient CIDR entries will fail when Terraform evaluates the corresponding resource expressions.
 
@@ -569,8 +611,6 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 
 ---
 
----
-
 ## Outputs
 
 ### VPC and Internet Gateway
@@ -578,7 +618,7 @@ For `nat_only` and `vpc_endpoints_only`, the default empty map is valid because 
 | Output | Value |
 |---|---|
 | `vpc_id` | Main VPC ID |
-| `main_vpc_id` | Main VPC ID |
+| `main_vpc_cidr` | Resource-backed main VPC IPv4 CIDR |
 | `internet_gateway_id` | Internet Gateway ID |
 
 ### NAT Gateway Outputs
@@ -622,8 +662,6 @@ Use the map outputs when Availability Zone identity matters. The list outputs ar
 | `endpoint_private_route_table_ids_map` | Endpoint-private route table IDs keyed by AZ |
 
 The module does not currently export ingress-public, egress-public, data-private, or firewall-private route table IDs.
-
----
 
 ---
 
@@ -679,8 +717,6 @@ modules/networking/security_policy/README.md
 
 ---
 
----
-
 ## Operational Invariants
 
 The current parent module enforces or establishes the following behavior:
@@ -707,4 +743,12 @@ The current parent module enforces or establishes the following behavior:
 - The parent module always creates ingress-public, egress-public, compute-private, firewall-private, endpoint-private, data-private, and serverless-private route tables even when some of them have no default route.
 - The parent module does not create Network Firewall endpoints; it consumes their IDs when firewall routing is selected.
 - The parent module does not define the `security_policy` submodule's security-group rules.
-- `cloud_name` is currently a required declared input but is not referenced by the attached parent-module resource or output definitions.
+- `cloud_name` is currently a required declared input but is not referenced by the RC1 parent-module resource or output definitions.
+
+## Validation and Sources
+
+`validate-networking.sh` uses the workload-root `network_topology` output rather than assuming `10.0.x.0/24` or `us-east-1a/b/c`. Its live checks include VPC CIDR, the exact seven-family subnet ID/CIDR inventory, route-table associations, NAT placement, same-AZ firewall/return routes, and the separate ingress-public path. `validate-vpc-endpoints.sh` and `validate-ecs-runtime.sh` check downstream endpoint and ALB/task placement.
+
+These checks compare configuration and live state; they do not execute a cross-region recovery exercise or prove application data-plane behavior. Read-only validation is separate from applying a changed CIDR or migrating an existing environment.
+
+Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline input validations](../../baseline/variables.tf), [baseline defaults](../../baseline/locals.tf), and [networking validator](../../scripts/validation/validate-networking.sh).

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `vpc_endpoints` module provisions private AWS service access for the workload VPCs.
+The `vpc_endpoints` module provisions private AWS service access for one supplied workload VPC. This reference describes `v1.11.0-rc1`; the module does not create or select the AWS account, provider region, VPC, or subnet topology.
 
 This module creates:
 
@@ -83,7 +83,7 @@ Each endpoint is created using:
 resource "aws_vpc_endpoint" "interface"
 ```
 
-The module uses `for_each` over the endpoint service list, so each service receives its own Interface Endpoint.
+The module uses `for_each` over this fixed 16-service list, so each service receives one Interface Endpoint spanning the supplied endpoint-private subnet set. The list is not a caller-configurable workload service catalog. There is no DynamoDB Gateway Endpoint resource despite the broader gateway comment in `main.tf`.
 
 Private DNS is enabled for all Interface Endpoints.
 
@@ -97,7 +97,7 @@ existing S3 Gateway Endpoint.
 
 `guardduty-data` is intentionally part of the Terraform-managed Interface Endpoint set.
 
-The endpoint supports GuardDuty Runtime Monitoring telemetry for eligible workload resources, including the v1.10 ECS/Fargate runtime. The baseline does not leave endpoint creation to GuardDuty automation.
+The endpoint supports GuardDuty Runtime Monitoring telemetry for eligible workload resources, including the ECS/Fargate Runtime Monitoring path retained in v1.11. The baseline does not leave endpoint creation to GuardDuty automation.
 
 The endpoint is treated like the rest of the workload VPC infrastructure:
 
@@ -109,7 +109,8 @@ The endpoint is treated like the rest of the workload VPC infrastructure:
 - EC2 and approved automation paths continue to use the same shared endpoint tier.
 - Workload validation requires exactly one live `guardduty-data` endpoint and requires its ID to exactly match Terraform output.
 
-This ownership model prevents a second unmanaged GuardDuty endpoint/security group from appearing and keeps placement, policy, validation, and teardown inside the Terraform graph.
+This ownership model is intended to avoid a duplicate unmanaged endpoint. The live validator detects inventory or ownership mismatches; declaring an endpoint does not guarantee that no external actor or service can create another one. Placement and lifecycle of the declared endpoint remain in the Terraform graph.
+
 ### Interface Endpoint Security Group
 
 Creates a dedicated security group for Interface VPC Endpoints:
@@ -168,7 +169,9 @@ This design keeps endpoint access restricted to known internal security groups i
 Interface Endpoints are deployed into dedicated VPC endpoint private subnets.
 
 ```hcl
-local.interface_endpoint_subnet_ids_map = var.endpoint_private_subnet_ids_map
+locals {
+  interface_endpoint_subnet_ids_map = var.endpoint_private_subnet_ids_map
+}
 ```
 
 These subnets are separate from:
@@ -177,7 +180,8 @@ These subnets are separate from:
 - Data private subnets
 - Serverless private subnets
 - Firewall private subnets
-- Public subnets
+- Ingress-public subnets
+- Egress-public subnets
 
 Dedicated endpoint subnets keep Interface Endpoint ENIs separate from workload ENIs and reduce private IP consumption in compute subnets.
 
@@ -189,13 +193,13 @@ The S3 Gateway Endpoint is associated with the route tables passed into the modu
 route_table_ids = var.s3_gateway_endpoint_rt_ids_list
 ```
 
-This allows the root baseline stack to decide which private route tables need S3 Gateway Endpoint access.
+Baseline passes the concatenated **endpoint-private, compute-private, and serverless-private** route-table maps. With the default topology that means nine associations in production and six in development/minimal. The data-private, firewall-private, ingress-public, and egress-public route tables are not in that supplied set. The module itself applies the caller list; it does not derive this policy from a deployment profile.
 
 ---
 
 ## Deployment Profile and Egress Mode Behavior
 
-This module is used across all deployment profiles and egress modes.
+This module is used across all deployment profiles and egress modes. The 16 Interface Endpoints, shared endpoint SG, and S3 Gateway Endpoint remain configured even with no ECS services or with the minimal profile. Disabling Fargate Runtime Monitoring through the minimal profile does not remove `guardduty-data`.
 
 | `egress_mode` | Role of this module |
 |---|---|
@@ -238,25 +242,27 @@ logs.<region>.amazonaws.com
 kms.<region>.amazonaws.com
 ```
 
-When queried from inside the VPC, those names resolve through the Interface Endpoint private DNS configuration.
+With the intended VPC resolver configuration, those names use the Interface Endpoint private DNS path. Live DNS and connectivity checks remain necessary when custom resolvers or other network changes are introduced. RC1 constructs service names as `com.amazonaws.<primary_region>.<service>`; a configurable region does not prove that all 16 services are available in every region or partition.
 
 ---
 
 ## Inputs
 
-| Name | Description | Required |
-|---|---|---:|
-| `name_prefix` | Prefix used for resource naming | Yes |
-| `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
-| `vpc_id` | ID of the VPC where endpoints are created | Yes |
-| `account_id` | AWS account ID; retained in the module interface | Yes |
-| `primary_region` | AWS Region used to build endpoint service names | Yes |
-| `endpoint_private_subnet_ids_map` | Dedicated endpoint private subnet IDs used for all Interface Endpoints | Yes |
-| `compute_private_subnet_ids_map` | Compute private subnet map retained in the module interface | Yes |
-| `serverless_private_subnet_ids_map` | Serverless private subnet map retained in the module interface | Yes |
-| `subnet_cidrs` | Subnet CIDR map retained for endpoint-subnet context | Yes |
-| `endpoint_private_route_table_ids_map` | Endpoint private route table map retained for endpoint-tier context | Yes |
-| `s3_gateway_endpoint_rt_ids_list` | Route table IDs associated with the S3 Gateway Endpoint | Yes |
+| Name | Type | Required | Purpose |
+|---|---|---:|---|
+| `name_prefix` | `string` | Yes | Endpoint and security-group naming |
+| `environment` | `string` | Yes | Environment tags |
+| `vpc_id` | `string` | Yes | VPC for all endpoints and the shared SG |
+| `account_id` | `string` | Yes | Retained interface input; no resource argument consumes it here |
+| `primary_region` | `string` | Yes | Region in endpoint service names; baseline supplies the provider region |
+| `endpoint_private_subnet_ids_map` | `map(string)` | Yes | All Interface Endpoint subnet IDs, keyed by AZ |
+| `compute_private_subnet_ids_map` | `map(string)` | Yes | Retained interface input, not Interface Endpoint placement |
+| `serverless_private_subnet_ids_map` | `map(string)` | Yes | Retained interface input, not Interface Endpoint placement |
+| `subnet_cidrs` | `map(list(string))` | Yes | Evaluated by the endpoint-private CIDR local; not a route or policy restriction |
+| `endpoint_private_route_table_ids_map` | `map(string)` | Yes | Retained endpoint-tier context local; S3 associations use the separate list below |
+| `s3_gateway_endpoint_rt_ids_list` | `list(string)` | Yes | Exact S3 Gateway Endpoint route-table associations |
+
+All 11 inputs have no module defaults. The module has no independent `state_region`, deployment-profile, or egress-mode input.
 
 The active Interface Endpoint resources use `endpoint_private_subnet_ids_map`; the S3 Gateway Endpoint uses `s3_gateway_endpoint_rt_ids_list`.
 
@@ -276,6 +282,8 @@ The active Interface Endpoint resources use `endpoint_private_subnet_ids_map`; t
 
 ## Usage Example
 
+This is the baseline module call; its surrounding modules, variables, and effective locals must exist in the caller. The resource-identification fragments elsewhere in this reference are excerpts, not complete configurations.
+
 ```hcl
 module "vpc_endpoints" {
   source = "../modules/vpc_endpoints"
@@ -284,7 +292,7 @@ module "vpc_endpoints" {
   vpc_id         = module.networking.vpc_id
   environment    = var.environment
   account_id     = var.account_id
-  primary_region = var.primary_region
+  primary_region = data.aws_region.current.region
 
   compute_private_subnet_ids_map       = module.networking.compute_private_subnet_ids_map
   serverless_private_subnet_ids_map    = module.networking.serverless_private_subnet_ids_map
@@ -297,7 +305,7 @@ module "vpc_endpoints" {
     values(module.networking.serverless_private_route_table_ids_map)
   )
 
-  subnet_cidrs = var.subnet_cidrs
+  subnet_cidrs = local.effective_subnet_cidrs
 }
 ```
 
@@ -379,10 +387,32 @@ The dedicated endpoint subnets do not need a default route. Interface Endpoint E
 
 ## Validation
 
+The authoritative automated check is [validate-vpc-endpoints.sh](../../scripts/validation/validate-vpc-endpoints.sh), inside the existing 16-script workload suite. It checks the Terraform-owned endpoint inventory, exact subnet and shared-SG placement, private DNS, service identities, live endpoint IDs, and exact S3 route-table coverage. These checks are not an application-level request to every AWS API.
+
+The commands below are supplemental manual inspection. From the repository root, initialize the deployed workload first, then substitute the intended account/profile:
+
+```bash
+export ENV_NAME="prod"
+export AWS_PROFILE="prod"
+export EXPECTED_ACCOUNT_ID="<12-digit-workload-account-id>"
+ENV_DIR="environments/${ENV_NAME}"
+export AWS_REGION="$(terraform -chdir="$ENV_DIR" output -raw primary_region)"
+export AWS_DEFAULT_REGION="$AWS_REGION"
+test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID" || exit 1
+VPC_ID="$(terraform -chdir="$ENV_DIR" output -raw vpc_id)"
+NAME_PREFIX="$(terraform -chdir="$ENV_DIR" output -raw name_prefix)"
+GUARDDUTY_ENDPOINT_ID="$(terraform -chdir="$ENV_DIR" output -json interface_endpoint_ids | jq -er '.["guardduty-data"]')"
+INTERFACE_ENDPOINTS_SG_ID="$(aws ec2 describe-vpc-endpoints --vpc-endpoint-ids "$GUARDDUTY_ENDPOINT_ID" --query 'VpcEndpoints[0].Groups[0].GroupId' --output text)"
+./scripts/validation/validate-vpc-endpoints.sh "$ENV_NAME"
+```
+
+The live SG lookup above is only for manual inspection; it does not replace the validator's independent Terraform/live comparison.
+
 ### List VPC Endpoints
 
 ```bash
 aws ec2 describe-vpc-endpoints \
+  --filters "Name=vpc-id,Values=${VPC_ID}" \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --query 'VpcEndpoints[].[VpcEndpointId,VpcEndpointType,ServiceName,State,PrivateDnsEnabled]' \
@@ -446,7 +476,7 @@ Expected:
 
 - Endpoint private route tables exist.
 - Endpoint private route tables are associated with endpoint private subnets.
-- No `0.0.0.0/0` default route is required.
+- No `0.0.0.0/0` default route is present in the Terraform-owned endpoint-private route tables.
 
 ---
 
@@ -465,7 +495,7 @@ Expected:
 
 - S3 Gateway Endpoint exists.
 - Route table IDs include the private route tables intentionally passed to the module.
-- S3 Gateway Endpoint route tables commonly include compute private route tables and serverless private route tables.
+- In baseline composition, the set exactly equals the endpoint-private, compute-private, and serverless-private route tables.
 
 ---
 
@@ -533,7 +563,7 @@ Expected:
 
 ### Test Private DNS Resolution from a Private Instance
 
-From an EC2 instance in a private compute subnet:
+From an EC2 instance in a private compute subnet with `dig` available. Set `AWS_REGION` to the workload’s actual service region; `us-east-1` below is an example, not an implicit fallback:
 
 ```bash
 export AWS_REGION="us-east-1"
@@ -563,9 +593,7 @@ Expected:
 - Private EC2 instances appear in Systems Manager.
 - `PingStatus` is `Online`.
 - `LastPingDateTime` is recent.
-- Inspector-created Linux associations may show `Success`.
-- Inspector-created non-Linux associations may show `Skipped` with `InvalidPlatform` on Ubuntu/Linux instances.
-- `InvalidPlatform` on skipped Inspector associations does not indicate SSM connectivity failure when the Linux Inspector associations are successful.
+This account/region-wide SSM inventory is only a manual connectivity indicator. Use `validate-ssm.sh` to match the workload instances. Association execution results require separate inspection and are not returned by this command.
 
 ---
 
@@ -655,7 +683,7 @@ Also check:
 
 Note:
 
-This module intentionally does not create an ec2messages endpoint. AWS recommends using ssmmessages for Systems Manager communication, and ec2messages is not supported in AWS Regions launched in 2024 or later.
+RC1 creates `ssm` and `ssmmessages` endpoints, not `ec2messages`. This reference describes that implemented endpoint set rather than asserting support for every SSM agent or regional configuration.
 
 ---
 
@@ -681,6 +709,12 @@ Check:
 - No custom DNS configuration is overriding AWS service resolution
 
 ---
+
+## Endpoint Policy and Authorization Boundary
+
+RC1 does not assign a custom `policy` argument to either endpoint resource. Do not describe these endpoints as an independently resource-scoped endpoint-policy allowlist. The shared SG controls network admission, while IAM, service resource policies, and other account controls determine API authorization.
+
+A private path is not by itself proof of least-privilege access, and an available endpoint does not prove that an application's credentials can call the intended API. The module also does not configure custom DNS, cross-account endpoint sharing, or endpoints for future scheduled-job/application features.
 
 ## Security Notes
 
@@ -721,3 +755,9 @@ This module follows:
 - The S3 Gateway Endpoint attaches to the route tables passed into this module.
 - Interface Endpoints deploy into dedicated endpoint private subnets.
 - `vpc_endpoints_only` mode depends heavily on these endpoints for AWS service access.
+## Implementation Sources
+
+- [Resource definitions](main.tf), [input declarations](variables.tf), and [outputs](outputs.tf)
+- [Baseline endpoint call](../../baseline/main.tf) and [topology derivation](../../baseline/locals.tf)
+- [Endpoint validation](../../scripts/validation/validate-vpc-endpoints.sh)
+- [Security-group policy](../networking/security_policy/main.tf)
