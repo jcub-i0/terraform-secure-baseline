@@ -25,6 +25,7 @@ Repository keys must use lowercase letters and numbers separated only by periods
 | `environment` | `string` | Yes | Workload environment identity used for tagging. |
 | `kms_key_arn` | `string` | Yes | ARN of the customer-managed KMS key used for repository encryption. |
 | `repositories` | `map(object({}))` | No | Repositories keyed by their environment-local repository name. Defaults to `{}`. |
+| `force_delete` | `bool` | Yes | Whether Terraform may remove repositories containing images. No module default; baseline supplies the profile-derived policy. |
 
 Example input:
 
@@ -42,7 +43,7 @@ With `name_prefix = "secure-baseline-development"`, this example creates:
 
 The values are currently empty objects, so each repository's identity and name come entirely from its map key. No per-repository settings are exposed. Adding, removing, or renaming a map key changes the corresponding repository instance and AWS repository name.
 
-The module intentionally does not expose configuration for force deletion, tag mutability, encryption type, image scanning, repository policies, lifecycle retention, image references, or arbitrary caller tags. Those settings are platform-owned or deferred.
+The module exposes one shared `force_delete` input for its repository set. It does not expose per-repository overrides for force deletion, tag mutability, encryption type, image scanning, repository policies, lifecycle retention, image references, or arbitrary caller tags. Those other settings remain platform-owned or deferred.
 
 ## Encryption and KMS Ownership
 
@@ -62,17 +63,23 @@ Any image digest that remains active or deployable **MUST retain at least one ta
 
 Tag immutability prevents tag reassignment, but it does not prevent deletion of a tag or an untagged image. Any digest that remains active or deployable must retain at least one tag so it is not eligible for the untagged-image lifecycle policy. Sophisticated historical release retention is deferred.
 
-## Development/Test Destruction Posture
+## Profile-Derived Destruction Posture
 
-The current workload environments are regularly applied and destroyed to control development and test costs. Repositories therefore use:
+The repository resource uses `force_delete = var.force_delete`. Baseline supplies:
 
-```hcl
-force_delete = true # CHANGE THIS IN PROD
-```
+| Baseline profile/state | `force_delete` |
+|---|---|
+| Normal `production` | `false` |
+| `production` with `production_retirement_mode = true` | `false` |
+| `development` or `minimal` | `true` |
 
-This permits `terraform destroy` to remove a repository that still contains development images. Persistent production usage must reconsider this setting before deployment. The module does not use `prevent_destroy` protection.
+The reusable module does not resolve deployment profiles itself and has no `prevent_destroy` guard. `force_delete = false` prevents Terraform from automatically emptying a repository to delete it; it is not a general AWS prohibition on image deletion by authorized principals.
 
-Repository force deletion and lifecycle cleanup are separate concerns. The 30-day lifecycle rule handles ordinary cleanup of untagged build artifacts; it is not a prerequisite for environment teardown, and users do not need to wait for lifecycle expiration before destroying an environment.
+Production retirement requires deliberate image disposition. The supported `prod` Destroy path invokes a separately approved cleanup helper to delete images in the Terraform-owned repository set, verifies that the repositories are empty, and then applies the reviewed Terraform destroy plan. It does not temporarily set `force_delete = true`. Required images must be retained elsewhere before deletion is authorized. See [Production Retirement](../../docs/production-retirement.md).
+
+Repository force deletion and lifecycle cleanup are separate concerns. The 30-day lifecycle rule handles untagged images by time since image push; it is not a prerequisite for intentional environment teardown. The cleanup helper's RC1 environment restriction is `prod`, even though the baseline's lifecycle values are profile-derived.
+
+---
 
 ## Scanning Ownership
 
@@ -114,6 +121,7 @@ The `repositories` output is keyed by the same repository keys as the input map.
 - `name`
 - `repository_url`
 - `registry_id`
+- `force_delete`
 
 The module does not output registry credentials, authorization tokens, image tags, image digests, or selected deployment images.
 
@@ -141,4 +149,13 @@ Those responsibilities belong to other modules or baseline integration.
 
 The implemented `Deploy Application` workflow owns the separate image-publication boundary: it publishes an image through the image-publisher role, resolves the authoritative ECR digest, and opens a release PR. It does not change this module's ownership or make Terraform build or push images.
 
-`validate-ecr.sh` uses the workload-root repository output as its authoritative inventory and passes cleanly for `{}`. For configured repositories it validates identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved untagged-only lifecycle policy. `validate-security-workload.sh` separately checks the Terraform-computed effective Inspector resource types.
+`validate-ecr.sh` uses the workload-root repository output as its authoritative inventory and passes cleanly for `{}`. For configured repositories it validates live identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved untagged-only lifecycle policy. It also checks the Terraform-owned `force_delete` value against the lifecycle contract; that flag is provider deletion intent, not a live ECR repository attribute. `validate-security-workload.sh` separately checks the Terraform-computed effective Inspector resource types.
+
+## Implementation References
+
+This page targets v1.11.0, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`).
+
+- [Repository resources](main.tf), [inputs](variables.tf), and [outputs](outputs.tf)
+- [Baseline derivation](../../baseline/locals.tf) and [module integration](../../baseline/main.tf)
+- [ECR validator](../../scripts/validation/validate-ecr.sh)
+- [Publication and lifecycle tooling](../../scripts/deployment/README.md)
