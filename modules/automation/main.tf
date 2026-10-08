@@ -321,9 +321,13 @@ resource "aws_cloudwatch_event_bus" "secops" {
 }
 
 #### SECURITY OPERATIONS EVENT BUS POLICY
-# Match the IAM role ARN, not the STS session ARN. Identity Center's
-# AWSReservedSSO role suffix changes if account assignments are recreated.
-# The two paths cover Identity Center hosted in us-east-1 and other Regions.
+# Match the IAM role generated for the SecOps-Operator-${var.environment}
+# permission set, not the configurable Identity Center group display name
+# or the STS assumed-role session ARN.
+# IAM Identity Center generates the AWSReservedSSO role-name suffix, which
+# can change if the role is deleted and recreated.
+# The two ARN patterns support Identity Center instances hosted in
+# us-east-1 and other AWS Regions.
 data "aws_partition" "current" {}
 
 locals {
