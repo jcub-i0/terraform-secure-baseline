@@ -11,7 +11,7 @@ service-linked/delegation resources. This stack owns the delegated
 administrator-side Security Hub CSPM, GuardDuty, and Security Hub V2
 configuration.
 
-This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). See [main.tf](main.tf), [variables.tf](variables.tf), [outputs.tf](outputs.tf), and [backend.tf](backend.tf). Implementation, declared rollout intent, live policy realization, and workload behavior are different evidence layers.
+See [main.tf](main.tf), [variables.tf](variables.tf), [outputs.tf](outputs.tf), and [backend.tf](backend.tf). Implementation, declared rollout intent, live policy realization, and workload behavior are different evidence layers.
 
 ## Responsibilities
 
@@ -22,7 +22,7 @@ This stack currently manages:
 - Security Hub CSPM central organization configuration;
 - per-account Security Hub CSPM configuration policies and associations;
 - GuardDuty configuration referencing an existing detector discovered through a data source (not detector creation or ownership);
-- GuardDuty organization member enrollment and protection-plan configuration, retaining the Runtime Monitoring automated-agent contract in RC1;
+- GuardDuty organization member enrollment and protection-plan configuration, retaining the Runtime Monitoring automated-agent contract;
 - Security Hub V2 enablement in the `security-operations` account; and
 - the Security Hub V2 AWS Organizations policy attached to the root-level
   `Workloads` OU.
@@ -129,9 +129,9 @@ securityhub_cspm_account_policies = {
 }
 ```
 
-The frozen catalog resolves these keys (not an automatically updated standards catalog):
+The catalog defined in source resolves these keys (not an automatically updated standards catalog):
 
-| Key | Standard/version selected by RC1 |
+| Key | Configured standard |
 |---|---|
 | `aws_fsbp` | AWS Foundational Security Best Practices `1.0.0` |
 | `aws_tagging` | AWS Resource Tagging Standard `1.0.0` |
@@ -209,7 +209,7 @@ Feature and additional-configuration auto-enable values are validated against `A
 
 Member auto-enrollment is fixed at `ALL` when enabled, even if a caller selects `NEW` or `NONE` for a particular protection feature. The feature map is not an assertion that every account's realized runtime coverage is healthy.
 
-The frozen validator is stricter than the variable schema: when GuardDuty organization configuration is enabled, it requires `RUNTIME_MONITORING=ALL` with exactly `EC2_AGENT_MANAGEMENT=ALL`, `ECS_FARGATE_AGENT_MANAGEMENT=ALL`, and `EKS_ADDON_MANAGEMENT=NONE`. That is a required validation contract, not merely an optional default. A custom map accepted by Terraform's input validation can fail this baseline check. Other managed features are compared against resource-backed state/output values, and unmanaged live enabled features are rejected.
+The validator is stricter than the variable schema: when GuardDuty organization configuration is enabled, it requires `RUNTIME_MONITORING=ALL` with exactly `EC2_AGENT_MANAGEMENT=ALL`, `ECS_FARGATE_AGENT_MANAGEMENT=ALL`, and `EKS_ADDON_MANAGEMENT=NONE`. That is a required validation contract, not merely an optional default. A custom map accepted by Terraform's input validation can fail this baseline check. Other managed features are compared against resource-backed state/output values, and unmanaged live enabled features are rejected.
 
 This stack owns the organization-wide secure default. Workload Terraform does **not** manage these organization features. Instead, each workload ECS cluster expresses its own deployment-profile-derived participation intent with `GuardDutyManaged=true` for `production`/`development` or `GuardDutyManaged=false` for `minimal`.
 
@@ -414,4 +414,4 @@ The exporter reruns this layer's validator and writes the generated summary/log 
 
 The validator also requires the `securityhub_v2_organization_policy_id` output key before its feature-specific branches. With the V2 policy disabled, that root output evaluates to `null`; an absent key fails the required-output gate. Do not promise that every Terraform-valid staged/all-flags-false configuration passes the final centralized-security validator. The source defines rollout stages, but the complete validation path has additional requirements.
 
-An enabled contract and a disabled rollout path exercise different checks. Review the exact feature flags, warnings, live associations and effective-policy results rather than describing every green run as a complete central rollout. See the [script reference](../../../scripts/validation/README.md) and [evidence guide](../../../docs/assurance/validation-evidence-guide.md) for per-run provenance and limitations. No source edit or documentation update establishes a new live qualification at RC1.
+An enabled contract and a disabled rollout path exercise different checks. Review the exact feature flags, warnings, live associations and effective-policy results rather than describing every green run as a complete central rollout. See the [script reference](../../../scripts/validation/README.md) and [evidence guide](../../../docs/assurance/validation-evidence-guide.md) for per-run provenance and limitations. No source edit or documentation update establishes a new live qualification.

@@ -4,6 +4,11 @@
 
 The `compute` module provisions the workload EC2 compute layer.
 
+These are standalone `aws_instance` resources, not an Auto Scaling Group or
+ECS capacity provider. The module does not provide health-based replacement,
+load balancing, rolling patch orchestration, or automatic capacity scaling.
+The Fargate application runtime is a separate layer.
+
 It creates:
 
 - A compute security group
@@ -107,9 +112,15 @@ Current quarantine egress:
 
 | Direction | Protocol | Port | Destination | Purpose |
 |---|---|---:|---|---|
-| Egress | TCP | 443 | `0.0.0.0/0` | Restricted HTTPS access for SSM and forensic workflows |
+| Egress | TCP | 443 | Shared Interface Endpoint SG | Access to the endpoint ENIs permitted by the networking security-policy layer |
 
-The quarantine security group intentionally defines no inbound rules.
+The quarantine security group intentionally defines no inbound rules. Its
+HTTPS egress and the reciprocal endpoint ingress are created by
+[`security_policy`](../networking/security_policy/README.md), not inline here.
+This retains access to the shared endpoint group, not just SSM. It is not a
+complete network disconnect or an IAM restriction on which AWS APIs the
+instance can call. No general internet or S3-prefix-list egress rule is created
+for quarantine by that module.
 
 ---
 
@@ -129,7 +140,10 @@ The module selects the most recent matching Canonical Ubuntu 24.04 LTS image.
 
 Selecting the most recent AMI does not guarantee that every installed package is
 fully current. The first-boot bootstrap script performs an APT metadata refresh
-and distribution upgrade.
+and distribution upgrade. The AMI ID is resolved dynamically, not pinned to a
+literal image ID. A later plan can select a newer image and propose instance
+replacement even without a repository change. Review the saved plan and retain
+the resolved AMI as deployment evidence.
 
 ---
 
@@ -152,7 +166,7 @@ Terraform dependencies between:
 2. The networking security-policy rules
 3. The EC2 instances
 
-The EC2 instances explicitly depend on this resource:
+The EC2 instances include this dependency (excerpt; the full list appears below):
 
 ```hcl
 depends_on = [
@@ -235,6 +249,12 @@ Expected map format:
 }
 ```
 
+In the integrated baseline, the default topology provides three compute subnets
+for the production profile and two for the development/minimal profiles.
+Explicit supported AZ selections can change that count. This child module
+iterates the supplied map; it does not enforce those profile rules itself.
+Map-key changes alter instance addresses and require careful plan review.
+
 Current instance configuration:
 
 | Setting | Value |
@@ -244,6 +264,7 @@ Current instance configuration:
 | Placement | One instance per compute private subnet map entry |
 | Security group | `aws_security_group.compute` |
 | Detailed monitoring | Enabled |
+| EBS optimized | `true` |
 | IAM instance profile | `var.instance_profile_name` |
 | User data | `user_data/bootstrap.sh` |
 | Replace on user-data change | Enabled |
@@ -283,12 +304,19 @@ The bootstrap script:
 3. Configures noninteractive APT behavior
 4. Sets a five-minute dpkg lock timeout and five retries
 5. Forces APT operations over IPv4
-6. Rewrites Ubuntu repository URLs from HTTP to HTTPS
+6. Rewrites HTTP URLs in `/etc/apt/sources.list.d/ubuntu.sources` to HTTPS when that file exists
 7. Runs `apt-get update` with `APT::Update::Error-Mode=any`
 8. Runs `apt-get dist-upgrade -y`
 9. Installs `ca-certificates`, `curl`, and `jq`
 10. Records selected package versions and reboot-required state
 11. Logs the completion timestamp
+
+The source rewrite is not a rewrite of every APT source file. A missing
+`ubuntu.sources` file produces a warning. The script reports a required reboot
+but does not reboot the instance, explicitly install/configure SSM Agent or
+CloudWatch Agent, or verify that every vulnerability has been remediated.
+Terraform instance creation and SSM registration do not independently establish
+that this script completed successfully.
 
 If any configured repository still fails after retries, metadata refresh fails and strict shell handling stops the bootstrap instead of continuing with stale package indexes.
 
@@ -335,7 +363,7 @@ Depending on the effective deployment profile, that path may use:
 
 - NAT Gateway egress
 - AWS Network Firewall followed by a NAT Gateway
-- An approved internal package mirror
+- An approved internal package mirror, if separately configured and reachable
 
 VPC endpoint access alone does not provide access to public Ubuntu repositories.
 
@@ -389,7 +417,7 @@ Each instance receives:
 | `Purpose` | Workload processing description | Workload role |
 | `IsolationAllowed` | `tostring(var.isolation_allowed)` | Explicit isolation authorization |
 | `PatchGroup` | `var.patch_tag_value` | SSM Patch Manager targeting |
-| `Backup` | `true` | AWS Backup tag-based selection |
+| `Backup` | `tostring(var.backup_enabled)` | AWS Backup tag-based selection intent |
 
 ### Isolation Authorization
 
@@ -408,7 +436,16 @@ isolation_allowed = true
 
 The resulting EC2 tag is stored as the string `true` or `false`.
 
-The current root-stack policy sets development to `true` and staging and production to `false`. Local tfvars or workload Plan GitHub Environment variables must make that decision explicitly.
+The reusable compute module defaults to `false`, but the supplied `dev`,
+`staging`, and `prod` workload roots each declare a `true` default and forward
+that input. Do not infer disabled response from an environment name or the
+child-module default. Set the intended value explicitly in reviewed local/CI
+inputs and inspect the live tag.
+
+The isolation handler trims and lowercases the tag before comparing it with
+`true`; this is a handler gate, not an IAM condition on the response role.
+Rollback writes `IsolationAllowed=true` rather than recovering a prior value.
+Reconcile that write with the approved Terraform input after a response test.
 
 ---
 
@@ -439,8 +476,16 @@ Because all changes to `vpc_security_group_ids` are ignored, Terraform will not
 automatically correct manual or automation-driven security group attachment
 changes.
 
-Restoring an isolated instance should be handled through the approved rollback
-workflow or another documented incident-response process.
+Restoring an isolated instance should be handled through an approved and
+verified recovery procedure. See the [isolation](../../docs/lambda_tests/ec2_isolation.md)
+and [rollback](../../docs/lambda_tests/ec2_rollback.md) guides for partial-failure
+and authorization limits.
+
+The ignore list protects in-place attachment/tag ownership; it is not
+`prevent_destroy`. AMI or user-data replacement and an approved destroy can
+still remove an isolated instance. Review incident and evidence-preservation
+requirements before applying a replacement. The rollback-only release tags
+are not all included in this ignore list.
 
 ---
 
@@ -455,8 +500,11 @@ PatchGroup = var.patch_tag_value
 The separate `patch_management` module uses this tag to target instances with
 SSM Patch Manager.
 
-The compute bootstrap performs first-boot package updates. Patch Manager provides
-ongoing scheduled patching after launch.
+The compute bootstrap attempts first-boot package updates. The separate
+[patch-management module](../patch_management/README.md) configures scheduled
+patching; successful execution, complete target coverage, repository access,
+and any required reboot must be verified separately. Its tag target does not
+exclude quarantined instances.
 
 ---
 
@@ -465,10 +513,15 @@ ongoing scheduled patching after launch.
 The module applies:
 
 ```text
-Backup = true
+Backup = tostring(var.backup_enabled)
 ```
 
-The backup module can use this tag for resource selection.
+`backup_enabled` is a required child-module Boolean with no default. The
+baseline supplies its resolved profile-aware value. This child module does not
+resolve a deployment profile or convert a null input into a profile default.
+When scheduling is disabled, the tag is `false`; the retained encrypted Backup
+vault is a separate resource. A `true` tag is selection intent, not proof of a
+successful backup or a recoverable snapshot.
 
 ---
 
@@ -486,7 +539,8 @@ The backup module can use this tag for resource selection.
 | `data_sg_id` | `string` | n/a | Data-tier security group ID |
 | `db_port` | `string` | n/a | Database port |
 | `patch_tag_value` | `string` | n/a | Value assigned to the `PatchGroup` tag |
-| `isolation_allowed` | `bool` | `false` | Whether instances may be automatically isolated |
+| `isolation_allowed` | `bool` | `false` | Whether instances may be automatically isolated; the caller can override this default |
+| `backup_enabled` | `bool` | n/a | Resolved backup-selection Boolean supplied by the baseline |
 | `compute_sg_rule_ids` | `object` | n/a | Security group rule IDs that must exist before EC2 launch |
 | `interface_endpoint_ids` | `map(string)` | n/a | Terraform-managed Interface Endpoint IDs that must exist before EC2 launch |
 
@@ -556,28 +610,28 @@ after updating every calling root module.
 
 ## Usage
 
+This is the composition used from `baseline/`; it is not a standalone workload root.
+
 ```hcl
 module "compute" {
-  source = "../../modules/compute"
+  source = "../modules/compute"
 
   name_prefix = local.name_prefix
   vpc_id      = module.networking.vpc_id
   environment = var.environment
 
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
-  instance_profile_name          = module.iam.compute_instance_profile_name
+  compute_sg_rule_ids            = module.security_policy.compute_sg_rule_ids
+  instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
+  isolation_allowed              = var.isolation_allowed
+  backup_enabled                 = local.effective_backup_enabled
 
-  patch_tag_value  = var.patch_tag_value
-  isolation_allowed = var.isolation_allowed
-
-  compute_sg_rule_ids   = module.security_policy.compute_sg_rule_ids
-  interface_endpoint_ids = module.vpc_endpoints.interface_endpoint_ids
-
-  # Retained compatibility inputs.
+  interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
   interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
   data_sg_id                = module.storage.data_sg_id
   db_port                   = var.db_port
+  patch_tag_value           = var.patch_tag_value
 }
 ```
 
@@ -594,21 +648,90 @@ Do not add a module-level dependency from the entire compute module to the stand
 
 ## Validation
 
-### Terraform Validation
+Run these local Bash examples from the repository root after initializing the
+selected workload backend with reviewed settings. Set the intended account
+independently of the current credentials. `us-east-1` and `dev` are examples,
+not universal deployment settings. These examples use a named AWS profile;
+GitHub OIDC jobs instead use their configured default credential chain.
 
 ```bash
-terraform fmt -recursive
-terraform validate
-terraform plan
+export AWS_PAGER=""
+export AWS_PROFILE="dev"
+export AWS_REGION="us-east-1"
+export ENVIRONMENT="dev"
+export EXPECTED_ACCOUNT_ID="<WORKLOAD-ACCOUNT-ID>"
+
+prepare_workload_context() {
+  local caller
+  case "${ENVIRONMENT:-}" in
+    dev|staging|prod) ;;
+    *) printf '%s\n' 'Select dev, staging, or prod.' >&2; return 1 ;;
+  esac
+  : "${AWS_PROFILE:?Set the workload profile}"
+  : "${AWS_REGION:?Set the service Region}"
+  [[ "${EXPECTED_ACCOUNT_ID:-}" =~ ^[0-9]{12}$ ]] || {
+    printf '%s\n' 'Set the intended 12-digit account ID.' >&2; return 1;
+  }
+  caller="$(aws sts get-caller-identity --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" --query Account --output text)" || return 1
+  [[ "$caller" == "$EXPECTED_ACCOUNT_ID" ]] || {
+    printf '%s\n' 'AWS caller account mismatch.' >&2; return 1;
+  }
+  WORKLOAD_ROOT="environments/${ENVIRONMENT}"
+  WORKLOAD_OUTPUTS_JSON="$(terraform -chdir="$WORKLOAD_ROOT" output -json)" || return 1
+  jq -e --arg region "$AWS_REGION" '
+    .primary_region.value == $region and
+    (.name_prefix.value | type == "string" and length > 0) and
+    (.vpc_id.value | type == "string" and startswith("vpc-"))
+  ' <<< "$WORKLOAD_OUTPUTS_JSON" >/dev/null || return 1
+  NAME_PREFIX="$(jq -r '.name_prefix.value' <<< "$WORKLOAD_OUTPUTS_JSON")"
+  VPC_ID="$(jq -r '.vpc_id.value' <<< "$WORKLOAD_OUTPUTS_JSON")"
+  export WORKLOAD_ROOT NAME_PREFIX VPC_ID
+}
+
+prepare_workload_context
 ```
+
+Stop if this preflight fails. The `${VAR:?message}` expressions require a
+non-empty value; they do not validate a profile's authority. Keep the selected
+credentials, account, Region, and backend consistent throughout each test.
+Re-run the complete preflight after changing environments.
+
+Use the existing workload validators for their implemented configuration checks:
+
+```bash
+./scripts/validation/validate-compute.sh "${ENVIRONMENT:?Select the workload}"
+./scripts/validation/validate-ssm.sh "${ENVIRONMENT:?Select the workload}"
+./scripts/validation/validate-networking.sh "${ENVIRONMENT:?Select the workload}"
+```
+
+They do not execute the first-boot script, prove patch completion, establish
+EC2 application high availability, or substitute for a live EC2 GuardDuty
+coverage test. Fargate coverage evidence is not EC2-agent evidence.
+
+### Terraform Validation
+
+After reviewing backend initialization and selecting the same effective inputs
+as the deployment, run from the repository root:
+
+```bash
+terraform -chdir="${WORKLOAD_ROOT:?Run the preflight}" fmt -check -recursive
+terraform -chdir="${WORKLOAD_ROOT:?Run the preflight}" validate
+terraform -chdir="${WORKLOAD_ROOT:?Run the preflight}" plan
+```
+
+Do not run the reusable child module as a deployment root. These commands do
+not execute the remote bootstrap or patch task.
 
 ### Confirm Security Groups
 
 ```bash
 aws ec2 describe-security-groups \
+  --profile "${AWS_PROFILE}" \
   --region "${AWS_REGION}" \
   --filters \
     "Name=group-name,Values=${NAME_PREFIX}-Compute-SG,${NAME_PREFIX}-Quarantine-SG" \
+    "Name=vpc-id,Values=${VPC_ID}" \
   --query 'SecurityGroups[].[GroupName,GroupId,VpcId,Description]' \
   --output table
 ```
@@ -617,10 +740,13 @@ aws ec2 describe-security-groups \
 
 ```bash
 aws ec2 describe-instances \
+  --profile "${AWS_PROFILE}" \
   --region "${AWS_REGION}" \
   --filters \
     "Name=tag:Environment,Values=${ENVIRONMENT}" \
-    "Name=tag:Terraform,Values=true" \
+    "Name=tag:Name,Values=${NAME_PREFIX}-EC2-*" \
+    "Name=vpc-id,Values=${VPC_ID}" \
+    "Name=instance-state-name,Values=pending,running,stopping,stopped" \
   --query 'Reservations[].Instances[].[InstanceId,Placement.AvailabilityZone,SubnetId,PrivateIpAddress,PublicIpAddress,State.Name]' \
   --output table
 ```
@@ -630,16 +756,23 @@ Expected:
 - Instances are in compute private subnets
 - Instances have private IP addresses
 - Public IP addresses are absent
-- Instances are running
+- Instances are running in normal operation; an approved stopped/isolation state must be recorded separately
+
+Compare the full instance/subnet/AZ set with the applied `network_topology`
+output. A table with one matching instance does not establish complete fleet
+placement. Terminated instances are deliberately excluded from this inspection.
 
 ### Confirm IMDSv2
 
 ```bash
 aws ec2 describe-instances \
+  --profile "${AWS_PROFILE}" \
   --region "${AWS_REGION}" \
   --filters \
     "Name=tag:Environment,Values=${ENVIRONMENT}" \
-    "Name=tag:Terraform,Values=true" \
+    "Name=tag:Name,Values=${NAME_PREFIX}-EC2-*" \
+    "Name=vpc-id,Values=${VPC_ID}" \
+    "Name=instance-state-name,Values=pending,running,stopping,stopped" \
   --query 'Reservations[].Instances[].[InstanceId,MetadataOptions.HttpTokens,MetadataOptions.HttpPutResponseHopLimit]' \
   --output table
 ```
@@ -653,59 +786,100 @@ HttpPutResponseHopLimit = 2
 
 ### Confirm SSM Registration
 
+Select one actual instance ID from the reviewed workload inventory; repeat for
+every expected instance. Do not select an arbitrary first account-wide result.
+
 ```bash
+export INSTANCE_ID="<REVIEWED-WORKLOAD-INSTANCE-ID>"
 aws ssm describe-instance-information \
+  --profile "${AWS_PROFILE}" \
   --region "${AWS_REGION}" \
+  --filters "Key=InstanceIds,Values=${INSTANCE_ID}" \
   --query 'InstanceInformationList[].[InstanceId,PingStatus,PlatformName,AgentVersion]' \
   --output table
 ```
 
-Expected:
-
-- `PingStatus` is `Online`
-- Platform is Ubuntu
+Expect the exact selected instance, `PingStatus=Online`, and the intended Ubuntu
+platform. An empty result is missing registration evidence, not a pass.
 
 ### Confirm Bootstrap Results
 
+Prefer reading the bootstrap and cloud-init logs through an approved SSM
+session. The following alternative creates a Run Command execution. Although
+its remote commands inspect files, `send-command` is not a read-only AWS API.
+Obtain authorization for that exact instance and retain the command ID.
+
 ```bash
-aws ssm send-command \
-  --region "${AWS_REGION}" \
-  --instance-ids "${INSTANCE_ID}" \
-  --document-name AWS-RunShellScript \
-  --parameters 'commands=[
-    "cloud-init status --long",
-    "tail -n 250 /var/log/instance-bootstrap.log",
-    "tail -n 250 /var/log/cloud-init-output.log"
-  ]'
+(
+  set -euo pipefail
+  prepare_workload_context
+  : "${INSTANCE_ID:?Select the reviewed instance}"
+  : "${APPROVED_INSTANCE_ID:?Set the independently approved instance ID}"
+  [[ "$INSTANCE_ID" == "$APPROVED_INSTANCE_ID" ]]
+  instance_vpc="$(aws ec2 describe-instances --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" \
+    --query 'Reservations[0].Instances[0].VpcId' --output text)"
+  [[ "$instance_vpc" == "$VPC_ID" ]]
+  command_id="$(aws ssm send-command --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" \
+    --document-name AWS-RunShellScript \
+    --parameters '{"commands":["set -eu","cloud-init status --long","tail -n 250 /var/log/instance-bootstrap.log","tail -n 250 /var/log/cloud-init-output.log"]}' \
+    --query 'Command.CommandId' --output text)"
+  [[ -n "$command_id" && "$command_id" != "None" ]]
+  printf 'Review command ID: %s\n' "$command_id"
+  if ! aws ssm wait command-executed --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" --command-id "$command_id" --instance-id "$INSTANCE_ID"; then
+    printf '%s\n' 'Waiter did not confirm success; inspect the command result.' >&2
+  fi
+  result="$(aws ssm get-command-invocation --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+    --output json)"
+  jq '{CommandId,InstanceId,Status,ResponseCode,StandardOutputContent,StandardErrorContent}' <<< "$result"
+  jq -e '.Status == "Success" and .ResponseCode == 0' <<< "$result" >/dev/null
+)
 ```
 
-The bootstrap log should show:
+`cloud-init` can report incomplete/error status and stop the remote shell before
+the log-tail commands; inspect those logs separately in that case. A waiter
+failure can also mean its polling period ended before the command finished.
+Reinspect the same ID rather than blindly resubmitting. Returned output can be
+truncated and is not automatically archived by this example.
 
-- Successful Ubuntu repository access without unresolved APT errors
-- APT metadata refresh followed by the distribution upgrade
-- Required package installation
-- Relevant package versions and reboot-required state
-- Bootstrap completion timestamp
-
-The source configuration should contain `Acquire::ForceIPv4=true` and `APT::Update::Error-Mode=any`.
+Require bootstrap completion without unresolved APT errors, the recorded
+package/reboot state, and the intended instance identity. A successful command
+transport alone does not certify the log content or prove a required reboot
+occurred. The source uses `Acquire::ForceIPv4=true` and
+`APT::Update::Error-Mode=any`.
 
 ### Confirm Package Repository Access
 
+From an approved SSM session, inspect the node's actual source files first:
+
 ```bash
-aws ssm send-command \
-  --region "${AWS_REGION}" \
-  --instance-ids "${INSTANCE_ID}" \
-  --document-name AWS-RunShellScript \
-  --parameters 'commands=[
-    "curl -4 -fsSI --connect-timeout 10 --max-time 30 https://security.ubuntu.com/ubuntu/dists/noble-security/InRelease",
-    "curl -4 -fsSI --connect-timeout 10 --max-time 30 https://us-east-1.ec2.archive.ubuntu.com/ubuntu/dists/noble/InRelease"
-  ]'
+sudo cat /etc/apt/sources.list.d/ubuntu.sources
+sudo test ! -f /etc/apt/sources.list || sudo cat /etc/apt/sources.list
 ```
+
+Select the actual HTTPS mirror and suite from that output; do not assume a
+particular Region's Ubuntu mirror. A read-only HTTP request can test that one
+path without installing updates:
+
+```bash
+REPOSITORY_PROBE_URL="https://security.ubuntu.com/ubuntu/dists/noble-security/InRelease"
+# Replace the example URL with the actual source being tested.
+curl -4 -fsSI --connect-timeout 10 --max-time 30 "$REPOSITORY_PROBE_URL"
+```
+
+A successful HEAD response is not an APT update, signature-validation, complete
+mirror-reachability, or installation test. Review all active sources and the
+bootstrap/patch results separately. Do not repair failed package access by
+loosening quarantine or production egress as part of this inspection.
 
 ### Confirm Isolation Tags
 
 ```bash
 aws ec2 describe-instances \
+  --profile "${AWS_PROFILE}" \
   --region "${AWS_REGION}" \
   --instance-ids "${INSTANCE_ID}" \
   --query 'Reservations[0].Instances[0].Tags[?Key==`IsolationAllowed` || starts_with(Key, `Isolat`) || Key==`OriginalSecurityGroups`].[Key,Value]' \
@@ -803,14 +977,14 @@ Then inspect the plan for instance replacement after modifying
 - Public IP assignment is not explicitly enabled.
 - IMDSv2 is required.
 - Root volumes use customer-managed KMS encryption.
-- The default isolation authorization is fail-closed.
+- The child-module default is fail-closed; supplied workload roots override it unless configured otherwise.
 - Normal security group rules remain centrally owned by the networking
   security-policy layer.
 - EC2 instances wait for required security group rules and Terraform-managed Interface Endpoints before launch.
 - The `guardduty-data` endpoint can therefore exist before GuardDuty Runtime Monitoring evaluates eligible EC2 instances.
 - User-data changes replace instances.
 - First-boot bootstrap upgrades the installed operating system packages.
-- Routine Terraform applies do not automatically release isolated instances.
+- In-place Terraform updates preserve ignored containment attachments; replacement and destroy are separate risks.
 - SSM Session Manager should be preferred over inbound SSH administration.
 
 ---
@@ -836,11 +1010,15 @@ Then inspect the plan for instance replacement after modifying
 ## Notes
 
 - The module currently creates one EC2 instance per compute subnet map entry.
-- AMI ID, instance type, and root-volume sizing are currently fixed in
-  `main.tf`.
+- AMI selection criteria, instance type, and root-volume sizing are defined in
+  `main.tf`; the selected AMI ID is dynamic.
 - The bootstrap script is located at
   `modules/compute/user_data/bootstrap.sh`.
 - The bootstrap log is written to
   `/var/log/instance-bootstrap.log`.
 - The networking security-policy output and compute input must use matching `compute_sg_rule_ids` object attributes.
 - `interface_endpoint_ids` should come directly from the VPC Endpoints module so endpoint creation remains part of the EC2 dependency graph.
+
+Implementation references: [resources](main.tf), [inputs](variables.tf),
+[outputs](outputs.tf), [bootstrap script](user_data/bootstrap.sh), and
+[baseline composition](../../baseline/main.tf).

@@ -6,7 +6,7 @@ The `modules/identity_center` module creates IAM Identity Center groups, permiss
 
 It is a reusable persona module: the caller decides which SecOps personas are enabled, supplies their group names, and identifies the account that receives each assignment.
 
-This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). See [main.tf](main.tf), [variables.tf](variables.tf), and [outputs.tf](outputs.tf). The target `account_id` is an assignment destination; it does not switch AWS provider credentials into that account.
+See [main.tf](main.tf), [variables.tf](variables.tf), and [outputs.tf](outputs.tf). The target `account_id` is an assignment destination; it does not switch AWS provider credentials into that account.
 
 The control-plane Identity Center stack currently uses this module for:
 
@@ -79,9 +79,9 @@ Its inline policy allows:
 
 `secops_event_bus_arn` is required whenever Operator access is enabled.
 
-The Operator persona is intended for controlled event submission rather than direct EC2 or Lambda administration. Its inline grant has no condition on `events:source`, detail type, payload, approval record, or workflow identity. The configured bus ARN limits the `DescribeEventBus` / `PutEvents` identity-policy grant to that resource; it is not proof that a submitted event was approved or that other resource policies enforce Operator-only access.
+The Operator persona submits events rather than directly administering EC2 or Lambda. Its inline grant scopes `DescribeEventBus` and `PutEvents` to the configured bus ARN, but does not authenticate event payloads. The workload bus resource policy separately restricts `custom.rollback` publication to matching Identity Center Operator role ARNs and explicitly denies other publishers. Neither policy independently validates the named approver or ticket.
 
-The built-in control-plane caller constructs `event-bus/secops-bus`, whereas RC1 workload automation creates `<name_prefix>-secops-bus`. See the [root's exact bus-identity boundary](../../bootstrap/control_plane/identity_center/README.md#operator-bus-identity-in-rc1). This module accepts the supplied ARN; it neither discovers nor repairs that mismatch.
+The built-in control-plane caller derives the prefixed event-bus ARN from required `cloud_name` and the workload map key, matching automation's `<name_prefix>-secops-bus`. See the [root's bus-identity contract](../../bootstrap/control_plane/identity_center/README.md#operator-bus-identity). This module accepts the supplied ARN without independently querying or validating the live bus.
 
 ### SecOps-Analyst
 
@@ -168,7 +168,7 @@ All fourteen inputs are listed above. Operator defaults to enabled but its group
 
 ### Workload Operator example
 
-These are caller examples placed at `bootstrap/control_plane/identity_center`, which explains the relative `source` path. The IDs are synthetic 12-digit examples. Supply the existing Identity Center provider context and actual target account/ARN. This standalone example supplies the **prefixed workload bus**; it is not a claim that the frozen root already constructs that value.
+These are caller examples placed at `bootstrap/control_plane/identity_center`, which explains the relative `source` path. The IDs are synthetic 12-digit examples. Supply the existing Identity Center provider context and actual target account/ARN. This standalone example supplies the **prefixed workload bus**; it is not a claim that the root already constructs that value.
 
 ```hcl
 module "identity_center_workload" {

@@ -4,7 +4,7 @@
 
 The `firewall` module implements **outbound traffic inspection and control within one workload VPC** using **AWS Network Firewall**.
 
-This reference describes `v1.11.0-rc1`. The firewall is workload-account infrastructure, not a cross-account inspection service deployed in `security-operations`. Baseline instantiates it only when `effective_egress_mode = "network_firewall"`.
+The firewall is workload-account infrastructure, not a cross-account inspection service deployed in `security-operations`. Baseline instantiates it only when `effective_egress_mode = "network_firewall"`.
 
 It exists to address a key security challenge in cloud environments: how to
 allow reviewed workload internet access without permitting unrestricted
@@ -91,7 +91,7 @@ Configures:
 - Stateful rule group enforcement
 - Strict rule evaluation order
 
-The RC1 policy forwards both ordinary and fragment stateless defaults to `aws:forward_to_sfe`. The stateful engine and generated domain rule group both use `STRICT_ORDER`; the rule group has capacity `1000` and is referenced at priority `1`. The stateful defaults are:
+The policy forwards both ordinary and fragment stateless defaults to `aws:forward_to_sfe`. The stateful engine and generated domain rule group both use `STRICT_ORDER`; the rule group has capacity `1000` and is referenced at priority `1`. The stateful defaults are:
 
 ```hcl
 stateful_default_actions = [
@@ -327,9 +327,9 @@ automated infrastructure deployment using Terraform.
 
 ## Current destruction posture
 
-RC1 separates resource deletion protection from policy/subnet-change protection:
+The module separates resource deletion protection from policy/subnet-change protection:
 
-| Setting | RC1 module behavior | Baseline behavior |
+| Setting | Module behavior | Baseline behavior |
 |---|---|---|
 | `delete_protection` | Required caller input | `true` for normal production; `false` for retirement and non-production |
 | `firewall_policy_change_protection` | Literal `false` | Not overridden by deployment profile |

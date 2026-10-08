@@ -38,7 +38,18 @@ It supports:
 
 This module is required by other security and monitoring components that depend on CloudTrail and VPC Flow Log data.
 
-The following assumes that `deployment_profile` is set to `production` and `cloudwatch_retention_days` is either `null` or `90`. Different values for either of these variables (especially `cloudwatch_retention_days`) may result in outcomes that differ from those depicted below.
+The child module does not accept `deployment_profile` or resolve profile defaults.
+Its required `cloudwatch_retention_days` input is applied to both log groups.
+The [baseline composition](../../baseline/main.tf) supplies its resolved
+`local.effective_cloudwatch_retention_days`; the workload exposes
+`effective_cloudwatch_retention_days` for comparison with live resources.
+
+The S3 bucket, lifecycle policy, KMS key, and IAM roles are owned by other
+modules. “Centralized” here describes the supplied workload log destination,
+not an organization trail or an independently protected cross-account archive.
+See the [storage reference](../storage/README.md) for deletion and retention
+limits. This logging module provides no Object Lock or immutable-retention
+control of its own.
 
 ---
 
@@ -62,7 +73,7 @@ Configuration:
 
 | Setting | Value |
 |---|---|
-| Retention | 90 days |
+| Retention | `var.cloudwatch_retention_days` |
 | Encryption | Logs CMK |
 | Purpose | CloudTrail event delivery and detection source |
 
@@ -95,7 +106,7 @@ Configuration:
 
 | Setting | Value |
 |---|---|
-| Retention | 90 days |
+| Retention | `var.cloudwatch_retention_days` |
 | Encryption | Logs CMK |
 | Purpose | VPC Flow Logs delivery and Firehose forwarding source |
 
@@ -149,7 +160,12 @@ event_selector {
 }
 ```
 
-This captures both read and write management events.
+This configures both read and write management events. No data-resource selector
+or advanced event selector is declared here: do not infer S3 object access,
+Lambda invocation data-event logging, or complete application audit coverage.
+`is_multi_region_trail` is an audit-collection setting, not a multi-Region
+workload, recovery mechanism, or organization-trail setting. This resource does
+not declare `is_organization_trail = true`.
 
 Management events include AWS control-plane API calls such as:
 
@@ -201,12 +217,15 @@ Configuration:
 | Traffic type | `ALL` |
 | IAM role | Flow Logs role ARN |
 
-Traffic type `ALL` means the flow log captures:
+Traffic type `ALL` requests records for:
 
 - Accepted traffic
 - Rejected traffic
 
-This provides useful visibility for both troubleshooting and security investigations.
+This provides network-flow metadata for investigation, not packet contents or
+an assurance that every possible network event is recorded. The resource does
+not specify a custom record format or aggregation interval. Configuration and
+fresh delivered records must be checked separately.
 
 ---
 
@@ -247,7 +266,16 @@ Error delivery prefix:
 errors/vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/!{firehose:error-output-type}/
 ```
 
-This provides longer-term S3 archival of VPC Flow Logs in addition to the 90-day CloudWatch Logs retention period.
+This configures an S3 archival path in addition to caller-selected CloudWatch
+retention. The `kms_key_arn` above belongs to the extended-S3 destination; the
+resource does not explicitly configure a separate delivery-stream
+`server_side_encryption` block. It also declares no record transformation,
+decompression, or format-conversion processor. Inspect a delivered object
+before assuming its decoded contents are plain flow-log lines.
+
+The error prefix is a configured destination, not a guarantee that every failure
+will produce an object there. No separate Firehose diagnostic log group or
+failure alarm is created by this module.
 
 ---
 
@@ -333,7 +361,8 @@ Firehose archives the logs to S3 for longer-term retention and lower-cost storag
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
 | `cloud_name` | Cloud or project name used by the broader baseline | Yes |
 | `centralized_logs_bucket_id` | Name or ID of the centralized logs S3 bucket used by CloudTrail | Yes |
-| `logs_cmk_arn` | KMS CMK ARN used to encrypt CloudWatch Log Groups, CloudTrail, and Firehose delivery | Yes |
+| `logs_cmk_arn` | KMS CMK ARN used by log groups, CloudTrail, and the Firehose S3 destination | Yes |
+| `cloudwatch_retention_days` | Required retention value applied to both CloudWatch log groups; caller resolves profile defaults | Yes |
 | `cloudtrail_role_arn` | IAM role ARN used by CloudTrail to write to CloudWatch Logs | Yes |
 | `flowlogs_role_arn` | IAM role ARN used by VPC Flow Logs to write to CloudWatch Logs | Yes |
 | `account_id` | AWS account ID | Yes |
@@ -341,9 +370,17 @@ Firehose archives the logs to S3 for longer-term retention and lower-cost storag
 | `centralized_logs_bucket_arn` | ARN of the centralized logs S3 bucket used by Firehose | Yes |
 | `cw_to_firehose_role_arn` | IAM role ARN used by CloudWatch Logs to send log events to Firehose | Yes |
 
+All 13 inputs are declared as `string` and have no defaults in
+[variables.tf](variables.tf). `cloud_name` and `account_id` remain required
+interface fields but are not referenced by this module's `main.tf`; supplying
+an account ID does not independently verify the active provider identity.
+
 ---
 
 ## Outputs
+
+These are child-module outputs from [outputs.tf](outputs.tf), not a promise that
+every value is forwarded unchanged by each workload root.
 
 | Name | Description |
 |---|---|
@@ -357,6 +394,9 @@ Firehose archives the logs to S3 for longer-term retention and lower-cost storag
 
 ## Usage Example
 
+This complete call belongs in the existing `baseline/` composition, alongside
+the referenced modules and locals; it is not an independent Terraform root.
+
 ```hcl
 module "logging" {
   source = "../modules/logging"
@@ -366,11 +406,12 @@ module "logging" {
   name_prefix                 = local.name_prefix
 
   vpc_id                      = module.networking.vpc_id
-  account_id                  = data.aws_caller_identity.current.account_id
+  account_id                  = var.account_id
 
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
   logs_cmk_arn                = module.security.logs_cmk_arn
+  cloudwatch_retention_days   = local.effective_cloudwatch_retention_days
 
   cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
   flowlogs_role_arn           = module.iam.flowlogs_role_arn
@@ -393,6 +434,12 @@ This module should be deployed after the following resources exist:
 - Firehose delivery IAM role
 - CloudWatch Logs to Firehose IAM role
 
+The composition uses resource references for ordering, not a required sequence
+of separately applying each child module. The IAM module's four logging-role
+outputs carry inline-policy dependencies. Avoid adding broad module-level
+`depends_on` relationships that would conflict with the existing bidirectional
+log-group/role wiring. These dependencies do not poll live delivery readiness.
+
 The module depends heavily on IAM roles created outside this module.
 
 If any of the logging delivery roles are missing or under-permissioned, log delivery may fail.
@@ -401,23 +448,103 @@ If any of the logging delivery roles are missing or under-permissioned, log deli
 
 ## Validation
 
-### Confirm CloudWatch Log Groups
+Use [validate-logging.sh](../../scripts/validation/validate-logging.sh) for its
+implemented checks, then review the additional reads below. The validator
+selects the first prefix-matching trail and requires at least one matching
+multi-Region trail and one active VPC flow log. Several S3/CW delivery problems,
+missing CloudWatch integration, and absent retention values are warnings. It
+does not inspect Firehose, subscription filters, fresh S3 objects, event/Insight
+selectors, or the CloudTrail digest chain. Its PASS is not an end-to-end logging
+or exact-inventory certification.
+
+Run these local examples from the repository root with an initialized, applied
+workload root and Bash, AWS CLI, Terraform, and `jq` available. Set a named
+workload `AWS_PROFILE`, the intended service `AWS_REGION`, and an independently
+known `EXPECTED_ACCOUNT_ID` first. `ENVIRONMENT` defaults to `dev`; select it
+explicitly when inspecting another workload. The `${VAR:?message}` expressions
+stop on missing values; their messages are not replacement placeholders.
+
+These examples require a named local profile. That is not a requirement to add
+`AWS_PROFILE` to GitHub OIDC jobs or other default-credential-chain executions.
+The service Region is checked against applied Terraform output; it does not
+change the independently configured state-backend Region.
 
 ```bash
-aws logs describe-log-groups \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --log-group-name-prefix "/aws/" \
-  --query 'logGroups[?contains(logGroupName, `cloudtrail`) || contains(logGroupName, `flowlogs`)].[logGroupName,retentionInDays,kmsKeyId]' \
-  --output table
+set -euo pipefail
+: "${AWS_PROFILE:?Set the local workload profile}"
+: "${AWS_REGION:?Set the intended service Region}"
+: "${EXPECTED_ACCOUNT_ID:?Set the independently known workload account ID}"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+case "$ENVIRONMENT" in dev|staging|prod) ;; *) echo "Invalid workload" >&2; exit 1 ;; esac
+[[ "$EXPECTED_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "Invalid account ID" >&2; exit 1; }
+export AWS_PROFILE AWS_REGION EXPECTED_ACCOUNT_ID
+export AWS_DEFAULT_REGION="$AWS_REGION" AWS_PAGER=""
+
+CALLER_ACCOUNT_ID="$(aws sts get-caller-identity \
+  --profile "$AWS_PROFILE" --region "$AWS_REGION" --query Account --output text)"
+[[ "$CALLER_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]] || {
+  echo "Unexpected AWS account; stopping" >&2; exit 1;
+}
+ACCOUNT_ID="$CALLER_ACCOUNT_ID"
+ENV_DIR="environments/${ENVIRONMENT}"
+OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"
+read_output_string() {
+  jq -er --arg key "$1" '
+    .[$key].value | if type == "string" and length > 0
+    then . else error("Missing or invalid string output: " + $key) end
+  ' <<< "$OUTPUTS_JSON"
+}
+APPLIED_REGION="$(read_output_string primary_region)"
+[[ "$AWS_REGION" == "$APPLIED_REGION" ]] || {
+  echo "Service Region differs from applied primary_region; stopping" >&2; exit 1;
+}
+NAME_PREFIX="$(read_output_string name_prefix)"
+export NAME_PREFIX
 ```
 
-Expected:
+This preflight confirms selected context, not every permission, resource, or
+configuration. Do not treat a successful API read as proof of delivery or
+operating effectiveness.
 
-- CloudTrail log group exists
-- VPC Flow Logs log group exists
-- Retention is 90 days
-- KMS key is configured
+```bash
+VPC_ID="$(read_output_string vpc_id)"
+CENTRALIZED_LOGS_BUCKET_NAME="$(read_output_string centralized_logs_bucket_name)"
+LOGS_CMK_ARN="$(read_output_string logs_cmk_arn)"
+EXPECTED_RETENTION="$(jq -er '.effective_cloudwatch_retention_days.value |
+  if type == "number" and . >= 0 then . else error("Invalid retention output") end' \
+  <<< "$OUTPUTS_JSON")"
+CLOUDTRAIL_NAME="${NAME_PREFIX}-CloudTrail"
+./scripts/validation/validate-logging.sh "$ENVIRONMENT"
+```
+
+A failed validator is not made acceptable by a later successful inspection.
+Preserve the warnings and command outputs with account, Region, timestamp,
+checked-out commit, and deployment provenance.
+
+### Confirm CloudWatch Log Groups
+
+Inspect each exact log-group name rather than all account-wide trail/flow groups:
+
+```bash
+for LOG_GROUP_NAME in "/aws/cloudtrail/${NAME_PREFIX}" "/aws/flowlogs/${NAME_PREFIX}"; do
+  GROUPS_JSON="$(aws logs describe-log-groups \
+    --region "$AWS_REGION" --profile "$AWS_PROFILE" \
+    --log-group-name-prefix "$LOG_GROUP_NAME" --output json)"
+  jq -e --arg name "$LOG_GROUP_NAME" --arg key "$LOGS_CMK_ARN" \
+    --argjson retention "$EXPECTED_RETENTION" '
+    [.logGroups[]? | select(.logGroupName == $name)] |
+    if length != 1 then error("Expected exactly one log group") else .[0] end |
+    if .kmsKeyId != $key then error("Unexpected log key")
+    elif $retention == 0 and .retentionInDays != null then error("Unexpected retention")
+    elif $retention != 0 and .retentionInDays != $retention then error("Unexpected retention")
+    else {logGroupName, retentionInDays, kmsKeyId} end
+  ' <<< "$GROUPS_JSON"
+done
+```
+
+A missing `retentionInDays` is accepted here only when the configured value is
+zero (no expiration), not when finite retention is intended. Matching metadata
+does not demonstrate recent ingestion.
 
 ---
 
@@ -427,6 +554,7 @@ Expected:
 aws cloudtrail describe-trails \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
+  --trail-name-list "${CLOUDTRAIL_NAME}" --no-include-shadow-trails \
   --query 'trailList[].[Name,TrailARN,HomeRegion,LogFileValidationEnabled,IsMultiRegionTrail]' \
   --output table
 ```
@@ -496,7 +624,8 @@ Expected:
 aws cloudtrail describe-trails \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --query 'trailList[?Name==`'"${CLOUDTRAIL_NAME}"'`].[Name,S3BucketName,S3KeyPrefix,KmsKeyId]' \
+  --trail-name-list "${CLOUDTRAIL_NAME}" --no-include-shadow-trails \
+  --query 'trailList[].[Name,S3BucketName,S3KeyPrefix,KmsKeyId]' \
   --output table
 ```
 
@@ -515,7 +644,7 @@ aws ec2 describe-flow-logs \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --filter "Name=resource-id,Values=${VPC_ID}" \
-  --query 'FlowLogs[].[FlowLogId,ResourceId,TrafficType,LogDestinationType,FlowLogStatus]' \
+  --query 'FlowLogs[].[FlowLogId,ResourceId,TrafficType,LogDestinationType,LogDestination,FlowLogStatus,DeliverLogsStatus,DeliverLogsErrorMessage]' \
   --output table
 ```
 
@@ -524,7 +653,8 @@ Expected:
 - Flow log exists for the workload VPC
 - Traffic type is `ALL`
 - Destination type is `cloud-watch-logs`
-- Status is `ACTIVE`
+- Status is `ACTIVE`; delivery status/errors and the exact log destination are reviewed
+- Extra flow logs for the same VPC are inventoried rather than silently substituted
 
 ---
 
@@ -535,7 +665,7 @@ aws firehose describe-delivery-stream \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --delivery-stream-name "${NAME_PREFIX}-flowlogs-to-s3" \
-  --query 'DeliveryStreamDescription.[DeliveryStreamName,DeliveryStreamStatus,DeliveryStreamType]' \
+  --query 'DeliveryStreamDescription.{Name:DeliveryStreamName,Status:DeliveryStreamStatus,Type:DeliveryStreamType,Destinations:Destinations,StreamEncryption:DeliveryStreamEncryptionConfiguration}' \
   --output table
 ```
 
@@ -543,7 +673,12 @@ Expected:
 
 - Delivery stream exists
 - Delivery stream status is `ACTIVE`
-- Destination type is extended S3
+- The expected destination has `ExtendedS3DestinationDescription`
+- Its bucket, role, `EncryptionConfiguration`, GZIP setting, buffering hints,
+  success prefix, and error prefix match the configured destination
+
+`DeliveryStreamType` is not the destination type. Review the destination object;
+a stream `ACTIVE` status alone does not prove successful delivery.
 
 ---
 
@@ -554,7 +689,7 @@ aws logs describe-subscription-filters \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --log-group-name "/aws/flowlogs/${NAME_PREFIX}" \
-  --query 'subscriptionFilters[].[filterName,destinationArn,roleArn]' \
+  --query 'subscriptionFilters[].[filterName,destinationArn,roleArn,filterPattern]' \
   --output table
 ```
 
@@ -563,6 +698,8 @@ Expected:
 - Subscription filter exists
 - Destination ARN is the Flow Logs Firehose delivery stream ARN
 - Role ARN is the CloudWatch Logs to Firehose role ARN
+- Filter name is `<name_prefix>-flowlogs-to-firehose` and pattern is empty
+- Any additional subscriptions are accounted for separately
 
 ---
 
@@ -600,8 +737,23 @@ aws s3 ls "s3://${CENTRALIZED_LOGS_BUCKET_NAME}/CloudTrail/" \
 Expected:
 
 - CloudTrail log objects exist under the `CloudTrail/` prefix
-- Objects are encrypted using the logs CMK
-- Delivery path includes AWS account and region structure
+- Delivery path includes the intended account and Region
+- Recent object timestamps correspond to activity during the inspection window
+
+Listing alone does not prove encryption or digest integrity. For an explicitly
+selected delivered object, inspect metadata without printing its contents:
+
+```bash
+: "${LOG_OBJECT_KEY:?Set one reviewed object key from the listing}"
+aws s3api head-object \
+  --region "$AWS_REGION" --profile "$AWS_PROFILE" \
+  --bucket "$CENTRALIZED_LOGS_BUCKET_NAME" --key "$LOG_OBJECT_KEY" \
+  --query '{LastModified:LastModified,Size:ContentLength,Encryption:ServerSideEncryption,Key:SSEKMSKeyId,Version:VersionId}' \
+  --output json
+```
+
+Compare the encryption/key metadata with `LOGS_CMK_ARN`. One object's result
+establishes neither the encryption of every object nor complete delivery.
 
 ---
 
@@ -619,21 +771,26 @@ Stopping or deleting CloudTrail should trigger monitoring and tamper detection a
 
 ### CloudTrail Log File Validation
 
-Log file validation is enabled.
-
-This helps support integrity verification of CloudTrail logs stored in S3.
-
-This is useful for forensic investigations and audit evidence.
+Log file validation is configured, but enabling it is not the same as verifying
+a digest chain for a selected account, Region, and time range. Retain a separate
+integrity-verification result when that claim is required. Neither this module
+nor `validate-logging.sh` performs that verification. See the
+[AWS log-integrity guide](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-intro.html)
+for the distinction between enabling and validating log integrity.
 
 ---
 
 ### CloudWatch Retention vs. S3 Retention
 
-CloudWatch Log Groups use 90-day retention.
+CloudWatch Log Groups use the supplied `cloudwatch_retention_days` value.
 
 Longer-term retention is handled by S3 through the centralized logs bucket lifecycle policy.
 
-This keeps recent logs easy to query while allowing older logs to transition to lower-cost S3 storage classes.
+A lifecycle expiration/transition policy is not an immutability or minimum
+preservation guarantee. The baseline's storage reference documents a logs
+bucket without Object Lock and with force deletion enabled. Preserve required
+logs and their decryption keys independently before workload retirement;
+this module does not enforce their survival.
 
 ---
 
@@ -666,7 +823,10 @@ Buffering interval: 300 seconds
 Buffering size: 5 MB
 ```
 
-S3 objects appear after either the time interval or size threshold is reached.
+These are buffering settings, not a maximum end-to-end delivery latency.
+Upstream collection, traffic volume, retries, permissions, and service errors
+can affect observed delivery. No traffic or an empty error prefix is not proof
+that the archival path has been exercised.
 
 ---
 
@@ -814,7 +974,7 @@ KMS access failures can prevent log encryption, log delivery, or Firehose archiv
 - CloudTrail logs are delivered to both CloudWatch Logs and S3.
 - VPC Flow Logs capture accepted and rejected traffic.
 - CloudWatch Log Groups are encrypted with the logs CMK.
-- CloudWatch Log Groups retain logs for 90 days.
+- CloudWatch Log Groups use caller-supplied retention; missing finite retention must be investigated.
 - Firehose archives VPC Flow Logs to the centralized logs bucket.
 - Firehose uses GZIP compression.
 - Firehose delivery to S3 is encrypted with the logs CMK.
@@ -843,6 +1003,6 @@ This module follows:
 - The CloudTrail log group name output is consumed by the monitoring module.
 - The CloudTrail ARN output may be consumed by storage, monitoring, or validation workflows.
 - The Firehose delivery stream ARN can be used for validation or future integrations.
-- CloudWatch Logs are retained for 90 days; long-term retention should rely on S3.
+- Retention, S3 preservation, and key survival must be reviewed together; neither rotation nor a lifecycle policy makes logs immutable.
 - Firehose delivery is buffered and may take several minutes to appear in S3.
 - CloudTrail and VPC Flow Logs are foundational evidence sources for SOC 2 and ISO 27001 readiness.

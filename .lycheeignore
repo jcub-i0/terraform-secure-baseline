@@ -1,0 +1,3 @@
+# Public ISO reference verified manually; CI link checker received HTTP 403.
+# Recheck this destination manually during documentation reviews.
+^https://www\.iso\.org/standard/27001/?$

@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
-Opinionated Terraform baseline for deploying secure, cost-efficient AWS environments for early-to-mid-stage SaaS businesses handling customer data.
+Opinionated Terraform foundation for AWS infrastructure, security controls, and application hosting for SaaS workloads handling sensitive customer data.
 
 ---
 
@@ -10,7 +10,16 @@ Opinionated Terraform baseline for deploying secure, cost-efficient AWS environm
 
 `tf-secure-baseline` is a Terraform-driven AWS security and application-hosting baseline for organizations running workloads that handle PII or other sensitive data.
 
-**Current release:** `v1.10.0 — ECS Runtime Security` extends the ECS/Fargate runtime with GuardDuty Runtime Monitoring, deployment-profile-driven cluster enrollment, least-privilege managed-agent prerequisites, runtime coverage-health notification, exact live validation, and corrected profile-aware AWS Backup semantics.
+The implementation combines account governance, segmented networking, EC2 and
+ECS/Fargate runtimes, an RDS PostgreSQL database, security-service integrations,
+backup/restore infrastructure, and controlled deployment and retirement workflows.
+The production profile adds three-AZ topology, RDS Multi-AZ, redundant ECS capacity,
+and selected lifecycle protections; it does not make every resource immutable or
+every control an independently proven guarantee.
+
+**Before deployment or adaptation, review [LICENSE](LICENSE) and the
+[adoption guide](docs/adoption-guide.md).** Public source visibility does not grant
+general deployment, modification, or consulting rights.
 
 The platform provides:
 
@@ -28,8 +37,8 @@ The platform provides:
 - GuardDuty ECS coverage-health notification through the existing SecOps path
 - GitHub OIDC-based CI/CD without long-lived AWS access keys
 - Exact reviewed-plan Terraform application through protected environments
-- Four-layer read-only validation and evidence export
-- SOC 2 / ISO 27001-aligned technical safeguards that support audit readiness
+- Four read-only validation layers and separate evidence exporters
+- Selected SOC 2 / ISO 27001 control mappings with explicit evidence and organizational boundaries
 
 > This baseline supports SOC 2 and ISO 27001 readiness, but it does not replace an organization’s full compliance program, ISMS, policies, risk management process, or formal audit requirements.
 
@@ -47,12 +56,14 @@ The platform provides:
 
 ### Networking and data protection
 
-- Segmented VPC networking across public, compute-private, data-private, serverless-private, firewall-private, and endpoint-private subnet tiers
+- Seven subnet families: ingress-public, egress-public, compute-private, data-private, serverless-private, firewall-private, and endpoint-private
+- Canonical IPv4 `/16` workload VPCs with derived `/24` subnet families and profile-based AZ selection
 - `network_firewall`, `nat_only`, and `vpc_endpoints_only` egress modes
 - AWS Network Firewall inspection when enabled
 - Terraform-managed VPC endpoints for private AWS service access
 - KMS-backed encryption across state, logs, messaging, application resources, and backups
-- Protected S3 storage for Terraform state and operational evidence
+- Separately managed state storage and workload logs storage, with different deletion and retention controls
+- Private RDS PostgreSQL with profile-derived Multi-AZ and deletion-time settings
 
 ### Security operations
 
@@ -61,8 +72,8 @@ The platform provides:
 - Security Hub V2 organization policy governance
 - Workload-local AWS Config, Inspector, remediation, and supporting controls
 - GuardDuty-scoped EC2 automatic isolation with configurable severity eligibility, defaulting to `CRITICAL`
-- Controlled EC2 rollback, IP enrichment, tamper detection, and break-glass monitoring
-- SNS/SQS alerting and DLQ-backed failure retention
+- Event-driven EC2 rollback, IP enrichment, tamper detection, and break-glass monitoring, subject to the authorization and failure boundaries below
+- SNS/SQS alerting and DLQs for selected delivery and processing failure paths
 
 ### Application runtimes
 
@@ -85,7 +96,11 @@ The platform provides:
 
 ## Target Use Case
 
-This baseline is designed for SaaS companies handling sensitive data, teams preparing for SOC 2 or ISO 27001, cloud security and platform teams building reusable AWS foundations, startups that need production-aligned controls early, and consultants implementing secure client environments.
+This baseline is designed for SaaS companies handling sensitive data, teams
+preparing for security reviews, cloud security/platform engineers, and authorized
+consulting deployments. Adoption assumes ownership of AWS operations, access
+review, application security, incident response, costs, and recovery testing.
+It is not a managed SOC, an account-vending service, or a complete compliance program.
 
 ---
 
@@ -123,13 +138,19 @@ The platform separates three Terraform ownership domains:
 | Security operations | Delegated-administrator-side Security Hub CSPM, GuardDuty, and Security Hub V2 organization policy configuration |
 | Workload environments | Networking, EC2, ECS/Fargate, ECR, logging, AWS Config, Inspector, remediation, automation, storage, backup, patching, and workload IAM |
 
-Architectural deployment order:
+Architectural ownership order:
 
 ```text
 control-plane -> security-operations -> bootstrap-workloads -> workloads
 ```
 
-The generic workload Apply and Destroy workflows intentionally do not operate the centralized security layer because that layer has organization-wide blast radius.
+The generic workload Apply and Destroy workflows intentionally do not operate the
+centralized security layer because that layer has organization-wide blast radius.
+Accounts must already exist or be prepared through a separate process. Existing
+Organizations, Identity Center, and security-service resources require ownership
+and import review; this is not an automatic merge into another landing zone.
+The sequence is an overview, not a substitute for root-specific prerequisites in
+the [quickstart](docs/quickstart.md).
 
 ---
 
@@ -141,7 +162,10 @@ Compute workloads are placed in private subnets by default. Internet-bound egres
 
 ### Explicit ownership boundaries
 
-Organization prerequisites, centralized security administration, and workload-local resources are owned by distinct Terraform roots. The same Security Hub, GuardDuty, or Security Hub V2 resource is not intentionally managed from multiple states.
+Organization prerequisites, centralized security administration, and workload-local
+resources are owned by distinct Terraform roots. Do not manage the same resource
+from competing states. Changing a local-ownership flag can plan deletion; it is
+not an automatic transfer of ownership to the central account.
 
 ### No long-lived CI/CD credentials
 
@@ -153,7 +177,10 @@ The protected workload Apply workflow generates its own saved Terraform plan, re
 
 ### Resource-granular readiness
 
-EC2 and ECS/Fargate launch paths wait on the specific security-policy, IAM, and endpoint resources they require instead of relying on broad module-level dependencies.
+EC2 and ECS/Fargate launch paths use resource-level dependency chains for required
+security-policy, IAM, and endpoint resources. Terraform dependency completion is
+not proof of successful image pulls, OS bootstrap, agent enrollment, application
+health, DNS resolution, or end-to-end connectivity.
 
 ### Single canonical ECS service interface
 
@@ -169,9 +196,9 @@ A service with `scaling = null` remains fixed-count and Terraform owns `desired_
 
 | `deployment_profile` | Default `egress_mode` | AWS Config | Scheduled Backup | Inspector | GuardDuty Fargate Runtime Monitoring | Log retention | Intended use |
 |---|---|---:|---:|---:|---:|---:|---|
-| `production` | `network_firewall` | Enabled | Enabled | Enabled | Enabled | 90 days | Full security baseline for sensitive workloads |
+| `production` | `network_firewall` | Enabled | Enabled | Enabled | Enabled | 90 days | Production resilience and inspected compute egress defaults |
 | `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days | Lower-cost development/testing with production-aligned runtime detection |
-| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
+| `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Reduced-service, private AWS-only testing |
 
 Explicit egress behavior:
 
@@ -182,8 +209,13 @@ Explicit egress behavior:
 | `vpc_endpoints_only` | No | No | No default route |
 
 When `egress_mode = "auto"`, the effective mode is selected from `deployment_profile`.
+The table describes resolved defaults, not a guarantee that every value is fixed.
+Production RDS Multi-AZ and normal-operation ECS capacity have enforced constraints;
+Config, Inspector, egress, retention, and scheduled-backup settings have their own
+input/override rules. A child-module input is configurable from a workload root or
+workflow only when that layer actually forwards it.
 
-GuardDuty Fargate Runtime Monitoring also follows the deployment profile directly in v1.10. There is no independent top-level Runtime Monitoring toggle:
+GuardDuty Fargate Runtime Monitoring follows the deployment profile directly. There is no independent top-level Runtime Monitoring toggle:
 
 ```text
 production  -> GuardDutyManaged=true
@@ -191,28 +223,51 @@ development -> GuardDutyManaged=true
 minimal     -> GuardDutyManaged=false
 ```
 
-The Scheduled Backup column controls the plan/selection behavior, not whether the environment backup vault exists. The KMS-encrypted backup vault is retained in all profiles. When scheduled backup is disabled, effective schedule/retention are null, the plan/selection are absent, and workload EC2/RDS resources use `Backup=false`. Production defaults to `cron(0 5 * * ? *)` with 30-day retention; explicitly enabled non-production backup defaults to 7-day retention unless overridden.
+The Scheduled Backup column controls plan/selection creation, not vault creation.
+The encrypted vault remains declared even when scheduling is disabled; that is not
+a guarantee it survives an approved destroy. Disabled scheduling produces null
+effective schedule/retention, no plan/selection, and `Backup=false` on the managed
+EC2/RDS resources. Production defaults to `cron(0 5 * * ? *)` with 30-day retention;
+explicitly enabled non-production backup defaults to 7 days unless overridden.
+An explicit `backup_enabled=false` is accepted even for production and also disables
+profile-derived Restore Testing. RDS-native automated backups are separate and
+remain configured with 14-day retention.
 
-`vpc_endpoints_only` is intended for AWS-private testing or workloads that do not require general internet access. Public package repositories and third-party services require another explicitly approved path.
+Default networking uses three AZs for production and two for development/minimal.
+`main_vpc_cidr` must be a canonical IPv4 `/16`; default subnet families are derived
+as `/24`s. Additional AZs require complete explicit subnet-family input. Service
+`primary_region`, state-resource `state_region`, and S3 backend `region` are distinct
+settings; changing one does not migrate resources or state for the others.
+
+The supplied composition creates standalone EC2 instances, RDS, an ECS cluster,
+endpoints, keys, and other shared resources even when no ECS service has a selected
+digest. Profiles are not an empty-environment or zero-cost switch.
+
+`vpc_endpoints_only` provides no default internet route for private compute.
+The supplied EC2 first-boot script still needs Ubuntu repositories; SSM endpoint
+connectivity alone does not satisfy that requirement. Network Firewall inspection
+applies to the configured compute path, not every Lambda or account resource.
+The IP enrichment Lambda is not attached to the workload VPC.
+
 ## Security Architecture
 
 The baseline combines centralized security governance with workload-local enforcement.
 
 | Service / capability | Primary Terraform ownership | Purpose |
 |---|---|---|
-| Security Hub CSPM | `security_operations/security_services` | Central policy, standards, finding aggregation, workload associations |
-| GuardDuty organization policy | `security_operations/security_services` | Organization enrollment, protection plans, Runtime Monitoring and automated agent policy |
+| Security Hub CSPM | `bootstrap/security_operations/security_services` | Central policy, standards, finding aggregation, workload associations |
+| GuardDuty organization policy | `bootstrap/security_operations/security_services` | Organization enrollment, protection plans, Runtime Monitoring and automated agent policy |
 | ECS Runtime Monitoring intent | Workload | `GuardDutyManaged` cluster participation, exact task-execution IAM, networking, validation |
 | GuardDuty live Fargate agent | GuardDuty service-managed | Agent injection/upgrades and runtime telemetry |
 | Security Hub V2 | Control-plane prerequisites + security-operations policy | Workload enablement through `SECURITYHUB_POLICY` |
 | AWS Config / Inspector | Workload | Configuration monitoring, remediation support, vulnerability scanning |
 | CloudTrail / CloudWatch | Workload | API activity, logs, metrics, and alarms |
-| EventBridge / Lambda | Workload | Detection routing, coverage-health notification, deterministic response automation |
+| EventBridge / Lambda | Workload | Detection routing, coverage-health notification, and selected response automation |
 | SNS / SQS | Workload | Alert delivery, retention, and failure paths |
 | IAM Identity Center | Control plane | Centralized workforce access |
 | AWS Backup / SSM Patch Manager | Workload | Recovery and patch-management foundations |
 
-The v1.10 centralized GuardDuty Runtime Monitoring contract is:
+The centralized GuardDuty Runtime Monitoring contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -223,16 +278,42 @@ EKS_ADDON_MANAGEMENT         = NONE
 
 Central Security Hub CSPM and GuardDuty governance reduce account-level drift while workload Terraform retains AWS Config, Inspector, remediation, logging, and incident-response responsibilities.
 
-The workload VPC endpoint layer pre-creates `guardduty-data`; runtime validation requires exactly one such endpoint and exact agreement between the live VPC Endpoint ID and Terraform output. Protected Fargate tasks also use Terraform-owned `ecr.api`, `ecr.dkr`, and S3 private paths.
+The workload VPC endpoint layer pre-creates `guardduty-data`; endpoint validation requires exactly one such endpoint and exact agreement between the live VPC Endpoint ID and Terraform output. Protected Fargate tasks also use Terraform-owned `ecr.api`, `ecr.dkr`, and S3 private paths.
 
-EC2 remains supported with fail-closed isolation authorization, first-boot package updating, scheduled SSM patching, controlled rollback, and Terraform lifecycle handling that does not silently undo active quarantine.
+EC2 remains a standalone-instance pattern, not an Auto Scaling Group. The compute
+module defaults `isolation_allowed` to `false`, but all three supplied workload roots
+default it to `true`; inspect effective inputs and live tags before enabling response.
+Ignoring security-group attachment drift preserves quarantine during ordinary
+reconciliation but does not prevent replacement or destruction. Bootstrap requests
+package updates and reports required reboots; execution and subsequent patching
+need their own operational evidence.
 
 Automatic EC2 isolation is intentionally narrower than the general Security Hub alert/enrichment path. EventBridge forwards only active, `NEW`, HIGH/CRITICAL GuardDuty findings for `AwsEc2Instance` resources to the isolation Lambda. The Lambda then independently revalidates GuardDuty product identity, workflow state, record state, and the configured `ec2_auto_isolation_severities` set, which defaults to `CRITICAL`, before evaluating the instance-level `IsolationAllowed` and quarantine gates.
 
-Automatic ECS/Fargate containment is not implemented in v1.10; Runtime Monitoring provides detection and coverage visibility while a separate fail-closed containment design remains future work.
+Automatic ECS/Fargate containment is not implemented. Runtime Monitoring provides
+detection and coverage visibility, not a task-level quarantine mechanism.
+
+### Security boundaries requiring adoption review
+
+| Area | Implemented boundary and remaining responsibility |
+|---|---|
+| CI/CD privileges | Plan includes broad read access plus custom state-write and selected secret permissions; Apply attaches `AdministratorAccess`. Role separation is not a universal least-privilege ceiling. Review trust, all grants, and GitHub protection settings. |
+| Human recovery access | The Identity Center caller and workload automation derive the same prefixed SecOps bus name. The workload bus policy scopes `custom.rollback` publication to matching `AWSReservedSSO_SecOps-Operator-<env>_*` IAM roles and explicitly denies other publishers; `aws.securityhub` forwarding remains separate. Verify effective grants and group membership in each account; dev testing does not qualify other environments. |
+| Approval and partial response | Rollback approver/ticket fields are event data, not an authenticated approval check. Isolation requests snapshots without waiting, changes groups before writing recovery tags, and can return handled errors. Rollback also sets `IsolationAllowed=true`. Preserve independent pre-state and verify each outcome. |
+| Logs and keys | The workload logs bucket has Object Lock disabled and permits force destruction. Workload KMS keys lack production destruction guards. Encryption, versioning, and lifecycle settings do not guarantee preservation or post-destroy recoverability. |
+| Config remediation | Config's fixed recorder scope and rule families are distinct. The separate automatic S3 remediation follows Config enablement, not the S3-family flag, and is not restricted by workload-name tags. Review affected resources and actual evaluation/remediation outcomes. |
+| Notifications | DLQs protect selected edges, not every SNS subscriber delivery or handled Lambda error. The module supplies no queue consumer or independent fallback alert channel. Verify receipt, retention, and response ownership. |
+| Application transport and identity | ALB frontend traffic is HTTPS; task targets use HTTP. VPC endpoint connectivity does not replace IAM. Application task permissions, database users, TLS, tenant isolation, and transactions need application-specific design. |
+
+See the [adoption guide](docs/adoption-guide.md), [IAM reference](modules/iam/README.md),
+[automation reference](modules/automation/README.md), and
+[control narratives](docs/assurance/control-narratives.md) for the supporting scope.
+These boundaries are not marked resolved by a successful documentation or baseline
+validation run. Report suspected vulnerabilities through [SECURITY.md](SECURITY.md).
+
 ## ECS/Fargate Runtime and Operations
 
-`v1.8.0 — Secure Container Workloads` established the generic ECS/Fargate runtime. `v1.9.0` added explicit runtime-operations ownership, target-tracking auto scaling, deployment-health configuration, and operational alarms. `v1.10.0 — ECS Runtime Security` adds GuardDuty Fargate Runtime Monitoring and exact runtime-security validation without changing the canonical application-service model.
+ECS/Fargate uses a single canonical application-service model for deployment, scaling, networking, and Runtime Monitoring prerequisites.
 
 The runtime remains composed from:
 
@@ -251,7 +332,11 @@ image_digest = null
 
 That state is **registered but unreleased**: the required ECR repository can exist while the task definition, ECS service, per-service runtime IAM, task security group, runtime log group, scaling resources, and optional ALB attachment remain absent.
 
-Selecting a valid digest materializes the deployable runtime from the same service entry.
+Selecting a valid digest materializes the deployable runtime from the same service
+entry. A null digest withholds that service's runtime, not the shared baseline,
+standalone EC2 instances, or RDS. The shared ALB is absent only when no deployable
+service requires ingress. Setting an existing service's digest back to null is a
+resource-removal change and requires plan review.
 
 Deployable images use exact immutable references:
 
@@ -286,8 +371,9 @@ means no platform-owned Application Auto Scaling target or scaling policy is cre
 A non-null scaling object defines minimum/maximum capacity plus at least one target-tracking metric:
 
 ```hcl
+desired_count = 2
 scaling = {
-  min_capacity               = 1
+  min_capacity               = 2
   max_capacity               = 3
   cpu_target_percent         = 50
   memory_target_percent      = 60
@@ -296,6 +382,11 @@ scaling = {
   scale_out_cooldown_seconds = 300
 }
 ```
+
+This excerpt belongs inside an existing service object; it is not a complete
+service definition. In normal production operation, fixed `desired_count` or
+scaling `min_capacity` must be at least two. Three-AZ networking does not imply
+one running task in every AZ; actual placement requires live evidence.
 
 For autoscaled services, the configured `desired_count` is bootstrap capacity only. Application Auto Scaling owns subsequent live desired count changes within the configured bounds, and Terraform intentionally does not reconcile legitimate autoscaler changes back to the bootstrap count.
 
@@ -319,7 +410,13 @@ deployment = {
 }
 ```
 
-Those values apply to both fixed-count and autoscaled services, while the existing ECS deployment circuit breaker and automatic rollback remain enabled.
+Those values apply to both fixed-count and autoscaled services, while the ECS
+deployment circuit breaker and automatic rollback remain enabled. The normal
+production runtime validator requires `minimum_healthy_percent=100` and
+`maximum_percent>=200`; not every runtime assertion is an identical Terraform
+input restriction. AZ rebalancing is explicitly `ENABLED` for production.
+ALB health, container health reporting, and successful application/database
+transactions remain separate checks.
 
 ### Operational signals
 
@@ -330,7 +427,12 @@ Terraform owns two ECS operational alarm classes:
 
 Both alarm classes notify the SecOps SNS topic on `ALARM` and `OK`.
 
-These alarms are separate from the CloudWatch alarms that AWS creates internally for target-tracking policies. AWS-managed target-tracking alarms remain AWS-managed.
+These alarms are separate from the CloudWatch alarms that AWS creates internally
+for target-tracking policies. AWS-managed target-tracking alarms remain AWS-managed.
+Both operational families treat missing data as non-breaching; their configuration
+or `OK` state is not an independent availability guarantee. Desired and running
+counts can both be zero, and an unhealthy-target metric does not prove a minimum
+number of healthy targets or successful transactions.
 
 ### GuardDuty Fargate Runtime Monitoring
 
@@ -345,11 +447,16 @@ For protected profiles, each deployable service's task execution role receives o
 
 Terraform's task definition remains application-only. GuardDuty injects and manages the runtime agent on protected tasks. Live ECS may report the agent as `aws-gd-agent` or an AWS-generated `aws-guardduty-agent-<suffix>` name.
 
-For protected running tasks, `validate-ecs-runtime.sh` requires exactly one running GuardDuty agent, a valid application container, and GuardDuty ECS coverage of `AUTO_MANAGED` / `HEALTHY` with no unresolved issues.
+For protected running tasks, `validate-ecs-runtime.sh` checks exactly one running
+GuardDuty agent, the application-container contract, and GuardDuty ECS coverage of
+`AUTO_MANAGED` / `HEALTHY` with no unresolved issues. Empty-service and not-yet-running
+branches do not establish live instrumentation. A healthy coverage report is a
+point-in-time service observation, not proof that the application is uncompromised.
 
 Coverage-state changes are routed through the existing SecOps notification architecture. The default-bus rule matches both `GuardDuty Runtime Protection Unhealthy` and `GuardDuty Runtime Protection Healthy` for ECS resources and uses the shared EventBridge security-notification DLQ/retry policy.
 
 See [`docs/ecs-runtime-design.md`](docs/ecs-runtime-design.md) for the full runtime and runtime-security contract.
+
 ## CI/CD and Application Releases
 
 GitHub Actions uses OIDC to assume account-specific AWS roles without storing long-lived AWS access keys.
@@ -400,7 +507,23 @@ application source + Dockerfile
   -> validation
 ```
 
-The image-publisher job has AWS/ECR authority but not repository-write authority. The release-PR job has repository-write authority but no AWS credentials or OIDC token.
+The image-publisher job has AWS/ECR authority but not repository-write authority.
+The release-PR job has repository-write authority but no AWS credentials or OIDC
+permission. These describe the declared workflow jobs, not a security boundary
+against every malicious source change.
+
+Publication requires the Amazon ECR Docker credential helper. The push operation
+uses an isolated temporary Docker configuration and disables the helper's token
+file cache instead of running `docker login`. That configuration is scoped to the
+push; it does not erase pre-existing Docker credentials or isolate every build step.
+See [publication prerequisites](scripts/deployment/README.md).
+
+Plan trust uses the corresponding GitHub Environment subject. Apply uses an
+Environment subject or configured branch subjects, depending on its input;
+Image Publisher uses configured branch subjects. Required reviewers and deployment
+branch restrictions are GitHub settings, not proof supplied by role names. Saved-plan
+checksums detect changed bytes; they do not authenticate an independent approver or
+replace protection of the workflow, artifacts, and privileged roles.
 
 Terraform never builds or pushes application images.
 
@@ -409,6 +532,13 @@ See [`scripts/deployment/README.md`](scripts/deployment/README.md) for detailed 
 ---
 
 ## Deployment Overview
+
+Before the first Apply, resolve licensing, account ownership, literal backend
+coordinates, Region/CIDR selection, administrative access, response authorization,
+remediation scope, preservation, and cost requirements in the
+[adoption guide](docs/adoption-guide.md). The AWS provider Region must agree with
+`primary_region`; administrative roots and backend configuration have separate
+context requirements.
 
 Recommended high-level sequence:
 
@@ -421,7 +551,13 @@ Recommended high-level sequence:
 7. Reconcile workload account-stack permissions when GitHub OIDC is enabled.
 8. Deploy or re-apply IAM Identity Center assignments.
 9. Run the applicable validation and evidence workflows.
-10. Complete approved live/manual security tests and destroy-safety review.
+10. Complete approved behavioral/recovery tests and review the applicable retirement procedure.
+
+Use the Terraform CLI specified by the workflows and the committed per-root
+`.terraform.lock.hcl` files; do not silently upgrade providers while reproducing
+an accepted plan. Configure both members of each GitHub Plan/Apply Environment
+pair consistently. A passing example does not authorize testing production or
+removing its durable data.
 
 Supported state migration targets:
 
@@ -450,42 +586,29 @@ The repository uses four read-only validation layers:
 
 The workload baseline suite contains 16 validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
 
-ECS Runtime Monitoring stays inside the existing workload-baseline layer; v1.10 does not introduce a fifth validation/evidence layer or a seventeenth workload validator.
+The total counts successful child-script exits, not individual assertions.
+Warnings, unqueried paths, and empty-runtime branches remain distinguishable from
+successful behavioral tests. The baseline runner proceeds sequentially and reports
+failed children; the exporter independently reruns the children rather than
+packaging a preceding run.
 
-The v1.10 runtime-security evidence chain verifies:
+Runtime checks cover the declared ECS service, IAM, network, scaling, logging,
+ALB, alarm, and GuardDuty contracts, with live instrumentation requirements scoped
+to applicable running workloads. Administrative configuration, member-account
+realization, and end-user access require their respective evidence layers.
 
-- deployment-profile Runtime Monitoring intent;
-- exact Terraform/live `GuardDutyManaged` cluster tag;
-- one `RUNNING` GuardDuty agent on each protected running task;
-- the canonical Terraform task definition remaining application-only;
-- GuardDuty ECS coverage `AUTO_MANAGED` / `HEALTHY` with no unresolved issues for protected running workloads;
-- disabled-state coverage semantics for `minimal`;
-- exact GuardDuty-agent ECR pull scope and absence of broad/unexpected ECR authority;
-- exact Terraform-owned `guardduty-data` endpoint reuse;
-- exact healthy/unhealthy GuardDuty coverage EventBridge rule, SecOps SNS target, shared DLQ, retry policy, and input transformer; and
-- the existing scaling, deployment-health, logging, networking, ALB/database, and ECS operational-alarm contracts.
+`validate-backup.sh` compares resource-backed RDS resilience and AWS Backup settings.
+It is not an exhaustive database configuration, SQL, failover, or application-data
+audit. Restore Testing configuration, actual execution, application validation, and
+temporary-resource cleanup are separate results; some warning states can coexist
+with a passing script.
 
-Security-operations validation separately proves the centralized organization policy and permits AWS-returned GuardDuty features outside Terraform management only when they remain disabled.
-
-`validate-backup.sh` now owns the exact profile-aware Backup contract: the encrypted vault is retained in enabled and disabled states; plan/selection resources and resource `Backup` tags follow `effective_backup_enabled`; schedule/retention are null when disabled.
-
-The merged R6 live qualification against development infrastructure confirmed:
-
-- centralized `ECS_FARGATE_AGENT_MANAGEMENT = ALL`;
-- live `GuardDutyManaged=true`;
-- injected GuardDuty agent `RUNNING`;
-- application steady state preserved;
-- GuardDuty ECS coverage `AUTO_MANAGED` and `HEALTHY`;
-- zero unresolved coverage issues;
-- Terraform-owned `guardduty-data` reuse;
-- exact agent ECR IAM scope;
-- corrected disabled-backup semantics;
-- `validate-ecs-runtime.sh` PASS; and
-- full workload baseline `16/16` PASS.
-
-The final workload evidence export completed with overall `PASS`.
-
-Generated evidence includes Markdown, JSON, and per-validator logs. These results provide point-in-time technical-control and audit-readiness evidence; they are not SOC 2 or ISO 27001 certification.
+Generated packages contain Markdown, JSON, and logs. Preserve the actual source
+commit, effective non-secret inputs, account/Region, selected image digests,
+execution time, warnings, and reviewer decisions with the evidence. The summaries
+do not automatically establish every item of provenance or a signed custody chain.
+Earlier qualification remains associated with its original configuration and run;
+this README does not relabel it as fresh testing of the current checkout.
 
 Detailed guidance:
 
@@ -495,6 +618,7 @@ Detailed guidance:
 - [`docs/assurance/validation-report-template.md`](docs/assurance/validation-report-template.md)
 
 Live EC2 isolation/rollback, IP enrichment, IAM Identity Center end-user login, tamper simulation, break-glass assumption, and destroy-safety testing remain separately controlled activities.
+
 ## State Management
 
 Terraform state is separated by account and Terraform root.
@@ -514,7 +638,15 @@ use_lockfile = true
 
 Tracked `backend.tf.migrated.example` files document intended post-migration configuration, while active state-stack `backend.tf` files are ignored by Git.
 
-A state stack must never destroy the bucket containing its own active state. Intentional teardown requires moving that state to an independent backend or local state and retaining an external backup first.
+A state stack must never destroy the bucket containing its own active state.
+Intentional teardown first requires independent state and external backups; that
+step alone does not remove the state module's literal destruction guards. Workload
+retirement is not a state-resource teardown mechanism.
+
+Service `primary_region`, state-resource `state_region`, and S3 backend `region`
+serve different purposes. Bucket names and object keys in backend files are literal
+coordinates, not rewritten by `cloud_name` or an IAM bucket-ARN input. Review
+migration and access separately when any of these change.
 
 See [`scripts/bootstrap/README.md`](scripts/bootstrap/README.md) for migration and reconciliation details.
 
@@ -522,7 +654,13 @@ See [`scripts/bootstrap/README.md`](scripts/bootstrap/README.md) for migration a
 
 ## Cost Considerations
 
-Major cost drivers can include AWS Network Firewall, NAT Gateways, Interface VPC Endpoints, CloudWatch, AWS Config, Inspector, Security Hub/GuardDuty features, GuardDuty Runtime Monitoring monitored-vCPU/runtime-agent overhead, Backup storage/scheduling, ECS/Fargate workloads, and Application Load Balancers.
+Cost drivers include AWS Network Firewall, per-AZ NAT/Interface Endpoints,
+CloudWatch ingestion and retention, Config, Inspector, Security Hub/GuardDuty,
+Runtime Monitoring, standalone EC2, RDS/Multi-AZ and native snapshots, Backup
+storage/restore jobs, ECS/Fargate, ALB, keys, and data transfer. The shared baseline
+still has a resource footprint when no application digest is selected; the
+reduced-service profile is not free. Temporary restores and retained artifacts
+can continue to incur costs outside the application lifecycle.
 
 Recommended defaults:
 
@@ -556,6 +694,9 @@ docs/            architecture, adoption, validation, assurance, and runtime desi
 | [`docs/design-principles.md`](docs/design-principles.md) | Design rationale and tradeoffs |
 | [`docs/adoption-guide.md`](docs/adoption-guide.md) | Guidance for adapting the baseline |
 | [`docs/ecs-runtime-design.md`](docs/ecs-runtime-design.md) | ECS/Fargate runtime and release architecture |
+| [`docs/production-retirement.md`](docs/production-retirement.md) | Staged production retirement, approvals, cleanup, and preservation boundaries |
+| [`SECURITY.md`](SECURITY.md) | Private vulnerability reporting and maintenance scope |
+| [`CHANGELOG.md`](CHANGELOG.md) | Historical change records; not current operating instructions |
 | [`docs/validation-checklist.md`](docs/validation-checklist.md) | Post-deployment validation checklist |
 | [`docs/assurance/`](docs/assurance/) | Evidence guidance and SOC 2 / ISO 27001-aligned mappings |
 | [`scripts/bootstrap/README.md`](scripts/bootstrap/README.md) | State migration and workload-account reconciliation |
@@ -566,73 +707,77 @@ docs/            architecture, adoption, validation, assurance, and runtime desi
 
 ---
 
-## Release Highlights
+<a id="release-highlights"></a>
 
-### Current Release: `v1.10.0 — ECS Runtime Security`
+## Production Availability and Recovery
 
-`v1.10.0` adds:
+The production profile selects three standard AZs by default, with dedicated
+public-ingress and public-egress subnet roles. The ALB uses ingress-public subnets;
+NAT Gateways use egress-public subnets. In inspected mode, compute outbound and
+return routes use the same-AZ firewall/NAT path without overriding the ALB-to-task
+VPC-local path.
 
-- Centralized `ECS_FARGATE_AGENT_MANAGEMENT = ALL` while preserving `EC2_AGENT_MANAGEMENT = ALL` and `EKS_ADDON_MANAGEMENT = NONE`
-- Secure-by-default Runtime Monitoring for `production` and `development`, with deliberate `minimal` exclusion
-- Exact `GuardDutyManaged=true|false` ECS cluster intent
-- Region-aware, least-privilege GuardDuty agent ECR image-pull scope
-- GuardDuty-managed live agent injection while Terraform task definitions remain application-only
-- Exact live validation of injected agent state and GuardDuty ECS coverage
-- `AUTO_MANAGED` / `HEALTHY` coverage requirements with zero unresolved issues for protected running workloads
-- Terraform-owned `guardduty-data` endpoint reuse and duplicate-endpoint rejection
-- Healthy/unhealthy GuardDuty Runtime coverage events routed to the existing SecOps SNS path with DLQ/retry protection
-- Security-operations validation aligned with AWS's full returned feature inventory while failing closed on unmanaged enabled features
-- Corrected profile-aware AWS Backup behavior: retained encrypted vault, conditional plan/selection, nullable schedule/retention, and exact EC2/RDS `Backup` tags
-- Live R6 development qualification with `validate-ecs-runtime.sh` PASS and the full workload baseline at `16/16` PASS
+RDS remains a PostgreSQL **Multi-AZ DB instance**, not Aurora or a three-node DB
+cluster. Production rejects `rds_multi_az=false`, enables deletion protection in
+normal operation, requires a final snapshot, and retains automated backups at
+deletion. RDS-native backups, scheduled AWS Backup, and isolation snapshots are
+separate mechanisms with separate scopes and retention behavior.
 
-### Previous Release: `v1.9.0`
+AWS Backup Restore Testing is configured for the production profile when scheduled
+backup is enabled. It selects the latest eligible snapshot within the configured
+window from the workload vault for the exact managed RDS instance. The temporary
+restore uses private networking and `multiAz=false`; no application-data validation
+handler is supplied by the Backup module. Configuration presence is not a measured
+recovery time or proof of a completed restore, successful application checks, or
+cleanup. See the [Backup reference](modules/backup/README.md) and
+[evidence guide](docs/assurance/validation-evidence-guide.md).
 
-`v1.9.0` added:
+### Production retirement
 
-- Explicit fixed-count versus autoscaled ECS `desired_count` ownership
-- Application Auto Scaling targets for autoscaled services
-- CPU and memory target-tracking policies
-- Conditional `ALBRequestCountPerTarget` target tracking
-- Resource-backed ALB/target-group identifiers for scaling and monitoring
-- Configurable deployment minimum/maximum percentages and health-check grace period
-- Terraform-owned ECS task-deficit and ingress unhealthy-target alarms
-- Exact runtime validation for scaling targets, policies, deployment configuration, dynamic desired count, and operational alarms
-- Modularized ECS runtime validator internals while preserving one workload-baseline validator entry point
-- GuardDuty-scoped EC2 isolation EventBridge filtering
-- Configurable `ec2_auto_isolation_severities`, defaulting to `CRITICAL`
-- Lambda-side fail-closed revalidation of GuardDuty product, severity, workflow status, and record state
+`production_retirement_mode=true` is explicit retirement intent, not a request to
+switch production into a development profile. The reviewed Stage-1 plan derives
+zero ECS capacity and removes the necessary RDS/ALB/firewall deletion protections
+while retaining the production durable-data boundaries. ECR/ECS force deletion
+and Backup-vault force destruction remain disabled for the production profile.
 
-### Earlier Release: `v1.8.0`
+The implemented workflow separates these stages:
 
-`v1.8.0 — Secure Container Workloads` established:
+```text
+reviewed Stage-1 plan and Apply
+  -> durable-data inventory and Destroy preflight
+  -> separately approved durable-data cleanup
+  -> retirement readiness validation
+  -> saved workload destroy plan
+  -> separately planned and approved Identity Center cleanup
+  -> final workload-destroy approval
+  -> artifact verification and readiness recheck
+  -> exact saved-plan Apply
+```
 
-- Canonical `ecs_services` configuration with nullable `image_digest`
-- KMS-encrypted immutable ECR repositories
-- Exact digest-pinned Fargate task images
-- Shared ECS cluster and optional shared HTTPS ALB
-- Separate least-privilege task execution and application task roles
-- Terraform-owned application and Container Insights logging
-- GitHub OIDC image publication and authoritative ECR digest resolution
-- Automated one-field release PR generation
-- Protected exact saved-plan Terraform Apply
-- 16-validator workload baseline coverage including ECR and ECS runtime validation
+The complete durable-cleanup path is restricted to the `prod` environment, even
+though profile-derived protections can apply elsewhere. Cleanup re-inventories at
+execution; it does not replay a frozen item manifest. Rejecting a later approval
+does not undo earlier cleanup. Required evidence, recovery artifacts, secrets, and
+usable encryption keys need a preservation plan outside the deletion scope.
 
-For complete release history, see [`CHANGELOG.md`](CHANGELOG.md).
-## Future Roadmap
+Follow the [retirement runbook](docs/production-retirement.md), not this overview,
+for the exact inputs, approval gates, and recovery boundaries.
 
-After v1.10.0, remaining candidates include:
+<a id="future-roadmap"></a>
 
-- Fail-closed ECS/Fargate task-level containment/remediation
-- Platform resilience improvements such as third-AZ and stronger RDS resilience/validation
-- ReconoSense reference deployment
-- Scheduled/run-to-completion ECS task abstractions
-- Audited ECS Exec
-- Advanced WAF and DNS ownership
-- Multi-container service abstractions
-- Application database-user lifecycle
-- More sophisticated historical ECR retention
+## Extension Boundaries
 
-Other potential improvements include expanded dashboarding and visual evidence, configurable VPC endpoint service lists, additional deployment-profile-controlled services, a deliberate Service Control Policy strategy, multi-region centralized security/evidence patterns, and additional synthetic workload examples.
+The supplied runtime is for long-running ECS services and standalone EC2 hosts.
+It does not provide first-class scheduled/run-to-completion ECS jobs, generic
+application task-IAM permissions, multi-container application services, ECS Exec,
+application database-user/migration lifecycle, WAF/DNS ownership, or cross-Region
+application recovery. Automatic ECS/Fargate containment is also absent.
+
+These are separate design and implementation decisions, not promised deliverables.
+A downstream application must fit the actual service interface or provide reviewed
+extensions with their own ownership, permissions, operations, and validation.
+Historical changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+
 ## Intended Audience
 
 - Cloud security engineers
@@ -648,7 +793,11 @@ Other potential improvements include expanded dashboarding and visual evidence, 
 
 `tf-secure-baseline` is a deployable AWS security foundation and generic application-hosting baseline for sensitive workloads.
 
-It combines five-account isolation, Organizations and Identity Center governance, centralized security administration, private-first networking, configurable egress, Security Hub/GuardDuty governance, profile-driven GuardDuty ECS/Fargate Runtime Monitoring, workload-local remediation, supported EC2 hosting, digest-pinned ECS/Fargate workloads, optional target-tracking auto scaling, explicit service-count ownership, ECS deployment-health controls, runtime coverage notification, durable alerting, protected Terraform CI/CD, profile-aware backup controls, and layered validation evidence into a reusable Terraform platform.
+It combines separate account/stack ownership, segmented networking, security-service
+integration, EC2 and ECS/Fargate hosting, RDS resilience, backup/restore resources,
+reviewable deployment and retirement, and layered validation. The implementation
+and documented limitations must be assessed together for the intended application;
+control presence alone is not proof of secure operation or recoverability.
 
 The goal is to provide a secure-by-default foundation that can be adapted and extended without representing the infrastructure alone as a complete compliance program.
 

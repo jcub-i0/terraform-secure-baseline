@@ -6,7 +6,7 @@ The control plane is the centralized governance and access layer for `tf-secure-
 
 It does **not** deploy workload application infrastructure or own the delegated administrator-side configuration of centralized security services.
 
-Implementation reference: `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). `bootstrap/control_plane` is a directory of independent roots, not itself a Terraform deployment root. Use the repository-root paths below.
+`bootstrap/control_plane` is a directory of independent roots, not itself a Terraform deployment root. Use the repository-root paths below.
 
 ---
 
@@ -98,7 +98,7 @@ The `organizations` Terraform root creates and manages the OU hierarchy, but it 
 
 All four control-plane roots pin Terraform **1.15.8** and AWS provider **6.66.0**. Their provider configuration is not uniform:
 
-| Root | Region authority in RC1 |
+| Root | Region authority |
 |---|---|
 | `bootstrap/control_plane/state` | Explicit provider configuration uses `state_region` for state-resource provisioning. |
 | `bootstrap/control_plane/account` | Explicit provider configuration uses required `primary_region`; the data-source postcondition checks agreement. |

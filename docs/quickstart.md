@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This guide describes the deployment path for `tf-secure-baseline` at **v1.11.0-rc1**, commit `728166fa17bf42fe06bf540729c6aba1e70e05d5`. It is not a claim that a final v1.11.0 release has already been published.
+This guide describes the deployment path for `tf-secure-baseline`.
 
 Examples are for an authorized deployment with reviewed account-specific configuration. Public source visibility is not deployment permission; see [LICENSE](../LICENSE). This guide does not change the license or resolve ownership notices.
 
@@ -77,7 +77,7 @@ Deployment profiles provide cost/security defaults and production resilience pol
 | `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days | Lower-cost development and testing with production-aligned runtime detection |
 | `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days | Lowest-cost/private AWS-only testing |
 
-GuardDuty Fargate Runtime Monitoring is derived directly from `deployment_profile` in RC1; there is no independent top-level Runtime Monitoring enable/disable input. `production` and `development` set the workload ECS cluster to `GuardDutyManaged=true`, while `minimal` sets `GuardDutyManaged=false`.
+GuardDuty Fargate Runtime Monitoring is derived directly from `deployment_profile`; there is no independent top-level Runtime Monitoring enable/disable input. `production` and `development` set the workload ECS cluster to `GuardDutyManaged=true`, while `minimal` sets `GuardDutyManaged=false`.
 
 The Backup column refers to scheduled AWS Backup behavior. The encrypted environment backup vault and backup CMK are retained even when scheduling is disabled. When backups are disabled, the effective schedule and retention outputs are `null`, the backup plan/selection are absent, and workload EC2/RDS resources use `Backup=false`. Production defaults to `cron(0 5 * * ? *)` with 30-day retention. If backups are explicitly enabled for a non-production profile, the same default schedule is used with 7-day retention unless overridden.
 
@@ -118,7 +118,7 @@ When `egress_mode = "vpc_endpoints_only"`, NAT Gateways and Network Firewall are
 
 ---
 
-## v1.11 Topology, Regions, and Resilience
+## Topology, Regions, and Resilience
 
 ### Service region versus Terraform state region
 
@@ -132,7 +132,7 @@ These are distinct contracts:
 | Validator/reconciliation `AWS_REGION` | Service region for those operations; state checks use independently resolved backend context |
 | Migration helper `AWS_REGION` | Backend-region context; when supplied, it must match the tracked migration template |
 
-All five RC1 state templates use `us-east-1`. A service-region change does not move state, the bucket, or the CMK. State/account/workload roots must use their intended backend bucket with distinct keys. See the [state module](../modules/state/README.md) and [bootstrap helper reference](../scripts/bootstrap/README.md).
+All five state templates use `us-east-1`. A service-region change does not move state, the bucket, or the CMK. State/account/workload roots must use their intended backend bucket with distinct keys. See the [state module](../modules/state/README.md) and [bootstrap helper reference](../scripts/bootstrap/README.md).
 
 In the commands below, `SERVICE_REGION` and `STATE_REGION` are **shell example variables**, not additional GitHub settings. Set them for the account/stack in the current terminal. `us-east-1` is the example used here, not evidence of alternate-region or multi-region disaster-recovery qualification:
 
@@ -186,7 +186,7 @@ Deployable production ECS services require at least **two** fixed tasks or an au
 
 The production profile does not enable every possible protection. In particular, the logs bucket retains `force_destroy=true`, `prevent_destroy=false`, and Object Lock disabled; Network Firewall policy/subnet change protections remain disabled. See [storage limits](../modules/storage/README.md) and [firewall limits](../modules/firewall/README.md).
 
-**Retirement scope:** baseline production policy is profile-driven, but the complete RC1 retirement workflow/durable cleanup supports **environment `prod` only**. Do not assume a production-profile `staging` or `dev` deployment has the same end-to-end automated teardown path. Do not bypass the limitation by changing its profile during destruction.
+**Retirement scope:** baseline production policy is profile-driven, but the complete retirement workflow/durable cleanup supports **environment `prod` only**. Do not assume a production-profile `staging` or `dev` deployment has the same end-to-end automated teardown path. Do not bypass the limitation by changing its profile during destruction.
 
 ## Prerequisites
 
@@ -198,8 +198,8 @@ Initial bootstrap needs an authorized AWS credential chain with sufficient admin
 
 Install and configure:
 
-- Terraform **1.15.8**, matching RC1 root constraints and workflow tooling
-- The committed root-specific provider lockfiles; AWS is pinned to **6.66.0** in the inspected RC1 roots
+- Terraform **1.15.8**, matching root constraints and workflow tooling
+- The committed root-specific provider lockfiles; AWS is pinned to **6.66.0** in the inspected roots
 - Git CLI
 - `jq`
 - A GitHub account with the following environments, if using `GitHub OIDC`:
@@ -222,14 +222,43 @@ Configure required reviewers and applicable branch restrictions on the protected
 
 ## Clone Repository
 
+For a new deployment, select the latest official stable release from this repository's [latest release page](https://github.com/jcub-i0/terraform-secure-baseline/releases/latest), review its release notes, and copy its exact tag into `RELEASE_TAG` below. Do not substitute a draft, prerelease, or the tip of `main`. If no official stable release is available, stop rather than silently choosing another revision. Use the source and documentation included in the selected release checkout.
+
+Run this from the parent directory where you want a new checkout. Replace `<official-stable-release-tag>` with the selected tag. `RELEASE_TAG` is a shell variable used only by this example, not a Terraform input or GitHub setting. The destination must not already exist. This procedure creates a new checkout; it does not switch or overwrite an existing working tree.
+
 ```bash
-git clone https://github.com/jcub-i0/terraform-secure-baseline.git
-cd terraform-secure-baseline
-git checkout --detach v1.11.0-rc1
-test "$(git rev-parse HEAD)" = "728166fa17bf42fe06bf540729c6aba1e70e05d5"
+RELEASE_TAG="<official-stable-release-tag>"
+
+(
+  if [[ -z "$RELEASE_TAG" || "$RELEASE_TAG" == "<official-stable-release-tag>" ]]; then
+    printf '%s\n' 'Set RELEASE_TAG to the official stable release tag you selected.' >&2
+    exit 1
+  fi
+
+  if [[ -e terraform-secure-baseline || -L terraform-secure-baseline ]]; then
+    printf '%s\n' 'Destination already exists; use a separate directory without overwriting existing work.' >&2
+    exit 1
+  fi
+
+  git clone --no-checkout \
+    https://github.com/jcub-i0/terraform-secure-baseline.git \
+    terraform-secure-baseline || exit 1
+
+  git -C terraform-secure-baseline show-ref --verify --quiet \
+    "refs/tags/${RELEASE_TAG}" || {
+      printf '%s\n' 'The selected release tag was not found in the clone; stop rather than selecting another revision.' >&2
+      exit 1
+    }
+
+  git -C terraform-secure-baseline checkout --detach "refs/tags/${RELEASE_TAG}" || exit 1
+  release_commit="$(git -C terraform-secure-baseline rev-parse --verify HEAD)" || exit 1
+  printf 'Selected release tag: %s\nResolved commit: %s\n' "$RELEASE_TAG" "$release_commit"
+) && cd terraform-secure-baseline
 ```
 
-This pins the implementation used by this guide. Subsequent documentation-only commits can be layered onto that source; do not move the RC1 tag.
+Only a successful checkout changes this terminal into the new repository directory. Record the printed release tag and resolved commit with your deployment records. The commands verify that the selected tag exists locally and check out its commit; they do not inspect GitHub release status or verify publisher identity, signatures, deployment authorization, security, or completed qualification. Select the official stable release from the release page before running them. If cloning, tag lookup, or checkout fails, stop; a partial clone may remain and must be inspected separately rather than automatically deleted or reused. A missing tag is not permission to fall back to `main`, another tag, or a prerelease.
+
+"Latest stable" guides initial selection, not every later Terraform operation. Keep an existing deployment on its selected release until an upgrade is deliberately reviewed. Do not automatically resolve a newer release during routine planning, validation, or deployment. Use the documentation, required toolchain, backend coordinates, and deployment inputs belonging to the selected release. Preserve tags and record any local modifications separately. Historical test evidence must still identify the actual implementation/validator commits and configuration that were tested; selecting a release does not rerun or re-date earlier qualification.
 
 ---
 
@@ -247,7 +276,7 @@ fi
 
 Repeat this for each Terraform root you plan to deploy. The resulting `terraform.tfvars` files are ignored by Git and must not be committed. GitHub Actions receives its values separately through workflow matrices, GitHub variables, and GitHub secrets.
 
-For local workload deployment, set `isolation_allowed` explicitly according to the approved environment policy. Do not infer a universal value from the profile or old instructions: the reusable baseline defaults to `false`, but the RC1 production environment root defaults to `true`. Workflow planning requires an explicit `ISOLATION_ALLOWED=true` or `false`. The canonical severity input defaults to `["CRITICAL"]` and accepts only `HIGH`/`CRITICAL`; review the response-automation contract before enabling automatic containment.
+For local workload deployment, set `isolation_allowed` explicitly according to the approved environment policy. Do not infer a universal value from the profile or old instructions: the reusable baseline defaults to `false`, but the production environment root defaults to `true`. Workflow planning requires an explicit `ISOLATION_ALLOWED=true` or `false`. The canonical severity input defaults to `["CRITICAL"]` and accepts only `HIGH`/`CRITICAL`; review the response-automation contract before enabling automatic containment.
 
 Templates contain example account IDs and names, not credentials or permission to use those accounts. Review existing backend files as well as `terraform.tfvars.example`; naming inputs do not automatically rewrite tracked backends. Preserve the one canonical `container-workloads.auto.tfvars.json` per workload and do not introduce a conflicting `ecs_services` value in another input source.
 
@@ -514,7 +543,7 @@ enable_guardduty_organization_configuration    = true
 enable_securityhub_v2_organization_policy      = true
 ```
 
-Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. The centralized GuardDuty contract retained in RC1 is:
+Also configure `securityhub_cspm_account_policies` for the workload accounts that should receive central Security Hub CSPM policies. The centralized GuardDuty contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -721,7 +750,7 @@ The Apply environment also requires `STATE_STACK_BACKEND_KEY` when workload-acco
 
 Workload plan-producing jobs also read optional `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, `ALB_CERTIFICATE_ARN`, and `ALB_INGRESS_CIDRS`. The workflow exports the supplied values to the corresponding Terraform inputs. Keep these consistent across normal Apply, standalone Plan, and Destroy; in particular, a custom-CIDR deployment must not be destroyed using a reconstructed default configuration. `ALB_INGRESS_CIDRS` is a JSON array, not a shell list. With no supplied CIDR override, the baseline default is `10.0.0.0/16`.
 
-`STATE_STACK_BACKEND_KEY` is the state root's own key, distinct from the workload/account keys. Reconciliation materializes that backend using the **state template's region**, not `PRIMARY_REGION`. RC1 does not introduce a parallel GitHub `STATE_REGION` setting.
+`STATE_STACK_BACKEND_KEY` is the state root's own key, distinct from the workload/account keys. Reconciliation materializes that backend using the **state template's region**, not `PRIMARY_REGION`. The reconciliation workflow does not introduce a parallel GitHub `STATE_REGION` setting.
 
 Secrets may include `ABUSEIPDB_API_KEY`. Keep all account IDs, role ARNs, region values, state settings, and deployment-profile choices aligned with the target environment. Do not publish secret input values or binary plans as public documentation evidence.
 
@@ -865,7 +894,7 @@ A service can be **registered but unreleased** by setting its digest to `null`:
 
 With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, application log group, Application Auto Scaling target/policy, or ECS operational alarm is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
 
-The shipped RC1 `test` entries are registered-but-unreleased with `image_digest=null`, including production. The production sample retains `desired_count=3` for a later release, but a fresh baseline apply does not start those tasks. Select an actual published digest through the reviewed application release path before claiming live ECS/ALB coverage.
+The shipped `test` entries are registered-but-unreleased with `image_digest=null`, including production. The production sample retains `desired_count=3` for a later release, but a fresh baseline apply does not start those tasks. Select an actual published digest through the reviewed application release path before claiming live ECS/ALB coverage.
 
 ### GuardDuty Fargate Runtime Monitoring
 
@@ -931,7 +960,7 @@ Example **development** scaling configuration. Replace the digest placeholder wi
 }
 ```
 
-At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. RC1 retains the target-tracking-only scaling contract introduced in v1.9.
+At least one target-tracking metric must be configured when `scaling` is non-null. CPU and memory targets may be used independently or together. `alb_requests_per_target` is also supported, but only for a service that configures `ingress`; its resource label is derived from Terraform-owned ALB/target-group identities. The baseline retains the target-tracking-only scaling contract.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. When Container Insights is enabled, each deployable service receives a task-deficit alarm. Each deployable ingress service receives an ALB unhealthy-target alarm. Both notify the SecOps SNS topic on ALARM and OK transitions.
 
@@ -965,7 +994,7 @@ Terraform never builds or pushes application images. The deployed task definitio
 
 The publisher job has AWS OIDC/ECR authority and only `contents: read`. The release/PR job has GitHub repository write authority but no AWS credentials or OIDC token. This keeps image publication authority separate from source-control mutation authority.
 
-Build contexts supplied to `Deploy Application` must resolve inside the checkout. RC1 installs the Amazon ECR Docker credential helper in the publisher job. The publication script uses a temporary helper-only Docker configuration for the push, disables the helper’s token-file cache, and removes that temporary directory on normal exit/failure. It does not use `docker login`; this does not erase unrelated credentials already present in a local Docker configuration, and abrupt process/host termination is not guaranteed to execute cleanup.
+Build contexts supplied to `Deploy Application` must resolve inside the checkout. The workflow installs the Amazon ECR Docker credential helper in the publisher job. The publication script uses a temporary helper-only Docker configuration for the push, disables the helper’s token-file cache, and removes that temporary directory on normal exit/failure. It does not use `docker login`; this does not erase unrelated credentials already present in a local Docker configuration, and abrupt process/host termination is not guaranteed to execute cleanup.
 
 Local publication requires `docker-credential-ecr-login` and an explicit `--region` or `AWS_REGION`; a named `--profile` is exported for helper use. See [deployment scripts](../scripts/deployment/README.md) for the supported inputs and boundaries. Publication success is not proof of ECS deployment.
 
@@ -1090,7 +1119,7 @@ IDENTITY_CENTER_WORKLOADS
 IDENTITY_CENTER_SECOPS
 ```
 
-For local deployment, create `bootstrap/control_plane/identity_center/terraform.tfvars` from its example only when no local file already exists. Populate the workload account IDs, Regions, expected workload policy names, and security-operations account ID. Review rather than overwrite an existing configuration.
+For local deployment, create `bootstrap/control_plane/identity_center/terraform.tfvars` from its example only when no local file already exists. Populate required `cloud_name` to match the workload roots, the workload account IDs, Regions, expected workload policy names, and the security-operations account ID. Review rather than overwrite an existing configuration.
 
 Then apply:
 
@@ -1169,7 +1198,7 @@ Keep the four validation/evidence layers separate: control plane, centralized se
 
 For production, retain the effective input set, implementation SHA, profile, region/CIDR/AZ topology, selected image digest, live task placement, target health, validator logs, and no-change plan. The shipped null digest is intentionally different from the digest-selected service used in application qualification.
 
-`validate-backup.sh` can pass with warnings when a fresh environment has no restore-test jobs or no current recovery points. Treat restore configuration, actual restore execution, temporary-resource cleanup, and application-data correctness as different claims. Earlier R8 failover/restore/task-replacement evidence must keep its original provenance; do not relabel it as an exact-RC1 test.
+`validate-backup.sh` can pass with warnings when a fresh environment has no restore-test jobs or no current recovery points. Treat restore configuration, actual restore execution, temporary-resource cleanup, and application-data correctness as different claims. Earlier R8 failover/restore/task-replacement evidence must keep its original provenance; do not relabel it as a test against a different commit or configuration.
 
 A final normal-operation no-change plan should use the same effective configuration as the deployment. It does not replace separately approved retirement/destroy qualification. Do not run destructive or fault-injection tests merely because an account-wide informational command completed.
 
@@ -1399,7 +1428,7 @@ This command is not a substitute for the protected GitHub workflow or production
 
 ### Production profile
 
-The complete RC1 automated retirement path supports **`prod`**. Its order is:
+The complete automated retirement path supports **`prod`**. Its order is:
 
 ```text
 normal production (production_retirement_mode=false)
@@ -1472,7 +1501,7 @@ printf 'Private state backup: %s\n' "$STATE_BACKUP_DIR"
 
 This is **only a backup**, not an instruction to migrate or destroy the backend. It can contain sensitive information; retain it under the approved access/retention policy.
 
-An approved state teardown must independently establish that dependent roots are handled, active state has moved off the bucket, the independent state is verified, the literal Terraform guards and AWS policy/versioned-object constraints are deliberately addressed, and retained data/keys remain recoverable. RC1 has no generic “retire state” toggle or reverse-migration/decommissioning helper that automates that whole process. See the relevant state-root README and [state module reference](../modules/state/README.md).
+An approved state teardown must independently establish that dependent roots are handled, active state has moved off the bucket, the independent state is verified, the literal Terraform guards and AWS policy/versioned-object constraints are deliberately addressed, and retained data/keys remain recoverable. The baseline has no generic “retire state” toggle or reverse-migration/decommissioning helper that automates that whole process. See the relevant state-root README and [state module reference](../modules/state/README.md).
 
 ---
 
@@ -1502,7 +1531,7 @@ Retiring centralized security governance is not part of workload destroy. Review
 
 ### 5. Control Plane
 
-Keep shared identity and governance available while dependent operations require them. The Organization resource itself has `prevent_destroy=true`; a routine `terraform destroy` is not an implemented Organization-retirement procedure. State bucket and CMK guards remain separate. Plan any final decommissioning as an explicitly approved administrative operation, not as an automatic extension of v1.11 workload retirement.
+Keep shared identity and governance available while dependent operations require them. The Organization resource itself has `prevent_destroy=true`; a routine `terraform destroy` is not an implemented Organization-retirement procedure. State bucket and CMK guards remain separate. Plan any final decommissioning as an explicitly approved administrative operation, not as an automatic extension of workload retirement.
 
 ---
 

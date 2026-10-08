@@ -11,7 +11,7 @@ This stack creates and assigns environment-specific SecOps groups and permission
 
 The stack uses the reusable `modules/identity_center` module with two access models: one repeated workload model and one dedicated security-operations model.
 
-This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). See [main.tf](main.tf), [variables.tf](variables.tf), and the [module reference](../../../modules/identity_center/README.md). Resource presence and assigned permission sets are not evidence that a person can perform the intended workflow.
+See [main.tf](main.tf), [variables.tf](variables.tf), and the [module reference](../../../modules/identity_center/README.md). Resource presence and assigned permission sets are not evidence that a person can perform the intended workflow.
 
 ---
 
@@ -33,7 +33,7 @@ This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d
   - `SecOps-Engineer-SecOps`
 - Assign enabled permission sets to their target AWS accounts.
 - Reference workload-created customer-managed log-access policies by name.
-- Construct each workload Operator policy ARN from the account/Region and the literal bus name `secops-bus`; see the RC1 mismatch below.
+- Construct each workload Operator policy ARN using the required `cloud_name`, workload map key, account ID, and Region, matching the prefixed workload SecOps event-bus name.
 
 ### This stack does not
 
@@ -73,7 +73,7 @@ For every configured workload account:
 - `SecOps-Analyst` is optional and defaults to disabled.
 - `SecOps-Engineer` is optional and defaults to disabled.
 - Group names are derived from the workload map key.
-- The Operator ARN is constructed as `arn:aws:events:<primary_region>:<account_id>:event-bus/secops-bus`; it is not read from workload state.
+- The Operator ARN is constructed as `arn:aws:events:<primary_region>:<account_id>:event-bus/<cloud_name>-<environment>-secops-bus`; it is not read from workload state.
 
 The workload map keys are restricted to:
 
@@ -85,18 +85,27 @@ prod
 
 The root validation permits only these keys, but does not require all three to be present or require account IDs to be distinct. The complete-platform validator and the standalone Identity Center Plan workflow expect `dev`, `staging`, and `prod`. A Terraform-valid subset is therefore not automatically a supported complete-platform evidence configuration. Removing a key also removes that module instance's managed access resources.
 
-### Operator bus identity in RC1
+### Operator bus identity
 
-The actual caller and workload resource disagree:
+The caller and workload resource now use the same naming contract:
 
 | Authority | ARN resource portion |
 |---|---|
-| This root's `secops_event_bus_arn` argument | `event-bus/secops-bus` |
-| [Workload automation](../../../modules/automation/main.tf), `aws_cloudwatch_event_bus.secops` | `event-bus/<name_prefix>-secops-bus` |
+| This root's `secops_event_bus_arn` argument | `event-bus/<cloud_name>-<environment>-secops-bus` |
+| [Workload automation](../../../modules/automation/main.tf), `aws_cloudwatch_event_bus.secops` | `event-bus/<name_prefix>-secops-bus`, where `name_prefix = <cloud_name>-<environment>` |
 
-There is no root input for the bus name or `cloud_name` here. Changing the nested Region or account ID cannot repair the differing bus-name suffix. The module will put the supplied unprefixed ARN in its Operator inline policy, and the current control-plane validator does not compare this relationship.
+The required root `cloud_name`, workload map key, account ID, and
+`primary_region` determine each Operator policy ARN. This root does not query
+workload state or confirm that the event bus exists; compare actual workload
+naming and Region before accepting the access path.
 
-Do not infer that all rollback requests must fail: the workload bus also has its own resource policy. In RC1 its rollback statement uses `Principal = "*"` with `events:source = custom.rollback`; it is not an Operator-principal allowlist. Effective authorization requires review of the identity and resource policies together. Neither an assignment PASS nor a successful event proves the intended Operator-only boundary. This documentation records the implementation mismatch; it does not fix either policy or authorize a new test event.
+The workload bus policy permits `custom.rollback` publication from matching
+`AWSReservedSSO_SecOps-Operator-<environment>_*` IAM role ARNs and explicitly
+denies nonmatching principals for that event source. A separate
+`aws.securityhub` forwarding Allow is retained. The role name derives from
+the permission-set name, not the configurable Identity Center group name.
+Validate deployed group membership and positive/negative access; the handler
+does not authenticate the supplied approver and ticket fields.
 
 ### Security-operations account
 
@@ -137,7 +146,7 @@ Optional Analyst/Engineer sessions are four hours. Both attach `SecurityAudit`, 
 
 [providers.tf](providers.tf) pins Terraform `1.15.8` and AWS provider `6.66.0`, but does not declare an explicit AWS provider configuration. Use the control-plane administrative credentials and the Region of the existing Identity Center organization instance. The module discovers that instance; it does not create it or let this root select an instance ARN.
 
-The two input objects below are the **entire root input interface**. There is no top-level `primary_region`, `state_region`, or `account_id`. A workload entry's `primary_region` only constructs its Operator policy ARN; it is not the Region of a separate per-workload Identity Center provider.
+The root has three required inputs: `cloud_name` and the two input objects described below. There is no top-level `primary_region`, `state_region`, or `account_id`. Each workload entry's `primary_region` is an input to its Operator policy ARN, not a per-workload provider Region. Match `cloud_name` to the values used by the workload roots.
 
 The backend is literal and independent:
 
@@ -157,7 +166,7 @@ Apply this stack with workload Operator access enabled and optional Analyst and 
 
 The workload configuration must still include the expected customer-managed policy names because those fields are required by the workload input schema, but those policies are not attached while Analyst and Engineer access remains disabled.
 
-Workload Operator permission sets can be created before the target EventBridge buses exist because the module does not check bus existence. This is only an ordering allowance, not evidence of usable rollback access; review the differing RC1 bus names documented above before accepting the access path.
+Workload Operator permission sets can be created before the target EventBridge buses exist because the module scopes policy to a constructed ARN without checking bus existence. Compare that ARN to the deployed workload bus, then test Operator access before relying on recovery.
 
 ### 2. Deploy workload baselines
 
@@ -228,6 +237,10 @@ Use the schema examples below only as starting values. Preserve every account en
 
 ## Inputs
 
+### `cloud_name`
+
+Required cloud naming value, with no implicit default. Set it to the same `cloud_name` used by the workload roots so the Operator bus name resolves to `<cloud_name>-<environment>-secops-bus`. Terraform rejects empty or whitespace-only values.
+
 ### `identity_center_workloads`
 
 Identity Center configuration keyed by workload environment. This input is required and has no default:
@@ -255,6 +268,8 @@ The root does not validate Region syntax or uniqueness of account IDs, and it do
 Example using synthetic 12-digit IDs; replace all accounts, Regions, and policy names with reviewed deployment values:
 
 ```hcl
+cloud_name = "tf-secure-baseline"
+
 identity_center_workloads = {
   dev = {
     account_id                     = "333333333333"
@@ -317,6 +332,7 @@ The standalone Identity Center Plan target reads these JSON variables from `cont
 
 | GitHub variable | Terraform variable |
 |---|---|
+| `CLOUD_NAME` | `TF_VAR_cloud_name` |
 | `IDENTITY_CENTER_WORKLOADS` | `TF_VAR_identity_center_workloads` |
 | `IDENTITY_CENTER_SECOPS` | `TF_VAR_identity_center_secops` |
 
@@ -351,7 +367,7 @@ workload_permission_set_arns = {
 
 ## Validation
 
-The [control-plane validator](../../../scripts/validation/validate-control-plane.sh) checks the required named groups, describes output-backed permission-set ARNs, and requires at least one assignment for each queried target account/permission-set pair under its default strictness. It does **not** compare the assignment principal ID/type with the Terraform-created group, reject all extra assignments, inspect group membership, or compare the complete permission-policy/session settings. It also does not detect the Operator bus-name mismatch above.
+The [control-plane validator](../../../scripts/validation/validate-control-plane.sh) checks the required named groups, describes output-backed permission-set ARNs, and requires at least one assignment for each queried target account/permission-set pair under its default strictness. It does **not** compare assignment principals to the Terraform-created group, reject unexpected assignments, inspect group membership, or compare complete permission-policy/session settings. It also does not verify the Operator ARN against the live bus policy; inspect both independently.
 
 Set `CHECK_OPTIONAL_SECOPS_GROUPS=true` to check optional Analyst/Engineer group names against the configured flags. `STRICT_IDENTITY_CENTER_ASSIGNMENTS=true` makes missing assignments fail; it does not make that check an exact membership or policy audit.
 

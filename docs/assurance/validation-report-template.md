@@ -25,9 +25,9 @@ This template is intended to summarize:
 
 The project generates separate evidence packages for each validation layer. A single combined-report exporter is not currently part of the baseline.
 
-This template is aligned to `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It is not a completed validation report. Leave unsupported results as `Not Run`, `Not Reviewed`, or `Not Applicable` with a reason; do not prefill historical or current-release success.
+This template is not a completed validation report. Leave unsupported results as `Not Run`, `Not Reviewed`, or `Not Applicable` with a reason; do not prefill success without supporting evidence.
 
-Fields added for provenance, warnings, recovery, and retirement are reviewer-supplied companion records, not new fields automatically emitted by the frozen exporters. Preserve the original generated package unchanged.
+Fields added for provenance, warnings, recovery, and retirement are reviewer-supplied companion records, not new fields automatically emitted by the exporters. Preserve the original generated package unchanged.
 
 ---
 
@@ -331,7 +331,7 @@ validation-results/<env>/baseline/<timestamp>/
 
 The current workload baseline export contains 16 validators. The generated package and `summary.json` remain the source of truth for each evidence run.
 
-### v1.11 Topology and Lifecycle Context
+### Topology and Lifecycle Context
 
 | Assertion / context | Result / Value | Evidence | Limit |
 |---|---|---|---|
@@ -348,7 +348,7 @@ Production defaults to three AZs; lower-cost profiles to two. A three-AZ topolog
 
 Use this subsection when ECS/Fargate services are in scope. Supporting detail is distributed across `validate-ecs-runtime.log`, `validate-iam.log`, `validate-vpc-endpoints.log`, and `validate-eventbridge.log`; the baseline summary still counts each top-level validator once.
 
-When the runtime is empty, mark task/ALB instrumentation assertions not applicable and record that no live service was exercised. Protected HEALTHY coverage is not required with no running protected tasks. RC1's registered sample digests are null; do not copy an earlier running-service result into this report.
+When the runtime is empty, mark task/ALB instrumentation assertions not applicable and record that no live service was exercised. Protected HEALTHY coverage is not required with no running protected tasks. The registered sample digests are null; do not copy an earlier running-service result into this report.
 
 | Runtime assertion | Result | Evidence Log | Notes |
 |---|---|---|---|
@@ -415,7 +415,7 @@ When the runtime is empty, mark task/ALB instrumentation assertions not applicab
 | Application validation status / method | `<status/not run>` | `<what was tested and by whom>` |
 | Temporary-resource cleanup status | `<SUCCESSFUL/DELETING/FAILED/no result/other>` | `<job and resource evidence>` |
 | Reviewer recovery acceptance | `<accepted/conditional/not accepted/not reviewed>` | `<scope, exceptions and rationale>` |
-| Earlier qualification relied upon | `<separate SHA/configuration/run reference/none>` | Do not relabel earlier evidence as execution on this candidate |
+| Earlier qualification relied upon | `<separate SHA/configuration/run reference/none>` | Do not relabel earlier evidence as execution against a different commit or configuration |
 
 An absent job or a pending/running execution is a warning-only condition in the validator. Restore `FAILED`/`ABORTED` fails. Application-validation failure/timeout and cleanup failure are reported as warnings, so a script PASS alone does not prove either succeeded. The temporary restore is configured private and Single-AZ; it is not the source database's Multi-AZ topology. Record achieved recovery objectives only when the actual test evidence measures them.
 
@@ -576,7 +576,7 @@ Use only when an authorized retirement was actually performed. This is a compani
 | Persistent Identity Center configuration reconciled | `<Complete/Outstanding/Not Applicable>` | `<source-of-truth update>` |
 | Aborted/partial operation and remaining obligations | `<description/none>` | Earlier cleanup is not undone by rejecting a later approval |
 
-RC1's complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
+The complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
 
 ## Warnings / Exceptions
 
@@ -622,7 +622,7 @@ Document the files included in the selected generated evidence package.
 
 This report validates deployed AWS control presence and selected configuration settings for the selected validation scope.
 
-This template does not automatically validate anything. The completed report summarizes only the attached evidence. Script-level PASS is not zero warnings, blanket least privilege, enforced human approval, successful application recovery, or proof that audit logs survive workload destruction. Preserve actual test provenance and do not substitute the RC1 tag for an unknown run commit.
+This template does not automatically validate anything. The completed report summarizes only the attached evidence. Script-level PASS is not zero warnings, blanket least privilege, enforced human approval, successful application recovery, or proof that audit logs survive workload destruction. Preserve actual test provenance and do not substitute a documentation reference for an unknown run commit.
 
 The validation scripts confirm the presence and configuration of selected AWS security controls, governance resources, state backend resources, GitHub OIDC resources, and supporting infrastructure at the time validation was run. The report is point-in-time evidence: a passing GuardDuty Runtime coverage state does not guarantee future coverage or finding delivery, and validation of EventBridge/SNS/DLQ configuration does not prove that every future coverage event will be delivered successfully.
 

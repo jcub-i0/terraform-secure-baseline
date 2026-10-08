@@ -209,13 +209,13 @@ Do not edit a template or active backend to redirect an established stack withou
 
 State resources are not part of ordinary workload retirement. Before even planning their retirement, inventory all dependent roots, preserve external state backups, and move this root's active state to an independent backend or local state. Verify that independent state before proceeding.
 
-The literal `prevent_destroy = true` guards on the bucket and CMK still block normal destruction after that move. RC1 provides no input that removes those guards. Any approved exception needs a separate, reviewed change and retained-object disposition plan. Do not remove resource definitions, force-delete bucket contents, or disable key protections simply to get past an error.
+The literal `prevent_destroy = true` guards on the bucket and CMK still block normal destruction after that move. This state root provides no input that removes those guards. Any approved exception needs a separate, reviewed change and retained-object disposition plan. Do not remove resource definitions, force-delete bucket contents, or disable key protections simply to get past an error.
 
 A successful workload destroy does not authorize deletion of this account's state bucket. For the management and security accounts, separately assess the organization-wide responsibilities of the dependent roots before retiring anything.
 
 ## Related Documentation
 
-This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It describes implementation, not a new live test.
+This page describes implementation, not a new live test.
 
 - [Root inputs](variables.tf), [provider](providers.tf), [module call](main.tf), and [outputs](outputs.tf)
 - [State module](../../../modules/state/README.md)

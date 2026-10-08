@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document describes the implemented ECS/Fargate runtime at `v1.11.0-rc1`, commit `728166fa17bf42fe06bf540729c6aba1e70e05d5`, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The v1.10 qualification section below is historical; the RC1 tag is not proof that those tests were repeated at this commit.
+This document describes the implemented ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
@@ -97,7 +97,7 @@ Baseline derives `deployable_ecs_services` by filtering the canonical map to ent
 
 Therefore a registered-but-unreleased service preserves/creates its required ECR repository without creating a task definition or ECS service. Selecting a valid digest later materializes the runtime from the same service entry. Registered-but-unreleased services also create no Application Auto Scaling targets or policies and no ECS operational alarms.
 
-All three tracked RC1 `test` registrations use `image_digest=null`. The shared ECS cluster and enabled Container Insights performance log group still exist. Earlier live qualification used a selected digest; a fresh RC1 baseline apply alone does not reproduce those running tasks or an ALB.
+All three tracked `test` registrations use `image_digest=null`. The shared ECS cluster and enabled Container Insights performance log group still exist. Earlier live qualification used a selected digest; a fresh baseline apply with those null digests does not reproduce those running tasks or an ALB.
 
 ### Fixed versus autoscaled desired-count ownership
 
@@ -107,9 +107,9 @@ A non-null `scaling` object means the service is autoscaled. The configured `des
 
 `modules/ecs_service` therefore keeps fixed and autoscaled ECS services on separate Terraform resources. Fixed services use `aws_ecs_service.services`; autoscaled services use `aws_ecs_service.autoscaled_services` with `lifecycle.ignore_changes = [desired_count]`. This split is required because Terraform lifecycle behavior cannot be selected conditionally for individual `for_each` instances.
 
-Existing fixed-count services retain the original `aws_ecs_service.services` address, preserving the v1.8 state identity for services that do not opt into scaling.
+Existing fixed-count services retain the original `aws_ecs_service.services` address when they do not opt into scaling.
 
-Changing an existing service between fixed and autoscaled classes changes the Terraform resource address. RC1 does not provide an automatic state migration for that transition; review its plan and disruption implications. Similarly, changing a deployed service's digest to `null` removes its deployable declaration; it is not the production retirement procedure.
+Changing an existing service between fixed and autoscaled classes changes the Terraform resource address. The module does not provide an automatic state migration for that transition; review its plan and disruption implications. Similarly, changing a deployed service's digest to `null` removes its deployable declaration; it is not the production retirement procedure.
 
 ## Image and repository lifecycle
 
@@ -165,7 +165,7 @@ Task definitions use Fargate, `awsvpc`, Linux, and either `X86_64` or `ARM64`. T
 
 Each task definition uses separate per-service task execution and application task roles. The current abstraction contains exactly one essential container named for the stable service key, one TCP port mapping, plaintext environment values, approved ECS-native secret references, and the `awslogs` driver.
 
-RC1 does not define an ECS-native application-container `healthCheck`. The GuardDuty task check accepts `healthStatus=UNKNOWN` when no such health check exists, rejects `UNHEALTHY`, and requires the application to be running. ALB target health, when present, is a separate health signal; neither proves database queries or business behavior.
+The module does not define an ECS-native application-container `healthCheck`. The GuardDuty task check accepts `healthStatus=UNKNOWN` when no such health check exists, rejects `UNHEALTHY`, and requires the application to be running. ALB target health, when present, is a separate health signal; neither proves database queries or business behavior.
 
 The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
 
@@ -189,11 +189,11 @@ The normal runtime validator additionally requires production deployment minimum
 
 The autoscaled resource still ignores `desired_count` changes. Derived zero intent alone is therefore not proof that AWS has reached zero capacity. `validate-retirement-readiness.sh` requires actual desired/running/pending counts of zero and exact live zero scaling bounds, and checks that scheduled actions cannot restore capacity. The normal production availability validator is not the retirement validator.
 
-Retirement uses the separate reviewed Apply, durable cleanup, Identity Center cleanup, and saved-destroy-plan sequence in the [runbook](production-retirement.md). RC1's full durable cleanup is `prod`-only and requires explicit deletion authorization even for empty scoped data. Setting a digest to `null`, downgrading the deployment profile, or enabling force deletion is not a substitute.
+Retirement uses the separate reviewed Apply, durable cleanup, Identity Center cleanup, and saved-destroy-plan sequence in the [runbook](production-retirement.md). The full durable cleanup is `prod`-only and requires explicit deletion authorization even for empty scoped data. Setting a digest to `null`, downgrading the deployment profile, or enabling force deletion is not a substitute.
 
 ## Application Auto Scaling
 
-For every deployable service whose canonical `scaling` object is non-null, `modules/ecs_service` creates one `aws_appautoscaling_target` for `ecs:service:DesiredCount` using the configured minimum and maximum capacities. The module retains the target-tracking-only scaling model introduced in v1.9.
+For every deployable service whose canonical `scaling` object is non-null, `modules/ecs_service` creates one `aws_appautoscaling_target` for `ecs:service:DesiredCount` using the configured minimum and maximum capacities. The module retains the target-tracking-only scaling model.
 
 Optional target-tracking policies are materialized from the same scaling object:
 
@@ -290,7 +290,7 @@ An ingress unhealthy-target alarm is created for every deployable ingress servic
 
 Task-deficit alarms are absent when Container Insights is disabled. Ingress alarms are conditional on ingress and are validated independently of the general ALB validation stage.
 
-The Terraform-owned EventBridge coverage-health signal introduced in v1.10 remains part of v1.11. The rule lives on the default event bus and matches:
+The baseline includes a Terraform-owned EventBridge coverage-health signal. The rule lives on the default event bus and matches:
 
 ```text
 source      = aws.guardduty
@@ -350,7 +350,7 @@ Workload Plan/Apply paths pass and validate `DEPLOYMENT_PROFILE`. Missing or inv
 
 ## Validation contract
 
-ECS/Fargate remains inside the existing workload-baseline validation layer. There are four validation/evidence layers total and 16 validators in the workload baseline suite. v1.11 retirement helpers are separate deployment gates, not a fifth evidence layer or a seventeenth workload validator.
+ECS/Fargate remains inside the existing workload-baseline validation layer. There are four validation/evidence layers total and 16 validators in the workload baseline suite. Retirement helpers are separate deployment gates, not a fifth evidence layer or a seventeenth workload validator.
 
 `validate-ecr.sh` verifies repository identity, immutable tags, KMS encryption against the exact workload ECR CMK, the approved untagged-only lifecycle rule, and Terraform-backed profile lifecycle intent. `force_delete` is a Terraform/provider deletion behavior, not an ECR service attribute that can independently be read back as that flag.
 
@@ -395,7 +395,7 @@ With no deployable services, coverage lookup is not required. With protected ser
 
 `validate-security-operations.sh` owns the centralized organization contract. It compares the Terraform-managed GuardDuty feature subset exactly with AWS and also fails if AWS reports any additional organization feature or additional configuration as enabled outside the Terraform-managed contract.
 
-### v1.10 live qualification
+### Historical Runtime Monitoring qualification
 
 Development qualification confirmed the implemented enabled-state path with a real Fargate service:
 
@@ -415,18 +415,18 @@ The same qualification cycle also corrected the profile-aware AWS Backup contrac
 
 Generated evidence packages remain the authoritative per-run record. These validation results support deployment and audit readiness; they do not represent SOC 2 or ISO 27001 certification.
 
-### v1.11 qualification provenance
+### Qualification provenance
 
-Keep the preceding v1.10 results historical. A v1.11 record must identify the tested implementation commit, effective profile/topology, selected application digest, caller identity, workflow/run attempt where applicable, and retained logs. RC1's null-digest distribution defaults are intentionally different from a qualification configuration with running tasks.
+Keep the preceding Runtime Monitoring results historical. Each qualification record must identify the tested implementation commit, effective profile/topology, selected application digest, caller identity, workflow/run attempt where applicable, and retained logs. Null-digest sample configurations are intentionally different from qualification configurations with running tasks.
 
-Record live per-AZ task placement and target health separately from subnet inventory and rebalancing intent. Record earlier ECS replacement/RDS failover/Restore Testing exercises separately from later configuration/no-change regressions; do not relabel older tests as new exact-RC1 executions. A post-helper image-publication smoke test likewise requires its own run evidence, not inference from the script change.
+Record live per-AZ task placement and target health separately from subnet inventory and rebalancing intent. Record earlier ECS replacement/RDS failover/Restore Testing exercises separately from later configuration/no-change regressions; do not relabel older tests as executions against a different commit or configuration. A post-helper image-publication smoke test likewise requires its own run evidence, not inference from the script change.
 
 Use the [evidence guide](assurance/validation-evidence-guide.md) and [report template](assurance/validation-report-template.md) to distinguish implemented, configured/live-checked, executed, not run, and not applicable. No new qualification run is asserted by this documentation update.
 ## Central security boundary
 
 Inspector ECR scanning remains workload-local under `modules/security`. Central GuardDuty organization ownership remains in `bootstrap/security_operations/security_services`.
 
-The centralized GuardDuty organization contract introduced in v1.10 and retained in RC1 is:
+The centralized GuardDuty organization contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -471,7 +471,7 @@ target-tracking CloudWatch alarms created from that policy.
 
 ### Organization-wide secure default
 
-The centralized GuardDuty contract retained in v1.11 is:
+The centralized GuardDuty contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -511,7 +511,7 @@ insecure sandbox. `minimal` carries the explicit exclusion because that profile
 already trades selected security/availability services for the lowest-cost
 private AWS-only footprint.
 
-RC1 retains profile-derived enrollment without an independent public
+The baseline retains profile-derived enrollment without an independent public
 `guardduty_fargate_runtime_monitoring_enabled` override. Such an override would
 require a deliberate future interface and validation change; it is not an
 existing top-level configuration option.
@@ -650,19 +650,19 @@ For `minimal`, validation proves:
 - healthy GuardDuty ECS/Fargate coverage is not required.
 
 `validate-ecs-runtime.sh` remains the single workload-baseline ECS validator
-entry point. The v1.11 workload suite retains 16 top-level validators and four
+entry point. The workload suite retains 16 top-level validators and four
 validation/evidence layers. Empty or inapplicable branches do not constitute
 executed task tests.
 
 ### Containment remains separate
 
-Automatic ECS/Fargate task containment remains outside the implemented v1.11
+Automatic ECS/Fargate task containment remains outside the implemented
 contract and requires a separate response design. Runtime detection and coverage
 must not be coupled to an unproven containment mechanism.
 
-## Deferred beyond v1.10.0
+## Deferred capabilities
 
-The heading records the earlier release boundary. The following capabilities are still unimplemented at v1.11.0-rc1:
+The following capabilities remain unimplemented:
 
 - fail-closed ECS task containment/remediation
 - ReconoSense reference deployment
@@ -673,4 +673,4 @@ No `modules/ecs_task` module is part of the current architecture.
 
 ## Implementation references
 
-Primary RC1 sources are [canonical inputs](../baseline/variables.tf), [runtime derivation](../baseline/locals.tf), [ECS services](../modules/ecs_service/main.tf), [ALB](../modules/application_load_balancer/main.tf), [runtime validator entry point](../scripts/validation/validate-ecs-runtime.sh), [service checks](../scripts/validation/lib/ecs-runtime/services.sh), [GuardDuty checks](../scripts/validation/lib/ecs-runtime/guardduty.sh), and [image publication](../scripts/deployment/deploy-application.sh).
+Primary sources for the commit being reviewed are [canonical inputs](../baseline/variables.tf), [runtime derivation](../baseline/locals.tf), [ECS services](../modules/ecs_service/main.tf), [ALB](../modules/application_load_balancer/main.tf), [runtime validator entry point](../scripts/validation/validate-ecs-runtime.sh), [service checks](../scripts/validation/lib/ecs-runtime/services.sh), [GuardDuty checks](../scripts/validation/lib/ecs-runtime/guardduty.sh), and [image publication](../scripts/deployment/deploy-application.sh).

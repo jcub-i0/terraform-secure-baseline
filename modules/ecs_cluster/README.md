@@ -6,7 +6,7 @@ The `ecs_cluster` module creates one Amazon ECS cluster for a workload environme
 
 It provides the shared cluster-level substrate for the workload's ECS/Fargate services while keeping service-specific concerns in separate modules.
 
-This reference describes the implementation at `v1.11.0-rc1`. The module does not select Availability Zones, set production service capacity, or enable service AZ rebalancing; those responsibilities belong to [baseline composition](../../baseline/locals.tf) and the [ECS service module](../ecs_service/README.md).
+The module does not select Availability Zones, set production service capacity, or enable service AZ rebalancing; those responsibilities belong to [baseline composition](../../baseline/locals.tf) and the [ECS service module](../ecs_service/README.md).
 
 ## Resources Created
 
@@ -67,7 +67,7 @@ When Container Insights is enabled, Terraform also creates:
 
 The log group uses the supplied retention period and logs CMK. It is absent when `container_insights = "disabled"`. The cluster depends on this resource so the Terraform-owned group exists before the cluster activates Container Insights.
 
-Task-deficit monitoring, introduced in v1.9, uses the Container Insights `DesiredTaskCount` and `RunningTaskCount` metrics. Baseline therefore supplies task-deficit alarm inputs only when `container_insights` is not `disabled`. Disabling Container Insights also disables that Terraform-owned task-deficit alarm path; it does not disable ECS services themselves.
+Task-deficit monitoring uses the Container Insights `DesiredTaskCount` and `RunningTaskCount` metrics. Baseline therefore supplies task-deficit alarm inputs only when `container_insights` is not `disabled`. Disabling Container Insights also disables that Terraform-owned task-deficit alarm path; it does not disable ECS services themselves.
 
 ## GuardDuty Fargate Runtime Monitoring
 
@@ -87,7 +87,7 @@ Baseline derives the input from `deployment_profile`:
 | `development` | `true` | `GuardDutyManaged=true` |
 | `minimal` | `false` | `GuardDutyManaged=false` |
 
-There is intentionally no independent public top-level Runtime Monitoring toggle in the RC1 baseline. The deployment profile owns this cost/security decision.
+There is intentionally no independent public top-level Runtime Monitoring toggle in the baseline. The deployment profile owns this cost/security decision.
 
 The module exposes both the expected boolean and the resource-backed tag value so validation can compare:
 
@@ -178,7 +178,7 @@ Those responsibilities belong to other modules, AWS-managed Application Auto Sca
 
 ## Runtime Model
 
-The RC1 runtime architecture uses one ECS cluster per workload environment with multiple ECS services able to consume the same cluster. The shared cluster also carries the deployment-profile-derived `GuardDutyManaged` participation intent.
+The runtime architecture uses one ECS cluster per workload environment with multiple ECS services able to consume the same cluster. The shared cluster also carries the deployment-profile-derived `GuardDutyManaged` participation intent.
 
 Conceptually:
 
@@ -256,4 +256,4 @@ During production retirement, baseline derives zero service capacity while retai
 
 `validate-ecs-runtime.sh` remains part of the 16-script workload suite. Cluster-setting and log-group checks apply even without a deployable application; protected-task instrumentation and GuardDuty coverage checks have their own runtime conditions.
 
-Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline outputs](../../baseline/outputs.tf), and [ECS runtime validator](../../scripts/validation/validate-ecs-runtime.sh). This document records configuration and ownership; it does not assert an exact-RC1 live qualification run.
+Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline outputs](../../baseline/outputs.tf), and [ECS runtime validator](../../scripts/validation/validate-ecs-runtime.sh). This document records configuration and ownership; it does not assert a live qualification run.

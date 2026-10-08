@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`scripts/deployment` contains the ECS/Fargate image-publication and immutable digest-promotion tooling, the exact-plan artifact helper, and the production retirement/cleanup gates used by v1.11. Terraform owns ECR repositories and ECS infrastructure; the image-publication scripts build and publish images outside Terraform, resolve the digest recorded by ECR, and prepare the one-field configuration change that selects a release.
+`scripts/deployment` contains the ECS/Fargate image-publication and immutable digest-promotion tooling, the exact-plan artifact helper, and the production retirement/cleanup gates. Terraform owns ECR repositories and ECS infrastructure; the image-publication scripts build and publish images outside Terraform, resolve the digest recorded by ECR, and prepare the one-field configuration change that selects a release.
 
 | Script | Responsibility | Mutation boundary |
 |---|---|---|
@@ -141,7 +141,7 @@ The manual workflow accepts:
 - Dockerfile path relative to that context; and
 - an optional immutable image tag.
 
-The publisher job installs the Ubuntu package `amazon-ecr-credential-helper` when `docker-credential-ecr-login` is not already on `PATH`, and verifies that the helper is available before invoking the publication script. It does not pin a package version in RC1.
+The publisher job installs the Ubuntu package `amazon-ecr-credential-helper` when `docker-credential-ecr-login` is not already on `PATH`, and verifies that the helper is available before invoking the publication script. It does not pin a package version.
 
 The workflow build context must resolve inside the repository checkout. The workflow reads `repository_name` and `cpu_architecture` from the selected canonical service entry and maps `X86_64` to `linux/amd64` or `ARM64` to `linux/arm64`; operators do not enter a parallel repository or platform value.
 
@@ -214,16 +214,16 @@ The workload Apply/Destroy and Identity Center cleanup paths use their own saved
 Use the [runbook](../../docs/production-retirement.md) for the complete order and approvals. These helpers must not be treated as interchangeable:
 
 - `validate-production-retirement-plan.sh` accepts `--working-directory` and `--plan-file`. It checks allowed resource action types and the planned production/lifecycle/zero-capacity outputs. It does not whitelist every permissible in-place attribute update, so the full plan still needs review.
-- `cleanup-retirement-durable-data.sh` accepts only `prod` in RC1. It requires the expected account ID and checks the deployed production retirement outputs. `--mode plan` inventories; `--mode apply --confirm DELETE-DURABLE-DATA` re-inventories and deletes scoped ECR images and Backup recovery points. The inventory is not a saved Terraform plan or immutable item-level approval artifact. Active Backup jobs prevent apply-mode cleanup.
+- `cleanup-retirement-durable-data.sh` accepts only `prod`. It requires the expected account ID and checks the deployed production retirement outputs. `--mode plan` inventories; `--mode apply --confirm DELETE-DURABLE-DATA` re-inventories and deletes scoped ECR images and Backup recovery points. The inventory is not a saved Terraform plan or immutable item-level approval artifact. Active Backup jobs prevent apply-mode cleanup.
 - `validate-retirement-readiness.sh` accepts a workload environment, reads its Terraform state/outputs, and checks production posture, live deletion protections, ECS quiescence, zero autoscaling bounds, empty ECR repositories, and an empty Backup vault without active backup jobs. It performs no deletion. It must pass after cleanup and immediately before the final destroy operations.
 
-The latter two helpers derive the service region from deployed `primary_region` and reject conflicting explicit region inputs. Their optional `--region`/`--profile` inputs are unrelated to the Terraform state backend's location. The full RC1 cleanup workflow is not supported for a production-profile `dev` or `staging` environment because of the cleanup helper's explicit `prod` restriction.
+The latter two helpers derive the service region from deployed `primary_region` and reject conflicting explicit region inputs. Their optional `--region`/`--profile` inputs are unrelated to the Terraform state backend's location. The full cleanup workflow is not supported for a production-profile `dev` or `staging` environment because of the cleanup helper's explicit `prod` restriction.
 
 Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow requires explicit durable-data authorization and separate protected cleanup, Identity Center cleanup, and final destroy steps. Later cancellation does not undo earlier approved deletions or access changes.
 
 ## Implementation References
 
-This page targets v1.11.0 behavior at `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It does not assert a new live publication or retirement test on this exact commit.
+This page does not assert a new live publication or retirement test. Test claims depend on the tested commit, effective configuration, and retained evidence.
 
 - [Image publisher](deploy-application.sh) and [digest update](update-application-digest.sh)
 - [Publication workflow](../../.github/workflows/deploy-application.yml)

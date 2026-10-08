@@ -15,7 +15,7 @@ The module is designed for long-running Fargate services using private `compute_
 
 Services are keyed by stable service name through the `services` map.
 
-This reference describes `v1.11.0-rc1`. The low-level `services` map consumes already-resolved runtime values; operators normally configure the canonical `ecs_services` map in `environments/<env>/container-workloads.auto.tfvars.json`. Do not confuse module inputs with baseline profile defaults.
+The low-level `services` map consumes already-resolved runtime values; operators normally configure the canonical `ecs_services` map in `environments/<env>/container-workloads.auto.tfvars.json`. Do not confuse module inputs with baseline profile defaults.
 
 A service is either:
 
@@ -330,7 +330,7 @@ The execution role is used by the ECS/Fargate runtime for platform-level actions
 
 The task role represents application-runtime AWS permissions.
 
-Both roles remain owned by `modules/iam` in baseline composition. Creating a task role does not itself grant application AWS permissions; RC1 does not add a generic application task-policy interface here.
+Both roles remain owned by `modules/iam` in baseline composition. Creating a task role does not itself grant application AWS permissions; the module does not add a generic application task-policy interface here.
 
 ## Launch Readiness
 
@@ -440,7 +440,7 @@ Target-tracking policies are created only for the metrics configured on the serv
 - `ECSServiceAverageMemoryUtilization`
 - `ALBRequestCountPerTarget`
 
-The target-tracking model introduced in v1.9 remains the RC1 model. Step scaling and scheduled scaling actions are not implemented by this module.
+The module uses the target-tracking model. Step scaling and scheduled scaling actions are not implemented by this module.
 
 Changing a service between fixed-count and autoscaled modes changes its Terraform resource address. This module contains no automatic state-migration instruction for that transition; review the actual plan rather than assuming an in-place mode change.
 
@@ -534,7 +534,7 @@ Baseline keeps the canonical service entry and selected digest, but derives runt
 
 The autoscaled resource retains `ignore_changes=[desired_count]` during retirement. Setting the derived bootstrap value to zero is not independent proof that live desired count was changed. The retirement-readiness script checks the actual ECS `desiredCount`, `runningCount`, and `pendingCount` are all zero, along with zero live scaling bounds and the absence of scheduled scaling actions for the relevant targets.
 
-Use the [production retirement runbook](../../docs/production-retirement.md), not normal-operation runtime validation, to qualify the zero-capacity retirement posture. The complete RC1 durable-cleanup workflow is limited to the `prod` environment even though baseline production policy is profile-driven.
+Use the [production retirement runbook](../../docs/production-retirement.md), not normal-operation runtime validation, to qualify the zero-capacity retirement posture. The complete durable-cleanup workflow is limited to the `prod` environment even though baseline production policy is profile-driven.
 
 ## Tags
 
@@ -763,7 +763,7 @@ The validator treats fixed-count desired count as exact. For autoscaled services
 
 ## Container and Validation Limits
 
-RC1 renders one essential application container per task definition. It does not expose generic sidecars, container dependency graphs, command overrides, or container `healthCheck` configuration. GuardDuty-managed agent injection is a separate AWS-managed runtime mechanism, not generic multi-container configuration support.
+The module renders one essential application container per task definition. It does not expose generic sidecars, container dependency graphs, command overrides, or container `healthCheck` configuration. GuardDuty-managed agent injection is a separate AWS-managed runtime mechanism, not generic multi-container configuration support.
 
 The module also does not implement bounded/one-off jobs, scheduled Fargate tasks, application database migrations, or application-level recovery tests. The ALB health-check path belongs to the optional target group; it must not be confused with a task-definition container health check.
 

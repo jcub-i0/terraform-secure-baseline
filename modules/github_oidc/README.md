@@ -4,7 +4,7 @@
 
 This module provisions AWS IAM resources required to enable GitHub Actions to authenticate to AWS using OpenID Connect (OIDC).
 
-This reference describes `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). The account roots in `bootstrap/*/account` instantiate this AWS module; it does not configure the GitHub repository or its Environment protections.
+The account roots in `bootstrap/*/account` instantiate this AWS module; it does not configure the GitHub repository or its Environment protections.
 
 It creates:
 

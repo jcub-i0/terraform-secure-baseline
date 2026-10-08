@@ -8,7 +8,7 @@ It is deployed in the `security-operations` AWS account, which is placed in the 
 
 This layer is intentionally separate from both the AWS Organizations management account and the workload accounts.
 
-Implementation reference: `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). The underscore in the directory name is not the standard logical `environment` value, which is `security-operations`.
+The underscore in the directory name is not the standard logical `environment` value, which is `security-operations`.
 
 ---
 
@@ -142,7 +142,7 @@ Current integration includes:
 
 Both use the security-operations GitHub Plan role through OIDC. Its trust is the `security-operations-plan` Environment subject, not the legacy Plan branch/PR inputs. The role attaches `ReadOnlyAccess` plus custom state-object write/delete, selected secret-read and conditional KMS grants; read-only use is not a read-only IAM permission boundary.
 
-The generic workload Apply and Destroy workflows intentionally do **not** manage the security-operations layer. RC1 does not provide a matching generic centralized-service Apply path. Use the controlled operator procedure; any additional platform workflow is a separately designed extension, not an existing release capability.
+The generic workload Apply and Destroy workflows intentionally do **not** manage the security-operations layer. The workflow integration does not provide a matching generic centralized-service Apply path. Use the controlled operator procedure; any additional platform workflow is a separately designed extension, not an existing release capability.
 
 The account example enables an Apply role, whose shared module attaches `AdministratorAccess`, but role availability does not imply a supported workflow consumes it. This account root exposes no Image Publisher interface. Configure any needed GitHub variables and Environment protections separately; the AWS account module does not create them.
 
@@ -185,7 +185,7 @@ The Security Operations validator checks selected delegated-administrator state 
 
 It does not replace control-plane checks for the expected Organizations topology, or workload baseline checks for member-account realization, ECS agent injection/coverage, RDS/Backup, or networking. It also does **not** constitute a dedicated validation of `security_operations/account` IAM trust/policies or the state root. Review those foundations independently; `validate-bootstrap.sh` is workload-only and does not accept `security-operations`.
 
-The centralized validator compares the managed GuardDuty feature subset and checks that additional AWS-returned feature configurations remain disabled. That is policy evidence, not proof that a task is running or an event has been delivered. Review generated logs and warnings, preserve per-run provenance, and do not relabel earlier qualification as an exact-RC1 run.
+The centralized validator compares the managed GuardDuty feature subset and checks that additional AWS-returned feature configurations remain disabled. That is policy evidence, not proof that a task is running or an event has been delivered. Review generated logs and warnings, preserve per-run provenance, and do not relabel earlier qualification as a new execution.
 
 The exporter runs the validator again. In GitHub OIDC jobs, leave named-profile setup out; temporary environment credentials are used. `REQUIRE_STATE_STACK_REMOTE` belongs to the bootstrap/control-plane evidence paths, not an automatic additional security-operations account audit.
 

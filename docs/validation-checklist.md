@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This checklist describes deployment inspection and separately approved live qualification for `tf-secure-baseline` at `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). Automated results establish selected configuration/health assertions, not exhaustive control effectiveness or completion of every live test.
+This checklist describes deployment inspection and separately approved live qualification for `tf-secure-baseline`. Automated results establish selected configuration/health assertions, not exhaustive control effectiveness or completion of every live test.
 
 Use this checklist after completing the deployment steps in:
 
@@ -69,7 +69,7 @@ Recommended validation order:
 10. Run live Lambda, tamper, and break-glass tests only in approved environments.
 11. Review destroy safety requirements before teardown.
 
-A completed earlier qualification remains valid evidence for its own commit and tested configuration; do not silently call it an RC1 execution. Record which changes were assessed by targeted regression versus earlier behavioral tests. RC1's shipped sample digest is null, whereas qualification of a running production service used a selected image. No further test is required merely because this documentation changes; investigate implementation changes and evidence gaps on their own merits.
+A completed earlier qualification remains valid evidence for its own commit and tested configuration; do not silently call it a new execution. Record which changes were assessed by targeted regression versus earlier behavioral tests. The shipped sample digest is null, whereas qualification of a running production service used a selected image. No further test is required merely because this documentation changes; investigate implementation changes and evidence gaps on their own merits.
 
 ### Inspection, live tests, and acceptance
 
@@ -425,7 +425,7 @@ staging-plan  ISOLATION_ALLOWED=false
 prod-plan     ISOLATION_ALLOWED=false
 ```
 
-Do not infer those values from the workload root defaults: the reusable baseline defaults `isolation_allowed=false`, but the RC1 production root defaults it to `true`. Select and align the effective local and CI value explicitly. The actual `IsolationAllowed` tag, not the environment name, gates containment.
+Do not infer those values from the workload root defaults: the reusable baseline defaults `isolation_allowed=false`, but the production root defaults it to `true`. Select and align the effective local and CI value explicitly. The actual `IsolationAllowed` tag, not the environment name, gates containment.
 
 Apply uses the reviewed saved plan and does not re-resolve this variable. Destroy uses a safe `false` fallback when the value is absent.
 
@@ -613,7 +613,7 @@ Validation scripts failed:  0/16
 
 This counts top-level script exits, not every assertion. Warnings and inapplicable branches can coexist with `16/16`. The runner does not write a timestamped package; `export-baseline.sh` reruns the same scripts and writes one. Use the exporter for an evidence-producing pass rather than assuming it packages a prior runner log.
 
-### v1.11 configuration coverage and separate acceptance
+### Configuration coverage and separate acceptance
 
 The topology comparison includes the exact VPC CIDR, full seven-family subnet inventory/CIDRs, IGW, NAT/firewall identities, same-AZ routing and deletion-protection intent. RDS/Backup checks include `rds_configuration`, `backup_vault_configuration`, `lifecycle_protection`, and `restore_testing`; they do not constitute SQL, failover or completed restore validation. See section 19 for exact boundaries.
 
@@ -1246,7 +1246,7 @@ Expected profile behavior:
 | `development` | `nat_only` | Enabled | Disabled | Enabled | Enabled | 30 days |
 | `minimal` | `vpc_endpoints_only` | Disabled | Disabled | Disabled | Disabled | 14 days |
 
-If `egress_mode`, `enable_config`, `backup_enabled`, `backup_schedule`, `delete_backups_after_days`, `cloudwatch_retention_days`, or related overrides are explicitly set, the effective outputs should reflect those overrides. Runtime Monitoring is not independently overridden in RC1; it follows `deployment_profile`. When backups are disabled, `effective_backup_schedule` and `effective_delete_backups_after_days` resolve to `null` and may be omitted from `terraform output -json` because Terraform omits root outputs whose evaluated value is null.
+If `egress_mode`, `enable_config`, `backup_enabled`, `backup_schedule`, `delete_backups_after_days`, `cloudwatch_retention_days`, or related overrides are explicitly set, the effective outputs should reflect those overrides. Runtime Monitoring is not independently overridden; it follows `deployment_profile`. When backups are disabled, `effective_backup_schedule` and `effective_delete_backups_after_days` resolve to `null` and may be omitted from `terraform output -json` because Terraform omits root outputs whose evaluated value is null.
 
 ---
 
@@ -1337,7 +1337,7 @@ Expected:
 - The distribution upgrade and required package installation complete.
 - Relevant package versions and reboot-required state are recorded.
 - A bootstrap or repository failure prevents a successful cloud-init completion.
-- The `IsolationAllowed` tag matches the deliberately selected effective Terraform/CI input. Do not infer it from the environment name; RC1 production-root and reusable-baseline defaults differ.
+- The `IsolationAllowed` tag matches the deliberately selected effective Terraform/CI input. Do not infer it from the environment name; production-root and reusable-baseline defaults differ.
 
 Verify the policy tag:
 
@@ -1474,7 +1474,7 @@ Cluster validation also checks the exact Container Insights setting and, when en
 
 The same validator checks task-SG relationships to Interface Endpoints and the S3 prefix list, effective-mode HTTPS egress, database SG presence/absence, and conditional shared-ALB relationships. It validates Terraform-owned task-deficit alarms for deployable services when Container Insights is enabled and ingress unhealthy-target alarms for deployable ingress services. AWS-managed target-tracking alarms are not treated as Terraform operational alarms. Operational alarm state is interpreted as `OK` = pass, `INSUFFICIENT_DATA` = warning, and `ALARM` = failure.
 
-RC1 Runtime Monitoring validation derives the expected state directly from `deployment_profile`. `production` and `development` require `GuardDutyManaged=true`; `minimal` requires `GuardDutyManaged=false`. The Terraform task definition must remain application-only even when GuardDuty injects a live agent.
+Runtime Monitoring validation derives the expected state directly from `deployment_profile`. `production` and `development` require `GuardDutyManaged=true`; `minimal` requires `GuardDutyManaged=false`. The Terraform task definition must remain application-only even when GuardDuty injects a live agent.
 
 For protected running tasks, live ECS must contain exactly one GuardDuty agent container and that agent must be `RUNNING`. AWS may report the agent as the exact name `aws-gd-agent` or as an AWS-generated name beginning `aws-guardduty-agent-`; both are valid. The canonical application container must remain valid and unexpected extra containers fail validation.
 
@@ -1621,7 +1621,7 @@ Expected:
 
 - S3 Gateway Endpoint exists.
 - Route table IDs include the private route tables intentionally passed to the VPC endpoints module.
-- For RC1, the S3 association set must equal the union of endpoint-private, compute-private, and serverless-private route tables. Mere inclusion of some compute/serverless tables is insufficient.
+- The S3 association set must equal the union of endpoint-private, compute-private, and serverless-private route tables. Mere inclusion of some compute/serverless tables is insufficient.
 
 ---
 
@@ -1847,7 +1847,7 @@ Expected:
 - Bucket exists.
 - Encryption is enabled.
 - Versioning is enabled.
-- RC1 sets Object Lock disabled, `force_destroy=true`, and `prevent_destroy=false` on this workload logs bucket. An absent Object Lock configuration is an implementation limitation, not evidence of immutable storage. Do not treat lifecycle retention as a guarantee that logs survive workload teardown.
+- The baseline sets Object Lock disabled, `force_destroy=true`, and `prevent_destroy=false` on this workload logs bucket. An absent Object Lock configuration is an implementation limitation, not evidence of immutable storage. Do not treat lifecycle retention as a guarantee that logs survive workload teardown.
 
 ---
 
@@ -1914,7 +1914,7 @@ For the centrally governed workload environments, those values are expected to b
 
 When GuardDuty is centrally governed, the workload account should have an enabled detector/member state associated with the `security-operations` delegated administrator; organization feature policy is validated from the security-operations account rather than recreated locally.
 
-The RC1 centralized Runtime Monitoring contract retained from v1.10 is:
+The centralized Runtime Monitoring contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -2669,7 +2669,7 @@ If backup is explicitly enabled for `development` or `minimal`, the default sche
 | Enabled Restore Testing | Exact plan/selection, protected RDS ARN, role, schedule/windows, source vault and private restore metadata |
 | Restore execution reporting | Latest restore job, validation result and temporary-resource deletion status; each status has a different acceptance rule |
 
-RDS-native automated backups are separate from the AWS Backup schedule and Restore Testing. RC1's production database is a PostgreSQL **DB instance**, not Aurora or a Multi-AZ DB cluster. The production source is Multi-AZ; the temporary Restore Testing override is private and Single-AZ. Neither a three-AZ subnet group nor its name proves three database servers.
+RDS-native automated backups are separate from the AWS Backup schedule and Restore Testing. The production database is a PostgreSQL **DB instance**, not Aurora or a Multi-AZ DB cluster. The production source is Multi-AZ; the temporary Restore Testing override is private and Single-AZ. Neither a three-AZ subnet group nor its name proves three database servers.
 
 This is not an exhaustive RDS configuration validator. In particular, it does not compare every engine/version, DB instance class, storage/parameter-group setting, or exact member-subnet set, and it does not log in to PostgreSQL or force failover. The `instance_class` output alone is not proof that the live `DBInstanceClass` was compared.
 
@@ -2719,7 +2719,7 @@ aws backup list-restore-jobs \
   --output json
 ```
 
-Record job ID, selected recovery point, restored ARN, execution completion, application/data validation method and result, and verified cleanup. No job is not a restore success. A completed restore is not a business recovery-time/data-loss guarantee. Preserve earlier behavioral qualification under its actual SHA/configuration rather than claiming a new restore ran on every final candidate.
+Record job ID, selected recovery point, restored ARN, execution completion, application/data validation method and result, and verified cleanup. No job is not a restore success. A completed restore is not a business recovery-time/data-loss guarantee. Preserve earlier behavioral qualification under its actual SHA/configuration rather than claiming the exercise was rerun for another deployment.
 
 ## SSM Patch Manager
 
@@ -2833,7 +2833,7 @@ Normal production runtime validation expects nonzero production capacity. Do not
 
 The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, separately planned/approved Identity Center cleanup, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
 
-The complete RC1 durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
+The complete durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
 
 Use the [production retirement runbook](production-retirement.md) for the exact approval chain. Retain separate Stage-1, cleanup, readiness, Identity Center, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
 
@@ -3285,6 +3285,6 @@ Passing automated validation demonstrates selected deployed control presence and
 
 ## Implementation and CLI references
 
-Repository behavior in this checklist is grounded in the frozen implementation: [workload runner](../scripts/validation/validate-baseline.sh), [validation Region helper](../scripts/validation/lib/common.sh), [networking validator](../scripts/validation/validate-networking.sh), [RDS/Backup validator](../scripts/validation/validate-backup.sh), [SQS validator](../scripts/validation/validate-sqs.sh), and [retirement runbook](production-retirement.md). The [validation script reference](../scripts/validation/README.md) describes the entry points and strictness settings.
+Repository behavior in this checklist is grounded in the implementation at the commit being reviewed: [workload runner](../scripts/validation/validate-baseline.sh), [validation Region helper](../scripts/validation/lib/common.sh), [networking validator](../scripts/validation/validate-networking.sh), [RDS/Backup validator](../scripts/validation/validate-backup.sh), [SQS validator](../scripts/validation/validate-sqs.sh), and [retirement runbook](production-retirement.md). The [validation script reference](../scripts/validation/README.md) describes the entry points and strictness settings.
 
-External AWS documentation is used only to verify CLI/API semantics, not to replace RC1's implementation: [SQS queue attributes](https://docs.aws.amazon.com/cli/latest/reference/sqs/get-queue-attributes.html), [SQS CloudWatch metrics](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-available-cloudwatch-metrics.html), [SQS message receipt](https://docs.aws.amazon.com/cli/latest/reference/sqs/receive-message.html), and [Lambda configuration reads](https://docs.aws.amazon.com/cli/latest/reference/lambda/get-function-configuration.html).
+External AWS documentation is used only to verify CLI/API semantics, not to replace the repository implementation: [SQS queue attributes](https://docs.aws.amazon.com/cli/latest/reference/sqs/get-queue-attributes.html), [SQS CloudWatch metrics](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-available-cloudwatch-metrics.html), [SQS message receipt](https://docs.aws.amazon.com/cli/latest/reference/sqs/receive-message.html), and [Lambda configuration reads](https://docs.aws.amazon.com/cli/latest/reference/lambda/get-function-configuration.html).

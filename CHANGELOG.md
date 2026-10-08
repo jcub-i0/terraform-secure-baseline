@@ -1,5 +1,143 @@
 # Changelog
 
+This changelog is organized by release version, newest first. The `v1.11.0`
+entry documents the planned stable release content. Its heading alone is not
+proof of publication or that historical tests were repeated.
+
+The historical entries below preserve their original version headings,
+technical changes, and then-current qualification claims. They are historical
+records, not current operating instructions or evidence of repeat tests on
+later commits. Use the [README](README.md), [adoption guide](docs/adoption-guide.md),
+and current module/runbook documentation for the implemented contract.
+
+## v1.11.0 — Production Resilience and Operator Contracts
+
+This section records the implemented changes since `v1.10.0` and their
+documentation reconciliation. Earlier behavioral qualifications and new
+configuration-level checks retain their own test revisions, inputs, and evidence.
+
+### Networking and Region Authority
+
+- Added production-default three-AZ topology, retaining two-AZ defaults for the other
+  profiles and requiring complete explicit subnet families for additional AZs.
+- Separated ingress-public subnets for the ALB from egress-public subnets for NAT,
+  preserving the VPC-local ingress path and same-AZ inspected compute return routes.
+- Added canonical IPv4 `/16` workload CIDR validation and derived `/24` subnet families.
+  Explicit subnet overrides must contain the seven required families and match the
+  selected AZ inventory without overlaps.
+- Made workload `primary_region` agree with the AWS provider and constrained explicit
+  AZs to the discovered standard AZ inventory. State-resource `state_region` remains
+  distinct from service Region and literal S3 backend `region`.
+- Extended resource-backed topology outputs and exact networking/endpoint comparisons.
+  Region-authoritative configuration is not evidence of cross-Region recovery.
+
+Sources: [baseline inputs](baseline/variables.tf), [derived settings](baseline/locals.tf),
+[composition](baseline/main.tf), [outputs](baseline/outputs.tf), and
+[networking validation](scripts/validation/validate-networking.sh).
+
+### Availability, Backups, and Restore Testing
+
+- Enforced RDS Multi-AZ for production while retaining the PostgreSQL DB-instance
+  resource model. Production normal-operation deletion protection, final-snapshot
+  requirements, and automated-backup retention are explicit lifecycle settings.
+- Added normal-operation production ECS capacity requirements: at least two fixed
+  tasks or an autoscaling minimum of two, with explicit AZ rebalancing and a retirement
+  exception. Three-AZ networking does not independently prove task distribution.
+- Added profile-derived ALB/firewall deletion protection, ECR/ECS force-delete settings,
+  and Backup-vault force-destroy settings. Workload logs and KMS keys do not gain
+  equivalent preservation guarantees from the production profile.
+- Added AWS Backup Restore Testing for the exact managed RDS instance when production
+  scheduled backup is enabled. The selection uses eligible snapshots from the workload
+  vault and private Single-AZ temporary restore metadata.
+- Expanded Backup validation to compare RDS resilience and Backup/Restore Testing
+  configuration and report restore execution, application-validation, and cleanup
+  status separately. No application-data validation handler is supplied by the Backup
+  module, and some warning outcomes can coexist with a passing validator.
+- Production scheduled backup remains an overridable default: explicit
+  `backup_enabled=false` disables its plan/selection and profile-derived Restore
+  Testing. RDS-native automated backups are a separate configuration.
+
+Sources: [profile and lifecycle derivation](baseline/locals.tf),
+[storage](modules/storage/main.tf), [backup resources](modules/backup/main.tf), and
+[Backup validator](scripts/validation/validate-backup.sh).
+
+### Staged Production Retirement
+
+- Added `production_retirement_mode` and a reviewed Stage-1 transition that derives
+  zero ECS capacity while relaxing only the selected deletion protections.
+- Added exact Stage-1 plan validation, retirement readiness checks, and separately
+  authorized durable-data cleanup before saved-plan workload destruction.
+- Kept production ECR/ECS force deletion and Backup-vault force destruction disabled.
+  Durable cleanup is an explicit operation, not an implicit force-delete setting.
+- Preserved separately planned and approved Identity Center cleanup before final
+  workload-destroy approval. Rejecting a later gate does not undo earlier cleanup.
+- The complete durable-cleanup path is `prod`-only and re-inventories at execution;
+  its inventory is not an immutable item manifest replayed at cleanup time.
+
+Sources: [retirement procedure](docs/production-retirement.md),
+[Destroy workflow](.github/workflows/terraform-destroy.yml),
+[Stage-1 plan validator](scripts/deployment/validate-production-retirement-plan.sh), and
+[readiness validator](scripts/deployment/validate-retirement-readiness.sh).
+
+### Publication, Tooling, and Distribution Defaults
+
+- Replaced explicit ECR `docker login` in publication with the Amazon ECR Docker
+  credential helper, a temporary push-only Docker configuration, disabled helper
+  token-file caching, and cleanup handling. The workflow supplies the helper.
+- Standardized workflow Terraform CLI selection and committed per-root dependency
+  locks for reproducible initialization. External service behavior and most-recent
+  AMI selection remain separate sources of change.
+- Reset the production sample service to `image_digest=null`, retaining registration
+  and its required ECR repository without selecting a qualification image for deployment.
+
+Sources: [publication script](scripts/deployment/deploy-application.sh),
+[publication workflow](.github/workflows/deploy-application.yml),
+[Plan workflow](.github/workflows/terraform-plan.yml), and
+[production workload configuration](environments/prod/container-workloads.auto.tfvars.json).
+
+### Operator Rollback Authorization
+
+- Corrected the workload Operator's IAM Identity Center EventBridge ARN to
+  derive the same `<cloud_name>-<environment>-secops-bus` name as workload
+  automation; the Identity Center root now requires `cloud_name`.
+- Scoped the `custom.rollback` EventBridge bus-policy Allow to matching
+  `AWSReservedSSO_SecOps-Operator-<environment>_*` IAM role ARNs (including
+  their generated suffixes) and explicitly denied publication by other
+  principals for that source. Separate `aws.securityhub` forwarding remains.
+- Development testing reported an explicit resource-policy denial for an
+  unauthorized IAM user and a successful rollback submitted through an IAM
+  Identity Center `SecOps-Operator-dev` session. This point-in-time dev
+  result does not qualify staging or production; retain individual run evidence.
+- The handler still treats `approved_by` and `ticket_id` as caller-supplied
+  metadata, not an independently authenticated approval check.
+
+Sources: [Identity Center caller](bootstrap/control_plane/identity_center/main.tf),
+[EventBridge bus policy](modules/automation/main.tf),
+[rollback handler](modules/automation/lambda/ec2_rollback.py), and
+[manual test guide](docs/lambda_tests/ec2_rollback.md).
+
+### Documentation and Evidence Boundaries
+
+- Reconciled deployment, state, retirement, module, validation, response-test, adoption,
+  and assurance references with implemented interfaces and operational boundaries.
+- Distinguished source configuration, point-in-time assertions, behavioral exercises,
+  and ongoing operating evidence. Earlier qualification retains its original run and
+  input provenance; it is not relabeled as testing performed during documentation work.
+- Corrected claims of immutable workload logging, universal least privilege,
+  authenticated rollback approval, complete DLQ coverage, and production-wide key
+  destruction guards. Recording those limitations does not repair or accept them.
+- Removed the superseded planning document and replaced root release narration with
+  behavior-based guidance. Historical milestones remain below, not as future commitments.
+- Clarified private vulnerability reporting without inventing contact information,
+  response deadlines, or support guarantees. Existing license terms and ownership
+  notices are not amended by this documentation work.
+
+The maintained [validation reference](scripts/validation/README.md),
+[evidence guide](docs/assurance/validation-evidence-guide.md), and
+[control narratives](docs/assurance/control-narratives.md) identify what each check
+can establish. The validation architecture retains four layers, with sixteen child scripts in
+the workload-baseline layer; counts are not an assurance opinion.
+
 ## v1.10.0 — ECS Runtime Security
 
 v1.10.0 extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, deployment-profile-driven cluster enrollment, least-privilege managed-agent prerequisites, runtime coverage-health notification, and exact live validation. The release also corrects the profile-aware AWS Backup contract discovered during live qualification.

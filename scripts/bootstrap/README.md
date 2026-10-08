@@ -12,7 +12,7 @@ State roots use `state_region` to configure the AWS provider that provisions the
 | `reconcile-workload-account.sh` | Required workload/account service Region; must match the planned account `primary_region` |
 | Workload/control-plane validation | Service Region; state S3/KMS operations use separately resolved backend-region arguments |
 
-Do not treat service `primary_region` as the state location, or changing a variable as a state migration. Keep committed provider lockfiles and the root's required Terraform/provider versions. RC1 pins Terraform `1.15.8` and AWS provider `6.66.0` in the inspected state roots.
+Do not treat service `primary_region` as the state location, or changing a variable as a state migration. Keep committed provider lockfiles and the root's required Terraform/provider versions. The repository pins Terraform `1.15.8` and AWS provider `6.66.0` in the inspected state roots.
 
 ## State-Stack Migration
 
@@ -171,8 +171,6 @@ Retain the generated backup directory until the deployment and validation workfl
 The state module's bucket and CMK retain literal `prevent_destroy = true` guards. Neither of these bootstrap scripts removes them, and workload retirement does not retire state resources. Moving active state away from a bucket is a prerequisite, not a complete state-destruction procedure.
 
 ## Implementation References
-
-This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`).
 
 - [Migration implementation](migrate-state-stack.sh)
 - [Account reconciliation implementation](reconcile-workload-account.sh)

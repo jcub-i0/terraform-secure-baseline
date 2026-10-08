@@ -16,7 +16,7 @@ use_lockfile = true
 
 The bucket and CMK each have a literal Terraform `prevent_destroy = true` guard. Treat these resources as critical infrastructure, not ordinary disposable workload resources.
 
-Never destroy a bucket containing a root's active state. A state root that has migrated into its own bucket must move to an independent backend or local state before any approved state-resource retirement. That move does not remove the literal destruction guards. RC1 exposes no state-module retirement toggle, and workload `production_retirement_mode` does not alter this module.
+Never destroy a bucket containing a root's active state. A state root that has migrated into its own bucket must move to an independent backend or local state before any approved state-resource retirement. That move does not remove the literal destruction guards. The state module exposes no retirement toggle, and workload `production_retirement_mode` does not alter this module.
 
 Retain external state backups. Bucket versioning can support recovery, but neither versioning nor a separate bootstrap directory guarantees recovery from every deletion, corruption, or key-loss scenario.
 
@@ -124,8 +124,6 @@ Do not describe a successful migration verification as a complete platform or le
 The module does not implement cross-Region state replication, a general recovery orchestrator, or an automated state-retirement path. Any approved retirement must separately address dependent roots, independent state/backups, retained object versions, key retention, and the literal destruction guards.
 
 ## Implementation References
-
-This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`).
 
 - [Resources and policies](main.tf), [inputs](variables.tf), and [outputs](outputs.tf)
 - [Workload state-root procedure](../../bootstrap/dev/state/README.md)

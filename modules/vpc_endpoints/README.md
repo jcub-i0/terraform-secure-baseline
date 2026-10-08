@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `vpc_endpoints` module provisions private AWS service access for one supplied workload VPC. This reference describes `v1.11.0-rc1`; the module does not create or select the AWS account, provider region, VPC, or subnet topology.
+The `vpc_endpoints` module provisions private AWS service access for one supplied workload VPC. The module does not create or select the AWS account, provider region, VPC, or subnet topology.
 
 This module creates:
 
@@ -97,7 +97,7 @@ existing S3 Gateway Endpoint.
 
 `guardduty-data` is intentionally part of the Terraform-managed Interface Endpoint set.
 
-The endpoint supports GuardDuty Runtime Monitoring telemetry for eligible workload resources, including the ECS/Fargate Runtime Monitoring path retained in v1.11. The baseline does not leave endpoint creation to GuardDuty automation.
+The endpoint supports GuardDuty Runtime Monitoring telemetry for eligible workload resources, including the ECS/Fargate Runtime Monitoring path. The baseline does not leave endpoint creation to GuardDuty automation.
 
 The endpoint is treated like the rest of the workload VPC infrastructure:
 
@@ -242,7 +242,7 @@ logs.<region>.amazonaws.com
 kms.<region>.amazonaws.com
 ```
 
-With the intended VPC resolver configuration, those names use the Interface Endpoint private DNS path. Live DNS and connectivity checks remain necessary when custom resolvers or other network changes are introduced. RC1 constructs service names as `com.amazonaws.<primary_region>.<service>`; a configurable region does not prove that all 16 services are available in every region or partition.
+With the intended VPC resolver configuration, those names use the Interface Endpoint private DNS path. Live DNS and connectivity checks remain necessary when custom resolvers or other network changes are introduced. The module constructs service names as `com.amazonaws.<primary_region>.<service>`; a configurable region does not prove that all 16 services are available in every region or partition.
 
 ---
 
@@ -683,7 +683,7 @@ Also check:
 
 Note:
 
-RC1 creates `ssm` and `ssmmessages` endpoints, not `ec2messages`. This reference describes that implemented endpoint set rather than asserting support for every SSM agent or regional configuration.
+The module creates `ssm` and `ssmmessages` endpoints, not `ec2messages`. This reference describes that implemented endpoint set rather than asserting support for every SSM agent or regional configuration.
 
 ---
 
@@ -712,7 +712,7 @@ Check:
 
 ## Endpoint Policy and Authorization Boundary
 
-RC1 does not assign a custom `policy` argument to either endpoint resource. Do not describe these endpoints as an independently resource-scoped endpoint-policy allowlist. The shared SG controls network admission, while IAM, service resource policies, and other account controls determine API authorization.
+The module does not assign a custom `policy` argument to either endpoint resource. Do not describe these endpoints as an independently resource-scoped endpoint-policy allowlist. The shared SG controls network admission, while IAM, service resource policies, and other account controls determine API authorization.
 
 A private path is not by itself proof of least-privilege access, and an available endpoint does not prove that an application's credentials can call the intended API. The module also does not configure custom DNS, cross-account endpoint sharing, or endpoints for future scheduled-job/application features.
 

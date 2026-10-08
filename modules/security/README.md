@@ -54,7 +54,18 @@ The reusable module defaults to local ownership so it can operate independently.
 
 Workload-local controls remain here regardless of centralization, including AWS Config, Inspector, KMS keys, SSM document-sharing protection, and tamper detection.
 
-This ownership split avoids competing Terraform resources in workload accounts while preserving standalone use of the module.
+The flags select which resources this module owns; they do not establish central
+services or transfer existing Terraform ownership automatically. Changing a
+local-ownership flag from true to false can plan deletion of locally owned
+resources. Review the state/ownership migration and central realization before
+applying that change, rather than toggling it as a repair shortcut.
+
+The six KMS keys, SSM setting, Inspector product subscription, and two child
+module calls are unconditional. Inspector enablement and Config recording have
+their own flags. The reusable module has no `deployment_profile` or
+`production_retirement_mode` input and cannot infer those controls itself.
+Keep the inherited AWS provider Region consistent with `primary_region` and
+verify the caller account independently of `account_id`.
 
 ---
 
@@ -108,7 +119,11 @@ from `var.guardduty_features`.
 
 When `manage_guardduty_locally = false`, this module creates neither the detector nor its feature resources. That is the normal setting for the centrally governed workload environments, where the `security-operations` delegated administrator manages organization enrollment and protection plans.
 
-The local detector-feature resource intentionally ignores provider-reported changes to `additional_configuration` and `status`. Centralized Runtime Monitoring configuration is not managed through this workload resource.
+The local detector-feature resource initializes `status = "ENABLED"` but ignores
+subsequent changes to `additional_configuration` and `status`. An unchanged
+Terraform plan therefore does not demonstrate reconciliation of those live
+feature settings. Central Runtime Monitoring configuration and live coverage
+must be inspected through their own ownership/evidence paths.
 
 ---
 
@@ -131,10 +146,14 @@ The current local standards map includes:
 
 | Key | Standard |
 |---|---|
-| `aws_fsbp` | AWS Foundational Security Best Practices v1.0.0 |
-| `cis` | CIS AWS Foundations Benchmark v5.0.0 |
+| `aws_fsbp` | AWS Foundational Security Best Practices; exact ARN in `main.tf` |
+| `cis` | CIS AWS Foundations Benchmark; exact ARN in `main.tf` |
 
-Additional standards are present as commented options in `main.tf`.
+These are the explicit subscriptions. The local `aws_securityhub_account` also
+sets `enable_default_standards = true`, so the map must not be described as an
+exclusive two-standard allowlist. Commented standards are not deployed.
+Inspect the complete live subscription inventory against the intended local
+configuration. Centralized CSPM policies have separate standards controls.
 
 When `manage_securityhub_cspm_locally = false`, this module does not own the workload account's CSPM account resource or standards subscriptions. In the centrally governed platform, those settings are inherited from Security Hub configuration policies managed by `bootstrap/security_operations/security_services`.
 
@@ -184,13 +203,14 @@ effective workload-root output rather than reconstructing this policy.
 
 Lambda scan types are disabled by default.
 
-This baseline encrypts Lambda environment variables with a customer-managed KMS key. Amazon Inspector Lambda standard scanning and Lambda code scanning do not support Lambda functions encrypted with customer-managed keys. Enabling Lambda scan types in this baseline can also generate expected `kms:Decrypt` `AccessDenied` events from the Inspector service-linked role against the Lambda CMK.
-
-Clients that intentionally want Lambda scanning and accept the KMS/encryption tradeoff can override:
-
-```hcl
-inspector_resource_types = ["EC2", "LAMBDA", "LAMBDA_CODE"]
-```
+The automation functions use a customer-managed key for their environment
+variables. [AWS documents a customer-managed-key limitation for Lambda
+scanning](https://docs.aws.amazon.com/inspector/latest/user/scanning-lambda.html).
+Changing the Inspector resource-type list alone does not change function
+configuration, key permissions, or scanning eligibility. Do not interpret an
+account-level ENABLED status as proof that those functions were scanned.
+Any different scanning/encryption design needs separate implementation and
+live-coverage review, not just a documentation input example.
 
 Supported values:
 
@@ -202,7 +222,11 @@ LAMBDA_CODE
 CODE_REPOSITORY
 ```
 
-`LAMBDA_CODE` requires `LAMBDA` to also be included.
+The supplied workload/baseline validation paths require `LAMBDA_CODE` to be
+accompanied by `LAMBDA`. This reusable child validates the allowed names but
+does not implement that combination check itself. Its Inspector resource has a
+separate nonempty-list precondition when enabled. An accepted input does not
+prove per-resource scanning coverage or support in every Region.
 
 ---
 
@@ -220,7 +244,11 @@ Product ARN:
 arn:aws:securityhub:<region>::product/aws/inspector
 ```
 
-This allows Inspector findings to flow into Security Hub. The product subscription remains workload-local even when Security Hub account enablement and standards are centrally governed.
+The subscription is created regardless of `inspector_enabled` and regardless of
+local CSPM ownership. It configures an import path, not Inspector scan coverage
+or evidence that a finding arrived. When local CSPM ownership is disabled, its
+`depends_on` list contains no local hub instance to establish central-policy
+readiness; ensure Security Hub is effective in the target account first.
 
 ---
 
@@ -239,17 +267,16 @@ The current key set includes:
 | ECR CMK | ECR repository encryption |
 | Backup Vault CMK | AWS Backup vault encryption |
 
-Each key has rotation enabled.
+All six keys have rotation enabled and a 30-day deletion window. Logs, EBS,
+Secrets Manager, ECR, and Backup keys explicitly have `prevent_destroy = false`;
+the Lambda key has no `prevent_destroy` guard. These settings do not change with
+the workload profile or retirement mode. Source comments are not protection.
 
-Several keys currently include:
-
-```hcl
-prevent_destroy = false # CHANGE THIS IN PROD
-```
-
-This is to promote simplicity during initial deployment testing/demo operations.
-
-For production, review whether `prevent_destroy` should be set to `true`.
+The Terraform state CMK is owned by the separate state stack, not this module.
+Do not conflate the logs or Secrets Manager key with RDS storage encryption;
+inspect the [storage resource](../storage/main.tf) for that separate boundary.
+Key rotation and aliases do not preserve a key scheduled for deletion or make
+its encrypted data immutable.
 
 ---
 
@@ -273,7 +300,26 @@ Alias name:
 alias/<name_prefix>/logs-cmk
 ```
 
-The logs CMK is used broadly across the baseline for logging and notification encryption.
+The logs CMK is shared across logging and notification resources. Its key policy
+is not uniformly restricted to individual baseline resource ARNs:
+
+| Grant | Declared restriction |
+|---|---|
+| Account principal | Account-root IAM delegation with `kms:*` |
+| CloudTrail service | Source account plus an encryption-context pattern for that account's trails across Regions |
+| Config service-linked role | Constructed exact role principal; role existence is a prerequisite, not created here |
+| Config service | Source account |
+| Regional CloudWatch Logs service | No log-group encryption-context restriction in this statement |
+| S3, SNS, SQS, CloudWatch, EventBridge, log-delivery services | Service-specific actions, but no source-resource condition on these respective statements |
+| Firehose service | Source account and regional/account delivery-stream wildcard |
+| Inspector service-linked role | Constructed role principal plus source account |
+
+The Config and Inspector role principals remain in this policy even when their
+corresponding feature flags are disabled. Do not assume that disabling a feature
+removes all key-policy dependencies. In a key policy, `Resource = "*"` identifies
+this key; it must not be misreported as a grant over every key in the account.
+Full effective access still depends on the applicable identity policies, key
+policy, grants, and external restrictions.
 
 Allowed service usage includes:
 
@@ -320,7 +366,9 @@ alias/<name_prefix>/ebs-cmk
 
 This key is intended for EBS volumes and snapshots.
 
-The key policy allows EC2/EBS service usage.
+The key policy includes account-root delegation and an EC2 service grant without
+source-account or source-resource conditions on that service statement. It is
+not a per-volume authorization inventory.
 
 ---
 
@@ -346,9 +394,15 @@ alias/<name_prefix>/lambda-cmk
 
 This key is intended to encrypt Lambda environment variables.
 
-The key policy allows Lambda service usage for the baseline automation functions.
+The Lambda service statement uses source-account and regional `kms:ViaService`
+conditions, not an explicit function-ARN allowlist. The resource configures
+Lambda environment-variable encryption; that does not assert that every form
+of function code, deployment artifact, or runtime data uses this key.
 
-Amazon Inspector decrypt access is not granted to this key by default. Lambda Inspector scan types are disabled by default because this baseline uses customer-managed KMS encryption for Lambda resources, and Inspector Lambda scanning does not support Lambda functions encrypted with customer-managed keys.
+No explicit Inspector principal grant is added to this key policy. That fact is
+not a complete effective-access evaluation, since account IAM delegation also
+exists. Keep the Lambda scanning limitation described above separate from a
+claim that adding a key-policy grant alone would make scanning supported.
 
 ---
 
@@ -372,7 +426,10 @@ Alias name:
 alias/<name_prefix>/secrets-cmk
 ```
 
-This key is intended to encrypt Secrets Manager secrets, including secrets created by other modules such as database credentials or threat intelligence API keys.
+This key encrypts secrets created by consumers such as storage and automation.
+Its policy includes account-root delegation and a Secrets Manager service grant
+without a secret-ARN or source-account condition on that statement. Secret
+access policies and decryption permission must be reviewed separately.
 
 ---
 
@@ -398,7 +455,10 @@ alias/<name_prefix>/backup-cmk
 
 This key is intended for AWS Backup vault encryption.
 
-The key policy allows the AWS Backup service to use the key for backup vault operations.
+The Backup service statement includes a source-account condition, not an exact
+vault ARN. Retained recovery data and its actual required encryption keys must
+be inventoried together; a vault ARN or protection flag alone is not recovery
+proof.
 
 ---
 
@@ -424,10 +484,11 @@ alias/<name_prefix>/ecr-cmk
 
 The baseline passes `ecr_cmk_arn`, the actual key ARN, to `modules/ecr` for
 repository encryption. The alias ARN is exported as metadata but is not used
-as the ECR repository encryption key reference. The key has rotation enabled
-and currently uses `prevent_destroy = false # CHANGE THIS IN PROD` for the
-repository's ephemeral development/test teardown model. Persistent production
-usage must reconsider that destruction posture.
+as the ECR repository encryption key reference. The key policy contains
+account-root IAM delegation; it does not add direct ECR-CMK decrypt grants to
+ECS task execution roles. Repository-service access and grants are a separate
+part of effective authorization. Its destruction posture is unchanged by the
+production profile, as described above.
 
 ---
 
@@ -463,9 +524,14 @@ It receives:
 - Logs CMK ARN
 - Enabled rule toggles
 
-The child module handles AWS Config recorder, delivery, rules, and remediation-related configuration.
+The child is always instantiated. `enable_config=false` disables recorder
+status and omits managed rules/remediation; it does not remove the recorder,
+delivery channel, or the fixed-delay resource. Rule-family toggles do not alter
+the recorder's fixed resource-type list.
 
-Refer to the child module README for detailed behavior.
+The S3 automatic-remediation rule is independent of `enable_rules.s3_baseline`:
+it follows `enable_config` alone. See the [Config reference](config_baseline/README.md)
+for exact recording scope, catalog, mutation risk, and validation limits.
 
 ---
 
@@ -483,10 +549,14 @@ It receives:
 - Cloud name
 - Environment
 - SecOps alert topic ARN
+- Shared security-notifications EventBridge DLQ ARN
 
 The child module creates tamper detection logic for critical security services and routes alerts to the SecOps SNS topic.
 
-Refer to the child module README for detailed detection coverage.
+See the [tamper reference](tamper_detection/README.md). It covers a finite list
+of CloudTrail, GuardDuty, Security Hub, KMS, and Config API names, not every
+security change. Matching events can be authorized changes or failed attempts;
+a notification is not proof that a control was successfully disabled.
 
 ---
 
@@ -504,9 +574,9 @@ Refer to the child module README for detailed detection coverage.
 | `compliance_topic_arn` | SNS topic ARN used for compliance notifications | Yes |
 | `guardduty_features` | List of GuardDuty detector features to enable | Yes |
 | `config_remediation_role_arn` | IAM role ARN used by AWS Config remediation actions | Yes |
-| `secops_event_bus_name` | Name of the SecOps EventBridge event bus | Yes |
+| `secops_event_bus_name` | Retained compatibility input; not consumed by this module's `main.tf` | Yes |
 | `secops_topic_arn` | SNS topic ARN used for SecOps alerts | Yes |
-| `enable_config` | Whether AWS Config baseline resources are enabled | Yes |
+| `enable_config` | Enables recorder status and Config rules/remediation; does not omit recorder/channel resources | Yes |
 | `enable_rules` | Object controlling which Config baseline rule groups are enabled | No |
 | `inspector_enabled` | Whether Amazon Inspector is enabled for the selected resource types | Yes |
 | `inspector_resource_types` | Amazon Inspector resource types to enable. Defaults to `["EC2"]`; Lambda scan types are disabled by default | No |
@@ -514,6 +584,14 @@ Refer to the child module README for detailed detection coverage.
 | `manage_securityhub_cspm_locally` | Whether this module owns Security Hub CSPM enablement and standards in the workload account. Defaults to `true`; centrally governed workload roots set it to `false` | No |
 | `manage_securityhub_v2_locally` | Whether this module enables Security Hub V2 directly in the workload account. Defaults to `true`; centrally governed workload roots set it to `false` | No |
 | `manage_guardduty_locally` | Whether this module owns the GuardDuty detector and detector features. Defaults to `true`; centrally governed workload roots set it to `false` | No |
+
+[variables.tf](variables.tf) declares 20 inputs. The 12 required scalar
+identifier/naming fields above are `string`; `guardduty_features` is a required
+`list(string)`, and `enable_config` / `inspector_enabled` are required `bool`.
+`enable_rules` is the eight-boolean object below. Optional ownership flags are
+`bool` with default `true`; `inspector_resource_types` is `list(string)` with
+default `["EC2"]`. Supplying an empty or incorrectly scoped ARN is not made safe
+by the presence of the required field.
 
 ---
 
@@ -536,13 +614,26 @@ enable_rules = {
 }
 ```
 
-The IAM baseline is disabled by default.
+The IAM **rule family** is disabled by default, but the recorder's inclusion
+list still contains four IAM resource types. Disabling these rules does not
+shrink that list or establish global-IAM recording suitability in every Region.
+The separate IAM log metric filter observes a limited API-name set; it is not a
+replacement for Config evaluations or a full identity-control assessment.
 
-This is because IAM/global resource recording can require additional AWS Config behavior and should be enabled intentionally. The `iam_policy_changes` Log Metric Filter resource, defined in the `monitoring` module, also does a great job at notifying upon suspicious actions relating to IAM policies (see `modules/monitoring/README.md`).
+KMS rules are enabled in the default family object although `AWS::KMS::Key` is
+not in the recorder list. Verify each rule's evaluation/recording requirements
+and actual results before claiming KMS coverage; the catalog alone is not
+proof of coverage. This observation does not assert that all periodic KMS
+rules must fail or never evaluate.
 
 ---
 
 ## Outputs
+
+The 12 outputs below are defined in [outputs.tf](outputs.tf). Config child outputs
+are not forwarded here; nor are state-CMK or Logs/Lambda alias-ARN outputs.
+A caller must explicitly expose a child output before `terraform output` can
+read it at a workload root.
 
 | Name | Description |
 |---|---|
@@ -563,6 +654,9 @@ This is because IAM/global resource recording can require additional AWS Config 
 
 ## Usage Example
 
+Complete integration excerpt for `baseline/`; the referenced locals and sibling
+modules must already exist. Profile resolution occurs in the caller.
+
 ```hcl
 module "security" {
   source = "../modules/security"
@@ -571,7 +665,7 @@ module "security" {
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   account_id                   = var.account_id
-  primary_region               = var.primary_region
+  primary_region               = data.aws_region.current.region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   manage_securityhub_cspm_locally = var.manage_securityhub_cspm_locally
@@ -626,15 +720,88 @@ This module expects some resources to already exist or be passed in:
 | `secops_topic_arn` | Monitoring module |
 | `secops_event_bus_name` | Automation module |
 
-Because of these relationships, deployment order should be handled carefully in the root environment stack.
+These references are composed in one workload graph, not a requirement to apply
+each child module separately. Broad module-level dependencies can introduce
+cycles between logging, IAM, storage, monitoring, and security. Preserve the
+resource-level references. A dependency on an empty locally owned Security Hub
+resource collection does not wait for external centralized enablement.
 
 ---
 
 ## Validation
 
-For the repository's centrally governed workload environments, use `scripts/validation/validate-security-workload.sh` as the primary workload-level check. Organization-level ownership and policy correctness are validated separately by `validate-security-operations.sh`.
+Use [validate-security-workload.sh](../../scripts/validation/validate-security-workload.sh)
+for workload service state, [validate-kms.sh](../../scripts/validation/validate-kms.sh)
+for its key checks, and the separate administrative validators for central
+configuration. None of these names establishes exhaustive policy verification.
 
-The direct AWS CLI checks below are still useful for troubleshooting. Interpret GuardDuty and Security Hub results according to the ownership mode: centrally governed services should exist and be effective in the workload account even though this module does not own their account-level resources.
+The workload security validator checks enabled services and active central
+administrator relationships. It does not independently consume
+`EXPECTED_ACCOUNT_ID`; the explicit preflight below supplies that boundary.
+Its Config checks are recorder/channel/rule inventory and recorder-state checks,
+not exact recording-type, rule-catalog, remediation, or compliance-result
+comparisons. Disabled Config/Inspector paths skip their service checks rather
+than proving absence. It does not audit the six Security Hub insight filters.
+
+Run these local examples from the repository root with an initialized, applied
+workload root and Bash, AWS CLI, Terraform, and `jq` available. Set a named
+workload `AWS_PROFILE`, the intended service `AWS_REGION`, and an independently
+known `EXPECTED_ACCOUNT_ID` first. `ENVIRONMENT` defaults to `dev`; select it
+explicitly when inspecting another workload. The `${VAR:?message}` expressions
+stop on missing values; their messages are not replacement placeholders.
+
+These examples require a named local profile. That is not a requirement to add
+`AWS_PROFILE` to GitHub OIDC jobs or other default-credential-chain executions.
+The service Region is checked against applied Terraform output; it does not
+change the independently configured state-backend Region.
+
+```bash
+set -euo pipefail
+: "${AWS_PROFILE:?Set the local workload profile}"
+: "${AWS_REGION:?Set the intended service Region}"
+: "${EXPECTED_ACCOUNT_ID:?Set the independently known workload account ID}"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+case "$ENVIRONMENT" in dev|staging|prod) ;; *) echo "Invalid workload" >&2; exit 1 ;; esac
+[[ "$EXPECTED_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "Invalid account ID" >&2; exit 1; }
+export AWS_PROFILE AWS_REGION EXPECTED_ACCOUNT_ID
+export AWS_DEFAULT_REGION="$AWS_REGION" AWS_PAGER=""
+
+CALLER_ACCOUNT_ID="$(aws sts get-caller-identity \
+  --profile "$AWS_PROFILE" --region "$AWS_REGION" --query Account --output text)"
+[[ "$CALLER_ACCOUNT_ID" == "$EXPECTED_ACCOUNT_ID" ]] || {
+  echo "Unexpected AWS account; stopping" >&2; exit 1;
+}
+ACCOUNT_ID="$CALLER_ACCOUNT_ID"
+ENV_DIR="environments/${ENVIRONMENT}"
+OUTPUTS_JSON="$(terraform -chdir="$ENV_DIR" output -json)"
+read_output_string() {
+  jq -er --arg key "$1" '
+    .[$key].value | if type == "string" and length > 0
+    then . else error("Missing or invalid string output: " + $key) end
+  ' <<< "$OUTPUTS_JSON"
+}
+APPLIED_REGION="$(read_output_string primary_region)"
+[[ "$AWS_REGION" == "$APPLIED_REGION" ]] || {
+  echo "Service Region differs from applied primary_region; stopping" >&2; exit 1;
+}
+NAME_PREFIX="$(read_output_string name_prefix)"
+export NAME_PREFIX
+```
+
+This preflight confirms selected context, not every permission, resource, or
+configuration. Do not treat a successful API read as proof of delivery or
+operating effectiveness.
+
+```bash
+LOGS_CMK_ARN="$(read_output_string logs_cmk_arn)"
+TAMPER_DETECTION_RULE_NAME="${NAME_PREFIX}-tamper-detection"
+./scripts/validation/validate-security-workload.sh "$ENVIRONMENT"
+./scripts/validation/validate-kms.sh "$ENVIRONMENT"
+```
+
+Interpret the direct reads below against the intended ownership mode, complete
+applied input set, and observed results. Script PASS, configured standards,
+and absence of findings do not establish compliance or effective protection.
 
 ### Confirm SSM Document Public Sharing Is Disabled
 
@@ -656,10 +823,13 @@ Expected:
 ### Confirm GuardDuty Detector
 
 ```bash
-aws guardduty list-detectors \
-  --region "${AWS_REGION}" \
-  --profile "${AWS_PROFILE}" \
-  --output table
+DETECTORS_JSON="$(aws guardduty list-detectors \
+  --region "$AWS_REGION" --profile "$AWS_PROFILE" --output json)"
+GUARDDUTY_DETECTOR_ID="$(jq -er '
+  .DetectorIds | if length == 1 then .[0]
+  else error("Expected exactly one detector") end
+' <<< "$DETECTORS_JSON")"
+printf '%s\n' "$GUARDDUTY_DETECTOR_ID"
 ```
 
 Expected:
@@ -700,7 +870,7 @@ aws guardduty get-detector \
 Expected:
 
 - Effective GuardDuty features are listed.
-- For local ownership, enabled `var.guardduty_features` entries show `ENABLED`.
+- For local ownership, compare requested features with live state; ignored status drift may require separately reviewed remediation.
 - For central ownership, compare effective workload state with the organization configuration validated by the security-operations evidence path.
 
 ---
@@ -735,8 +905,8 @@ aws securityhub get-enabled-standards \
 Expected:
 
 - Security Hub is effective in the workload account.
-- Local ownership uses the standards configured in `local.securityhub_standards`.
-- The centrally governed platform currently applies AWS Foundational Security Best Practices and CIS AWS Foundations Benchmark v5.0.0 through account configuration policies.
+- Local ownership includes explicit subscriptions and AWS default standards; inventory both.
+- For central ownership, compare the live inventory with the actual account configuration policy, not a presumed universal standards list.
 
 ---
 
@@ -747,18 +917,20 @@ aws inspector2 batch-get-account-status \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
   --account-ids "${ACCOUNT_ID}" \
-  --query 'accounts[0].{AccountStatus:state.status,EC2:resourceState.ec2.status,ECR:resourceState.ecr.status,Lambda:resourceState.lambda.status,LambdaCode:resourceState.lambdaCode.status}' \
+  --query '{Accounts:accounts,FailedAccounts:failedAccounts}' \
   --output table
 ```
 
 Expected:
 
 - If Inspector is enabled, account status is `ENABLED`.
-- Resource types included in inspector_resource_types should show `ENABLED`.
-- Resource types not included in inspector_resource_types may show `DISABLED`.
-- By default, EC2 scanning is `ENABLED`.
-- By default, Lambda and Lambda code scanning are `DISABLED`.
-- If Inspector is disabled by deployment profile or explicit override, Inspector resource states may be disabled.
+- Review `failedAccounts` and the response identity before interpreting statuses.
+- Compare all resource statuses with `effective_inspector_resource_types` and
+  `effective_inspector_enabled`, not solely the child default or account status.
+- When Inspector is disabled, the workload validator skips this comparison;
+  inspect live state separately when proving disabled-state posture matters.
+- Account-level enablement is not per-image, per-instance, or per-function coverage.
+
 ---
 
 ### Confirm Inspector Security Hub Product Subscription
@@ -783,13 +955,12 @@ Expected:
 aws kms list-aliases \
   --region "${AWS_REGION}" \
   --profile "${AWS_PROFILE}" \
-  --query 'Aliases[?contains(AliasName, `'"${NAME_PREFIX}"'`) == `true`].[AliasName,TargetKeyId]' \
-  --output table
+  --output json | jq --arg prefix "alias/${NAME_PREFIX}/" \
+  '[.Aliases[]? | select(.AliasName | startswith($prefix)) | {AliasName,TargetKeyId}]'
 ```
 
 Expected aliases include:
 
-- `alias/<name_prefix>/state-cmk`
 - `alias/<name_prefix>/logs-cmk`
 - `alias/<name_prefix>/ebs-cmk`
 - `alias/<name_prefix>/lambda-cmk`
@@ -800,6 +971,9 @@ Expected aliases include:
 ---
 
 ### Confirm KMS Key Rotation
+
+The state-key alias belongs to bootstrap, potentially in another Region. Alias
+matching does not verify target-key identity, policy, state, or retention.
 
 Use the relevant key ID or key ARN:
 
@@ -850,7 +1024,12 @@ For detailed validation, use the `tamper_detection` child module README.
 
 The KMS keys created by this module are used across the environment.
 
-Do not delete or disable these keys unless intentionally tearing down the environment.
+Do not disable or schedule key deletion merely because workload destruction is
+approved. First identify retained objects, snapshots, secrets, backups, and
+other data still requiring each key, and verify an independently usable copy
+where preservation is required. [Pending-deletion keys cannot perform KMS
+cryptographic operations](https://docs.aws.amazon.com/kms/latest/developerguide/deleting-keys.html);
+the waiting period is not continued service availability.
 
 Disabling or scheduling deletion for one of these keys can break:
 
@@ -868,25 +1047,25 @@ Disabling or scheduling deletion for one of these keys can break:
 
 ### Production Deletion Protection
 
-Several KMS keys currently include:
+There is no profile-derived KMS destruction guard in this module. Five keys
+explicitly permit Terraform destruction; the Lambda key has no such guard.
+The configured 30-day window delays final key deletion, not the loss of
+cryptographic availability. RDS/ALB/Backup-vault protection elsewhere does not
+change these key settings.
 
-```hcl
-prevent_destroy = false # CHANGE THIS IN PROD
-```
-
-For production, consider changing this to:
-
-```hcl
-prevent_destroy = true
-```
-
-This adds a Terraform-level guardrail against accidental KMS key destruction.
+Any stronger retention or key-lifecycle control requires a separately reviewed
+implementation and ownership decision. A documentation statement or source
+comment cannot make the keys persistent. Preserve necessary data and keys
+before applying an approved teardown, and retain evidence of recoverability.
 
 ---
 
 ### Security Hub Standards Are Intentionally Selective
 
-The local fallback configuration currently includes AWS Foundational Security Best Practices and CIS AWS Foundations Benchmark v5.0.0. Additional standards remain commented out.
+The local fallback explicitly subscribes to AWS Foundational Security Best
+Practices and CIS AWS Foundations Benchmark, with exact identifiers in
+`main.tf`. Local account enablement also enables default standards. This is
+not an exclusive approved-standards list; comments create no subscriptions.
 
 For the managed multi-account platform, the authoritative workload standards are the centralized Security Hub CSPM configuration policies in `bootstrap/security_operations/security_services`, not this module's local fallback map.
 
@@ -915,7 +1094,10 @@ The parent module passes configuration into the `config_baseline` child module.
 
 The default `enable_rules` object enables most baseline groups but leaves `iam_baseline` disabled.
 
-If IAM/global Config coverage is enabled later, confirm the child module AWS Config recorder settings support global IAM resource recording as required.
+The fixed recorder list already includes IAM types and excludes KMS keys.
+Rule-family selection and recorder scope are separate. Verify actual rule
+applicability/results, and review the always-on-with-Config S3 remediation
+before treating the rule-family map as an authorization switch.
 
 ---
 
@@ -1007,7 +1189,7 @@ aws guardduty get-detector \
 Expected:
 
 - Effective GuardDuty features are listed.
-- For local ownership, enabled `var.guardduty_features` entries show `ENABLED`.
+- For local ownership, compare requested features with live state; ignored status drift may require separately reviewed remediation.
 - For central ownership, compare effective workload state with the organization configuration validated by the security-operations evidence path.
 
 ---
@@ -1030,7 +1212,7 @@ aws inspector2 batch-get-account-status \
   --account-ids "${ACCOUNT_ID}"
 ```
 
-> If Lambda scan types are enabled and Lambda functions use customer-managed KMS keys, Inspector may generate kms:Decrypt AccessDenied events against the Lambda CMK. The baseline disables Lambda scan types by default to avoid unsupported scanner behavior and alert noise.
+> Lambda scan types are omitted by default. Verify actual resource eligibility and scan coverage; adding types or decryption permission alone does not resolve the documented customer-managed-key limitation.
 
 ---
 
@@ -1117,7 +1299,7 @@ For detailed troubleshooting, use the `tamper_detection` child module README.
 - SSM document public sharing is disabled.
 - GuardDuty and Security Hub account-level ownership is selectable so centrally governed workload accounts do not create competing resources.
 - The managed workload environments defer GuardDuty, Security Hub CSPM, and Security Hub V2 account-level governance to the security-operations layer.
-- The local fallback Security Hub standards map includes AWS Foundational Security Best Practices and CIS AWS Foundations Benchmark v5.0.0.
+- Local CSPM has explicit subscriptions plus default standards; central policies must be inspected separately.
 - Inspector v2 is enabled conditionally and defaults to EC2 scanning only.
 - Inspector findings are imported into Security Hub.
 - KMS keys are purpose-specific instead of using one shared key for everything.
@@ -1142,8 +1324,8 @@ This module follows:
 - Configurable vulnerability detection for supported workloads
 - Security control evaluation through AWS Config
 - Event-driven tamper detection
-- Least privilege KMS service usage
-- Production-aligned security defaults
+- Explicit key-policy grants whose actual condition scope must be reviewed
+- Caller-resolved workload settings, distinct from this module's fixed KMS lifecycle
 
 ---
 

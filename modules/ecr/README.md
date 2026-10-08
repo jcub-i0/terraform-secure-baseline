@@ -77,7 +77,7 @@ The reusable module does not resolve deployment profiles itself and has no `prev
 
 Production retirement requires deliberate image disposition. The supported `prod` Destroy path invokes a separately approved cleanup helper to delete images in the Terraform-owned repository set, verifies that the repositories are empty, and then applies the reviewed Terraform destroy plan. It does not temporarily set `force_delete = true`. Required images must be retained elsewhere before deletion is authorized. See [Production Retirement](../../docs/production-retirement.md).
 
-Repository force deletion and lifecycle cleanup are separate concerns. The 30-day lifecycle rule handles untagged images by time since image push; it is not a prerequisite for intentional environment teardown. The cleanup helper's RC1 environment restriction is `prod`, even though the baseline's lifecycle values are profile-derived.
+Repository force deletion and lifecycle cleanup are separate concerns. The 30-day lifecycle rule handles untagged images by time since image push; it is not a prerequisite for intentional environment teardown. The cleanup helper's environment restriction is `prod`, even though the baseline's lifecycle values are profile-derived.
 
 ---
 
@@ -152,8 +152,6 @@ The implemented `Deploy Application` workflow owns the separate image-publicatio
 `validate-ecr.sh` uses the workload-root repository output as its authoritative inventory and passes cleanly for `{}`. For configured repositories it validates live identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved untagged-only lifecycle policy. It also checks the Terraform-owned `force_delete` value against the lifecycle contract; that flag is provider deletion intent, not a live ECR repository attribute. `validate-security-workload.sh` separately checks the Terraform-computed effective Inspector resource types.
 
 ## Implementation References
-
-This page targets v1.11.0, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`).
 
 - [Repository resources](main.tf), [inputs](variables.tf), and [outputs](outputs.tf)
 - [Baseline derivation](../../baseline/locals.tf) and [module integration](../../baseline/main.tf)

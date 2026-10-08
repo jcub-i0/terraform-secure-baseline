@@ -35,12 +35,38 @@ The platform is built around:
 - Private-first networking
 - Centralized logging
 - Centrally governed Security Hub CSPM, GuardDuty, and Security Hub V2 for workload accounts
-- Profile-driven GuardDuty ECS/Fargate Runtime Monitoring with workload-local enrollment, least-privilege prerequisites, and coverage-health notification
+- Profile-driven GuardDuty ECS/Fargate Runtime Monitoring with workload-local enrollment, resource-scoped prerequisites, and coverage-health notification
 - Workload-local AWS Config, Inspector, remediation, and supporting security controls
 - Event-driven security automation
-- Encrypted and protected operational evidence
+- Encrypted operational telemetry with explicit retention and destruction limits
 
 The controls described below are infrastructure-level controls. They should be paired with organizational policies, application security controls, risk management, incident response procedures, and human review processes.
+
+---
+
+## Reading These Narratives
+
+**Control Intent** describes the desired outcome. **Implementation** describes
+repository behavior, not a certification or a result for a particular deployment.
+**Security Impact** describes the contribution that behavior can make when it is
+correctly configured, operated, and reviewed.
+
+| Evidence level | What it establishes | What it does not establish |
+|---|---|---|
+| Source configuration | Resources, inputs, policies, and workflow logic declared in the repository | That they were applied or are effective in a customer account |
+| Point-in-time validation | The assertions actually executed against a named account, Region, and deployment | All possible settings, skipped branches, transactions, or continuing effectiveness |
+| Recorded behavioral exercise | The selected operation and observed outcome, including failures and cleanup | Every workload, failure mode, or recovery objective |
+| Operating evidence | Dated records and owner review for an agreed scope and period | A certification conclusion from this repository alone |
+
+Record deployment and validation commits separately, the effective inputs and
+image digests, execution time, account/Region, warnings, exclusions, and evidence
+location. Prior exercises retain their original provenance; a subsequent
+configuration check does not retroactively rerun them. Use the
+[evidence guide](validation-evidence-guide.md) and
+[report template](validation-report-template.md) to record acceptance separately
+from generated script results. The baseline runner counts successful exits of
+its 16 child scripts; it does not count every assertion or convert warnings into
+successful behavioral tests.
 
 ---
 
@@ -86,6 +112,14 @@ This supports:
 - More controlled production access
 - Improved auditability of environment-specific activity
 
+**Implementation and evidence:** Review the
+[Organizations root](../../bootstrap/control_plane/organizations/main.tf) and
+[control-plane validator](../../scripts/validation/validate-control-plane.sh).
+Record actual account IDs, OU placement, trusted-service access, and delegated
+administrators. Account and state separation do not prohibit every cross-account
+role or resource-policy grant, and the repository does not supply a complete
+Service Control Policy strategy.
+
 ---
 
 # Control Plane Separation
@@ -111,6 +145,13 @@ The control plane owns AWS Organizations topology and the management-account pre
 
 This separation helps prevent workload changes from affecting centralized identity, organization structure, or control-plane access and reduces the chance of CI/CD lockout or cross-stack failures.
 
+**Boundary:** Separate Terraform roots reduce lifecycle coupling; they are not
+an IAM deny boundary. The workload Destroy workflow includes separately approved
+Identity Center cleanup before final workload-destroy approval. Review that
+intentional cross-stack operation in the
+[retirement runbook](../production-retirement.md); rejecting a later gate does
+not reverse earlier authorized cleanup.
+
 ---
 
 # Centralized Security Administration
@@ -130,7 +171,7 @@ The dedicated `security-operations` account centrally manages:
 - GuardDuty Runtime Monitoring organization policy; and
 - Security Hub V2 administrator state and the `SECURITYHUB_POLICY` attached to `Workloads`.
 
-The implemented v1.10 GuardDuty Runtime Monitoring organization contract is:
+The managed GuardDuty Runtime Monitoring organization contract is:
 
 ```text
 RUNTIME_MONITORING           = ALL
@@ -153,6 +194,17 @@ This supports:
 - Separation of organization governance from security operations;
 - Central finding visibility and delegated administration; and
 - Explicit evidence boundaries between organization, central security, and workload state.
+
+**Implementation and evidence:** The
+[central service root](../../bootstrap/security_operations/security_services/main.tf)
+and its [validator](../../scripts/validation/validate-security-operations.sh)
+are separate from workload validation. The CSPM aggregator uses `NO_REGIONS`;
+regional finding aggregation is not cross-Region recovery. Administrator service
+resources and detector discovery are not all removed by disabling organization
+rollout flags. The root's `check` assertions are not blocking account safeguards;
+verify caller identity independently. Local-ownership flags suppress local
+resources, not prove that central policy has successfully reached each workload.
+
 # Terraform State Protection
 
 ## Control Intent
@@ -170,7 +222,7 @@ The baseline uses dedicated state resources per account/environment, including:
 - distinct state object keys per Terraform root
 - bucket versioning and public-access protections
 
-Each `state` substack follows a two-phase lifecycle: it is applied locally first to create its state bucket and CMK, then `scripts/bootstrap/migrate-state-stack.sh` migrates that stack into the protected S3 backend it created. Strict release/client evidence can require the remote state object to exist, be readable, and support `terraform state pull`.
+Each `state` substack follows a two-phase lifecycle: it is applied locally first to create its state bucket and CMK, then `scripts/bootstrap/migrate-state-stack.sh` migrates that stack into the protected S3 backend it created. Strict deployment/client evidence can require the remote state object to exist, be readable, and support `terraform state pull`.
 
 ## Security Impact
 
@@ -182,13 +234,24 @@ This supports:
 - Encrypted state storage
 - Protection against unauthorized backend modification
 
+**Implementation and evidence:** Review the
+[state module](../../modules/state/main.tf), backend coordinates, the
+[migration helper](../../scripts/bootstrap/migrate-state-stack.sh), and strict
+bootstrap evidence. Keep service `primary_region`, state-resource `state_region`,
+and backend `region` distinct. Locking coordinates Terraform operations; it does
+not authorize a change or prevent a separately authorized direct S3 write.
+State, local backups, saved plans, and JSON exports can contain sensitive values.
+Plan-role custom permissions include state-object writes/deletes across the
+configured bucket, not only lockfiles. Migrating a state root away from its own
+bucket does not remove the state resources' literal destruction guards.
+
 ---
 
 # CI/CD Access Control
 
 ## Control Intent
 
-Use short-lived, narrowly scoped CI/CD identities and preserve separation between planning, infrastructure application, image publication, and source-control release mutation.
+Use short-lived CI/CD identities, review their actual privileges, and preserve separation between planning, infrastructure application, image publication, and source-control release mutation.
 
 ## Implementation
 
@@ -204,6 +267,26 @@ Workload bootstrap validation can also verify the enabled Image Publisher role's
 
 This model reduces exposure to static credentials, limits the blast radius of any one CI job, preserves a reviewable chain from image digest to release PR to exact Terraform plan, and supports separation of duties between artifact publication and infrastructure deployment.
 
+**Privilege and approval limits:** The
+[OIDC module](../../modules/github_oidc/main.tf) attaches `ReadOnlyAccess` plus a
+custom state/secret policy to Plan and `AdministratorAccess` to Apply. Apply is
+not a least-privilege role, and Plan is not strictly read-only. The Image
+Publisher's repository prefix is not an IAM restriction to the one service
+selected in a workflow.
+
+Plan trusts the configured GitHub Environment subject. Apply selects an
+Environment subject or configured branch subjects; those are not combined as an
+AND condition. Required reviewers, deployment-branch restrictions, and repository
+protections need their own administrative configuration and evidence. A checksum
+binds plan bytes to expected metadata; it is not an independent signature or
+proof of reviewer independence. Retain actual approvals and protect the binary
+plan, its readable representation, and metadata as sensitive artifacts.
+
+The [publication script](../../scripts/deployment/deploy-application.sh) uses an
+ECR credential helper with temporary push configuration and token-file caching
+disabled. This narrows local persistence, not all credential exposure on a
+compromised runner. See the [deployment reference](../../scripts/deployment/README.md).
+
 # Human Access Management
 
 ## Control Intent
@@ -212,9 +295,13 @@ Provide centralized, role-based human access to AWS accounts.
 
 ## Implementation
 
-Human access is managed through IAM Identity Center.
+The [Identity Center caller](../../bootstrap/control_plane/identity_center/main.tf)
+uses the [persona module](../../modules/identity_center/main.tf) to discover an
+existing Identity Center instance and create configured groups, permission sets,
+policy attachments, and account assignments. It does not create human users,
+manage group membership, or configure the upstream identity provider's MFA.
 
-The baseline creates environment-specific groups and permission sets such as:
+Example workload **group names** are:
 
 ```text
 SecOps-Operator-Dev
@@ -222,13 +309,25 @@ SecOps-Operator-Staging
 SecOps-Operator-Prod
 ```
 
-The security-operations account receives a required administrative persona:
+Permission-set names are distinct, for example `SecOps-Operator-dev` and
+`SecOps-Administrator-secops`. The central security account requires
+the administrative persona and disables Operator. Analyst and Engineer are
+optional; Engineer includes wildcard-resource response actions, and Administrator
+attaches `AdministratorAccess`.
 
-```text
-SecOps-Administrator
-```
+Operator's inline policy omits direct EC2 mutation and Lambda invocation.
+The control-plane caller derives the workload's prefixed bus ARN from
+`cloud_name` and the environment key. The bus policy restricts
+`custom.rollback` publication to matching Identity Center Operator role
+ARNs and explicitly denies other publishers; `aws.securityhub` forwarding
+remains separate. These controls scope event publication; group assignment,
+human approval, and successful recovery require distinct evidence.
 
-Optional Analyst and Engineer personas can be enabled independently for workload and security-operations accounts. The workload `SecOps-Operator` role is intentionally limited to submitting rollback events to its environment-specific SecOps EventBridge bus; the security-operations account intentionally does not receive that Operator persona.
+The control-plane validator checks groups, output-backed permission sets, and
+assignment presence. It does not compare each assignment principal to the created
+group or inspect full policies and group membership. Retain actual grants,
+assignment principals, membership, access reviews, and approved positive/negative
+access tests before accepting the access-control claim.
 
 ## Security Impact
 
@@ -236,7 +335,7 @@ This supports:
 
 - Centralized human access management
 - Environment-specific access boundaries
-- Least-privilege role design
+- Reviewable persona-specific grants, including explicitly privileged personas
 - Reduced reliance on IAM users
 - Better auditability of human access
 
@@ -250,15 +349,17 @@ Provide emergency administrative access while ensuring that use of that access i
 
 ## Implementation
 
-The baseline includes a break-glass role intended for emergency use.
+The [break-glass role](../../modules/iam/break_glass.tf) trusts the supplied
+principals with an MFA condition and attaches `AdministratorAccess`. The deploying
+organization supplies and secures the emergency identity; the module does not
+create that identity, authenticate a ticket, or technically limit use to emergencies.
 
-Use of the break-glass role is monitored through:
-
-- CloudTrail
-- EventBridge
-- SNS notifications
-
-When the role is assumed, an alert is sent through the configured SecOps notification path.
+The [monitoring rule](../../modules/monitoring/main.tf) matches CloudTrail
+`AssumeRole` requests for the role ARN and targets SecOps SNS. It does not require
+a successful assumption. Inspect the original API outcome, not only the alert's
+wording. Capture an authorized exercise, caller identity, MFA/trust configuration,
+notification receipt, and subsequent access review. Event routing is not a
+guarantee that a person receives or acts on an alert.
 
 ## Security Impact
 
@@ -279,17 +380,26 @@ Reduce external attack surface by keeping workloads private by default.
 
 ## Implementation
 
-Workloads are deployed into private subnets and do not receive public IP addresses by default.
+The [baseline](../../baseline/main.tf) derives a seven-family VPC topology from
+its canonical `/16` CIDR and selected standard Availability Zones. Production
+defaults to three AZs; other profiles default to two. The families are
+`ingress_public`, `egress_public`, `compute_private`, `data_private`,
+`serverless_private`, `endpoint_private`, and `firewall_private`.
 
-The baseline uses:
+The public ingress family hosts the optional internet-facing ALB; the public
+egress family hosts NAT Gateways. Their route-table roles remain separate so
+inspected compute egress can use AZ-local firewall/NAT paths without redirecting
+the ALB's VPC-local path to tasks.
 
-- Private compute subnets
-- Private data subnets
-- Security groups
-- Route table segmentation
-- VPC endpoints
-- NAT Gateway
-- AWS Network Firewall for controlled egress
+ECS tasks use private compute subnets without public task IPs. The RDS DB instance
+is private. Standalone EC2 instances are created per compute-subnet map entry;
+they are not an Auto Scaling Group. IP enrichment is deliberately not attached
+to this VPC, so private-workload statements do not apply to every Lambda.
+
+Review [network resources](../../modules/networking/main.tf),
+[traffic rules](../../modules/networking/security_policy/main.tf), and exact
+[topology validation](../../scripts/validation/validate-networking.sh).
+Separate subnet names alone do not establish the complete allowed-traffic set.
 
 ## Security Impact
 
@@ -331,6 +441,15 @@ This supports:
 - Reduced unmonitored internet access
 - Better control over external communication
 - Improved security posture for workloads handling sensitive data
+
+**Scope and evidence:** The [firewall module](../../modules/firewall/main.tf)
+implements the configured domain allowlist on the inspected compute path. The
+resolved list combines platform-required domains with the caller's additions;
+it is not an arbitrary-content DLP system or end-to-end TLS inspection. Verify
+actual same-AZ routes and allowed/denied destinations in the selected mode.
+`nat_only` has no Network Firewall inspection. IP enrichment runs outside the
+workload VPC and does not use its NAT or firewall. Neither endpoint presence nor
+an egress mode proves every sensitive data flow is restricted.
 
 ---
 
@@ -375,11 +494,18 @@ This supports:
 - Improved management access for private workloads;
 - Deterministic ownership of Runtime Monitoring networking; and
 - Better alignment with private-by-default architecture.
+
+**Authorization boundary:** The [endpoint resources](../../modules/vpc_endpoints/main.tf)
+do not supply custom endpoint policy documents. Security-group connectivity,
+endpoint/service policies, IAM authority, and KMS permissions must be assessed
+separately. Quarantine retains TCP/443 to the shared Interface Endpoint SG; it
+is neither complete network disconnection nor an SSM-only destination set.
+
 # Secure ECS/Fargate Runtime and Runtime Security
 
 ## Control Intent
 
-Provide a private, immutable, observable application runtime while preserving explicit ownership of service capacity, deployment health, runtime-detection prerequisites, and operational alerting.
+Provide a private, digest-selected, observable application runtime while preserving explicit ownership of service capacity, deployment health, runtime-detection prerequisites, and operational alerting.
 
 ## Implementation
 
@@ -398,7 +524,19 @@ Deployable services use:
 
 Service-capacity ownership is explicit. When `scaling = null`, Terraform owns the ECS service `desired_count`. When scaling is configured, the configured `desired_count` is bootstrap capacity and Application Auto Scaling owns subsequent live desired count within the Terraform-defined minimum and maximum bounds. The current scaling policies use target tracking for CPU, memory, and optional `ALBRequestCountPerTarget`; ALB request scaling requires ingress and uses resource labels derived from Terraform-owned ALB and target-group identities.
 
-Deployment-health configuration is explicit through minimum healthy percentage, maximum percentage, and health-check grace period.
+Deployment-health configuration is explicit through minimum healthy percentage,
+maximum percentage, and health-check grace period. Normal production deployable
+services require at least two fixed tasks or an autoscaling minimum of two, and
+explicit AZ rebalancing. A three-AZ VPC does not prove three running tasks or one
+task per AZ. Capture live placement and ALB target health separately. Runtime
+validation's normal production deployment-health requirement is 100 minimum
+healthy percent and at least 200 maximum percent.
+
+The ALB terminates HTTPS; its task target groups and health checks use HTTP.
+Digest pinning selects exact image content but does not establish signature
+verification, absence of vulnerabilities, read-only container filesystems, or
+application transaction correctness. Application task roles start without
+application policies; task-startup secret access belongs to the execution role.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. The monitoring module creates:
 
@@ -409,7 +547,7 @@ Both operational alarm families route alarm and recovery notifications to the Se
 
 ### GuardDuty Fargate Runtime Monitoring
 
-v1.10 adds deployment-profile-driven GuardDuty Runtime Monitoring to the same ECS runtime without adding a second application-service inventory.
+Deployment-profile-driven GuardDuty Runtime Monitoring uses the same ECS runtime without a second application-service inventory.
 
 ```text
 production  -> GuardDutyManaged=true
@@ -439,7 +577,7 @@ For `minimal`, healthy coverage and an injected agent are not required; if a cov
 
 The monitoring module also routes both `GuardDuty Runtime Protection Unhealthy` and `GuardDuty Runtime Protection Healthy` ECS coverage-state events to the existing SecOps SNS topic through the default EventBridge bus. The target uses the shared EventBridge security-notification DLQ, three retry attempts, and a 3600-second maximum event age.
 
-Automatic ECS/Fargate task containment is **not** part of v1.10. Runtime Monitoring provides detection and coverage visibility; the existing automatic containment implementation remains EC2-specific.
+Automatic ECS/Fargate task containment is **not implemented**. Runtime Monitoring provides detection and coverage visibility; the existing automatic containment implementation remains EC2-specific.
 
 ## Security Impact
 
@@ -447,13 +585,23 @@ This supports:
 
 - private workload placement and reduced public exposure;
 - immutable application release selection;
-- least-privilege runtime identity separation;
+- separate task-startup and application identity authority;
 - deterministic scaling ownership without Terraform fighting legitimate autoscaling;
 - controlled deployment-health behavior;
 - timely detection of sustained task deficits and unhealthy ingress targets;
 - runtime threat-detection coverage for protected Fargate tasks;
 - visibility when GuardDuty runtime coverage degrades or recovers; and
 - auditable runtime validation through resource-backed Terraform outputs and live AWS state.
+
+**Evidence boundary:** Inspect the [ECS resources](../../modules/ecs_service/main.tf)
+and [runtime validator](../../scripts/validation/validate-ecs-runtime.sh).
+An empty deployable-service map or an unexercised branch does not prove live agent
+injection, ALB health, application/database access, or replacement behavior.
+`UNKNOWN` application-container health is distinct from a healthy ALB target.
+The operational alarms use nonbreaching missing-data treatment; no alarm is not
+proof of running capacity or continuing telemetry. Preserve task/cluster identity,
+image digest, timestamps, warning branches, and application acceptance evidence.
+
 # Logging Integrity
 
 ## Control Intent
@@ -462,25 +610,29 @@ Ensure that security-relevant activity is captured and protected from tampering.
 
 ## Implementation
 
-The baseline captures logs and activity from:
+The [logging module](../../modules/logging/main.tf) configures an account-level
+multi-Region CloudTrail for read/write management events, CloudWatch delivery,
+S3 delivery, Insights, and log-file validation. It does not configure an
+organization trail or data-resource selectors. VPC Flow Logs record flow
+metadata, not packet payloads, and use a CloudWatch-to-Firehose-to-S3 path.
 
-- CloudTrail
-- AWS Config
-- VPC Flow Logs
-- CloudWatch Logs
-- Lambda logs
-- ECS service application logs under `/aws/ecs/<name-prefix>/<service>`
-- ECS Container Insights performance logs when enabled
+Other modules create Config records, Lambda logs, RDS exports, ECS service logs,
+and Container Insights logs. They do not all share one automatic archival path.
+The workload's centralized logs bucket is local to that workload account, not
+an independently administered organization-wide log archive.
 
-Logs are stored in protected locations with controls such as:
+[Storage](../../modules/storage/main.tf) configures KMS encryption, public-access
+blocks, versioning, and lifecycle transitions, but **Object Lock is disabled**,
+`force_destroy=true`, and `prevent_destroy=false`. Lifecycle expiration is not
+immutable retention or a legal hold. Workload KMS keys also lack production
+destruction guards; retained ciphertext alone is not recoverability.
 
-- KMS encryption
-- S3 versioning
-- Object Lock
-- Restricted bucket policies
-- Lifecycle retention
-
-ECS runtime validation verifies the effective CloudWatch retention period and exact workload logs-CMK encryption for the Terraform-owned service and Container Insights log groups.
+The [logging validator](../../scripts/validation/validate-logging.sh) permits
+selected delivery/retention warnings and does not verify Firehose archival or a
+CloudTrail digest chain. ECS runtime validation compares the exact logs CMK and
+effective retention for its own managed log groups. Retain fresh delivery samples,
+selected object/key metadata, integrity-verification results where required,
+reader/deletion permissions, and an independently approved preservation plan.
 
 ## Security Impact
 
@@ -528,6 +680,19 @@ This supports:
 - Workload-specific configuration and vulnerability evidence;
 - Event-driven response and alerting; and
 - Reduced drift between workload accounts.
+
+**Coverage and evidence:** Account-level service enablement is not per-resource
+coverage. The [workload security validator](../../scripts/validation/validate-security-workload.sh)
+checks selected active services and relationships; its Config checks do not
+compare the full recorder scope, rule catalog, or compliance outcomes. Disabled
+Inspector/Config branches are skipped, not proof of live absence. Record the
+applied ownership flags, central associations, resource coverage, finding ages,
+exceptions, and human disposition.
+
+[Security Hub insights](../../modules/security_dashboard/main.tf) are saved views.
+Their environment suffix labels the insight, not a finding filter. An empty view
+may reflect missing ingestion or filter scope rather than a clean environment.
+
 # Monitoring Integrity and Tamper Detection
 
 ## Control Intent
@@ -545,13 +710,15 @@ Examples include attempts to modify or disable:
 - Security Hub
 - AWS Config
 - KMS keys
-- Logging destinations
+- Selected CloudTrail and Config delivery-setting APIs
 
 Tamper events are detected through CloudTrail/EventBridge and routed to SNS.
 
 ## Security Impact
 
-This helps ensure that detection capabilities cannot be silently degraded.
+This can surface selected administrative changes if the source telemetry and
+notification path remain available. It does not ensure that monitoring cannot
+be silently degraded.
 
 It supports:
 
@@ -559,6 +726,14 @@ It supports:
 - Alerting on suspicious administrative activity
 - Detection of defense evasion behavior
 - Increased confidence in security telemetry
+
+**Implementation and evidence:** The [tamper pattern](../../modules/security/tamper_detection/main.tf)
+lists selected CloudTrail, GuardDuty, Security Hub, KMS, and Config actions on the
+regional default bus. It does not prove success, intent, approval, or complete
+coverage of every way to alter monitoring. A non-publishing pattern test proves
+only matching; inspect original outcomes and independently test delivery.
+The same SNS topic and logs key support ordinary alerts and DLQ alarms, so their
+failure is not covered by an independent notification channel.
 
 ---
 
@@ -578,8 +753,9 @@ Before quarantine, the Lambda also requires a valid running or stopped EC2 insta
 
 When an eligible finding is processed successfully, the Lambda:
 
-- preserves the original security group IDs in instance metadata;
+- retains the original security group IDs in memory;
 - replaces the current security groups with the quarantine security group;
+- then persists the original IDs in the `OriginalSecurityGroups` tag;
 - applies isolation evidence tags while leaving `IsolationAllowed` Terraform-managed;
 - records the finding and isolation time; and
 - publishes an SNS notification when the SecOps topic is configured.
@@ -588,14 +764,30 @@ A notification failure is logged after isolation and does not roll back an alrea
 
 ## Security Impact
 
-This limits:
+Successful, reviewed containment can reduce:
 
 - Lateral movement
 - Continued network communication
 - Potential data exposure
 - Blast radius during security events
 
-It provides rapid containment while preserving metadata needed for controlled rollback.
+It supports containment, but successful recovery requires independently verified metadata and authorization.
+
+**Implementation and evidence:** The [handler](../../modules/automation/lambda/ec2_isolation.py)
+requests snapshots without waiting for completion and replaces security groups
+before writing recovery tags. Partial failure can leave quarantine applied without
+usable rollback metadata. Its caught exceptions normally return an error count,
+not an invocation failure that necessarily reaches a DLQ. Its
+[IAM EC2 permissions](../../modules/iam/lambda.tf) use `Resource="*"` without the
+Python eligibility conditions.
+
+The reusable compute default is `isolation_allowed=false`, but the supplied
+workload roots default to `true`. Confirm the effective tag and approved policy
+rather than inferring safety from an environment name. Preserve independent
+pre-isolation groups, requested/completed snapshots, handler counters, final
+tags/groups, and notification receipt using the [test guide](../lambda_tests/ec2_isolation.md).
+Routine Terraform attachment drift is ignored, but replacement/destruction is
+not prevented. Quarantine still reaches shared Interface Endpoints.
 
 ---
 
@@ -607,34 +799,43 @@ Allow recovery from quarantine only after human review and approval.
 
 ## Implementation
 
-The EC2 Rollback Lambda is triggered through a custom EventBridge event sent to the environment-specific SecOps event bus.
+The [automation bus/rule](../../modules/automation/main.tf) routes
+`source=custom.rollback` events to the [rollback handler](../../modules/automation/lambda/ec2_rollback.py).
+The rule does not filter detail type. The handler requires nonempty `instance_id`,
+`approved_by`, and `ticket_id`, an `Isolated=true` tag, and saved original groups.
+The approval fields are caller-supplied metadata; no approval system is consulted.
 
-A user assigned to the `SecOps-Operator` role can submit a rollback event, but cannot directly modify EC2 security groups.
-
-Rollback event flow:
+Intended recovery flow:
 
 ```text
-SecOps-Operator
-    |
-    v
-SecOps EventBridge Bus
-    |
-    v
-EC2 Rollback Lambda
-    |
-    v
-Restore original security groups
+Independent review and authorization
+    -> authorized event submission to <name_prefix>-secops-bus
+    -> Lambda reads saved groups
+    -> restore groups
+    -> write release tags
+    -> publish notification
 ```
+
+The Identity Center caller and workload automation now derive matching
+prefixed bus names. The bus policy's `aws:PrincipalArn`-conditioned
+Operator Allow and explicit non-Operator Deny restrict `custom.rollback`
+publication. Group membership, human approval, and successful rollback
+remain separate evidence requirements; the handler does not authenticate
+the approver or ticket metadata.
+
+The handler writes `IsolationAllowed=true`, not the prior authorization value.
+Security-group restoration, tagging, and notification are not transactional;
+later failure does not undo earlier mutations. Use the [rollback tests](../lambda_tests/ec2_rollback.md)
+to separate intended submitter access, independent observer access, per-entry event
+acceptance, exact pre/post group comparison, tag review, and notification receipt.
 
 ## Security Impact
 
-This supports:
-
-- Human-approved recovery
-- Separation of duties
-- Controlled restoration
-- Reduced risk of accidental or unauthorized rollback
-- Auditable recovery actions
+This provides a mechanism for restoring security groups with an
+Operator-restricted EventBridge publisher path. Human approval, effective
+account-specific authorization, incident closure, and safe re-enablement
+still require independent controls and evidence. Identity-based event
+authorization does not itself authenticate a separate approver.
 
 ---
 
@@ -660,6 +861,19 @@ This supports:
 - Better triage context
 - Improved prioritization
 - Enhanced visibility into suspicious network indicators
+
+**Implementation and evidence:** The [handler](../../modules/automation/lambda/ip_enrichment.py)
+queries AbuseIPDB outside the workload VPC, caches the secret across warm
+invocations without a TTL, and can return success-shaped payloads after handled
+lookup/notification/writeback errors. It does not inspect `UnprocessedFindings`
+before logging writeback success. Its incoming-note deduplication is not a fresh
+read of current finding state. Secret rotation, external indicator disclosure,
+provider usage limits, note replacement, and result freshness require review.
+
+Follow the [enrichment tests](../lambda_tests/ip_enrichment.md): use synthetic
+identifiers by default, approve real-finding writeback separately, and retain
+before/after notes, payloads, handler results, and actual notification evidence.
+Disabling runtime writeback does not remove its IAM permission.
 
 ---
 
@@ -689,10 +903,24 @@ The baseline can evaluate controls related to:
 This supports:
 
 - Configuration drift detection
-- Exposure prevention
-- Encryption enforcement
-- Continuous compliance monitoring
+- Detection of exposure and encryption-policy deviations
+- Selected configuration evaluation
 - Faster identification of misconfigurations
+
+**Implementation and evidence:** The [Config recorder](../../modules/security/config_baseline/main.tf)
+uses a fixed inclusion list. IAM types are included even with IAM rules disabled;
+KMS keys are not listed despite enabled KMS rules. Review actual applicability,
+evaluation results, and freshness rather than treating rule existence as coverage.
+Disabling Config leaves its recorder and delivery channel declared, with recording
+stopped and rules/remediation omitted.
+
+The [automatic S3 remediation](../../modules/security/config_baseline/remediations.tf)
+follows `enable_config` independently of the S3 catalog-family toggle. Its prefix
+does not limit target buckets by name, tag, or environment, and the mutation may
+disrupt deliberately public use. The [rule catalog](../../modules/security/config_baseline/rules.tf)
+is primarily detective; no general guarantee of encryption enforcement or safe
+remediation follows from its presence. Record evaluations, exceptions, intended
+resource scope, and approved remediation outcomes.
 
 ---
 
@@ -704,21 +932,30 @@ Protect sensitive infrastructure data, operational logs, secrets, and backups.
 
 ## Implementation
 
-The baseline uses KMS-backed encryption for resources such as:
+The [security module](../../modules/security/main.tf) supplies purpose-specific
+KMS keys for logs/notifications, EBS, Lambda environment variables, Secrets
+Manager, ECR, and the backup vault. Terraform state has a separately owned key.
+RDS storage encryption is enabled without an explicit database `kms_key_id`;
+do not identify that key as the logs or secrets key. The workload key policies
+include differing service/account/context conditions, not one uniform
+least-privilege policy.
 
-- S3 logs
-- Lambda
-- EBS
-- Backup vaults
-- Secrets Manager
-- SNS topics
-- CloudWatch Logs
+[Storage](../../modules/storage/main.tf) uses an ephemeral generated RDS password
+with write-only arguments, whereas [automation](../../modules/automation/main.tf)
+stores the AbuseIPDB key through a normal secret-version value. Do not claim
+all secret values are absent from Terraform state and plan artifacts.
 
-The centralized logging bucket also supports:
+The logs bucket uses versioning and lifecycle rules but not Object Lock. The
+six workload keys have rotation and a deletion window without effective
+production destruction guards. A pending-deletion key is unavailable for KMS
+cryptographic operations; retaining encrypted records without usable key access
+is not sufficient. [AWS KMS deletion guidance](https://docs.aws.amazon.com/kms/latest/developerguide/deleting-keys.html)
+explains that service behavior.
 
-- Versioning
-- Object Lock
-- Lifecycle retention
+Transport is a separate control: the optional ALB uses HTTPS on its frontend
+and HTTP to task target groups. Database/application transport and tenant access
+need their own configuration and evidence. Validate actual keys, grants,
+permissions, secret exposure, data paths, and retention/exit requirements.
 
 ## Security Impact
 
@@ -765,7 +1002,7 @@ When scheduled backup is disabled:
 - the backup plan and selection are absent; and
 - workload EC2 and RDS resources use `Backup=false`.
 
-This design avoids treating a cost-control decision as authorization to delete the environment backup vault while also preventing disabled profiles from continuing scheduled backups.
+This design avoids treating a cost-control decision as authorization to delete the environment backup vault while omitting AWS Backup plan-based scheduling when disabled. RDS-native automated backups are configured independently.
 
 The EC2 isolation workflow separately requests tagged snapshots of attached EBS volumes after all eligibility checks pass and before quarantine is applied. Snapshot-request failure stops isolation rather than quarantining without that recovery evidence.
 
@@ -782,6 +1019,44 @@ This supports:
 - Reduced impact from data loss;
 - Improved patch hygiene; and
 - Support for audit expectations around recoverability.
+
+### Availability and recovery boundaries
+
+[Profile resolution](../../baseline/locals.tf) and [input constraints](../../baseline/variables.tf)
+enforce production RDS Multi-AZ. Scheduled AWS Backup defaults to enabled, but an
+explicit `backup_enabled=false` overrides that default and also disables the
+profile-derived Restore Testing resources. Do not present backup enablement as a
+hard production-only input prohibition. The database remains a
+PostgreSQL Multi-AZ **DB instance**, not a three-node cluster or Aurora. Its native
+14-day automated-backup retention is separate from AWS Backup. Normal production
+also enables ALB, RDS, and Network Firewall deletion protection; ECR, ECS service,
+and backup-vault force deletion remain disabled even in retirement.
+
+Three-AZ networking and redundant ECS capacity reduce single-resource exposure;
+they do not establish application availability, successful failover, cross-Region
+recovery, or measured recovery time/point objectives. Capture live placement,
+replacement/failover observations, application recovery, and a no-change plan
+for the exact tested configuration.
+
+### Restore Testing and destructive lifecycle
+
+The [backup module](../../modules/backup/main.tf) configures Restore
+Testing when the production profile and effective backup enablement are both true, for the managed RDS source using a temporary private Single-AZ restore.
+Record separately: plan/selection correctness, an actual restore job, application
+and data-validation results, and cleanup of temporary resources. A
+[backup-validator](../../scripts/validation/validate-backup.sh) PASS can coexist
+with warnings for absent jobs, application validation, or cleanup; it is not
+complete recovery acceptance. The module does not supply application-specific
+restore validation.
+
+The [retirement runbook](../production-retirement.md) describes Stage-1 protected
+planning and zero ECS capacity, separately authorized durable-data cleanup,
+readiness checks, Identity Center cleanup, and exact saved workload-destroy
+application. Cleanup re-inventories at execution; it is not a frozen-item
+manifest. Later rejection does not undo earlier cleanup. This complete workflow
+is `prod`-only even though resilience policy is profile-driven. Preserve required
+records, snapshots, images, and usable keys outside approved destruction scope.
+
 # Alerting and Notification
 
 ## Control Intent
@@ -818,18 +1093,32 @@ This supports:
 - Centralized notification patterns;
 - Visibility into loss or recovery of Runtime Monitoring coverage; and
 - Improved incident response readiness.
+
+**Implementation and evidence:** [Monitoring](../../modules/monitoring/main.tf)
+has separate EventBridge-to-SNS and SQS receive-count failure paths. The latter
+cannot recognize application processing success, and neither SNS subscription
+has subscriber-delivery redrive. There is no supplied SQS consumer or independent
+fallback alarm channel. Confirm recipients, review queue age/retention and missing
+signals, and retain actual correlated receipts and response records. Reading an
+SQS message changes receive/visibility state and is not a passive observation.
+
+GuardDuty coverage events are regional/account-scoped rather than a baseline-only
+cluster filter. A transformed first-finding Security Hub notification is not a
+complete event archive. Empty DLQs, an `OK` alarm, or an SNS-validator PASS do not
+establish end-to-end delivery or human acknowledgement.
+
 # Operational Impact
 
-Together, these controls help ensure that:
+Together, these mechanisms are intended to support the following outcomes, subject to the limits and operating evidence above:
 
 - Infrastructure exposure is minimized
 - Human and CI/CD access is controlled
 - Security-relevant activity is visible
-- Monitoring cannot be silently disabled
+- Selected changes to monitoring can be surfaced for investigation
 - Qualifying EC2 incidents can be contained automatically, while ECS/Fargate Runtime Monitoring remains detection/visibility only
-- Recovery actions are controlled
+- Recovery actions can follow independently authorized procedures
 - Configuration integrity is monitored
-- Operational logs are protected
+- Operational logs have configured access and encryption controls, not immutable retention
 - Terraform state is secured
 - Sensitive data paths are better protected
 
@@ -849,7 +1138,7 @@ It does not replace:
 - Security policies and procedures
 - Vendor risk management
 - Business continuity planning
-- Backup restore testing, RPO/RTO definition, or proof of recoverability
+- Application-specific restore validation, RPO/RTO definition, or proof of recoverability
 - Automatic ECS/Fargate containment or remediation
 - Compliance evidence management
 - Security awareness training
@@ -857,10 +1146,18 @@ It does not replace:
 
 Organizations should treat this baseline as a technical foundation that supports, but does not replace, a broader security program.
 
+Unresolved implementation limitations require a named owner and a documented
+remediation or risk decision; describing them here does not resolve them. The
+most consequential include Operator bus authorization, broad administrative and
+response grants, mutable log retention, key preservation during destruction,
+partial response failures, Config recording/remediation scope, and shared
+notification dependencies. This document does not assert that any customer
+has accepted those risks or that behavioral tests have been rerun.
+
 ---
 
 # Summary
 
-`tf-secure-baseline` implements a secure AWS infrastructure baseline with controls for identity, networking, logging, centralized threat detection, profile-driven ECS/Fargate Runtime Monitoring, response, encryption, backup, and operational resilience.
+`tf-secure-baseline` implements an AWS infrastructure baseline with controls for identity, networking, logging, centralized threat detection, profile-driven ECS/Fargate Runtime Monitoring, response, encryption, backup, and operational resilience.
 
 The control narratives in this document explain how those controls function and what security outcomes they are intended to support.

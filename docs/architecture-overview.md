@@ -6,7 +6,7 @@ This document describes the high-level architecture implemented by `tf-secure-ba
 
 It focuses on system relationships, trust boundaries, and operational flow rather than low-level Terraform implementation details.
 
-The v1.11.0 documentation target is the frozen `v1.11.0-rc1` implementation at `728166fa17bf42fe06bf540729c6aba1e70e05d5`. This describes implemented architecture, not a claim that the final release has been published or that every qualification exercise ran at this exact commit.
+This document describes implemented architecture, not proof that every qualification exercise has been completed. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
 `tf-secure-baseline` is designed for SaaS companies and engineering teams running workloads that handle PII or other sensitive data and need a secure, repeatable cloud foundation aligned with **SOC 2 / ISO 27001-style** security expectations.
 
@@ -115,7 +115,7 @@ This model provides:
 - Separate Terraform state per account/environment
 - Cleaner access and governance boundaries
 - Production-aligned account segmentation
-- Profile-driven Multi-AZ workload topology in one service Region; cross-Region replication and failover are not implemented by this release
+- Profile-driven Multi-AZ workload topology in one service Region; cross-Region replication and failover are not implemented
 
 ---
 
@@ -192,7 +192,7 @@ Environment stacks can include:
 
 In the centralized multi-account deployment, `dev`, `staging`, and `prod` set `manage_securityhub_cspm_locally = false`, `manage_guardduty_locally = false`, and `manage_securityhub_v2_locally = false`. AWS Config, Inspector, workload logging, remediation, and response automation remain workload-local.
 
-Workload environments have separate Terraform roots and state; their ordinary lifecycle does not destroy the centralized security-services root. This is not dependency-free teardown: optional Identity Center attachments must be handled, production must pass the retirement gates, and the RC1 durable-cleanup workflow is limited to `prod`.
+Workload environments have separate Terraform roots and state; their ordinary lifecycle does not destroy the centralized security-services root. This is not dependency-free teardown: optional Identity Center attachments must be handled, production must pass the retirement gates, and the durable-cleanup workflow is limited to `prod`.
 
 ---
 
@@ -265,7 +265,7 @@ Security-group objects remain owned by the resource modules, while cross-compone
 
 The canonical `scaling` object defines ownership of ECS desired capacity. With `scaling = null`, Terraform owns the service's `desired_count` exactly. With scaling configured, `desired_count` is bootstrap capacity only; Application Auto Scaling owns subsequent live desired-count changes within the configured minimum and maximum. Separate fixed and autoscaled ECS resources preserve this ownership boundary so Terraform does not undo legitimate runtime scaling.
 
-The runtime retains the target-tracking-only scaling model introduced in v1.9. Services may target average ECS CPU, average ECS memory, and—when ingress exists—ALB requests per target. The ALB request resource label is constructed from Terraform-owned ALB and target-group ARN suffix outputs instead of being recreated from resource names by validation scripts.
+The runtime retains the target-tracking-only scaling model. Services may target average ECS CPU, average ECS memory, and—when ingress exists—ALB requests per target. The ALB request resource label is constructed from Terraform-owned ALB and target-group ARN suffix outputs instead of being recreated from resource names by validation scripts.
 
 Canonical deployment settings control ECS minimum healthy percentage, maximum percentage, and task-startup health-check grace period. The grace period applies to unhealthy load-balancer, VPC Lattice, and container health checks. Deployment circuit breaking with rollback remains enabled.
 
@@ -279,7 +279,7 @@ The normal runtime validator also requires production deployment minimum healthy
 
 ### GuardDuty Fargate Runtime Monitoring
 
-The GuardDuty Runtime Monitoring contract introduced in v1.10 remains part of v1.11, preserving Terraform ownership of workload infrastructure.
+The GuardDuty Runtime Monitoring contract preserves Terraform ownership of workload infrastructure.
 
 The organization-level policy is owned by `bootstrap/security_operations/security_services`:
 
@@ -377,7 +377,7 @@ The `baseline` is designed around the following principles:
 
 These principles guide the structure of the Terraform modules, account layout, IAM model, deployment profiles, egress modes, and security automation workflows.
 
-Automatic containment currently applies to the established EC2 isolation workflow. ECS/Fargate has runtime detection and coverage visibility, but automatic ECS/Fargate containment remains outside the implemented v1.11 scope.
+Automatic containment currently applies to the established EC2 isolation workflow. ECS/Fargate has runtime detection and coverage visibility, but automatic ECS/Fargate containment remains outside the implemented scope.
 
 ---
 
@@ -517,7 +517,7 @@ same-AZ NAT Gateway in egress-public
 Internet Gateway
 ```
 
-This provides workload-local HTTP-host/TLS-SNI domain filtering on the configured compute internet-egress path. It does not decrypt TLS or inspect ALB-to-task, VPC-local, or endpoint traffic merely because the firewall exists. Native firewall deletion protection follows production retirement intent; policy-change and subnet-change protection remain `false` in RC1.
+This provides workload-local HTTP-host/TLS-SNI domain filtering on the configured compute internet-egress path. It does not decrypt TLS or inspect ALB-to-task, VPC-local, or endpoint traffic merely because the firewall exists. Native firewall deletion protection follows production retirement intent; policy-change and subnet-change protection remain `false`.
 
 ### NAT-Only Mode
 
@@ -585,7 +585,7 @@ The current Interface Endpoint set includes:
 
 Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-The baseline supplies exactly the endpoint-private, compute-private, and serverless-private route-table sets to the S3 Gateway Endpoint. It does not associate data-private or public route tables. The fixed 16-service Interface Endpoint set remains present across profiles, including `guardduty-data` in minimal. RC1 does not configure custom endpoint-policy documents; network reachability, security-group admission, and IAM authorization remain distinct.
+The baseline supplies exactly the endpoint-private, compute-private, and serverless-private route-table sets to the S3 Gateway Endpoint. It does not associate data-private or public route tables. The fixed 16-service Interface Endpoint set remains present across profiles, including `guardduty-data` in minimal. The baseline does not configure custom endpoint-policy documents; network reachability, security-group admission, and IAM authorization remain distinct.
 
 Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and `ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway Endpoint.
 
@@ -624,7 +624,7 @@ The access model separates operational duties:
 | SecOps-Engineer | Optional investigation and limited response actions |
 | Break-glass admin | Emergency administrative access |
 
-`SecOps-Operator` remains intentionally limited: it can submit events to the environment-specific SecOps event bus, but it does not directly modify EC2 instances or invoke Lambda functions. The security-operations account uses a separate access model in which `SecOps-Administrator` is required and `SecOps-Operator` is disabled.
+`SecOps-Operator` submits rollback events without direct EC2 mutation or Lambda invocation authority. The control-plane caller and workload automation use the same prefixed bus identity; the bus policy allows `custom.rollback` from matching IAM Identity Center Operator roles and explicitly denies other publishers. The separate security-operations account requires `SecOps-Administrator` and disables `SecOps-Operator`. The handler does not authenticate approver/ticket metadata.
 
 ---
 
@@ -646,7 +646,7 @@ Workload Plan/Apply paths validate `DEPLOYMENT_PROFILE` and fail closed if it is
 
 The publisher uses the Amazon ECR Docker Credential Helper, a temporary helper-only Docker configuration for `docker push`, and `AWS_ECR_DISABLE_CACHE=true`. It does not run `docker login` in this path. This does not scrub pre-existing Docker credentials or establish that tokens never exist in process memory. See the [deployment tooling reference](../scripts/deployment/README.md).
 
-Layer-specific evidence workflows read deployed workload/control configuration and write local reports. Their Plan roles also have state-object/KMS permissions; the workload Plan policy is not equivalent to a general read-only IAM policy. The Apply role has broad account administration authority in RC1. OIDC and protected environments limit authentication and workflow entry, not every permission available after assumption. Required reviewers must be configured in GitHub; `environment:` in YAML does not itself prove a human approval rule exists.
+Layer-specific evidence workflows read deployed workload/control configuration and write local reports. Their Plan roles also have state-object/KMS permissions; the workload Plan policy is not equivalent to a general read-only IAM policy. The Apply role has broad account administration authority. OIDC and protected environments limit authentication and workflow entry, not every permission available after assumption. Required reviewers must be configured in GitHub; `environment:` in YAML does not itself prove a human approval rule exists.
 
 ## Production retirement architecture
 
@@ -667,7 +667,7 @@ Stage-1 saved plan and non-destructive-action guard
   -> artifact verification, readiness recheck, exact saved-plan apply
 ```
 
-RC1's complete durable-cleanup path is `prod`-only. Production Destroy requires `delete_durable_retirement_data=true` even when the scoped inventory is empty. Cleanup re-inventories at execution time; its item list is not the exact-plan Terraform artifact. Rejecting a later approval does not undo earlier data deletion or Identity Center changes. Readiness proves actual ECS desired/running/pending counts and scaling bounds, not just zero-valued Terraform intent.
+The complete durable-cleanup path is `prod`-only. Production Destroy requires `delete_durable_retirement_data=true` even when the scoped inventory is empty. Cleanup re-inventories at execution time; its item list is not the exact-plan Terraform artifact. Rejecting a later approval does not undo earlier data deletion or Identity Center changes. Readiness proves actual ECS desired/running/pending counts and scaling bounds, not just zero-valued Terraform intent.
 
 Apply and Destroy share the workload-scoped concurrency key, but this does not serialize every separate Identity Center, account, publication, or evidence workflow. Coordinate those operations. Account/state decommissioning remains separate and is not automatically authorized by workload retirement.
 
@@ -768,7 +768,7 @@ The workload/account providers use `primary_region`; the baseline/account postco
 
 Workload validators resolve the deployed `primary_region` output and reject a supplied `AWS_REGION` mismatch. Bootstrap/control-plane/security-operations entry points require explicit service `AWS_REGION`; backend-specific checks use the separately resolved state Region. Region authority is not evidence of cross-Region replication, failover, or broad regional qualification.
 
-RC1 pins Terraform `1.15.8` and the AWS provider `6.66.0`; committed per-root `.terraform.lock.hcl` files retain provider selections and checksums. Use the selected root's provider declarations and lockfile rather than a generic latest-version install. These pins do not freeze every runner package, action tag, base image, or external service. See the [quickstart](quickstart.md) and [state-module reference](../modules/state/README.md).
+The repository pins Terraform `1.15.8` and the AWS provider `6.66.0`; committed per-root `.terraform.lock.hcl` files retain provider selections and checksums. Use the selected root's provider declarations and lockfile rather than a generic latest-version install. These pins do not freeze every runner package, action tag, base image, or external service. See the [quickstart](quickstart.md) and [state-module reference](../modules/state/README.md).
 
 ## Centralized Logging
 
@@ -798,7 +798,7 @@ CloudWatch retention is profile-aware by default:
 
 Long-term centralized log storage remains encrypted, versioned, lifecycle-managed, and access-restricted. These controls support monitoring continuity, incident response, and audit-readiness evidence without representing the platform as independently certified.
 
-Here, centralized log storage is a bucket within each workload account, not a separate cross-account log-archive service. In RC1 the logs bucket has `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` in every profile. The 2555-day lifecycle expiration policy is not WORM retention or a guarantee that logs survive workload destruction. Review retention/export obligations before retirement; the [storage reference](../modules/storage/README.md) documents the actual limits.
+Here, centralized log storage is a bucket within each workload account, not a separate cross-account log-archive service. The logs bucket has `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` in every profile. The 2555-day lifecycle expiration policy is not WORM retention or a guarantee that logs survive workload destruction. Review retention/export obligations before retirement; the [storage reference](../modules/storage/README.md) documents the actual limits.
 
 ## Centralized Security Governance
 
@@ -949,9 +949,9 @@ This enables rapid containment of potentially compromised instances. The separat
 
 The `EC2 Rollback` workflow provides controlled recovery after isolation.
 
-Rollback is intentionally human-approved and triggered through the environment-specific SecOps event bus.
+An authorized human must review the restoration decision and submit a rollback request through the environment-specific SecOps event bus. Human approval is an operational requirement: the handler treats `approved_by` and `ticket_id` as supplied metadata, not independently verified approval evidence.
 
-Workflow:
+Intended operating procedure:
 
 ```text
 SecOps review / approval
@@ -972,13 +972,15 @@ Restore original security groups
 Send SNS notification
 ```
 
-The `SecOps-Operator` role can submit rollback events but cannot directly modify EC2 security groups.
+EventBridge invokes Lambda, which performs the EC2 mutation using its execution role. The bus policy enforces the configured Operator publisher boundary; actual group membership, human approval, and successful recovery still require separate verification. Development testing is not staging or production qualification.
 
-This creates a separation between:
+The procedure distinguishes these steps:
 
 - Human approval
 - Event submission
 - Automated infrastructure modification
+
+The diagram is not proof of an enforced approval mechanism. Separating event submission from Lambda's EC2 permissions does not independently enforce separation between the approver and submitter.
 
 ---
 
@@ -1061,7 +1063,7 @@ This supports confidentiality, integrity, and separation of encryption domains.
 
 ## RDS resilience
 
-The data plane contains one PostgreSQL `aws_db_instance`, not Aurora or an RDS Multi-AZ DB cluster. RC1 configures engine version `17.10`, a caller-supplied instance class, encrypted storage, private data-subnet placement, and 14-day RDS-native automated-backup retention. A three-AZ subnet group does not mean three database servers. Production enforces Multi-AZ; non-production resolves the supported override/default.
+The data plane contains one PostgreSQL `aws_db_instance`, not Aurora or an RDS Multi-AZ DB cluster. The baseline configures engine version `17.10`, a caller-supplied instance class, encrypted storage, private data-subnet placement, and 14-day RDS-native automated-backup retention. A three-AZ subnet group does not mean three database servers. Production enforces Multi-AZ; non-production resolves the supported override/default.
 
 Normal production enables deletion protection, requires a final snapshot, and retains automated backups on deletion. Retirement disables native deletion protection but preserves the final-snapshot and automated-backup intent. The source database's RDS backup policy is independent of AWS Backup scheduling.
 
@@ -1189,4 +1191,4 @@ The architecture is designed to provide a secure starting point for SaaS compani
 
 ## Implementation references
 
-The frozen implementation, not a profile name or a historical qualification result, defines these boundaries: [baseline inputs](../baseline/variables.tf), [derivation](../baseline/locals.tf), [module composition](../baseline/main.tf), [RDS/log storage](../modules/storage/main.tf), [Backup/Restore Testing](../modules/backup/main.tf), [Apply workflow](../.github/workflows/terraform-apply.yml), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). Use these files at the pinned RC1 commit when auditing this revision.
+The implementation at the commit being reviewed, not a profile name or a historical qualification result, defines these boundaries: [baseline inputs](../baseline/variables.tf), [derivation](../baseline/locals.tf), [module composition](../baseline/main.tf), [RDS/log storage](../modules/storage/main.tf), [Backup/Restore Testing](../modules/backup/main.tf), [Apply workflow](../.github/workflows/terraform-apply.yml), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). Read these files at that same commit; use the actual implementation and validator commits recorded for a test when assessing its evidence.

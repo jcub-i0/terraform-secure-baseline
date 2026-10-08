@@ -6,9 +6,9 @@ The `application_load_balancer` module creates the shared Application Load Balan
 
 It owns the public-facing ALB, its security group, HTTPS listener, per-service target groups, and HTTPS listener rules. ECS services consume the target groups created by this module but remain owned by `modules/ecs_service`.
 
-The RC1 baseline instantiates this module only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it. This condition is owned by `baseline/main.tf`, not by the module: a direct module call with `services = {}` still creates the shared ALB, security group, ingress rule, and listener.
+The baseline instantiates this module only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it. This condition is owned by `baseline/main.tf`, not by the module: a direct module call with `services = {}` still creates the shared ALB, security group, ingress rule, and listener.
 
-Since v1.9, the module also exposes resource-backed ALB and target-group ARN suffixes used by:
+The module also exposes resource-backed ALB and target-group ARN suffixes used by:
 
 - `ALBRequestCountPerTarget` Application Auto Scaling resource labels; and
 - Terraform-owned unhealthy-target operational alarms.
@@ -348,7 +348,7 @@ Those responsibilities belong to other modules or the baseline integration layer
 
 ## Runtime Model
 
-The RC1 runtime architecture retains one shared ALB per workload environment when ingress is required.
+The runtime architecture retains one shared ALB per workload environment when ingress is required.
 
 Multiple ECS services can be routed through the same listener using explicit host-header and/or path-pattern rules.
 

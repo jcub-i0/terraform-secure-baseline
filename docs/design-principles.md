@@ -6,7 +6,7 @@ This document describes the design principles behind `tf-secure-baseline`.
 
 It explains why the platform is structured the way it is, what tradeoffs were made, and what security outcomes the baseline is intended to support.
 
-This revision describes `v1.11.0-rc1` at `728166fa17bf42fe06bf540729c6aba1e70e05d5`. Principles express design intent; the implementation boundaries below qualify what the frozen code actually provides. They are not evidence of a final release or a completed client deployment.
+Principles express design intent; the implementation boundaries below qualify what the code actually provides. These principles are not evidence of a completed deployment or successful live qualification.
 
 This document is not a deployment guide. For deployment instructions, see:
 
@@ -215,7 +215,7 @@ SecOps-Administrator
 
 Optional Analyst and Engineer access can be enabled per workload account and for the security-operations account.
 
-The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is limited to approved event submission, while the separate `SecOps-Administrator` permission set provides administrative access to the centralized security-operations account.
+The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is intended for rollback-event submission, while `SecOps-Administrator` provides centralized security-operations administrative access. The workload bus policy restricts `custom.rollback` publication to matching permission-set-derived Operator role ARNs and explicitly denies other publishers. Human approval remains an operational requirement rather than an independently authenticated Lambda check.
 
 ---
 
@@ -422,14 +422,14 @@ The logging design emphasizes:
 - KMS encryption
 - Versioning
 - Restricted bucket policies
-- Explicitly documented Object Lock limitations: the RC1 workload logs bucket does not enable it
+- Explicitly documented Object Lock limitations: the workload logs bucket does not enable it
 - Lifecycle retention
 - Profile-aware CloudWatch retention
 - Long-term forensic usefulness
 
 Logs are treated as security evidence, not just operational telemetry.
 
-In the frozen implementation, each workload owns its logs bucket. Its `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` values are not changed by the production profile. Administrative policy changes and workload destruction remain material retention risks; the 2555-day lifecycle policy is not immutable retention. Required external evidence preservation is an operator responsibility, not an implemented archive-copy workflow.
+In the implementation, each workload owns its logs bucket. Its `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` values are not changed by the production profile. Administrative policy changes and workload destruction remain material retention risks; the 2555-day lifecycle policy is not immutable retention. Required external evidence preservation is an operator responsibility, not an implemented archive-copy workflow.
 
 ---
 
@@ -472,7 +472,7 @@ This enables rapid response without requiring humans to manually execute every a
 
 Containment can happen automatically when a high-confidence security condition is detected, but authorization fails closed. The EC2 isolation EventBridge path is limited to `HIGH`/`CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings for `AwsEc2Instance`. The Lambda independently revalidates the GuardDuty product and the canonical `ec2_auto_isolation_severities` set, which defaults to `CRITICAL`, and still requires the instance to have `IsolationAllowed=true`.
 
-The reusable baseline default is `false`, but root and CI settings must be inspected independently: RC1's production root declares `isolation_allowed=true` as its default. Do not assume an environment name guarantees opt-out. Align explicit local and GitHub inputs with the approved response policy. Attached EBS snapshots are requested before quarantine; a request is not evidence that snapshot creation completed. Recovery should require human review.
+The reusable baseline default is `false`, but root and CI settings must be inspected independently: the production root declares `isolation_allowed=true` as its default. Do not assume an environment name guarantees opt-out. Align explicit local and GitHub inputs with the approved response policy. Attached EBS snapshots are requested before quarantine; a request is not evidence that snapshot creation completed. Recovery requires an authorized human to review the restoration decision and submit a rollback request. This is an operational requirement; `approved_by` and `ticket_id` are supplied metadata, not approval evidence independently verified by the handler.
 
 For example:
 
@@ -496,7 +496,7 @@ SecOps-Operator rollback event
 EC2 Rollback Lambda
 ```
 
-This design supports fast containment while preventing uncontrolled automatic restoration.
+The diagram illustrates the intended procedure: EventBridge invokes Lambda, which performs the EC2 mutation using its execution role. Separating event submission from those permissions does not independently enforce separation between the approver and submitter or guarantee prevention of uncontrolled restoration.
 
 ---
 
@@ -508,13 +508,13 @@ Examples:
 
 - CI/CD roles can manage Terraform resources for a specific environment.
 - Lambda execution roles receive only the permissions needed by their automation.
-- SecOps operators can submit rollback events but cannot directly modify EC2 resources.
+- The SecOps Operator persona separates event submission from direct EC2 mutation, with a bus-policy restriction for `custom.rollback` publication. An accepted event is not proof of authenticated approval or successful recovery.
 - Analysts can be granted visibility without response permissions.
 - Engineers can be granted limited response actions where required.
 
 This reduces the chance that one compromised credential can perform every action.
 
-Least privilege is a design goal, not a uniform property of every role. RC1's Terraform Apply role attaches `AdministratorAccess`, and its Plan role can write state objects and use relevant KMS/secret permissions. Reviewer protection, role trust, account scope, and actual permissions must all be assessed. A read-only validation operation does not prove a read-only credential.
+Least privilege is a design goal, not a uniform property of every role. The baseline's Terraform Apply role attaches `AdministratorAccess`, and its Plan role can write state objects and use relevant KMS/secret permissions. Reviewer protection, role trust, account scope, and actual permissions must all be assessed. A read-only validation operation does not prove a read-only credential.
 
 ---
 
@@ -541,7 +541,7 @@ This avoids circular dependencies and preserves environment isolation.
 
 ## 17. Immutable and Encrypted State
 
-The heading describes the integrity objective, not a WORM implementation. Terraform state is necessarily updated; RC1 uses encryption, versioning, locking, and restricted administration rather than S3 Object Lock. Do not treat version history as an undeletable or independent backup.
+The heading describes the integrity objective, not a WORM implementation. Terraform state is necessarily updated; the baseline uses encryption, versioning, locking, and restricted administration rather than S3 Object Lock. Do not treat version history as an undeletable or independent backup.
 
 Terraform state is sensitive because it can contain resource identifiers, outputs, and sometimes secrets or references to sensitive infrastructure.
 
@@ -577,7 +577,7 @@ EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2
 
 Operators maintain one canonical `ecs_services` map. A service can be registered with `image_digest = null`; baseline still derives its repository requirement while filtering per-service runtime resources until an immutable digest is selected. This avoids a second service inventory and avoids splitting Terraform state merely to bootstrap ECR.
 
-The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. The runtime retains the target-tracking-only model introduced in v1.9: CPU, memory, and conditional ALB requests per target.
+The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. The runtime retains the target-tracking-only model: CPU, memory, and conditional ALB requests per target.
 
 Deployment health is likewise explicit in the canonical contract through minimum healthy percentage, maximum percentage, and task-startup health-check grace period. AWS-managed target-tracking alarms remain AWS-managed; Terraform-owned task-deficit and ingress unhealthy-target alarms are separate operational notification controls.
 
@@ -645,7 +645,7 @@ Production enables backup by default, while lower-cost profiles can disable back
 
 This supports operational resilience after incidents, mistakes, or misconfigurations while keeping development costs manageable.
 
-v1.11 makes resilience and intentional retirement explicit. Production defaults to three AZs, enforces Multi-AZ on the single RDS DB instance, enables ECS AZ rebalancing, and requires at least two fixed tasks or an autoscaling minimum of two for deployable services outside retirement. The production example chooses three; actual per-AZ placement still needs live evidence.
+The baseline makes resilience and intentional retirement explicit. Production defaults to three AZs, enforces Multi-AZ on the single RDS DB instance, enables ECS AZ rebalancing, and requires at least two fixed tasks or an autoscaling minimum of two for deployable services outside retirement. The production example chooses three; actual per-AZ placement still needs live evidence.
 
 RDS-native 14-day automated backups, the AWS Backup plan, and scheduled RDS Restore Testing are separate controls. Restore Testing is enabled when the profile is production and AWS Backup is enabled; the temporary test restore is private and Single-AZ. Configuration equality does not prove application data recovery or cleanup. No cross-Region/cross-account recovery or achieved recovery objective is implied.
 
@@ -705,7 +705,7 @@ Use resource-backed outputs and exact live checks where implemented, but retain 
 
 Record the source commit, effective inputs, selected image digests, target account/Region, caller identity, and each run's artifacts. Keep historical behavioral qualification distinct from later configuration regressions. A tag does not retroactively move evidence to its commit. The [evidence guide](assurance/validation-evidence-guide.md) and [report template](assurance/validation-report-template.md) provide the recording boundary.
 
-RC1 pins Terraform `1.15.8`, the AWS provider `6.66.0`, and per-root provider lockfiles. These improve repeatability without freezing every dependency or proving a run used the pinned configuration. Retain the actual version and lockfile evidence with the run.
+The repository pins Terraform `1.15.8`, the AWS provider `6.66.0`, and per-root provider lockfiles. These improve repeatability without freezing every dependency or proving a run used the pinned configuration. Retain the actual version and lockfile evidence with the run.
 
 ## Threat Model Assumptions
 
@@ -738,7 +738,7 @@ The baseline supports data protection through:
 
 - S3 encryption
 - S3 versioning
-- Explicit log-retention policy, with S3 Object Lock absent in RC1
+- Explicit log-retention policy, with S3 Object Lock absent
 - KMS-backed encryption
 - Restricted bucket policies
 - Backup vault encryption
@@ -1005,4 +1005,4 @@ The goal is to provide a strong security foundation that can be understood, oper
 
 ## Implementation references
 
-See the RC1 [baseline inputs](../baseline/variables.tf), [profile/topology/lifecycle derivation](../baseline/locals.tf), [GitHub OIDC policies](../modules/github_oidc/main.tf), [state safeguards](../modules/state/main.tf), [storage limitations](../modules/storage/main.tf), [production root inputs](../environments/prod/variables.tf), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). These qualify the design goals; they do not establish completed operating-effectiveness tests.
+At the commit being reviewed, see the [baseline inputs](../baseline/variables.tf), [profile/topology/lifecycle derivation](../baseline/locals.tf), [GitHub OIDC policies](../modules/github_oidc/main.tf), [state safeguards](../modules/state/main.tf), [storage limitations](../modules/storage/main.tf), [production root inputs](../environments/prod/variables.tf), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). These qualify the design goals; they do not establish completed operating-effectiveness tests.

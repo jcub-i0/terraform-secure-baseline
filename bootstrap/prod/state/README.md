@@ -458,7 +458,7 @@ The key rule is:
 
 > A Terraform stack must not destroy the bucket that contains its own active state.
 
-Do not use a routine `terraform destroy` against the state stack while its backend still points at the bucket being destroyed. Moving the state is necessary but not sufficient: the bucket and CMK remain protected by `prevent_destroy = true`. RC1 has no state-retirement input or turnkey helper to remove those guards. The workload Destroy workflow and `production_retirement_mode` do not retire this state root. Any lifecycle exception is a separate, explicitly reviewed operation, not a step to bypass automatically.
+Do not use a routine `terraform destroy` against the state stack while its backend still points at the bucket being destroyed. Moving the state is necessary but not sufficient: the bucket and CMK remain protected by `prevent_destroy = true`. This state root has no state-retirement input or turnkey helper to remove those guards. The workload Destroy workflow and `production_retirement_mode` do not retire this state root. Any lifecycle exception is a separate, explicitly reviewed operation, not a step to bypass automatically.
 
 ---
 
@@ -521,7 +521,7 @@ The state backend is critical infrastructure. Intentional retirement requires in
 
 ## Implementation References
 
-This page targets `v1.11.0`, reconciled against `v1.11.0-rc1` (`728166fa17bf42fe06bf540729c6aba1e70e05d5`). It describes the checked-in implementation, not a new live qualification result.
+This page describes the checked-in implementation, not a new live qualification result.
 
 - [Root inputs](variables.tf), [provider requirements](providers.tf), [module call](main.tf), and [outputs](outputs.tf)
 - [Tracked backend template](backend.tf.migrated.example)
