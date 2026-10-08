@@ -989,9 +989,11 @@ The intended pattern is:
 
 The security-operations access model is separate from workload access: `SecOps-Administrator` is required there, `SecOps-Operator` is disabled, and Analyst/Engineer access remains optional.
 
-The intended persona lifecycle does not fix the Operator caller/bus mismatch.
-Resolve effective authorization and inspect membership, assignment principals,
-policy contents, and actual access. Required customer-managed policies must exist
+Identity Center account assignments and the workload bus's role-restricted
+`custom.rollback` publisher policy are separate controls. The caller now
+constructs the matching prefixed bus ARN, but actual group membership,
+assignment principals, policy contents, and positive/negative publication
+still require verification. Required customer-managed policies must exist
 in the target account before corresponding access is relied upon.
 
 ---

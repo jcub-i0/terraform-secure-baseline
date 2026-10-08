@@ -1239,7 +1239,7 @@ Tamper alerts and SNS notifications
 
 | Area | Implementation authority | Evidence still required for acceptance |
 |---|---|---|
-| Identity and CI/CD | [OIDC](../../modules/github_oidc/main.tf), [Identity Center](../../modules/identity_center/main.tf) | Actual grants/subjects, assignment principals and membership, approvals/removal, negative access tests, risk disposition for broad grants and bus mismatch |
+| Identity and CI/CD | [OIDC](../../modules/github_oidc/main.tf), [Identity Center](../../modules/identity_center/main.tf) | Actual grants/subjects, assignment principals and membership, approvals/removal, negative access tests, risk disposition for broad grants, and verification of restricted rollback publishers |
 | Network and transport | [Baseline](../../baseline/main.tf), [security policy](../../modules/networking/security_policy/main.tf) | Exact routing/SG state, intended ingress/egress observations, application/database TLS, cross-account and tenant boundaries |
 | Logs and records | [Logging](../../modules/logging/main.tf), [storage](../../modules/storage/main.tf) | Fresh delivery and archival, performed integrity verification, retention/deletion decisions, usable key access, evidence custody |
 | Detection and notification | [Monitoring](../../modules/monitoring/main.tf), [Config](../../modules/security/config_baseline/main.tf) | Actual evaluated resources and timestamps, coverage/queue-age review, correlated alert receipt, triage and response records |
