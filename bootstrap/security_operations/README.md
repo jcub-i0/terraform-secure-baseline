@@ -142,7 +142,7 @@ Current integration includes:
 
 Both use the security-operations GitHub Plan role through OIDC. Its trust is the `security-operations-plan` Environment subject, not the legacy Plan branch/PR inputs. The role attaches `ReadOnlyAccess` plus custom state-object write/delete, selected secret-read and conditional KMS grants; read-only use is not a read-only IAM permission boundary.
 
-The generic workload Apply and Destroy workflows intentionally do **not** manage the security-operations layer. RC1 does not provide a matching generic centralized-service Apply path. Use the controlled operator procedure; any additional platform workflow is a separately designed extension, not an existing release capability.
+The generic workload Apply and Destroy workflows intentionally do **not** manage the security-operations layer. The workflow integration does not provide a matching generic centralized-service Apply path. Use the controlled operator procedure; any additional platform workflow is a separately designed extension, not an existing release capability.
 
 The account example enables an Apply role, whose shared module attaches `AdministratorAccess`, but role availability does not imply a supported workflow consumes it. This account root exposes no Image Publisher interface. Configure any needed GitHub variables and Environment protections separately; the AWS account module does not create them.
 

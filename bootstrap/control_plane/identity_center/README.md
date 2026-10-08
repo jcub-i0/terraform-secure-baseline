@@ -33,7 +33,7 @@ See [main.tf](main.tf), [variables.tf](variables.tf), and the [module reference]
   - `SecOps-Engineer-SecOps`
 - Assign enabled permission sets to their target AWS accounts.
 - Reference workload-created customer-managed log-access policies by name.
-- Construct each workload Operator policy ARN from the account/Region and the literal bus name `secops-bus`; see the RC1 mismatch below.
+- Construct each workload Operator policy ARN from the account/Region and the literal bus name `secops-bus`; see the mismatch below.
 
 ### This stack does not
 
@@ -96,7 +96,7 @@ The actual caller and workload resource disagree:
 
 There is no root input for the bus name or `cloud_name` here. Changing the nested Region or account ID cannot repair the differing bus-name suffix. The module will put the supplied unprefixed ARN in its Operator inline policy, and the current control-plane validator does not compare this relationship.
 
-Do not infer that all rollback requests must fail: the workload bus also has its own resource policy. In RC1 its rollback statement uses `Principal = "*"` with `events:source = custom.rollback`; it is not an Operator-principal allowlist. Effective authorization requires review of the identity and resource policies together. Neither an assignment PASS nor a successful event proves the intended Operator-only boundary. This documentation records the implementation mismatch; it does not fix either policy or authorize a new test event.
+Do not infer that all rollback requests must fail: the workload bus also has its own resource policy. Its rollback statement uses `Principal = "*"` with `events:source = custom.rollback`; it is not an Operator-principal allowlist. Effective authorization requires review of the identity and resource policies together. Neither an assignment PASS nor a successful event proves the intended Operator-only boundary. This documentation records the implementation mismatch; it does not fix either policy or authorize a new test event.
 
 ### Security-operations account
 
@@ -157,7 +157,7 @@ Apply this stack with workload Operator access enabled and optional Analyst and 
 
 The workload configuration must still include the expected customer-managed policy names because those fields are required by the workload input schema, but those policies are not attached while Analyst and Engineer access remains disabled.
 
-Workload Operator permission sets can be created before the target EventBridge buses exist because the module does not check bus existence. This is only an ordering allowance, not evidence of usable rollback access; review the differing RC1 bus names documented above before accepting the access path.
+Workload Operator permission sets can be created before the target EventBridge buses exist because the module does not check bus existence. This is only an ordering allowance, not evidence of usable rollback access; review the differing bus names documented above before accepting the access path.
 
 ### 2. Deploy workload baselines
 

@@ -81,7 +81,7 @@ Its inline policy allows:
 
 The Operator persona is intended for controlled event submission rather than direct EC2 or Lambda administration. Its inline grant has no condition on `events:source`, detail type, payload, approval record, or workflow identity. The configured bus ARN limits the `DescribeEventBus` / `PutEvents` identity-policy grant to that resource; it is not proof that a submitted event was approved or that other resource policies enforce Operator-only access.
 
-The built-in control-plane caller constructs `event-bus/secops-bus`, whereas RC1 workload automation creates `<name_prefix>-secops-bus`. See the [root's exact bus-identity boundary](../../bootstrap/control_plane/identity_center/README.md#operator-bus-identity). This module accepts the supplied ARN; it neither discovers nor repairs that mismatch.
+The built-in control-plane caller constructs `event-bus/secops-bus`, whereas workload automation creates `<name_prefix>-secops-bus`. See the [root's exact bus-identity boundary](../../bootstrap/control_plane/identity_center/README.md#operator-bus-identity). This module accepts the supplied ARN; it neither discovers nor repairs that mismatch.
 
 ### SecOps-Analyst
 

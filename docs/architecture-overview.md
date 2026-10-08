@@ -585,7 +585,7 @@ The current Interface Endpoint set includes:
 
 Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-The baseline supplies exactly the endpoint-private, compute-private, and serverless-private route-table sets to the S3 Gateway Endpoint. It does not associate data-private or public route tables. The fixed 16-service Interface Endpoint set remains present across profiles, including `guardduty-data` in minimal. RC1 does not configure custom endpoint-policy documents; network reachability, security-group admission, and IAM authorization remain distinct.
+The baseline supplies exactly the endpoint-private, compute-private, and serverless-private route-table sets to the S3 Gateway Endpoint. It does not associate data-private or public route tables. The fixed 16-service Interface Endpoint set remains present across profiles, including `guardduty-data` in minimal. The baseline does not configure custom endpoint-policy documents; network reachability, security-group admission, and IAM authorization remain distinct.
 
 Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and `ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway Endpoint.
 
@@ -667,7 +667,7 @@ Stage-1 saved plan and non-destructive-action guard
   -> artifact verification, readiness recheck, exact saved-plan apply
 ```
 
-RC1's complete durable-cleanup path is `prod`-only. Production Destroy requires `delete_durable_retirement_data=true` even when the scoped inventory is empty. Cleanup re-inventories at execution time; its item list is not the exact-plan Terraform artifact. Rejecting a later approval does not undo earlier data deletion or Identity Center changes. Readiness proves actual ECS desired/running/pending counts and scaling bounds, not just zero-valued Terraform intent.
+The complete durable-cleanup path is `prod`-only. Production Destroy requires `delete_durable_retirement_data=true` even when the scoped inventory is empty. Cleanup re-inventories at execution time; its item list is not the exact-plan Terraform artifact. Rejecting a later approval does not undo earlier data deletion or Identity Center changes. Readiness proves actual ECS desired/running/pending counts and scaling bounds, not just zero-valued Terraform intent.
 
 Apply and Destroy share the workload-scoped concurrency key, but this does not serialize every separate Identity Center, account, publication, or evidence workflow. Coordinate those operations. Account/state decommissioning remains separate and is not automatically authorized by workload retirement.
 
@@ -798,7 +798,7 @@ CloudWatch retention is profile-aware by default:
 
 Long-term centralized log storage remains encrypted, versioned, lifecycle-managed, and access-restricted. These controls support monitoring continuity, incident response, and audit-readiness evidence without representing the platform as independently certified.
 
-Here, centralized log storage is a bucket within each workload account, not a separate cross-account log-archive service. In RC1 the logs bucket has `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` in every profile. The 2555-day lifecycle expiration policy is not WORM retention or a guarantee that logs survive workload destruction. Review retention/export obligations before retirement; the [storage reference](../modules/storage/README.md) documents the actual limits.
+Here, centralized log storage is a bucket within each workload account, not a separate cross-account log-archive service. The logs bucket has `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` in every profile. The 2555-day lifecycle expiration policy is not WORM retention or a guarantee that logs survive workload destruction. Review retention/export obligations before retirement; the [storage reference](../modules/storage/README.md) documents the actual limits.
 
 ## Centralized Security Governance
 
@@ -1061,7 +1061,7 @@ This supports confidentiality, integrity, and separation of encryption domains.
 
 ## RDS resilience
 
-The data plane contains one PostgreSQL `aws_db_instance`, not Aurora or an RDS Multi-AZ DB cluster. RC1 configures engine version `17.10`, a caller-supplied instance class, encrypted storage, private data-subnet placement, and 14-day RDS-native automated-backup retention. A three-AZ subnet group does not mean three database servers. Production enforces Multi-AZ; non-production resolves the supported override/default.
+The data plane contains one PostgreSQL `aws_db_instance`, not Aurora or an RDS Multi-AZ DB cluster. The baseline configures engine version `17.10`, a caller-supplied instance class, encrypted storage, private data-subnet placement, and 14-day RDS-native automated-backup retention. A three-AZ subnet group does not mean three database servers. Production enforces Multi-AZ; non-production resolves the supported override/default.
 
 Normal production enables deletion protection, requires a final snapshot, and retains automated backups on deletion. Retirement disables native deletion protection but preserves the final-snapshot and automated-backup intent. The source database's RDS backup policy is independent of AWS Backup scheduling.
 

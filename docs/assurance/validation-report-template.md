@@ -576,7 +576,7 @@ Use only when an authorized retirement was actually performed. This is a compani
 | Persistent Identity Center configuration reconciled | `<Complete/Outstanding/Not Applicable>` | `<source-of-truth update>` |
 | Aborted/partial operation and remaining obligations | `<description/none>` | Earlier cleanup is not undone by rejecting a later approval |
 
-RC1's complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
+The complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
 
 ## Warnings / Exceptions
 

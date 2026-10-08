@@ -721,7 +721,7 @@ The Apply environment also requires `STATE_STACK_BACKEND_KEY` when workload-acco
 
 Workload plan-producing jobs also read optional `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, `ALB_CERTIFICATE_ARN`, and `ALB_INGRESS_CIDRS`. The workflow exports the supplied values to the corresponding Terraform inputs. Keep these consistent across normal Apply, standalone Plan, and Destroy; in particular, a custom-CIDR deployment must not be destroyed using a reconstructed default configuration. `ALB_INGRESS_CIDRS` is a JSON array, not a shell list. With no supplied CIDR override, the baseline default is `10.0.0.0/16`.
 
-`STATE_STACK_BACKEND_KEY` is the state root's own key, distinct from the workload/account keys. Reconciliation materializes that backend using the **state template's region**, not `PRIMARY_REGION`. RC1 does not introduce a parallel GitHub `STATE_REGION` setting.
+`STATE_STACK_BACKEND_KEY` is the state root's own key, distinct from the workload/account keys. Reconciliation materializes that backend using the **state template's region**, not `PRIMARY_REGION`. The reconciliation workflow does not introduce a parallel GitHub `STATE_REGION` setting.
 
 Secrets may include `ABUSEIPDB_API_KEY`. Keep all account IDs, role ARNs, region values, state settings, and deployment-profile choices aligned with the target environment. Do not publish secret input values or binary plans as public documentation evidence.
 
@@ -965,7 +965,7 @@ Terraform never builds or pushes application images. The deployed task definitio
 
 The publisher job has AWS OIDC/ECR authority and only `contents: read`. The release/PR job has GitHub repository write authority but no AWS credentials or OIDC token. This keeps image publication authority separate from source-control mutation authority.
 
-Build contexts supplied to `Deploy Application` must resolve inside the checkout. RC1 installs the Amazon ECR Docker credential helper in the publisher job. The publication script uses a temporary helper-only Docker configuration for the push, disables the helper’s token-file cache, and removes that temporary directory on normal exit/failure. It does not use `docker login`; this does not erase unrelated credentials already present in a local Docker configuration, and abrupt process/host termination is not guaranteed to execute cleanup.
+Build contexts supplied to `Deploy Application` must resolve inside the checkout. The workflow installs the Amazon ECR Docker credential helper in the publisher job. The publication script uses a temporary helper-only Docker configuration for the push, disables the helper’s token-file cache, and removes that temporary directory on normal exit/failure. It does not use `docker login`; this does not erase unrelated credentials already present in a local Docker configuration, and abrupt process/host termination is not guaranteed to execute cleanup.
 
 Local publication requires `docker-credential-ecr-login` and an explicit `--region` or `AWS_REGION`; a named `--profile` is exported for helper use. See [deployment scripts](../scripts/deployment/README.md) for the supported inputs and boundaries. Publication success is not proof of ECS deployment.
 
@@ -1472,7 +1472,7 @@ printf 'Private state backup: %s\n' "$STATE_BACKUP_DIR"
 
 This is **only a backup**, not an instruction to migrate or destroy the backend. It can contain sensitive information; retain it under the approved access/retention policy.
 
-An approved state teardown must independently establish that dependent roots are handled, active state has moved off the bucket, the independent state is verified, the literal Terraform guards and AWS policy/versioned-object constraints are deliberately addressed, and retained data/keys remain recoverable. RC1 has no generic “retire state” toggle or reverse-migration/decommissioning helper that automates that whole process. See the relevant state-root README and [state module reference](../modules/state/README.md).
+An approved state teardown must independently establish that dependent roots are handled, active state has moved off the bucket, the independent state is verified, the literal Terraform guards and AWS policy/versioned-object constraints are deliberately addressed, and retained data/keys remain recoverable. The baseline has no generic “retire state” toggle or reverse-migration/decommissioning helper that automates that whole process. See the relevant state-root README and [state module reference](../modules/state/README.md).
 
 ---
 

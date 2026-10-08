@@ -103,7 +103,7 @@ Configuration in the frozen resource definition (not a report of live AWS state)
 
 This remains a PostgreSQL **Multi-AZ DB instance** when enabled, not Aurora or an RDS Multi-AZ DB cluster. A three-AZ DB subnet group is not a declaration of three database instances or read replicas.
 
-The resource does not specify `kms_key_id` for database storage. Do not identify the database storage key as `logs_cmk_arn` or `secrets_manager_cmk_arn`; those inputs encrypt the log groups/bucket and secret respectively. Likewise, RC1 does not wire `db_port` into an RDS `port` argument. Baseline security-group rules use the configured port, while `rds_port` reports the database's actual endpoint port. Changing only `db_port` is not a supported database-port migration.
+The resource does not specify `kms_key_id` for database storage. Do not identify the database storage key as `logs_cmk_arn` or `secrets_manager_cmk_arn`; those inputs encrypt the log groups/bucket and secret respectively. Likewise, the module does not wire `db_port` into an RDS `port` argument. Baseline security-group rules use the configured port, while `rds_port` reports the database's actual endpoint port. Changing only `db_port` is not a supported database-port migration.
 
 The configured engine version and enabled automatic minor-version upgrades are separate settings. Inspect live `EngineVersion` when establishing release evidence; do not infer it solely from this table.
 
@@ -199,7 +199,7 @@ The secret value is stored as JSON:
 }
 ```
 
-The RDS instance uses the generated value through `password_wo`, with `password_wo_version` bound to the secret version’s `secret_string_wo_version`. RC1 sets that version counter to `1` and also declares an ephemeral secret-version read. This does not implement a scheduled secret-rotation workflow or application database-user lifecycle. Secret references and non-secret metadata remain visible in state; the write-only pattern is specific to the password value.
+The RDS instance uses the generated value through `password_wo`, with `password_wo_version` bound to the secret version’s `secret_string_wo_version`. The module sets that version counter to `1` and also declares an ephemeral secret-version read. This does not implement a scheduled secret-rotation workflow or application database-user lifecycle. Secret references and non-secret metadata remain visible in state; the write-only pattern is specific to the password value.
 
 ---
 
@@ -489,17 +489,17 @@ Final-snapshot creation and automated-backup retention are deletion-time intent,
 
 ### Centralized Logs Bucket Object Lock
 
-RC1 explicitly sets `object_lock_enabled = false` and exposes no input for enabling it. This module does not provide an Object Lock retention policy, legal hold, or WORM guarantee. An organization needing those controls needs a separate reviewed design; this documentation does not assert they are supplied by the production profile.
+The module explicitly sets `object_lock_enabled = false` and exposes no input for enabling it. This module does not provide an Object Lock retention policy, legal hold, or WORM guarantee. An organization needing those controls needs a separate reviewed design; this documentation does not assert they are supplied by the production profile.
 
 ### Centralized Logs Bucket Force Destroy
 
-RC1 explicitly sets `force_destroy = true` for this bucket in **every profile**. This is distinct from production ECR `force_delete=false` and Backup vault `force_destroy=false`.
+The module explicitly sets `force_destroy = true` for this bucket in **every profile**. This is distinct from production ECR `force_delete=false` and Backup vault `force_destroy=false`.
 
 The existing log-deletion bucket policy is a separate permission boundary. The force-destroy flag does not override an AWS policy deny, nor does that deny turn this bucket into an independently retained archive. Decide log retention/disposition before workload deletion.
 
 ### Centralized Logs Bucket Prevent Destroy
 
-RC1 explicitly sets `prevent_destroy = false` on the logs bucket. Neither selecting production nor leaving `production_retirement_mode=false` changes it. The `# CHANGE THIS IN PROD` comments are unresolved implementation limitations, not automatic profile switches.
+The module explicitly sets `prevent_destroy = false` on the logs bucket. Neither selecting production nor leaving `production_retirement_mode=false` changes it. The `# CHANGE THIS IN PROD` comments are unresolved implementation limitations, not automatic profile switches.
 
 Do not describe the entire storage module as protected against production destruction. Changes to these S3 controls belong in a separately reviewed implementation change, not a documentation-only release update.
 
@@ -598,7 +598,7 @@ module "storage" {
 
 ## Validation
 
-The automated RDS resilience checks are inside [validate-backup.sh](../../scripts/validation/validate-backup.sh), including when scheduled AWS Backup is disabled. They compare live identity, Multi-AZ, DB subnet-group **name**, SG set, deletion protection, backup retention, public accessibility, and storage-encryption state with `rds_configuration`. Deletion-time settings are checked as Terraform lifecycle intent. An output field such as `instance_class` is not proof the validator compares it: RC1 does not include `DBInstanceClass`, engine/version, or all database settings in that equality check.
+The automated RDS resilience checks are inside [validate-backup.sh](../../scripts/validation/validate-backup.sh), including when scheduled AWS Backup is disabled. They compare live identity, Multi-AZ, DB subnet-group **name**, SG set, deletion protection, backup retention, public accessibility, and storage-encryption state with `rds_configuration`. Deletion-time settings are checked as Terraform lifecycle intent. An output field such as `instance_class` is not proof the validator compares it: the validator does not include `DBInstanceClass`, engine/version, or all database settings in that equality check.
 
 [Networking validation](../../scripts/validation/validate-networking.sh) checks the data subnet family, and compute/ECS validators check their declared SG relationships. Those are not a SQL connectivity test, an exact audit of every RDS subnet-group member, or application recovery verification. The supplemental commands below are **manual inspections**, not additional automated assertions in the 16-script suite.
 

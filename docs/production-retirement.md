@@ -172,7 +172,7 @@ cleanup-retirement-durable-data.sh
 
 The helper re-reads Terraform outputs, checks the production retirement posture and AWS identity, and re-inventories the scoped repositories/vault. It refuses mutation while active Backup jobs are present, deletes the inventoried image digests and recovery points, verifies emptiness, and checks again for active Backup jobs.
 
-**The apply-mode inventory is fresh.** RC1 does not accept and replay a checksummed saved inventory from preflight. Approval authorizes the scoped cleanup operation, not an immutable item list equivalent to the Terraform saved-plan contract. Coordinate writers and inspect the cleanup job's actual inventory. Do not claim stronger approval binding than the implementation provides.
+**The apply-mode inventory is fresh.** The cleanup helper does not accept and replay a checksummed saved inventory from preflight. Approval authorizes the scoped cleanup operation, not an immutable item list equivalent to the Terraform saved-plan contract. Coordinate writers and inspect the cleanup job's actual inventory. Do not claim stronger approval binding than the implementation provides.
 
 The workflow then runs `validate-retirement-readiness.sh`.
 

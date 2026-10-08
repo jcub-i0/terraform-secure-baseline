@@ -573,7 +573,7 @@ For `minimal`, agents are not required and healthy coverage is not required; whe
 | Enabled Restore Testing | Exact plan/selection, protected RDS ARN, role, schedule/windows, source vault and private restore metadata |
 | Restore execution reporting | Latest restore job, validation result and temporary-resource deletion status; each status has a different acceptance rule |
 
-RDS-native automated backups are separate from the AWS Backup schedule and Restore Testing. RC1's production database is a PostgreSQL **DB instance**, not Aurora or a Multi-AZ DB cluster. The production source is Multi-AZ; the temporary Restore Testing override is private and Single-AZ. Neither a three-AZ subnet group nor its name proves three database servers.
+RDS-native automated backups are separate from the AWS Backup schedule and Restore Testing. The production database is a PostgreSQL **DB instance**, not Aurora or a Multi-AZ DB cluster. The production source is Multi-AZ; the temporary Restore Testing override is private and Single-AZ. Neither a three-AZ subnet group nor its name proves three database servers.
 
 This is not an exhaustive RDS configuration validator. In particular, it does not compare every engine/version, DB instance class, storage/parameter-group setting, or exact member-subnet set, and it does not log in to PostgreSQL or force failover. The `instance_class` output alone is not proof that the live `DBInstanceClass` was compared.
 

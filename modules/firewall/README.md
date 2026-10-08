@@ -327,7 +327,7 @@ automated infrastructure deployment using Terraform.
 
 ## Current destruction posture
 
-RC1 separates resource deletion protection from policy/subnet-change protection:
+The module separates resource deletion protection from policy/subnet-change protection:
 
 | Setting | Module behavior | Baseline behavior |
 |---|---|---|

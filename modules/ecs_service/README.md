@@ -330,7 +330,7 @@ The execution role is used by the ECS/Fargate runtime for platform-level actions
 
 The task role represents application-runtime AWS permissions.
 
-Both roles remain owned by `modules/iam` in baseline composition. Creating a task role does not itself grant application AWS permissions; RC1 does not add a generic application task-policy interface here.
+Both roles remain owned by `modules/iam` in baseline composition. Creating a task role does not itself grant application AWS permissions; the module does not add a generic application task-policy interface here.
 
 ## Launch Readiness
 
@@ -763,7 +763,7 @@ The validator treats fixed-count desired count as exact. For autoscaled services
 
 ## Container and Validation Limits
 
-RC1 renders one essential application container per task definition. It does not expose generic sidecars, container dependency graphs, command overrides, or container `healthCheck` configuration. GuardDuty-managed agent injection is a separate AWS-managed runtime mechanism, not generic multi-container configuration support.
+The module renders one essential application container per task definition. It does not expose generic sidecars, container dependency graphs, command overrides, or container `healthCheck` configuration. GuardDuty-managed agent injection is a separate AWS-managed runtime mechanism, not generic multi-container configuration support.
 
 The module also does not implement bounded/one-off jobs, scheduled Fargate tasks, application database migrations, or application-level recovery tests. The ALB health-check path belongs to the optional target group; it must not be confused with a task-definition container health check.
 

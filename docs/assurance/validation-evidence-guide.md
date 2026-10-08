@@ -660,7 +660,7 @@ Avoid positioning such as:
 
 Validation evidence should be retained according to the organization’s evidence retention expectations.
 
-RC1's Baseline Evidence workflow requests 30-day artifact retention; the exact-plan Apply/Destroy artifacts request one day. These are workflow retention settings, not an organizational archive or evidence-preservation guarantee. Preserve required records before expiry under the approved process. A checksum supplied and retained by the reviewer helps detect subsequent byte changes but is not an independent signature or proof of execution.
+The Baseline Evidence workflow requests 30-day artifact retention; the exact-plan Apply/Destroy artifacts request one day. These are workflow retention settings, not an organizational archive or evidence-preservation guarantee. Preserve required records before expiry under the approved process. A checksum supplied and retained by the reviewer helps detect subsequent byte changes but is not an independent signature or proof of execution.
 
 Recommended retention considerations:
 

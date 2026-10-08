@@ -472,7 +472,7 @@ This enables rapid response without requiring humans to manually execute every a
 
 Containment can happen automatically when a high-confidence security condition is detected, but authorization fails closed. The EC2 isolation EventBridge path is limited to `HIGH`/`CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings for `AwsEc2Instance`. The Lambda independently revalidates the GuardDuty product and the canonical `ec2_auto_isolation_severities` set, which defaults to `CRITICAL`, and still requires the instance to have `IsolationAllowed=true`.
 
-The reusable baseline default is `false`, but root and CI settings must be inspected independently: RC1's production root declares `isolation_allowed=true` as its default. Do not assume an environment name guarantees opt-out. Align explicit local and GitHub inputs with the approved response policy. Attached EBS snapshots are requested before quarantine; a request is not evidence that snapshot creation completed. Recovery should require human review.
+The reusable baseline default is `false`, but root and CI settings must be inspected independently: the production root declares `isolation_allowed=true` as its default. Do not assume an environment name guarantees opt-out. Align explicit local and GitHub inputs with the approved response policy. Attached EBS snapshots are requested before quarantine; a request is not evidence that snapshot creation completed. Recovery should require human review.
 
 For example:
 
@@ -514,7 +514,7 @@ Examples:
 
 This reduces the chance that one compromised credential can perform every action.
 
-Least privilege is a design goal, not a uniform property of every role. RC1's Terraform Apply role attaches `AdministratorAccess`, and its Plan role can write state objects and use relevant KMS/secret permissions. Reviewer protection, role trust, account scope, and actual permissions must all be assessed. A read-only validation operation does not prove a read-only credential.
+Least privilege is a design goal, not a uniform property of every role. The baseline's Terraform Apply role attaches `AdministratorAccess`, and its Plan role can write state objects and use relevant KMS/secret permissions. Reviewer protection, role trust, account scope, and actual permissions must all be assessed. A read-only validation operation does not prove a read-only credential.
 
 ---
 
@@ -541,7 +541,7 @@ This avoids circular dependencies and preserves environment isolation.
 
 ## 17. Immutable and Encrypted State
 
-The heading describes the integrity objective, not a WORM implementation. Terraform state is necessarily updated; RC1 uses encryption, versioning, locking, and restricted administration rather than S3 Object Lock. Do not treat version history as an undeletable or independent backup.
+The heading describes the integrity objective, not a WORM implementation. Terraform state is necessarily updated; the baseline uses encryption, versioning, locking, and restricted administration rather than S3 Object Lock. Do not treat version history as an undeletable or independent backup.
 
 Terraform state is sensitive because it can contain resource identifiers, outputs, and sometimes secrets or references to sensitive infrastructure.
 
