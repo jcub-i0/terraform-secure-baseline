@@ -99,7 +99,7 @@ Sources: [publication script](scripts/deployment/deploy-application.sh),
 
 - Corrected the workload Operator's IAM Identity Center EventBridge ARN to
   derive the same `<cloud_name>-<environment>-secops-bus` name as workload
-  automation; the Identity Center root now requires `cloud_name`.
+  automation; the Identity Center root now exposes `cloud_name` (default `tf-secure-baseline`).
 - Scoped the `custom.rollback` EventBridge bus-policy Allow to matching
   `AWSReservedSSO_SecOps-Operator-<environment>_*` IAM role ARNs (including
   their generated suffixes) and explicitly denied publication by other

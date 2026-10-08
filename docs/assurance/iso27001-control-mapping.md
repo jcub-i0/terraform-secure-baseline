@@ -672,7 +672,7 @@ This supports protection of sensitive infrastructure and workload data.
 replace effective IAM/resource-policy evaluation or application authorization.
 The endpoint resources supply no custom endpoint-policy restrictions, and shared
 endpoint access is broader than a single service. Review actual API access and
-both identity/resource policies, including the unresolved rollback bus boundary.
+both identity/resource policies, including the deployed Operator-restricted `custom.rollback` publisher rule.
 
 ---
 

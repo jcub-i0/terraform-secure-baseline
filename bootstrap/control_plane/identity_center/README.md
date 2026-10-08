@@ -33,7 +33,7 @@ See [main.tf](main.tf), [variables.tf](variables.tf), and the [module reference]
   - `SecOps-Engineer-SecOps`
 - Assign enabled permission sets to their target AWS accounts.
 - Reference workload-created customer-managed log-access policies by name.
-- Construct each workload Operator policy ARN using the required `cloud_name`, workload map key, account ID, and Region, matching the prefixed workload SecOps event-bus name.
+- Construct each workload Operator policy ARN using `cloud_name` (default `tf-secure-baseline`), the workload map key, account ID, and Region, matching the prefixed workload SecOps event-bus name.
 
 ### This stack does not
 
@@ -94,7 +94,7 @@ The caller and workload resource now use the same naming contract:
 | This root's `secops_event_bus_arn` argument | `event-bus/<cloud_name>-<environment>-secops-bus` |
 | [Workload automation](../../../modules/automation/main.tf), `aws_cloudwatch_event_bus.secops` | `event-bus/<name_prefix>-secops-bus`, where `name_prefix = <cloud_name>-<environment>` |
 
-The required root `cloud_name`, workload map key, account ID, and
+The root `cloud_name` value (default `tf-secure-baseline`), workload map key, account ID, and
 `primary_region` determine each Operator policy ARN. This root does not query
 workload state or confirm that the event bus exists; compare actual workload
 naming and Region before accepting the access path.
@@ -146,7 +146,7 @@ Optional Analyst/Engineer sessions are four hours. Both attach `SecurityAudit`, 
 
 [providers.tf](providers.tf) pins Terraform `1.15.8` and AWS provider `6.66.0`, but does not declare an explicit AWS provider configuration. Use the control-plane administrative credentials and the Region of the existing Identity Center organization instance. The module discovers that instance; it does not create it or let this root select an instance ARN.
 
-The root has three required inputs: `cloud_name` and the two input objects described below. There is no top-level `primary_region`, `state_region`, or `account_id`. Each workload entry's `primary_region` is an input to its Operator policy ARN, not a per-workload provider Region. Match `cloud_name` to the values used by the workload roots.
+The root has two required input objects described below; `cloud_name` is optional and defaults to `tf-secure-baseline`. There is no top-level `primary_region`, `state_region`, or `account_id`. Each workload entry's `primary_region` is an input to its Operator policy ARN, not a per-workload provider Region. Match `cloud_name` to the values used by the workload roots.
 
 The backend is literal and independent:
 
@@ -239,7 +239,7 @@ Use the schema examples below only as starting values. Preserve every account en
 
 ### `cloud_name`
 
-Required cloud naming value, with no implicit default. Set it to the same `cloud_name` used by the workload roots so the Operator bus name resolves to `<cloud_name>-<environment>-secops-bus`. Terraform rejects empty or whitespace-only values.
+Optional cloud naming value (default `tf-secure-baseline`). Override it if needed to match the `cloud_name` used by the workload roots so the Operator bus name resolves to `<cloud_name>-<environment>-secops-bus`. Terraform rejects empty or whitespace-only values.
 
 ### `identity_center_workloads`
 
