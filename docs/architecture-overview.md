@@ -768,7 +768,7 @@ The workload/account providers use `primary_region`; the baseline/account postco
 
 Workload validators resolve the deployed `primary_region` output and reject a supplied `AWS_REGION` mismatch. Bootstrap/control-plane/security-operations entry points require explicit service `AWS_REGION`; backend-specific checks use the separately resolved state Region. Region authority is not evidence of cross-Region replication, failover, or broad regional qualification.
 
-RC1 pins Terraform `1.15.8` and the AWS provider `6.66.0`; committed per-root `.terraform.lock.hcl` files retain provider selections and checksums. Use the selected root's provider declarations and lockfile rather than a generic latest-version install. These pins do not freeze every runner package, action tag, base image, or external service. See the [quickstart](quickstart.md) and [state-module reference](../modules/state/README.md).
+The repository pins Terraform `1.15.8` and the AWS provider `6.66.0`; committed per-root `.terraform.lock.hcl` files retain provider selections and checksums. Use the selected root's provider declarations and lockfile rather than a generic latest-version install. These pins do not freeze every runner package, action tag, base image, or external service. See the [quickstart](quickstart.md) and [state-module reference](../modules/state/README.md).
 
 ## Centralized Logging
 
@@ -1189,4 +1189,4 @@ The architecture is designed to provide a secure starting point for SaaS compani
 
 ## Implementation references
 
-The frozen implementation, not a profile name or a historical qualification result, defines these boundaries: [baseline inputs](../baseline/variables.tf), [derivation](../baseline/locals.tf), [module composition](../baseline/main.tf), [RDS/log storage](../modules/storage/main.tf), [Backup/Restore Testing](../modules/backup/main.tf), [Apply workflow](../.github/workflows/terraform-apply.yml), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). Use these files at the pinned RC1 commit when auditing this revision.
+The implementation at the commit being reviewed, not a profile name or a historical qualification result, defines these boundaries: [baseline inputs](../baseline/variables.tf), [derivation](../baseline/locals.tf), [module composition](../baseline/main.tf), [RDS/log storage](../modules/storage/main.tf), [Backup/Restore Testing](../modules/backup/main.tf), [Apply workflow](../.github/workflows/terraform-apply.yml), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). Read these files at that same commit; use the actual implementation and validator commits recorded for a test when assessing its evidence.

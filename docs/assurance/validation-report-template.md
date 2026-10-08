@@ -25,9 +25,9 @@ This template is intended to summarize:
 
 The project generates separate evidence packages for each validation layer. A single combined-report exporter is not currently part of the baseline.
 
-This template is not a completed validation report. Leave unsupported results as `Not Run`, `Not Reviewed`, or `Not Applicable` with a reason; do not prefill historical or current-release success.
+This template is not a completed validation report. Leave unsupported results as `Not Run`, `Not Reviewed`, or `Not Applicable` with a reason; do not prefill success without supporting evidence.
 
-Fields added for provenance, warnings, recovery, and retirement are reviewer-supplied companion records, not new fields automatically emitted by the frozen exporters. Preserve the original generated package unchanged.
+Fields added for provenance, warnings, recovery, and retirement are reviewer-supplied companion records, not new fields automatically emitted by the exporters. Preserve the original generated package unchanged.
 
 ---
 

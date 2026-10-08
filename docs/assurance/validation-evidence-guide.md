@@ -56,7 +56,7 @@ Run local examples from the repository root with initialized backends, an explic
 
 State roots provision their bucket/CMK through `state_region`; S3 backend `region` is explicit backend configuration. Neither is a synonym for workload `primary_region`. A caller profile's default Region is not the workload validator's authority. Changing a variable does not migrate existing state or resources, and Region configurability is not evidence of multi-Region qualification.
 
-Use the pinned Terraform `1.15.8` and each root's committed provider lockfile for RC1 work. Store configuration and version provenance with the report. Do not change or migrate infrastructure merely to make a read-only evidence collection pass.
+Use the pinned Terraform `1.15.8` and each root's committed provider lockfile. Store configuration and version provenance with the report. Do not change or migrate infrastructure merely to make a read-only evidence collection pass.
 
 ### Naming Convention
 

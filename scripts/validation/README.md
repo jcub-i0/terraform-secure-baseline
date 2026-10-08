@@ -63,7 +63,7 @@ git
 
 Some scripts may require additional AWS CLI permissions depending on the resources being checked.
 
-Use Bash (not `sh`), AWS CLI, Git, `jq`, and the RC1 Terraform CLI **1.15.8** with the tracked lockfiles. Standard shell utilities are also used; this list is not a complete portable installation manifest. Commands below run from the repository root. Replace angle-bracket values before execution and select the correct account/profile for each layer. No example authorizes a production mutation.
+Use Bash (not `sh`), AWS CLI, Git, `jq`, and the Terraform CLI **1.15.8** with the tracked lockfiles. Standard shell utilities are also used; this list is not a complete portable installation manifest. Commands below run from the repository root. Replace angle-bracket values before execution and select the correct account/profile for each layer. No example authorizes a production mutation.
 
 Initialize the selected Terraform backends before validation. A fresh checkout of an already-migrated state root needs its reviewed runtime `backend.tf` materialized from the tracked template; merely initializing the root without that backend can read the wrong state location. Follow the [bootstrap reference](../bootstrap/README.md) and [quickstart](../../docs/quickstart.md). Do not run `init -upgrade` to solve an evidence run's version mismatch.
 

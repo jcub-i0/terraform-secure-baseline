@@ -79,7 +79,7 @@ Creates the main PostgreSQL RDS instance:
 resource "aws_db_instance" "main"
 ```
 
-Configuration in the frozen resource definition (not a report of live AWS state):
+Configuration in the resource definition (not a report of live AWS state):
 
 | Setting | Value |
 |---|---|

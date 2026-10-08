@@ -673,4 +673,4 @@ No `modules/ecs_task` module is part of the current architecture.
 
 ## Implementation references
 
-Primary RC1 sources are [canonical inputs](../baseline/variables.tf), [runtime derivation](../baseline/locals.tf), [ECS services](../modules/ecs_service/main.tf), [ALB](../modules/application_load_balancer/main.tf), [runtime validator entry point](../scripts/validation/validate-ecs-runtime.sh), [service checks](../scripts/validation/lib/ecs-runtime/services.sh), [GuardDuty checks](../scripts/validation/lib/ecs-runtime/guardduty.sh), and [image publication](../scripts/deployment/deploy-application.sh).
+Primary sources for the commit being reviewed are [canonical inputs](../baseline/variables.tf), [runtime derivation](../baseline/locals.tf), [ECS services](../modules/ecs_service/main.tf), [ALB](../modules/application_load_balancer/main.tf), [runtime validator entry point](../scripts/validation/validate-ecs-runtime.sh), [service checks](../scripts/validation/lib/ecs-runtime/services.sh), [GuardDuty checks](../scripts/validation/lib/ecs-runtime/guardduty.sh), and [image publication](../scripts/deployment/deploy-application.sh).

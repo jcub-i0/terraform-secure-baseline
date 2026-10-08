@@ -129,7 +129,7 @@ securityhub_cspm_account_policies = {
 }
 ```
 
-The frozen catalog resolves these keys (not an automatically updated standards catalog):
+The catalog defined in source resolves these keys (not an automatically updated standards catalog):
 
 | Key | Configured standard |
 |---|---|

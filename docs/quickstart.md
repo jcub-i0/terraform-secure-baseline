@@ -198,8 +198,8 @@ Initial bootstrap needs an authorized AWS credential chain with sufficient admin
 
 Install and configure:
 
-- Terraform **1.15.8**, matching RC1 root constraints and workflow tooling
-- The committed root-specific provider lockfiles; AWS is pinned to **6.66.0** in the inspected RC1 roots
+- Terraform **1.15.8**, matching root constraints and workflow tooling
+- The committed root-specific provider lockfiles; AWS is pinned to **6.66.0** in the inspected roots
 - Git CLI
 - `jq`
 - A GitHub account with the following environments, if using `GitHub OIDC`:
@@ -222,14 +222,43 @@ Configure required reviewers and applicable branch restrictions on the protected
 
 ## Clone Repository
 
+For a new deployment, select the latest official stable release from this repository's [latest release page](https://github.com/jcub-i0/terraform-secure-baseline/releases/latest), review its release notes, and copy its exact tag into `RELEASE_TAG` below. Do not substitute a draft, prerelease, or the tip of `main`. If no official stable release is available, stop rather than silently choosing another revision. Use the source and documentation included in the selected release checkout.
+
+Run this from the parent directory where you want a new checkout. Replace `<official-stable-release-tag>` with the selected tag. `RELEASE_TAG` is a shell variable used only by this example, not a Terraform input or GitHub setting. The destination must not already exist. This procedure creates a new checkout; it does not switch or overwrite an existing working tree.
+
 ```bash
-git clone https://github.com/jcub-i0/terraform-secure-baseline.git
-cd terraform-secure-baseline
-git checkout --detach v1.11.0-rc1
-test "$(git rev-parse HEAD)" = "728166fa17bf42fe06bf540729c6aba1e70e05d5"
+RELEASE_TAG="<official-stable-release-tag>"
+
+(
+  if [[ -z "$RELEASE_TAG" || "$RELEASE_TAG" == "<official-stable-release-tag>" ]]; then
+    printf '%s\n' 'Set RELEASE_TAG to the official stable release tag you selected.' >&2
+    exit 1
+  fi
+
+  if [[ -e terraform-secure-baseline || -L terraform-secure-baseline ]]; then
+    printf '%s\n' 'Destination already exists; use a separate directory without overwriting existing work.' >&2
+    exit 1
+  fi
+
+  git clone --no-checkout \
+    https://github.com/jcub-i0/terraform-secure-baseline.git \
+    terraform-secure-baseline || exit 1
+
+  git -C terraform-secure-baseline show-ref --verify --quiet \
+    "refs/tags/${RELEASE_TAG}" || {
+      printf '%s\n' 'The selected release tag was not found in the clone; stop rather than selecting another revision.' >&2
+      exit 1
+    }
+
+  git -C terraform-secure-baseline checkout --detach "refs/tags/${RELEASE_TAG}" || exit 1
+  release_commit="$(git -C terraform-secure-baseline rev-parse --verify HEAD)" || exit 1
+  printf 'Selected release tag: %s\nResolved commit: %s\n' "$RELEASE_TAG" "$release_commit"
+) && cd terraform-secure-baseline
 ```
 
-This pins the implementation used by this guide. Subsequent documentation-only commits can be layered onto that source; do not move the RC1 tag.
+Only a successful checkout changes this terminal into the new repository directory. Record the printed release tag and resolved commit with your deployment records. The commands verify that the selected tag exists locally and check out its commit; they do not inspect GitHub release status or verify publisher identity, signatures, deployment authorization, security, or completed qualification. Select the official stable release from the release page before running them. If cloning, tag lookup, or checkout fails, stop; a partial clone may remain and must be inspected separately rather than automatically deleted or reused. A missing tag is not permission to fall back to `main`, another tag, or a prerelease.
+
+"Latest stable" guides initial selection, not every later Terraform operation. Keep an existing deployment on its selected release until an upgrade is deliberately reviewed. Do not automatically resolve a newer release during routine planning, validation, or deployment. Use the documentation, required toolchain, backend coordinates, and deployment inputs belonging to the selected release. Preserve tags and record any local modifications separately. Historical test evidence must still identify the actual implementation/validator commits and configuration that were tested; selecting a release does not rerun or re-date earlier qualification.
 
 ---
 
