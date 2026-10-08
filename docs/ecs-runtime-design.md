@@ -109,7 +109,7 @@ A non-null `scaling` object means the service is autoscaled. The configured `des
 
 Existing fixed-count services retain the original `aws_ecs_service.services` address, preserving the v1.8 state identity for services that do not opt into scaling.
 
-Changing an existing service between fixed and autoscaled classes changes the Terraform resource address. RC1 does not provide an automatic state migration for that transition; review its plan and disruption implications. Similarly, changing a deployed service's digest to `null` removes its deployable declaration; it is not the production retirement procedure.
+Changing an existing service between fixed and autoscaled classes changes the Terraform resource address. The module does not provide an automatic state migration for that transition; review its plan and disruption implications. Similarly, changing a deployed service's digest to `null` removes its deployable declaration; it is not the production retirement procedure.
 
 ## Image and repository lifecycle
 
@@ -165,7 +165,7 @@ Task definitions use Fargate, `awsvpc`, Linux, and either `X86_64` or `ARM64`. T
 
 Each task definition uses separate per-service task execution and application task roles. The current abstraction contains exactly one essential container named for the stable service key, one TCP port mapping, plaintext environment values, approved ECS-native secret references, and the `awslogs` driver.
 
-RC1 does not define an ECS-native application-container `healthCheck`. The GuardDuty task check accepts `healthStatus=UNKNOWN` when no such health check exists, rejects `UNHEALTHY`, and requires the application to be running. ALB target health, when present, is a separate health signal; neither proves database queries or business behavior.
+The module does not define an ECS-native application-container `healthCheck`. The GuardDuty task check accepts `healthStatus=UNKNOWN` when no such health check exists, rejects `UNHEALTHY`, and requires the application to be running. ALB target health, when present, is a separate health signal; neither proves database queries or business behavior.
 
 The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
 
@@ -189,7 +189,7 @@ The normal runtime validator additionally requires production deployment minimum
 
 The autoscaled resource still ignores `desired_count` changes. Derived zero intent alone is therefore not proof that AWS has reached zero capacity. `validate-retirement-readiness.sh` requires actual desired/running/pending counts of zero and exact live zero scaling bounds, and checks that scheduled actions cannot restore capacity. The normal production availability validator is not the retirement validator.
 
-Retirement uses the separate reviewed Apply, durable cleanup, Identity Center cleanup, and saved-destroy-plan sequence in the [runbook](production-retirement.md). RC1's full durable cleanup is `prod`-only and requires explicit deletion authorization even for empty scoped data. Setting a digest to `null`, downgrading the deployment profile, or enabling force deletion is not a substitute.
+Retirement uses the separate reviewed Apply, durable cleanup, Identity Center cleanup, and saved-destroy-plan sequence in the [runbook](production-retirement.md). The full durable cleanup is `prod`-only and requires explicit deletion authorization even for empty scoped data. Setting a digest to `null`, downgrading the deployment profile, or enabling force deletion is not a substitute.
 
 ## Application Auto Scaling
 
@@ -511,7 +511,7 @@ insecure sandbox. `minimal` carries the explicit exclusion because that profile
 already trades selected security/availability services for the lowest-cost
 private AWS-only footprint.
 
-RC1 retains profile-derived enrollment without an independent public
+The baseline retains profile-derived enrollment without an independent public
 `guardduty_fargate_runtime_monitoring_enabled` override. Such an override would
 require a deliberate future interface and validation change; it is not an
 existing top-level configuration option.
