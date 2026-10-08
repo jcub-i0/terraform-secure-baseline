@@ -1119,7 +1119,7 @@ IDENTITY_CENTER_WORKLOADS
 IDENTITY_CENTER_SECOPS
 ```
 
-For local deployment, create `bootstrap/control_plane/identity_center/terraform.tfvars` from its example only when no local file already exists. Populate required `cloud_name` to match the workload roots, the workload account IDs, Regions, expected workload policy names, and the security-operations account ID. Review rather than overwrite an existing configuration.
+For local deployment, create `bootstrap/control_plane/identity_center/terraform.tfvars` from its example only when no local file already exists. Review `cloud_name` (default `tf-secure-baseline`) and set it explicitly if needed to match the workload roots; populate the workload account IDs, Regions, expected workload policy names, and the security-operations account ID. Review rather than overwrite an existing configuration.
 
 Then apply:
 

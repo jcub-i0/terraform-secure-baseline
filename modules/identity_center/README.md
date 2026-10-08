@@ -81,7 +81,7 @@ Its inline policy allows:
 
 The Operator persona submits events rather than directly administering EC2 or Lambda. Its inline grant scopes `DescribeEventBus` and `PutEvents` to the configured bus ARN, but does not authenticate event payloads. The workload bus resource policy separately restricts `custom.rollback` publication to matching Identity Center Operator role ARNs and explicitly denies other publishers. Neither policy independently validates the named approver or ticket.
 
-The built-in control-plane caller derives the prefixed event-bus ARN from required `cloud_name` and the workload map key, matching automation's `<name_prefix>-secops-bus`. See the [root's bus-identity contract](../../bootstrap/control_plane/identity_center/README.md#operator-bus-identity). This module accepts the supplied ARN without independently querying or validating the live bus.
+The built-in control-plane caller derives the prefixed event-bus ARN from its `cloud_name` input (default `tf-secure-baseline`) and the workload map key, matching automation's `<name_prefix>-secops-bus`. See the [root's bus-identity contract](../../bootstrap/control_plane/identity_center/README.md#operator-bus-identity). This module accepts the supplied ARN without independently querying or validating the live bus.
 
 ### SecOps-Analyst
 
