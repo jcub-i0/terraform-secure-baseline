@@ -1,3 +1,13 @@
+variable "cloud_name" {
+  description = "Cloud name used when constructing workload resource names"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.cloud_name)) > 0
+    error_message = "cloud_name must not be empty."
+  }
+}
+
 variable "identity_center_workloads" {
   description = "Identity Center configuration for workload accounts"
 
