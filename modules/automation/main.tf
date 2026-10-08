@@ -321,10 +321,51 @@ resource "aws_cloudwatch_event_bus" "secops" {
 }
 
 #### SECURITY OPERATIONS EVENT BUS POLICY
+# Match the IAM role ARN, not the STS session ARN. Identity Center's
+# AWSReservedSSO role suffix changes if account assignments are recreated.
+# The two paths cover Identity Center hosted in us-east-1 and other Regions.
+data "aws_partition" "current" {}
+
+locals {
+  secops_operator_role_arn_patterns = [
+    "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_SecOps-Operator-${var.environment}_*",
+    "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_SecOps-Operator-${var.environment}_*",
+  ]
+}
+
 data "aws_iam_policy_document" "secops_bus_policy" {
   statement {
     sid       = "AllowSecOpsRollbackOnly"
     effect    = "Allow"
+    actions   = ["events:PutEvents"]
+    resources = [aws_cloudwatch_event_bus.secops.arn]
+
+    # The account principal delegates only to in-account IAM identities.
+    # aws:PrincipalArn narrows this to the Identity Center Operator role.
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "events:source"
+      values   = ["custom.rollback"]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:PrincipalArn"
+      values   = local.secops_operator_role_arn_patterns
+    }
+  }
+
+  # An explicit Deny is needed: another same-account IAM Allow must not
+  # authorize custom.rollback publication by a non-Operator identity.
+  # This condition does not match aws.securityhub forwarding events.
+  statement {
+    sid       = "DenyRollbackEventsFromNonOperators"
+    effect    = "Deny"
     actions   = ["events:PutEvents"]
     resources = [aws_cloudwatch_event_bus.secops.arn]
 
@@ -337,6 +378,12 @@ data "aws_iam_policy_document" "secops_bus_policy" {
       test     = "StringEquals"
       variable = "events:source"
       values   = ["custom.rollback"]
+    }
+
+    condition {
+      test     = "ArnNotLike"
+      variable = "aws:PrincipalArn"
+      values   = local.secops_operator_role_arn_patterns
     }
   }
 
