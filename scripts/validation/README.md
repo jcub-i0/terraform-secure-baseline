@@ -451,9 +451,9 @@ The runner invokes the scripts **sequentially**, continues after a child fails, 
 
 `validate-baseline.sh` prints its results; `export-baseline.sh` independently reruns the same child scripts and writes the timestamped evidence package. It does not package a previous runner invocation. For a single evidence-producing pass, use the exporter; use direct validators for focused diagnostics.
 
-The historical v1.9 qualification narrative records all 16 workload validators passing, strict workload-bootstrap validation passing, and a converged Terraform plan with no changes. The qualification also exercised CPU and memory scale-out/scale-in, conditional ALB request scaling, fixed-versus-autoscaled desired-count ownership, digest release while scaled, deployment-health settings, and ECS operational alarms. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
+The historical runtime-operations qualification narrative records all 16 workload validators passing, strict workload-bootstrap validation passing, and a converged Terraform plan with no changes. The qualification also exercised CPU and memory scale-out/scale-in, conditional ALB request scaling, fixed-versus-autoscaled desired-count ownership, digest release while scaled, deployment-health settings, and ECS operational alarms. This is point-in-time technical-control evidence, not a compliance certification; each deployment should retain its own generated evidence.
 
-That historical statement is not an exact-RC1 rerun. Record the implementation/deployment commit, validator checkout, selected digests and configuration for each new evidence set; a release tag does not retroactively re-date earlier tests.
+That historical statement is not evidence that the tests were repeated. Record the implementation/deployment commit, validator checkout, selected digests and configuration for each new evidence set; a release tag does not retroactively re-date earlier tests.
 
 ---
 

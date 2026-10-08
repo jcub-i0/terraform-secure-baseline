@@ -386,7 +386,7 @@ When enabled, the validator compares the live plan and selection with Terraform,
 
 The absence of a Restore Testing job produces a warning rather than a failure; a pending/running job is also reported without establishing completed qualification. A latest restore status of `FAILED` or `ABORTED` fails validation. Application validation status `FAILED`/`TIMED_OUT` and cleanup `FAILED` are reported as warnings, not enforced as application-level acceptance gates. A suite `PASS` must not be presented as proof that a new restore, business-data validation, and cleanup all succeeded.
 
-For release/recovery evidence, retain the actual job identifiers, source revision/configuration, completion state, validation scope, and temporary-resource cleanup result. Earlier qualification must not be relabeled as a new run on RC1. Absence of current recovery points after a fresh deployment also must not be described as established recoverability.
+For release/recovery evidence, retain the actual job identifiers, source revision/configuration, completion state, validation scope, and temporary-resource cleanup result. Earlier qualification must not be relabeled as a new run against a different commit or configuration. Absence of current recovery points after a fresh deployment also must not be described as established recoverability.
 
 ---
 

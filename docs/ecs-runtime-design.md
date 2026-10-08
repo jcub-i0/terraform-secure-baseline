@@ -97,7 +97,7 @@ Baseline derives `deployable_ecs_services` by filtering the canonical map to ent
 
 Therefore a registered-but-unreleased service preserves/creates its required ECR repository without creating a task definition or ECS service. Selecting a valid digest later materializes the runtime from the same service entry. Registered-but-unreleased services also create no Application Auto Scaling targets or policies and no ECS operational alarms.
 
-All three tracked RC1 `test` registrations use `image_digest=null`. The shared ECS cluster and enabled Container Insights performance log group still exist. Earlier live qualification used a selected digest; a fresh RC1 baseline apply alone does not reproduce those running tasks or an ALB.
+All three tracked `test` registrations use `image_digest=null`. The shared ECS cluster and enabled Container Insights performance log group still exist. Earlier live qualification used a selected digest; a fresh baseline apply with those null digests does not reproduce those running tasks or an ALB.
 
 ### Fixed versus autoscaled desired-count ownership
 
@@ -107,7 +107,7 @@ A non-null `scaling` object means the service is autoscaled. The configured `des
 
 `modules/ecs_service` therefore keeps fixed and autoscaled ECS services on separate Terraform resources. Fixed services use `aws_ecs_service.services`; autoscaled services use `aws_ecs_service.autoscaled_services` with `lifecycle.ignore_changes = [desired_count]`. This split is required because Terraform lifecycle behavior cannot be selected conditionally for individual `for_each` instances.
 
-Existing fixed-count services retain the original `aws_ecs_service.services` address, preserving the v1.8 state identity for services that do not opt into scaling.
+Existing fixed-count services retain the original `aws_ecs_service.services` address when they do not opt into scaling.
 
 Changing an existing service between fixed and autoscaled classes changes the Terraform resource address. The module does not provide an automatic state migration for that transition; review its plan and disruption implications. Similarly, changing a deployed service's digest to `null` removes its deployable declaration; it is not the production retirement procedure.
 
@@ -395,7 +395,7 @@ With no deployable services, coverage lookup is not required. With protected ser
 
 `validate-security-operations.sh` owns the centralized organization contract. It compares the Terraform-managed GuardDuty feature subset exactly with AWS and also fails if AWS reports any additional organization feature or additional configuration as enabled outside the Terraform-managed contract.
 
-### v1.10 live qualification
+### Historical Runtime Monitoring qualification
 
 Development qualification confirmed the implemented enabled-state path with a real Fargate service:
 
@@ -415,11 +415,11 @@ The same qualification cycle also corrected the profile-aware AWS Backup contrac
 
 Generated evidence packages remain the authoritative per-run record. These validation results support deployment and audit readiness; they do not represent SOC 2 or ISO 27001 certification.
 
-### v1.11 qualification provenance
+### Qualification provenance
 
-Keep the preceding v1.10 results historical. A v1.11 record must identify the tested implementation commit, effective profile/topology, selected application digest, caller identity, workflow/run attempt where applicable, and retained logs. RC1's null-digest distribution defaults are intentionally different from a qualification configuration with running tasks.
+Keep the preceding Runtime Monitoring results historical. Each qualification record must identify the tested implementation commit, effective profile/topology, selected application digest, caller identity, workflow/run attempt where applicable, and retained logs. Null-digest sample configurations are intentionally different from qualification configurations with running tasks.
 
-Record live per-AZ task placement and target health separately from subnet inventory and rebalancing intent. Record earlier ECS replacement/RDS failover/Restore Testing exercises separately from later configuration/no-change regressions; do not relabel older tests as new exact-RC1 executions. A post-helper image-publication smoke test likewise requires its own run evidence, not inference from the script change.
+Record live per-AZ task placement and target health separately from subnet inventory and rebalancing intent. Record earlier ECS replacement/RDS failover/Restore Testing exercises separately from later configuration/no-change regressions; do not relabel older tests as executions against a different commit or configuration. A post-helper image-publication smoke test likewise requires its own run evidence, not inference from the script change.
 
 Use the [evidence guide](assurance/validation-evidence-guide.md) and [report template](assurance/validation-report-template.md) to distinguish implemented, configured/live-checked, executed, not run, and not applicable. No new qualification run is asserted by this documentation update.
 ## Central security boundary
@@ -660,9 +660,9 @@ Automatic ECS/Fargate task containment remains outside the implemented
 contract and requires a separate response design. Runtime detection and coverage
 must not be coupled to an unproven containment mechanism.
 
-## Deferred beyond v1.10.0
+## Deferred capabilities
 
-The heading records the earlier release boundary. The following capabilities are still unimplemented at v1.11.0-rc1:
+The following capabilities remain unimplemented:
 
 - fail-closed ECS task containment/remediation
 - ReconoSense reference deployment

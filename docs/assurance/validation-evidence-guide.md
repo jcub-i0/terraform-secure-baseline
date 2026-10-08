@@ -246,7 +246,7 @@ Keep original generated summaries/logs unchanged. Put reviewer-supplied provenan
 | Evidence integrity | Package location, retained original artifacts/logs, and separately generated checksums under the organization's evidence process |
 | Behavioral exercise | Tested commit/configuration, triggering action, expected/observed result, recovery and cleanup evidence |
 
-A no-change Terraform plan with the same effective inputs complements the live checks; `terraform output` alone reads stored outputs and is not a fresh plan. Record which configuration was actually deployed. Do not label an earlier R8 exercise or a later configuration-only regression as an exact-RC1 recovery test merely because the current documentation references RC1.
+A no-change Terraform plan with the same effective inputs complements the live checks; `terraform output` alone reads stored outputs and is not a fresh plan. Record which configuration was actually deployed. Do not label an earlier R8 exercise or a later configuration-only regression as a new recovery test merely because the documentation has changed.
 
 ---
 
@@ -364,7 +364,7 @@ top-level Issue          = empty
 
 For `minimal`, healthy coverage is not required. A missing coverage record is valid; if a matching record exists, Fargate `ManagementType` must be `DISABLED`.
 
-With no deployable ECS services, live coverage is not required; with no running protected tasks, protected HEALTHY coverage is not required until tasks run. Record how many services/tasks were actually checked. RC1's tracked sample digests are null, so baseline-only qualification can legitimately omit task/ALB instrumentation checks.
+With no deployable ECS services, live coverage is not required; with no running protected tasks, protected HEALTHY coverage is not required until tasks run. Record how many services/tasks were actually checked. The tracked sample digests are null, so baseline-only qualification can legitimately omit task/ALB instrumentation checks.
 
 Supporting workload validators provide the rest of the Runtime Monitoring evidence chain:
 
@@ -409,7 +409,7 @@ A script PASS can coexist with missing jobs or unresolved validation/cleanup war
 
 Operational alarm state remains deliberate: `OK` passes, `INSUFFICIENT_DATA` is a warning that metric evaluation is not yet complete, and `ALARM` fails runtime validation.
 
-The earlier v1.10 R6 development qualification is historical Runtime Monitoring evidence, not a new v1.11 execution claim. Generated summaries/logs plus retained run provenance remain the record for each individual evidence run.
+The earlier R6 development qualification is historical Runtime Monitoring evidence, not evidence of a new execution. Generated summaries/logs plus retained run provenance remain the record for each individual evidence run.
 ## What Automated Control-Plane Validation Covers
 
 Control-plane validation establishes the organization and access foundation that centralized security depends on.

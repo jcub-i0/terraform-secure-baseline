@@ -348,7 +348,7 @@ Production defaults to three AZs; lower-cost profiles to two. A three-AZ topolog
 
 Use this subsection when ECS/Fargate services are in scope. Supporting detail is distributed across `validate-ecs-runtime.log`, `validate-iam.log`, `validate-vpc-endpoints.log`, and `validate-eventbridge.log`; the baseline summary still counts each top-level validator once.
 
-When the runtime is empty, mark task/ALB instrumentation assertions not applicable and record that no live service was exercised. Protected HEALTHY coverage is not required with no running protected tasks. RC1's registered sample digests are null; do not copy an earlier running-service result into this report.
+When the runtime is empty, mark task/ALB instrumentation assertions not applicable and record that no live service was exercised. Protected HEALTHY coverage is not required with no running protected tasks. The registered sample digests are null; do not copy an earlier running-service result into this report.
 
 | Runtime assertion | Result | Evidence Log | Notes |
 |---|---|---|---|
@@ -622,7 +622,7 @@ Document the files included in the selected generated evidence package.
 
 This report validates deployed AWS control presence and selected configuration settings for the selected validation scope.
 
-This template does not automatically validate anything. The completed report summarizes only the attached evidence. Script-level PASS is not zero warnings, blanket least privilege, enforced human approval, successful application recovery, or proof that audit logs survive workload destruction. Preserve actual test provenance and do not substitute the RC1 tag for an unknown run commit.
+This template does not automatically validate anything. The completed report summarizes only the attached evidence. Script-level PASS is not zero warnings, blanket least privilege, enforced human approval, successful application recovery, or proof that audit logs survive workload destruction. Preserve actual test provenance and do not substitute a documentation reference for an unknown run commit.
 
 The validation scripts confirm the presence and configuration of selected AWS security controls, governance resources, state backend resources, GitHub OIDC resources, and supporting infrastructure at the time validation was run. The report is point-in-time evidence: a passing GuardDuty Runtime coverage state does not guarantee future coverage or finding delivery, and validation of EventBridge/SNS/DLQ configuration does not prove that every future coverage event will be delivered successfully.
 

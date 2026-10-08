@@ -69,7 +69,7 @@ Recommended validation order:
 10. Run live Lambda, tamper, and break-glass tests only in approved environments.
 11. Review destroy safety requirements before teardown.
 
-A completed earlier qualification remains valid evidence for its own commit and tested configuration; do not silently call it an RC1 execution. Record which changes were assessed by targeted regression versus earlier behavioral tests. RC1's shipped sample digest is null, whereas qualification of a running production service used a selected image. No further test is required merely because this documentation changes; investigate implementation changes and evidence gaps on their own merits.
+A completed earlier qualification remains valid evidence for its own commit and tested configuration; do not silently call it a new execution. Record which changes were assessed by targeted regression versus earlier behavioral tests. The shipped sample digest is null, whereas qualification of a running production service used a selected image. No further test is required merely because this documentation changes; investigate implementation changes and evidence gaps on their own merits.
 
 ### Inspection, live tests, and acceptance
 
@@ -2719,7 +2719,7 @@ aws backup list-restore-jobs \
   --output json
 ```
 
-Record job ID, selected recovery point, restored ARN, execution completion, application/data validation method and result, and verified cleanup. No job is not a restore success. A completed restore is not a business recovery-time/data-loss guarantee. Preserve earlier behavioral qualification under its actual SHA/configuration rather than claiming a new restore ran on every final candidate.
+Record job ID, selected recovery point, restored ARN, execution completion, application/data validation method and result, and verified cleanup. No job is not a restore success. A completed restore is not a business recovery-time/data-loss guarantee. Preserve earlier behavioral qualification under its actual SHA/configuration rather than claiming the exercise was rerun for another deployment.
 
 ## SSM Patch Manager
 

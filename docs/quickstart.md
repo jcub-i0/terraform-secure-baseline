@@ -865,7 +865,7 @@ A service can be **registered but unreleased** by setting its digest to `null`:
 
 With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, application log group, Application Auto Scaling target/policy, or ECS operational alarm is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
 
-The shipped RC1 `test` entries are registered-but-unreleased with `image_digest=null`, including production. The production sample retains `desired_count=3` for a later release, but a fresh baseline apply does not start those tasks. Select an actual published digest through the reviewed application release path before claiming live ECS/ALB coverage.
+The shipped `test` entries are registered-but-unreleased with `image_digest=null`, including production. The production sample retains `desired_count=3` for a later release, but a fresh baseline apply does not start those tasks. Select an actual published digest through the reviewed application release path before claiming live ECS/ALB coverage.
 
 ### GuardDuty Fargate Runtime Monitoring
 
@@ -1169,7 +1169,7 @@ Keep the four validation/evidence layers separate: control plane, centralized se
 
 For production, retain the effective input set, implementation SHA, profile, region/CIDR/AZ topology, selected image digest, live task placement, target health, validator logs, and no-change plan. The shipped null digest is intentionally different from the digest-selected service used in application qualification.
 
-`validate-backup.sh` can pass with warnings when a fresh environment has no restore-test jobs or no current recovery points. Treat restore configuration, actual restore execution, temporary-resource cleanup, and application-data correctness as different claims. Earlier R8 failover/restore/task-replacement evidence must keep its original provenance; do not relabel it as an exact-RC1 test.
+`validate-backup.sh` can pass with warnings when a fresh environment has no restore-test jobs or no current recovery points. Treat restore configuration, actual restore execution, temporary-resource cleanup, and application-data correctness as different claims. Earlier R8 failover/restore/task-replacement evidence must keep its original provenance; do not relabel it as a test against a different commit or configuration.
 
 A final normal-operation no-change plan should use the same effective configuration as the deployment. It does not replace separately approved retirement/destroy qualification. Do not run destructive or fault-injection tests merely because an account-wide informational command completed.
 

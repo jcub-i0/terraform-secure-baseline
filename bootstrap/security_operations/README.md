@@ -185,7 +185,7 @@ The Security Operations validator checks selected delegated-administrator state 
 
 It does not replace control-plane checks for the expected Organizations topology, or workload baseline checks for member-account realization, ECS agent injection/coverage, RDS/Backup, or networking. It also does **not** constitute a dedicated validation of `security_operations/account` IAM trust/policies or the state root. Review those foundations independently; `validate-bootstrap.sh` is workload-only and does not accept `security-operations`.
 
-The centralized validator compares the managed GuardDuty feature subset and checks that additional AWS-returned feature configurations remain disabled. That is policy evidence, not proof that a task is running or an event has been delivered. Review generated logs and warnings, preserve per-run provenance, and do not relabel earlier qualification as an exact-RC1 run.
+The centralized validator compares the managed GuardDuty feature subset and checks that additional AWS-returned feature configurations remain disabled. That is policy evidence, not proof that a task is running or an event has been delivered. Review generated logs and warnings, preserve per-run provenance, and do not relabel earlier qualification as a new execution.
 
 The exporter runs the validator again. In GitHub OIDC jobs, leave named-profile setup out; temporary environment credentials are used. `REQUIRE_STATE_STACK_REMOTE` belongs to the bootstrap/control-plane evidence paths, not an automatic additional security-operations account audit.
 
