@@ -1,18 +1,16 @@
 # Changelog
 
-## Reading This Record
+This changelog is organized by release version, newest first. The unreleased
+entry records work intended for `v1.11.0`; it does not announce a published
+stable release or re-date historical tests.
 
-The current implementation summary below is followed by historical milestones in
-their existing newest-to-oldest order. Historical entries retain the technical changes,
-qualification claims, and then-deferred work recorded at the time. They are not current
-operating instructions, fresh test results, or a promise to implement deferred work.
+The historical entries below preserve their original version headings,
+technical changes, and then-current qualification claims. They are historical
+records, not current operating instructions or evidence of repeat tests on
+later commits. Use the [README](README.md), [adoption guide](docs/adoption-guide.md),
+and current module/runbook documentation for the implemented contract.
 
-Use the [README](README.md), [adoption guide](docs/adoption-guide.md), and linked
-module/runbook references for present behavior and limitations. Use repository Git
-history for exact revisions and chronology; no publication dates have been invented
-for the undated historical entries.
-
-## Unreleased — Production Resilience and Operator Contracts
+## Unreleased — v1.11.0: Production Resilience and Operator Contracts
 
 This section records implemented changes not covered by the historical milestones
 below and the accompanying documentation reconciliation. It does not announce a
@@ -97,6 +95,27 @@ Sources: [publication script](scripts/deployment/deploy-application.sh),
 [Plan workflow](.github/workflows/terraform-plan.yml), and
 [production workload configuration](environments/prod/container-workloads.auto.tfvars.json).
 
+### Operator Rollback Authorization
+
+- Corrected the workload Operator's IAM Identity Center EventBridge ARN to
+  derive the same `<cloud_name>-<environment>-secops-bus` name as workload
+  automation; the Identity Center root now requires `cloud_name`.
+- Scoped the `custom.rollback` EventBridge bus-policy Allow to matching
+  `AWSReservedSSO_SecOps-Operator-<environment>_*` IAM role ARNs (including
+  their generated suffixes) and explicitly denied publication by other
+  principals for that source. Separate `aws.securityhub` forwarding remains.
+- Development testing reported an explicit resource-policy denial for an
+  unauthorized IAM user and a successful rollback submitted through an IAM
+  Identity Center `SecOps-Operator-dev` session. This point-in-time dev
+  result does not qualify staging or production; retain individual run evidence.
+- The handler still treats `approved_by` and `ticket_id` as caller-supplied
+  metadata, not an independently authenticated approval check.
+
+Sources: [Identity Center caller](bootstrap/control_plane/identity_center/main.tf),
+[EventBridge bus policy](modules/automation/main.tf),
+[rollback handler](modules/automation/lambda/ec2_rollback.py), and
+[manual test guide](docs/lambda_tests/ec2_rollback.md).
+
 ### Documentation and Evidence Boundaries
 
 - Reconciled deployment, state, retirement, module, validation, response-test, adoption,
@@ -119,18 +138,9 @@ The maintained [validation reference](scripts/validation/README.md),
 can establish. The validation architecture retains four layers, with sixteen child scripts in
 the workload-baseline layer; counts are not an assurance opinion.
 
-## Historical Record
+## v1.10.0 — ECS Runtime Security
 
-The milestone sections below are retained historical accounts. For example, an older
-entry can describe three validation layers, disabled Fargate agent management, or
-prior isolation defaults that later changed. Do not restore those values merely to
-match historical text. Validation statements are inherited records, not newly
-independently requalified results. Current limitations belong to current operating
-guidance, even when an older entry used broader assurance language.
-
-## ECS Runtime Security
-
-This update extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, deployment-profile-driven cluster enrollment, least-privilege managed-agent prerequisites, runtime coverage-health notification, and exact live validation. The release also corrects the profile-aware AWS Backup contract discovered during live qualification.
+v1.10.0 extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, deployment-profile-driven cluster enrollment, least-privilege managed-agent prerequisites, runtime coverage-health notification, and exact live validation. The release also corrects the profile-aware AWS Backup contract discovered during live qualification.
 
 ### Added
 
@@ -176,7 +186,7 @@ This update extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, 
 
 - Kept GuardDuty organization Runtime Monitoring ownership in `security-operations`; workload Terraform now expresses ECS cluster participation and owns only workload-local IAM, networking, service configuration, and validation expectations.
 - Kept the canonical Terraform ECS task definition application-only. GuardDuty service-manages agent injection, upgrades, and runtime telemetry.
-- Reused the existing Terraform-owned `guardduty-data`, `ecr.api`, `ecr.dkr`, and S3 endpoint paths; that update does not introduce a parallel GuardDuty-managed VPC endpoint/security-group model.
+- Reused the existing Terraform-owned `guardduty-data`, `ecr.api`, `ecr.dkr`, and S3 endpoint paths; v1.10 does not introduce a parallel GuardDuty-managed VPC endpoint/security-group model.
 - Extended `validate-vpc-endpoints.sh` to require the complete live Interface Endpoint ID map to match Terraform and to prove exactly one Terraform-owned `guardduty-data` endpoint exists.
 - Extended `validate-iam.sh` to compare the complete ECS execution-role ECR authority against exact application and GuardDuty repository requirements, rejecting broad or unexpected ECR grants.
 - Extended `validate-eventbridge.sh` to validate the exact GuardDuty Runtime coverage rule, SNS target, shared DLQ, retry policy, and evidence-preserving transformer.
@@ -207,7 +217,7 @@ This update extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, 
 - Preserves least privilege by adding only the exact AWS-hosted GuardDuty agent repository pull scope required for protected services.
 - Preserves Terraform ownership of private Runtime Monitoring networking and rejects duplicate/unexpected `guardduty-data` endpoint state.
 - Adds operational visibility when GuardDuty ECS Runtime Monitoring coverage becomes unhealthy or recovers.
-- Keeps Runtime Monitoring separate from automatic Fargate containment. that update does not attempt to modify AWS-managed task ENIs or copy the EC2 quarantine model to ECS.
+- Keeps Runtime Monitoring separate from automatic Fargate containment. v1.10 does not attempt to modify AWS-managed task ENIs or copy the EC2 quarantine model to ECS.
 
 ### Validation
 
@@ -228,9 +238,9 @@ This update extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, 
 - The ReconoSense reference deployment remains future work.
 - Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, more sophisticated historical ECR retention, and broader platform-resilience work remain future design areas.
 
-## ECS Scaling and Operations
+## v1.9.0
 
-This update extends the established ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. The implementation completed live qualification and release documentation.
+v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownership, Application Auto Scaling, deployment-health controls, operational alarms, exact runtime validation, and additional EC2 isolation hardening. The implementation completed live qualification and release documentation.
 
 ### Added
 
@@ -321,9 +331,9 @@ This update extends the established ECS/Fargate runtime with explicit service-co
 - The ReconoSense reference deployment remains future work.
 - Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, and more sophisticated historical ECR retention remain future design work.
 
-## Secure Container Workloads
+## v1.8.0 — Secure Container Workloads
 
-This update adds a generic secure ECS/Fargate application runtime and release path while retaining EC2 as a supported host-based workload pattern. The runtime, image-publication workflow, digest-promotion workflow, protected exact-plan deployment path, and workload validation are implemented and live-tested.
+v1.8.0 adds a generic secure ECS/Fargate application runtime and release path while retaining EC2 as a supported host-based workload pattern. The runtime, image-publication workflow, digest-promotion workflow, protected exact-plan deployment path, and workload validation are implemented and live-tested.
 
 ### Added
 
@@ -366,11 +376,11 @@ This update adds a generic secure ECS/Fargate application runtime and release pa
 
 ### Deferred / Future
 
-- ECS Service Auto Scaling, GuardDuty Fargate agent management, ECS task-level containment, and the ReconoSense reference deployment were deferred beyond this milestone, not blockers for it.
+- ECS Service Auto Scaling, GuardDuty Fargate agent management, ECS task-level containment, and the ReconoSense reference deployment are post-v1.8.0 work, not release blockers.
 - GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`; operating the ECS runtime does not itself enable central Fargate agent management.
 - Scheduled/run-to-completion tasks, migration-task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, and application database-user lifecycle remain future design work.
 
-## Centralized Security Administration
+## v1.7.0
 
 This update introduces a dedicated `security-operations` administration layer and centralizes Security Hub CSPM, GuardDuty, and Security Hub V2 governance while preserving workload-local configuration, detection, remediation, and response responsibilities.
 
@@ -493,7 +503,7 @@ This update introduces a dedicated `security-operations` administration layer an
 - The top-level deployment sequence is `control-plane -> security-operations -> bootstrap-workloads -> workloads`.
 - Centralized CSPM policy associations depend on required workload-local services such as AWS Config being correctly realized; validate both the central association and workload state before treating the control as healthy.
 
-## EC2 Bootstrap and Isolation Hardening
+## v1.6.0
 
 This update hardens EC2 provisioning, boot-time vulnerability remediation, and automated isolation after testing the Amazon Inspector remediation path against fresh development deployments.
 
@@ -550,9 +560,9 @@ This update hardens EC2 provisioning, boot-time vulnerability remediation, and a
 - The existing weekly SSM Patch Manager maintenance window remains the ongoing patching control; boot-time patching provides the initial remediation layer for newly launched instances.
 - Development deployments continue to use the `nat_only` egress mode. Testing confirmed that the completed NAT, Internet Gateway, route-table, security-group, and NACL path was healthy; the launch-time failure was addressed by waiting for required compute security-group rules.
 - Configure `ISOLATION_ALLOWED` in workload Plan GitHub Environments. The current deployment policy enables it for development and disables it for staging and production.
-- Managed Lambda archive resources shipped with Reviewed-Plan Deployment and Reconciliation but were omitted from the original changelog entry; that history below now records them.
+- Managed Lambda archive resources shipped in `v1.5.0` but were omitted from the original changelog entry; the `v1.5.0` history below now records them.
 
-## Reviewed-Plan Deployment and Reconciliation
+## v1.5.0
 
 This release completes the workload CI/CD integration (for now) by moving baseline and workload-account changes to a plan-before-approval model with exact saved-plan application, protected GitHub environments, and stronger AWS account safety validation.
 
@@ -592,7 +602,7 @@ This release completes the workload CI/CD integration (for now) by moving baseli
 - Changed workload reconciliation automation to apply the exact reviewed account-stack plan after approval instead of regenerating the plan in the Apply job.
 - Preserved the existing one-step reconciliation `--apply` mode while adding a durable two-invocation review path through `--plan-file` and `--apply-plan`.
 - Changed GitHub OIDC execution so an unset `AWS_PROFILE` uses the AWS default credential provider chain instead of attempting to load an empty AWS CLI profile.
-- Updated the root README, quickstart, validation checklist, adoption guide, and bootstrap-script README for the plan-before-apply model.
+- Updated the root README, quickstart, validation checklist, adoption guide, and bootstrap-script README for the v1.5.0 plan-before-apply model.
 - Changed Lambda packaging from plan-time archive data sources to managed Terraform resources so the protected Apply runner can create required ZIP files while applying the exact reviewed saved plan.
 
 ### Fixed
@@ -618,7 +628,7 @@ This release completes the workload CI/CD integration (for now) by moving baseli
 - The reconciliation helper continues to run strict workload bootstrap validation after apply unless `--skip-validation` is explicitly used.
 - Generated Lambda ZIP files are Terraform-managed build artifacts and are not manually maintained or committed as source files.
 
-## Workload Account Reconciliation
+## v1.4.2
 
 ### Added
 
@@ -628,7 +638,7 @@ This release completes the workload CI/CD integration (for now) by moving baseli
 
 - Updated deployment and validation guidance to use `scripts/bootstrap/reconcile-workload-account.sh <env>` instead of manually copying workload CMK outputs and re-applying `bootstrap/<env>/account`.
 
-## Runtime Variable Templates
+## v1.4.1
 
 ### Changed
 
@@ -640,7 +650,7 @@ This release completes the workload CI/CD integration (for now) by moving baseli
 
 - Added Git ignore coverage for runtime Terraform variable files to reduce the risk of committing client-specific or sensitive configuration.
 
-## Remote Bootstrap State and Layered Evidence Exports
+## v1.4.0
 
 This release improves client-readiness and operational safety by adding layer-specific validation evidence exports, migrating bootstrap state stacks to protected remote S3 backends, and adding GitHub Actions workflows for repeatable validation evidence collection.
 
@@ -694,7 +704,7 @@ Direct validation script runs default `REQUIRE_STATE_STACK_REMOTE` to `false` so
 
 Generated validation evidence remains ignored by Git and does not replace live GitHub Actions execution testing, IAM Identity Center end-user access testing, Lambda workflow tests, tamper tests, break-glass tests, or destroy safety review.
 
-## Validation Layers and Native State Locking
+## v1.3.4
 
 This release completes the validation architecture cleanup by organizing validation into workload bootstrap, workload baseline, and control-plane validation layers while standardizing Terraform state-locking validation around S3 native lockfiles.
 
@@ -735,7 +745,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 
 `validate-control-plane.sh` remains read-only. It validates control-plane state backend resources, GitHub OIDC roles, AWS Organizations structure, IAM Identity Center basics, and optional account assignment evidence, but it does not execute GitHub workflows, move accounts between OUs, modify Identity Center assignments, assume privileged roles, or perform destructive operations.
 
-## Control-Plane Validation
+## v1.3.3
 
 ### Added
 
@@ -754,7 +764,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 
 - AWS Organizations account placement warnings are treated as warnings unless account placement is explicitly managed by Terraform.
 
-## Firewall Route Validation
+## v1.3.2
 
 ### Fixed
 
@@ -772,7 +782,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
   - public route tables route default traffic to Internet Gateways;
   - public route tables return compute private subnet CIDRs through firewall VPC endpoints.
 
-## Notification and Automation Failure Queues
+## v1.3.1
 
 ### Added
 
@@ -805,7 +815,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 - The compliance and security notification queues may accumulate visible messages when no downstream consumer is configured. This is expected when the queues are used as durable notification subscribers.
 - The new DLQ hardening improves alert-delivery resilience but does not automatically replay failed security automation or notification events.
 
-## Validation Report Exports
+## v1.3.0
 
 ### Added
 
@@ -828,7 +838,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 - Validation reporting is intended to support deployment evidence and audit-readiness discussions.
 - Validation reports do not replace formal SOC 2 or ISO 27001 audits, control owner review, policy review, risk assessment, or ISMS activities.
 
-## Inspector Resource-Type Controls
+## v1.2.1
 
 ### Fixed
 
@@ -843,7 +853,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 - Disabled Lambda and Lambda code scanning by default because the baseline uses customer-managed KMS encryption for Lambda resources.
 - Updated security module documentation to reflect configurable Inspector behavior and Lambda CMK policy changes.
 
-## Workload Validation Suite
+## v1.2.0
 
 ### Added
 
@@ -877,7 +887,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 - Updated validation guidance to distinguish safe read-only checks from live workflow tests, tamper tests, break-glass tests, and destroy safety checks.
 - Improved validation summary output across SNS, SQS, KMS, Backup, Lambda, SSM, Compute, and related scripts.
 - Improved validation output readability by shortening long resource names, ARNs, and table columns where appropriate.
-- Updated root-level documentation to include the validation suite and its release highlights.
+- Updated root-level documentation to include the validation suite and v1.2.0 release highlights.
 
 ### Notes
 
@@ -885,7 +895,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 - Live workflow validation remains manual and should only be run in approved environments.
 - A successful full workload validation run should report every script in that release's validator inventory as passed.
 
-## Policy Document Refactoring
+## v1.1.1
 
 ### Changed
 - Refactored IAM, SNS topic, EventBridge bus, and S3 bucket policies to use `aws_iam_policy_document` data sources instead of inline `jsonencode()` policy documents.
@@ -893,7 +903,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 - Removed redundant Lambda principals from the SecOps SNS topic policy, relying instead on Lambda execution role permissions for direct SNS publishing.
 - Added stronger bucket policy protections for state and centralized logging buckets using explicit deny controls and admin-principal exceptions.
 
-## Deployment Profiles and Egress Modes
+## v1.1.0
 
 ### Added
 
@@ -923,7 +933,7 @@ DynamoDB state locking is not expected because this project uses Terraform S3 na
 - `development` defaults to `nat_only`.
 - `minimal` defaults to `vpc_endpoints_only`, with no NAT Gateway, no Network Firewall, and no general internet route for compute private subnets.
 
-## Initial Baseline
+## v1.0.0
 
 ### Added
 
