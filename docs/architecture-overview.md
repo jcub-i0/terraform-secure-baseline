@@ -624,7 +624,7 @@ The access model separates operational duties:
 | SecOps-Engineer | Optional investigation and limited response actions |
 | Break-glass admin | Emergency administrative access |
 
-`SecOps-Operator` is intended to submit rollback requests without directly modifying EC2 instances or invoking Lambda functions. The caller supplies an unprefixed bus ARN while workload automation creates a prefixed bus, and the bus resource policy uses a wildcard-principal, source-conditioned allow. This configuration does not establish Operator-only access. The security-operations account uses a separate access model in which `SecOps-Administrator` is required and `SecOps-Operator` is disabled.
+`SecOps-Operator` submits rollback events without direct EC2 mutation or Lambda invocation authority. The control-plane caller and workload automation use the same prefixed bus identity; the bus policy allows `custom.rollback` from matching IAM Identity Center Operator roles and explicitly denies other publishers. The separate security-operations account requires `SecOps-Administrator` and disables `SecOps-Operator`. The handler does not authenticate approver/ticket metadata.
 
 ---
 
@@ -972,7 +972,7 @@ Restore original security groups
 Send SNS notification
 ```
 
-EventBridge invokes Lambda, which performs the EC2 mutation using its execution role. The intended Operator submission path remains subject to the bus-ARN and resource-policy limitations described above.
+EventBridge invokes Lambda, which performs the EC2 mutation using its execution role. The bus policy enforces the configured Operator publisher boundary; actual group membership, human approval, and successful recovery still require separate verification. Development testing is not staging or production qualification.
 
 The procedure distinguishes these steps:
 

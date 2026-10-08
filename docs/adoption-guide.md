@@ -446,7 +446,7 @@ Review the [quickstart](quickstart.md), [IAM reference](../modules/iam/README.md
 | Decision | Implementation boundary to review |
 |---|---|
 | Privileged access | Apply attaches `AdministratorAccess`; Plan can write state and read selected secrets. Environment subjects do not themselves configure GitHub reviewers or branch restrictions. |
-| Human recovery access | Operator's unprefixed bus ARN differs from the created prefixed bus; the bus has a wildcard-principal source allow. Approver/ticket payload fields are not authenticated. |
+| Human recovery access | Identity Center and automation derive matching prefixed bus ARNs. The workload bus policy restricts `custom.rollback` publication to matching Operator role ARNs and explicitly denies other publishers. Approver/ticket payload fields remain unauthenticated; verify group assignments, effective access, and operational approval evidence. |
 | Automatic isolation | All three supplied workload roots default `isolation_allowed` to true; reusable compute defaults false. Choose explicitly before deployment and verify the live tags. |
 | Retention and exit | Logs have Object Lock disabled and allow force destruction; workload keys lack production destruction guards. Decide how required records and usable keys survive approved teardown. |
 | Remediation | Config's separate S3 automatic remediation follows `enable_config`, not the S3 family toggle, and is not scoped by workload prefix/tag. |

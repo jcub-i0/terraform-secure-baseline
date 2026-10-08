@@ -63,7 +63,7 @@ This project uses a centralized IAM Identity Center model.
 For this test document:
 
 - **EC2 Isolation** is automated and triggered by qualifying GuardDuty findings imported through Security Hub and matched by the dedicated EventBridge rule.
-- **EC2 Rollback** is intended to use the environment-specific `SecOps-Operator` persona, but the configured policy/bus relationship must be verified first. The [rollback guide](ec2_rollback.md) records the current bus-ARN mismatch and resource-policy limitations.
+- **EC2 Rollback** uses the environment-specific `SecOps-Operator` persona and matching prefixed bus identity. The [rollback guide](ec2_rollback.md) covers effective-role verification, non-Operator denial, and authorized workflow qualification. Human approval remains an operational prerequisite.
 - The `SecOps-Operator` role does **not** directly invoke this Lambda.
 - Use a separately authorized test principal with explicit `lambda:InvokeFunction` and the necessary inspection rights; a role name alone does not establish them.
 

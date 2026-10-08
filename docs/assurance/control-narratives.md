@@ -315,12 +315,13 @@ the administrative persona and disables Operator. Analyst and Engineer are
 optional; Engineer includes wildcard-resource response actions, and Administrator
 attaches `AdministratorAccess`.
 
-Operator's inline policy omits direct EC2 mutation and Lambda invocation, but the
-caller constructs an unprefixed `event-bus/secops-bus` ARN while automation creates
-`event-bus/<name_prefix>-secops-bus`. The bus's rollback resource-policy statement
-also uses a wildcard principal and a source condition, not an Operator allowlist.
-These are unresolved authorization boundaries, not evidence of enforced
-Operator-only recovery. Review identity and resource policies together.
+Operator's inline policy omits direct EC2 mutation and Lambda invocation.
+The control-plane caller derives the workload's prefixed bus ARN from
+`cloud_name` and the environment key. The bus policy restricts
+`custom.rollback` publication to matching Identity Center Operator role
+ARNs and explicitly denies other publishers; `aws.securityhub` forwarding
+remains separate. These controls scope event publication; group assignment,
+human approval, and successful recovery require distinct evidence.
 
 The control-plane validator checks groups, output-backed permission sets, and
 assignment presence. It does not compare each assignment principal to the created
@@ -815,10 +816,12 @@ Independent review and authorization
     -> publish notification
 ```
 
-The Identity Center caller's unprefixed bus ARN differs from this resource, and
-the bus policy contains a wildcard-principal rollback allow with an event-source
-condition. The repository therefore does not establish an Operator-only approval
-boundary. Successful submission cannot resolve that policy discrepancy.
+The Identity Center caller and workload automation now derive matching
+prefixed bus names. The bus policy's `aws:PrincipalArn`-conditioned
+Operator Allow and explicit non-Operator Deny restrict `custom.rollback`
+publication. Group membership, human approval, and successful rollback
+remain separate evidence requirements; the handler does not authenticate
+the approver or ticket metadata.
 
 The handler writes `IsolationAllowed=true`, not the prior authorization value.
 Security-group restoration, tagging, and notification are not transactional;
@@ -828,10 +831,11 @@ acceptance, exact pre/post group comparison, tag review, and notification receip
 
 ## Security Impact
 
-This provides a mechanism for restoring security groups. Human approval,
-authorization correctness, incident closure, and safe re-enablement require
-independent controls and evidence. The unresolved bus-policy and ARN relationship
-must not be described as a completed separation-of-duties control.
+This provides a mechanism for restoring security groups with an
+Operator-restricted EventBridge publisher path. Human approval, effective
+account-specific authorization, incident closure, and safe re-enablement
+still require independent controls and evidence. Identity-based event
+authorization does not itself authenticate a separate approver.
 
 ---
 

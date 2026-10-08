@@ -203,16 +203,16 @@ the created group.
 
 ### Baseline Control
 
-Operator is intended to submit rollback events without direct EC2 mutation or
-Lambda-invocation grants in its inline policy. That intention must not be reported
-as an enforced Operator-only workflow.
+Operator submits rollback events without direct EC2 mutation or
+Lambda-invocation grants in its inline policy. The workload bus policy
+restricts `custom.rollback` publication to matching Identity Center
+Operator role ARNs via `aws:PrincipalArn` and explicitly denies non-Operator
+publishers. This identity enforcement does not authenticate human approval.
 
-The [caller](../../bootstrap/control_plane/identity_center/main.tf) supplies
-`event-bus/secops-bus`, while [automation](../../modules/automation/main.tf)
-creates `event-bus/<name_prefix>-secops-bus`. The bus's rollback allow statement
-uses `Principal = "*"` with `events:source = custom.rollback`; it is not a named
-Operator-principal allowlist. The handler does not authenticate the event's
-approver or ticket fields.
+The [caller](../../bootstrap/control_plane/identity_center/main.tf) derives
+the same prefixed bus name as [automation](../../modules/automation/main.tf).
+The rollback handler does not independently authenticate the submitted
+approver or ticket metadata.
 
 ### SOC 2 Alignment
 
@@ -222,11 +222,11 @@ approver or ticket fields.
 
 ### Narrative
 
-This section describes a least-privilege objective and a partial role separation,
-not proof that the objective is satisfied. Review identity and resource policies
-together, correct or explicitly adjudicate the ARN mismatch and authorization
-scope, and retain approved positive/negative access evidence. A successful
-PutEvents request alone does not prove Operator exclusivity or human approval.
+The bus implements a role-scoped `custom.rollback` publisher boundary, but
+actual group assignments, effective permissions, human approval, and
+successful recovery remain separate claims. Retain positive/negative access
+evidence in addition to source and policy review; `PutEvents` acceptance
+alone does not prove human approval.
 
 ---
 
@@ -754,9 +754,10 @@ notifies SNS. It requires supplied instance, approver, and ticket fields but doe
 not authenticate the approver or validate the ticket. The event rule matches only
 `source=custom.rollback`, not detail type.
 
-The Operator bus-ARN mismatch and wildcard-principal resource-policy boundary
-noted under operational roles remain unresolved. Rollback also sets
-`IsolationAllowed=true` rather than restoring its prior value.
+The Identity Center caller now matches the prefixed workload bus, and the
+resource policy explicitly denies `custom.rollback` publishers outside the
+configured Operator role ARN patterns. The handler still sets
+`IsolationAllowed=true` rather than restoring its previous value.
 
 ### SOC 2 Alignment
 
@@ -766,12 +767,12 @@ noted under operational roles remain unresolved. Rollback also sets
 
 ### Narrative
 
-The mechanism can support recovery under independently authorized procedures;
-it is not proof that every recovery is human-approved or Operator-only. Retain
-actual submission identity and approval, the independent pre-isolation group set,
-per-entry event acceptance, eventual exact group/tag state, and notification
-receipt. Failures after mutation may require manual incident handling. Correct
-or formally adjudicate authorization gaps separately from documentation.
+The mechanism supports recovery through an Operator-restricted publisher
+path, but does not prove that every recovery is human-approved or successful.
+Retain actual submitter and approval evidence, the independent pre-isolation
+group set, per-entry event acceptance, resulting exact group/tag state, and
+notification receipt. Failures after mutation may require manual handling.
+Effective access and human approval remain deployment-specific.
 
 ---
 

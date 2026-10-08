@@ -373,11 +373,12 @@ default isolation authorization to true; this needs an explicit policy decision.
 
 The [rollback handler](../../modules/automation/lambda/ec2_rollback.py) does not
 authenticate its supplied approver/ticket fields, does not check detail type, and
-sets `IsolationAllowed=true`. Operator's caller uses an unprefixed bus ARN while
-automation creates a prefixed bus; the bus policy has a wildcard-principal source
-allow. Human approval and Operator exclusivity are not established by those
-mechanisms. Review effective authorization, preserve pre-state, and retain observed
-recovery, partial-failure handling, and organizational approval evidence.
+sets `IsolationAllowed=true`. Identity Center and workload automation derive
+matching prefixed bus names. The bus policy restricts `custom.rollback`
+publication to matching Operator role ARNs and explicitly denies other
+publishers. Those publisher controls do not independently establish human
+approval, group membership, or successful recovery. Retain effective-access,
+pre-state, recovery, partial-failure, and organizational approval evidence.
 
 ---
 

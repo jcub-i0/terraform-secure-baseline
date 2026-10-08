@@ -215,7 +215,7 @@ SecOps-Administrator
 
 Optional Analyst and Engineer access can be enabled per workload account and for the security-operations account.
 
-The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is intended for rollback-event submission, while the separate `SecOps-Administrator` permission set provides administrative access to the centralized security-operations account. The Operator caller supplies an unprefixed bus ARN while workload automation creates a prefixed bus with a wildcard-principal, source-conditioned allow; this configuration does not establish Operator-only access.
+The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is intended for rollback-event submission, while `SecOps-Administrator` provides centralized security-operations administrative access. The workload bus policy restricts `custom.rollback` publication to matching permission-set-derived Operator role ARNs and explicitly denies other publishers. Human approval remains an operational requirement rather than an independently authenticated Lambda check.
 
 ---
 
@@ -508,7 +508,7 @@ Examples:
 
 - CI/CD roles can manage Terraform resources for a specific environment.
 - Lambda execution roles receive only the permissions needed by their automation.
-- The intended SecOps Operator persona separates event submission from direct EC2 mutation, subject to the bus-ARN and resource-policy limitations above.
+- The SecOps Operator persona separates event submission from direct EC2 mutation, with a bus-policy restriction for `custom.rollback` publication. An accepted event is not proof of authenticated approval or successful recovery.
 - Analysts can be granted visibility without response permissions.
 - Engineers can be granted limited response actions where required.
 

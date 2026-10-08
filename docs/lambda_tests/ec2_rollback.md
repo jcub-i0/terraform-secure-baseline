@@ -68,18 +68,16 @@ Original security groups restored
 The `SecOps-Operator` role is intentionally limited.
 
 Its module-defined permissions contain EventBridge discovery and submission,
-not direct EC2 modification or Lambda invocation. However, the Identity Center
-caller currently supplies an ARN ending in `event-bus/secops-bus`, while the
-workload creates `event-bus/<name_prefix>-secops-bus`. Verify the actual identity
-policy and bus resource policy before relying on the intended Operator path.
+not direct EC2 modification or Lambda invocation. The Identity Center caller
+constructs the same prefixed bus ARN used by workload automation. The bus
+resource policy allows `custom.rollback` from matching
+`AWSReservedSSO_SecOps-Operator-<environment>_*` IAM roles and explicitly
+denies other publishers while retaining separate `aws.securityhub` forwarding.
 
-The bus's rollback resource-policy statement uses `Principal = "*"` with
-`events:source = custom.rollback`, not an Operator-principal allowlist. A
-successful submission is not proof that only Operators can submit events.
-Conversely, the ARN mismatch alone does not establish that all requests must
-fail: effective authorization must be reviewed across the applicable policies.
-Do not widen a permission set or switch to an administrator merely to make an
-Operator qualification appear successful.
+Verify actual group membership, effective bus access, and positive/negative
+submission evidence. Acceptance does not establish independently authenticated
+approval or completed EC2 recovery. Do not use administrator submission as
+evidence that the intended Operator identity works.
 
 ---
 
@@ -125,7 +123,7 @@ The `SecOps-Operator` permission set allows:
 
 - `events:ListEventBuses`
 - `events:DescribeEventBus`
-- `events:PutEvents` on the ARN supplied to the module; the caller/bus mismatch above must be reconciled in the access review
+- `events:PutEvents` on the derived prefixed workload bus ARN; the separate bus policy enforces Operator-role identity for `custom.rollback` publication.
 
 The resource-specific permission must match the actual target bus. Console
 navigation can additionally depend on read permissions; a console error alone
@@ -792,7 +790,7 @@ Check:
 - Your Identity Center user is assigned to the correct environment-specific group.
 - The permission set allows `events:PutEvents` on the environment-specific event bus.
 - The event bus ARN matches the account and region being tested.
-- Compare the actual prefixed bus ARN with the Identity Center caller's unprefixed Operator ARN and review the bus resource policy. Do not report elevated-identity recovery as Operator success.
+- Confirm the Identity Center caller and workload bus names match, and review both the Operator permission set and the bus's role-scoped `custom.rollback` Allow/explicit non-Operator Deny. Administrator submission is not Operator qualification.
 
 ---
 

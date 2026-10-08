@@ -199,19 +199,23 @@ This workflow is routed through a custom SecOps EventBridge bus rather than
 the default bus. The rule matches `source = custom.rollback`; it does not
 validate approval fields or an approver identity.
 
-The bus's rollback resource-policy statement grants `events:PutEvents` to
-`Principal = "*"` with an `events:source` condition. A separate statement grants
-the configured account principal the `aws.securityhub` source. These Allow
-statements are not an Operator-principal allowlist or an explicit denial of
-all other access paths. Evaluate identity and resource policies together before
-claiming an Operator-only boundary.
+The rollback bus policy uses `aws:PrincipalArn` to scope its
+`custom.rollback` Allow to IAM Identity Center
+`AWSReservedSSO_SecOps-Operator-<environment>_*` role ARNs, including their
+AWS-generated suffixes. The role name derives from the permission set,
+not the configurable Identity Center group display name. An explicit Deny
+rejects `custom.rollback` publication by nonmatching principals even when
+another identity policy allows `events:PutEvents`. The separate
+`aws.securityhub` forwarding Allow remains unchanged.
 
 The [Identity Center caller](../../bootstrap/control_plane/identity_center/main.tf)
-also constructs an unprefixed `event-bus/secops-bus` ARN, whereas this module
-creates `<name_prefix>-secops-bus`. That discrepancy is not repaired by the
-existence of this bus, an Identity Center assignment, or a successful event.
+and workload automation now use the same prefixed bus name. The caller derives
+it from `cloud_name` and the workload map key; the automation module receives
+`name_prefix`. Verify effective group membership, account/Region identity,
+and positive/negative publisher authorization in each deployed environment.
 The [Identity Center reference](../../bootstrap/control_plane/identity_center/README.md)
-records the separate authorization review requirement.
+covers the separate access model. The handler does not independently authenticate
+the supplied human approval or ticket.
 
 #### Trigger
 
@@ -251,7 +255,7 @@ may skip the remaining work. There is no transactional rollback of these steps.
 | `aws_lambda_function.ec2_rollback` | Runs the rollback workflow |
 | `aws_security_group.lambda_ec2_rollback_sg` | Security group for the VPC-enabled Lambda |
 | `aws_cloudwatch_event_bus.secops` | Custom EventBridge bus for SecOps workflows |
-| `aws_cloudwatch_event_bus_policy.secops_bus_policy` | Adds source-conditioned Allow statements; not an Operator-only principal restriction |
+| `aws_cloudwatch_event_bus_policy.secops_bus_policy` | Conditions `custom.rollback` Allow on matching Operator-role identity, explicitly denies non-Operator publishers, and retains separate `aws.securityhub` forwarding Allow |
 | `aws_cloudwatch_event_rule.ec2_rollback` | Matches rollback events on the SecOps bus |
 | `aws_cloudwatch_event_target.ec2_rollback` | Sends rollback events to the Lambda |
 | `aws_lambda_permission.allow_eventbridge_ec2_rollback` | Allows EventBridge to invoke the Lambda |
@@ -429,7 +433,7 @@ The implemented security controls and their boundaries are:
 - EC2 Isolation rechecks the regional GuardDuty product, configured severity set, and ACTIVE/NEW finding state.
 - EC2 Isolation requests snapshots before replacing groups, but does not wait for completed recovery points or atomically persist rollback metadata.
 - IP Enrichment intentionally does not use a VPC configuration so it can reach external threat intelligence APIs without requiring NAT.
-- EC2 Rollback is routed through a custom EventBridge bus; source-conditioned Allow statements and caller-supplied approval text are not an authenticated approval system.
+- EC2 Rollback is routed through a custom EventBridge bus with a role-scoped `custom.rollback` Allow and explicit non-Operator Deny; supplied approval metadata remains unauthenticated.
 - EventBridge targets use retry policies and DLQs.
 - DLQ send permissions are scoped to expected EventBridge rule ARNs and Lambda execution roles.
 
@@ -690,13 +694,17 @@ Use this workflow carefully in non-development environments. Confirm the quarant
 
 Rollback uses a custom SecOps EventBridge bus and the `custom.rollback` source.
 
-The Operator persona is intended to submit events rather than modify EC2
-directly, but the implemented bus/caller mismatch and wildcard-principal Allow
-statement require separate authorization review. `approved_by` and `ticket_id`
-are event payload fields, not verified approvals. Record the real authorizing
-principal and incident approval independently. After rollback, verify restored
-groups, release tags, the changed `IsolationAllowed` value, and notification
-receipt separately.
+The Operator persona submits recovery events rather than modifying EC2
+directly. The bus policy restricts `custom.rollback` publication to matching
+Identity Center Operator role ARNs, including generated suffixes, and explicitly
+denies nonmatching publishers. The Identity Center caller derives the same
+prefixed bus ARN. Verify the intended account's group assignment and positive/
+negative access evidence independently.
+
+`approved_by` and `ticket_id` remain event payload fields, not
+independently verified approvals. Record the real authorizing principal and
+incident approval separately. After rollback, verify restored groups, release
+tags, the changed `IsolationAllowed` value, and notification receipt.
 
 ---
 

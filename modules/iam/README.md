@@ -396,7 +396,7 @@ var.secops_event_bus_arn
 
 The role is for the EventBridge service, not a human Operator identity. Its trust has no source-ARN/source-account condition; its permission is scoped to the supplied bus. Creating the role or passing its ARN to another module does not create a forwarding target. In the automation implementation, the declared `eventbridge_putevents_to_secops_role_arn` input is not consumed by a target resource.
 
-The Identity Center Operator policy and the workload bus resource policy are different authorization surfaces. Their recorded bus-name/principal discrepancy remains unresolved; see [automation](../automation/README.md) and the [Identity Center caller](../../bootstrap/control_plane/identity_center/README.md).
+The Identity Center Operator identity policy and the workload EventBridge bus resource policy are distinct authorization surfaces. The control-plane caller uses the matching prefixed bus ARN; the bus policy restricts `custom.rollback` publishing by Operator role ARN and explicitly denies others. Group membership, effective access, and approval require separate review; see [automation](../automation/README.md) and the [Identity Center caller](../../bootstrap/control_plane/identity_center/README.md).
 
 ---
 
