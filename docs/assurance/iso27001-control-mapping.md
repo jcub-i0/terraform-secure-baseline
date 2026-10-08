@@ -162,7 +162,7 @@ attachments, and account assignments. Example **group names** are
 `SecOps-Operator-Dev`, `SecOps-Operator-Staging`, and `SecOps-Operator-Prod`;
 permission-set names use the environment suffix, such as `SecOps-Operator-dev`.
 The central security account requires
-`SecOps-Administrator-security-operations`; Analyst and Engineer are optional.
+`SecOps-Administrator-secops`; Analyst and Engineer are optional.
 
 The module does not create human users, manage group membership, or configure
 the upstream identity provider's authentication policy.

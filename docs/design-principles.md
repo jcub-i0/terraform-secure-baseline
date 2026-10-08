@@ -215,7 +215,7 @@ SecOps-Administrator
 
 Optional Analyst and Engineer access can be enabled per workload account and for the security-operations account.
 
-The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is limited to approved event submission, while the separate `SecOps-Administrator` permission set provides administrative access to the centralized security-operations account.
+The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is intended for rollback-event submission, while the separate `SecOps-Administrator` permission set provides administrative access to the centralized security-operations account. The Operator caller supplies an unprefixed bus ARN while workload automation creates a prefixed bus with a wildcard-principal, source-conditioned allow; this configuration does not establish Operator-only access.
 
 ---
 
@@ -429,7 +429,7 @@ The logging design emphasizes:
 
 Logs are treated as security evidence, not just operational telemetry.
 
-In the frozen implementation, each workload owns its logs bucket. Its `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` values are not changed by the production profile. Administrative policy changes and workload destruction remain material retention risks; the 2555-day lifecycle policy is not immutable retention. Required external evidence preservation is an operator responsibility, not an implemented archive-copy workflow.
+In the implementation, each workload owns its logs bucket. Its `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` values are not changed by the production profile. Administrative policy changes and workload destruction remain material retention risks; the 2555-day lifecycle policy is not immutable retention. Required external evidence preservation is an operator responsibility, not an implemented archive-copy workflow.
 
 ---
 
@@ -472,7 +472,7 @@ This enables rapid response without requiring humans to manually execute every a
 
 Containment can happen automatically when a high-confidence security condition is detected, but authorization fails closed. The EC2 isolation EventBridge path is limited to `HIGH`/`CRITICAL`, `NEW`, `ACTIVE` GuardDuty findings for `AwsEc2Instance`. The Lambda independently revalidates the GuardDuty product and the canonical `ec2_auto_isolation_severities` set, which defaults to `CRITICAL`, and still requires the instance to have `IsolationAllowed=true`.
 
-The reusable baseline default is `false`, but root and CI settings must be inspected independently: the production root declares `isolation_allowed=true` as its default. Do not assume an environment name guarantees opt-out. Align explicit local and GitHub inputs with the approved response policy. Attached EBS snapshots are requested before quarantine; a request is not evidence that snapshot creation completed. Recovery should require human review.
+The reusable baseline default is `false`, but root and CI settings must be inspected independently: the production root declares `isolation_allowed=true` as its default. Do not assume an environment name guarantees opt-out. Align explicit local and GitHub inputs with the approved response policy. Attached EBS snapshots are requested before quarantine; a request is not evidence that snapshot creation completed. Recovery requires an authorized human to review the restoration decision and submit a rollback request. This is an operational requirement; `approved_by` and `ticket_id` are supplied metadata, not approval evidence independently verified by the handler.
 
 For example:
 
@@ -496,7 +496,7 @@ SecOps-Operator rollback event
 EC2 Rollback Lambda
 ```
 
-This design supports fast containment while preventing uncontrolled automatic restoration.
+The diagram illustrates the intended procedure: EventBridge invokes Lambda, which performs the EC2 mutation using its execution role. Separating event submission from those permissions does not independently enforce separation between the approver and submitter or guarantee prevention of uncontrolled restoration.
 
 ---
 
@@ -508,7 +508,7 @@ Examples:
 
 - CI/CD roles can manage Terraform resources for a specific environment.
 - Lambda execution roles receive only the permissions needed by their automation.
-- SecOps operators can submit rollback events but cannot directly modify EC2 resources.
+- The intended SecOps Operator persona separates event submission from direct EC2 mutation, subject to the bus-ARN and resource-policy limitations above.
 - Analysts can be granted visibility without response permissions.
 - Engineers can be granted limited response actions where required.
 

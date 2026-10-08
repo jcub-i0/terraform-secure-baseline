@@ -173,7 +173,7 @@ and [module](../../modules/identity_center/main.tf) discover an existing instanc
 and create configured groups, permission sets, policy attachments, and account
 assignments. Workload group names such as `SecOps-Operator-Dev` differ from
 permission-set names such as `SecOps-Operator-dev`. The central security account
-requires `SecOps-Administrator-security-operations`; Analyst and Engineer are
+requires `SecOps-Administrator-secops`; Analyst and Engineer are
 optional, and Operator is disabled there.
 
 Human users, group membership, upstream authentication/MFA policy, employment

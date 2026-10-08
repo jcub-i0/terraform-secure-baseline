@@ -168,7 +168,7 @@ All fourteen inputs are listed above. Operator defaults to enabled but its group
 
 ### Workload Operator example
 
-These are caller examples placed at `bootstrap/control_plane/identity_center`, which explains the relative `source` path. The IDs are synthetic 12-digit examples. Supply the existing Identity Center provider context and actual target account/ARN. This standalone example supplies the **prefixed workload bus**; it is not a claim that the frozen root already constructs that value.
+These are caller examples placed at `bootstrap/control_plane/identity_center`, which explains the relative `source` path. The IDs are synthetic 12-digit examples. Supply the existing Identity Center provider context and actual target account/ARN. This standalone example supplies the **prefixed workload bus**; it is not a claim that the root already constructs that value.
 
 ```hcl
 module "identity_center_workload" {

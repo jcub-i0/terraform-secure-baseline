@@ -12,7 +12,7 @@ State roots use `state_region` to configure the AWS provider that provisions the
 | `reconcile-workload-account.sh` | Required workload/account service Region; must match the planned account `primary_region` |
 | Workload/control-plane validation | Service Region; state S3/KMS operations use separately resolved backend-region arguments |
 
-Do not treat service `primary_region` as the state location, or changing a variable as a state migration. Keep committed provider lockfiles and the root's required Terraform/provider versions. RC1 pins Terraform `1.15.8` and AWS provider `6.66.0` in the inspected state roots.
+Do not treat service `primary_region` as the state location, or changing a variable as a state migration. Keep committed provider lockfiles and the root's required Terraform/provider versions. The repository pins Terraform `1.15.8` and AWS provider `6.66.0` in the inspected state roots.
 
 ## State-Stack Migration
 

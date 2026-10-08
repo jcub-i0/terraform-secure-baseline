@@ -256,4 +256,4 @@ During production retirement, baseline derives zero service capacity while retai
 
 `validate-ecs-runtime.sh` remains part of the 16-script workload suite. Cluster-setting and log-group checks apply even without a deployable application; protected-task instrumentation and GuardDuty coverage checks have their own runtime conditions.
 
-Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline outputs](../../baseline/outputs.tf), and [ECS runtime validator](../../scripts/validation/validate-ecs-runtime.sh). This document records configuration and ownership; it does not assert an exact-RC1 live qualification run.
+Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline outputs](../../baseline/outputs.tf), and [ECS runtime validator](../../scripts/validation/validate-ecs-runtime.sh). This document records configuration and ownership; it does not assert a live qualification run.

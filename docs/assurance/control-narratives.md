@@ -310,7 +310,7 @@ SecOps-Operator-Prod
 ```
 
 Permission-set names are distinct, for example `SecOps-Operator-dev` and
-`SecOps-Administrator-security-operations`. The central security account requires
+`SecOps-Administrator-secops`. The central security account requires
 the administrative persona and disables Operator. Analyst and Engineer are
 optional; Engineer includes wildcard-resource response actions, and Administrator
 attaches `AdministratorAccess`.

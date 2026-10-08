@@ -415,7 +415,7 @@ When the runtime is empty, mark task/ALB instrumentation assertions not applicab
 | Application validation status / method | `<status/not run>` | `<what was tested and by whom>` |
 | Temporary-resource cleanup status | `<SUCCESSFUL/DELETING/FAILED/no result/other>` | `<job and resource evidence>` |
 | Reviewer recovery acceptance | `<accepted/conditional/not accepted/not reviewed>` | `<scope, exceptions and rationale>` |
-| Earlier qualification relied upon | `<separate SHA/configuration/run reference/none>` | Do not relabel earlier evidence as execution on this candidate |
+| Earlier qualification relied upon | `<separate SHA/configuration/run reference/none>` | Do not relabel earlier evidence as execution against a different commit or configuration |
 
 An absent job or a pending/running execution is a warning-only condition in the validator. Restore `FAILED`/`ABORTED` fails. Application-validation failure/timeout and cleanup failure are reported as warnings, so a script PASS alone does not prove either succeeded. The temporary restore is configured private and Single-AZ; it is not the source database's Multi-AZ topology. Record achieved recovery objectives only when the actual test evidence measures them.
 

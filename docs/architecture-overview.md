@@ -624,7 +624,7 @@ The access model separates operational duties:
 | SecOps-Engineer | Optional investigation and limited response actions |
 | Break-glass admin | Emergency administrative access |
 
-`SecOps-Operator` remains intentionally limited: it can submit events to the environment-specific SecOps event bus, but it does not directly modify EC2 instances or invoke Lambda functions. The security-operations account uses a separate access model in which `SecOps-Administrator` is required and `SecOps-Operator` is disabled.
+`SecOps-Operator` is intended to submit rollback requests without directly modifying EC2 instances or invoking Lambda functions. The caller supplies an unprefixed bus ARN while workload automation creates a prefixed bus, and the bus resource policy uses a wildcard-principal, source-conditioned allow. This configuration does not establish Operator-only access. The security-operations account uses a separate access model in which `SecOps-Administrator` is required and `SecOps-Operator` is disabled.
 
 ---
 
@@ -949,9 +949,9 @@ This enables rapid containment of potentially compromised instances. The separat
 
 The `EC2 Rollback` workflow provides controlled recovery after isolation.
 
-Rollback is intentionally human-approved and triggered through the environment-specific SecOps event bus.
+An authorized human must review the restoration decision and submit a rollback request through the environment-specific SecOps event bus. Human approval is an operational requirement: the handler treats `approved_by` and `ticket_id` as supplied metadata, not independently verified approval evidence.
 
-Workflow:
+Intended operating procedure:
 
 ```text
 SecOps review / approval
@@ -972,13 +972,15 @@ Restore original security groups
 Send SNS notification
 ```
 
-The `SecOps-Operator` role can submit rollback events but cannot directly modify EC2 security groups.
+EventBridge invokes Lambda, which performs the EC2 mutation using its execution role. The intended Operator submission path remains subject to the bus-ARN and resource-policy limitations described above.
 
-This creates a separation between:
+The procedure distinguishes these steps:
 
 - Human approval
 - Event submission
 - Automated infrastructure modification
+
+The diagram is not proof of an enforced approval mechanism. Separating event submission from Lambda's EC2 permissions does not independently enforce separation between the approver and submitter.
 
 ---
 
