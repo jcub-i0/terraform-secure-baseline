@@ -144,7 +144,7 @@ The [Identity Center](../../modules/identity_center/main.tf),
 [OIDC](../../modules/github_oidc/main.tf), and network-policy resources provide
 access mechanisms, not a uniform least-privilege guarantee. Apply and the central
 administrator attach `AdministratorAccess`; Plan also has custom state-write and
-selected secret permissions. The Operator bus-name/policy boundary is unresolved.
+selected secret permissions. The Operator rollback publisher boundary is implemented in the bus resource policy; effective assignments, approval, and positive/negative access still require verification.
 
 Review actual principals, policies, membership, trust subjects, allowed/denied
 access, and business approval. Resource separation and names alone do not prove
@@ -672,7 +672,7 @@ This supports protection of sensitive infrastructure and workload data.
 replace effective IAM/resource-policy evaluation or application authorization.
 The endpoint resources supply no custom endpoint-policy restrictions, and shared
 endpoint access is broader than a single service. Review actual API access and
-both identity/resource policies, including the unresolved rollback bus boundary.
+both identity/resource policies, including the Operator-restricted rollback bus policy and deployed principal assignments.
 
 ---
 
@@ -1238,7 +1238,7 @@ Security Hub / GuardDuty findings
 
 | Themes | Repository authority | Acceptance evidence and unresolved responsibility |
 |---|---|---|
-| Access and privileged identity | [OIDC](../../modules/github_oidc/main.tf), [Identity Center](../../modules/identity_center/main.tf) | Effective grants, assignment principals/membership, approvals, authentication and rights lifecycle; resolve Operator bus authorization and broad-grant decisions |
+| Access and privileged identity | [OIDC](../../modules/github_oidc/main.tf), [Identity Center](../../modules/identity_center/main.tf) | Effective grants, assignment principals/membership, approvals, authentication and rights lifecycle; verify deployed Operator publisher authorization and resolve broad-grant decisions |
 | Evidence and records | [Logging](../../modules/logging/main.tf), [storage](../../modules/storage/main.tf), [keys](../../modules/security/main.tf) | Actual delivery, performed integrity verification, retention/custody, independent preservation and usable keys |
 | Incident handling | [Automation](../../modules/automation/main.tf), [response code](../../modules/automation/lambda/) | Authentic event path, approved caller/target, pre-state, partial failures, containment/recovery and human decisions |
 | Configuration and monitoring | [Config](../../modules/security/config_baseline/main.tf), [monitoring](../../modules/monitoring/main.tf) | Evaluated resources/freshness, signal gaps, receipt and triage, remediation impact and exceptions |

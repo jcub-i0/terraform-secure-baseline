@@ -1148,7 +1148,7 @@ Organizations should treat this baseline as a technical foundation that supports
 
 Unresolved implementation limitations require a named owner and a documented
 remediation or risk decision; describing them here does not resolve them. The
-most consequential include Operator bus authorization, broad administrative and
+most consequential include unauthenticated rollback approval metadata, broad administrative and
 response grants, mutable log retention, key preservation during destruction,
 partial response failures, Config recording/remediation scope, and shared
 notification dependencies. This document does not assert that any customer
