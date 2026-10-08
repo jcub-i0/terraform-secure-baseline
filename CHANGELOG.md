@@ -1,8 +1,8 @@
 # Changelog
 
-This changelog is organized by release version, newest first. The unreleased
-entry records work intended for `v1.11.0`; it does not announce a published
-stable release or re-date historical tests.
+This changelog is organized by release version, newest first. The `v1.11.0`
+entry documents the planned stable release content. Its heading alone is not
+proof of publication or that historical tests were repeated.
 
 The historical entries below preserve their original version headings,
 technical changes, and then-current qualification claims. They are historical
@@ -10,11 +10,11 @@ records, not current operating instructions or evidence of repeat tests on
 later commits. Use the [README](README.md), [adoption guide](docs/adoption-guide.md),
 and current module/runbook documentation for the implemented contract.
 
-## Unreleased — v1.11.0: Production Resilience and Operator Contracts
+## v1.11.0 — Production Resilience and Operator Contracts
 
-This section records implemented changes not covered by the historical milestones
-below and the accompanying documentation reconciliation. It does not announce a
-published release or assert fresh live qualification of the current checkout.
+This section records the implemented changes since `v1.10.0` and their
+documentation reconciliation. Earlier behavioral qualifications and new
+configuration-level checks retain their own test revisions, inputs, and evidence.
 
 ### Networking and Region Authority
 
