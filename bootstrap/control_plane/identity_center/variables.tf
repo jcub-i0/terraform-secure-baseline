@@ -1,6 +1,6 @@
 variable "cloud_name" {
   description = "Cloud name used when constructing workload resource names"
-  type        = string
+  type        = "tf-secure-baseline"
 
   validation {
     condition     = length(trimspace(var.cloud_name)) > 0
