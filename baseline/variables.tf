@@ -427,8 +427,8 @@ variable "inspector_resource_types" {
 
   validation {
     condition = (
-      !contains(var.inspector_resource_types, "LAMBDA_CODE")
-      || contains(var.inspector_resource_types, "LAMBDA")
+      !contains(var.inspector_resource_types, "LAMBDA_CODE") ||
+      contains(var.inspector_resource_types, "LAMBDA")
     )
     error_message = "inspector_resource_types cannot include LAMBDA_CODE unless LAMBDA is also included."
   }
@@ -556,8 +556,7 @@ variable "alb_certificate_arn" {
 
   validation {
     condition = (
-      var.alb_certificate_arn == null
-      || can(regex(
+      var.alb_certificate_arn == null || can(regex(
         "^arn:(aws|aws-us-gov|aws-cn):acm:[a-z0-9-]+:[0-9]{12}:certificate/[A-Za-z0-9-]+$",
         var.alb_certificate_arn
       ))
@@ -571,8 +570,7 @@ variable "alb_certificate_arn" {
       alltrue([
         for service in values(var.ecs_services) :
         service.image_digest == null || service.ingress == null
-      ])
-      || var.alb_certificate_arn != null
+      ]) || var.alb_certificate_arn != null
     )
 
     error_message = "alb_certificate_arn must be provided when any deployable ECS service configures ingress."
@@ -601,8 +599,7 @@ variable "alb_ingress_cidrs" {
       alltrue([
         for service in values(var.ecs_services) :
         service.image_digest == null || service.ingress == null
-      ])
-      || length(var.alb_ingress_cidrs) > 0
+      ]) || length(var.alb_ingress_cidrs) > 0
     )
 
     error_message = "alb_ingress_cidrs must contain at least one CIDR when any deployable ECS service configures ingress."

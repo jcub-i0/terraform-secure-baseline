@@ -186,8 +186,8 @@ variable "inspector_resource_types" {
 
   validation {
     condition = (
-      !contains(var.inspector_resource_types, "LAMBDA_CODE")
-      || contains(var.inspector_resource_types, "LAMBDA")
+      !contains(var.inspector_resource_types, "LAMBDA_CODE") ||
+      contains(var.inspector_resource_types, "LAMBDA")
     )
     error_message = "inspector_resource_types cannot include LAMBDA_CODE unless LAMBDA is also included."
   }
