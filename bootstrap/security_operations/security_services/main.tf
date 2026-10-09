@@ -1,4 +1,5 @@
 data "aws_organizations_organization" "main" {}
+data "aws_partition" "current" {}
 
 data "aws_organizations_organizational_units" "root" {
   parent_id = data.aws_organizations_organization.main.roots[0].id
