@@ -225,6 +225,9 @@ validate_aws_identity() {
   require_non_empty "$account_id" "AWS account ID"
   require_non_empty "$caller_arn" "AWS caller ARN"
 
+  AWS_PARTITION="$(get_aws_partition_from_caller_arn "$caller_arn")"
+  info "AWS partition: ${AWS_PARTITION}"
+
   success "AWS identity resolved"
   info "AWS profile: ${AWS_PROFILE:-<default>}"
   info "AWS region: ${AWS_REGION}"
@@ -366,7 +369,7 @@ validate_backend_state_config() {
   fi
 
   TF_STATE_BUCKET_NAME="$account_backend_bucket"
-  TF_STATE_BUCKET_ARN="arn:aws:s3:::${TF_STATE_BUCKET_NAME}"
+  TF_STATE_BUCKET_ARN="arn:${AWS_PARTITION}:s3:::${TF_STATE_BUCKET_NAME}"
 }
 
 handle_state_stack_remote_issue() {
@@ -537,7 +540,7 @@ check_s3_state_bucket() {
     --bucket "$bucket_name" >/dev/null
   success "State bucket exists: ${bucket_name}"
 
-  TF_STATE_BUCKET_ARN="arn:aws:s3:::${bucket_name}"
+  TF_STATE_BUCKET_ARN="arn:${AWS_PARTITION}:s3:::${bucket_name}"
   success "Derived state bucket ARN from backend bucket: ${TF_STATE_BUCKET_ARN}"
 
   local versioning_status

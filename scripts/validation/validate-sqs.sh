@@ -113,6 +113,7 @@ section "Checking AWS caller identity"
 
 ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
 CALLER_ARN="$(get_aws_caller_arn "$AWS_PROFILE" "$AWS_REGION")"
+AWS_PARTITION="$(get_aws_partition_from_caller_arn "$CALLER_ARN")"
 
 if [[ -z "$ACCOUNT_ID" || "$ACCOUNT_ID" == "None" ]]; then
   fail "Unable to resolve AWS account ID"
@@ -179,7 +180,7 @@ validate_sns_producer_for_queue() {
   local sns_sendmessage_statement_count
 
   topic_name="$(resource_name "$topic_suffix")"
-  topic_arn="arn:aws:sns:${AWS_REGION}:${ACCOUNT_ID}:${topic_name}"
+  topic_arn="arn:${AWS_PARTITION}:sns:${AWS_REGION}:${ACCOUNT_ID}:${topic_name}"
 
   section "Validating SNS producer for ${queue_label}"
 
