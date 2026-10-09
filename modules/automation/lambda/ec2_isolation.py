@@ -66,6 +66,13 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
         summary["errors"] += 1
         return summary
 
+    if not AWS_PARTITION or not AWS_REGION:
+        logger.error(
+            "AWS_PARTITION or AWS_REGION is not configured; aborting isolation"
+        )
+        summary["errors"] += 1
+        return summary
+
     logger.info(
         "Received event with automatic-isolation product_arn=%s severities=%s: %s",
         GUARDDUTY_PRODUCT_ARN or "<unconfigured>",
