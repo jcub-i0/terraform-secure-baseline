@@ -4,6 +4,7 @@
 # IAM IDENTITY CENTER - DISCOVER INSTANCE
 ##########################################
 
+data "aws_partition" "current" {}
 data "aws_ssoadmin_instances" "this" {}
 
 locals {
@@ -98,7 +99,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_security_audit
 
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
-  managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
+  managed_policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/SecurityAudit"
 }
 
 resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_readonly" {
@@ -106,7 +107,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_analyst_readonly" {
 
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_analyst[0].arn
-  managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+  managed_policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/ReadOnlyAccess"
 }
 
 # SECOPS-ENGINEER POLICY ATTACHMENTS
@@ -116,7 +117,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_security_audi
 
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
-  managed_policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
+  managed_policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/SecurityAudit"
 }
 
 resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
@@ -124,7 +125,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_engineer_readonly" {
 
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_engineer[0].arn
-  managed_policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+  managed_policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/ReadOnlyAccess"
 }
 
 # SECOPS-ADMIN POLICY ATTACHMENT
@@ -134,7 +135,7 @@ resource "aws_ssoadmin_managed_policy_attachment" "secops_administrator_access" 
 
   instance_arn       = local.instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.secops_administrator[0].arn
-  managed_policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  managed_policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AdministratorAccess"
 }
 
 ##########################################

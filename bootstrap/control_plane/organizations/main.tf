@@ -1,4 +1,5 @@
 data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
 
 resource "aws_organizations_organization" "main" {
   feature_set = "ALL"
@@ -96,7 +97,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     principals {
       type = "AWS"
       identifiers = [
-        "arn:aws:iam::${local.security_operations_account_id}:root"
+        "arn:${data.aws_partition.current.partition}:iam::${local.security_operations_account_id}:root"
       ]
     }
 
@@ -123,7 +124,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     principals {
       type = "AWS"
       identifiers = [
-        "arn:aws:iam::${local.security_operations_account_id}:root"
+        "arn:${data.aws_partition.current.partition}:iam::${local.security_operations_account_id}:root"
       ]
     }
 
@@ -154,7 +155,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     principals {
       type = "AWS"
       identifiers = [
-        "arn:aws:iam::${local.security_operations_account_id}:root"
+        "arn:${data.aws_partition.current.partition}:iam::${local.security_operations_account_id}:root"
       ]
     }
 
@@ -167,10 +168,10 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     ]
 
     resources = [
-      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:root/${aws_organizations_organization.main.id}/*",
-      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:ou/${aws_organizations_organization.main.id}/*",
-      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:account/${aws_organizations_organization.main.id}/*",
-      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:policy/${aws_organizations_organization.main.id}/securityhub_policy/*",
+      "arn:${data.aws_partition.current.partition}:organizations::${data.aws_caller_identity.current.account_id}:root/${aws_organizations_organization.main.id}/*",
+      "arn:${data.aws_partition.current.partition}:organizations::${data.aws_caller_identity.current.account_id}:ou/${aws_organizations_organization.main.id}/*",
+      "arn:${data.aws_partition.current.partition}:organizations::${data.aws_caller_identity.current.account_id}:account/${aws_organizations_organization.main.id}/*",
+      "arn:${data.aws_partition.current.partition}:organizations::${data.aws_caller_identity.current.account_id}:policy/${aws_organizations_organization.main.id}/securityhub_policy/*",
     ]
 
     condition {
@@ -190,7 +191,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     principals {
       type = "AWS"
       identifiers = [
-        "arn:aws:iam::${local.security_operations_account_id}:root"
+        "arn:${data.aws_partition.current.partition}:iam::${local.security_operations_account_id}:root"
       ]
     }
 
@@ -200,7 +201,7 @@ data "aws_iam_policy_document" "securityhub_v2_organizations_delegation" {
     ]
 
     resources = [
-      "arn:aws:organizations::${data.aws_caller_identity.current.account_id}:policy/${aws_organizations_organization.main.id}/securityhub_policy/*",
+      "arn:${data.aws_partition.current.partition}:organizations::${data.aws_caller_identity.current.account_id}:policy/${aws_organizations_organization.main.id}/securityhub_policy/*",
     ]
   }
 }

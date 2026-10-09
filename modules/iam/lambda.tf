@@ -1,15 +1,15 @@
 # LAMBDA ROLES
 ## AWS-MANAGED POLICIES FOR LAMBDA LOGGING & VPC ENI ACCESS
 data "aws_iam_policy" "lambda_vpc" {
-  arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+  arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 data "aws_iam_policy" "lambda_logs" {
-  arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 data "aws_iam_policy" "lambda_xray" {
-  arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+  arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
 # LAMBDA TRUST POLICY

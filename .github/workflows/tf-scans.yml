@@ -82,6 +82,7 @@ jobs:
             "staging-state|bootstrap/staging/state"
             "prod-account|bootstrap/prod/account"
             "prod-state|bootstrap/prod/state"
+            "security-operations-security-services|bootstrap/security_operations/security_services"
           )
 
           failed=0

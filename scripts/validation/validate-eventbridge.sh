@@ -176,6 +176,7 @@ section "Checking AWS caller identity"
 
 ACCOUNT_ID="$(get_aws_account_id "${AWS_PROFILE:-}" "${AWS_REGION:-}")"
 CALLER_ARN="$(get_aws_caller_arn "${AWS_PROFILE:-}" "${AWS_REGION:-}")"
+AWS_PARTITION="$(get_aws_partition_from_caller_arn "$CALLER_ARN")"
 
 if [[ -z "${ACCOUNT_ID}" || "${ACCOUNT_ID}" == "None" ]]; then
   fail "Unable to resolve AWS account ID"
@@ -332,15 +333,15 @@ validate_expected_target_dlq() {
   local actual_max_event_age
 
   rule_name="${NAME_PREFIX}-${rule_suffix}"
-  expected_dlq_arn="arn:aws:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${dlq_suffix}"
+  expected_dlq_arn="arn:${AWS_PARTITION}:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${dlq_suffix}"
 
   case "$target_type" in
     lambda)
-      expected_target_arn="arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${NAME_PREFIX}-${target_suffix}"
+      expected_target_arn="arn:${AWS_PARTITION}:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:${NAME_PREFIX}-${target_suffix}"
       ;;
 
     sns)
-      expected_target_arn="arn:aws:sns:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${target_suffix}"
+      expected_target_arn="arn:${AWS_PARTITION}:sns:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-${target_suffix}"
       ;;
 
     *)
@@ -425,7 +426,6 @@ validate_guardduty_runtime_coverage_notification() {
   local expected_rule_name
   local expected_target_id
   local expected_dlq_arn
-  local partition
   local rule_json
   local actual_event_pattern_raw
   local actual_event_pattern_normalized
@@ -439,15 +439,9 @@ validate_guardduty_runtime_coverage_notification() {
 
   section "Validating GuardDuty ECS Runtime coverage notification"
 
-  partition="$(echo "$CALLER_ARN" | cut -d: -f2)"
-
-  if [[ -z "$partition" ]]; then
-    fail "Unable to resolve AWS partition from caller ARN: ${CALLER_ARN}"
-  fi
-
   expected_rule_name="${NAME_PREFIX}-guardduty-ecs-runtime-coverage"
   expected_target_id="guardduty-ecs-runtime-coverage-to-secops-sns"
-  expected_dlq_arn="arn:${partition}:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-security-notifications-eventbridge-dlq"
+  expected_dlq_arn="arn:${AWS_PARTITION}:sqs:${AWS_REGION}:${ACCOUNT_ID}:${NAME_PREFIX}-security-notifications-eventbridge-dlq"
 
   if [[ "$GUARDDUTY_COVERAGE_RULE_NAME" != "$expected_rule_name" ]]; then
     fail "GuardDuty Runtime coverage rule name from Terraform is ${GUARDDUTY_COVERAGE_RULE_NAME}; expected ${expected_rule_name}."

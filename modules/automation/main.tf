@@ -34,6 +34,7 @@ resource "aws_lambda_function" "ec2_isolation" {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
       SNS_TOPIC_ARN    = var.secops_topic_arn
+      AWS_PARTITION    = data.aws_partition.current.partition
       AUTO_ISOLATION_SEVERITIES = join(
         ",",
         sort(tolist(var.ec2_auto_isolation_severities))
@@ -78,7 +79,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
     detail = {
       findings = {
         ProductArn = [
-          "arn:aws:securityhub:${var.primary_region}::product/aws/guardduty"
+          "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::product/aws/guardduty"
         ],
         Severity = {
           Label = ["HIGH", "CRITICAL"]
@@ -398,8 +399,10 @@ data "aws_iam_policy_document" "secops_bus_policy" {
     resources = [aws_cloudwatch_event_bus.secops.arn]
 
     principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+      type = "AWS"
+      identifiers = [
+        "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
+      ]
     }
 
     condition {

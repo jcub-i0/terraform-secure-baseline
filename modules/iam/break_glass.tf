@@ -42,5 +42,5 @@ resource "aws_iam_role" "break_glass_admin" {
 
 resource "aws_iam_role_policy_attachment" "break_glass_admin_access" {
   role       = aws_iam_role.break_glass_admin.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AdministratorAccess"
 }

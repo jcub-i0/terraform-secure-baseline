@@ -18,13 +18,14 @@ sns = boto3.client("sns")
 QUARANTINE_SG = os.getenv("QUARANTINE_SG_ID", "").strip()
 SNS_TOPIC_ARN = os.getenv("SNS_TOPIC_ARN", "").strip()
 AWS_REGION = os.getenv("AWS_REGION", "").strip()
+AWS_PARTITION = os.getenv("AWS_PARTITION", "").strip()
 
 PROTECTION_TAG = "IsolationAllowed"
 ISOLATED_TAG = "Isolated"
 
 GUARDDUTY_PRODUCT_ARN = (
-    f"arn:aws:securityhub:{AWS_REGION}::product/aws/guardduty"
-    if AWS_REGION
+    f"arn:{AWS_PARTITION}:securityhub:{AWS_REGION}::product/aws/guardduty"
+    if AWS_REGION and AWS_PARTITION
     else ""
 )
 
@@ -62,6 +63,13 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, int]:
 
     if not QUARANTINE_SG:
         logger.error("QUARANTINE_SG_ID is not configured; aborting isolation")
+        summary["errors"] += 1
+        return summary
+
+    if not AWS_PARTITION or not AWS_REGION:
+        logger.error(
+            "AWS_PARTITION or AWS_REGION is not configured; aborting isolation"
+        )
         summary["errors"] += 1
         return summary
 

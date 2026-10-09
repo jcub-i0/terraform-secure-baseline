@@ -136,7 +136,7 @@ Plan attaches AWS-managed `ReadOnlyAccess` and a custom policy that includes:
 |---|---|
 | `tf_state_bucket_arn` | `s3:ListBucket` |
 | Every object under `${tf_state_bucket_arn}/*` | `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` |
-| `arn:aws:secretsmanager:<primary_region>:<account_id>:secret:<name_prefix>/*` | `secretsmanager:GetSecretValue` |
+| `arn:<partition>:secretsmanager:<primary_region>:<account_id>:secret:<name_prefix>/*` | `secretsmanager:GetSecretValue` |
 | `*` | `secretsmanager:GetRandomPassword` |
 | Supplied state CMK | `kms:Decrypt`, `kms:DescribeKey`, `kms:Encrypt`, `kms:GenerateDataKey` |
 | Supplied Lambda/Secrets Manager CMKs | `kms:Decrypt`, `kms:DescribeKey` |
@@ -167,7 +167,7 @@ ecr:UploadLayerPart
 The repository-action scope is exactly the constructed pattern:
 
 ```text
-arn:aws:ecr:<primary_region>:<account_id>:repository/<name_prefix>-*
+arn:<partition>:ecr:<primary_region>:<account_id>:repository/<name_prefix>-*
 ```
 
 That covers the workload's matching repositories, not only the repository selected in a particular run. The module grants no repository creation/deletion, Terraform-state, ECS, IAM, or general administrative actions to the publisher. Do not confuse its registry-wide authorization-token action with repository-wide administrative permission.
@@ -178,7 +178,12 @@ The publication job has AWS OIDC authority and `contents: read`; the release/PR 
 
 The account roots set their provider Region from `primary_region`, compare it with `data.aws_region.current.region`, and pass that resolved value here. Their backends independently specify the S3 state Region. Supplying a new bucket ARN or service Region does not rewrite or migrate a backend.
 
-Several policy ARNs and managed-policy attachments in this module explicitly use `arn:aws`. A configurable Region is not a claim of GovCloud/China portability or qualified cross-Region recovery. KMS and bucket policy restrictions must be reviewed separately; a custom IAM grant does not rewrite the resource policy.
+The module derives the partition from `data.aws_partition.current` for its
+constructed Secrets Manager/ECR policy scopes and AWS-managed policy attachment
+ARNs. Supplied state bucket and KMS ARNs remain caller inputs and are not
+rewritten. Partition-aware construction does not establish GovCloud/China
+compatibility or qualified cross-Region recovery. Review KMS and bucket
+resource policies separately; a custom IAM grant does not rewrite them.
 
 ---
 
