@@ -167,6 +167,16 @@ get_aws_caller_arn() {
   fi
 }
 
+get_aws_partition_from_caller_arn() {
+  local caller_arn="$1"
+
+  if [[ "$caller_arn" =~ ^arn:([a-z0-9-]+):(iam|sts)::[0-9]{12}:.+ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  else
+    fail "Unable to determine AWS partition from caller ARN: ${caller_arn}"
+  fi
+}
+
 # Resolve against deployed state, never the AWS profile or backend region.
 # An optional output snapshot avoids reading state twice in standalone validators.
 # Diagnostics go to stderr; stdout contains only the region.
