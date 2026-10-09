@@ -18,12 +18,13 @@ sns = boto3.client("sns")
 QUARANTINE_SG = os.getenv("QUARANTINE_SG_ID", "").strip()
 SNS_TOPIC_ARN = os.getenv("SNS_TOPIC_ARN", "").strip()
 AWS_REGION = os.getenv("AWS_REGION", "").strip()
+AWS_PARTITION = os.getenv("AWS_PARTITION", "").strip()
 
 PROTECTION_TAG = "IsolationAllowed"
 ISOLATED_TAG = "Isolated"
 
 GUARDDUTY_PRODUCT_ARN = (
-    f"arn:aws:securityhub:{AWS_REGION}::product/aws/guardduty"
+    f"arn:{AWS_PARTITION}:securityhub:{AWS_REGION}::product/aws/guardduty"
     if AWS_REGION
     else ""
 )

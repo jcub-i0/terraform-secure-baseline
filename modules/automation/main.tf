@@ -34,6 +34,7 @@ resource "aws_lambda_function" "ec2_isolation" {
     variables = {
       QUARANTINE_SG_ID = var.quarantine_sg_id
       SNS_TOPIC_ARN    = var.secops_topic_arn
+      AWS_PARTITION    = data.aws_partition.current.partition
       AUTO_ISOLATION_SEVERITIES = join(
         ",",
         sort(tolist(var.ec2_auto_isolation_severities))
