@@ -1,3 +1,5 @@
+data "aws_partition" "current" {}
+
 module "identity_center_workload" {
   for_each = var.identity_center_workloads
 
@@ -9,7 +11,7 @@ module "identity_center_workload" {
   enable_secops_operator     = true
   secops_operator_group_name = "SecOps-Operator-${title(each.key)}"
 
-  secops_event_bus_arn = "arn:aws:events:${each.value.primary_region}:${each.value.account_id}:event-bus/${var.cloud_name}-${each.key}-secops-bus"
+  secops_event_bus_arn = "arn:${data.aws_partition.current.partition}:events:${each.value.primary_region}:${each.value.account_id}:event-bus/${var.cloud_name}-${each.key}-secops-bus"
 
   enable_secops_analyst     = each.value.enable_secops_analyst
   secops_analyst_group_name = "SecOps-Analyst-${title(each.key)}"
