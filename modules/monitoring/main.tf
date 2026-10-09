@@ -1,3 +1,5 @@
+data "aws_partition" "current" {}
+
 # SNS and SQS
 ## SNS RESOURCES FOR CONFIG
 ### CONFIG SNS TOPIC
@@ -30,7 +32,7 @@ data "aws_iam_policy_document" "compliance" {
 
     principals {
       type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"]
     }
 
     resources = [aws_sns_topic.compliance.arn]
@@ -137,7 +139,7 @@ data "aws_iam_policy_document" "security_notifications_sns" {
 
     principals {
       type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.account_id}:root"]
+      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"]
     }
 
     resources = [aws_sns_topic.secops.arn]

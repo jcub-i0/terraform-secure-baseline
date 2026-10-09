@@ -1,12 +1,14 @@
+data "aws_partition" "current" {}
+
 locals {
   # SecurityHub standards for securityhub_standards_subscriptions resource to loop through
   ## Select the SecurityHub standards you want by uncommenting the respective standard(s)
   securityhub_standards = {
-    aws_fsbp = "arn:aws:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0",
-    cis      = "arn:aws:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0",
-    #aws_tagging = "arn:aws:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0",
-    #nist_800 = "arn:aws:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0",
-    #pci_dss = "arn:aws:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
+    aws_fsbp = "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::standards/aws-foundational-security-best-practices/v/1.0.0",
+    cis      = "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::standards/cis-aws-foundations-benchmark/v/5.0.0",
+    #aws_tagging = "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::standards/aws-resource-tagging-standard/v/1.0.0",
+    #nist_800 = "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::standards/nist-800-53/v/5.0.0",
+    #pci_dss = "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::standards/pci-dss/v/4.0.1"
   }
 }
 
@@ -83,13 +85,11 @@ resource "aws_inspector2_enabler" "main" {
 
 ## SUBSCRIBE SECURITY HUB TO AMAZON INSPECTOR PRODUCT
 resource "aws_securityhub_product_subscription" "inspector" {
-  product_arn = "arn:aws:securityhub:${var.primary_region}::product/aws/inspector"
+  product_arn = "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::product/aws/inspector"
   depends_on  = [aws_securityhub_account.main]
 }
 
 # KMS
-data "aws_partition" "current" {}
-
 ## KMS KEY FOR LOGS
 resource "aws_kms_key" "logs" {
   description             = "CMK for centralized logging (CloudTrail, Config, Flow Logs)"
@@ -107,7 +107,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -132,7 +132,7 @@ resource "aws_kms_key" "logs" {
             "aws:SourceAccount" = var.account_id
           }
           StringLike = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${var.account_id}:trail/*"
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:${data.aws_partition.current.partition}:cloudtrail:*:${var.account_id}:trail/*"
           }
         }
       },
@@ -141,7 +141,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "AllowConfigServiceRole"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
         }
         Action = [
           "kms:GenerateDataKey*",
@@ -263,7 +263,7 @@ resource "aws_kms_key" "logs" {
             "aws:SourceAccount" = var.account_id
           }
           ArnLike = {
-            "aws:SourceArn" = "arn:aws:firehose:${var.primary_region}:${var.account_id}:deliverystream/*"
+            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:firehose:${var.primary_region}:${var.account_id}:deliverystream/*"
           }
         }
       },
@@ -272,7 +272,7 @@ resource "aws_kms_key" "logs" {
         Sid    = "AllowInspectorDecrypt"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"
         }
         Action = [
           "kms:DescribeKey",
@@ -348,7 +348,7 @@ resource "aws_kms_key" "ebs" {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -399,7 +399,7 @@ resource "aws_kms_key" "lambda" {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -460,7 +460,7 @@ resource "aws_kms_key" "secrets_manager" {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -513,7 +513,7 @@ resource "aws_kms_key" "backup_vault" {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"

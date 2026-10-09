@@ -78,7 +78,7 @@ resource "aws_cloudwatch_event_rule" "securityhub_ec2_high_critical" {
     detail = {
       findings = {
         ProductArn = [
-          "arn:aws:securityhub:${var.primary_region}::product/aws/guardduty"
+          "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}::product/aws/guardduty"
         ],
         Severity = {
           Label = ["HIGH", "CRITICAL"]

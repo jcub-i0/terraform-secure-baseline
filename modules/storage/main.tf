@@ -1,3 +1,5 @@
+data "aws_partition" "current" {}
+
 locals {
   rds_identifier = "${var.name_prefix}-saas-db"
 }
@@ -472,7 +474,7 @@ data "aws_iam_policy_document" "centralized_logs" {
       test     = "ArnLike"
       variable = "aws:SourceArn"
       values = [
-        "arn:aws:logs:${var.primary_region}:${var.account_id}:*"
+        "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:*"
       ]
     }
   }
@@ -510,7 +512,7 @@ data "aws_iam_policy_document" "centralized_logs" {
       test     = "ArnLike"
       variable = "aws:SourceArn"
       values = [
-        "arn:aws:logs:${var.primary_region}:${var.account_id}:*"
+        "arn:${data.aws_partition.current.partition}:logs:${var.primary_region}:${var.account_id}:*"
       ]
     }
   }

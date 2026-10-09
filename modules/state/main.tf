@@ -3,6 +3,7 @@
 ###############
 
 data "aws_region" "current" {}
+data "aws_partition" "current" {}
 
 # KMS KEY FOR STATE S3 BUCKET
 resource "aws_kms_key" "state" {
@@ -18,7 +19,7 @@ resource "aws_kms_key" "state" {
         Sid    = "EnableRootPermissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"

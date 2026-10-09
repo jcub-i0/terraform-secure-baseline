@@ -29,5 +29,5 @@ resource "aws_iam_role" "patch_maintenance_window" {
 
 resource "aws_iam_role_policy_attachment" "patch_maintenance_window" {
   role       = aws_iam_role.patch_maintenance_window.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole"
 }

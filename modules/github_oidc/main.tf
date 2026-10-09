@@ -2,6 +2,8 @@
 # GITHUB OIDC MODULE
 #####################
 
+data "aws_partition" "current" {}
+
 ## Build GitHub OIDC subject strings dynamically
 locals {
   # GitHub-Plan role
@@ -101,7 +103,7 @@ data "aws_iam_policy_document" "github_plan" {
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
-      "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
+      "arn:${data.aws_partition.current.partition}:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
     ]
   }
 
@@ -168,7 +170,7 @@ resource "aws_iam_role_policy_attachment" "github_plan_attach" {
 
 resource "aws_iam_role_policy_attachment" "readonly_github_plan_attach" {
   role       = aws_iam_role.github_plan.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/ReadOnlyAccess"
 }
 
 # GitHub-Apply resources
@@ -234,7 +236,7 @@ data "aws_iam_policy_document" "github_apply" {
     effect  = "Allow"
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
-      "arn:aws:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
+      "arn:${data.aws_partition.current.partition}:secretsmanager:${var.primary_region}:${var.account_id}:secret:${var.name_prefix}/*"
     ]
   }
 
@@ -307,7 +309,7 @@ resource "aws_iam_role_policy_attachment" "admin_github_apply_attach" {
   count = var.enable_apply_role_github ? 1 : 0
 
   role       = aws_iam_role.github_apply[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AdministratorAccess"
 }
 
 # GitHub-Image-Publisher resources
@@ -364,7 +366,7 @@ data "aws_iam_policy_document" "github_image_publisher" {
     ]
 
     resources = [
-      "arn:aws:ecr:${var.primary_region}:${var.account_id}:repository/${var.name_prefix}-*"
+      "arn:${data.aws_partition.current.partition}:ecr:${var.primary_region}:${var.account_id}:repository/${var.name_prefix}-*"
     ]
   }
 }
