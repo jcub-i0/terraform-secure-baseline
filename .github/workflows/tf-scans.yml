@@ -5,11 +5,14 @@
 name: Terraform Static Analysis
 
 on:
+  pull_request:
+    branches:
+      - main
+
   push:
-    paths:
-      - '**/*.tf'
-      - '**/*.tfvars'
-      - '.github/workflows/tf-scans.yml'
+    branches:
+      - main
+
   workflow_dispatch:
 
 permissions:
@@ -27,6 +30,7 @@ jobs:
       TF_IN_AUTOMATION: "true"
       TF_PLUGIN_CACHE_DIR: "/home/runner/.terraform.d/plugin-cache"
       REPORT_DIR: ${{ github.workspace }}/reports
+      TFLINT_CONFIG_FILE: ${{ github.workspace }}/.tflint.hcl
 
     defaults:
       run:
@@ -57,9 +61,16 @@ jobs:
 
       - name: Install TFLint
         uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.64.0
+          cache: true
 
       - name: Initialize TFLint
-        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --version
+          tflint --init --config "$TFLINT_CONFIG_FILE"
 
       - name: Validate Terraform roots and run TFLint
         id: root_validation
@@ -83,6 +94,8 @@ jobs:
             "prod-account|bootstrap/prod/account"
             "prod-state|bootstrap/prod/state"
             "security-operations-security-services|bootstrap/security_operations/security_services"
+            "security-operations-account|bootstrap/security_operations/account"
+            "security-operations-state|bootstrap/security_operations/state"
           )
 
           failed=0
@@ -119,7 +132,7 @@ jobs:
             echo "::group::TFLint compact - ${root}"
             (
               cd "${root}"
-              tflint --recursive -f compact
+              tflint --recursive --config "$TFLINT_CONFIG_FILE" -f compact
             ) 2>&1 | tee "${root_report_dir}/tflint-compact.txt"
             tflint_compact_status=${PIPESTATUS[0]}
             echo "::endgroup::"
@@ -131,7 +144,7 @@ jobs:
             echo "::group::TFLint JUnit - ${root}"
             (
               cd "${root}"
-              tflint --recursive -f junit
+              tflint --recursive --config "$TFLINT_CONFIG_FILE" -f junit
             ) > "${root_report_dir}/tflint-junit.xml"
             tflint_junit_status=$?
             echo "::endgroup::"
@@ -145,7 +158,9 @@ jobs:
 
       - name: Install Checkov
         if: always()
-        run: pip install checkov
+        run: |
+          python -m pip install 'checkov==3.3.26'
+          checkov --version
 
       - name: Run repository Checkov scan
         if: always()

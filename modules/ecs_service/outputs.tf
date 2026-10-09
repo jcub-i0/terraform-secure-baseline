@@ -99,9 +99,7 @@ output "autoscaling_cpu_policies" {
       )
 
       predefined_metric_type = (
-        policy.target_tracking_scaling_policy_configuration[0]
-        .predefined_metric_specification[0]
-        .predefined_metric_type
+        policy.target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type
       )
     }
   }
@@ -131,9 +129,7 @@ output "autoscaling_memory_policies" {
       )
 
       predefined_metric_type = (
-        policy.target_tracking_scaling_policy_configuration[0]
-        .predefined_metric_specification[0]
-        .predefined_metric_type
+        policy.target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type
       )
     }
   }
@@ -163,15 +159,11 @@ output "autoscaling_alb_request_policies" {
       )
 
       predefined_metric_type = (
-        policy.target_tracking_scaling_policy_configuration[0]
-        .predefined_metric_specification[0]
-        .predefined_metric_type
+        policy.target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].predefined_metric_type
       )
 
       resource_label = (
-        policy.target_tracking_scaling_policy_configuration[0]
-        .predefined_metric_specification[0]
-        .resource_label
+        policy.target_tracking_scaling_policy_configuration[0].predefined_metric_specification[0].resource_label
       )
     }
   }
