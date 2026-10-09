@@ -5,11 +5,14 @@
 name: Terraform Static Analysis
 
 on:
+  pull_request:
+    branches:
+      - main
+
   push:
-    paths:
-      - '**/*.tf'
-      - '**/*.tfvars'
-      - '.github/workflows/tf-scans.yml'
+    branches:
+      - main
+
   workflow_dispatch:
 
 permissions:
