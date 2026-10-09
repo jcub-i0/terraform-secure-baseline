@@ -83,6 +83,8 @@ jobs:
             "prod-account|bootstrap/prod/account"
             "prod-state|bootstrap/prod/state"
             "security-operations-security-services|bootstrap/security_operations/security_services"
+            "security-operations-account|bootstrap/security_operations/account"
+            "security-operations-state|bootstrap/security_operations/state"
           )
 
           failed=0
