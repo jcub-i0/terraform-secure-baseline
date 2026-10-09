@@ -158,7 +158,9 @@ jobs:
 
       - name: Install Checkov
         if: always()
-        run: pip install checkov
+        run: |
+          python -m pip install 'checkov==3.3.26'
+          checkov --version
 
       - name: Run repository Checkov scan
         if: always()
