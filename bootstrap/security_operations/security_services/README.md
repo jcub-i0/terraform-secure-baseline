@@ -140,7 +140,10 @@ The catalog defined in source resolves these keys (not an automatically updated 
 | `nist_800_53` | NIST 800-53 `5.0.0` |
 | `pci_dss` | PCI DSS `4.0.1` |
 
-All other catalog entries construct commercial-partition ARNs from the resolved provider Region. This documents configured standard versions, not compliance certification or availability in every Region.
+All catalog entries use the AWS provider's resolved partition. All except the
+`cis_1_2` regionless ruleset ARN also use the resolved provider Region. These
+are configured standard versions, not proof of compliance certification or
+service/standard availability in every Region or partition.
 
 Policy-map keys are resolved against active AWS Organizations account names before associations are created. They are account **names**, not account IDs or OU names, and are not limited by Terraform to `dev`, `staging`, or `prod`.
 

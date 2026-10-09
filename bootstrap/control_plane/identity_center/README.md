@@ -73,7 +73,7 @@ For every configured workload account:
 - `SecOps-Analyst` is optional and defaults to disabled.
 - `SecOps-Engineer` is optional and defaults to disabled.
 - Group names are derived from the workload map key.
-- The Operator ARN is constructed as `arn:aws:events:<primary_region>:<account_id>:event-bus/<cloud_name>-<environment>-secops-bus`; it is not read from workload state.
+- The Operator ARN uses the AWS provider's resolved partition: `arn:<partition>:events:<primary_region>:<account_id>:event-bus/<cloud_name>-<environment>-secops-bus`; it is not read from workload state.
 
 The workload map keys are restricted to:
 
@@ -94,8 +94,9 @@ The caller and workload resource now use the same naming contract:
 | This root's `secops_event_bus_arn` argument | `event-bus/<cloud_name>-<environment>-secops-bus` |
 | [Workload automation](../../../modules/automation/main.tf), `aws_cloudwatch_event_bus.secops` | `event-bus/<name_prefix>-secops-bus`, where `name_prefix = <cloud_name>-<environment>` |
 
-The root `cloud_name` (default `tf-secure-baseline`), workload map key, account ID, and
-`primary_region` determine each Operator policy ARN. This root does not query
+The root's `data.aws_partition.current` value, `cloud_name` (default
+`tf-secure-baseline`), workload map key, account ID, and `primary_region`
+determine each Operator policy ARN. This root does not query
 workload state or confirm that the event bus exists; compare actual workload
 naming and Region before accepting the access path.
 

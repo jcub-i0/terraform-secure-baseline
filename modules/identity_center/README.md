@@ -168,7 +168,11 @@ All fourteen inputs are listed above. Operator defaults to enabled but its group
 
 ### Workload Operator example
 
-These are caller examples placed at `bootstrap/control_plane/identity_center`, which explains the relative `source` path. The IDs are synthetic 12-digit examples. Supply the existing Identity Center provider context and actual target account/ARN. This standalone example supplies the **prefixed workload bus**; it is not a claim that the root already constructs that value.
+These are caller examples placed at `bootstrap/control_plane/identity_center`,
+which explains the relative `source` path. The IDs are synthetic 12-digit
+examples. The workload example uses a commercial AWS ARN; the actual
+control-plane root derives the prefixed bus ARN using its provider's partition
+and the configured account, Region, and naming inputs.
 
 ```hcl
 module "identity_center_workload" {
@@ -268,5 +272,5 @@ Effective human access should still be verified through an IAM Identity Center l
 - The module does not validate that an EventBridge bus exists before creating an Operator policy that references its ARN.
 - Account-specific naming and persona policy are determined by the calling stack.
 - Permission sets and policy references are not proof of approved group membership, effective access, or successful rollback.
-- Commercial-partition `arn:aws:` policy ARNs are hard-coded in this module; it is not a partition-generic implementation.
+- AWS-managed policy attachment ARNs use `data.aws_partition.current`; the calling stack must still supply an appropriate `secops_event_bus_arn`. Partition-aware ARNs alone do not establish support for every AWS partition.
 - The module does not configure MFA requirements, a permission boundary, approval enforcement, or a universal resource-tag restriction for these personas.

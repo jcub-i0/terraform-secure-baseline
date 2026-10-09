@@ -241,7 +241,7 @@ resource "aws_securityhub_product_subscription" "inspector"
 Product ARN:
 
 ```text
-arn:aws:securityhub:<region>::product/aws/inspector
+arn:<partition>:securityhub:<region>::product/aws/inspector
 ```
 
 The subscription is created regardless of `inspector_enabled` and regardless of
@@ -1160,7 +1160,7 @@ For centralized ownership, standards subscriptions are controlled by the Securit
 Current active standard ARN pattern:
 
 ```text
-arn:aws:securityhub:<region>::standards/aws-foundational-security-best-practices/v/1.0.0
+arn:<partition>:securityhub:<region>::standards/aws-foundational-security-best-practices/v/1.0.0
 ```
 
 ---

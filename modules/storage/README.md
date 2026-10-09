@@ -454,7 +454,7 @@ The policy allows the log delivery service principal:
 delivery.logs.amazonaws.com
 ```
 
-The write statement requires the workload source account and bucket-owner-full-control ACL and restricts `aws:SourceArn` to `arn:aws:logs:<primary_region>:<account_id>:*`. The [firewall module](../firewall/README.md) supplies the matching `<cloud_name>/firewall/flow` destination prefix. This is workload-local log storage, not a separate cross-account archive.
+The write statement requires the workload source account and bucket-owner-full-control ACL and restricts `aws:SourceArn` to `arn:<partition>:logs:<primary_region>:<account_id>:*`, with `<partition>` derived from `data.aws_partition.current`. The [firewall module](../firewall/README.md) supplies the matching `<cloud_name>/firewall/flow` destination prefix. This is workload-local log storage, not a separate cross-account archive.
 
 ---
 

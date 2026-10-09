@@ -102,7 +102,7 @@ profile. Profile and workload settings are resolved by the calling baseline.
 
 ### EC2 Isolation
 
-The EC2 Isolation EventBridge rule matches HIGH or CRITICAL, NEW, ACTIVE GuardDuty findings imported through Security Hub for `AwsEc2Instance` resources. It matches the exact regional GuardDuty `ProductArn`. The [handler](lambda/ec2_isolation.py) independently rechecks product, severity, workflow, and record state before instance operations; this is narrower than the separate IP Enrichment rule.
+The EC2 Isolation EventBridge rule matches HIGH or CRITICAL, NEW, ACTIVE GuardDuty findings imported through Security Hub for `AwsEc2Instance` resources. It matches the exact regional GuardDuty `ProductArn`. The module supplies `AWS_PARTITION` from `data.aws_partition.current` to the [handler](lambda/ec2_isolation.py), which constructs its expected product ARN using that value and the Lambda's `AWS_REGION`. The handler independently rechecks product, severity, workflow, and record state before instance operations; this is narrower than the separate IP Enrichment rule.
 
 The baseline supplies `ec2_auto_isolation_severities`, normally `["CRITICAL"]`, and Terraform joins that set into `AUTO_ISOLATION_SEVERITIES`. This child module has no default for that required input. The Python handler also falls back to `CRITICAL` for an absent or empty severity setting. HIGH events can reach the function, but are skipped unless the supplied severity set includes HIGH.
 
@@ -155,7 +155,7 @@ path restricted only to SSM. See [security policy](../networking/security_policy
 ```text
 source      = aws.securityhub
 detail-type = Security Hub Findings - Imported
-ProductArn  = arn:aws:securityhub:<region>::product/aws/guardduty
+ProductArn  = arn:<partition>:securityhub:<region>::product/aws/guardduty
 severity    = HIGH or CRITICAL
 resource    = AwsEc2Instance
 workflow    = NEW

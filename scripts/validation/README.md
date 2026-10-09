@@ -118,6 +118,13 @@ This allows client or custom deployments to override `CLOUD_NAME` without editin
 
 ### Region authority and execution context
 
+`validate-bootstrap.sh`, `validate-eventbridge.sh`, and `validate-sqs.sh`
+resolve `AWS_PARTITION` from the authenticated STS caller ARN using the shared
+validation helper. Expected S3 state, EventBridge target/DLQ, and SNS producer
+ARNs use that value rather than assuming `arn:aws:`. This shell value is not a
+required operator-supplied environment variable and does not establish service
+availability in other AWS partitions.
+
 The workload runner, workload exporters, and individual workload validators resolve the service Region from the **applied** `environments/<env>` output `primary_region`. The shared `resolve_workload_region` helper rejects a conflicting supplied `AWS_REGION`, including an explicitly empty value. The AWS profile's default Region, `AWS_DEFAULT_REGION`, and the S3 backend Region are not substitutes for that output. Use `unset AWS_REGION`, not `AWS_REGION=""`, when deliberately allowing the workload helper to resolve it; an unreadable or unapplied workload root still fails.
 
 Workload-bootstrap, control-plane, and security-operations validators/exporters instead require an explicit, non-empty service `AWS_REGION`. They do not discover their scope from workload state. Bootstrap/control-plane state checks use the separately resolved backend Region for their state S3/KMS queries. Keep these concepts distinct:
