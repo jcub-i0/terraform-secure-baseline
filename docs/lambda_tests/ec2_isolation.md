@@ -138,6 +138,17 @@ assert_test_context() (
 )
 assert_test_context
 
+# Use the authenticated caller's partition for test payloads and expected ARNs.
+TEST_CALLER_ARN="$(aws sts get-caller-identity \
+  --profile "$AWS_PROFILE" --region "$AWS_REGION" \
+  --query Arn --output text)"
+if [[ "$TEST_CALLER_ARN" =~ ^arn:([a-z0-9-]+):(iam|sts)::${EXPECTED_ACCOUNT_ID}:.+ ]]; then
+  export AWS_PARTITION="${BASH_REMATCH[1]}"
+else
+  printf 'Unable to resolve partition from caller ARN: %s\n' "$TEST_CALLER_ARN" >&2
+  exit 1
+fi
+
 # Run this only after the preflight succeeds. The directory is not auto-deleted.
 EVIDENCE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lambda-check.XXXXXX")"
 export EVIDENCE_DIR
@@ -156,10 +167,10 @@ an operator assertion for this test, not a control implemented by the Lambda.
 ```bash
 export INSTANCE_ID="<APPROVED-EC2-INSTANCE-ID>"
 export APPROVED_INSTANCE_ID="<SAME-INDEPENDENTLY-APPROVED-INSTANCE-ID>"
-export INSTANCE_ARN="arn:aws:ec2:${AWS_REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}"
+export INSTANCE_ARN="arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}"
 export FUNCTION_NAME="${NAME_PREFIX}-ec2-isolation"
 export ISOLATION_RULE_NAME="${NAME_PREFIX}-securityhub-ec2-high-critical"
-export GUARDDUTY_PRODUCT_ARN="arn:aws:securityhub:${AWS_REGION}::product/aws/guardduty"
+export GUARDDUTY_PRODUCT_ARN="arn:${AWS_PARTITION}:securityhub:${AWS_REGION}::product/aws/guardduty"
 ```
 
 The cases below assume the deployed automatic severity set is exactly
@@ -175,13 +186,14 @@ aws lambda get-function-configuration \
   --profile "${AWS_PROFILE}" \
   --region "${AWS_REGION}" \
   --function-name "${FUNCTION_NAME}" \
-  --query 'Environment.Variables.{QUARANTINE_SG_ID:QUARANTINE_SG_ID,SNS_TOPIC_ARN:SNS_TOPIC_ARN,AUTO_ISOLATION_SEVERITIES:AUTO_ISOLATION_SEVERITIES}' \
+  --query 'Environment.Variables.{QUARANTINE_SG_ID:QUARANTINE_SG_ID,SNS_TOPIC_ARN:SNS_TOPIC_ARN,AUTO_ISOLATION_SEVERITIES:AUTO_ISOLATION_SEVERITIES,AWS_PARTITION:AWS_PARTITION}' \
   --output json
 ```
 
 Expected:
 
 - `QUARANTINE_SG_ID` is populated.
+- `AWS_PARTITION` matches the partition derived from the active STS caller ARN.
 - `SNS_TOPIC_ARN` is populated for the normal baseline deployment.
 - `AUTO_ISOLATION_SEVERITIES` reflects the Terraform-configured severity set.
 
@@ -203,7 +215,7 @@ aws events describe-rule \
 The deployed pattern should require all of the following under `detail.findings`:
 
 ```text
-ProductArn   = arn:aws:securityhub:<region>::product/aws/guardduty
+ProductArn   = arn:<partition>:securityhub:<region>::product/aws/guardduty
 Severity     = HIGH or CRITICAL
 Resources    = AwsEc2Instance
 Workflow     = NEW
@@ -328,7 +340,7 @@ invoke_isolation_case() (
   [[ "$INSTANCE_ID" =~ ^i-([0-9a-f]{8}|[0-9a-f]{17})$ ]]
   [[ "$INSTANCE_ID" == "${APPROVED_INSTANCE_ID:?Approve the exact instance}" ]]
   [[ "$FUNCTION_NAME" == "${NAME_PREFIX}-ec2-isolation" ]]
-  [[ "$INSTANCE_ARN" == "arn:aws:ec2:${AWS_REGION}:${EXPECTED_ACCOUNT_ID}:instance/${INSTANCE_ID}" ]]
+  [[ "$INSTANCE_ARN" == "arn:${AWS_PARTITION}:ec2:${AWS_REGION}:${EXPECTED_ACCOUNT_ID}:instance/${INSTANCE_ID}" ]]
   umask 077
   run_dir="$(mktemp -d "${EVIDENCE_DIR}/${label}.XXXXXX")"
   printf 'Review evidence: %s\n' "$run_dir"
@@ -342,9 +354,9 @@ invoke_isolation_case() (
     --output json > "$run_dir/caller.json"
   aws lambda get-function-configuration --profile "$AWS_PROFILE" --region "$AWS_REGION" \
     --function-name "$FUNCTION_NAME" \
-    --query '{FunctionArn:FunctionArn,CodeSha256:CodeSha256,LastModified:LastModified,State:State,Isolation:Environment.Variables.AUTO_ISOLATION_SEVERITIES,Quarantine:Environment.Variables.QUARANTINE_SG_ID}' \
+    --query '{FunctionArn:FunctionArn,CodeSha256:CodeSha256,LastModified:LastModified,State:State,Isolation:Environment.Variables.AUTO_ISOLATION_SEVERITIES,Quarantine:Environment.Variables.QUARANTINE_SG_ID,Partition:Environment.Variables.AWS_PARTITION}' \
     --output json > "$run_dir/function.json"
-  jq -e '.State == "Active" and .Isolation == "CRITICAL"' "$run_dir/function.json" >/dev/null
+  jq -e --arg partition "$AWS_PARTITION" '.State == "Active" and .Isolation == "CRITICAL" and .Partition == $partition' "$run_dir/function.json" >/dev/null
   aws ec2 describe-instances --profile "$AWS_PROFILE" --region "$AWS_REGION" \
     --instance-ids "$INSTANCE_ID" --output json > "$run_dir/instance-before.json"
   vpc_id="$(terraform -chdir="environments/${ENVIRONMENT}" output -raw vpc_id)"
@@ -586,6 +598,7 @@ invoke_isolation_case "test-critical-non-guardduty-ec2" 0 0 \
   "$(jq -n \
     --arg ACCOUNT_ID "${ACCOUNT_ID}" \
     --arg AWS_REGION "${AWS_REGION}" \
+    --arg AWS_PARTITION "${AWS_PARTITION}" \
     --arg INSTANCE_ARN "${INSTANCE_ARN}" \
     --arg TEST_TIME "${TEST_TIME}" \
     --arg TEST_RUN_ID "${TEST_RUN_ID}" \
@@ -604,7 +617,7 @@ invoke_isolation_case "test-critical-non-guardduty-ec2" 0 0 \
         "Id": ("test-finding-critical-non-guardduty-ec2-001-" + $TEST_RUN_ID),
         "Title": "Manual test CRITICAL non-GuardDuty EC2 finding",
         "Description": "Manual test event used to validate the GuardDuty product gate.",
-        "ProductArn": "arn:aws:securityhub:\($AWS_REGION)::product/aws/inspector",
+        "ProductArn": "arn:\($AWS_PARTITION):securityhub:\($AWS_REGION)::product/aws/inspector",
         "Severity": {
           "Label": "CRITICAL"
         },
@@ -1181,7 +1194,7 @@ Ensure that all environment variables are correctly set prior to following the t
 
 Check:
 
-- `ProductArn` exactly matches `arn:aws:securityhub:${AWS_REGION}::product/aws/guardduty`.
+- `ProductArn` exactly matches `arn:${AWS_PARTITION}:securityhub:${AWS_REGION}::product/aws/guardduty`, and the Lambda's deployed `AWS_PARTITION` matches the active account's partition.
 - Finding severity is included in `AUTO_ISOLATION_SEVERITIES`.
 - Workflow status is `NEW` and record state is explicitly `ACTIVE`; missing `RecordState` fails closed.
 - Resource type is `AwsEc2Instance` and the resource ID is valid.
