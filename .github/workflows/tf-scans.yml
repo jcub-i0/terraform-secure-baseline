@@ -164,22 +164,16 @@ jobs:
 
       - name: Run repository Checkov scan
         if: always()
+        shell: bash
         run: |
-          set -uo pipefail
-          set +e
+          set -euo pipefail
+
           checkov -d . \
             -o junitxml \
             -o json \
             --output-file-path \
               "${REPORT_DIR}/repository/checkov-junit.xml,${REPORT_DIR}/repository/checkov.json" \
             --soft-fail
-          checkov_status=$?
-
-          if (( checkov_status != 0 )); then
-            echo "::warning::Checkov exited with status ${checkov_status}; its results remain non-blocking."
-          fi
-
-          exit 0
 
       - name: Upload scan results
         if: always()
