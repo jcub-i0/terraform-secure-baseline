@@ -25,7 +25,7 @@ ISOLATED_TAG = "Isolated"
 
 GUARDDUTY_PRODUCT_ARN = (
     f"arn:{AWS_PARTITION}:securityhub:{AWS_REGION}::product/aws/guardduty"
-    if AWS_REGION
+    if AWS_REGION and AWS_PARTITION
     else ""
 )
 
