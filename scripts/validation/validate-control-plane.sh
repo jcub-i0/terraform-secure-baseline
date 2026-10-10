@@ -55,7 +55,6 @@ NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${CONTROL_PLANE_ENV_NAME}}"
 
 REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
-CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
 STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-true}"
 REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
@@ -66,7 +65,7 @@ PROD_OU_NAME="${PROD_OU_NAME:-Prod}"
 SECURITY_OU_NAME="${SECURITY_OU_NAME:-Security}"
 SECURITY_OPERATIONS_ACCOUNT_NAME="${SECURITY_OPERATIONS_ACCOUNT_NAME:-security-operations}"
 
-for boolean_setting in   REQUIRE_CONTROL_PLANE_GITHUB_OIDC   CHECK_OPTIONAL_SECOPS_GROUPS   STRICT_IDENTITY_CENTER_ASSIGNMENTS   STRICT_ACCOUNT_OU_CHECKS   REQUIRE_STATE_STACK_REMOTE; do
+for boolean_setting in   REQUIRE_CONTROL_PLANE_GITHUB_OIDC   STRICT_IDENTITY_CENTER_ASSIGNMENTS   STRICT_ACCOUNT_OU_CHECKS   REQUIRE_STATE_STACK_REMOTE; do
   boolean_value="${!boolean_setting}"
   case "$boolean_value" in
     true|false)
@@ -91,15 +90,6 @@ WORKLOADS_OU_ID=""
 NONPROD_OU_ID=""
 PROD_OU_ID=""
 SECURITY_OU_ID=""
-
-ENABLE_SECOPS_ANALYST_DEV="false"
-ENABLE_SECOPS_ANALYST_STAGING="false"
-ENABLE_SECOPS_ANALYST_PROD="false"
-ENABLE_SECOPS_ANALYST_SECOPS="false"
-ENABLE_SECOPS_ENGINEER_DEV="false"
-ENABLE_SECOPS_ENGINEER_STAGING="false"
-ENABLE_SECOPS_ENGINEER_PROD="false"
-ENABLE_SECOPS_ENGINEER_SECOPS="false"
 
 export AWS_PAGER=""
 
@@ -210,9 +200,7 @@ resolve_identity_center_configuration() {
       .prod;
       type == "object" and
       (.account_id | type == "string" and test("^[0-9]{12}$")) and
-      (.primary_region | type == "string" and length > 0) and
-      ((.enable_secops_analyst // false) | type == "boolean") and
-      ((.enable_secops_engineer // false) | type == "boolean")
+      (.primary_region | type == "string" and length > 0)
     )
   ' >/dev/null <<<"$IDENTITY_CENTER_WORKLOADS"; then
     fail "IDENTITY_CENTER_WORKLOADS does not match the expected workload configuration structure"
@@ -220,9 +208,7 @@ resolve_identity_center_configuration() {
 
   if ! jq -e '
     type == "object" and
-    (.account_id | type == "string" and test("^[0-9]{12}$")) and
-    ((.enable_secops_analyst // false) | type == "boolean") and
-    ((.enable_secops_engineer // false) | type == "boolean")
+    (.account_id | type == "string" and test("^[0-9]{12}$"))
   ' >/dev/null <<<"$IDENTITY_CENTER_SECOPS"; then
     fail "IDENTITY_CENTER_SECOPS does not match the expected security-operations configuration structure"
   fi
@@ -231,16 +217,6 @@ resolve_identity_center_configuration() {
   ACCOUNT_ID_STAGING="$(jq -r '.staging.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
   ACCOUNT_ID_PROD="$(jq -r '.prod.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
   ACCOUNT_ID_SECOPS="$(jq -r '.account_id' <<<"$IDENTITY_CENTER_SECOPS")"
-
-  ENABLE_SECOPS_ANALYST_DEV="$(jq -r '.dev.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
-  ENABLE_SECOPS_ANALYST_STAGING="$(jq -r '.staging.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
-  ENABLE_SECOPS_ANALYST_PROD="$(jq -r '.prod.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
-  ENABLE_SECOPS_ANALYST_SECOPS="$(jq -r '.enable_secops_analyst // false' <<<"$IDENTITY_CENTER_SECOPS")"
-
-  ENABLE_SECOPS_ENGINEER_DEV="$(jq -r '.dev.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
-  ENABLE_SECOPS_ENGINEER_STAGING="$(jq -r '.staging.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
-  ENABLE_SECOPS_ENGINEER_PROD="$(jq -r '.prod.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_WORKLOADS")"
-  ENABLE_SECOPS_ENGINEER_SECOPS="$(jq -r '.enable_secops_engineer // false' <<<"$IDENTITY_CENTER_SECOPS")"
 
   success "Identity Center workload and security-operations configuration inputs are valid"
   info "Dev account ID: ${ACCOUNT_ID_DEV}"
@@ -1221,19 +1197,6 @@ check_identity_center() {
   check_identity_center_group "SecOps-Operator-Staging" "true"
   check_identity_center_group "SecOps-Operator-Prod" "true"
   check_identity_center_group "SecOps-Administrator" "true"
-
-  if [[ "$CHECK_OPTIONAL_SECOPS_GROUPS" == "true" ]]; then
-    check_identity_center_group "SecOps-Analyst-Dev" "$ENABLE_SECOPS_ANALYST_DEV"
-    check_identity_center_group "SecOps-Analyst-Staging" "$ENABLE_SECOPS_ANALYST_STAGING"
-    check_identity_center_group "SecOps-Analyst-Prod" "$ENABLE_SECOPS_ANALYST_PROD"
-    check_identity_center_group "SecOps-Engineer-Dev" "$ENABLE_SECOPS_ENGINEER_DEV"
-    check_identity_center_group "SecOps-Engineer-Staging" "$ENABLE_SECOPS_ENGINEER_STAGING"
-    check_identity_center_group "SecOps-Engineer-Prod" "$ENABLE_SECOPS_ENGINEER_PROD"
-    check_identity_center_group "SecOps-Analyst-SecOps" "$ENABLE_SECOPS_ANALYST_SECOPS"
-    check_identity_center_group "SecOps-Engineer-SecOps" "$ENABLE_SECOPS_ENGINEER_SECOPS"
-  else
-    warn "CHECK_OPTIONAL_SECOPS_GROUPS is false. Skipping optional SecOps-Analyst and SecOps-Engineer group checks."
-  fi
 
   section "Checking IAM Identity Center Terraform outputs and permission sets"
 

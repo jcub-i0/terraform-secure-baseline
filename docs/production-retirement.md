@@ -56,9 +56,6 @@ Terraform Destroy: confirm=DESTROY, delete_durable_retirement_data=true
     -> retirement-readiness validation
     -> reconfirm no change and readiness
     -> create saved workload destroy plan
-    -> create saved Identity Center cleanup plan
-    -> control-plane environment approval
-    -> verify and apply exact Identity Center cleanup plan
     -> workload-environment approval for final destroy
     -> verify saved destroy artifact and recheck readiness
     -> apply exact saved workload destroy plan
@@ -66,7 +63,7 @@ Terraform Destroy: confirm=DESTROY, delete_durable_retirement_data=true
 
 The workflows reference protected environments, but repository administrators must actually configure the required reviewer/deployment protection rules in GitHub. Declaring an `environment:` in YAML is not itself evidence that a human approval rule is configured.
 
-**Earlier steps are not rolled back by rejecting a later approval.** Durable-data deletion happens before creation of the final destroy plan. Identity Center cleanup has its own approval and is applied before the final workload-destroy job reaches its approval. Do not document either operation as waiting for the final workload-destroy approval.
+**Earlier steps are not rolled back by rejecting a later approval.** Durable-data deletion happens before creation of the final destroy plan. The final workload-destroy approval is distinct; declining it does not restore images or recovery points that were deleted earlier.
 
 ## Stage 0 — Decide Durable Asset Disposition
 
@@ -216,21 +213,13 @@ baseline-destroy-plan.sha256
 
 Destroy-mode validation permits only delete/no-op/read resource actions and requires at least one deletion. The workflow retains this artifact for one day. Treat the binary and readable plans as sensitive; checksums do not encrypt them.
 
-### 5. Review and approve Identity Center cleanup
+### 5. Approve and apply the workload destroy plan
 
-After the workload destroy plan exists, `identity-center-cleanup-plan` runs in `control-plane-plan`. It takes the configured `IDENTITY_CENTER_WORKLOADS` map and sets only the target workload's `enable_secops_analyst` and `enable_secops_engineer` inputs to false. It also requires the configured `IDENTITY_CENTER_SECOPS` input.
+When `terraform-destroy-plan` succeeds, `terraform-destroy-apply` becomes eligible for its own protected workload-environment approval. It downloads the reviewed destroy artifact, verifies checksums and exact context, rechecks production readiness, and applies the saved `.tfplan` without generating a new plan.
 
-It generates a separate saved plan for `bootstrap/control_plane/identity_center`. Review the complete plan: a narrowly changed input is not a guarantee that unrelated pre-existing drift cannot appear in that root's plan. Do not approve unexpected changes to other workloads or central administration.
+There is no additional Identity Center cleanup stage in this workflow. The baseline no longer creates optional customer Analyst/Engineer permission sets or policy attachments, so workload teardown no longer needs to detach those personas from workload-created IAM policies. If upgrading an older deployed Identity Center state with those personas enabled, review and apply their removal separately **before** destroying the workload that owns any referenced IAM policies. Plan and perform any additional customer-owned identity cleanup under its own governance.
 
-`identity-center-cleanup-apply` then uses the `control-plane` environment gate, verifies that cleanup artifact, and applies the exact saved plan. This removes the applicable dependencies before workload-created IAM policies are deleted; it is not a destroy of the whole Identity Center stack.
-
-The workflow changes the effective input for that run; it does not persistently rewrite the GitHub `IDENTITY_CENTER_WORKLOADS` variable or commit a configuration change. Reconcile the authoritative map with the intended post-retirement state through the normal reviewed configuration process so a later unrelated apply does not attempt to restore retired assignments.
-
-### 6. Approve and apply the workload destroy plan
-
-Only after successful Identity Center cleanup does `terraform-destroy-apply` become eligible. It has its own workload-environment gate. It downloads the existing destroy artifact, verifies checksums and exact context, rechecks production readiness, and applies the saved `.tfplan` without generating a new plan.
-
-Do not replace this step with `terraform destroy -auto-approve` or a newly generated unreviewed plan. If state or resources change and the saved plan becomes unusable, investigate and obtain a new reviewed plan; do not bypass verification.
+Do not replace the approved saved-plan step with `terraform destroy -auto-approve` or a newly generated unreviewed plan. If state or resources change and the saved plan becomes unusable, investigate and obtain a new reviewed plan; do not bypass verification.
 
 ## Artifact and Approval Boundaries
 
@@ -262,7 +251,7 @@ See the [workload state procedure](../bootstrap/prod/state/README.md) and [state
 
 If only Stage 1 has been applied, cancel retirement through a reviewed Apply with `production_retirement_mode=false`. The canonical normal service configuration is the source for capacity; verify actual live capacity, especially for autoscaled services, and restore normal protection/validation before treating the environment as operational.
 
-After durable cleanup has executed, changing retirement mode back does not recreate deleted images or recovery points. Confirm that the required image and recovery assets still exist in an approved location before attempting service recovery. If Identity Center cleanup already applied, separately restore intended assignments through a reviewed Identity Center plan where appropriate.
+After durable cleanup has executed, changing retirement mode back does not recreate deleted images or recovery points. Confirm that the required image and recovery assets still exist in an approved location before attempting service recovery. Customer-managed access assignments and any earlier Identity Center migration remain separate administrative responsibilities.
 
 If final destruction fails part-way, inspect the failed resource and Terraform state, preserve evidence, and generate/review a new plan for the remaining work. Do not enable force-delete flags or manually remove unrelated resources simply to turn the workflow green. Previously applied cleanup is not rolled back by a failed or rejected final destroy.
 
@@ -270,7 +259,7 @@ If final destruction fails part-way, inspect the failed resource and Terraform s
 
 Stage 1 is complete when the reviewed saved plan passes its guard and applies, the retirement inputs converge to no change, and actual ECS/scaling capacity is quiescent. Remaining durable data is inventoried but has not been implicitly deleted.
 
-Final retirement is complete when scoped durable deletion has been explicitly approved and verified, readiness has passed, the separately reviewed Identity Center cleanup has applied, the exact reviewed workload destroy plan has applied, and retained assets/state/account responsibilities are recorded. Account/state deletion is not a prerequisite to calling the workload root destroyed.
+Final retirement is complete when scoped durable deletion has been explicitly approved and verified, readiness has passed, the exact reviewed workload destroy plan has applied, and retained assets/state/account responsibilities are recorded. Account/state deletion is not a prerequisite to calling the workload root destroyed.
 
 ## Implementation References
 

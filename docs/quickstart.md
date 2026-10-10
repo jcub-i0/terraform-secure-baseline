@@ -827,12 +827,7 @@ terraform -chdir=environments/prod plan
 terraform -chdir=environments/prod apply
 ```
 
-Record environment outputs needed by the `bootstrap/control_plane/identity_center` stack, such as:
-
-```text
-logs_s3_readonly_policy_name
-logs_cmk_decrypt_policy_name
-```
+Workload outputs include log-read policy names for optional customer-managed workforce access, but the baseline's Identity Center stack no longer consumes those outputs.
 
 If using GitHub OIDC, the account reconciliation helper later reads `lambda_cmk_arn` and `secrets_manager_cmk_arn` directly from the workload Terraform state. Those CMK values do not need to be copied manually.
 
@@ -1110,7 +1105,7 @@ identity_center_workloads
 identity_center_secops
 ```
 
-The workload map contains `dev`, `staging`, and `prod`. Each workload always receives its `SecOps-Operator` access model; optional Analyst and Engineer access remains disabled unless explicitly enabled. The security-operations object always enables the required `SecOps-Administrator` access model, while its Analyst and Engineer roles are optional.
+The workload map contains `dev`, `staging`, and `prod`. Each workload receives `SecOps-Operator` access for the approved rollback workflow. The security-operations object enables `SecOps-Administrator`. Customers provision additional workforce identities and permission sets outside this stack.
 
 For GitHub Actions, the matching control-plane environment variables are:
 
@@ -1119,7 +1114,7 @@ IDENTITY_CENTER_WORKLOADS
 IDENTITY_CENTER_SECOPS
 ```
 
-For local deployment, create `bootstrap/control_plane/identity_center/terraform.tfvars` from its example only when no local file already exists. Review `cloud_name` (default `tf-secure-baseline`) and set it explicitly if needed to match the workload roots; populate the workload account IDs, Regions, expected workload policy names, and the security-operations account ID. Review rather than overwrite an existing configuration.
+For local deployment, create `bootstrap/control_plane/identity_center/terraform.tfvars` from its example only when no local file already exists. Review `cloud_name` (default `tf-secure-baseline`) and set it explicitly if needed to match the workload roots; populate the workload account IDs and Regions and the security-operations account ID. Review rather than overwrite an existing configuration.
 
 Then apply:
 
@@ -1142,7 +1137,7 @@ SecOps-Operator-Prod
 SecOps-Administrator
 ```
 
-Workload-created customer-managed policy names are only attached when the corresponding optional Analyst or Engineer role is enabled. Keeping those roles disabled during the first deployment avoids a circular dependency; re-apply Identity Center after workload deployment if optional access is later enabled.
+The baseline does not attach workload-created log policies to customer workforce groups through this Identity Center root. Customers are responsible for any such attachments in their own access-management configuration.
 
 ---
 
@@ -1238,7 +1233,7 @@ Expected workflows:
 | Terraform Apply | Generates its own saved binary workload plan, readable plan, metadata, and checksum; waits for protected-environment approval; verifies and applies that exact plan without replanning |
 | Deploy Application | Builds/publishes an application image with the dedicated Image Publisher role, resolves the authoritative digest, and creates a one-field release PR; it does not run Terraform Apply |
 | Reconcile Workload Account | Runs `plan-only` or generates a reconciliation plan, waits for approval, applies the exact saved plan, and runs strict bootstrap validation |
-| Terraform Destroy | Runs preflight; production adds separately approved durable cleanup/readiness; then workload destroy planning, separate Identity Center cleanup plan/apply, and final approved exact destroy apply |
+| Terraform Destroy | Runs preflight; production adds separately approved durable cleanup/readiness; then workload destroy planning and final approved exact destroy apply |
 | Export Bootstrap Evidence | Materializes the state backend, initializes workload roots, and exports bootstrap evidence |
 | Export Baseline Evidence | Exports the 16-script workload baseline evidence package |
 | Export Control Plane Evidence | Materializes the control-plane state backend, initializes control-plane roots, and exports control-plane evidence |
@@ -1258,16 +1253,14 @@ The subsequent dependency order is:
 
 ```text
 saved workload destroy plan
-  -> Identity Center cleanup plan
-  -> control-plane approval and exact cleanup apply
   -> workload destroy approval
   -> artifact verification and production readiness recheck
   -> exact workload destroy apply
 ```
 
-The Identity Center approval is separate from the final workload approval. A later rejection does not undo earlier access changes or durable-data deletion. Cleanup applies a fresh inventory; it does not replay the preflight item list as a checksummed deletion artifact. The [retirement runbook](production-retirement.md) describes the complete boundaries and abort behavior.
+No Identity Center cleanup job is included in the workload Destroy workflow. A later rejection does not undo prior durable-data deletion. The durable-data cleanup re-inventories its scope; it does not replay the preflight item list as a checksummed deletion artifact. The [retirement runbook](production-retirement.md) describes the complete boundaries and abort behavior.
 
-Development/minimal teardown sets `delete_durable_retirement_data=false` and does not require production retirement mode, but the workflow still includes the Identity Center cleanup dependency.
+Development/minimal teardown sets `delete_durable_retirement_data=false` and does not require production retirement mode.
 
 Evidence jobs use Plan-role credentials and read-only validation commands. That description does not imply the IAM role has no write permissions whatsoever: Terraform planning/backend operations have their own state/lock permissions. On clean runners the relevant state/backend files must be materialized before initialization; bootstrap/control-plane evidence requires remote-state proof by default.
 
@@ -1440,7 +1433,6 @@ normal production (production_retirement_mode=false)
   -> separately approved durable cleanup
   -> readiness validation
   -> saved workload destroy plan
-  -> separately planned/approved Identity Center cleanup
   -> final workload-destroy approval
   -> artifact verification and readiness recheck
   -> exact saved destroy-plan apply
@@ -1466,22 +1458,11 @@ Do not change the deployment profile, delete the service entry, or set its diges
 
 ## Identity Center Dependency
 
-For one workload, do not destroy the whole Identity Center stack. Optional Analyst/Engineer access can depend on workload-created IAM policies.
+For one workload, do not destroy the entire Identity Center stack. It also manages Operator access for other workload accounts and Administrator access for the security-operations account.
 
-The workflow derives cleanup inputs by setting these fields to `false` for the selected workload inside `identity_center_workloads`:
+The workload Destroy workflow no longer plans or applies any Identity Center changes: customer workforce permission sets are not managed by this baseline. If upgrading a legacy deployment with old optional permissions attached to workload-owned IAM policies, review and apply the Identity Center migration plan **before** retiring the dependent workload. Customer-owned account assignments must be retired through the customer's access governance.
 
-```text
-enable_secops_analyst
-enable_secops_engineer
-```
-
-It plans and applies that control-plane change under its own approval **before the final workload-destroy approval**. Review the complete cleanup plan for unrelated changes; it is still a plan of the shared Identity Center root.
-
-These effective input changes do not persistently rewrite the `IDENTITY_CENTER_WORKLOADS` GitHub variable or local configuration. Reconcile the intended long-term settings so a later Identity Center apply does not unexpectedly recreate dependencies on retired workload policies.
-
-Keep the Identity Center stack and its backend available until all GitHub workload-destroy workflows that depend on it have completed. Do not follow a “destroy Identity Center first, then run the normal workload Destroy workflows” recipe.
-
----
+Retain the shared Identity Center stack and its backend while the remaining workloads or operational access paths depend on them.
 
 ## Workload Account and State Teardown
 
@@ -1511,7 +1492,7 @@ This is a dependency checklist, **not** a fully qualified one-command platform d
 
 ### 0. Prepare Identity Center
 
-Review the selected workload’s optional policy dependencies, but keep the shared Identity Center stack available for the normal Destroy workflow’s cleanup plan/apply. Complete those workload workflows before considering whole-stack removal.
+Keep the shared Identity Center stack available while baseline-managed Operator and Administrator access is required. Migrate any legacy optional personas and separately review customer-owned access before the associated workload IAM policies are deleted. Do not assume the workload Destroy workflow cleans up customer identities.
 
 ### 1. Dev
 

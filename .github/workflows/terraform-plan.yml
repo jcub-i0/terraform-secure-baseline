@@ -139,13 +139,7 @@ jobs:
               (.account_id | type == "string") and
               (.account_id | test("^[0-9]{12}$")) and
               (.primary_region | type == "string") and
-              (.primary_region | length > 0) and
-              ((.enable_secops_analyst // false) | type == "boolean") and
-              ((.enable_secops_engineer // false) | type == "boolean") and
-              (.logs_s3_readonly_policy_name | type == "string") and
-              (.logs_s3_readonly_policy_name | length > 0) and
-              (.logs_cmk_decrypt_policy_name | type == "string") and
-              (.logs_cmk_decrypt_policy_name | length > 0)
+              (.primary_region | length > 0)
             )
           ' <<< "${TF_VAR_identity_center_workloads}" >/dev/null; then
             echo "::error::IDENTITY_CENTER_WORKLOADS is not valid JSON matching the Terraform workload map schema."
@@ -155,13 +149,7 @@ jobs:
           if ! jq -e '
             type == "object" and
             (.account_id | type == "string") and
-            (.account_id | test("^[0-9]{12}$")) and
-            ((.enable_secops_analyst // false) | type == "boolean") and
-            ((.enable_secops_engineer // false) | type == "boolean") and
-            ((.logs_s3_readonly_policy_name == null) or
-              (.logs_s3_readonly_policy_name | type == "string")) and
-            ((.logs_cmk_decrypt_policy_name == null) or
-              (.logs_cmk_decrypt_policy_name | type == "string"))
+            (.account_id | test("^[0-9]{12}$"))
           ' <<< "${TF_VAR_identity_center_secops}" >/dev/null; then
             echo "::error::IDENTITY_CENTER_SECOPS is not valid JSON matching the Terraform security-operations object schema."
             exit 1

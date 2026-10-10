@@ -1,178 +1,57 @@
 # Identity Center Module
 
-## Overview
+## Purpose and ownership boundary
 
-The `modules/identity_center` module creates IAM Identity Center groups, permission sets, policy attachments, and account assignments for one target AWS account.
+The `modules/identity_center` module manages only the IAM Identity Center access needed by the baseline's operational contracts: workload `SecOps-Operator` and security-operations `SecOps-Administrator`. A caller enables the appropriate persona, supplies the group display name, and selects the target AWS account.
 
-It is a reusable persona module: the caller decides which SecOps personas are enabled, supplies their group names, and identifies the account that receives each assignment.
+**Customer workforce identities and permissions are customer-managed.** This module does not create generic security-analyst or security-engineer groups, permission sets, attachments, or account assignments. Organizations should grant investigative and response access through their own identity governance and access reviews.
 
-See [main.tf](main.tf), [variables.tf](variables.tf), and [outputs.tf](outputs.tf). The target `account_id` is an assignment destination; it does not switch AWS provider credentials into that account.
+The control-plane caller in [`bootstrap/control_plane/identity_center`](../../bootstrap/control_plane/identity_center/README.md) creates Operator access for `dev`, `staging`, and `prod`, and Administrator access for the dedicated `security-operations` account.
 
-The control-plane Identity Center stack currently uses this module for:
+## Resources and prerequisites
 
-- workload `SecOps-Operator` access in `dev`, `staging`, and `prod`;
-- optional workload Analyst and Engineer access;
-- required `SecOps-Administrator` access in the security-operations account;
-- optional security-operations Analyst and Engineer access.
+For enabled personas, this module manages Identity Center groups (`aws_identitystore_group`), permission sets (`aws_ssoadmin_permission_set`), policy attachments/inline policy, and account assignments (`aws_ssoadmin_account_assignment`). It does not manage users, group membership, external IdP/SCIM configuration, the Identity Center instance, Organizations, AWS accounts, workload EventBridge buses, or customer workforce roles.
 
----
+The module discovers an existing Identity Center instance through `aws_ssoadmin_instances` and selects the first ARN and identity-store ID. It does not provide an instance selector or reject multiple results; verify the administrative account and Identity Center Region before deployment. `account_id` identifies the assignment destination, not an AWS provider role switch.
 
-## What the Module Manages
+## Baseline-managed personas
 
-When the corresponding persona is enabled, the module can create:
-
-- `aws_identitystore_group`
-- `aws_ssoadmin_permission_set`
-- AWS-managed permission-set policy attachments
-- customer-managed permission-set policy attachments
-- inline permission-set policies
-- `aws_ssoadmin_account_assignment`
-
-The module discovers the existing IAM Identity Center instance and identity store with `aws_ssoadmin_instances`, using the caller's AWS provider context. It selects element `[0]` from each returned ARN/identity-store collection. There is no configurable instance selector or explicit exactly-one-instance guard in this module. Establish the intended existing organization instance and its Region before deployment; do not assume an arbitrary multi-instance response is unambiguous.
-
-It does **not** create:
-
-- the IAM Identity Center instance;
-- users or group membership;
-- customer-managed IAM policies referenced by permission sets;
-- workload EventBridge buses;
-- AWS accounts or Organizations structure.
-
----
-
-## Persona Model
-
-| Persona | Default | Session | Primary permissions |
-|---|---:|---:|---|
-| `SecOps-Administrator` | Disabled | 2 hours | AWS-managed `AdministratorAccess` |
-| `SecOps-Operator` | Enabled | 2 hours | EventBridge discovery plus `DescribeEventBus` / `PutEvents` on the configured SecOps bus |
-| `SecOps-Analyst` | Disabled | 4 hours | `SecurityAudit`, `ReadOnlyAccess`, and configured log-read policies |
-| `SecOps-Engineer` | Disabled | 4 hours | Analyst-style visibility plus the six listed response actions on `Resource = "*"` |
-
-The caller supplies the actual Identity Center group display names. This module does not impose fixed default group names. Permission-set names use the persona and `environment`, not the group display name. For example, a `SecOps-Operator-Dev` group can be assigned `SecOps-Operator-dev`.
-
-The persona flags are independent: enabling Administrator does not disable the default-enabled Operator. Administrator-only callers must explicitly set `enable_secops_operator = false`. Session durations are fixed in the resource definitions, not exposed as module inputs.
-
-### SecOps-Administrator
-
-When enabled, the module creates:
-
-- the configured Administrator group;
-- permission set `SecOps-Administrator-${environment}`;
-- AWS-managed `AdministratorAccess` attachment;
-- an account assignment for the configured `account_id`.
-
-This persona is disabled by default and is enabled explicitly by the control-plane stack for the dedicated security-operations account.
+| Persona | Default | Session | Managed authority |
+|---|---|---|---|
+| `SecOps-Operator` | Enabled | 2 hours | EventBridge bus discovery and event publication on the configured workload SecOps bus |
+| `SecOps-Administrator` | Disabled | 2 hours | AWS-managed `AdministratorAccess` for the security-operations account |
 
 ### SecOps-Operator
 
-When enabled, the module creates permission set:
+When enabled, the module creates the supplied Operator group, a `SecOps-Operator-${environment}` permission set, its inline policy, and an account assignment.
 
-```text
-SecOps-Operator-${environment}
-```
+The inline policy permits `events:ListEventBuses` with `Resource = "*"` and scopes `events:DescribeEventBus` / `events:PutEvents` to the supplied `secops_event_bus_arn`. The bus ARN is required for Operator access. The module accepts this ARN without verifying its existence or matching the workload bus resource policy.
 
-Its inline policy allows:
+The control-plane root constructs the bus ARN using the provider's AWS partition, the workload account ID, Region, `cloud_name`, and environment. The workload bus policy separately restricts `custom.rollback` publication to matching Identity Center Operator role ARNs and explicitly denies nonmatching publishers. Neither the Operator policy nor the Lambda independently authenticates caller-supplied approver/ticket metadata. Validate both successful authorized publication and denied unauthorized publication before relying on rollback.
 
-- `events:ListEventBuses` across EventBridge;
-- `events:DescribeEventBus` and `events:PutEvents` on the configured `secops_event_bus_arn`.
+### SecOps-Administrator
 
-`secops_event_bus_arn` is required whenever Operator access is enabled.
+When enabled, the module creates the supplied Administrator group, a `SecOps-Administrator-${environment}` permission set, an `AdministratorAccess` attachment, and an account assignment. The control-plane root enables it for the dedicated security-operations account only and sets `enable_secops_operator = false` there.
 
-The Operator persona submits events rather than directly administering EC2 or Lambda. Its inline grant scopes `DescribeEventBus` and `PutEvents` to the configured bus ARN, but does not authenticate event payloads. The workload bus resource policy separately restricts `custom.rollback` publication to matching Identity Center Operator role ARNs and explicitly denies other publishers. Neither policy independently validates the named approver or ticket.
-
-The built-in control-plane caller derives the prefixed event-bus ARN from its `cloud_name` input (default `tf-secure-baseline`) and the workload map key, matching automation's `<name_prefix>-secops-bus`. See the [root's bus-identity contract](../../bootstrap/control_plane/identity_center/README.md#operator-bus-identity). This module accepts the supplied ARN without independently querying or validating the live bus.
-
-### SecOps-Analyst
-
-When enabled, the Analyst permission set receives:
-
-- AWS-managed `SecurityAudit`;
-- AWS-managed `ReadOnlyAccess`;
-- the configured centralized-logs S3 read-only customer-managed policy;
-- the configured logs KMS decrypt customer-managed policy.
-
-Both customer-managed policy names are required when Analyst access is enabled.
-
-### SecOps-Engineer
-
-When enabled, the Engineer permission set receives:
-
-- AWS-managed `SecurityAudit`;
-- AWS-managed `ReadOnlyAccess`;
-- the configured centralized-logs S3 read-only customer-managed policy;
-- the configured logs KMS decrypt customer-managed policy;
-- an inline response policy.
-
-The inline policy currently permits:
-
-```text
-securityhub:BatchUpdateFindings
-ec2:CreateTags
-ec2:ModifyInstanceAttribute
-ec2:ReplaceIamInstanceProfileAssociation
-ec2:AssociateIamInstanceProfile
-ec2:DisassociateIamInstanceProfile
-```
-
-All six actions share one unconditional `Allow` statement with `Resource = "*"`. The module does not restrict them by instance ID, resource tag, environment prefix, or approval state, and does not set a permission-set permissions boundary. `iam:PassRole` is not granted by this inline policy. Do not infer that every profile-association action will therefore succeed, or describe the persona as narrowly resource-scoped; effective access depends on all applicable policies and AWS requirements.
-
-Both customer-managed policy names are required when Engineer access is enabled. Analyst and Engineer also attach AWS-managed policies by ARN rather than freezing their policy documents in this repository; inspect their effective deployed contents during access review.
-
----
-
-## Customer-Managed Policy References
-
-Analyst and Engineer roles reference existing IAM policies by **name and path** through IAM Identity Center customer-managed policy attachments.
-
-The module does not create these IAM policies. The referenced policy must already exist in the target account before AWS can successfully provision an enabled permission set attachment.
-
-The default policy path is:
-
-```text
-/
-```
-
-This design avoids a Terraform dependency from the control plane into workload remote state while still allowing workload-specific policies to be attached centrally. Matching names/paths do not establish equivalent policy contents across accounts. Review the actual policy documents in each target account; these attachments are additive grants, not a boundary limiting the AWS-managed policies.
-
-AWS requires the matching policy name/path in each assigned target account; see [CustomerManagedPolicyReference](https://docs.aws.amazon.com/singlesignon/latest/APIReference/API_CustomerManagedPolicyReference.html). The module does not copy or create the referenced policies.
-
----
+Administrator access is broad, including delegated-administration consequences. Assignment and group membership must be separately reviewed.
 
 ## Inputs
 
-| Name | Type | Default | Requirement |
+| Input | Type | Default | Meaning |
 |---|---|---|---|
-| `environment` | `string` | required | Suffix used in permission-set names. |
-| `account_id` | `string` | required | Target AWS account for assignments. |
-| `secops_event_bus_arn` | `string` | `null` | Required when `enable_secops_operator = true`. |
-| `enable_secops_analyst` | `bool` | `false` | Enables Analyst resources. |
-| `enable_secops_engineer` | `bool` | `false` | Enables Engineer resources. |
-| `enable_secops_operator` | `bool` | `true` | Enables Operator resources. |
-| `enable_secops_administrator` | `bool` | `false` | Enables Administrator resources. |
-| `secops_analyst_group_name` | `string` | `null` | Required when Analyst is enabled. |
-| `secops_engineer_group_name` | `string` | `null` | Required when Engineer is enabled. |
-| `secops_operator_group_name` | `string` | `null` | Required when Operator is enabled. |
-| `secops_administrator_group_name` | `string` | `null` | Required when Administrator is enabled. |
-| `logs_s3_readonly_policy_name` | `string` | `null` | Required when Analyst or Engineer is enabled. |
-| `logs_cmk_decrypt_policy_name` | `string` | `null` | Required when Analyst or Engineer is enabled. |
-| `customer_managed_policy_path` | `string` | `/` | Path used for customer-managed policy references. |
+| `environment` | `string` | required | Permission-set naming suffix |
+| `account_id` | `string` | required | Target account receiving the assignment |
+| `secops_event_bus_arn` | `string` | `null` | Required if Operator is enabled |
+| `enable_secops_operator` | `bool` | `true` | Manage the workload rollback Operator persona |
+| `secops_operator_group_name` | `string` | `null` | Required, nonblank if Operator is enabled |
+| `enable_secops_administrator` | `bool` | `false` | Manage Administrator access |
+| `secops_administrator_group_name` | `string` | `null` | Required, nonblank if Administrator is enabled |
 
-The module validates role-dependent inputs, but its `environment` and `account_id` variables have no name/12-digit validation. Enabled persona group names must be nonblank. The bus ARN and required log-policy-name validations reject `null`; they do not prove ARN syntax, existence, ownership, or nonblank policy content. The path check rejects an empty string, not every invalid IAM path. The control-plane caller adds its own input checks; AWS/provider validation can reject additional invalid values.
+The two persona flags are independent; an Administrator-only caller must explicitly disable Operator. The module validates the dependent group-name and bus-ARN inputs but does not validate the account ID's length, the environment's spelling, or existence/ownership of the event bus. A bare call with only `environment` and `account_id` is insufficient because Operator defaults to enabled.
 
-All fourteen inputs are listed above. Operator defaults to enabled but its group name and bus ARN default to `null`, so a bare module call with only `environment` and `account_id` is not a complete valid configuration.
+## Example usage
 
----
-
-## Usage
-
-### Workload Operator example
-
-These are caller examples placed at `bootstrap/control_plane/identity_center`,
-which explains the relative `source` path. The IDs are synthetic 12-digit
-examples. The workload example uses a commercial AWS ARN; the actual
-control-plane root derives the prefixed bus ARN using its provider's partition
-and the configured account, Region, and naming inputs.
+A workload caller:
 
 ```hcl
 module "identity_center_workload" {
@@ -184,13 +63,10 @@ module "identity_center_workload" {
   enable_secops_operator     = true
   secops_operator_group_name = "SecOps-Operator-Dev"
   secops_event_bus_arn       = "arn:aws:events:us-east-1:333333333333:event-bus/tf-secure-baseline-dev-secops-bus"
-
-  enable_secops_analyst  = false
-  enable_secops_engineer = false
 }
 ```
 
-### Security-operations Administrator example
+A security-operations caller:
 
 ```hcl
 module "identity_center_secops" {
@@ -201,76 +77,22 @@ module "identity_center_secops" {
 
   enable_secops_administrator     = true
   secops_administrator_group_name = "SecOps-Administrator"
-
-  enable_secops_operator = false
+  enable_secops_operator          = false
 }
 ```
 
----
+## Outputs and validation
 
-## Outputs
+`permission_set_arns` is the sole module output. It contains `secops-operator` and/or `secops-administrator` keys only when enabled. It does not return group principals, membership, policies, assignment principal IDs, or session evidence.
 
-### `permission_set_arns`
+The [control-plane validator](../../scripts/validation/validate-control-plane.sh) checks named baseline groups, output-backed permission-set existence, and the presence of account assignments. It does not check group membership, exact assignment principals, complete effective permissions, user login, or the live bus ARN/policy pairing. `STRICT_IDENTITY_CENTER_ASSIGNMENTS=true` makes absent assignments a failure but is not a full authorization audit.
 
-Returns only the permission sets that are enabled for the module instance. Disabled keys are absent, not present with `null`. This is the sole module output; it does not return the instance ID, group IDs, account-assignment principals, or policy documents:
+Workload Operator permission sets can be deployed before the actual workload EventBridge buses because the ARN is used as a policy resource without live lookup. Verify the deployed bus and actual authorized session afterward. Access should not be represented as operationally qualified solely because Terraform provisioned a permission set.
 
-Illustrative map value:
+## Breaking-change and migration boundary
 
-```hcl
-{
-  "secops-administrator" = "..." # when enabled
-  "secops-operator"      = "..." # when enabled
-  "secops-analyst"       = "..." # when enabled
-  "secops-engineer"      = "..." # when enabled
-}
-```
+Previous module versions optionally managed `SecOps-Analyst` and `SecOps-Engineer` workforce personas. Their Terraform resources, configuration inputs, and output keys have been removed. If those personas were enabled in an existing state, a normal Terraform plan will propose removing their groups, assignments, and permission sets. This is **access revocation**, not a documentation-only change.
 
----
+Before applying a removal plan, inventory live assignments and principals, arrange replacement customer-owned access if required, and review the complete control-plane plan. Do not destroy the shared Identity Center root when retiring one workload. Workload-created centralized-log read and decrypt IAM policies remain available for separately governed customer access; they are no longer attached here.
 
-## Deployment Dependencies
-
-IAM Identity Center must already be enabled and accessible from the account running this module.
-
-For workload deployments:
-
-- Operator access can be created before the actual SecOps EventBridge bus exists because the ARN is used to scope the inline policy.
-- Analyst and Engineer roles should remain disabled until their referenced customer-managed log-access policies exist in the target account.
-
-For the security-operations deployment, the current control-plane stack enables Administrator access and disables Operator access.
-
-The assignment resources have explicit dependencies on AWS-managed attachments and, for Operator/Engineer, the respective inline policy. Analyst/Engineer assignment dependencies do **not** explicitly include the customer-managed log-policy attachments. Do not describe the graph as a universal “all attachments complete before assignment” barrier. Review provisioning errors and the resulting live permission set/assignment before accepting access.
-
-Disabling a persona or removing the calling module plans removal of its group, permission set, policy attachments, and assignment. User/group-membership management remains external. For workload retirement, coordinate optional role/attachment removal through the [production retirement procedure](../../docs/production-retirement.md); do not tear down the entire Identity Center root while other workloads still depend on it.
-
----
-
-## Validation
-
-The module itself does not perform an end-user login test. The [control-plane validator](../../scripts/validation/validate-control-plane.sh) checks named groups, describes permission-set ARNs returned by the root outputs, and checks that each queried account/permission-set pair has at least one assignment. It does not compare the assignment's principal ID/type to the Terraform-created group or reject all unexpected assignments. A group-presence check is likewise not membership validation.
-
-That validator does not compare the complete inline/managed/customer-managed policy contents, configured session durations, or exact Operator bus ARN as part of its Identity Center checks. `STRICT_IDENTITY_CENTER_ASSIGNMENTS=true` makes a missing assignment a failure; it does not turn the count check into exact principal/policy validation. Optional group checks additionally require `CHECK_OPTIONAL_SECOPS_GROUPS=true` when desired.
-
-Effective human access should still be verified through an IAM Identity Center login and role-assumption test when performing release or client-readiness validation.
-
----
-
-## Security Considerations
-
-- Identity Center provides short-lived federated AWS sessions rather than requiring long-lived IAM user credentials for these personas.
-- Personas have distinct policies. Operator is enabled by default; Administrator, Analyst, and Engineer require opt-in.
-- The Operator inline grant scopes Describe/Put actions to the supplied EventBridge bus ARN, without an approval or event-payload condition.
-- Analyst and Engineer customer-managed policies are resolved in the target account by name and path.
-- Administrator access is intentionally opt-in and should be limited to accounts where full administrative access is required.
-
----
-
-## Limitations
-
-- The module does not provision or synchronize users.
-- The module does not manage external IdP federation, SCIM, or conditional-access policy.
-- The module does not create the customer-managed policies used by Analyst or Engineer roles.
-- The module does not validate that an EventBridge bus exists before creating an Operator policy that references its ARN.
-- Account-specific naming and persona policy are determined by the calling stack.
-- Permission sets and policy references are not proof of approved group membership, effective access, or successful rollback.
-- AWS-managed policy attachment ARNs use `data.aws_partition.current`; the calling stack must still supply an appropriate `secops_event_bus_arn`. Partition-aware ARNs alone do not establish support for every AWS partition.
-- The module does not configure MFA requirements, a permission boundary, approval enforcement, or a universal resource-tag restriction for these personas.
+This module does not enforce MFA, privileged session approval, conditional access, or membership provisioning. Identity Center configuration does not replace the organization's access-governance procedures.

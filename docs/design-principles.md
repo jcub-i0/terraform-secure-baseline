@@ -213,7 +213,7 @@ SecOps-Operator-Prod
 SecOps-Administrator
 ```
 
-Optional Analyst and Engineer access can be enabled per workload account and for the security-operations account.
+Investigative, engineering, and other customer workforce access is configured by the customer outside the baseline-managed Identity Center personas.
 
 The access model is designed so that humans receive only the access needed for their function. Workload `SecOps-Operator` access is intended for rollback-event submission, while `SecOps-Administrator` provides centralized security-operations administrative access. The workload bus policy restricts `custom.rollback` publication to matching permission-set-derived Operator role ARNs and explicitly denies other publishers. Human approval remains an operational requirement rather than an independently authenticated Lambda check.
 

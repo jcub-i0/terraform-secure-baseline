@@ -461,7 +461,6 @@ validation-results/control-plane/<timestamp>/
 | `CONTROL_PLANE_ENV_NAME` | `<control-plane>` |
 | `REQUIRE_CONTROL_PLANE_GITHUB_OIDC` | `<true/false>` |
 | `EXPECTED_GITHUB_REPOSITORY` | `<owner/repo/not-set>` |
-| `CHECK_OPTIONAL_SECOPS_GROUPS` | `<true/false>` |
 | `STRICT_IDENTITY_CENTER_ASSIGNMENTS` | `<true/false>` |
 | `STRICT_ACCOUNT_OU_CHECKS` | `<true/false>` |
 | `REQUIRE_STATE_STACK_REMOTE` | `<true/false>` |
@@ -570,10 +569,9 @@ Use only when an authorized retirement was actually performed. This is a compani
 | Durable cleanup and post-cleanup verification | `<Complete/Failed/Not Run>` | `<ECR/Backup evidence; execution re-inventories>` |
 | Live zero-capacity retirement readiness | `<PASS/FAIL/Not Run>` | `<desired/running/pending, scaling, native protections and scoped data>` |
 | Saved workload destroy plan | `<Created/Not Created>` | `<artifact and review>` |
-| Separate Identity Center cleanup plan/apply | `<Complete/Failed/Not Run>` | `<control-plane approval; occurs before final workload approval>` |
 | Final workload-destroy approval and exact apply | `<Complete/Failed/Not Run>` | `<approval, metadata/checksum, readiness recheck, apply>` |
 | Retained recovery assets / external evidence verified | `<Complete/Incomplete/Not Run>` | `<post-operation evidence>` |
-| Persistent Identity Center configuration reconciled | `<Complete/Outstanding/Not Applicable>` | `<source-of-truth update>` |
+| Customer workforce access dependencies reviewed | `<Complete/Outstanding/Not Applicable>` | `<separate IAM Identity Center governance>` |
 | Aborted/partial operation and remaining obligations | `<description/none>` | Earlier cleanup is not undone by rejecting a later approval |
 
 The complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
@@ -597,7 +595,6 @@ Examples of environment-specific exceptions may include:
 - Network Firewall and NAT Gateway not required when `effective_egress_mode = vpc_endpoints_only`
 - AWS Config rules not required when Config is intentionally disabled by deployment profile
 - Pending SNS email confirmation where subscriber approval is still required
-- Optional Identity Center Analyst/Engineer groups intentionally disabled
 - ECS operational alarm state is `INSUFFICIENT_DATA` while metric evaluation is not yet complete
 - Image Publisher role intentionally absent because application publication is disabled and the role is not required
 - Workload CMK policy checks intentionally run with `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` during transitional validation

@@ -612,7 +612,7 @@ SecOps-Operator-Prod
 SecOps-Administrator
 ```
 
-Optional Analyst and Engineer groups can be enabled per workload account and for the security-operations account.
+Additional customer workforce identities and their assignments are managed outside the baseline.
 
 The access model separates operational duties:
 
@@ -620,8 +620,6 @@ The access model separates operational duties:
 |-----|---------|
 | SecOps-Operator | Submit approved rollback events in a workload account |
 | SecOps-Administrator | Administrative access to the centralized security-operations account |
-| SecOps-Analyst | Optional read-only investigation and visibility |
-| SecOps-Engineer | Optional investigation and limited response actions |
 | Break-glass admin | Emergency administrative access |
 
 `SecOps-Operator` submits rollback events without direct EC2 mutation or Lambda invocation authority. The control-plane caller and workload automation use the same prefixed bus identity; the bus policy allows `custom.rollback` from matching IAM Identity Center Operator roles and explicitly denies other publishers. The separate security-operations account requires `SecOps-Administrator` and disables `SecOps-Operator`. The handler does not authenticate approver/ticket metadata.
@@ -662,12 +660,11 @@ Stage-1 saved plan and non-destructive-action guard
   -> separately approved ECR/Backup data cleanup
   -> live retirement readiness
   -> saved workload destroy plan
-  -> separately planned/approved Identity Center cleanup
   -> final workload-destroy approval
   -> artifact verification, readiness recheck, exact saved-plan apply
 ```
 
-The complete durable-cleanup path is `prod`-only. Production Destroy requires `delete_durable_retirement_data=true` even when the scoped inventory is empty. Cleanup re-inventories at execution time; its item list is not the exact-plan Terraform artifact. Rejecting a later approval does not undo earlier data deletion or Identity Center changes. Readiness proves actual ECS desired/running/pending counts and scaling bounds, not just zero-valued Terraform intent.
+The complete durable-cleanup path is `prod`-only. Production Destroy requires `delete_durable_retirement_data=true` even when the scoped inventory is empty. Cleanup re-inventories at execution time; its item list is not the exact-plan Terraform artifact. Rejecting a later approval does not undo earlier data deletion. Readiness proves actual ECS desired/running/pending counts and scaling bounds, not just zero-valued Terraform intent.
 
 Apply and Destroy share the workload-scoped concurrency key, but this does not serialize every separate Identity Center, account, publication, or evidence workflow. Coordinate those operations. Account/state decommissioning remains separate and is not automatically authorized by workload retirement.
 

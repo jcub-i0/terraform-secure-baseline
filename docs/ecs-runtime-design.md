@@ -189,7 +189,7 @@ The normal runtime validator additionally requires production deployment minimum
 
 The autoscaled resource still ignores `desired_count` changes. Derived zero intent alone is therefore not proof that AWS has reached zero capacity. `validate-retirement-readiness.sh` requires actual desired/running/pending counts of zero and exact live zero scaling bounds, and checks that scheduled actions cannot restore capacity. The normal production availability validator is not the retirement validator.
 
-Retirement uses the separate reviewed Apply, durable cleanup, Identity Center cleanup, and saved-destroy-plan sequence in the [runbook](production-retirement.md). The full durable cleanup is `prod`-only and requires explicit deletion authorization even for empty scoped data. Setting a digest to `null`, downgrading the deployment profile, or enabling force deletion is not a substitute.
+Retirement uses the separate reviewed Apply, durable cleanup, and saved-destroy-plan sequence in the [runbook](production-retirement.md). The full durable cleanup is `prod`-only and requires explicit deletion authorization even for empty scoped data. Setting a digest to `null`, downgrading the deployment profile, or enabling force deletion is not a substitute.
 
 ## Application Auto Scaling
 

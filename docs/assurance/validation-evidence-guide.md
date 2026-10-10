@@ -614,7 +614,7 @@ STRICT_IDENTITY_CENTER_ASSIGNMENTS=true
 
 Under the default settings, incorrect placement of `dev`, `staging`, `prod`, or `security-operations` in the expected OU hierarchy is a validation failure rather than a normal warning.
 
-Warnings remain appropriate for optional or intentionally relaxed checks, such as optional Analyst/Engineer groups or a run that explicitly sets one of the strictness flags to `false`. If strictness is relaxed for transitional troubleshooting, document that fact in the evidence package or handoff because the resulting evidence is weaker than the default release posture.
+Warnings remain appropriate for intentionally relaxed checks, such as a run that explicitly sets one of the strictness flags to `false`. If strictness is relaxed for transitional troubleshooting, document that fact in the evidence package or handoff because the resulting evidence is weaker than the default release posture.
 
 ---
 

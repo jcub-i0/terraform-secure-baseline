@@ -790,7 +790,7 @@ No supplied input turns the baseline into active/active or cross-Region failover
 - Who administers IAM Identity Center?
 - Which users need workload `SecOps-Operator` access?
 - Who receives `SecOps-Administrator` access to the security-operations account?
-- Will optional `SecOps-Analyst` and `SecOps-Engineer` roles be enabled for workloads or security-operations?
+- Who manages customer workforce permission sets and group assignments outside the baseline?
 - Who owns break-glass credentials?
 - How is break-glass access reviewed?
 
@@ -973,28 +973,23 @@ Modify workload account stacks carefully and reconcile them when required. Do no
 
 Identity Center access is centralized from the control plane.
 
-Some optional Identity Center permissions depend on IAM policies created by workload baselines.
-
-This is expected.
+The control-plane Identity Center stack manages only workload `SecOps-Operator` and security-operations `SecOps-Administrator` access. It does not manage generic customer workforce permission sets or group assignments.
 
 The intended pattern is:
 
 ```text
 1. Configure workload Operator access and required SecOps-Administrator access
-2. Deploy workload baselines
-3. Confirm workload-created policy names
-4. Enable optional Analyst/Engineer roles as needed
-5. Re-apply Identity Center
+2. Deploy workload baselines and validate the EventBridge rollback access boundary
+3. Configure additional customer personnel access independently through customer IAM Identity Center governance
 ```
 
-The security-operations access model is separate from workload access: `SecOps-Administrator` is required there, `SecOps-Operator` is disabled, and Analyst/Engineer access remains optional.
+The security-operations access model is separate from workload access: `SecOps-Administrator` is required there and `SecOps-Operator` is disabled.
 
 Identity Center account assignments and the workload bus's role-restricted
 `custom.rollback` publisher policy are separate controls. The caller now
 constructs the matching prefixed bus ARN, but actual group membership,
 assignment principals, policy contents, and positive/negative publication
-still require verification. Required customer-managed policies must exist
-in the target account before corresponding access is relied upon.
+still require verification. Customers must provision and review any IAM policies they attach to their own workforce permission sets.
 
 ---
 
