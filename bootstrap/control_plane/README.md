@@ -68,7 +68,7 @@ SecOps-Operator-Prod
 SecOps-Administrator
 ```
 
-Optional Analyst and Engineer access can be enabled independently for workload and security-operations accounts. The root consumes `identity_center_workloads` and `identity_center_secops`, not the old individual workload account-ID inputs. Workload module instances follow the configured map keys; the complete platform validation path expects dev, staging, prod, and the security-operations configuration.
+Only baseline-specific workload Operator and security-operations Administrator access is provisioned here; customers manage other workforce roles. The root consumes `identity_center_workloads` and `identity_center_secops`, not the old individual workload account-ID inputs. Workload module instances follow the configured map keys; the complete platform validation path expects dev, staging, prod, and the security-operations configuration.
 
 This Terraform root looks up an existing Identity Center instance through its module; enabling the account's Identity Center service is a prerequisite, not an account-vending operation. Use the [quickstart](../../docs/quickstart.md) and [Identity Center root](identity_center/README.md) for the detailed access sequence.
 
@@ -141,8 +141,8 @@ This boundary keeps AWS Organizations authority in the management account while 
   - The security-operations stack administers centralized security services.
 
 - **No circular Terraform dependencies**
-  - Identity Center references workload-created customer-managed IAM policies by name rather than consuming workload remote state.
-  - Optional roles that require those policies are enabled only after the policies exist.
+  - Baseline-managed Identity Center identities do not depend on workload-created log-access policies.
+  - Customers independently define any workforce permissions requiring those policies.
 
 - **Bootstrap before automation**
   - State and OIDC execution roles are established before CI/CD depends on them.

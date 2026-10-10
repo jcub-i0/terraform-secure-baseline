@@ -612,7 +612,7 @@ SecOps-Operator-Prod
 SecOps-Administrator
 ```
 
-Optional Analyst and Engineer groups can be enabled per workload account and for the security-operations account.
+Additional customer workforce identities and their assignments are managed outside the baseline.
 
 The access model separates operational duties:
 
@@ -620,8 +620,6 @@ The access model separates operational duties:
 |-----|---------|
 | SecOps-Operator | Submit approved rollback events in a workload account |
 | SecOps-Administrator | Administrative access to the centralized security-operations account |
-| SecOps-Analyst | Optional read-only investigation and visibility |
-| SecOps-Engineer | Optional investigation and limited response actions |
 | Break-glass admin | Emergency administrative access |
 
 `SecOps-Operator` submits rollback events without direct EC2 mutation or Lambda invocation authority. The control-plane caller and workload automation use the same prefixed bus identity; the bus policy allows `custom.rollback` from matching IAM Identity Center Operator roles and explicitly denies other publishers. The separate security-operations account requires `SecOps-Administrator` and disables `SecOps-Operator`. The handler does not authenticate approver/ticket metadata.

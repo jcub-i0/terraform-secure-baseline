@@ -461,7 +461,6 @@ validation-results/control-plane/<timestamp>/
 | `CONTROL_PLANE_ENV_NAME` | `<control-plane>` |
 | `REQUIRE_CONTROL_PLANE_GITHUB_OIDC` | `<true/false>` |
 | `EXPECTED_GITHUB_REPOSITORY` | `<owner/repo/not-set>` |
-| `CHECK_OPTIONAL_SECOPS_GROUPS` | `<true/false>` |
 | `STRICT_IDENTITY_CENTER_ASSIGNMENTS` | `<true/false>` |
 | `STRICT_ACCOUNT_OU_CHECKS` | `<true/false>` |
 | `REQUIRE_STATE_STACK_REMOTE` | `<true/false>` |
