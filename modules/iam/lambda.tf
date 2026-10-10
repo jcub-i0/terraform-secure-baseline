@@ -270,9 +270,9 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
   }
 
   statement {
-    sid       = "AllowSecurityHubFindingUpdates"
-    effect    = "Allow"
-    actions   = ["securityhub:BatchUpdateFindings"]
+    sid     = "AllowSecurityHubFindingUpdates"
+    effect  = "Allow"
+    actions = ["securityhub:BatchUpdateFindings"]
     resources = [
       "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}:${var.account_id}:hub/default"
     ]
