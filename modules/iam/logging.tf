@@ -179,7 +179,8 @@ data "aws_iam_policy_document" "firehose_flow_logs" {
       "kms:Encrypt",
       "kms:Decrypt",
       "kms:GenerateDataKey*",
-      "kms:DescribeKey"
+      "kms:DescribeKey",
+      "kms:CreateGrant"
     ]
 
     resources = [var.logs_cmk_arn]
