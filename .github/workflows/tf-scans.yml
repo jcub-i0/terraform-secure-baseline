@@ -164,22 +164,63 @@ jobs:
 
       - name: Run repository Checkov scan
         if: always()
+        shell: bash
         run: |
-          set -uo pipefail
-          set +e
+          set -euo pipefail
+
           checkov -d . \
             -o junitxml \
             -o json \
             --output-file-path \
               "${REPORT_DIR}/repository/checkov-junit.xml,${REPORT_DIR}/repository/checkov.json" \
             --soft-fail
-          checkov_status=$?
+            
+      - name: Validate Checkov report integrity
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          if (( checkov_status != 0 )); then
-            echo "::warning::Checkov exited with status ${checkov_status}; its results remain non-blocking."
+          json="${REPORT_DIR}/repository/checkov.json"
+          junit="${REPORT_DIR}/repository/checkov-junit.xml"
+
+          if [[ ! -s "$json" || ! -s "$junit" ]]; then
+            echo "::error::Checkov reports are missing or empty."
+            exit 1
           fi
 
-          exit 0
+          if ! jq -e '
+            type == "array"
+            and ([.[].check_type] | sort == ["dockerfile", "github_actions", "terraform"])
+            and all(.[];
+              (.summary.passed | type == "number")
+              and (.summary.failed | type == "number")
+              and (.summary.parsing_errors == 0)
+              and (.results.passed_checks | type == "array")
+              and (.results.failed_checks | type == "array")
+              and (.results.parsing_errors | type == "array" and length == 0)
+              and (.summary.passed == (.results.passed_checks | length))
+              and (.summary.failed == (.results.failed_checks | length))
+              and (.summary.passed + .summary.failed > 0)
+            )
+          ' "$json" >/dev/null; then
+            echo "::error::Checkov report is incomplete, invalid, or contains parsing errors."
+
+            jq -r '
+              .[] |
+              .check_type as $framework |
+              .results.parsing_errors[]? |
+              "::error::\($framework): \(.)"
+            ' "$json" || true
+
+            exit 1
+          fi
+
+          python3 -c \
+            'import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])' \
+            "$junit"
+
+          echo "Checkov report integrity verified."
 
       - name: Upload scan results
         if: always()
