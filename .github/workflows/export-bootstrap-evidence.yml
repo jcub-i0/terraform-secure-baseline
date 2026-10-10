@@ -4,6 +4,7 @@ run-name: Bootstrap evidence - ${{ inputs.environment }}
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:Intentional operator inputs for a protected, approval-gated validation evidence workflow.
     inputs:
       environment:
         description: "Workload environment to validate"

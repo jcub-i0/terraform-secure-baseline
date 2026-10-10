@@ -4,6 +4,7 @@ run-name: Workload account reconciliation - ${{ inputs.environment }} - ${{ inpu
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:Intentional operator inputs for a protected, approval-gated reconciliation workflow.
     inputs:
       environment:
         description: "Workload environment to reconcile"
