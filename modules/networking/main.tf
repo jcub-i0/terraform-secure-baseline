@@ -17,6 +17,22 @@ resource "aws_vpc" "main" {
   }
 }
 
+# HARDEN THE AWS-CREATED DEFAULT VPC SECURITY GROUP
+# Terraform adopts this group on first apply and removes its default rules.
+# All baseline workloads must use explicit purpose-built security groups.
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  ingress = []
+  egress  = []
+
+  tags = {
+    Name        = "${var.name_prefix}-Default-SG"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
 # CREATE SUBNETS
 ## INGRESS PUBLIC SUBNETS
 resource "aws_subnet" "ingress_public" {
