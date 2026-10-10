@@ -84,9 +84,9 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
   destination = "extended_s3"
 
   server_side_encryption {
-    enabled = true
+    enabled  = true
     key_type = "CUSTOMER_MANAGED_CMK"
-    key_arn = var.logs_cmk_arn
+    key_arn  = var.logs_cmk_arn
   }
 
   extended_s3_configuration {
