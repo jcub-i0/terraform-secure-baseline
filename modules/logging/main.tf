@@ -83,6 +83,12 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
   name        = "${var.name_prefix}-flowlogs-to-s3"
   destination = "extended_s3"
 
+  server_side_encryption {
+    enabled = true
+    key_type = "CUSTOMER_MANAGED_CMK"
+    key_arn = var.logs_cmk_arn
+  }
+
   extended_s3_configuration {
     role_arn   = var.firehose_flow_logs_role_arn
     bucket_arn = var.centralized_logs_bucket_arn
