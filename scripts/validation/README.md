@@ -95,7 +95,6 @@ Most scripts use the following environment variables:
 | `STRICT_WORKLOAD_CMK_POLICY_CHECKS` | Current workload CMK references in bootstrap IAM; default `true` | Workload bootstrap only |
 | `REQUIRE_BOOTSTRAP_GITHUB_OIDC` / `REQUIRE_BOOTSTRAP_GITHUB_APPLY_ROLE` | Required bootstrap OIDC/Apply-role checks; each defaults to `true` | Workload bootstrap only |
 | `STRICT_ACCOUNT_OU_CHECKS` / `STRICT_IDENTITY_CENTER_ASSIGNMENTS` | Required topology/assignment findings fail by default (`true`) | Control plane only |
-| `CHECK_OPTIONAL_SECOPS_GROUPS` | Additional optional-group checks; default `false` | Control plane only |
 | `REQUIRE_CONTROL_PLANE_GITHUB_OIDC` | Control-plane OIDC checks; default `true` | Control plane only |
 
 Example service-region context (replace `us-east-1` with the intended service Region, not the backend Region):
@@ -610,11 +609,11 @@ Normal production runtime validation expects nonzero production capacity. Do not
 | `validate-retirement-readiness.sh` | Read-only live gate: native protections relaxed, RDS final-snapshot intent preserved, ECS desired/running/pending zero, scaling unable to restore capacity, empty ECR/vault and no active Backup jobs |
 | `terraform-plan-artifact.sh` | Creates/verifies exact-plan artifacts within its GitHub workflow contract; it does not apply Terraform |
 
-The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, separately planned/approved Identity Center cleanup, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
+The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
 
 The complete durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
 
-Use the [production retirement runbook](../../docs/production-retirement.md) for the exact approval chain. Retain separate Stage-1, cleanup, readiness, Identity Center, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
+Use the [production retirement runbook](../../docs/production-retirement.md) for the exact approval chain. Retain separate Stage-1, durable-cleanup, readiness, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
 
 ---
 
@@ -636,7 +635,6 @@ This script validates:
 - IAM Identity Center instance
 - required workload `SecOps-Operator-*` groups
 - required `SecOps-Administrator` group for the security-operations account
-- optional workload and security-operations Analyst and Engineer groups
 - the consolidated Identity Center Terraform outputs:
   - `workload_permission_set_arns`
   - `secops_permission_set_arns`
@@ -659,9 +657,9 @@ TF_VAR_identity_center_workloads
 TF_VAR_identity_center_secops
 ```
 
-`IDENTITY_CENTER_WORKLOADS` must be a JSON object containing `dev`, `staging`, and `prod`. Each entry must contain a 12-digit `account_id` and a non-empty `primary_region`. The Analyst and Engineer flags are optional and default to `false`.
+`IDENTITY_CENTER_WORKLOADS` must be a JSON object containing `dev`, `staging`, and `prod`. Each entry must contain a 12-digit `account_id` and a non-empty `primary_region`. Customer workforce personas are not provisioned by this baseline.
 
-`IDENTITY_CENTER_SECOPS` must contain the security-operations account ID. Its Analyst and Engineer flags are also optional and default to `false`.
+`IDENTITY_CENTER_SECOPS` must contain the security-operations account ID. Only the account ID is required for this security-operations input.
 
 Example:
 
@@ -669,28 +667,20 @@ Example:
 export IDENTITY_CENTER_WORKLOADS='{
   "dev": {
     "account_id": "<DEV-ACCOUNT-ID>",
-    "primary_region": "us-east-1",
-    "enable_secops_analyst": false,
-    "enable_secops_engineer": false
+    "primary_region": "us-east-1"
   },
   "staging": {
     "account_id": "<STAGING-ACCOUNT-ID>",
-    "primary_region": "us-east-1",
-    "enable_secops_analyst": false,
-    "enable_secops_engineer": false
+    "primary_region": "us-east-1"
   },
   "prod": {
     "account_id": "<PROD-ACCOUNT-ID>",
-    "primary_region": "us-east-1",
-    "enable_secops_analyst": false,
-    "enable_secops_engineer": false
+    "primary_region": "us-east-1"
   }
 }'
 
 export IDENTITY_CENTER_SECOPS='{
-  "account_id": "<SECURITY-OPERATIONS-ACCOUNT-ID>",
-  "enable_secops_analyst": false,
-  "enable_secops_engineer": false
+  "account_id": "<SECURITY-OPERATIONS-ACCOUNT-ID>"
 }'
 
 AWS_PROFILE=control-plane \
@@ -715,9 +705,9 @@ The validator confirms that `bootstrap/control_plane/state/backend.tf` declares 
 
 The **Export Control-Plane Evidence** workflow uses the `control-plane-plan` GitHub Environment, initializes all four control-plane Terraform roots, supplies the Identity Center workload and security-operations JSON values, and defaults remote-state validation to `true`.
 
-### Optional SecOps Groups
+### Baseline-managed SecOps Groups
 
-Required groups are always checked:
+The control-plane validator always checks these baseline-specific groups:
 
 ```text
 SecOps-Operator-Dev
@@ -726,27 +716,7 @@ SecOps-Operator-Prod
 SecOps-Administrator
 ```
 
-To validate optional Analyst and Engineer groups, set:
-
-```bash
-export CHECK_OPTIONAL_SECOPS_GROUPS=true
-```
-
-The validator uses the corresponding `enable_secops_analyst` and `enable_secops_engineer` values from `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` to determine whether each optional group is required.
-
-Example:
-
-```bash
-CHECK_OPTIONAL_SECOPS_GROUPS=true \
-AWS_PROFILE=control-plane \
-AWS_REGION=us-east-1 \
-EXPECTED_ACCOUNT_ID="<CONTROL-PLANE-ACCOUNT-ID>" \
-EXPECTED_GITHUB_REPOSITORY="<GITHUB-OWNER>/<GITHUB-REPO>" \
-REQUIRE_STATE_STACK_REMOTE=true \
-./scripts/validation/validate-control-plane.sh
-```
-
-This example assumes `IDENTITY_CENTER_WORKLOADS` and `IDENTITY_CENTER_SECOPS` were exported as shown above.
+Customer-managed workforce groups and permission sets are not enumerated or validated by this baseline; review them through the customer's access-governance controls.
 
 ### Identity Center Assignment Strictness
 

@@ -1124,16 +1124,7 @@ SecOps-Operator-Prod
 SecOps-Administrator
 ```
 
-Optional groups may include:
-
-```text
-SecOps-Analyst-Dev
-SecOps-Engineer-Dev
-SecOps-Analyst-Staging
-SecOps-Engineer-Staging
-SecOps-Analyst-Prod
-SecOps-Engineer-Prod
-```
+Customer-defined security workforce groups are outside this baseline's Identity Center management scope.
 
 ---
 
@@ -1173,7 +1164,7 @@ Expected:
 
 - Expected permission sets exist.
 - Expected account assignments exist for enabled SecOps roles.
-- Customer-managed policy attachments are present only when the required workload-account policy names have been provided and the policies exist in the target account.
+- Only the baseline-managed Operator and Administrator policy grants are checked here. Additional customer-managed permissions require their own access review.
 
 ---
 
@@ -2786,7 +2777,7 @@ Expected:
 - Security Operations Evidence runs through `security-operations-plan` and validates centralized Security Hub CSPM, GuardDuty, and Security Hub V2 governance.
 - Evidence packages are uploaded as GitHub Actions artifacts.
 - A blank `AWS_PROFILE` in GitHub is expected; AWS CLI and validation commands should use the OIDC-provided default credential chain.
-- Destroy preserves the implemented separate approvals: production durable cleanup precedes workload destroy planning; Identity Center cleanup has its own plan/apply approval before final workload-destroy approval. Exact artifacts are verified before application.
+- Destroy preserves the implemented separate approvals: production durable cleanup precedes workload destroy planning, followed by the final workload-destroy approval. Exact artifacts are verified before application.
 - No OIDC role assumption errors occur.
 - No Terraform state lock conflicts occur.
 
@@ -2831,11 +2822,11 @@ Normal production runtime validation expects nonzero production capacity. Do not
 | `validate-retirement-readiness.sh` | Read-only live gate: native protections relaxed, RDS final-snapshot intent preserved, ECS desired/running/pending zero, scaling unable to restore capacity, empty ECR/vault and no active Backup jobs |
 | `terraform-plan-artifact.sh` | Creates/verifies exact-plan artifacts within its GitHub workflow contract; it does not apply Terraform |
 
-The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, separately planned/approved Identity Center cleanup, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
+The implemented sequence is Stage-1 saved-plan review/apply, inventory and convergence checks, separately approved durable cleanup, readiness, saved workload destroy plan, then final workload-destroy approval and exact-plan verification/application with another readiness check. Earlier cleanup is not undone by rejecting a later approval.
 
 The complete durable-cleanup path is limited to `prod`; production Destroy requires `delete_durable_retirement_data=true` even for an empty inventory. Stage 1 keeps production ECR/ECS/Backup force-deletion flags false. Setting a service digest to null, changing production to a cheaper profile, or manually stopping tasks is not a substitute for the staged contract. Autoscaled ECS resources still ignore direct `desired_count` changes, so planned zero capacity alone is not live quiescence evidence.
 
-Use the [production retirement runbook](production-retirement.md) for the exact approval chain. Retain separate Stage-1, cleanup, readiness, Identity Center, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
+Use the [production retirement runbook](production-retirement.md) for the exact approval chain. Retain separate Stage-1, durable-cleanup, readiness, and destroy evidence. Moving a state stack to an independent backend does not remove the state module's literal `prevent_destroy` guards; whole-platform retirement is not established by successful workload destruction.
 
 ## Final convergence and qualification record
 
@@ -3188,7 +3179,7 @@ Check:
 - Account ID variables are correct.
 - Permission set exists.
 - Group exists.
-- Customer-managed policy names exist in the target account if being attached.
+- Legacy or customer-owned permission sets that reference workload IAM policies have been reviewed for migration or removal.
 
 ---
 
@@ -3196,11 +3187,12 @@ Check:
 
 Cause:
 
-- Identity Center still has a customer-managed policy attached to a permission set provisioned into the target account.
+- An older Identity Center deployment or a customer-owned permission set still references an IAM policy in the workload account.
 
 Fix:
 
-- Re-apply the Identity Center stack with that environment's optional Analyst/Engineer attachments disabled.
+- Inventory the permission sets and account assignments that still reference the policy. Migrate or remove the dependent attachments through their actual ownership and approval process; the workload Destroy workflow no longer has an Identity Center cleanup stage.
+- If the attachment was previously managed by this baseline, review and apply the upgraded Identity Center configuration before destroying the workload-owned policy.
 - After approved cleanup and refreshed readiness, generate/review a new exact destroy plan through the appropriate workflow. For production, retain the staged retirement contract; do not bypass it with a direct `terraform destroy` or reuse a stale saved plan.
 
 ---
