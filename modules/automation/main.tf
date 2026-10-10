@@ -8,6 +8,8 @@ resource "archive_file" "lambda_ec2_isolation" {
 
 ## EC2 ISOLATION LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_isolation" {
+  #checkov:skip=CKV_AWS_116:Async invocation failures are routed through aws_lambda_function_event_invoke_config.ec2_isolation; EventBridge delivery has a separate DLQ.
+
   function_name                  = "${var.name_prefix}-ec2-isolation"
   description                    = "Automatically isolate opted-in EC2 instances for eligible GuardDuty findings imported through Security Hub"
   role                           = var.lambda_ec2_isolation_role_arn
@@ -257,6 +259,8 @@ resource "archive_file" "lambda_ec2_rollback" {
 
 ## EC2 ROLLBACK LAMBDA FUNCTION
 resource "aws_lambda_function" "ec2_rollback" {
+  #checkov:skip=CKV_AWS_116:Async invocation failures are routed through aws_lambda_function_event_invoke_config.ec2_rollback; EventBridge delivery has a separate DLQ.
+
   function_name                  = "${var.name_prefix}-ec2-rollback"
   description                    = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
   role                           = var.lambda_ec2_rollback_role_arn
@@ -591,6 +595,8 @@ resource "archive_file" "lambda_ip_enrichment" {
 }
 
 resource "aws_lambda_function" "ip_enrichment" {
+  #checkov:skip=CKV_AWS_116:Async invocation failures are routed through aws_lambda_function_event_invoke_config.ip_enrichment; EventBridge delivery has a separate DLQ.
+
   function_name                  = "${var.name_prefix}-ip-enrichment"
   description                    = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"
   role                           = var.lambda_ip_enrichment_role_arn

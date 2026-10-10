@@ -41,18 +41,88 @@ resource "aws_iam_role" "lambda_ec2_isolation" {
 
 ### EC2 ISOLATION IAM POLICY
 data "aws_iam_policy_document" "lambda_ec2_isolation" {
+
+  # EC2 discovery requires wildcard resource scope
   statement {
-    sid    = "AllowEC2IsolationActions"
-    effect = "Allow"
-    actions = [
-      "ec2:DescribeInstances",
-      "ec2:ModifyInstanceAttribute",
-      "ec2:DescribeSecurityGroups",
-      "ec2:CreateTags",
-      "ec2:CreateSnapshot"
-    ]
+    sid     = "AllowEC2IsolationDiscovery"
+    effect  = "Allow"
+    actions = ["ec2:DescribeInstances"]
 
     resources = ["*"]
+  }
+
+  # Restrict instance security-group modification to this account/Region
+  statement {
+    sid     = "AllowEC2IsolationInstanceModification"
+    effect  = "Allow"
+    actions = ["ec2:ModifyInstanceAttribute"]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.primary_region}:${var.account_id}:instance/*"
+    ]
+  }
+
+  # Permit only the incident-response metadata written by the handler
+  statement {
+    sid     = "AllowEC2IsolationInstanceTagging"
+    effect  = "Allow"
+    actions = ["ec2:CreateTags"]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.primary_region}:${var.account_id}:instance/*"
+    ]
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "aws:TagKeys"
+      values = [
+        "Isolated",
+        "IsolatedBy",
+        "IsolationFinding",
+        "IsolationTime",
+        "OriginalSecurityGroups"
+      ]
+    }
+  }
+
+  # CreateSnapshot requires authorization on both source volumes and newly created snapshot resources
+  statement {
+    sid     = "AllowEC2IsolationSnapshotCreation"
+    effect  = "Allow"
+    actions = ["ec2:CreateSnapshot"]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.primary_region}:${var.account_id}:volume/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.primary_region}::snapshot/*"
+    ]
+  }
+
+  # Tag snapshots only as part of CreateSnapshot, never afterward
+  statement {
+    sid     = "AllowEC2IsolationSnapshotTagging"
+    effect  = "Allow"
+    actions = ["ec2:CreateTags"]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.primary_region}::snapshot/*"
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:CreateAction"
+      values   = ["CreateSnapshot"]
+    }
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "aws:TagKeys"
+      values = [
+        "Name",
+        "CreatedBy",
+        "InstanceId",
+        "IsolationFinding"
+      ]
+    }
   }
 
   statement {
@@ -136,16 +206,29 @@ resource "aws_iam_role" "lambda_ec2_rollback" {
 ### EC2 ROLLBACK IAM POLICY
 data "aws_iam_policy_document" "lambda_ec2_rollback" {
   statement {
-    sid    = "AllowEC2RollbackActions"
+    sid    = "AllowEC2RollbackDiscovery"
     effect = "Allow"
+
     actions = [
       "ec2:DescribeInstances",
-      "ec2:ModifyInstanceAttribute",
-      "ec2:DescribeSecurityGroups",
-      "ec2:CreateTags"
+      "ec2:DescribeSecurityGroups"
     ]
 
     resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowEC2RollbackInstanceChanges"
+    effect = "Allow"
+
+    actions = [
+      "ec2:ModifyInstanceAttribute",
+      "ec2:CreateTags"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.primary_region}:${var.account_id}:instance/*"
+    ]
   }
 
   statement {
@@ -257,10 +340,12 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
   }
 
   statement {
-    sid       = "AllowSecurityHubFindingUpdates"
-    effect    = "Allow"
-    actions   = ["securityhub:BatchUpdateFindings"]
-    resources = ["*"]
+    sid     = "AllowSecurityHubFindingUpdates"
+    effect  = "Allow"
+    actions = ["securityhub:BatchUpdateFindings"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:securityhub:${var.primary_region}:${var.account_id}:hub/default"
+    ]
   }
 
   statement {

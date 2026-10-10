@@ -126,6 +126,24 @@ data "aws_iam_policy_document" "cw_to_firehose" {
 
     resources = [var.flowlogs_firehose_delivery_stream_arn]
   }
+
+  statement {
+    sid    = "AllowCloudWatchLogsUseFirehoseSSEKey"
+    effect = "Allow"
+
+    actions = [
+      "kms:GenerateDataKey",
+      "kms:Decrypt"
+    ]
+
+    resources = [var.logs_cmk_arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["firehose.${var.primary_region}.${data.aws_partition.current.dns_suffix}"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "cw_to_firehose" {
@@ -179,7 +197,7 @@ data "aws_iam_policy_document" "firehose_flow_logs" {
       "kms:Encrypt",
       "kms:Decrypt",
       "kms:GenerateDataKey*",
-      "kms:DescribeKey"
+      "kms:DescribeKey",
     ]
 
     resources = [var.logs_cmk_arn]
