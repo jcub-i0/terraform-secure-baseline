@@ -19,43 +19,29 @@ See [main.tf](main.tf), [variables.tf](variables.tf), and the [module reference]
 
 ### This stack does
 
-- Create workload Identity Center groups (permission-set names use lowercase environment suffixes):
-  - `SecOps-Operator-Dev`
-  - `SecOps-Operator-Staging`
-  - `SecOps-Operator-Prod`
-  - optional `SecOps-Analyst-*`
-  - optional `SecOps-Engineer-*`
-- Create the required security-operations administrator group:
-  - `SecOps-Administrator`
-- Create the corresponding `SecOps-Administrator-secops` permission set with `AdministratorAccess`.
-- Optionally create security-operations Analyst and Engineer access:
-  - `SecOps-Analyst-SecOps`
-  - `SecOps-Engineer-SecOps`
-- Assign enabled permission sets to their target AWS accounts.
-- Reference workload-created customer-managed log-access policies by name.
-- Construct each workload Operator policy ARN using `cloud_name` (default `tf-secure-baseline`), workload map key, account ID, and Region, matching the prefixed workload SecOps event-bus name.
+- Create the workload `SecOps-Operator-Dev`, `SecOps-Operator-Staging`, and `SecOps-Operator-Prod` groups and their permission sets.
+- Create the `SecOps-Administrator` group and its `SecOps-Administrator-secops` permission set with `AdministratorAccess`.
+- Assign those baseline-managed permission sets to the configured AWS accounts.
+- Construct each workload Operator policy bus ARN from the selected partition, `cloud_name`, workload key, account ID, and Region.
 
 ### This stack does not
 
-- Create or manage Identity Center users or group membership.
-- Create the referenced customer-managed IAM policies.
-- Create workload application or baseline infrastructure.
-- Create the workload SecOps EventBridge buses.
-- Manage IAM users or long-lived access keys.
-- Manage AWS Organizations account placement.
+- Create or manage Identity Center users, group membership, or external workforce identity-provider configuration.
+- Create customer-defined analyst, engineer, or other general workforce permission sets and assignments.
+- Create workload application infrastructure, workload SecOps event buses, AWS accounts, or Organizations account placement.
 
 ---
 
 ## Access Model
 
-| Target | Required group display name | Optional groups | Operator |
-|---|---|---|---|
-| `dev` | `SecOps-Operator-Dev` | Analyst, Engineer | Enabled |
-| `staging` | `SecOps-Operator-Staging` | Analyst, Engineer | Enabled |
-| `prod` | `SecOps-Operator-Prod` | Analyst, Engineer | Enabled |
-| `security-operations` | `SecOps-Administrator` | Analyst, Engineer | Disabled |
+| Target | Baseline-managed group | Operator |
+|---|---|---|
+| `dev` | `SecOps-Operator-Dev` | Enabled |
+| `staging` | `SecOps-Operator-Staging` | Enabled |
+| `prod` | `SecOps-Operator-Prod` | Enabled |
+| `security-operations` | `SecOps-Administrator` | Disabled |
 
-The corresponding permission sets are `SecOps-Operator-dev`, `SecOps-Operator-staging`, `SecOps-Operator-prod`, and `SecOps-Administrator-secops`. Optional workload permission sets use `SecOps-Analyst-<env>` / `SecOps-Engineer-<env>`; optional security-operations permission sets use the suffix `secops`, while their group display names end in `SecOps`.
+Permission-set names are `SecOps-Operator-dev`, `SecOps-Operator-staging`, `SecOps-Operator-prod`, and `SecOps-Administrator-secops`. Customer personnel beyond these baseline-specific operational identities are outside this stack's provisioning scope.
 
 ### Workload accounts
 
@@ -70,8 +56,6 @@ module.identity_center_workload["prod"]
 For every configured workload account:
 
 - `SecOps-Operator` is always enabled.
-- `SecOps-Analyst` is optional and defaults to disabled.
-- `SecOps-Engineer` is optional and defaults to disabled.
 - Group names are derived from the workload map key.
 - The Operator ARN uses the AWS provider's resolved partition: `arn:<partition>:events:<primary_region>:<account_id>:event-bus/<cloud_name>-<environment>-secops-bus`; it is not read from workload state.
 
@@ -110,36 +94,16 @@ does not authenticate the supplied approver and ticket fields.
 
 ### Security-operations account
 
-The security-operations account is configured separately through `identity_center_secops` because its access model differs from the workload accounts.
-
-- `SecOps-Administrator` is always enabled.
-- `SecOps-Operator` is disabled.
-- `SecOps-Analyst` is optional and defaults to disabled.
-- `SecOps-Engineer` is optional and defaults to disabled.
-
-The required Administrator permission set uses a two-hour session and the AWS-managed `AdministratorAccess` policy. Its assignment target is the configured security-operations account rather than each workload account. This is not a narrow service-specific grant: central delegated-administrator capabilities can affect workload accounts through organization governance.
-
-Optional Analyst/Engineer sessions are four hours. Both attach `SecurityAudit`, `ReadOnlyAccess`, and the required customer-managed log policies. Engineer additionally grants six Security Hub/EC2 response actions on `Resource = "*"` without resource-tag or approval conditions. Review the [exact module policy](../../../modules/identity_center/README.md#secops-engineer) before enabling that persona.
+The security-operations account is configured separately through `identity_center_secops`. `SecOps-Administrator` is enabled and `SecOps-Operator` is disabled. The Administrator permission set has a two-hour session and attaches AWS-managed `AdministratorAccess`, so organization-governance impact and membership must be reviewed separately.
 
 ---
 
 ## Design Principles
 
-- **Centralized administration**
-  - Identity Center groups, permission sets, and account assignments are managed from the control-plane account.
-
-- **Consistent workload configuration**
-  - Workload accounts use one typed map and one `for_each` module call.
-
-- **Separate security-operations access model**
-  - Security-operations access remains a distinct object and module call rather than being forced into the workload model.
-
-- **No circular Terraform dependencies**
-  - Customer-managed policies are referenced by name rather than through workload remote state.
-  - The referenced policies must exist in the target account before a permission-set attachment that uses them can be provisioned.
-
-- **Explicit access expansion**
-  - Analyst and Engineer access is disabled by default; their actual managed and wildcard response grants must be reviewed before opt-in.
+- **Centralized baseline access:** Identity Center groups, permission sets, and assignments for Operator and Administrator are managed from the control-plane account.
+- **Consistent workload model:** Workload accounts use one typed map and one `for_each` module call.
+- **Distinct administration model:** Security-operations Administrator access is separate from workload Operator access.
+- **Customer-owned workforce access:** Customers choose and provision their own investigative, engineering, and other staff identities/permissions. Workload-created log-access IAM policies can be used separately without any attachment by this stack.
 
 ---
 
@@ -161,34 +125,15 @@ Keep the existing backend coordinates and native S3 lockfile setting. The siblin
 
 ## Deployment Workflow
 
-### 1. Deploy initial Identity Center access
+### 1. Deploy baseline-managed identities
 
-Apply this stack with workload Operator access enabled and optional Analyst and Engineer access disabled.
+Configure the workload `SecOps-Operator` assignments and the security-operations `SecOps-Administrator` assignment. The former can be created before the target workload EventBridge buses because the operator policy uses a constructed ARN. Verify the final ARN, group membership, and authorized/denied event publication after deployment.
 
-The workload configuration must still include the expected customer-managed policy names because those fields are required by the workload input schema, but those policies are not attached while Analyst and Engineer access remains disabled.
+### 2. Configure customer workforce identities separately
 
-Workload Operator permission sets can be created before the target EventBridge buses exist because the module scopes policy to a constructed ARN without checking bus existence. Compare that ARN to the deployed workload bus, then test Operator access before relying on recovery.
+This stack does not create customer analyst or engineer roles. Customers manage any additional Identity Center groups, permission sets, and assignments separately. Workload-created centralized-log read and KMS decrypt policies remain available to customers but are not automatically attached to any staff permissions here.
 
-### 2. Deploy workload baselines
-
-Each workload baseline creates the customer-managed IAM policies used by optional Analyst and Engineer permission sets, including:
-
-- centralized logs S3 read-only access;
-- centralized logs KMS decrypt access.
-
-### 3. Enable optional roles
-
-After the required policies exist in the target account:
-
-1. set `enable_secops_analyst` and/or `enable_secops_engineer` to `true` for the target account;
-2. confirm the configured policy names exactly match the policies in that account;
-3. re-plan and re-apply this stack.
-
-The security-operations policy-name fields are optional and may remain `null` while its Analyst and Engineer roles are disabled. If either is enabled, the module requires both names. This root does not pass `customer_managed_policy_path`, so all references use the module's `/` default. A policy elsewhere in the IAM path hierarchy is not selected by changing its name alone.
-
-The security-services root does not create workload-style log-access policies for the security-operations account. Provision and review any needed policies in that target account through its actual policy owner before enabling optional personas; do not reference policies from a workload account as though they were local.
-
-### 4. Plan and review the access change
+### 3. Plan and review the access change
 
 Run from the repository root in a local named-profile session. Set the following values deliberately; `<...>` values are placeholders, not deployment defaults. The `${VAR:?message}` expressions below reject unset or empty variables. They do not establish that a supplied value is correct.
 
@@ -199,7 +144,7 @@ export AWS_DEFAULT_REGION="$AWS_REGION"
 export EXPECTED_ACCOUNT_ID="<12-digit-account-id>"
 ```
 
-Prepare and review this root's local input file before planning. Do not overwrite an existing `terraform.tfvars` with an example. For an adopted deployment, retain its existing feature flags and configuration; omitted settings can select defaults that remove resources.
+Prepare and review this root's local input file before planning. Do not overwrite an existing `terraform.tfvars` with an example. For an adopted deployment, retain all required account entries and review permission-set removals explicitly; dropping a configured workload key can remove its Operator access.
 
 The following creates a saved plan, not an Apply. It assumes the intended backend already exists and its literal bucket/key/Region have been reviewed. Initialization is separate from the read-only validators.
 
@@ -232,7 +177,7 @@ The following creates a saved plan, not an Apply. It assumes the intended backen
 
 Do not apply a plan with unresolved warnings, unexpected removals, or mismatched target identity. A later authorized Apply must use the reviewed binary plan with the same account and source context; this example does not invoke it. Saved plans can contain sensitive values and should not be committed or published. The generated temporary directory is deliberately retained for review and must be removed through the operator's evidence-retention process.
 
-Use the schema examples below only as starting values. Preserve every account entry, role flag, and policy name required by the intended access configuration when editing a deployed stack.
+Use the schema examples below only as starting values. Preserve every workload account entry and reviewed Operator bus identity when editing a deployed stack.
 
 ---
 
@@ -248,12 +193,12 @@ Identity Center configuration keyed by workload environment. This input is requi
 
 ```hcl
 map(object({
-  account_id                   = string
-  primary_region               = string
-  enable_secops_analyst        = optional(bool, false)
-  enable_secops_engineer       = optional(bool, false)
-  logs_s3_readonly_policy_name = string
-  logs_cmk_decrypt_policy_name = string
+  account_id     = string
+  primary_region = string
+__REMOVED__ optional(bool, false)
+__REMOVED__ optional(bool, false)
+__REMOVED__ string
+__REMOVED__ string
 }))
 ```
 
@@ -261,42 +206,40 @@ Requirements:
 
 - keys must be `dev`, `staging`, or `prod`;
 - every account ID must contain exactly 12 digits;
-- the two log-policy-name strings are required by the object type even while optional roles are disabled;
-- policy names must match customer-managed policies at path `/` in the corresponding target account before an attachment that uses them is enabled.
 
-The root does not validate Region syntax or uniqueness of account IDs, and it does not look up the policy documents. The Plan workflow has additional nonempty-string and complete-map checks. Its acceptance rules are not identical to the root's Terraform type/validation rules.
+The root does not validate Region syntax or uniqueness of account IDs. The Plan workflow also checks that the workload map contains exactly dev, staging, and prod; its acceptance rules are not identical to Terraform's root input checks.
 
-Example using synthetic 12-digit IDs; replace all accounts, Regions, and policy names with reviewed deployment values:
+Example using synthetic 12-digit IDs; replace the account IDs and Regions with reviewed deployment values:
 
 ```hcl
 cloud_name = "tf-secure-baseline"
 
 identity_center_workloads = {
   dev = {
-    account_id                     = "333333333333"
-    primary_region                 = "us-east-1"
-    enable_secops_analyst          = false
-    enable_secops_engineer         = false
-    logs_s3_readonly_policy_name   = "tf-secure-baseline-dev-CentralizedLogsS3ReadOnly"
-    logs_cmk_decrypt_policy_name   = "tf-secure-baseline-dev-LogsKmsDecrypt"
+    account_id     = "333333333333"
+    primary_region = "us-east-1"
+__REMOVED__ false
+__REMOVED__ false
+__REMOVED__ "tf-secure-baseline-dev-CentralizedLogsS3ReadOnly"
+__REMOVED__ "tf-secure-baseline-dev-LogsKmsDecrypt"
   }
 
   staging = {
-    account_id                     = "444444444444"
-    primary_region                 = "us-east-1"
-    enable_secops_analyst          = false
-    enable_secops_engineer         = false
-    logs_s3_readonly_policy_name   = "tf-secure-baseline-staging-CentralizedLogsS3ReadOnly"
-    logs_cmk_decrypt_policy_name   = "tf-secure-baseline-staging-LogsKmsDecrypt"
+    account_id     = "444444444444"
+    primary_region = "us-east-1"
+__REMOVED__ false
+__REMOVED__ false
+__REMOVED__ "tf-secure-baseline-staging-CentralizedLogsS3ReadOnly"
+__REMOVED__ "tf-secure-baseline-staging-LogsKmsDecrypt"
   }
 
   prod = {
-    account_id                     = "555555555555"
-    primary_region                 = "us-east-1"
-    enable_secops_analyst          = false
-    enable_secops_engineer         = false
-    logs_s3_readonly_policy_name   = "tf-secure-baseline-prod-CentralizedLogsS3ReadOnly"
-    logs_cmk_decrypt_policy_name   = "tf-secure-baseline-prod-LogsKmsDecrypt"
+    account_id     = "555555555555"
+    primary_region = "us-east-1"
+__REMOVED__ false
+__REMOVED__ false
+__REMOVED__ "tf-secure-baseline-prod-CentralizedLogsS3ReadOnly"
+__REMOVED__ "tf-secure-baseline-prod-LogsKmsDecrypt"
   }
 }
 ```
@@ -307,11 +250,11 @@ Identity Center configuration for the security-operations account. This input is
 
 ```hcl
 object({
-  account_id                   = string
-  enable_secops_analyst        = optional(bool, false)
-  enable_secops_engineer       = optional(bool, false)
-  logs_s3_readonly_policy_name = optional(string)
-  logs_cmk_decrypt_policy_name = optional(string)
+  account_id     = string
+__REMOVED__ optional(bool, false)
+__REMOVED__ optional(bool, false)
+__REMOVED__ optional(string)
+__REMOVED__ optional(string)
 })
 ```
 
@@ -329,7 +272,7 @@ identity_center_secops = {
 
 ## GitHub Actions Variables
 
-The standalone Identity Center Plan target reads these JSON variables from `control-plane-plan`. The workload Destroy workflow also consumes the consolidated access configuration for its separately reviewed Identity Center cleanup. A variable existing in a GitHub Environment does not imply a general-purpose administrative Apply workflow is implemented:
+The standalone Identity Center Plan target reads these JSON variables from `control-plane-plan`. The workload Destroy workflow no longer runs a dedicated Identity Center cleanup job; it retains a separately reviewed workload destroy plan and Apply approval. A variable existing in a GitHub Environment does not imply a general-purpose administrative Apply workflow is implemented:
 
 | GitHub variable | Terraform variable |
 |---|---|
@@ -339,9 +282,17 @@ The standalone Identity Center Plan target reads these JSON variables from `cont
 
 Store raw JSON in GitHub without surrounding shell quotes. Set the provider/service Region to the Identity Center instance Region for these jobs; each nested workload Region remains an event-bus ARN input.
 
-The [standalone Plan workflow](../../../.github/workflows/terraform-plan.yml) requires exactly the three workload keys and nonempty policy-name strings. Its plan is informational, not an artifact consumed by another Apply workflow. Do not replace a reviewed cleanup input with a partial one-account map: that can plan removal of access for omitted accounts.
+The [standalone Plan workflow](../../../.github/workflows/terraform-plan.yml) requires exactly the three workload keys with valid account IDs and nonempty Regions. Its plan is informational, not an artifact consumed by another Apply workflow. Omitting a configured workload from a Terraform input map can plan removal of that workload's Operator resources.
 
-Keep required-reviewer/branch protections and the actual OIDC role authority under separate review. [Production retirement](../../../docs/production-retirement.md) describes the cleanup approval sequence; removing optional workload personas removes their groups and assignments as well as policy attachments.
+Keep required-reviewer/branch protections and the actual OIDC role authority under separate review. [Production retirement](../../../docs/production-retirement.md) documents the remaining workload destruction gates and separate administrative obligations.
+
+---
+
+## Migration: removal of customer workforce personas
+
+Earlier versions optionally managed `SecOps-Analyst` and `SecOps-Engineer` groups, permission sets, and assignments. These are no longer provided by this stack. If previously enabled, applying the new configuration will plan access removal. Review those destroys, confirm replacement customer-managed access where needed, and do not mistake this for a non-disruptive documentation change.
+
+Remove retired persona flags and log-policy-name fields from `IDENTITY_CENTER_WORKLOADS`, `IDENTITY_CENTER_SECOPS`, and local Terraform variable files. Terraform object conversion may otherwise discard unrecognized fields without warning. Keep the configured workload map and Operator roles intact. Workload log-read IAM policies still exist in the baseline but are not attached to a workforce permission set here.
 
 ---
 
@@ -352,7 +303,7 @@ Keep required-reviewer/branch protections and the actual OIDC role authority und
 | `workload_permission_set_arns` | Permission-set ARN maps keyed by workload environment. |
 | `secops_permission_set_arns` | Permission-set ARNs for the security-operations account. |
 
-`workload_permission_set_arns` contains only configured workload entries; each inner map contains only enabled persona keys. `secops_permission_set_arns` always includes `secops-administrator` for this caller and includes optional personas only when enabled. These outputs do not identify assigned group principals or attest to policy contents.
+`workload_permission_set_arns` contains only configured workload entries with the `secops-operator` key. `secops_permission_set_arns` includes only `secops-administrator` for this caller. These outputs do not identify assigned group principals or attest to policy contents.
 
 Example workload output shape:
 
@@ -370,7 +321,7 @@ workload_permission_set_arns = {
 
 The [control-plane validator](../../../scripts/validation/validate-control-plane.sh) checks the required named groups, describes output-backed permission-set ARNs, and requires at least one assignment for each queried target account/permission-set pair under its default strictness. It does **not** compare assignment principals to the Terraform-created group, reject unexpected assignments, inspect group membership, or compare complete permission-policy/session settings. It also does not verify the Operator ARN against the live bus policy; inspect both independently.
 
-Set `CHECK_OPTIONAL_SECOPS_GROUPS=true` to check optional Analyst/Engineer group names against the configured flags. `STRICT_IDENTITY_CENTER_ASSIGNMENTS=true` makes missing assignments fail; it does not make that check an exact membership or policy audit.
+`STRICT_IDENTITY_CENTER_ASSIGNMENTS=true` makes missing assignments fail; it does not make that check an exact membership or policy audit.
 
 Run from the repository root after initializing all control-plane roots. This local example requires already-set named-profile and JSON context:
 
@@ -382,7 +333,6 @@ EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:?Set owner/repo}" \
 IDENTITY_CENTER_WORKLOADS="${IDENTITY_CENTER_WORKLOADS:?Set the workload JSON map}" \
 IDENTITY_CENTER_SECOPS="${IDENTITY_CENTER_SECOPS:?Set the security-operations JSON object}" \
 REQUIRE_STATE_STACK_REMOTE=true \
-CHECK_OPTIONAL_SECOPS_GROUPS=true \
 ./scripts/validation/validate-control-plane.sh
 ```
 
@@ -392,13 +342,12 @@ The full validator expects all three workloads and security operations; it is no
 
 ## Important Notes
 
-- Identity Center customer-managed policy attachments reference a policy by name and path in the target AWS account.
-- A referenced policy must exist in the target account before AWS can provision the corresponding attachment successfully.
+- The baseline does not attach customer workforce IAM policies through Identity Center; clients manage those permissions independently.
 - IAM Identity Center provisions `AWSReservedSSO_*` roles into assigned target accounts.
 - This stack manages groups, permission sets, and account assignments, but not users or group membership.
-- Disabling a role removes the Terraform-managed group, permission set, policy attachments, and account assignment associated with that role.
+- Removing or disabling a baseline-managed Operator/Administrator persona revokes its group, permission set, and account assignment.
 - Changes to workload map keys alter Terraform module instance addresses. Treat key renames as state migrations rather than ordinary configuration changes.
 - The security-operations account intentionally does not receive the workload Operator role.
 - Do not destroy this root to retire one workload. Other accounts' human access and subsequent cleanup operations can depend on it.
 - The root does not configure MFA, external IdP/SCIM, group membership, or a permission-set permissions boundary.
-- An existing enabled persona's planned removal is an access revocation, not a documentation-only change.
+- Upgrading from an earlier version that enabled the removed Analyst/Engineer personas will plan their removal; inventory and migrate affected access before Apply.
