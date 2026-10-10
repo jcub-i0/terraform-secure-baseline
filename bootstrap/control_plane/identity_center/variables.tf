@@ -13,8 +13,8 @@ variable "identity_center_workloads" {
   description = "Identity Center configuration for workload accounts"
 
   type = map(object({
-    account_id                   = string
-    primary_region               = string
+    account_id     = string
+    primary_region = string
   }))
 
   validation {
@@ -40,7 +40,7 @@ variable "identity_center_secops" {
   description = "Identity Center configuration for the security-operations account"
 
   type = object({
-    account_id                   = string
+    account_id = string
   })
 
   validation {

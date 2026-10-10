@@ -91,7 +91,6 @@ NONPROD_OU_ID=""
 PROD_OU_ID=""
 SECURITY_OU_ID=""
 
-
 export AWS_PAGER=""
 
 aws_args=()
@@ -218,8 +217,6 @@ resolve_identity_center_configuration() {
   ACCOUNT_ID_STAGING="$(jq -r '.staging.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
   ACCOUNT_ID_PROD="$(jq -r '.prod.account_id' <<<"$IDENTITY_CENTER_WORKLOADS")"
   ACCOUNT_ID_SECOPS="$(jq -r '.account_id' <<<"$IDENTITY_CENTER_SECOPS")"
-
-
 
   success "Identity Center workload and security-operations configuration inputs are valid"
   info "Dev account ID: ${ACCOUNT_ID_DEV}"
@@ -1200,7 +1197,6 @@ check_identity_center() {
   check_identity_center_group "SecOps-Operator-Staging" "true"
   check_identity_center_group "SecOps-Operator-Prod" "true"
   check_identity_center_group "SecOps-Administrator" "true"
-
 
   section "Checking IAM Identity Center Terraform outputs and permission sets"
 

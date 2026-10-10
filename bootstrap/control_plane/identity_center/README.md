@@ -195,10 +195,6 @@ Identity Center configuration keyed by workload environment. This input is requi
 map(object({
   account_id     = string
   primary_region = string
-__REMOVED__ optional(bool, false)
-__REMOVED__ optional(bool, false)
-__REMOVED__ string
-__REMOVED__ string
 }))
 ```
 
@@ -218,28 +214,16 @@ identity_center_workloads = {
   dev = {
     account_id     = "333333333333"
     primary_region = "us-east-1"
-__REMOVED__ false
-__REMOVED__ false
-__REMOVED__ "tf-secure-baseline-dev-CentralizedLogsS3ReadOnly"
-__REMOVED__ "tf-secure-baseline-dev-LogsKmsDecrypt"
   }
 
   staging = {
     account_id     = "444444444444"
     primary_region = "us-east-1"
-__REMOVED__ false
-__REMOVED__ false
-__REMOVED__ "tf-secure-baseline-staging-CentralizedLogsS3ReadOnly"
-__REMOVED__ "tf-secure-baseline-staging-LogsKmsDecrypt"
   }
 
   prod = {
     account_id     = "555555555555"
     primary_region = "us-east-1"
-__REMOVED__ false
-__REMOVED__ false
-__REMOVED__ "tf-secure-baseline-prod-CentralizedLogsS3ReadOnly"
-__REMOVED__ "tf-secure-baseline-prod-LogsKmsDecrypt"
   }
 }
 ```
@@ -250,11 +234,7 @@ Identity Center configuration for the security-operations account. This input is
 
 ```hcl
 object({
-  account_id     = string
-__REMOVED__ optional(bool, false)
-__REMOVED__ optional(bool, false)
-__REMOVED__ optional(string)
-__REMOVED__ optional(string)
+  account_id = string
 })
 ```
 
