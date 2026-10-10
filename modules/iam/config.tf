@@ -1,9 +1,5 @@
 # CONFIG IAM RESOURCES
 
-data "aws_iam_policy" "ssm_automation" {
-  name = "AmazonSSMAutomationRole"
-}
-
 locals {
   config_service_linked_role_arn = (
     "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
@@ -34,11 +30,6 @@ data "aws_iam_policy_document" "config_remediation_assume_role" {
 resource "aws_iam_role" "config_remediation" {
   name               = "${var.name_prefix}-ConfigRemediationRole"
   assume_role_policy = data.aws_iam_policy_document.config_remediation_assume_role.json
-}
-
-resource "aws_iam_role_policy_attachment" "config_ssm_automation" {
-  role       = aws_iam_role.config_remediation.name
-  policy_arn = data.aws_iam_policy.ssm_automation.arn
 }
 
 ## CONFIG REMEDIATION S3 PUBLIC ACCESS BLOCK POLICY
