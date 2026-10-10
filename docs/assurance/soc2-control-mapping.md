@@ -1163,7 +1163,7 @@ recovery, and measured recovery objectives require their own exercises.
 
 [Production retirement](../production-retirement.md) uses a reviewed Stage-1
 saved plan to quiesce ECS and relax selected deletion protections. Separate
-approvals cover durable cleanup and Identity Center cleanup before final exact
+approvals cover durable cleanup and final exact
 workload destruction. Later rejection does not undo earlier cleanup, and durable
 cleanup re-inventories rather than consuming a frozen-item manifest. The complete
 workflow is `prod`-only. Preserve required data, evidence, and keys outside the

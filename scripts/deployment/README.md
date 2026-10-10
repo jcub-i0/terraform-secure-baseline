@@ -207,7 +207,7 @@ Creation refuses to overwrite existing artifact files. The checksum manifest cov
 
 The helper requires GitHub Actions identity variables, including `GITHUB_SHA`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`, `GITHUB_REF`, `GITHUB_ACTOR`, and `GITHUB_WORKFLOW_REF`. It is not a general local helper that runs unchanged outside Actions. Do not invent workflow identity variables to label a local plan as CI evidence.
 
-The workload Apply/Destroy and Identity Center cleanup paths use their own saved artifacts. Their plan artifacts are retained for one day in the current workflows. Protect these artifacts and their logs: checksums are not encryption, and plan files can contain sensitive configuration.
+Workload Apply and Destroy use separate saved-plan artifacts, retained for one day in the current workflows. Protect these artifacts and their logs: checksums are not encryption, and plan files can contain sensitive configuration.
 
 ## Production Retirement Helpers
 
@@ -219,7 +219,7 @@ Use the [runbook](../../docs/production-retirement.md) for the complete order an
 
 The latter two helpers derive the service region from deployed `primary_region` and reject conflicting explicit region inputs. Their optional `--region`/`--profile` inputs are unrelated to the Terraform state backend's location. The full cleanup workflow is not supported for a production-profile `dev` or `staging` environment because of the cleanup helper's explicit `prod` restriction.
 
-Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow requires explicit durable-data authorization and separate protected cleanup, Identity Center cleanup, and final destroy steps. Later cancellation does not undo earlier approved deletions or access changes.
+Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow requires explicit durable-data authorization and separate protected durable-cleanup and final workload-destroy approvals. It does not mutate the Identity Center stack. Later cancellation does not undo earlier approved deletions.
 
 ## Implementation References
 

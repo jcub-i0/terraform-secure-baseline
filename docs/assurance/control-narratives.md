@@ -146,11 +146,11 @@ The control plane owns AWS Organizations topology and the management-account pre
 This separation helps prevent workload changes from affecting centralized identity, organization structure, or control-plane access and reduces the chance of CI/CD lockout or cross-stack failures.
 
 **Boundary:** Separate Terraform roots reduce lifecycle coupling; they are not
-an IAM deny boundary. The workload Destroy workflow includes separately approved
-Identity Center cleanup before final workload-destroy approval. Review that
-intentional cross-stack operation in the
+an IAM deny boundary. Workload Destroy no longer applies a separate Identity
+Center cleanup plan; customer-managed workforce access is independently
+governed. Review the staged approval chain in the
 [retirement runbook](../production-retirement.md); rejecting a later gate does
-not reverse earlier authorized cleanup.
+not reverse earlier authorized durable-data deletion.
 
 ---
 
@@ -1051,7 +1051,7 @@ restore validation.
 
 The [retirement runbook](../production-retirement.md) describes Stage-1 protected
 planning and zero ECS capacity, separately authorized durable-data cleanup,
-readiness checks, Identity Center cleanup, and exact saved workload-destroy
+readiness checks and exact saved workload-destroy
 application. Cleanup re-inventories at execution; it is not a frozen-item
 manifest. Later rejection does not undo earlier cleanup. This complete workflow
 is `prod`-only even though resilience policy is profile-driven. Preserve required

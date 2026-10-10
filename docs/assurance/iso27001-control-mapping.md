@@ -481,7 +481,7 @@ application/data behavior, cleanup, and measured recovery objectives. A Multi-AZ
 DB instance is not a three-node database or cross-Region recovery.
 
 [Retirement](../production-retirement.md) separates Stage-1 quiescence, durable
-cleanup, Identity Center cleanup, and final exact workload destruction. Later
+cleanup and final exact workload destruction. Later
 rejection does not reverse earlier changes; the complete cleanup workflow is
 `prod`-only. Retain required data and usable keys outside destruction scope and
 maintain organizational continuity plans, ownership, and exercises.
@@ -1168,7 +1168,7 @@ Document actual reviewers and GitHub protections, sensitive artifact handling,
 provenance, tests, results, convergence and emergency/out-of-band changes. A
 checksum is not an independent signature or proof of separation of duties.
 Retirement approvals are staged: rejecting final destruction does not undo earlier
-approved data or Identity Center cleanup.
+approved durable-data cleanup.
 
 ---
 
