@@ -2,30 +2,18 @@ cloud_name = "tf-secure-baseline"
 
 identity_center_workloads = {
   "dev" = {
-    account_id                   = "333333333333"
-    primary_region               = "us-east-1"
-    enable_secops_analyst        = true
-    enable_secops_engineer       = true
-    logs_s3_readonly_policy_name = "tf-secure-baseline-dev-CentralizedLogsS3ReadOnly"
-    logs_cmk_decrypt_policy_name = "tf-secure-baseline-dev-LogsKmsDecrypt"
+    account_id     = "333333333333"
+    primary_region = "us-east-1"
   }
 
   "staging" = {
-    account_id                   = "444444444444"
-    primary_region               = "us-east-1"
-    enable_secops_analyst        = true
-    enable_secops_engineer       = true
-    logs_s3_readonly_policy_name = "tf-secure-baseline-staging-CentralizedLogsS3ReadOnly"
-    logs_cmk_decrypt_policy_name = "tf-secure-baseline-staging-LogsKmsDecrypt"
+    account_id     = "444444444444"
+    primary_region = "us-east-1"
   }
 
   "prod" = {
-    account_id                   = "555555555555"
-    primary_region               = "us-east-1"
-    enable_secops_analyst        = true
-    enable_secops_engineer       = true
-    logs_s3_readonly_policy_name = "tf-secure-baseline-prod-CentralizedLogsS3ReadOnly"
-    logs_cmk_decrypt_policy_name = "tf-secure-baseline-prod-LogsKmsDecrypt"
+    account_id     = "555555555555"
+    primary_region = "us-east-1"
   }
 }
 
