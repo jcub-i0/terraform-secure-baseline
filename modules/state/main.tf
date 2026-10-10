@@ -87,7 +87,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
   bucket = aws_s3_bucket.state.id
 
   rule {
-    id = "abort-incomplete-multipart-uploads"
+    id     = "abort-incomplete-multipart-uploads"
     status = "Enabled"
 
     filter {}
