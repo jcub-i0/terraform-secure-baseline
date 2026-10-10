@@ -4,7 +4,7 @@ run-name: Publish application image - ${{ inputs.environment }} - ${{ inputs.ser
 
 on:
   workflow_dispatch:
-    # checkov:skip=CKV_GHA_7:Intentional operator inputs for a protected, approval-gated deployment workflow.
+    # checkov:skip=CKV_GHA_7:Intentional build inputs validated within the repository; image publishing uses branch-scoped OIDC authorization.
     inputs:
       environment:
         description: "Workload environment"

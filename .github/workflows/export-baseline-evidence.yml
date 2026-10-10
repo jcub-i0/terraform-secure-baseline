@@ -4,7 +4,7 @@ run-name: Baseline evidence - ${{ inputs.environment }}
 
 on:
   workflow_dispatch:
-    # checkov:skip=CKV_GHA_7:Intentional operator inputs for a protected, approval-gated validation evidence workflow.
+    # checkov:skip=CKV_GHA_7:Intentional evidence scope inputs; execution uses the configured Plan environment and credentials.
     inputs:
       environment:
         description: "Workload environment to validate"
