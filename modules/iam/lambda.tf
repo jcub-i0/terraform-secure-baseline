@@ -136,16 +136,29 @@ resource "aws_iam_role" "lambda_ec2_rollback" {
 ### EC2 ROLLBACK IAM POLICY
 data "aws_iam_policy_document" "lambda_ec2_rollback" {
   statement {
-    sid    = "AllowEC2RollbackActions"
+    sid    = "AllowEC2RollbackDiscovery"
     effect = "Allow"
+
     actions = [
       "ec2:DescribeInstances",
-      "ec2:ModifyInstanceAttribute",
-      "ec2:DescribeSecurityGroups",
-      "ec2:CreateTags"
+      "ec2:DescribeSecurityGroups"
     ]
 
     resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowEC2RollbackInstanceChanges"
+    effect = "Allow"
+
+    actions = [
+      "ec2:ModifyInstanceAttribute",
+      "ec2:CreateTags"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.primary_region}:${var.account_id}:instance/*"
+    ]
   }
 
   statement {
