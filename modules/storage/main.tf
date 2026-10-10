@@ -56,6 +56,7 @@ resource "aws_db_instance" "main" {
   password_wo_version = aws_secretsmanager_secret_version.rds_master.secret_string_wo_version
 
   deletion_protection      = var.rds_deletion_protection
+  copy_tags_to_snapshot    = true
   skip_final_snapshot      = var.rds_skip_final_snapshot
   delete_automated_backups = var.rds_delete_automated_backups
 
