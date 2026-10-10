@@ -29,7 +29,6 @@ fi
 
 REQUIRE_CONTROL_PLANE_GITHUB_OIDC="${REQUIRE_CONTROL_PLANE_GITHUB_OIDC:-true}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
-CHECK_OPTIONAL_SECOPS_GROUPS="${CHECK_OPTIONAL_SECOPS_GROUPS:-false}"
 STRICT_IDENTITY_CENTER_ASSIGNMENTS="${STRICT_IDENTITY_CENTER_ASSIGNMENTS:-true}"
 STRICT_ACCOUNT_OU_CHECKS="${STRICT_ACCOUNT_OU_CHECKS:-true}"
 REQUIRE_STATE_STACK_REMOTE="${REQUIRE_STATE_STACK_REMOTE:-false}"
@@ -116,9 +115,7 @@ if ! jq -e '
     .prod;
     type == "object" and
     (.account_id | type == "string" and test("^[0-9]{12}$")) and
-    (.primary_region | type == "string" and length > 0) and
-    ((.enable_secops_analyst // false) | type == "boolean") and
-    ((.enable_secops_engineer // false) | type == "boolean")
+    (.primary_region | type == "string" and length > 0)
   )
 ' >/dev/null <<<"$IDENTITY_CENTER_WORKLOADS"; then
   fail "IDENTITY_CENTER_WORKLOADS does not match the expected workload configuration structure"
@@ -126,9 +123,7 @@ fi
 
 if ! jq -e '
   type == "object" and
-  (.account_id | type == "string" and test("^[0-9]{12}$")) and
-  ((.enable_secops_analyst // false) | type == "boolean") and
-  ((.enable_secops_engineer // false) | type == "boolean")
+  (.account_id | type == "string" and test("^[0-9]{12}$"))
 ' >/dev/null <<<"$IDENTITY_CENTER_SECOPS"; then
   fail "IDENTITY_CENTER_SECOPS does not match the expected security-operations configuration structure"
 fi
@@ -160,7 +155,6 @@ info "AWS_REGION: ${AWS_REGION}"
 info "EXPECTED_ACCOUNT_ID: ${EXPECTED_ACCOUNT_ID:-<not set>}"
 info "EXPECTED_GITHUB_REPOSITORY: ${EXPECTED_GITHUB_REPOSITORY:-<not set>}"
 info "REQUIRE_CONTROL_PLANE_GITHUB_OIDC: ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC}"
-info "CHECK_OPTIONAL_SECOPS_GROUPS: ${CHECK_OPTIONAL_SECOPS_GROUPS}"
 info "STRICT_IDENTITY_CENTER_ASSIGNMENTS: ${STRICT_IDENTITY_CENTER_ASSIGNMENTS}"
 info "STRICT_ACCOUNT_OU_CHECKS: ${STRICT_ACCOUNT_OU_CHECKS}"
 info "REQUIRE_STATE_STACK_REMOTE: ${REQUIRE_STATE_STACK_REMOTE}"
@@ -211,7 +205,6 @@ export CLOUD_NAME
 export NAME_PREFIX
 export REQUIRE_CONTROL_PLANE_GITHUB_OIDC
 export EXPECTED_GITHUB_REPOSITORY
-export CHECK_OPTIONAL_SECOPS_GROUPS
 export STRICT_IDENTITY_CENTER_ASSIGNMENTS
 export STRICT_ACCOUNT_OU_CHECKS
 export REQUIRE_STATE_STACK_REMOTE
@@ -280,7 +273,6 @@ jq -n \
   --arg overall_result "$OVERALL_RESULT" \
   --arg expected_github_repository "$EXPECTED_GITHUB_REPOSITORY" \
   --arg require_control_plane_github_oidc "$REQUIRE_CONTROL_PLANE_GITHUB_OIDC" \
-  --arg check_optional_secops_groups "$CHECK_OPTIONAL_SECOPS_GROUPS" \
   --arg strict_identity_center_assignments "$STRICT_IDENTITY_CENTER_ASSIGNMENTS" \
   --arg strict_account_ou_checks "$STRICT_ACCOUNT_OU_CHECKS" \
   --arg require_state_stack_remote "$REQUIRE_STATE_STACK_REMOTE" \
@@ -315,7 +307,6 @@ jq -n \
     settings: {
       expected_github_repository: $expected_github_repository,
       require_control_plane_github_oidc: $require_control_plane_github_oidc,
-      check_optional_secops_groups: $check_optional_secops_groups,
       strict_identity_center_assignments: $strict_identity_center_assignments,
       strict_account_ou_checks: $strict_account_ou_checks,
       require_state_stack_remote: $require_state_stack_remote,
@@ -439,7 +430,6 @@ section "Generating Markdown summary"
   echo "|---|---|"
   echo "| Expected GitHub Repository | \`${EXPECTED_GITHUB_REPOSITORY:-not configured}\` |"
   echo "| Require Control-Plane GitHub OIDC | ${REQUIRE_CONTROL_PLANE_GITHUB_OIDC} |"
-  echo "| Check Optional SecOps Groups | ${CHECK_OPTIONAL_SECOPS_GROUPS} |"
   echo "| Strict Identity Center Assignments | ${STRICT_IDENTITY_CENTER_ASSIGNMENTS} |"
   echo "| Strict Account OU Checks | ${STRICT_ACCOUNT_OU_CHECKS} |"
   echo "| Require State Stack Remote | ${REQUIRE_STATE_STACK_REMOTE} |"
