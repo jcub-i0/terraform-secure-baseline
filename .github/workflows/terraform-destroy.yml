@@ -4,6 +4,7 @@ run-name: Terraform destroy - ${{ inputs.environment }}
 
 on:
     workflow_dispatch:
+        # checkov:skip=CKV_GHA_7:Intentional operator inputs for a protected, approval-gated destroy workflow.
         inputs:
             environment:
                 description: "Environment to destroy"

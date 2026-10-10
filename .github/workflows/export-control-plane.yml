@@ -4,6 +4,7 @@ run-name: Control-plane evidence
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:Intentional operator inputs for a protected, approval-gated validation evidence workflow.
     inputs:
       strict_identity_center_assignments:
         description: "Fail when expected Identity Center account assignments are missing"

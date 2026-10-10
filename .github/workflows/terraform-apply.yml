@@ -4,6 +4,7 @@ run-name: Terraform apply - ${{ inputs.environment }}
 
 on:
     workflow_dispatch:
+        # checkov:skip=CKV_GHA_7:Intentional operator inputs for a protected, approval-gated Terraform Apply workflow.
         inputs:
             environment:
                 description: "Environment to deploy"
