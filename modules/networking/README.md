@@ -26,6 +26,7 @@ The repository also contains `modules/networking/security_policy`. That is a sep
 This parent module owns:
 
 - The main workload VPC
+- The AWS-created default VPC security group (managed with no ingress or egress rules)
 - Ingress-public subnets
 - Egress-public subnets
 - Compute-private subnets
@@ -48,6 +49,8 @@ This parent module owns:
 - Networking outputs for downstream consumers
 
 This parent module does not define the security-group rules contained in `modules/networking/security_policy`, and it does not create AWS Network Firewall resources or VPC endpoint resources. It accepts Network Firewall endpoint IDs when `egress_mode = "network_firewall"` so it can build the required routes.
+
+The parent adopts the AWS-created VPC default security group with `aws_default_security_group.default` and explicitly configures `ingress = []` and `egress = []`. On the first apply, the AWS provider removes existing rules from that group; this is not creation of a separate security group. All managed workloads should use their purpose-built security groups. Before applying to an existing environment, inspect the default security group's live network-interface attachments and rules. Removing this Terraform resource later does not restore its AWS default rules.
 
 ---
 
