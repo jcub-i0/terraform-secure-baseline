@@ -83,6 +83,21 @@ resource "aws_s3_bucket" "state" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  rule {
+    id = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 # BLOCK PUBLIC ACCESS TO THE STATE BUCKET
 resource "aws_s3_bucket_public_access_block" "state" {
   bucket = aws_s3_bucket.state.id
