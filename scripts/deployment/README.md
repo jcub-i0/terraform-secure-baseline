@@ -12,6 +12,8 @@
 | `validate-production-retirement-plan.sh` | Check a saved retirement Stage-1 plan | Reads the plan; does not apply it |
 | `cleanup-retirement-durable-data.sh` | Inventory or explicitly delete production ECR/Backup contents | `plan` inventories; `apply` permanently deletes the scoped durable data |
 | `validate-retirement-readiness.sh` | Check converged retirement state and live AWS readiness | Read-only AWS checks; does not clean up or apply |
+| `validate-retirement-log-authorization.sh` | Validate explicit log-disposition acknowledgment and record ID | Reads workflow environment variables; no AWS mutation |
+| `validate-log-bucket-destroy-principal.sh` | Check the live log-bucket deny-policy exemption for the assumed Apply role | Read-only; does not prove IAM authorization or actual S3 teardown |
 
 The canonical production lifecycle procedure is [Production Retirement](../../docs/production-retirement.md). The image-publication flow below is separate from that destructive lifecycle.
 
@@ -219,7 +221,7 @@ Use the [runbook](../../docs/production-retirement.md) for the complete order an
 
 The latter two helpers derive the service region from deployed `primary_region` and reject conflicting explicit region inputs. Their optional `--region`/`--profile` inputs are unrelated to the Terraform state backend's location. The full cleanup workflow is not supported for a production-profile `dev` or `staging` environment because of the cleanup helper's explicit `prod` restriction.
 
-Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow requires explicit durable-data authorization and separate protected durable-cleanup and final workload-destroy approvals. It does not mutate the Identity Center stack. Later cancellation does not undo earlier approved deletions.
+Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow requires explicit durable-data authorization, a separate audit-log/key disposition confirmation with an approved record reference, and protected durable-cleanup and final workload-destroy approvals. It checks the live log bucket policy/Apply-role exception before ECR/Backup cleanup and again before final destruction; it does not verify external archives or guarantee the caller can delete the policy. It does not mutate the Identity Center stack. Later cancellation does not undo earlier approved deletions.
 
 ## Implementation References
 
@@ -231,4 +233,6 @@ This page does not assert a new live publication or retirement test. Test claims
 - [Retirement plan guard](validate-production-retirement-plan.sh)
 - [Durable-data cleanup](cleanup-retirement-durable-data.sh)
 - [Retirement readiness](validate-retirement-readiness.sh)
+- [Audit-log disposition authorization](validate-retirement-log-authorization.sh)
+- [Log-bucket destroy principal preflight](validate-log-bucket-destroy-principal.sh)
 - [Terraform Apply](../../.github/workflows/terraform-apply.yml) and [Terraform Destroy](../../.github/workflows/terraform-destroy.yml)
