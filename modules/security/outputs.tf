@@ -3,6 +3,11 @@ output "logs_cmk_arn" {
   value       = aws_kms_key.logs.arn
 }
 
+output "rds_performance_insights_cmk_arn" {
+  description = "Customer-managed KMS key ARN for RDS Performance/Database Insights."
+  value       = aws_kms_key.rds_performance_insights.arn
+}
+
 output "ebs_cmk_arn" {
   description = "The ARN of the EBS KMS CMK"
   value       = aws_kms_key.ebs.arn
