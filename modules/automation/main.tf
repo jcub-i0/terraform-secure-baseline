@@ -20,7 +20,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   memory_size                    = 256
   source_code_hash               = archive_file.lambda_ec2_isolation.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
-  reserved_concurrent_executions = null #5
+  reserved_concurrent_executions = 5 # May require 'null' for new AWS accounts
 
   # ENABLE X-RAY TRACING
   tracing_config {
@@ -271,7 +271,7 @@ resource "aws_lambda_function" "ec2_rollback" {
   memory_size                    = 256
   source_code_hash               = archive_file.lambda_ec2_rollback.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
-  reserved_concurrent_executions = null #5
+  reserved_concurrent_executions = 1 # May require 'null' for new AWS accounts
 
   # ENABLE X-RAY TRACING
   tracing_config {
@@ -607,7 +607,7 @@ resource "aws_lambda_function" "ip_enrichment" {
   memory_size                    = 256
   source_code_hash               = archive_file.lambda_ip_enrichment.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
-  reserved_concurrent_executions = null #2
+  reserved_concurrent_executions = 2 # May require 'null' for new AWS accounts
 
   # ENABLE X-RAY TRACING
   tracing_config {

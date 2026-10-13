@@ -89,16 +89,13 @@ When adding another Lambda, review its source/package dependency, IAM, routing, 
 [main.tf](main.tf) configures all three functions with the following settings;
 these are resource settings, not defaults exposed by this module's inputs:
 
-| Function | Runtime | Timeout | Memory | Tracing | Workload VPC attachment |
-|---|---|---:|---:|---|---|
-| EC2 Isolation | `python3.12` | 60 seconds | 256 MB | `Active` | Supplied serverless-private subnets and isolation Lambda SG |
-| EC2 Rollback | `python3.12` | 60 seconds | 256 MB | `Active` | Supplied serverless-private subnets and rollback Lambda SG |
-| IP Enrichment | `python3.12` | 60 seconds | 256 MB | `Active` | None |
+| Function | Runtime | Timeout | Memory | Tracing | Workload VPC attachment | Reserved Concurrency Rate |
+|---|---|---:|---:|---|---|---|
+| EC2 Isolation | `python3.12` | 60 seconds | 256 MB | `Active` | Supplied serverless-private subnets and isolation Lambda SG | `5` |
+| EC2 Rollback | `python3.12` | 60 seconds | 256 MB | `Active` | Supplied serverless-private subnets and rollback Lambda SG | `1` |
+| IP Enrichment | `python3.12` | 60 seconds | 256 MB | `Active` | None | `2` |
 
-`reserved_concurrent_executions` is `null` for each function; the commented
-numbers next to that setting are not configured concurrency reservations.
-The module creates the automation resources independently of the deployment
-profile. Profile and workload settings are resolved by the calling baseline.
+The module creates the automation resources independently of the deployment profile. Profile and workload settings are resolved by the calling baseline.
 
 ### EC2 Isolation
 
