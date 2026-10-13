@@ -364,8 +364,9 @@ transmission-protection control.
 
 The workload logs bucket uses public access blocks, bucket-policy controls,
 KMS-backed default encryption, versioning, and lifecycle configuration.
-**Object Lock is disabled**, and the bucket permits force destruction without
-a Terraform destruction guard. See [storage](../../modules/storage/main.tf).
+**Object Lock is disabled**. Normal production sets `force_destroy=false`,
+while approved retirement permits force deletion; no static Terraform
+`prevent_destroy` guard is present. See [storage](../../modules/storage/main.tf).
 
 The [Config remediation](../../modules/security/config_baseline/remediations.tf)
 can automatically apply bucket public-access blocking when Config is enabled,
@@ -510,8 +511,9 @@ A multi-Region trail is not a cross-Region workload recovery architecture.
 ### Baseline Control
 
 Logs use KMS encryption, S3 versioning, selected bucket policies, and lifecycle
-rules. The workload logs bucket explicitly disables Object Lock and allows force
-destruction without a Terraform destruction guard. CloudWatch retention is
+rules. The workload logs bucket explicitly disables Object Lock and has no
+static `prevent_destroy` guard. Normal production disables `force_destroy`;
+approved retirement re-enables it and can purge logs. CloudWatch retention is
 caller/profile-resolved rather than universally fixed. See
 [storage](../../modules/storage/main.tf) and [logging](../../modules/logging/main.tf).
 
@@ -1060,8 +1062,9 @@ existence or a successful Secrets Manager metadata read.
 ### Baseline Control
 
 Logs use KMS encryption, S3 versioning, selected bucket policies, and lifecycle
-rules. The workload logs bucket explicitly disables Object Lock and allows force
-destruction without a Terraform destruction guard. CloudWatch retention is
+rules. The workload logs bucket explicitly disables Object Lock and has no
+static `prevent_destroy` guard. Normal production disables `force_destroy`;
+approved retirement re-enables it and can purge logs. CloudWatch retention is
 caller/profile-resolved rather than universally fixed. See
 [storage](../../modules/storage/main.tf) and [logging](../../modules/logging/main.tf).
 

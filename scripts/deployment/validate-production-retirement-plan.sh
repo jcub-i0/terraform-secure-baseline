@@ -10,6 +10,7 @@ set -euo pipefail
 # - resolves production_retirement_mode=true;
 # - disables only the native deletion protections required for retirement;
 # - preserves fail-closed ECR/ECS/Backup destructive behavior;
+# - enables log-bucket force destruction only during approved retirement;
 # - derives zero-capacity ECS retirement configuration; and
 # - contains no create, delete, replacement, or otherwise unsupported resource
 #   actions.
@@ -200,6 +201,7 @@ if ! echo "$LIFECYCLE_JSON" |
     and .ecr_force_delete == false
     and .ecs_service_force_delete == false
     and .backup_vault_force_destroy == false
+    and .centralized_logs_force_destroy == true
   ' >/dev/null; then
   echo "$LIFECYCLE_JSON" | jq .
   fail "Planned lifecycle_protection output is not the required production retirement posture."
@@ -271,6 +273,7 @@ Network Firewall protection:     $(echo "$LIFECYCLE_JSON" | jq -r '.network_fire
 ECR force_delete:                $(echo "$LIFECYCLE_JSON" | jq -r '.ecr_force_delete')
 ECS service force_delete:        $(echo "$LIFECYCLE_JSON" | jq -r '.ecs_service_force_delete')
 Backup vault force_destroy:      $(echo "$LIFECYCLE_JSON" | jq -r '.backup_vault_force_destroy')
+Centralized logs force_destroy: $(echo "$LIFECYCLE_JSON" | jq -r '.centralized_logs_force_destroy')
 SUMMARY
 
 section "Validation Result"

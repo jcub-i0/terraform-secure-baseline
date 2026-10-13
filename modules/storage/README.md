@@ -460,7 +460,7 @@ The write statement requires the workload source account and bucket-owner-full-c
 
 ## Important Production Notes
 
-RDS lifecycle behavior is now input-driven. The centralized logs bucket's literal settings are **not** covered by the same production lifecycle policy.
+RDS lifecycle behavior and centralized logs bucket force-destroy posture are input-driven by baseline composition. Object Lock and Terraform's static `prevent_destroy` setting remain independent limitations.
 
 ### RDS Deletion Protection
 
@@ -493,15 +493,38 @@ The module explicitly sets `object_lock_enabled = false` and exposes no input fo
 
 ### Centralized Logs Bucket Force Destroy
 
-The module explicitly sets `force_destroy = true` for this bucket in **every profile**. This is distinct from production ECR `force_delete=false` and Backup vault `force_destroy=false`.
+Baseline resolves the required `centralized_logs_force_destroy` input as follows:
 
-The existing log-deletion bucket policy is a separate permission boundary. The force-destroy flag does not override an AWS policy deny, nor does that deny turn this bucket into an independently retained archive. Decide log retention/disposition before workload deletion.
+| Posture | S3 `force_destroy` |
+|---|---:|
+| Development/minimal | `true` |
+| Normal production | `false` |
+| Production retirement (after reviewed Stage-1 Apply) | `true` |
+
+A nonempty production bucket is not implicitly purged under the normal-production
+posture. The reviewed retirement Apply must successfully write `true` into
+Terraform state **before** the final destroy; setting the input only in a
+single destroy plan is insufficient to update provider deletion behavior.
+The Stage-1 and retirement-readiness gates check the planned and applied
+postures respectively.
+
+**Important:** The final approved production destroy can delete the contents
+of this log bucket. Unlike ECR and Backup, the scoped durable-data cleanup
+script does **not** inventory/archive/delete these logs in its earlier
+approved cleanup job. Operators must independently assess, copy, and verify
+retained audit evidence and the required encryption keys before retirement.
+S3 Object Lock remains disabled. The existing log-deletion bucket policy is
+a separate permission boundary; `force_destroy` does not override its deny,
+and neither that deny nor the false flag guarantees immutable retention.
 
 ### Centralized Logs Bucket Prevent Destroy
 
-The module explicitly sets `prevent_destroy = false` on the logs bucket. Neither selecting production nor leaving `production_retirement_mode=false` changes it. The `# CHANGE THIS IN PROD` comments are unresolved implementation limitations, not automatic profile switches.
-
-Do not describe the entire storage module as protected against production destruction. Changes to these S3 controls belong in a separately reviewed implementation change, not a documentation-only release update.
+The module continues to set `prevent_destroy = false` because Terraform
+lifecycle meta-arguments cannot be parameterized by the deployment profile.
+Normal production's `force_destroy = false` protects a **nonempty** bucket
+against Terraform's automatic object purge, but does not stop destruction of
+an already empty bucket, administrative policy changes, or direct AWS deletion.
+Do not describe this as WORM or a universal production destruction guard.
 
 ---
 
@@ -526,6 +549,7 @@ Do not describe the entire storage module as protected against production destru
 | `random_id` | `string` | Required | Centralized logs-bucket naming suffix |
 | `cloudtrail_arn` | `string` | Required | Retained interface input; resource definitions here do not consume it |
 | `bucket_admin_principals` | `list(string)` | Required | Principals exempted from protected policy/versioning-change denies |
+| `centralized_logs_force_destroy` | `bool` | Required | S3 force-destroy behavior; baseline derives it from deployment profile and retirement mode |
 | `secrets_manager_cmk_arn` | `string` | Required | RDS master-secret encryption key |
 | `backup_enabled` | `bool` | Required | Resolved enablement used for the RDS Backup tag; this module does not resolve profiles or `null` defaults |
 | `rds_deletion_protection` | `bool` | Required | Native RDS deletion protection |
@@ -587,10 +611,11 @@ module "storage" {
   backup_enabled            = local.effective_backup_enabled
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
-  logs_cmk_arn            = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
-  cloudtrail_arn          = module.logging.cloudtrail_arn
-  bucket_admin_principals = var.bucket_admin_principals
+  logs_cmk_arn                    = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn         = module.security.secrets_manager_cmk_arn
+  cloudtrail_arn                  = module.logging.cloudtrail_arn
+  bucket_admin_principals        = var.bucket_admin_principals
+  centralized_logs_force_destroy = local.effective_centralized_logs_force_destroy
 }
 ```
 

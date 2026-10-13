@@ -11,7 +11,8 @@ set -euo pipefail
 #
 # The script proves:
 # - Terraform reports production_retirement_mode=true;
-# - production force-delete/force-destroy behavior remains disabled;
+# - production ECR/ECS/Backup force-delete behavior remains disabled while
+#   centralized logs force-destroy is enabled only after retirement Apply;
 # - RDS/ALB/Network Firewall native deletion protection is disabled live;
 # - RDS final-snapshot and automated-backup retention behavior remains intact;
 # - Terraform derives zero-capacity ECS retirement state;
@@ -264,6 +265,7 @@ if ! echo "$LIFECYCLE_JSON" |
     and .ecr_force_delete == false
     and .ecs_service_force_delete == false
     and .backup_vault_force_destroy == false
+    and .centralized_logs_force_destroy == true
   ' >/dev/null; then
   echo "$LIFECYCLE_JSON" | jq .
   fail "Terraform lifecycle_protection output is not in the required retirement posture."
@@ -384,6 +386,17 @@ RDS_STATE_JSON="$(state_resources aws_db_instance)"
 ECR_STATE_JSON="$(state_resources aws_ecr_repository)"
 ECS_STATE_JSON="$(state_resources aws_ecs_service)"
 BACKUP_VAULT_STATE_JSON="$(state_resources aws_backup_vault)"
+CENTRALIZED_LOGS_STATE_JSON="$(
+  state_resources aws_s3_bucket |
+    jq -c '[.[] | select(.address | endswith(".aws_s3_bucket.centralized_logs"))]'
+)"
+
+if ! echo "$CENTRALIZED_LOGS_STATE_JSON" |
+  jq -e '(length == 1) and (.[0].values.force_destroy == true)' >/dev/null; then
+  echo "$CENTRALIZED_LOGS_STATE_JSON" |
+    jq '[.[] | {address, bucket: .values.bucket, force_destroy: .values.force_destroy}]'
+  fail "The centralized logs S3 bucket must have force_destroy=true in applied retirement state before final destruction."
+fi
 
 [[ "$(echo "$RDS_STATE_JSON" | jq 'length')" -eq 1 ]] ||
   fail "Expected exactly one Terraform-managed RDS DB instance."
@@ -942,6 +955,7 @@ AWS region:                    ${AWS_REGION}
 Name prefix:                   ${NAME_PREFIX}
 effective_egress_mode:         ${EFFECTIVE_EGRESS_MODE}
 production_retirement_mode:    ${PRODUCTION_RETIREMENT_MODE}
+Centralized logs force_destroy: true (applied retirement state)
 
 RDS identifier:                ${RDS_IDENTIFIER}
 RDS deletion protection:       ${RDS_DELETION_PROTECTION}

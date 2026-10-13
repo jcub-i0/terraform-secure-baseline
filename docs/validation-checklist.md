@@ -1838,7 +1838,7 @@ Expected:
 - Bucket exists.
 - Encryption is enabled.
 - Versioning is enabled.
-- The baseline sets Object Lock disabled, `force_destroy=true`, and `prevent_destroy=false` on this workload logs bucket. An absent Object Lock configuration is an implementation limitation, not evidence of immutable storage. Do not treat lifecycle retention as a guarantee that logs survive workload teardown.
+- The baseline disables Object Lock and retains `prevent_destroy=false` on the workload logs bucket. `force_destroy` resolves to `true` in development/minimal, `false` in normal production, and `true` after production retirement preparation. Check `lifecycle_protection.centralized_logs_force_destroy` and the Terraform state for the intended deletion posture; these settings are not exposed by a live S3 bucket API. Object Lock absence is an implementation limitation, not immutable storage. The final approved production destroy can purge logs unless they were preserved outside the workload.
 
 ---
 

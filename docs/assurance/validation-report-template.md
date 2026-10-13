@@ -574,7 +574,7 @@ Use only when an authorized retirement was actually performed. This is a compani
 | Customer workforce access dependencies reviewed | `<Complete/Outstanding/Not Applicable>` | `<separate IAM Identity Center governance>` |
 | Aborted/partial operation and remaining obligations | `<description/none>` | Earlier cleanup is not undone by rejecting a later approval |
 
-The complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
+The complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. During the subsequently approved final Terraform destroy, the centralized logs bucket can also be force-deleted; the earlier ECR/Backup cleanup helper does not archive or inventory those logs. Preserve required audit evidence and keys outside the workload before retirement. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
 
 ## Warnings / Exceptions
 

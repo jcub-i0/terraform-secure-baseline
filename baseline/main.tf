@@ -151,10 +151,11 @@ module "storage" {
   backup_enabled            = local.effective_backup_enabled
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
-  logs_cmk_arn            = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
-  cloudtrail_arn          = module.logging.cloudtrail_arn
-  bucket_admin_principals = var.bucket_admin_principals
+  logs_cmk_arn                   = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn        = module.security.secrets_manager_cmk_arn
+  cloudtrail_arn                 = module.logging.cloudtrail_arn
+  bucket_admin_principals        = var.bucket_admin_principals
+  centralized_logs_force_destroy = local.effective_centralized_logs_force_destroy
 }
 
 module "iam" {

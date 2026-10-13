@@ -16,7 +16,7 @@ on:
                 required: true
                 type: string
             delete_durable_retirement_data:
-                description: "Permanently delete Terraform-managed ECR images and Backup recovery points during prod retirement"
+                description: "Authorize ECR/Backup cleanup and final logs-bucket deletion during prod retirement"
                 required: true
                 default: false
                 type: boolean
@@ -148,7 +148,7 @@ jobs:
                     }
 
                     [[ "${DELETE_DURABLE_RETIREMENT_DATA}" == "true" ]] || {
-                      echo "::error::Production destruction requires explicit authorization to delete durable ECR/Backup data."
+                      echo "::error::Production destruction requires approval for ECR/Backup cleanup and final logs-bucket deletion."
                       echo "::error::Set delete_durable_retirement_data=true and approve the protected cleanup job."
                       exit 1
                     }

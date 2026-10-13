@@ -242,6 +242,7 @@ output "lifecycle_protection" {
     ecr_force_delete                   = local.effective_ecr_force_delete
     ecs_service_force_delete           = local.effective_ecs_service_force_delete
     backup_vault_force_destroy         = local.effective_backup_vault_force_destroy
+    centralized_logs_force_destroy     = local.effective_centralized_logs_force_destroy
   }
 }
 

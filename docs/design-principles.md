@@ -429,7 +429,7 @@ The logging design emphasizes:
 
 Logs are treated as security evidence, not just operational telemetry.
 
-In the implementation, each workload owns its logs bucket. Its `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` values are not changed by the production profile. Administrative policy changes and workload destruction remain material retention risks; the 2555-day lifecycle policy is not immutable retention. Required external evidence preservation is an operator responsibility, not an implemented archive-copy workflow.
+In the implementation, each workload owns its logs bucket. Object Lock remains disabled and Terraform `prevent_destroy=false` is static, but `force_destroy` is now `false` in normal production and `true` only for development/minimal or after the reviewed production retirement Apply. This prevents Terraform from silently purging a nonempty normal-production bucket; it is not WORM retention and does not prevent destruction of an empty bucket. During approved retirement, automatic log deletion becomes possible. The 2555-day lifecycle policy is not immutable retention; required external evidence preservation and key continuity remain operator responsibilities.
 
 ---
 
