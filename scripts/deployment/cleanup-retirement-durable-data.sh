@@ -24,6 +24,7 @@ set -euo pipefail
 #
 #   cleanup-retirement-durable-data.sh prod --mode apply \
 #     --expected-account-id 123456789012 \
+#     --expected-apply-role-arn arn:aws:iam::123456789012:role/TerraformApplyRole \
 #     --confirm DELETE-DURABLE-DATA
 
 export AWS_PAGER=""
@@ -69,6 +70,9 @@ Options:
   --profile <profile>          AWS CLI profile. Default: $AWS_PROFILE.
   --expected-account-id <id>   Required 12-digit workload account ID.
                                Default: $EXPECTED_ACCOUNT_ID.
+  --expected-apply-role-arn <arn>
+                               Required for apply. IAM Apply role which must
+                               be exempt from the live log-bucket policy deny.
   -h, --help                   Show this help.
 
 The script fails closed unless Terraform reports the complete production
@@ -83,6 +87,7 @@ CONFIRM=""
 AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
+EXPECTED_APPLY_ROLE_ARN=""
 
 if [[ $# -gt 0 && "${1:0:1}" != "-" ]]; then
   ENVIRONMENT="$1"
@@ -121,6 +126,11 @@ while [[ $# -gt 0 ]]; do
       EXPECTED_ACCOUNT_ID="$2"
       shift 2
       ;;
+    --expected-apply-role-arn)
+      [[ $# -ge 2 ]] || fail "--expected-apply-role-arn requires a value"
+      EXPECTED_APPLY_ROLE_ARN="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -147,8 +157,11 @@ esac
 [[ "$EXPECTED_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] ||
   fail "Expected AWS account ID must contain exactly 12 digits."
 
-if [[ "$MODE" == "apply" && "$CONFIRM" != "DELETE-DURABLE-DATA" ]]; then
-  fail "--mode apply requires --confirm DELETE-DURABLE-DATA."
+if [[ "$MODE" == "apply" ]]; then
+  [[ "$CONFIRM" == "DELETE-DURABLE-DATA" ]] ||
+    fail "--mode apply requires --confirm DELETE-DURABLE-DATA."
+  [[ -n "$EXPECTED_APPLY_ROLE_ARN" ]] ||
+    fail "--mode apply requires --expected-apply-role-arn for the live log-bucket policy preflight."
 fi
 
 section "Production Retirement Durable-Data ${MODE^}"
@@ -558,6 +571,23 @@ if [[ "$MODE" == "plan" ]]; then
   success "Read-only durable-data inventory completed for: ${ENVIRONMENT}"
   exit 0
 fi
+
+section "Verifying log-bucket policy before durable-data deletion"
+
+# Enforce the live policy check here, rather than only in GitHub Actions, so
+# direct apply-mode invocations cannot bypass it. Plan mode remains read-only.
+log_guard_args=(
+  --working-directory "$ENV_DIR"
+  --expected-account-id "$EXPECTED_ACCOUNT_ID"
+  --expected-role-arn "$EXPECTED_APPLY_ROLE_ARN"
+  --region "$AWS_REGION"
+)
+
+[[ -z "$AWS_PROFILE" ]] || log_guard_args+=(--profile "$AWS_PROFILE")
+
+bash "${REPO_ROOT}/scripts/deployment/validate-log-bucket-destroy-principal.sh" \
+  "${log_guard_args[@]}" ||
+  fail "Log-bucket policy/Apply-role verification failed before durable-data deletion."
 
 section "Applying approved durable-data cleanup"
 

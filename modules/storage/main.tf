@@ -254,7 +254,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "centralized_logs" {
 ## S3 BUCKET POLICIES
 ### CENTRALIZED LOGS S3 BUCKET POLICY
 data "aws_iam_policy_document" "centralized_logs" {
-  # DENY DELETING ANY OBJECTS/VERSIONS (IMMUTABILITY)
+  # Deny direct deletion of objects and versions while this removable policy is attached.
+  # This is not S3 Object Lock, WORM, or protection against approved teardown.
   statement {
     sid    = "DenyDeleteLogs"
     effect = "Deny"
@@ -290,7 +291,7 @@ data "aws_iam_policy_document" "centralized_logs" {
     resources = [aws_s3_bucket.centralized_logs.arn]
 
     condition {
-      test     = "ForAnyValue:ArnNotEquals"
+      test     = "ArnNotEquals"
       variable = "aws:PrincipalArn"
       values   = var.bucket_admin_principals
     }
@@ -310,7 +311,7 @@ data "aws_iam_policy_document" "centralized_logs" {
     resources = [aws_s3_bucket.centralized_logs.arn]
 
     condition {
-      test     = "ForAnyValue:ArnNotEquals"
+      test     = "ArnNotEquals"
       variable = "aws:PrincipalArn"
       values   = var.bucket_admin_principals
     }
