@@ -97,9 +97,11 @@ Configuration in the resource definition (not a report of live AWS state):
 | Backup window | `03:00-04:00` |
 | Maintenance window | `sun:05:00-sun:06:00` |
 | CloudWatch log exports | `postgresql`, `upgrade` |
-| Performance Insights | `performance_insights_enabled = true` |
-| Enhanced Monitoring | Not configured; the `monitoring_interval` line is commented out |
+| Performance/Database Insights | Enabled with a dedicated, rotation-enabled RDS insights customer-managed KMS key |
+| Enhanced Monitoring | Every 60 seconds, using a dedicated IAM role and the AWS-managed `AmazonRDSEnhancedMonitoringRole` policy |
 | Auto minor version upgrade | Enabled |
+
+Enhanced Monitoring delivers OS metrics through its separate RDS service role. The RDS Insights CMK encrypts performance-metric insights only, **not** the DB storage volume, master secret, or CloudWatch log groups. Account-level KMS IAM permissions and service grants must be verified in deployed AWS; readers of sensitive insights data need permissions to decrypt with this key. Retain the key while encrypted insights remain needed.
 
 This remains a PostgreSQL **Multi-AZ DB instance** when enabled, not Aurora or an RDS Multi-AZ DB cluster. A three-AZ DB subnet group is not a declaration of three database instances or read replicas.
 
