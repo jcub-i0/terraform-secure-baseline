@@ -156,6 +156,7 @@ module "storage" {
   cloudtrail_arn                 = module.logging.cloudtrail_arn
   bucket_admin_principals        = var.bucket_admin_principals
   centralized_logs_force_destroy = local.effective_centralized_logs_force_destroy
+  rds_performance_insights_cmk_arn = module.security.rds_performance_insights_cmk_arn
 }
 
 module "iam" {
