@@ -24,6 +24,8 @@ assert_failure() {
 }
 
 assert_success env DEPLOYMENT_PROFILE=development bash "$auth"
+assert_success env -u DEPLOYMENT_PROFILE TF_VAR_deployment_profile=development bash "$auth"
+assert_success env -u DEPLOYMENT_PROFILE TF_VAR_deployment_profile=production AUDIT_LOG_DISPOSITION_CONFIRMED=true AUDIT_LOG_DISPOSITION_REFERENCE=CHG-12345 bash "$auth"
 assert_failure env DEPLOYMENT_PROFILE=development AUDIT_LOG_DISPOSITION_CONFIRMED=true bash "$auth"
 assert_failure env DEPLOYMENT_PROFILE=development AUDIT_LOG_DISPOSITION_REFERENCE=CHG-123 bash "$auth"
 assert_failure env DEPLOYMENT_PROFILE=production bash "$auth"
