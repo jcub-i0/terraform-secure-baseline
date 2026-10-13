@@ -567,6 +567,13 @@ locals {
     !local.is_production_profile
   )
 
+  # Non-production stays destructible; production logs can be force-deleted
+  # only after the approved retirement preparation has been applied.
+  effective_centralized_logs_force_destroy = (
+    !local.is_production_profile ||
+    local.effective_production_retirement_mode
+  )
+
   effective_rds_skip_final_snapshot = (
     !local.is_production_profile
   )
