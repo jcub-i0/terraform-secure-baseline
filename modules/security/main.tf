@@ -563,9 +563,9 @@ resource "aws_kms_key" "ecr" {
   lifecycle {
     prevent_destroy = false # CHANGE THIS IN PROD
   }
-  
+
   tags = {
-    Name        = "${var.name_prefix}-Backup-CMK"
+    Name        = "${var.name_prefix}-ECR-CMK"
     Environment = var.environment
     Terraform   = "true"
   }
