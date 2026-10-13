@@ -20,7 +20,7 @@ resource "aws_lambda_function" "ec2_isolation" {
   memory_size                    = 256
   source_code_hash               = archive_file.lambda_ec2_isolation.output_base64sha256
   kms_key_arn                    = var.lambda_cmk_arn
-  reserved_concurrent_executions = 2 # May require 'null' for new AWS accounts
+  reserved_concurrent_executions = 5 # May require 'null' for new AWS accounts
 
   # ENABLE X-RAY TRACING
   tracing_config {
