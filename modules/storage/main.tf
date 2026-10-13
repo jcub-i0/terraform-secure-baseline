@@ -291,7 +291,7 @@ data "aws_iam_policy_document" "centralized_logs" {
     resources = [aws_s3_bucket.centralized_logs.arn]
 
     condition {
-      test     = "ForAnyValue:ArnNotEquals"
+      test     = "ArnNotEquals"
       variable = "aws:PrincipalArn"
       values   = var.bucket_admin_principals
     }
@@ -311,7 +311,7 @@ data "aws_iam_policy_document" "centralized_logs" {
     resources = [aws_s3_bucket.centralized_logs.arn]
 
     condition {
-      test     = "ForAnyValue:ArnNotEquals"
+      test     = "ArnNotEquals"
       variable = "aws:PrincipalArn"
       values   = var.bucket_admin_principals
     }
