@@ -8,26 +8,14 @@ resource "aws_config_configuration_recorder" "config" {
   role_arn = var.config_role_arn
 
   recording_group {
-    all_supported                 = false
-    include_global_resource_types = false
-
-    resource_types = [
-      "AWS::S3::Bucket",
-      "AWS::CloudTrail::Trail",
-      "AWS::RDS::DBInstance",
-      "AWS::EC2::Volume",
-      "AWS::EC2::SecurityGroup",
-      "AWS::EC2::Instance",
-
-      # GLOBAL IAM TYPES - explicitly recorded to support IAM Config rules in this designated region
-      "AWS::IAM::User",
-      "AWS::IAM::Group",
-      "AWS::IAM::Role",
-      "AWS::IAM::Policy"
-    ]
+    # Include current and future supported resource types, including KMS keys.
+    # Record global IAM resources in the designated us-east-1 Region; reuse in
+    # other Regions requires an explicit global-IAM support review.
+    all_supported                 = true
+    include_global_resource_types = true
 
     recording_strategy {
-      use_only = "INCLUSION_BY_RESOURCE_TYPES"
+      use_only = "ALL_SUPPORTED_RESOURCE_TYPES"
     }
   }
 }
@@ -51,6 +39,7 @@ resource "time_sleep" "wait_for_config_recorder" {
 
 ## CONFIGURATION RECORDER STATUS
 resource "aws_config_configuration_recorder_status" "config" {
+  #checkov:skip=CKV2_AWS_45:Recorder activation follows enable_config; minimal is intentionally disabled by default while enabled profiles undergo live recorder validation.
   name       = aws_config_configuration_recorder.config.name
   is_enabled = var.enable_config
 

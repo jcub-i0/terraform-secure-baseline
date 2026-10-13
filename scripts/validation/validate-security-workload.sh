@@ -463,6 +463,7 @@ fi
 section "Checking AWS Config"
 
 CONFIG_RECORDER_COUNT="0"
+CONFIG_RECORDER_COVERAGE="<not checked>"
 CONFIG_DELIVERY_CHANNEL_COUNT="0"
 CONFIG_RULE_COUNT="0"
 
@@ -474,34 +475,52 @@ if [[ "$EFFECTIVE_ENABLE_CONFIG" == "true" ]]; then
   )"
 
   CONFIG_RECORDER_COUNT="$(
-    echo "$CONFIG_RECORDERS_JSON" |
-      jq '.ConfigurationRecorders | length'
+    jq -r '.ConfigurationRecorders | length' <<<"$CONFIG_RECORDERS_JSON"
+  )"
+  CONFIG_EXPECTED_RECORDER_JSON="$(
+    jq -c --arg name "$NAME_PREFIX" '
+      [.ConfigurationRecorders[]? | select(.name == $name)]
+    ' <<<"$CONFIG_RECORDERS_JSON"
   )"
 
-  if [[ "$CONFIG_RECORDER_COUNT" -gt 0 ]]; then
-    success "AWS Config configuration recorder exists"
-  else
-    fail "effective_enable_config=true, but no AWS Config configuration recorder was found."
+  if [[ "$(jq 'length' <<<"$CONFIG_EXPECTED_RECORDER_JSON")" -ne 1 ]]; then
+    echo "$CONFIG_RECORDERS_JSON" | jq .
+    fail "Expected exactly one AWS Config recorder named ${NAME_PREFIX} (found ${CONFIG_RECORDER_COUNT} total)."
   fi
+  success "AWS Config recorder exists: ${NAME_PREFIX}"
+
+  if ! jq -e '
+    .[0].recordingGroup as $group
+    | ($group.allSupported == true)
+      and ($group.includeGlobalResourceTypes == true)
+      and ($group.recordingStrategy.useOnly == "ALL_SUPPORTED_RESOURCE_TYPES")
+      and (($group.resourceTypes // []) | length == 0)
+  ' >/dev/null <<<"$CONFIG_EXPECTED_RECORDER_JSON"; then
+    echo "$CONFIG_EXPECTED_RECORDER_JSON" | jq .
+    fail "AWS Config recorder does not use all-supported recording with global IAM resources."
+  fi
+  CONFIG_RECORDER_COVERAGE="ALL_SUPPORTED_RESOURCE_TYPES (global IAM included)"
+  success "AWS Config recorder records all supported resource types, including global IAM."
 
   CONFIG_RECORDER_STATUS_JSON="$(
     aws configservice describe-configuration-recorder-status \
       "${aws_args[@]}" \
       --output json
   )"
-
-  CONFIG_RECORDERS_NOT_RECORDING_COUNT="$(
-    echo "$CONFIG_RECORDER_STATUS_JSON" |
-      jq '[.ConfigurationRecordersStatus[]? | select(.recording != true)] | length'
+  CONFIG_EXPECTED_RECORDER_STATUS_JSON="$(
+    jq -c --arg name "$NAME_PREFIX" '
+      [.ConfigurationRecordersStatus[]? | select(.name == $name)]
+    ' <<<"$CONFIG_RECORDER_STATUS_JSON"
   )"
 
-  if [[ "$CONFIG_RECORDERS_NOT_RECORDING_COUNT" -eq 0 ]]; then
-    success "AWS Config recorder is recording"
-  else
+  if ! jq -e '
+    (length == 1) and (.[0].recording == true)
+  ' >/dev/null <<<"$CONFIG_EXPECTED_RECORDER_STATUS_JSON"; then
     echo "$CONFIG_RECORDER_STATUS_JSON" | jq .
-    fail "One or more AWS Config recorders are not recording."
+    fail "Expected AWS Config recorder ${NAME_PREFIX} to exist and report recording=true."
   fi
-  
+  success "AWS Config recorder ${NAME_PREFIX} is recording"
+
   CONFIG_DELIVERY_CHANNELS_JSON="$(
     aws configservice describe-delivery-channels \
       "${aws_args[@]}" \
@@ -623,6 +642,7 @@ Inspector Lambda code status:       ${INSPECTOR_LAMBDA_CODE_STATUS}
 Inspector code repository status:   ${INSPECTOR_CODE_REPOSITORY_STATUS}
 
 AWS Config recorder count:          ${CONFIG_RECORDER_COUNT}
+AWS Config recorder coverage:       ${CONFIG_RECORDER_COVERAGE}
 AWS Config delivery channel count:  ${CONFIG_DELIVERY_CHANNEL_COUNT}
 AWS Config rule count:              ${CONFIG_RULE_COUNT}
 
