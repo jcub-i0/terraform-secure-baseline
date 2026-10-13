@@ -627,7 +627,7 @@ module "storage" {
 
 ## Validation
 
-The automated RDS resilience checks are inside [validate-backup.sh](../../scripts/validation/validate-backup.sh), including when scheduled AWS Backup is disabled. They compare live identity, Multi-AZ, DB subnet-group **name**, SG set, deletion protection, backup retention, public accessibility, and storage-encryption state with `rds_configuration`. Deletion-time settings are checked as Terraform lifecycle intent. An output field such as `instance_class` is not proof the validator compares it: the validator does not include `DBInstanceClass`, engine/version, or all database settings in that equality check.
+The automated RDS resilience checks are inside [validate-backup.sh](../../scripts/validation/validate-backup.sh), including when scheduled AWS Backup is disabled. They compare live identity, Multi-AZ, DB subnet-group **name**, SG set, deletion protection, backup retention, public accessibility, storage encryption, Enhanced Monitoring (interval/role), and Insights encryption (enablement/KMS key) with `rds_configuration`. Deletion-time settings are checked as Terraform lifecycle intent. An output field such as `instance_class` is not proof the validator compares it: the validator does not include `DBInstanceClass`, engine/version, or all database settings in that equality check.
 
 [Networking validation](../../scripts/validation/validate-networking.sh) checks the data subnet family, and compute/ECS validators check their declared SG relationships. Those are not a SQL connectivity test, an exact audit of every RDS subnet-group member, or application recovery verification. The supplemental commands below are **manual inspections**, not additional automated assertions in the 16-script suite.
 
