@@ -582,6 +582,7 @@ log_guard_args=(
   --expected-role-arn "$EXPECTED_APPLY_ROLE_ARN"
   --region "$AWS_REGION"
 )
+
 [[ -z "$AWS_PROFILE" ]] || log_guard_args+=(--profile "$AWS_PROFILE")
 
 bash "${REPO_ROOT}/scripts/deployment/validate-log-bucket-destroy-principal.sh" \

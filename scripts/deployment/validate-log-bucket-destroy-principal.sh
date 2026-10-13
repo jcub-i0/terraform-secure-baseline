@@ -6,6 +6,7 @@ set -euo pipefail
 # Does not prove that IAM, SCPs, permissions boundaries, or S3 delete succeed.
 
 export AWS_PAGER=""
+
 fail() { printf '[FAIL] %s\n' "$*" >&2; exit 1; }
 
 working_dir=""
@@ -13,6 +14,7 @@ expected_account=""
 expected_role=""
 region=""
 aws_profile="${AWS_PROFILE:-}"
+
 while (( $# )); do
   case "$1" in
     --working-directory|--expected-account-id|--expected-role-arn|--region|--profile)
@@ -32,6 +34,7 @@ done
 [[ -d "$working_dir" ]] || fail 'Terraform working directory is unavailable.'
 [[ "$expected_account" =~ ^[0-9]{12}$ ]] || fail 'Invalid expected AWS account ID.'
 [[ "$region" =~ ^[a-z0-9]+(-[a-z0-9]+)+-[0-9]+$ ]] || fail 'Invalid AWS Region.'
+
 if [[ "$expected_role" =~ ^arn:([^:]+):iam::([0-9]{12}):role/(.+)$ ]]; then
   partition="${BASH_REMATCH[1]}"
   role_account="${BASH_REMATCH[2]}"
@@ -39,33 +42,44 @@ if [[ "$expected_role" =~ ^arn:([^:]+):iam::([0-9]{12}):role/(.+)$ ]]; then
 else
   fail 'Expected Apply role must be an IAM role ARN.'
 fi
+
 [[ "$role_account" == "$expected_account" ]] || fail 'Apply role is in the wrong account.'
+
 for command in aws terraform jq; do
   command -v "$command" >/dev/null 2>&1 || fail "Missing command: $command"
 done
 
 deployment_profile="$(terraform -chdir="$working_dir" output -raw deployment_profile)" ||
   fail 'Cannot read applied deployment profile.'
+
 [[ "$deployment_profile" == production ]] || fail 'Log-bucket preflight requires applied production profile.'
+
 lifecycle="$(terraform -chdir="$working_dir" output -json lifecycle_protection)" ||
   fail 'Cannot read applied lifecycle posture.'
+
 jq -e '.production_retirement_mode == true and .centralized_logs_force_destroy == true' \
   <<< "$lifecycle" >/dev/null || fail 'Production log force_destroy is not enabled in applied outputs.'
 
 bucket="$(terraform -chdir="$working_dir" output -raw centralized_logs_bucket_name)" ||
   fail 'Cannot read centralized logs bucket name.'
+
 [[ "$bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] ||
   fail 'Invalid centralized logs bucket name.'
 
 aws_args=(--region "$region")
+
 [[ -z "$aws_profile" ]] || aws_args+=(--profile "$aws_profile")
 
 caller="$(aws sts get-caller-identity "${aws_args[@]}" --output json)" ||
   fail 'Cannot resolve the active AWS caller identity.'
+
 caller_account="$(jq -er '.Account' <<< "$caller")" || fail 'Caller has no AWS account.'
 caller_arn="$(jq -er '.Arn' <<< "$caller")" || fail 'Caller has no AWS ARN.'
+
 [[ "$caller_account" == "$expected_account" ]] || fail 'AWS caller account mismatch.'
+
 expected_session_prefix="arn:${partition}:sts::${expected_account}:assumed-role/${role_name}/"
+
 [[ "$caller_arn" == "$expected_session_prefix"* ]] ||
   fail 'AWS caller is not a session of the expected Apply role.'
 
