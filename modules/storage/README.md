@@ -105,7 +105,6 @@ Enhanced Monitoring delivers OS metrics through its separate RDS service role. T
 
 **Existing database migration warning:** RDS can reject changing the physical Insights KMS key on an instance where Insights is already enabled. An in-place Terraform plan does not prove AWS will permit that key switch. Qualify this configuration on a newly created DB instance, or establish a separately approved migration procedure for existing databases. Do **not** apply this change directly to an active instance with a different Insights key, and do not destroy production data to make the scanner pass. The existing dev plan currently shows a switch away from its previously assigned Insights KMS key; treat that portion as unqualified.
 
-
 This remains a PostgreSQL **Multi-AZ DB instance** when enabled, not Aurora or an RDS Multi-AZ DB cluster. A three-AZ DB subnet group is not a declaration of three database instances or read replicas.
 
 The resource does not specify `kms_key_id` for database storage. Do not identify the database storage key as `logs_cmk_arn` or `secrets_manager_cmk_arn`; those inputs encrypt the log groups/bucket and secret respectively. Likewise, the module does not wire `db_port` into an RDS `port` argument. Baseline security-group rules use the configured port, while `rds_port` reports the database's actual endpoint port. Changing only `db_port` is not a supported database-port migration.
