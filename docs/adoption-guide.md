@@ -448,7 +448,7 @@ Review the [quickstart](quickstart.md), [IAM reference](../modules/iam/README.md
 | Privileged access | Apply attaches `AdministratorAccess`; Plan can write state and read selected secrets. Environment subjects do not themselves configure GitHub reviewers or branch restrictions. |
 | Human recovery access | Identity Center and automation derive matching prefixed bus ARNs. The workload bus policy restricts `custom.rollback` publication to matching Operator role ARNs and explicitly denies other publishers. Approver/ticket payload fields remain unauthenticated; verify group assignments, effective access, and operational approval evidence. |
 | Automatic isolation | All three supplied workload roots default `isolation_allowed` to true; reusable compute defaults false. Choose explicitly before deployment and verify the live tags. |
-| Retention and exit | Logs have Object Lock disabled and allow force destruction; workload keys lack production destruction guards. Decide how required records and usable keys survive approved teardown. |
+| Retention and exit | Logs have Object Lock disabled; `force_destroy` is false in normal production but true during approved retirement. The final destroy can purge logs, and workload keys still lack production destruction guards. Preserve records and usable keys outside teardown scope. |
 | Remediation | Config's separate S3 automatic remediation follows `enable_config`, not the S3 family toggle, and is not scoped by workload prefix/tag. |
 | Application fit | Task IAM scaffolding, private networking and RDS do not implement tenant isolation, migrations, background-job orchestration, or application-specific restore validation. |
 
@@ -872,8 +872,9 @@ Record ALB frontend/backend and database transport requirements explicitly.
 - Should CloudWatch retention follow deployment profile defaults or explicit overrides?
 
 Object Lock is not enabled by the supplied storage resource and is not a simple
-profile toggle. The logs bucket and workload keys have permissive destruction
-postures that require a deliberate preservation design. Confirm actual fresh
+profile toggle. Although normal production disables logs-bucket `force_destroy`,
+retirement enables it, and workload keys lack unconditional destruction guards.
+These boundaries require a deliberate preservation design. Confirm actual fresh
 archival and performed integrity checks, not only metadata.
 
 No supplied queue consumer, SNS subscription DLQ, or independent fallback alert

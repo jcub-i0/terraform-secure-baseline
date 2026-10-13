@@ -184,7 +184,7 @@ Restore Testing is derived from production and effective backup enablement. The 
 
 Deployable production ECS services require at least **two** fixed tasks or an autoscaling minimum of two outside retirement. The shipped production sample chooses three. Baseline enables service AZ rebalancing; one live task in every AZ must be checked separately. Normal runtime validation requires deployment-health settings `100` minimum and at least `200` maximum.
 
-The production profile does not enable every possible protection. In particular, the logs bucket retains `force_destroy=true`, `prevent_destroy=false`, and Object Lock disabled; Network Firewall policy/subnet change protections remain disabled. See [storage limits](../modules/storage/README.md) and [firewall limits](../modules/firewall/README.md).
+The production profile does not enable every possible protection. In particular, the logs bucket has `force_destroy=false` in normal production and `true` after retirement preparation, while `prevent_destroy=false` and Object Lock remain unchanged; Network Firewall policy/subnet change protections remain disabled. See [storage limits](../modules/storage/README.md) and [firewall limits](../modules/firewall/README.md).
 
 **Retirement scope:** baseline production policy is profile-driven, but the complete retirement workflow/durable cleanup supports **environment `prod` only**. Do not assume a production-profile `staging` or `dev` deployment has the same end-to-end automated teardown path. Do not bypass the limitation by changing its profile during destruction.
 
@@ -1522,7 +1522,7 @@ Keep shared identity and governance available while dependent operations require
 - Do not remove the whole Identity Center stack before workflows that still plan/apply its environment-specific cleanup.
 - Preserve state externally before backend changes. Moving state does not relax the state module’s literal guards or empty a versioned bucket.
 - Production native deletion protection, provider force-deletion flags, and explicitly approved data cleanup are separate mechanisms.
-- The logs bucket’s `force_destroy=true` and disabled Object Lock are separate storage limits; the ECR/Backup cleanup helper is not an audit-log preservation service.
+- The centralized logs bucket has `force_destroy=false` for normal production and `true` only after the reviewed retirement Apply. The final production destroy can purge logs, but the scoped ECR/Backup cleanup helper does not inventory or archive them. Explicitly preserve required logs and their KMS access before retirement. Object Lock remains disabled.
 - A failed or cancelled later approval does not undo earlier approved cleanup. Inspect current state and re-plan through the reviewed path rather than applying stale artifacts.
 
 ## Source and Further Reading
