@@ -51,10 +51,10 @@ jobs:
         with:
           terraform_version: 1.15.8
 
-      - name: Test production audit-log retirement guards
+      - name: Test production log-bucket role preflight
         run: |
           set -euo pipefail
-          bash scripts/tests/test-production-log-retirement-guards.sh
+          bash scripts/tests/test-log-bucket-destroy-principal.sh
 
       - name: Terraform format check
         id: terraform_fmt
