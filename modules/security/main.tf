@@ -330,6 +330,42 @@ resource "aws_kms_alias" "logs" {
   target_key_id = aws_kms_key.logs.key_id
 }
 
+## RDS PERFORMANCE/ DATABASE INSIGHTS KMS KEY
+# Account-root delegation allows same-account IAM identities, including RDS
+# control-plane integrations, to receive grants according to their IAM policies.
+# Data readers additionally need kms:Decrypt on this key.
+resource "aws_kms_key" "rds_performance_insights" {
+  description             = "CMK for RDS Performance/Database Insights data"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootPermissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.name_prefix}-rds-performance-insights-cmk"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+resource "aws_kms_alias" "rds_performance_insights" {
+  name          = "alias/${var.name_prefix}/rds-performance-insights-cmk"
+  target_key_id = aws_kms_key.rds_performance_insights.key_id
+}
+
 ## EBS KMS KEY
 resource "aws_kms_key" "ebs" {
   description             = "CMK for encrypting EBS volumes and snapshots"
