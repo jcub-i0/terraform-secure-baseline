@@ -20,6 +20,16 @@ on:
                 required: true
                 default: false
                 type: boolean
+            confirm_audit_log_disposition:
+                description: "Confirm reviewed audit-log/key retention or approved disposal (prod only)"
+                required: true
+                default: false
+                type: boolean
+            audit_log_disposition_reference:
+                description: "Approved audit-log/key disposition record ID (prod only; non-secret)"
+                required: false
+                default: ""
+                type: string
 
 permissions: {}
 
@@ -62,6 +72,8 @@ jobs:
             AWS_DEFAULT_REGION: ${{ vars.PRIMARY_REGION }}
             PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
             DELETE_DURABLE_RETIREMENT_DATA: ${{ inputs.delete_durable_retirement_data }}
+            AUDIT_LOG_DISPOSITION_CONFIRMED: ${{ inputs.confirm_audit_log_disposition }}
+            AUDIT_LOG_DISPOSITION_REFERENCE: ${{ inputs.audit_log_disposition_reference }}
 
             TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
             TF_VAR_environment: ${{ inputs.environment }}
@@ -219,6 +231,10 @@ jobs:
                     echo "production_retirement_mode=${TF_VAR_production_retirement_mode}"
                   } >> "${GITHUB_OUTPUT}"
 
+            - name: Validate audit-log disposition approval
+              shell: bash
+              run: bash scripts/deployment/validate-retirement-log-authorization.sh
+
             - name: Configure AWS credentials
               uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
               with:
@@ -295,6 +311,7 @@ jobs:
                     echo "- Deployment profile: \`${TF_VAR_deployment_profile:-<not resolved>}\`"
                     echo "- Production retirement mode: \`${TF_VAR_production_retirement_mode:-<not resolved>}\`"
                     echo "- Durable-data deletion authorized: \`${DELETE_DURABLE_RETIREMENT_DATA:-<not resolved>}\`"
+                    echo "- Audit-log disposition record: \`${AUDIT_LOG_DISPOSITION_REFERENCE:-<none>}\`"
                     echo "- Status: \`${{ job.status }}\`"
                   } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -321,6 +338,8 @@ jobs:
             DEPLOYMENT_PROFILE: ${{ needs.terraform-destroy-preflight.outputs.deployment_profile }}
             PRODUCTION_RETIREMENT_MODE: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
             APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+            AUDIT_LOG_DISPOSITION_CONFIRMED: ${{ inputs.confirm_audit_log_disposition }}
+            AUDIT_LOG_DISPOSITION_REFERENCE: ${{ inputs.audit_log_disposition_reference }}
 
         steps:
             - name: Checkout
@@ -390,6 +409,17 @@ jobs:
 
                   aws sts get-caller-identity
                   terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
+
+            - name: Verify audit-log disposition and log-bucket policy role exception
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  bash scripts/deployment/validate-retirement-log-authorization.sh
+                  bash scripts/deployment/validate-log-bucket-destroy-principal.sh \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}" \
+                    --expected-role-arn "${APPLY_ROLE_GITHUB_ARN}" \
+                    --region "${AWS_REGION}"
 
             - name: Delete approved durable retirement data
               shell: bash
@@ -662,6 +692,8 @@ jobs:
             DEPLOYMENT_PROFILE: ${{ needs.terraform-destroy-plan.outputs.deployment_profile }}
             PRODUCTION_RETIREMENT_MODE: ${{ needs.terraform-destroy-plan.outputs.production_retirement_mode }}
             APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+            AUDIT_LOG_DISPOSITION_CONFIRMED: ${{ inputs.confirm_audit_log_disposition }}
+            AUDIT_LOG_DISPOSITION_REFERENCE: ${{ inputs.audit_log_disposition_reference }}
 
         steps:
             - name: Checkout
@@ -736,6 +768,18 @@ jobs:
                   name: ${{ env.DESTROY_ARTIFACT_NAME }}
                   path: ${{ github.workspace }}/${{ env.DESTROY_ARTIFACT_DIR }}
 
+            - name: Reverify production audit-log approval and log-bucket policy role exception
+              if: ${{ env.DEPLOYMENT_PROFILE == 'production' }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  bash scripts/deployment/validate-retirement-log-authorization.sh
+                  bash scripts/deployment/validate-log-bucket-destroy-principal.sh \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}" \
+                    --expected-role-arn "${APPLY_ROLE_GITHUB_ARN}" \
+                    --region "${AWS_REGION}"
+
             - name: Verify readiness and apply exact destroy artifact
               shell: bash
               run: |
@@ -784,5 +828,6 @@ jobs:
                     echo "- AWS account: \`${EXPECTED_ACCOUNT_ID}\`"
                     echo "- Deployment profile: \`${DEPLOYMENT_PROFILE}\`"
                     echo "- Production retirement mode: \`${PRODUCTION_RETIREMENT_MODE}\`"
+                    echo "- Audit-log disposition record: \`${AUDIT_LOG_DISPOSITION_REFERENCE:-<none>}\`"
                     echo "- Status: \`${{ job.status }}\`"
                   } >> "${GITHUB_STEP_SUMMARY}"
