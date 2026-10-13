@@ -683,8 +683,9 @@ This supports:
 
 **Coverage and evidence:** Account-level service enablement is not per-resource
 coverage. The [workload security validator](../../scripts/validation/validate-security-workload.sh)
-checks selected active services and relationships; its Config checks do not
-compare the full recorder scope, rule catalog, or compliance outcomes. Disabled
+checks selected active services and relationships; its Config checks enforce
+the expected all-supported/global-IAM recording group and live status, but not
+recorded-item completeness, rule catalog, or compliance outcomes. Disabled
 Inspector/Config branches are skipped, not proof of live absence. Record the
 applied ownership flags, central associations, resource coverage, finding ages,
 exceptions, and human disposition.
@@ -908,11 +909,12 @@ This supports:
 - Faster identification of misconfigurations
 
 **Implementation and evidence:** The [Config recorder](../../modules/security/config_baseline/main.tf)
-uses a fixed inclusion list. IAM types are included even with IAM rules disabled;
-KMS keys are not listed despite enabled KMS rules. Review actual applicability,
-evaluation results, and freshness rather than treating rule existence as coverage.
-Disabling Config leaves its recorder and delivery channel declared, with recording
-stopped and rules/remediation omitted.
+uses all-supported recording with legacy global IAM included in the designated
+`us-east-1` Region. This includes KMS keys among supported resource types and
+can increase configuration-item costs. Review actual applicability, evaluation
+results, and freshness rather than treating recorder settings or rule existence
+as proven coverage. Disabling Config leaves its recorder and delivery channel
+declared, with recording stopped and rules/remediation omitted.
 
 The [automatic S3 remediation](../../modules/security/config_baseline/remediations.tf)
 follows `enable_config` independently of the S3 catalog-family toggle. Its prefix

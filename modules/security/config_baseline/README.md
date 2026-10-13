@@ -29,29 +29,26 @@ Implementation: [main.tf](main.tf), [rules.tf](rules.tf),
 
 ### AWS Config Recorder
 
-The recorder uses `INCLUSION_BY_RESOURCE_TYPES`, with `all_supported = false`
-and `include_global_resource_types = false`. Its explicit list is:
+The recorder uses `ALL_SUPPORTED_RESOURCE_TYPES`, with
+`all_supported = true` and `include_global_resource_types = true`. This
+includes current and future AWS Config-supported resource types in the
+selected Region, including `AWS::KMS::Key`. The global IAM switch adds
+`AWS::IAM::User`, `AWS::IAM::Group`, `AWS::IAM::Role`, and
+`AWS::IAM::Policy`, independently of the `iam_baseline` rule-family toggle.
 
-```text
-AWS::S3::Bucket
-AWS::CloudTrail::Trail
-AWS::RDS::DBInstance
-AWS::EC2::Volume
-AWS::EC2::SecurityGroup
-AWS::EC2::Instance
-AWS::IAM::User
-AWS::IAM::Group
-AWS::IAM::Role
-AWS::IAM::Policy
-```
+**Region boundary:** The platform currently uses `us-east-1`, which supports
+legacy global IAM recording. IAM types cannot be recorded in Regions added to
+AWS Config after February 2022. Deployments in other Regions must review
+global-resource support and choose one supported Region for global IAM to avoid
+duplicate configuration items. Other global resource types have separate
+home-Region behavior.
 
-The list is fixed rather than derived from rule-family toggles. In particular,
-disabling `iam_baseline` leaves the four IAM entries in the configuration.
-Confirm Region-specific recording support and actual recorded resources;
-neither the flag nor the list alone proves successful global-resource coverage.
-`AWS::KMS::Key` is not in this list even though KMS rules exist in the catalog.
-Check those rules' evaluation requirements/results before claiming coverage;
-this is not a claim that every periodic KMS evaluation necessarily fails.
+**Operational impact:** All-supported recording increases resource coverage,
+configuration-item volume, AWS Config charges, and potentially rule evaluations.
+It can increase costs sharply during initial discovery or with short-lived
+resources. Verify actual recorded resources, regional support, rule results,
+and costs; a configuration setting alone does not prove that every item was
+recorded or evaluated.
 
 The delivery channel uses the supplied S3 bucket, `Config` prefix, logs CMK, and
 compliance SNS topic. The module waits a fixed 20 seconds after channel creation
@@ -187,10 +184,9 @@ Includes:
 - Root MFA required
 - Password policy enforcement
 
-The family defaults to disabled. This does not remove IAM types from the
-recorder configuration or remove the need to assess root access. Verify
-recording support, policy applicability, and evidence independently of whether
-routine users are federated.
+The family defaults to disabled. Global IAM resources remain in the recorder
+scope independently of the IAM rule-family toggle. Verify recording support,
+policy applicability, and evidence independently of whether users are federated.
 
 ---
 
@@ -209,9 +205,10 @@ Includes:
 
 ### KMS Baseline
 
-Evaluates the four KMS catalog entries listed above. Rule creation alone is not
-proof of evaluated key inventory, key-policy safety, or recoverability of data
-under a retained key. The fixed recorder list does not contain KMS keys.
+Evaluates the four KMS catalog entries listed above. The all-supported
+recorder includes KMS key configuration items when Config is enabled, but rule
+creation alone does not prove evaluation results, key-policy safety, or
+recoverability of data under a retained key.
 
 ---
 
@@ -319,10 +316,11 @@ presence of a rule or an empty finding list is insufficient.
 
 ## Validation
 
-Use the workload security validator for its implemented presence/status checks;
-it does not compare this exact recorder list, rule catalog, or remediation
-configuration, and it skips Config checks when recording is disabled. Inspect
-applied configuration and live evaluations separately.
+The workload security validator checks the named recorder, its all-supported
+and global-IAM recording group, live recorder status, and channel/rule presence.
+It does not verify actual configuration-item freshness, exact rule evaluations,
+or automatic remediation outcomes; it skips enabled-state checks when Config
+is disabled. Inspect recorded inventory and evaluations separately.
 
 Run these local examples from the repository root with an initialized, applied
 workload root and Bash, AWS CLI, Terraform, and `jq` available. Set a named

@@ -1938,8 +1938,11 @@ aws configservice describe-configuration-recorder-status \
 
 Expected:
 
-- If `effective_enable_config = true`, the configuration recorder exists and is recording.
-- If `effective_enable_config = false`, Config resources may be absent or disabled.
+- When `effective_enable_config = true`, the named recorder uses `ALL_SUPPORTED_RESOURCE_TYPES`, has `allSupported = true` and `includeGlobalResourceTypes = true`, has no explicit type allowlist, and reports `recording = true`.
+- The workload security validator verifies that exact recorder configuration, not merely existence and status.
+- When `effective_enable_config = false`, Terraform retains the recorder and delivery channel, but recording is intentionally disabled; the validator skips enabled-state checks.
+- For release evidence, inspect actual discovered `AWS::KMS::Key` resources and KMS-rule evaluations separately; recorder configuration alone does not establish actual configuration-item delivery.
+- Global IAM recording requires a supported Region (the platform uses `us-east-1`). Broader Config recording can increase costs.
 - Centrally associated Security Hub CSPM standards depend on Config being available in workload accounts where those controls require it.
 
 ## 10.4 Inspector
