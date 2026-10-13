@@ -9,11 +9,9 @@ locals {
     # ------------------------
     # S3 BASELINE
     # ------------------------
-    s3_bucket_level_public_access_prohibited = {
-      family      = "s3_baseline"
-      name_suffix = "s3-bucket-level-public-access-prohibited"
-      identifier  = "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED"
-    }
+    # S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED is owned exclusively by the
+    # always-on-when-Config-enabled remediation rule in remediations.tf.
+    # Do not duplicate it in this optional family catalog.
     s3_bucket_public_read_prohibited = {
       family      = "s3_baseline"
       name_suffix = "s3-bucket-public-read-prohibited"
