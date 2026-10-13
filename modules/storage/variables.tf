@@ -102,3 +102,8 @@ variable "rds_final_snapshot_identifier" {
   type        = string
   default     = null
 }
+
+variable "centralized_logs_force_destroy" {
+  description = "Whether the centralized logs bucket may delete contained objects during destruction; non-production and approved production retirement only."
+  type        = bool
+}

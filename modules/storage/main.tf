@@ -159,11 +159,13 @@ ephemeral "aws_secretsmanager_secret_version" "rds_master" {
 ## CENTRALIZED LOGS S3 BUCKET
 resource "aws_s3_bucket" "centralized_logs" {
   bucket              = "${var.name_prefix}-centralized-logs-${var.random_id}"
-  object_lock_enabled = false # CHANGE THIS IN PROD
-  force_destroy       = true  # CHANGE THIS IN PROD
+  object_lock_enabled = false # Object Lock requires a separately qualified WORM design
+  force_destroy       = var.centralized_logs_force_destroy
 
+  # Terraform lifecycle meta-arguments cannot depend on variable inputs.
+  # force_destroy is therefore profile-controlled; this is not WORM protection.
   lifecycle {
-    prevent_destroy = false # CHANGE THIS IN PROD
+    prevent_destroy = false
   }
 
   tags = {
