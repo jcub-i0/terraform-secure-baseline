@@ -622,10 +622,12 @@ The workload's centralized logs bucket is local to that workload account, not
 an independently administered organization-wide log archive.
 
 [Storage](../../modules/storage/main.tf) configures KMS encryption, public-access
-blocks, versioning, and lifecycle transitions, but **Object Lock is disabled**,
-`force_destroy=true`, and `prevent_destroy=false`. Lifecycle expiration is not
-immutable retention or a legal hold. Workload KMS keys also lack production
-destruction guards; retained ciphertext alone is not recoverability.
+blocks, versioning, and lifecycle transitions. **Object Lock remains disabled**
+and `prevent_destroy=false`; `force_destroy` is false in normal production
+but true in non-production and approved retirement. A final production destroy
+can purge the bucket, so lifecycle expiration is not immutable retention or a
+legal hold. Workload KMS keys also lack production destruction guards; retained
+ciphertext alone is not recoverability.
 
 The [logging validator](../../scripts/validation/validate-logging.sh) permits
 selected delivery/retention warnings and does not verify Firehose archival or a

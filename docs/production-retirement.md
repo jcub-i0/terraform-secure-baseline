@@ -26,6 +26,7 @@ production_retirement_mode = false
 | ECR `force_delete` | `false` | Remains `false` |
 | ECS service `force_delete` | `false` | Remains `false` |
 | Backup vault `force_destroy` | `false` | Remains `false` |
+| Centralized logs S3 `force_destroy` | `false` | `true` after Stage-1 Apply |
 | RDS `skip_final_snapshot` | `false` | Remains `false` |
 | RDS `delete_automated_backups` | `false` | Remains `false` |
 | Effective ECS desired capacity | Normal configured capacity | `0` |
@@ -67,9 +68,11 @@ The workflows reference protected environments, but repository administrators mu
 
 ## Stage 0 — Decide Durable Asset Disposition
 
-Before approving deletion, identify required application images, recovery points, and retention obligations. Copy/retain required assets outside the repositories/vault that will be destroyed, or stop the retirement. The workflow is not an archival/copy tool.
+Before approving deletion, identify required application images, recovery points, audit logs, and retention obligations. Copy/retain required assets outside the repositories, vault, and centralized logs bucket that will be destroyed, or stop retirement. The workflow is not an archival/copy tool. **The later approved Terraform destroy can permanently purge audit logs once the Stage-1 Apply has set `force_destroy=true`.** Preserve any required log evidence and access to its KMS keys independently before advancing.
 
 Production ECR repositories use `force_delete = false`, and the Backup vault uses `force_destroy = false`. Terraform therefore does not implicitly purge their contents to make deletion succeed. The explicit cleanup script inventories **all image digests in Terraform-listed ECR repositories and all recovery points in the Terraform-listed Backup vault**, not only the sample service's active image or one RDS recovery point. Treat that entire scope as the deletion authorization boundary.
+
+The scoped ECR/Backup cleanup operation does not enumerate, archive, or delete centralized logs; their deletion is part of the final Terraform destroy when permitted by the bucket policy and provider behavior. The `delete_durable_retirement_data=true` input and protected final-destroy approval must be understood to authorize this outcome, not merely ECR/Backup cleanup.
 
 The final RDS snapshot requirement and retention of RDS automated backups are separate from AWS Backup vault cleanup. `delete_automated_backups = false` is not indefinite archival retention. Decide how retained snapshots, backups, and their necessary encryption keys will be managed after workload deletion. The cleanup script does not implement that retention program.
 
@@ -98,7 +101,7 @@ The workflow creates a saved plan using `terraform-plan-artifact.sh`. It runs `v
 
 ### 3. Review the Stage-1 plan and guard result
 
-The guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement or unsupported actions and requires planned outputs showing production profile, retirement mode, the specified deletion-protection/force-delete posture, and zero effective ECS capacity (including zero min/max for autoscaled services).
+The guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement or unsupported actions and requires planned outputs showing production profile, retirement mode, the specified deletion-protection/force-delete posture (including centralized logs `force_destroy=true`), and zero effective ECS capacity (including zero min/max for autoscaled services). The Stage-1 Apply must update the logs bucket's force-destroy flag in state before any final destroy.
 
 This is not a whitelist of every allowed in-place attribute change. Review the full readable plan for unrelated updates, credential changes, or security-policy changes; a passing action-type check does not authorize them. Verify that the RDS final-snapshot and automated-backup behavior remains intact.
 
@@ -241,7 +244,7 @@ Do not change them to independent Apply/Destroy keys. This key does not lock out
 
 ## Post-Destroy Steps
 
-Record the workflow run, source commit, plan artifacts, readiness result, deletion result, and disposition of retained recovery assets. A successful workload root destroy is not evidence that all account resources, historical snapshots, or state backends are gone.
+Record the workflow run, source commit, plan artifacts, readiness result, deletion result, and disposition of retained recovery assets and audit logs. A successful workload root destroy is not evidence that all account resources, historical snapshots, or state backends are gone.
 
 Only consider removing `bootstrap/prod/account` after its roles and access are no longer required. The state root is handled last and only from independent state with retained external backups. Its bucket and CMK remain guarded by literal `prevent_destroy = true`; workload retirement does not remove these guards or supply a turnkey state teardown.
 
