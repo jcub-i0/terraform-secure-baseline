@@ -45,6 +45,13 @@ esac
 MOCK
 cat >"$tmp/bin/aws" <<'MOCK'
 #!/usr/bin/env bash
+# Verify the selected credential profile is explicit and is not accidentally
+# overwritten by the Terraform deployment_profile=production output.
+if [[ -n "${MOCK_EXPECT_PROFILE:-}" ]]; then
+  [[ " $* " == *" --profile ${MOCK_EXPECT_PROFILE} "* ]] || exit 20
+else
+  [[ " $* " != *" --profile "* ]] || exit 21
+fi
 case "$1:$2" in
   sts:get-caller-identity)
     printf '{"Account":"123456789012","Arn":"%s"}\n' "${MOCK_CALLER_ARN:-arn:aws:sts::123456789012:assumed-role/TerraformApplyRole/test-run}" ;;
@@ -80,6 +87,8 @@ args=(
   --region us-east-1
 )
 assert_success env PATH="$tmp/bin:$PATH" bash "$guard" "${args[@]}"
+assert_success env PATH="$tmp/bin:$PATH" MOCK_EXPECT_PROFILE=target-account \
+  bash "$guard" "${args[@]}" --profile target-account
 assert_failure env PATH="$tmp/bin:$PATH" MOCK_TF_PROFILE=development bash "$guard" "${args[@]}"
 assert_failure env PATH="$tmp/bin:$PATH" MOCK_FORCE_DESTROY=false bash "$guard" "${args[@]}"
 assert_failure env PATH="$tmp/bin:$PATH" MOCK_CALLER_ARN=arn:aws:sts::123456789012:assumed-role/OtherRole/test bash "$guard" "${args[@]}"
