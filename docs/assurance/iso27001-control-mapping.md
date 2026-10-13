@@ -445,7 +445,9 @@ custody and do not automatically include every deployment commit, image digest,
 input set, or artifact checksum.
 
 The [logs bucket](../../modules/storage/main.tf) uses encryption and versioning
-but has Object Lock disabled and permits force destruction. The
+but has Object Lock disabled. Normal production sets `force_destroy=false`;
+approved retirement re-enables force deletion, so external log preservation
+and usable-key retention remain necessary. The
 [workload keys](../../modules/security/main.tf) have no effective production
 destruction guards. Define independent preservation and usable-key retention,
 access controls, collection timestamps, and custody procedures. Review warnings
@@ -492,8 +494,8 @@ maintain organizational continuity plans, ownership, and exercises.
 
 The workload logs bucket uses KMS-backed encryption, public access blocks,
 versioning, access policies, and lifecycle transitions/expiration. It explicitly
-has `object_lock_enabled=false`, `force_destroy=true`, and no Terraform
-destruction guard. Other CloudWatch log groups have configured retention, not
+has `object_lock_enabled=false`, `force_destroy=false` during normal production
+and `true` during approved retirement, and no static `prevent_destroy` guard. Other CloudWatch log groups have configured retention, not
 universal archival to that bucket. See [storage](../../modules/storage/main.tf).
 
 ### ISO 27001 Alignment
@@ -843,7 +845,8 @@ application, Lambda, RDS, and Container Insights records have their own resource
 and retention. There is no universal S3 archival path for every log group.
 
 The logs bucket has encryption, versioning, access policy and lifecycle rules,
-but Object Lock is disabled and force destruction is allowed. CloudTrail is not
+but Object Lock is disabled; force destruction is disabled in normal production
+and enabled after retirement preparation. CloudTrail is not
 configured as an organization trail or general data-event trail.
 
 ### ISO 27001 Alignment
