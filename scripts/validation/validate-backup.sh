@@ -11,7 +11,7 @@
 #   effective_delete_backups_after_days match the resolved backup contract
 # - AWS caller identity is valid
 # - Backup vault identity, encryption, and force-destroy posture match Terraform
-# - RDS live resilience configuration exactly matches Terraform
+# - RDS live resilience and monitoring configuration exactly matches Terraform
 # - RDS deletion-time lifecycle intent is resource-backed by Terraform outputs
 # - Workload EC2 and RDS Backup tags exactly match effective_backup_enabled
 # - Backup plan and selection are absent when backups are disabled
@@ -209,6 +209,10 @@ if ! echo "$RDS_CONFIGURATION_JSON" |
     type == "object"
     and (.identifier | type == "string" and length > 0)
     and (.arn | type == "string" and length > 0)
+    and (.monitoring_interval == 60)
+    and (.monitoring_role_arn | type == "string" and length > 0)
+    and (.performance_insights_enabled == true)
+    and (.performance_insights_kms_key_id | type == "string" and startswith("arn:"))
     and ((.multi_az | type) == "boolean")
     and (.db_subnet_group_name | type == "string" and length > 0)
     and (
@@ -274,6 +278,10 @@ fi
 
 EXPECTED_RDS_IDENTIFIER="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.identifier')"
 EXPECTED_RDS_ARN="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.arn')"
+EXPECTED_RDS_MONITORING_INTERVAL="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.monitoring_interval')"
+EXPECTED_RDS_MONITORING_ROLE_ARN="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.monitoring_role_arn')"
+EXPECTED_RDS_PERFORMANCE_INSIGHTS_ENABLED="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.performance_insights_enabled')"
+EXPECTED_RDS_PERFORMANCE_INSIGHTS_KMS_KEY_ID="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.performance_insights_kms_key_id')"
 EXPECTED_RDS_MULTI_AZ="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.multi_az')"
 EXPECTED_RDS_DB_SUBNET_GROUP_NAME="$(echo "$RDS_CONFIGURATION_JSON" | jq -r '.db_subnet_group_name')"
 EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON="$(
@@ -538,7 +546,7 @@ validate_rds_configuration_live() {
   local rds_instance_json="$1"
   local actual_rds_vpc_security_group_ids_json
 
-  section "Validating exact RDS resilience configuration"
+  section "Validating exact RDS resilience and monitoring configuration"
 
   actual_rds_vpc_security_group_ids_json="$(
     echo "$rds_instance_json" |
@@ -549,6 +557,10 @@ validate_rds_configuration_live() {
     jq -e \
       --arg identifier "$EXPECTED_RDS_IDENTIFIER" \
       --arg arn "$EXPECTED_RDS_ARN" \
+      --argjson monitoring_interval "$EXPECTED_RDS_MONITORING_INTERVAL" \
+      --arg monitoring_role_arn "$EXPECTED_RDS_MONITORING_ROLE_ARN" \
+      --argjson performance_insights_enabled "$EXPECTED_RDS_PERFORMANCE_INSIGHTS_ENABLED" \
+      --arg performance_insights_kms_key_id "$EXPECTED_RDS_PERFORMANCE_INSIGHTS_KMS_KEY_ID" \
       --arg subnet_group "$EXPECTED_RDS_DB_SUBNET_GROUP_NAME" \
       --argjson expected_vpc_security_group_ids "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" \
       --argjson multi_az "$EXPECTED_RDS_MULTI_AZ" \
@@ -558,6 +570,10 @@ validate_rds_configuration_live() {
       --argjson storage_encrypted "$EXPECTED_RDS_STORAGE_ENCRYPTED" '
         .DBInstanceIdentifier == $identifier
         and .DBInstanceArn == $arn
+        and .MonitoringInterval == $monitoring_interval
+        and .MonitoringRoleArn == $monitoring_role_arn
+        and .PerformanceInsightsEnabled == $performance_insights_enabled
+        and .PerformanceInsightsKMSKeyId == $performance_insights_kms_key_id
         and .MultiAZ == $multi_az
         and .DBSubnetGroup.DBSubnetGroupName == $subnet_group
         and (
@@ -576,6 +592,10 @@ validate_rds_configuration_live() {
           jq -c '{
             identifier: .DBInstanceIdentifier,
             arn: .DBInstanceArn,
+            monitoring_interval: .MonitoringInterval,
+            monitoring_role_arn: .MonitoringRoleArn,
+            performance_insights_enabled: .PerformanceInsightsEnabled,
+            performance_insights_kms_key_id: .PerformanceInsightsKMSKeyId,
             multi_az: .MultiAZ,
             db_subnet_group_name: .DBSubnetGroup.DBSubnetGroupName,
             vpc_security_group_ids: ([.VpcSecurityGroups[]?.VpcSecurityGroupId] | sort | unique),
@@ -590,14 +610,14 @@ validate_rds_configuration_live() {
           live_rds_configuration: $actual
         }
       '
-    fail "Live RDS resilience configuration does not exactly match Terraform."
+    fail "Live RDS resilience and monitoring configuration does not exactly match Terraform."
   fi
 
   if [[ "$actual_rds_vpc_security_group_ids_json" != "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" ]]; then
     fail "Live RDS VPC security-group set does not exactly match Terraform."
   fi
 
-  success "Live RDS resilience configuration exactly matches Terraform"
+  success "Live RDS resilience and monitoring configuration exactly matches Terraform"
   success "Terraform-owned RDS deletion-time lifecycle intent is resource-backed and internally consistent"
   info "RDS skip_final_snapshot: ${EXPECTED_RDS_SKIP_FINAL_SNAPSHOT}"
   info "RDS delete_automated_backups: ${EXPECTED_RDS_DELETE_AUTOMATED_BACKUPS}"
