@@ -273,7 +273,7 @@ Network Firewall protection:     $(echo "$LIFECYCLE_JSON" | jq -r '.network_fire
 ECR force_delete:                $(echo "$LIFECYCLE_JSON" | jq -r '.ecr_force_delete')
 ECS service force_delete:        $(echo "$LIFECYCLE_JSON" | jq -r '.ecs_service_force_delete')
 Backup vault force_destroy:      $(echo "$LIFECYCLE_JSON" | jq -r '.backup_vault_force_destroy')
-Centralized logs force_destroy: $(echo "$LIFECYCLE_JSON" | jq -r '.centralized_logs_force_destroy')
+Centralized logs force_destroy:  $(echo "$LIFECYCLE_JSON" | jq -r '.centralized_logs_force_destroy')
 SUMMARY
 
 section "Validation Result"

@@ -181,9 +181,11 @@ if ! TERRAFORM_REGION="$(
 )"; then
   fail "Unable to resolve Terraform primary_region from ${ENV_DIR}: expected a non-empty AWS region string."
 fi
+
 if [[ -n "$AWS_REGION" && "$AWS_REGION" != "$TERRAFORM_REGION" ]]; then
   fail "AWS region mismatch: requested ${AWS_REGION}, but Terraform primary_region is ${TERRAFORM_REGION}."
 fi
+
 AWS_REGION="$TERRAFORM_REGION"
 export AWS_REGION
 export AWS_DEFAULT_REGION="$AWS_REGION"
@@ -334,6 +336,7 @@ EXPECTED_AUTOSCALED_SERVICE_KEYS_JSON="$(
   echo "$ECS_SERVICE_CONFIGURATION_JSON" |
     jq -c '[to_entries[] | select(.value.scaling != null) | .key] | sort'
 )"
+
 AUTOSCALING_TARGET_KEYS_JSON="$(
   echo "$ECS_AUTOSCALING_TARGETS_JSON" | jq -c 'keys | sort'
 )"
@@ -386,6 +389,7 @@ RDS_STATE_JSON="$(state_resources aws_db_instance)"
 ECR_STATE_JSON="$(state_resources aws_ecr_repository)"
 ECS_STATE_JSON="$(state_resources aws_ecs_service)"
 BACKUP_VAULT_STATE_JSON="$(state_resources aws_backup_vault)"
+
 CENTRALIZED_LOGS_STATE_JSON="$(
   state_resources aws_s3_bucket |
     jq -c '[.[] | select(.address | endswith(".aws_s3_bucket.centralized_logs"))]'
@@ -448,10 +452,12 @@ if [[ "$(echo "$BACKUP_VAULT_STATE_JSON" | jq 'length')" -ne 1 ]] ||
 fi
 
 RDS_IDENTIFIER="$(echo "$RDS_STATE_JSON" | jq -r '.[0].values.identifier // empty')"
+
 FINAL_SNAPSHOT_IDENTIFIER="$(
   echo "$RDS_STATE_JSON" |
     jq -r '.[0].values.final_snapshot_identifier // empty'
 )"
+
 BACKUP_VAULT_NAME="$(
   echo "$BACKUP_VAULT_STATE_JSON" |
     jq -r '.[0].values.name // empty'

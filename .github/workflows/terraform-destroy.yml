@@ -20,6 +20,16 @@ on:
                 required: true
                 default: false
                 type: boolean
+            confirm_audit_log_disposition:
+                description: "Confirm reviewed audit-log/key retention or approved disposal (prod only)"
+                required: true
+                default: false
+                type: boolean
+            audit_log_disposition_reference:
+                description: "Approved audit-log/key disposition record ID (prod only; non-secret)"
+                required: false
+                default: ""
+                type: string
 
 permissions: {}
 
@@ -62,6 +72,8 @@ jobs:
             AWS_DEFAULT_REGION: ${{ vars.PRIMARY_REGION }}
             PLAN_ROLE_GITHUB_ARN: ${{ vars.PLAN_ROLE_GITHUB_ARN }}
             DELETE_DURABLE_RETIREMENT_DATA: ${{ inputs.delete_durable_retirement_data }}
+            AUDIT_LOG_DISPOSITION_CONFIRMED: ${{ inputs.confirm_audit_log_disposition }}
+            AUDIT_LOG_DISPOSITION_REFERENCE: ${{ inputs.audit_log_disposition_reference }}
 
             TF_VAR_cloud_name: ${{ vars.CLOUD_NAME }}
             TF_VAR_environment: ${{ inputs.environment }}
@@ -152,6 +164,23 @@ jobs:
                       echo "::error::Set delete_durable_retirement_data=true and approve the protected cleanup job."
                       exit 1
                     }
+
+                    [[ "${AUDIT_LOG_DISPOSITION_CONFIRMED}" == "true" ]] || {
+                      echo "::error::Production destruction requires confirm_audit_log_disposition=true."
+                      exit 1
+                    }
+
+                    if [[ ! "${AUDIT_LOG_DISPOSITION_REFERENCE}" =~ ^[A-Za-z0-9][A-Za-z0-9._:/#-]{3,199}$ ]]; then
+                      echo "::error::Production destruction requires a non-secret 4-200 character approved audit-log disposition record ID."
+                      exit 1
+                    fi
+
+                    case "${AUDIT_LOG_DISPOSITION_REFERENCE,,}" in
+                      todo|tbd|none|null|n/a|na|test|placeholder)
+                        echo "::error::Audit-log disposition record ID must not be a placeholder."
+                        exit 1
+                        ;;
+                    esac
                   else
                     [[ "${TF_VAR_production_retirement_mode}" == "false" ]] || {
                       echo "::error::Non-production profiles must not enable production_retirement_mode."
@@ -160,6 +189,12 @@ jobs:
 
                     [[ "${DELETE_DURABLE_RETIREMENT_DATA}" == "false" ]] || {
                       echo "::error::delete_durable_retirement_data is production-only and must remain false for non-production."
+                      exit 1
+                    }
+
+                    [[ "${AUDIT_LOG_DISPOSITION_CONFIRMED}" == "false" &&
+                       -z "${AUDIT_LOG_DISPOSITION_REFERENCE}" ]] || {
+                      echo "::error::Audit-log disposition inputs are production-only; non-production must leave them false/empty."
                       exit 1
                     }
                   fi
@@ -295,6 +330,7 @@ jobs:
                     echo "- Deployment profile: \`${TF_VAR_deployment_profile:-<not resolved>}\`"
                     echo "- Production retirement mode: \`${TF_VAR_production_retirement_mode:-<not resolved>}\`"
                     echo "- Durable-data deletion authorized: \`${DELETE_DURABLE_RETIREMENT_DATA:-<not resolved>}\`"
+                    echo "- Audit-log disposition record: \`${AUDIT_LOG_DISPOSITION_REFERENCE:-<none>}\`"
                     echo "- Status: \`${{ job.status }}\`"
                   } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -321,6 +357,8 @@ jobs:
             DEPLOYMENT_PROFILE: ${{ needs.terraform-destroy-preflight.outputs.deployment_profile }}
             PRODUCTION_RETIREMENT_MODE: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
             APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+            AUDIT_LOG_DISPOSITION_CONFIRMED: ${{ inputs.confirm_audit_log_disposition }}
+            AUDIT_LOG_DISPOSITION_REFERENCE: ${{ inputs.audit_log_disposition_reference }}
 
         steps:
             - name: Checkout
@@ -401,7 +439,8 @@ jobs:
                     --mode apply \
                     --confirm DELETE-DURABLE-DATA \
                     --region "${AWS_REGION}" \
-                    --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}" \
+                    --expected-apply-role-arn "${APPLY_ROLE_GITHUB_ARN}"
 
             - name: Verify production retirement readiness
               shell: bash
@@ -662,6 +701,8 @@ jobs:
             DEPLOYMENT_PROFILE: ${{ needs.terraform-destroy-plan.outputs.deployment_profile }}
             PRODUCTION_RETIREMENT_MODE: ${{ needs.terraform-destroy-plan.outputs.production_retirement_mode }}
             APPLY_ROLE_GITHUB_ARN: ${{ vars.APPLY_ROLE_GITHUB_ARN }}
+            AUDIT_LOG_DISPOSITION_CONFIRMED: ${{ inputs.confirm_audit_log_disposition }}
+            AUDIT_LOG_DISPOSITION_REFERENCE: ${{ inputs.audit_log_disposition_reference }}
 
         steps:
             - name: Checkout
@@ -736,6 +777,17 @@ jobs:
                   name: ${{ env.DESTROY_ARTIFACT_NAME }}
                   path: ${{ github.workspace }}/${{ env.DESTROY_ARTIFACT_DIR }}
 
+            - name: Reverify production log-bucket policy role exception
+              if: ${{ env.DEPLOYMENT_PROFILE == 'production' }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  bash scripts/deployment/validate-log-bucket-destroy-principal.sh \
+                    --working-directory "${WORKING_DIRECTORY}" \
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}" \
+                    --expected-role-arn "${APPLY_ROLE_GITHUB_ARN}" \
+                    --region "${AWS_REGION}"
+
             - name: Verify readiness and apply exact destroy artifact
               shell: bash
               run: |
@@ -784,5 +836,6 @@ jobs:
                     echo "- AWS account: \`${EXPECTED_ACCOUNT_ID}\`"
                     echo "- Deployment profile: \`${DEPLOYMENT_PROFILE}\`"
                     echo "- Production retirement mode: \`${PRODUCTION_RETIREMENT_MODE}\`"
+                    echo "- Audit-log disposition record: \`${AUDIT_LOG_DISPOSITION_REFERENCE:-<none>}\`"
                     echo "- Status: \`${{ job.status }}\`"
                   } >> "${GITHUB_STEP_SUMMARY}"
