@@ -70,7 +70,7 @@ The workflows reference protected environments, but repository administrators mu
 
 Before approving deletion, identify required application images, recovery points, audit logs, and retention obligations. Copy/retain required assets outside the repositories, vault, and centralized logs bucket that will be destroyed, or stop retirement. The workflow is not an archival/copy tool. **The later approved Terraform destroy can permanently purge audit logs once the Stage-1 Apply has set `force_destroy=true`.** Preserve any required log evidence and access to its KMS keys independently before advancing.
 
-Record a human-reviewed log/key disposition decision in an externally retained ticket or evidence record. For logs that must survive, the record should identify the source bucket and object-version scope, the out-of-workload archive destination, integrity/completeness checks, and the retained KMS key/decrypt-access plan. If approved deletion without preservation is permissible, record the applicable authority and rationale instead. The workflow requires an explicit acknowledgment and non-secret record reference; **it does not independently verify the record, archive copies, or KMS recoverability**. GitHub Environment reviewers must check the evidence before approving destructive steps.
+Record a human-reviewed log/key disposition decision in an externally retained ticket or evidence record. For logs that must survive, the record should identify the source bucket and object-version scope, the out-of-workload archive destination, integrity/completeness checks, and the retained KMS key/decrypt-access plan. If approved deletion without preservation is permissible, record the applicable authority and rationale instead. The Destroy workflow's initial preflight checks the acknowledgment and non-secret record reference in its existing request-validation step; **it does not independently verify the record, archive copies, or KMS recoverability**. GitHub Environment reviewers must check the evidence before approving destructive steps.
 
 Production ECR repositories use `force_delete = false`, and the Backup vault uses `force_destroy = false`. Terraform therefore does not implicitly purge their contents to make deletion succeed. The explicit cleanup script inventories **all image digests in Terraform-listed ECR repositories and all recovery points in the Terraform-listed Backup vault**, not only the sample service's active image or one RDS recovery point. Treat that entire scope as the deletion authorization boundary.
 
@@ -163,9 +163,11 @@ Review all listed repositories, image digests, vault recovery points, and active
 
 ### 3. Approve durable-data cleanup
 
-`production-durable-cleanup` uses the workload Apply environment and its Apply role. After the environment gate and AWS role assumption, the job rechecks the audit-log disposition record and performs a **read-only live S3 bucket-policy/Apply-role preflight before any ECR or Backup deletions**. It confirms the current assumed-role caller and expected `DenyBucketPolicyChanges` exception for that IAM role, plus the `DenyDeleteLogs` statement. The Terraform dependency on the S3 bucket normally schedules the bucket-policy resource for removal before bucket deletion. These checks are **not** proof of `s3:DeleteBucketPolicy` effective permission (IAM/SCP/boundary denies can still apply), nor proof that deletion of every object version will succeed. Review the actual destroy plan and qualify that ordering against a disposable versioned bucket; do not claim a live regression is complete unless executed.
+`production-durable-cleanup` uses the workload Apply environment and its Apply role. After the environment gate and AWS role assumption, the **apply-mode durable-data cleanup helper itself enforces a read-only live S3 bucket-policy/Apply-role preflight before any ECR or Backup deletions**. This also guards direct script invocations. It confirms the current assumed-role caller and the expected `DenyBucketPolicyChanges` exception for that IAM role, plus the `DenyDeleteLogs` statement. It requires the supported `ArnNotEquals` IAM condition (the former `ForAnyValue:ArnNotEquals` must be updated through an approved Terraform Apply before retirement cleanup).
 
-After the gate succeeds, it runs:
+Terraform's dependency on the S3 bucket normally schedules the bucket-policy resource for removal before bucket deletion. These checks are **not** proof of `s3:DeleteBucketPolicy` effective permission (IAM/SCP/boundary denies can still apply), nor proof that deletion of every object version will succeed. Review the actual destroy plan and qualify that ordering against a disposable versioned bucket; do not claim a live regression is complete unless executed.
+
+The cleanup job runs the following command; the helper performs its policy check before deleting durable data:
 
 ```text
 cleanup-retirement-durable-data.sh
@@ -174,6 +176,7 @@ cleanup-retirement-durable-data.sh
   --confirm DELETE-DURABLE-DATA
   --region <workload-service-region>
   --expected-account-id <workload-account-id>
+  --expected-apply-role-arn <workload-apply-iam-role-arn>
 ```
 
 The helper re-reads Terraform outputs, checks the production retirement posture and AWS identity, and re-inventories the scoped repositories/vault. It refuses mutation while active Backup jobs are present, deletes the inventoried image digests and recovery points, verifies emptiness, and checks again for active Backup jobs.
@@ -224,7 +227,7 @@ Destroy-mode validation permits only delete/no-op/read resource actions and requ
 
 ### 5. Approve and apply the workload destroy plan
 
-When `terraform-destroy-plan` succeeds, `terraform-destroy-apply` becomes eligible for its own protected workload-environment approval. It downloads the reviewed destroy artifact, verifies checksums and exact context, rechecks the audit-log disposition authorization and live bucket-policy/Apply-role exception for production, rechecks production readiness, and applies the saved `.tfplan` without generating a new plan. The pre-destroy role check cannot guarantee the eventual S3 API operations succeed.
+When `terraform-destroy-plan` succeeds, `terraform-destroy-apply` becomes eligible for its own protected workload-environment approval. It downloads the reviewed destroy artifact, verifies checksums and exact context, rechecks the live bucket-policy/Apply-role exception for production, rechecks production readiness, and applies the saved `.tfplan` without generating a new plan. The initial destroy preflight already validated the workflow-dispatch disposition inputs; the final protected-environment reviewer must independently review the referenced evidence. The pre-destroy role check cannot guarantee the eventual S3 API operations succeed.
 
 There is no additional Identity Center cleanup stage in this workflow. The baseline no longer creates optional customer Analyst/Engineer permission sets or policy attachments, so workload teardown no longer needs to detach those personas from workload-created IAM policies. If upgrading an older deployed Identity Center state with those personas enabled, review and apply their removal separately **before** destroying the workload that owns any referenced IAM policies. Plan and perform any additional customer-owned identity cleanup under its own governance.
 
@@ -278,7 +281,6 @@ Final retirement is complete when scoped durable deletion has been explicitly ap
 - [Saved-plan artifact helper](../scripts/deployment/terraform-plan-artifact.sh)
 - [Stage-1 plan validator](../scripts/deployment/validate-production-retirement-plan.sh)
 - [Durable-data cleanup](../scripts/deployment/cleanup-retirement-durable-data.sh)
-- [Audit-log disposition authorization guard](../scripts/deployment/validate-retirement-log-authorization.sh)
 - [Read-only log-bucket policy/role guard](../scripts/deployment/validate-log-bucket-destroy-principal.sh)
 - [Retirement readiness](../scripts/deployment/validate-retirement-readiness.sh)
 - [Deployment script reference](../scripts/deployment/README.md)
