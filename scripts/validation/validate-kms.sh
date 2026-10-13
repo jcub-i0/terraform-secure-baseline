@@ -9,6 +9,7 @@
 # - KMS aliases matching the environment exist
 # - Expected workload CMK aliases exist:
 #   - logs
+#   - RDS Performance/Database Insights
 #   - lambda
 #   - ebs
 #   - secrets manager
@@ -301,6 +302,7 @@ KMS_SUMMARY_ROWS=()
 
 # Required workload/environment keys.
 validate_alias_and_key "logs" "logs" "true"
+validate_alias_and_key "rds insights" "rds-performance-insights" "true"
 validate_alias_and_key "lambda" "lambda" "true"
 validate_alias_and_key "ebs" "ebs" "true"
 validate_alias_and_key "secrets manager" "secrets" "true"

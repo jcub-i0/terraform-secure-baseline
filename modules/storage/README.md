@@ -97,9 +97,13 @@ Configuration in the resource definition (not a report of live AWS state):
 | Backup window | `03:00-04:00` |
 | Maintenance window | `sun:05:00-sun:06:00` |
 | CloudWatch log exports | `postgresql`, `upgrade` |
-| Performance Insights | `performance_insights_enabled = true` |
-| Enhanced Monitoring | Not configured; the `monitoring_interval` line is commented out |
+| Performance/Database Insights | Enabled with a dedicated, rotation-enabled RDS insights customer-managed KMS key |
+| Enhanced Monitoring | Every 60 seconds, using a dedicated IAM role and the AWS-managed `AmazonRDSEnhancedMonitoringRole` policy |
 | Auto minor version upgrade | Enabled |
+
+Enhanced Monitoring delivers OS metrics through its separate RDS service role. The RDS Insights CMK encrypts performance-metric insights only, **not** the DB storage volume, master secret, or CloudWatch log groups. Account-level KMS IAM permissions and service grants must be verified in deployed AWS; readers of sensitive insights data need permissions to decrypt with this key. Retain the key while encrypted insights remain needed.
+
+**Existing database migration warning:** RDS can reject changing the physical Insights KMS key on an instance where Insights is already enabled. An in-place Terraform plan does not prove AWS will permit that key switch. Qualify this configuration on a newly created DB instance, or establish a separately approved migration procedure for existing databases. Do **not** apply this change directly to an active instance with a different Insights key, and do not destroy production data to make the scanner pass. The existing dev plan currently shows a switch away from its previously assigned Insights KMS key; treat that portion as unqualified.
 
 This remains a PostgreSQL **Multi-AZ DB instance** when enabled, not Aurora or an RDS Multi-AZ DB cluster. A three-AZ DB subnet group is not a declaration of three database instances or read replicas.
 
@@ -623,7 +627,7 @@ module "storage" {
 
 ## Validation
 
-The automated RDS resilience checks are inside [validate-backup.sh](../../scripts/validation/validate-backup.sh), including when scheduled AWS Backup is disabled. They compare live identity, Multi-AZ, DB subnet-group **name**, SG set, deletion protection, backup retention, public accessibility, and storage-encryption state with `rds_configuration`. Deletion-time settings are checked as Terraform lifecycle intent. An output field such as `instance_class` is not proof the validator compares it: the validator does not include `DBInstanceClass`, engine/version, or all database settings in that equality check.
+The automated RDS resilience checks are inside [validate-backup.sh](../../scripts/validation/validate-backup.sh), including when scheduled AWS Backup is disabled. They compare live identity, Multi-AZ, DB subnet-group **name**, SG set, deletion protection, backup retention, public accessibility, storage encryption, Enhanced Monitoring (interval/role), and Insights encryption (enablement/KMS key) with `rds_configuration`. Deletion-time settings are checked as Terraform lifecycle intent. An output field such as `instance_class` is not proof the validator compares it: the validator does not include `DBInstanceClass`, engine/version, or all database settings in that equality check.
 
 [Networking validation](../../scripts/validation/validate-networking.sh) checks the data subnet family, and compute/ECS validators check their declared SG relationships. Those are not a SQL connectivity test, an exact audit of every RDS subnet-group member, or application recovery verification. The supplemental commands below are **manual inspections**, not additional automated assertions in the 16-script suite.
 

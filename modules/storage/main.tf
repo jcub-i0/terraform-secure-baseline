@@ -31,6 +31,34 @@ resource "aws_db_subnet_group" "data" {
   }
 }
 
+## IAM ROLE FOR RDS ENHANCED MONITORING
+data "aws_iam_policy_document" "rds_enhanced_monitoring_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["monitoring.rds.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "rds_enhanced_monitoring" {
+  name               = "${var.name_prefix}-RdsEnhancedMonitoringRole"
+  assume_role_policy = data.aws_iam_policy_document.rds_enhanced_monitoring_assume.json
+
+  tags = {
+    Name        = "${var.name_prefix}-RdsEnhancedMonitoringRole"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
+  role       = aws_iam_role.rds_enhanced_monitoring.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
 ## RDS Instance
 resource "aws_db_instance" "main" {
   identifier = local.rds_identifier
@@ -72,14 +100,18 @@ resource "aws_db_instance" "main" {
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
-  performance_insights_enabled = true
-  # monitoring_interval = 60 # IAM ROLE IS REQUIRED TO DO THIS
+  performance_insights_enabled    = true
+  performance_insights_kms_key_id = var.rds_performance_insights_cmk_arn
+
+  monitoring_interval = 60
+  monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
 
   auto_minor_version_upgrade = true
 
   depends_on = [
     aws_cloudwatch_log_group.rds_postgresql,
-    aws_cloudwatch_log_group.rds_upgrade
+    aws_cloudwatch_log_group.rds_upgrade,
+    aws_iam_role_policy_attachment.rds_enhanced_monitoring
   ]
 
   tags = {

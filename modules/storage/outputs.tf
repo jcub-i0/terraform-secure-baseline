@@ -55,6 +55,11 @@ output "rds_configuration" {
     identifier = aws_db_instance.main.identifier
     arn        = aws_db_instance.main.arn
 
+    monitoring_interval             = aws_db_instance.main.monitoring_interval
+    monitoring_role_arn             = aws_db_instance.main.monitoring_role_arn
+    performance_insights_enabled    = aws_db_instance.main.performance_insights_enabled
+    performance_insights_kms_key_id = aws_db_instance.main.performance_insights_kms_key_id
+
     multi_az       = aws_db_instance.main.multi_az
     instance_class = aws_db_instance.main.instance_class
 
