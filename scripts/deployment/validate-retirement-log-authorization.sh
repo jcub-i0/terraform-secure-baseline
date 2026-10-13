@@ -7,7 +7,7 @@ set -euo pipefail
 
 fail() { printf '[FAIL] %s\n' "$*" >&2; exit 1; }
 
-profile="${DEPLOYMENT_PROFILE:-}"
+profile="${DEPLOYMENT_PROFILE:-${TF_VAR_deployment_profile:-}}"
 confirmed="${AUDIT_LOG_DISPOSITION_CONFIRMED:-false}"
 reference="${AUDIT_LOG_DISPOSITION_REFERENCE:-}"
 
