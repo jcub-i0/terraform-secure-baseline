@@ -540,6 +540,12 @@ resource "aws_kms_key" "backup_vault" {
       }
     ] }
   )
+
+  tags = {
+    Name        = "${var.name_prefix}-Backup-CMK"
+    Environment = var.environment
+    Terraform   = "true"
+  }
 }
 
 resource "aws_kms_alias" "backup_vault" {
@@ -556,6 +562,12 @@ resource "aws_kms_key" "ecr" {
 
   lifecycle {
     prevent_destroy = false # CHANGE THIS IN PROD
+  }
+  
+  tags = {
+    Name        = "${var.name_prefix}-Backup-CMK"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
