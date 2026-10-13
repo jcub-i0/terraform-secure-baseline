@@ -164,6 +164,23 @@ jobs:
                       echo "::error::Set delete_durable_retirement_data=true and approve the protected cleanup job."
                       exit 1
                     }
+
+                    [[ "${AUDIT_LOG_DISPOSITION_CONFIRMED}" == "true" ]] || {
+                      echo "::error::Production destruction requires confirm_audit_log_disposition=true."
+                      exit 1
+                    }
+
+                    if [[ ! "${AUDIT_LOG_DISPOSITION_REFERENCE}" =~ ^[A-Za-z0-9][A-Za-z0-9._:/#-]{3,199}$ ]]; then
+                      echo "::error::Production destruction requires a non-secret 4-200 character approved audit-log disposition record ID."
+                      exit 1
+                    fi
+
+                    case "${AUDIT_LOG_DISPOSITION_REFERENCE,,}" in
+                      todo|tbd|none|null|n/a|na|test|placeholder)
+                        echo "::error::Audit-log disposition record ID must not be a placeholder."
+                        exit 1
+                        ;;
+                    esac
                   else
                     [[ "${TF_VAR_production_retirement_mode}" == "false" ]] || {
                       echo "::error::Non-production profiles must not enable production_retirement_mode."
@@ -172,6 +189,12 @@ jobs:
 
                     [[ "${DELETE_DURABLE_RETIREMENT_DATA}" == "false" ]] || {
                       echo "::error::delete_durable_retirement_data is production-only and must remain false for non-production."
+                      exit 1
+                    }
+
+                    [[ "${AUDIT_LOG_DISPOSITION_CONFIRMED}" == "false" &&
+                       -z "${AUDIT_LOG_DISPOSITION_REFERENCE}" ]] || {
+                      echo "::error::Audit-log disposition inputs are production-only; non-production must leave them false/empty."
                       exit 1
                     }
                   fi
@@ -230,10 +253,6 @@ jobs:
                     echo "deployment_profile=${TF_VAR_deployment_profile}"
                     echo "production_retirement_mode=${TF_VAR_production_retirement_mode}"
                   } >> "${GITHUB_OUTPUT}"
-
-            - name: Validate audit-log disposition approval
-              shell: bash
-              run: bash scripts/deployment/validate-retirement-log-authorization.sh
 
             - name: Configure AWS credentials
               uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
@@ -410,17 +429,6 @@ jobs:
                   aws sts get-caller-identity
                   terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
 
-            - name: Verify audit-log disposition and log-bucket policy role exception
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  bash scripts/deployment/validate-retirement-log-authorization.sh
-                  bash scripts/deployment/validate-log-bucket-destroy-principal.sh \
-                    --working-directory "${WORKING_DIRECTORY}" \
-                    --expected-account-id "${EXPECTED_ACCOUNT_ID}" \
-                    --expected-role-arn "${APPLY_ROLE_GITHUB_ARN}" \
-                    --region "${AWS_REGION}"
-
             - name: Delete approved durable retirement data
               shell: bash
               run: |
@@ -431,7 +439,8 @@ jobs:
                     --mode apply \
                     --confirm DELETE-DURABLE-DATA \
                     --region "${AWS_REGION}" \
-                    --expected-account-id "${EXPECTED_ACCOUNT_ID}"
+                    --expected-account-id "${EXPECTED_ACCOUNT_ID}" \
+                    --expected-apply-role-arn "${APPLY_ROLE_GITHUB_ARN}"
 
             - name: Verify production retirement readiness
               shell: bash
@@ -768,12 +777,11 @@ jobs:
                   name: ${{ env.DESTROY_ARTIFACT_NAME }}
                   path: ${{ github.workspace }}/${{ env.DESTROY_ARTIFACT_DIR }}
 
-            - name: Reverify production audit-log approval and log-bucket policy role exception
+            - name: Reverify production log-bucket policy role exception
               if: ${{ env.DEPLOYMENT_PROFILE == 'production' }}
               shell: bash
               run: |
                   set -euo pipefail
-                  bash scripts/deployment/validate-retirement-log-authorization.sh
                   bash scripts/deployment/validate-log-bucket-destroy-principal.sh \
                     --working-directory "${WORKING_DIRECTORY}" \
                     --expected-account-id "${EXPECTED_ACCOUNT_ID}" \
