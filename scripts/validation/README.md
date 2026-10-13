@@ -517,6 +517,21 @@ For every configured repository, it compares the live name, ARN, and registry ID
 
 `validate-vpc-endpoints.sh` validates the non-overridable platform Interface Endpoint inventory, including `ecr.api`, `ecr.dkr`, and `guardduty-data`. It also requires every Interface Endpoint to be available, in the expected VPC, private-DNS enabled, attached to the exact endpoint-private subnet set, and attached to exactly the shared Interface Endpoint SG. The S3 Gateway Endpoint must have the exact union of endpoint-private, compute-private, and serverless-private route-table associations.
 
+### AWS Config recorder coverage
+
+When `effective_enable_config = true`, `validate-security-workload.sh`
+requires exactly one recorder matching `NAME_PREFIX`, verifies
+`allSupported = true`, `includeGlobalResourceTypes = true`, and
+`recordingStrategy.useOnly = ALL_SUPPORTED_RESOURCE_TYPES`, and requires the
+named recorder to report `recording = true`. Delivery channel and rule
+presence are also checked.
+
+When Config is disabled, its Terraform-managed recorder and delivery channel
+remain defined, but enabled-state validation is skipped. The script does not
+prove configuration-item freshness, KMS-rule evaluation, or successful S3
+remediation. Retain separate evidence of actual recorded keys and evaluations.
+Global IAM recording is intended for the platform's `us-east-1` Region.
+
 ### Inspector effective resource types
 
 When Inspector is enabled, the expected scan-type set is the effective Terraform output. A profile's cost choice is not inferred from repository names by the validator.

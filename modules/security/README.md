@@ -614,17 +614,16 @@ enable_rules = {
 }
 ```
 
-The IAM **rule family** is disabled by default, but the recorder's inclusion
-list still contains four IAM resource types. Disabling these rules does not
-shrink that list or establish global-IAM recording suitability in every Region.
-The separate IAM log metric filter observes a limited API-name set; it is not a
-replacement for Config evaluations or a full identity-control assessment.
+The IAM **rule family** is disabled by default, but the all-supported recorder
+includes global IAM resources independently of this rule-family toggle in
+the designated `us-east-1` Region. Global IAM recording is not supported in
+every Region and should not be redundantly enabled in several Regions.
+The separate IAM log metric filter observes a limited API-name set, not a
+complete identity-control assessment.
 
-KMS rules are enabled in the default family object although `AWS::KMS::Key` is
-not in the recorder list. Verify each rule's evaluation/recording requirements
-and actual results before claiming KMS coverage; the catalog alone is not
-proof of coverage. This observation does not assert that all periodic KMS
-rules must fail or never evaluate.
+KMS rules are enabled by default, and the all-supported recorder includes
+`AWS::KMS::Key` when Config is active. Rule existence and recorder scope are
+not proof of successful key evaluations; verify live inventory and freshness.
 
 ---
 
@@ -738,10 +737,12 @@ configuration. None of these names establishes exhaustive policy verification.
 The workload security validator checks enabled services and active central
 administrator relationships. It does not independently consume
 `EXPECTED_ACCOUNT_ID`; the explicit preflight below supplies that boundary.
-Its Config checks are recorder/channel/rule inventory and recorder-state checks,
-not exact recording-type, rule-catalog, remediation, or compliance-result
-comparisons. Disabled Config/Inspector paths skip their service checks rather
-than proving absence. It does not audit the six Security Hub insight filters.
+Its Config checks require the named recorder, its exact all-supported/global-IAM
+recording configuration, live recording status, and channel/rule inventory.
+They do not prove configuration-item freshness, rule-catalog membership,
+remediation execution, or compliance results. Disabled Config/Inspector paths
+skip service checks rather than proving absence. It does not audit the six
+Security Hub insight filters.
 
 Run these local examples from the repository root with an initialized, applied
 workload root and Bash, AWS CLI, Terraform, and `jq` available. Set a named
@@ -1094,10 +1095,12 @@ The parent module passes configuration into the `config_baseline` child module.
 
 The default `enable_rules` object enables most baseline groups but leaves `iam_baseline` disabled.
 
-The fixed recorder list already includes IAM types and excludes KMS keys.
-Rule-family selection and recorder scope are separate. Verify actual rule
-applicability/results, and review the always-on-with-Config S3 remediation
-before treating the rule-family map as an authorization switch.
+The all-supported recorder includes KMS keys and legacy global IAM types in
+the designated `us-east-1` Region. This broadens resource collection and may
+increase Config costs; other Regions require a global IAM support review.
+Rule-family selection and recorder scope remain separate. Verify actual rule
+evaluations, and review the always-on-with-Config S3 remediation before
+treating the rule-family map as an authorization switch.
 
 ---
 

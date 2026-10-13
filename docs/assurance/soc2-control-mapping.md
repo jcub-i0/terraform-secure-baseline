@@ -637,15 +637,17 @@ The baseline can monitor posture related to:
 
 ### Narrative
 
-The [recorder](../../modules/security/config_baseline/main.tf) uses a fixed list
-of ten resource types, including IAM types independently of the IAM rule flag.
-KMS keys are absent from that list despite the enabled KMS rule family. Verify
-actual rule applicability, evaluated resources, timestamps, and exceptions rather
-than treating catalog presence as complete coverage.
+The [recorder](../../modules/security/config_baseline/main.tf) uses
+all-supported resource recording, including KMS keys and legacy global IAM types
+in the designated `us-east-1` Region. This scope is independent of the IAM
+rule-family flag and may raise configuration-item volume and costs. Verify
+actual resource coverage, rule applicability, evaluations, timestamps, and
+exceptions rather than treating a recording setting as complete coverage.
 
 `enable_config=false` leaves recorder/channel resources declared with recording
-stopped. The workload security validator checks selected existence/status fields,
-not complete recorder scope, catalog equality, rule compliance, or remediation
+stopped. The workload security validator verifies the named recorder's
+all-supported/global-IAM configuration and live status, but not actual
+recorded-item completeness, catalog equality, rule compliance, or remediation
 success. A Config PASS is not continuous control-effectiveness evidence.
 
 ---
