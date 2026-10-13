@@ -12,7 +12,7 @@ working_dir=""
 expected_account=""
 expected_role=""
 region=""
-profile="${AWS_PROFILE:-}"
+aws_profile="${AWS_PROFILE:-}"
 while (( $# )); do
   case "$1" in
     --working-directory|--expected-account-id|--expected-role-arn|--region|--profile)
@@ -22,7 +22,7 @@ while (( $# )); do
         --expected-account-id) expected_account="$2" ;;
         --expected-role-arn) expected_role="$2" ;;
         --region) region="$2" ;;
-        --profile) profile="$2" ;;
+        --profile) aws_profile="$2" ;;
       esac
       shift 2 ;;
     *) fail "Unknown argument: $1" ;;
@@ -44,9 +44,9 @@ for command in aws terraform jq; do
   command -v "$command" >/dev/null 2>&1 || fail "Missing command: $command"
 done
 
-profile="$(terraform -chdir="$working_dir" output -raw deployment_profile)" ||
+deployment_profile="$(terraform -chdir="$working_dir" output -raw deployment_profile)" ||
   fail 'Cannot read applied deployment profile.'
-[[ "$profile" == production ]] || fail 'Log-bucket preflight requires applied production profile.'
+[[ "$deployment_profile" == production ]] || fail 'Log-bucket preflight requires applied production profile.'
 lifecycle="$(terraform -chdir="$working_dir" output -json lifecycle_protection)" ||
   fail 'Cannot read applied lifecycle posture.'
 jq -e '.production_retirement_mode == true and .centralized_logs_force_destroy == true' \
@@ -58,7 +58,7 @@ bucket="$(terraform -chdir="$working_dir" output -raw centralized_logs_bucket_na
   fail 'Invalid centralized logs bucket name.'
 
 aws_args=(--region "$region")
-[[ -z "$profile" ]] || aws_args+=(--profile "$profile")
+[[ -z "$aws_profile" ]] || aws_args+=(--profile "$aws_profile")
 
 caller="$(aws sts get-caller-identity "${aws_args[@]}" --output json)" ||
   fail 'Cannot resolve the active AWS caller identity.'
