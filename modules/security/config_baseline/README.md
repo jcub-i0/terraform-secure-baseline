@@ -85,17 +85,19 @@ bucket scope and role authority before enablement. A successful configuration
 Apply does not prove remediation succeeded or that exposure never occurred.
 
 The separate rule is present even when `enable_rules.s3_baseline = false` or
-all catalog families are disabled. Its identifier duplicates one S3 catalog
-rule when that family is enabled; these are distinct resources, not one rule.
+all catalog families are disabled. It is the **only Terraform-managed rule**
+using `S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED`, regardless of family flags.
+Its existing name, Terraform resource address, and remediation binding remain
+unchanged.
 
 ---
 
 ### Managed Rule Pack
 
-The module has 22 catalog entries in eight families. With Config enabled and
-the default family object, it creates 20 catalog rules (the two IAM rules are
+The module has 21 catalog entries in eight families. With Config enabled and
+the default family object, it creates 19 catalog rules (the two IAM rules are
 omitted) plus the separate S3 remediation rule. Enabling every family creates
-22 catalog rules plus that separate rule. These counts are configuration
+21 catalog rules plus that separate rule. These counts are configuration
 inventory, not counts of passing evaluations.
 
 Each catalog rule uses the AWS-owned identifier below. No custom rule scope,
@@ -105,7 +107,7 @@ implementation, resource applicability, or evaluation freshness.
 
 | Family | AWS-managed identifiers |
 |---|---|
-| S3 | `S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED`, `S3_BUCKET_PUBLIC_READ_PROHIBITED`, `S3_BUCKET_PUBLIC_WRITE_PROHIBITED`, `S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED`, `S3_BUCKET_VERSIONING_ENABLED` |
+| S3 | `S3_BUCKET_PUBLIC_READ_PROHIBITED`, `S3_BUCKET_PUBLIC_WRITE_PROHIBITED`, `S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED`, `S3_BUCKET_VERSIONING_ENABLED` |
 | CloudTrail | `CLOUD_TRAIL_ENABLED`, `MULTI_REGION_CLOUD_TRAIL_ENABLED`, `CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED` |
 | RDS | `RDS_STORAGE_ENCRYPTED`, `RDS_INSTANCE_PUBLIC_ACCESS_CHECK` |
 | EBS | `ENCRYPTED_VOLUMES` |
@@ -113,6 +115,26 @@ implementation, resource applicability, or evaluation freshness.
 | IAM | `ROOT_ACCOUNT_MFA_ENABLED`, `IAM_PASSWORD_POLICY` |
 | EC2 | `EBS_OPTIMIZED_INSTANCE`, `EC2_IMDSV2_CHECK`, `EC2_VOLUME_INUSE_CHECK`, `EC2_INSTANCE_NO_PUBLIC_IP` |
 | KMS | `CMK_BACKING_KEY_ROTATION_ENABLED`, `KMS_CMK_NOT_SCHEDULED_FOR_DELETION`, `KMS_KEY_POLICY_NO_PUBLIC_ACCESS`, `KMS_KEY_TAGGED` |
+
+---
+
+## Existing-State Transition
+
+For environments where the S3 rule family was previously applied, Terraform
+must destroy only the **redundant catalog rule**
+`aws_config_config_rule.managed["s3_bucket_level_public_access_prohibited"]`.
+The existing `aws_config_config_rule.s3_public_access_block[0]` and
+`aws_config_remediation_configuration.s3_public_access_block[0]` remain
+unchanged, including the live Config rule name
+`<name_prefix>-s3-bucket-public-read-block`. No Terraform `moved` block,
+state removal, import, or replacement of the remediation rule is appropriate.
+
+Review the complete environment plan before applying: the expected intentional
+destruction is the redundant Config rule, along with its historical evaluation
+results. Verify the remediation rule and configuration remain present afterward.
+Do not apply if the plan would delete or replace either remediation resource.
+AWS Config rule deletion is asynchronous and may affect Config recording costs
+temporarily; this change does not disable the recorder or its remediation.
 
 ---
 
