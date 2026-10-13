@@ -12,15 +12,17 @@ working_dir=""
 expected_account=""
 expected_role=""
 region=""
+profile="${AWS_PROFILE:-}"
 while (( $# )); do
   case "$1" in
-    --working-directory|--expected-account-id|--expected-role-arn|--region)
+    --working-directory|--expected-account-id|--expected-role-arn|--region|--profile)
       (( $# >= 2 )) || fail "Missing value for $1"
       case "$1" in
         --working-directory) working_dir="$2" ;;
         --expected-account-id) expected_account="$2" ;;
         --expected-role-arn) expected_role="$2" ;;
         --region) region="$2" ;;
+        --profile) profile="$2" ;;
       esac
       shift 2 ;;
     *) fail "Unknown argument: $1" ;;
@@ -55,7 +57,10 @@ bucket="$(terraform -chdir="$working_dir" output -raw centralized_logs_bucket_na
 [[ "$bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] ||
   fail 'Invalid centralized logs bucket name.'
 
-caller="$(aws sts get-caller-identity --region "$region" --output json)" ||
+aws_args=(--region "$region")
+[[ -z "$profile" ]] || aws_args+=(--profile "$profile")
+
+caller="$(aws sts get-caller-identity "${aws_args[@]}" --output json)" ||
   fail 'Cannot resolve the active AWS caller identity.'
 caller_account="$(jq -er '.Account' <<< "$caller")" || fail 'Caller has no AWS account.'
 caller_arn="$(jq -er '.Arn' <<< "$caller")" || fail 'Caller has no AWS ARN.'
@@ -64,13 +69,13 @@ expected_session_prefix="arn:${partition}:sts::${expected_account}:assumed-role/
 [[ "$caller_arn" == "$expected_session_prefix"* ]] ||
   fail 'AWS caller is not a session of the expected Apply role.'
 
-policy="$(aws s3api get-bucket-policy --bucket "$bucket" --region "$region" \
+policy="$(aws s3api get-bucket-policy --bucket "$bucket" "${aws_args[@]}" \
   --query Policy --output text)" ||
   fail 'Cannot read the live centralized logs bucket policy.'
 
-# Require precisely the existing protected-policy SIDs and the expected role
-# exception. arn:PrincipalArn is single-valued for role sessions; the repo
-# currently uses ForAnyValue:ArnNotEquals, but accept equivalent ArnNotEquals.
+# Require precisely the expected policy SIDs and ArnNotEquals role exception.
+# aws:PrincipalArn is single-valued; reject obsolete ForAnyValue:ArnNotEquals
+# rather than treating that incorrect IAM condition operator as equivalent.
 jq -e --arg role "$expected_role" --arg bucket "arn:${partition}:s3:::${bucket}" '
   def as_list: if type == "array" then . else [.] end;
   (.Statement | as_list) as $statements
@@ -78,8 +83,7 @@ jq -e --arg role "$expected_role" --arg bucket "arn:${partition}:s3:::${bucket}"
       .Sid == "DenyBucketPolicyChanges" and .Effect == "Deny"
       and (.Action | as_list | index("s3:DeleteBucketPolicy") != null)
       and (.Resource | as_list | index($bucket) != null)
-      and ((.Condition["ForAnyValue:ArnNotEquals"]["aws:PrincipalArn"]
-            // .Condition.ArnNotEquals["aws:PrincipalArn"])
+      and (.Condition.ArnNotEquals["aws:PrincipalArn"]
            | as_list | index($role) != null)
     )] | length == 1)
   and ([$statements[] | select(
