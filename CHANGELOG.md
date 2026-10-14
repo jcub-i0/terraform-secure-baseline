@@ -1,14 +1,121 @@
 # Changelog
 
-This changelog is organized by release version, newest first. The `v1.11.0`
-entry documents the planned stable release content. Its heading alone is not
-proof of publication or that historical tests were repeated.
+This changelog is ordered newest-first. The `Unreleased` section records
+proposed release content; it is not evidence that a GitHub release has been
+tagged or published. Consult the repository's GitHub Releases for publication
+status and retain tested commits and evidence separately.
 
-The historical entries below preserve their original version headings,
-technical changes, and then-current qualification claims. They are historical
-records, not current operating instructions or evidence of repeat tests on
-later commits. Use the [README](README.md), [adoption guide](docs/adoption-guide.md),
-and current module/runbook documentation for the implemented contract.
+Historical release entries preserve their then-current functionality and
+qualification claims. They are not current deployment instructions or proof
+that earlier tests were repeated on subsequent commits. Use the
+[README](README.md), [adoption guide](docs/adoption-guide.md), and current
+module/runbooks for the implemented contract.
+
+## Unreleased — v1.11.1 candidate: Security Hardening and Operational Safeguards
+
+This candidate summarizes changes merged after the published `v1.11.0`
+release. The version number and any promotion to a GitHub release remain
+subject to maintainer review, particularly the **breaking Identity Center
+interface change** below. CI success alone is not production qualification.
+
+### Hardening and Corrections
+
+- **Partition and tooling:** Standardized partition-aware ARN construction
+  across active Terraform modules and relevant validators; EC2 isolation now
+  receives the AWS partition for product-ARN verification. Expanded Terraform
+  Static Analysis root coverage, enabled pinned AWS-specific TFLint rules, and
+  made Checkov JSON/JUnit report integrity a blocking check instead of relying
+  on a successful soft-fail process. Partition-aware strings do not establish
+  GovCloud or China deployment qualification. (#829, #830, #834)
+- **IAM, encryption, and networking:** Narrowed EC2 isolation, rollback,
+  IP Enrichment, and AWS Config remediation permissions. Added Firehose
+  customer-managed KMS encryption and relevant delivery permissions; protected
+  default VPC security-group ingress/egress; added incomplete S3 multipart
+  upload cleanup and RDS snapshot tag propagation. Added missing Backup/ECR
+  KMS-key tags. (#835, #843)
+- **AWS Config recording and rules:** Replaced the workload recorder's
+  selective inclusion list with `ALL_SUPPORTED_RESOURCE_TYPES`, including
+  global IAM where supported, and strengthened live recorder identity/status
+  validation. This can increase configuration-item volume and costs, and
+  deployments outside the currently qualified Region need a global-IAM
+  recording review. Removed the duplicate
+  `S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED` catalog entry while preserving
+  the separate automatic-remediation rule and configuration, which remain
+  controlled by `enable_config` independent of `enable_rules.s3_baseline`.
+  (#841, #848)
+- **Production logs and retirement:** Made centralized workload log-bucket
+  `force_destroy` dependent on environment and approved retirement posture.
+  Production normal operation uses `false`; approved Stage-1 retirement
+  changes this setting before final destruction. Added a required audit-log
+  disposition reference and validated the AWS Apply-role identity and live
+  bucket-policy deny conditions before irreversible durable cleanup and final
+  destroy. These are authorization guards, **not** WORM retention, external
+  archival, independent recovery, or proof that approved retirement preserves
+  logs. (#844, #845)
+- **Lambda and RDS monitoring:** Configured reserved concurrency for the
+  three automation Lambda functions (EC2 isolation 5, rollback 1, IP
+  enrichment 2). Enabled 60-second RDS Enhanced Monitoring through a
+  dedicated service IAM role and encrypted RDS Performance/Database Insights
+  with a dedicated rotating customer-managed KMS key. Extended the existing
+  live RDS and KMS validators to compare configuration and key status. (#846, #847)
+- **Workflow hygiene:** Applied focused Checkov/CI fixes and simplified
+  obsolete workflow definitions and naming; report integrity remains
+  mandatory while unresolved Checkov findings remain visible. (#837–#839)
+
+### Compatibility and Migration Requirements
+
+- **Breaking Identity Center interface change (#836):** The baseline no
+  longer owns the optional `SecOps-Analyst` or `SecOps-Engineer` groups,
+  permission sets, policies, or assignments. It retains workload
+  `SecOps-Operator` and security-operations `SecOps-Administrator`; other
+  workforce access is customer-owned. Prior deployments using the optional
+  personas may plan **destructive removal of existing access**. Before
+  applying, inventory assignments, provision replacement access, remove
+  retired inputs, and review the complete Identity Center plan and downstream
+  cleanup. This is a published-interface removal, **not a compatibility-
+  neutral patch**: the maintainer must consciously approve the `v1.11.1`
+  label or choose an appropriate version before publication.
+- **Existing RDS Insights key:** Switching a previously enabled database
+  to a different Insights KMS key can fail at `ModifyDBInstance` even when
+  Terraform plans an in-place update. The disposable `dev` database was
+  deliberately rebuilt; **do not infer authorization to replace an
+  existing populated staging/production database**. Plan and approve a
+  workload-specific migration or recreation before deploying this change.
+- **AWS Config catalog consolidation (#848):** Applied environments with
+  the old duplicate rule must have a reviewed plan showing deletion of
+  only the redundant managed-catalog rule, without deletion/replacement of
+  `s3_public_access_block[0]` or its remediation configuration. Removing the
+  duplicate also removes its historical Config-rule evaluations. Fresh-stack
+  CI plans do not qualify this existing-state transition.
+- **Runtime limits:** Lambda concurrency reservations require account
+  quota headroom. Broader AWS Config recording may change ongoing cost.
+  Workload KMS keys and centralized logs still require a separately reviewed
+  preservation strategy when operational evidence must survive retirement.
+
+### Verification and Open Boundaries
+
+- After #848 merged, Terraform Plan, Terraform Static Analysis, and Docs
+  Validation passed on `main` at
+  `3587c389de2f5565a07770b0ff803a95e1fa2e32` (October 14, 2026).
+  The plan matrix does not substitute for a no-change plan of live workloads.
+- Historical deployed `dev` evidence following the approved RDS rebuild
+  showed **16/16 workload validators passing**, including the RDS monitoring
+  settings and Insights CMK. This was before the #848 merge; it does not
+  requalify the new Config-rule transition, or establish staging/production
+  resilience and retirement behavior at the candidate commit.
+- Checkov 3.3.26 at `3587c389`: Terraform **915 passed, 32 failed,
+  10 skipped, zero parsing errors** (24 distinct failing checks); GitHub
+  Actions **761 passed, zero failed**; Dockerfile **24 passed, zero failed**.
+  The remaining findings are tracked in [#688](https://github.com/jcub-i0/terraform-secure-baseline/issues/688).
+  The intentional `--soft-fail` does not waive those findings; security risk
+  decisions and separate feature work remain pending.
+- A final state-backed, no-change Terraform Plan with the same effective
+  inputs, final-commit validation/evidence, and any applicable live
+  remediation-rule check remain release gates. Production Stage-1 retirement,
+  destructive cleanup, actual restoration, and end-to-end application behavior
+  must not be claimed as newly tested without corresponding dated evidence.
+  Release readiness and versioning are tracked in
+  [#840](https://github.com/jcub-i0/terraform-secure-baseline/issues/840).
 
 ## v1.11.0 — Production Resilience and Operator Contracts
 
