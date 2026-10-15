@@ -833,3 +833,9 @@ variable "ecs_services" {
     error_message = "Deployable production ECS services require desired_count >= 2 for fixed-count services or min_capacity >= 2 for autoscaled services unless production_retirement_mode is enabled."
   }
 }
+
+variable "fargate_platform_version" {
+  description = "AWS Fargate platform version. Defaults to the latest available platform."
+  type        = string
+  default     = "LATEST"
+}

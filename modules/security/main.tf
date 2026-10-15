@@ -20,6 +20,7 @@ resource "aws_ssm_service_setting" "block_ssm_doc_public_sharing" {
 
 # GUARDDUTY
 resource "aws_guardduty_detector" "main" {
+  #checkov:skip=CKV2_AWS_3:GuardDuty organization enrollment is managed by the security-operations stack and verified by validate-security-operations.sh.
   count = var.manage_guardduty_locally ? 1 : 0
 
   enable                       = true

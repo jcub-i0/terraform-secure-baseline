@@ -15,6 +15,7 @@ resource "aws_security_group" "compute" {
 
 ## QUARANTINE SECURITY GROUP
 resource "aws_security_group" "quarantine" {
+  #checkov:skip=CKV2_AWS_5:Incident-response quarantine SG is intentionally unattached until EC2 isolation; validate-compute.sh verifies its restricted network configuration.
   name        = "${var.name_prefix}-Quarantine-SG"
   description = "Security Group for isolating EC2 instances suspected of compromisation so that security triage and remediation can be performed safely without allowing unrestricted network access"
   vpc_id      = var.vpc_id

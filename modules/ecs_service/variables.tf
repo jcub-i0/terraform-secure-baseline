@@ -38,9 +38,9 @@ variable "cloudwatch_retention_days" {
 }
 
 variable "platform_version" {
-  description = "AWS Fargate platform version used by ECS services."
+  description = "AWS Fargate platform version. Defaults to the latest available platform."
   type        = string
-  default     = "1.4.0"
+  default     = "LATEST"
 }
 
 variable "services" {

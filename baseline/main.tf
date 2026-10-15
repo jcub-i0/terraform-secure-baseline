@@ -398,9 +398,10 @@ module "ecs_service" {
     local.effective_ecs_availability_zone_rebalancing
   )
 
-  vpc_id       = module.networking.vpc_id
-  cluster_arn  = module.ecs_cluster.cluster_arn
-  cluster_name = module.ecs_cluster.cluster_name
+  vpc_id           = module.networking.vpc_id
+  cluster_arn      = module.ecs_cluster.cluster_arn
+  cluster_name     = module.ecs_cluster.cluster_name
+  platform_version = var.fargate_platform_version
 
   compute_private_subnet_ids = toset(
     module.networking.compute_private_subnet_ids_list
