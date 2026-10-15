@@ -149,7 +149,9 @@ Those responsibilities belong to other modules or baseline integration.
 
 The implemented `Deploy Application` workflow owns the separate image-publication boundary: it publishes an image through the image-publisher role, resolves the authoritative ECR digest, and opens a release PR. It does not change this module's ownership or make Terraform build or push images.
 
-`validate-ecr.sh` uses the workload-root repository output as its authoritative inventory and passes cleanly for `{}`. For configured repositories it validates live identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved untagged-only lifecycle policy. It also checks the Terraform-owned `force_delete` value against the lifecycle contract; that flag is provider deletion intent, not a live ECR repository attribute. `validate-security-workload.sh` separately checks the Terraform-computed effective Inspector resource types.
+`validate-ecr.sh` uses the workload-root repository output as its authoritative inventory and passes cleanly for `{}`. For configured repositories it validates live identity, immutable tags, exact equality with `ecr_cmk_arn`, and the approved untagged-only lifecycle policy. It also checks the Terraform-owned `force_delete` value against the lifecycle contract; that flag is provider deletion intent, not a live ECR repository attribute.
+
+When workload configuration enables Inspector ECR scanning, `validate-ecr.sh` also requires an `ENHANCED` regional registry scanning configuration and verifies that **every Terraform-managed repository** has effective `CONTINUOUS_SCAN` frequency via `batch-get-repository-scanning-configuration`. The validator uses the effective frequency, not legacy `scanOnPush`: AWS can report `scanOnPush=false` and `CONTINUOUS_SCAN` for the same repository. The ECR module does not own registry-level scanning settings. If Inspector is disabled by configuration (including default minimal profiles), the validator explicitly warns and **does not claim scanning coverage**. `validate-security-workload.sh` independently checks enabled Inspector resource types.
 
 ## Implementation References
 
