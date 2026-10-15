@@ -401,7 +401,7 @@ Development qualification confirmed the implemented enabled-state path with a re
 
 - `deployment_profile = development`;
 - `GuardDutyManaged=true` in Terraform and live ECS;
-- Fargate platform `LATEST`;
+- Fargate platform `1.4.0`;
 - one GuardDuty agent injected and `RUNNING`;
 - application container still valid and service at steady state;
 - GuardDuty management type `AUTO_MANAGED`;
