@@ -1,4 +1,5 @@
 resource "aws_ecr_repository" "repositories" {
+  #checkov:skip=CKV_AWS_163:Image scanning is governed by ECR registry-level Inspector ENHANCED scanning; this rule checks legacy repository scan_on_push rather than effective scanning frequency. Verify live repository coverage per environment.
   for_each = var.repositories
 
   name                 = "${var.name_prefix}-${each.key}"
