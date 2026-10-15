@@ -142,6 +142,7 @@ resource "terraform_data" "ecs_security_policy_ready" {
 }
 
 resource "aws_ecs_service" "services" {
+  #checkov:skip=CKV_AWS_332:Platform version defaults to LATEST through a configurable module input; Checkov does not resolve the value. Overrides require review, and validate-ecs-runtime.sh checks the live service configuration.
   for_each = local.fixed_services
 
   name            = "${var.name_prefix}-${each.key}"
@@ -197,6 +198,7 @@ resource "aws_ecs_service" "services" {
 # Keep this resource separate from fixed-count services so Terraform does not
 # reconcile legitimate runtime scaling back to the configured bootstrap count.
 resource "aws_ecs_service" "autoscaled_services" {
+  #checkov:skip=CKV_AWS_332:Platform version defaults to LATEST through a configurable module input; Checkov does not resolve the value. Overrides require review, and validate-ecs-runtime.sh checks the live service configuration.
   for_each = local.autoscaled_services
 
   name            = "${var.name_prefix}-${each.key}"
