@@ -2,6 +2,7 @@
 # ECS_CLUSTER MODULE
 #####################
 resource "aws_ecs_cluster" "cluster" {
+  #checkov:skip=CKV_AWS_65:Container Insights is configurable and defaults to enhanced; validate-ecs-runtime.sh checks the live setting against Terraform.
   name = "${var.name_prefix}-ecs"
 
   setting {
