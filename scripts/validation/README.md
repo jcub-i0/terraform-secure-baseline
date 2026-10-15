@@ -513,6 +513,8 @@ When the effective mode is `network_firewall`, the script describes the live `${
 
 For every configured repository, it compares the live name, ARN, and registry ID with the Terraform output; requires immutable tags and KMS encryption with a configured key; requires the live repository KMS key to equal the workload-root `ecr_cmk_arn`; and requires exactly the approved lifecycle rule that expires only untagged images older than 30 days. Tagged-image expiration fails validation.
 
+When Inspector is enabled and repositories exist, the validator also requires ECR in the effective scan types, registry-level `ENHANCED` scanning, and effective `CONTINUOUS_SCAN` for every managed repository. It checks effective coverage rather than legacy `scanOnPush`. Disabled Inspector emits a warning and does not establish scanning coverage; an empty repository inventory skips live ECR checks.
+
 ### VPC endpoint hardening
 
 `validate-vpc-endpoints.sh` validates the non-overridable platform Interface Endpoint inventory, including `ecr.api`, `ecr.dkr`, and `guardduty-data`. It also requires every Interface Endpoint to be available, in the expected VPC, private-DNS enabled, attached to the exact endpoint-private subnet set, and attached to exactly the shared Interface Endpoint SG. The S3 Gateway Endpoint must have the exact union of endpoint-private, compute-private, and serverless-private route-table associations.
@@ -587,7 +589,7 @@ For `minimal`, agents are not required and healthy coverage is not required; whe
 
 | Check | Evidence established |
 |---|---|
-| Live RDS | Expected DB identifier/ARN, Multi-AZ, DB subnet-group **name**, exact VPC SG set, deletion protection, native backup retention, public accessibility, and storage-encryption flag |
+| Live RDS | Expected DB identifier/ARN, Multi-AZ, DB subnet-group **name**, exact VPC SG set, deletion protection, native backup retention, public accessibility, storage-encryption flag, 60-second Enhanced Monitoring/role, and Insights enablement/KMS key |
 | RDS deletion-time intent | Resource-backed `skip_final_snapshot`, `delete_automated_backups`, and final-snapshot identifier consistency; these are not all live RDS API settings |
 | Backup vault | Live name/ARN/encryption and Terraform `force_destroy` consistency with `lifecycle_protection`; `force_destroy` is Terraform deletion behavior, not a live vault API flag |
 | Scheduled Backup | Effective enablement, plan/selection presence or absence, rule schedule/retention/vault, service-role/tag selection, and EC2/RDS `Backup` tags |
@@ -986,7 +988,6 @@ A `WARN` means the condition should be reviewed but does not necessarily invalid
 Examples:
 
 - optional resources not enabled
-- optional Identity Center groups not configured
 - intentionally relaxed strictness checks during transitional troubleshooting
 - environment-specific exceptions
 - an ECS operational alarm in `INSUFFICIENT_DATA`

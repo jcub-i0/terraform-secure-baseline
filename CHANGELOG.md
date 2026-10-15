@@ -13,16 +13,20 @@ module/runbooks for the implemented contract.
 
 ## Unreleased — v1.11.1 candidate: Security Hardening and Operational Safeguards
 
-This candidate summarizes changes merged after the published `v1.11.0`
-release. The version number and any promotion to a GitHub release remain
-subject to maintainer review, particularly the **breaking Identity Center
-interface change** below. CI success alone is not production qualification.
+This candidate covers the published `v1.11.0` (`18e579f7`) through `main` at
+`4aac66a71153d5afa2c70a568f1d46fdcef8dd48` (October 15, 2026). The maintainer
+has explicitly retained **v1.11.1**, including the **breaking Identity Center
+interface change** below, because no external customers or repository consumers
+currently depend on those removed interfaces. This decision does not make the
+change backward compatible. Publication remains separately authorized; CI
+success alone is not production qualification.
 
 ### Hardening and Corrections
 
 - **Partition and tooling:** Standardized partition-aware ARN construction
   across active Terraform modules and relevant validators; EC2 isolation now
-  receives the AWS partition for product-ARN verification. Expanded Terraform
+  receives the AWS partition for product-ARN verification and aborts isolation
+  with an error result if partition or Region is missing. Expanded Terraform
   Static Analysis root coverage, enabled pinned AWS-specific TFLint rules, and
   made Checkov JSON/JUnit report integrity a blocking check instead of relying
   on a successful soft-fail process. Partition-aware strings do not establish
@@ -60,7 +64,42 @@ interface change** below. CI success alone is not production qualification.
   live RDS and KMS validators to compare configuration and key status. (#846, #847)
 - **Workflow hygiene:** Applied focused Checkov/CI fixes and simplified
   obsolete workflow definitions and naming; report integrity remains
-  mandatory while unresolved Checkov findings remain visible. (#837–#839)
+  mandatory while unresolved Checkov findings remain visible. Renamed the
+  control-plane exporter workflow to `export-control-plane-evidence.yml`.
+  (#837–#839)
+
+### Functional and Operational Changes
+
+- **Saved-plan Lambda deployment:** Normalize all three archive resources to
+  `output_file_mode = "0644"` to avoid permission-driven ZIP hash drift. The
+  internal Plan job in `Terraform Apply` bundles the generated isolation,
+  rollback, and enrichment ZIPs with the reviewed plan and appends their SHA-256
+  hashes to its manifest. Apply verifies the manifest and restores those ZIPs
+  on its separate runner before applying the saved plan; no new plan or separate
+  Apply-side archive build is introduced. This fixes missing local ZIPs during
+  saved-plan application. (#855, #856)
+- **Fargate runtime and application qualification:** Expose
+  `fargate_platform_version` through the workload roots and baseline; its default
+  changes from `1.4.0` to `LATEST`. The minimal HTTP fixture now runs as a non-root
+  user and declares a Docker health check. The existing OIDC image-publisher and
+  separate repository-write jobs published a digest and generated the `dev`
+  release PR; Terraform deployed the smoke-test service. Those publication,
+  scaling, health-alarm, and GuardDuty runtime capabilities predate this patch.
+  Temporary digest selection and disabled ingress were restored to the original
+  null-digest, optional-ingress sample by #861. (#835, #850, #853, #854, #861)
+- **Inspector/ECR validation:** Require registry-level `ENHANCED` scanning and
+  effective `CONTINUOUS_SCAN` for each managed repository when Inspector ECR is
+  enabled. Legacy `scanOnPush=false` is not treated as missing enhanced scanning.
+  Disabled Inspector and empty repository inventories do not demonstrate scan
+  coverage. This strengthens validation without changing registry ownership.
+  (#857, #858)
+- **Reproducible tooling:** Retain the existing Terraform `1.15.8`, AWS provider
+  `6.66.0`, and committed per-root provider selections; these are not new version
+  upgrades in this delta. Static analysis now pins TFLint `0.64.0`, its AWS
+  ruleset `0.49.0`, and Checkov `3.3.26`, scans the previously omitted
+  security-operations roots, and repairs Checkov parsing of existing expressions.
+  The retirement policy/role guard has focused offline regression coverage.
+  (#830, #834, #845)
 
 ### Compatibility and Migration Requirements
 
@@ -72,9 +111,14 @@ interface change** below. CI success alone is not production qualification.
   personas may plan **destructive removal of existing access**. Before
   applying, inventory assignments, provision replacement access, remove
   retired inputs, and review the complete Identity Center plan and downstream
-  cleanup. This is a published-interface removal, **not a compatibility-
-  neutral patch**: the maintainer must consciously approve the `v1.11.1`
-  label or choose an appropriate version before publication.
+  cleanup. Removed interfaces include `enable_secops_analyst`,
+  `enable_secops_engineer`, their group-name inputs, customer-managed-policy
+  reference/path inputs, and their permission-set output keys. The Engineer
+  response policy and persona policy attachments are removed; workload log-read
+  and decrypt policies remain available for customer-owned access. Update local
+  module calls and GitHub Identity Center input objects. Workload Destroy no
+  longer performs an Identity Center cleanup plan/apply: migrate legacy
+  attachments separately before deleting workload-owned IAM policies.
 - **Existing RDS Insights key:** Switching a previously enabled database
   to a different Insights KMS key can fail at `ModifyDBInstance` even when
   Terraform plans an in-place update. The disposable `dev` database was
@@ -87,34 +131,102 @@ interface change** below. CI success alone is not production qualification.
   `s3_public_access_block[0]` or its remediation configuration. Removing the
   duplicate also removes its historical Config-rule evaluations. Fresh-stack
   CI plans do not qualify this existing-state transition.
+- **Existing resource/module callers:** Default security-group adoption clears
+  existing ingress and egress rules; inspect attachments and move dependent
+  workloads to appropriate explicit groups before applying. Direct storage-module
+  callers must provide `centralized_logs_force_destroy` and
+  `rds_performance_insights_cmk_arn`. Archive mode normalization can cause a
+  one-time archive replacement/Lambda code update. Review Fargate `LATEST`
+  behavior and any explicit platform override rather than assuming the former
+  fixed platform selection remains in effect.
 - **Runtime limits:** Lambda concurrency reservations require account
-  quota headroom. Broader AWS Config recording may change ongoing cost.
+  quota headroom for all eight reserved executions and the required unreserved
+  pool; low-quota accounts may need a quota increase before deployment.
+  Broader AWS Config recording may change ongoing cost.
   Workload KMS keys and centralized logs still require a separately reviewed
   preservation strategy when operational evidence must survive retirement.
 
-### Verification and Open Boundaries
+### Validation Evidence
 
-- After #848 merged, Terraform Plan, Terraform Static Analysis, and Docs
-  Validation passed on `main` at
-  `3587c389de2f5565a07770b0ff803a95e1fa2e32` (October 14, 2026).
-  The plan matrix does not substitute for a no-change plan of live workloads.
-- Historical deployed `dev` evidence following the approved RDS rebuild
-  showed **16/16 workload validators passing**, including the RDS monitoring
-  settings and Insights CMK. This was before the #848 merge; it does not
-  requalify the new Config-rule transition, or establish staging/production
-  resilience and retirement behavior at the candidate commit.
-- Checkov 3.3.26 at `3587c389`: Terraform **915 passed, 32 failed,
-  10 skipped, zero parsing errors** (24 distinct failing checks); GitHub
-  Actions **761 passed, zero failed**; Dockerfile **24 passed, zero failed**.
-  The remaining findings are tracked in [#688](https://github.com/jcub-i0/terraform-secure-baseline/issues/688).
-  The intentional `--soft-fail` does not waive those findings; security risk
-  decisions and separate feature work remain pending.
-- A final state-backed, no-change Terraform Plan with the same effective
-  inputs, final-commit validation/evidence, and any applicable live
-  remediation-rule check remain release gates. Production Stage-1 retirement,
-  destructive cleanup, actual restoration, and end-to-end application behavior
-  must not be claimed as newly tested without corresponding dated evidence.
-  Release readiness and versioning are tracked in
+- **Historical deployment:** [Publication run 38669309326](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38669309326)
+  generated #853 from source `78b989de47decf801e2e497dabd86f16bb299461`, selecting
+  `sha256:24a0c180dd0325ee56870c040be565e152a3bf035011ace67363009c0be526ec`
+  for `tf-secure-baseline-dev-test`.
+  [Terraform Apply run 38675095713](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38675095713)
+  succeeded on October 15 at `717823ec1a187d3a2beca9a32fc670e90ca45d45`, after
+  the ZIP-handoff fix. Its retained Apply log reports all three ZIP checksums
+  `OK` and `0 added, 0 changed, 0 destroyed`. This successful convergence run is
+  distinct from the subsequent validation revision.
+- **Retained workload evidence:** [Baseline evidence run 38680334147](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38680334147)
+  succeeded using GitHub OIDC at
+  `c3bc2e6cef839559c9cdf678bcb972890344fec8`. Artifact
+  `baseline-validation-dev-38680334147-1` records **16/16 PASS, 0 failures** at
+  **2026-10-15T04:13:47+00:00**, account `955775177042`, `us-east-1`, environment
+  `dev`, profile `development`, effective egress `nat_only`. Its logs confirm
+  one ECS service, three running application tasks with three running GuardDuty
+  agents, `AUTO_MANAGED` / `HEALTHY` ECS coverage, and `ENHANCED` /
+  `CONTINUOUS_SCAN` on the managed ECR repository. No ALB was deployed and
+  scheduled AWS Backup was disabled; the Backup-CMK check was consequently
+  skipped with a warning. RDS monitoring/Insights configuration and the Insights
+  CMK passed their checks. Script totals are not counts of behavioral tests.
+- **Separate maintainer-reported results:** The deployed qualification
+  configuration converged to a state-backed zero-change plan, and local
+  `validate-baseline.sh` passed **16/16, 0 failed**. After #861 restored
+  `image_digest = null` and the original optional ingress object, the maintainer
+  separately confirmed intended local cleanup, another no-change plan, and
+  passing local validation before beginning intentional dev teardown. Those
+  local confirmations have no separate timestamped artifact identified here;
+  they are not the three-task evidence above or post-destruction plans. The
+  restored canonical registration preserves ECR derivation but selects no image
+  to deploy. Teardown does not invalidate historical qualification or imply
+  those AWS resources remain active.
+- **Config transition evidence:** The maintainer reported successful deployment
+  reconciliation and later zero-change planning. Source preserves the separate
+  remediation rule/configuration; the retained baseline report does not prove
+  the exact deleted rule identity or execution of automatic remediation.
+  Earlier SSM remediation success reported in [#835](https://github.com/jcub-i0/terraform-secure-baseline/pull/835)
+  (October 10, execution `a211cbca-2b60-4455-aa84-17cb5f2c622d`) retains that
+  original provenance, not final-candidate retest status.
+- **Static analysis:** [Candidate scan 38682111443](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38682111443)
+  at `dc16feeb912c03c6eb3413a34654ffae1284674b` and
+  [main scan 38681959140](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38681959140)
+  at `4aac66a71153d5afa2c70a568f1d46fdcef8dd48`, both October 15, retained
+  matching Checkov `3.3.26` results in `ci-evidence`,
+  `repository/checkov.json`: Terraform **915 passed / 23 failed / 29 skipped**
+  (16 distinct failing check IDs); GitHub Actions **765 / 0 / 7**; Dockerfile
+  **24 / 0 / 0**; **zero parsing errors** in each framework. These are dated
+  scan snapshots, not a claim of zero security findings. JSON/JUnit report
+  integrity is independently enforced while Checkov uses `--soft-fail`.
+
+### Known Limitations and Deferred Work
+
+- **Resource-local scanner exceptions:** `CKV_AWS_163` reflects Inspector
+  enhanced scanning rather than legacy repository scan-on-push; the retained
+  dev evidence verifies effective coverage. `CKV_AWS_378` documents HTTPS
+  termination at the ALB with HTTP to private Fargate targets, **not end-to-end
+  TLS**. `CKV_AWS_117` documents IP Enrichment outside the customer VPC for public
+  AbuseIPDB HTTPS access without private-resource dependencies; that egress
+  bypasses VPC Network Firewall. Other local exceptions cover existing Lambda
+  async failure destinations/separate EventBridge DLQs (`CKV_AWS_116`),
+  cross-module Flow Logs, centrally governed GuardDuty, the intentionally unused
+  quarantine SG, configurable Container Insights/Fargate values, and disabled
+  minimal-profile Config recording. Workflow dispatch exceptions retain
+  operator/evidence inputs. Skips do not establish runtime effectiveness.
+- **Remaining findings:** [#688](https://github.com/jcub-i0/terraform-secure-baseline/issues/688)
+  remains open for WAF, ALB access logs, RDS query logging/IAM authentication,
+  secret rotation, Lambda code signing, S3 access logs/notifications/replication,
+  CloudTrail SNS, Network Firewall CMKs, and outstanding KMS-policy/AZ-discovery
+  findings. The maintainer deferred broader remediation to separately scoped
+  work; deferral is neither remediation nor blanket security-risk acceptance.
+  Encryption, secret storage, and scanning do not rotate credentials or remediate
+  vulnerabilities automatically. No bulk suppressions are introduced here.
+- **Qualification limits:** The dev `nat_only` run does not retest production
+  three-AZ topology, RDS failover, AWS Backup Restore Testing execution,
+  production retirement/durable cleanup, Network Firewall egress, or optional
+  ALB ingress. Historical tests retain their original revision/configuration.
+  Neither these results nor the configured controls establish zero residual
+  risk, immutable retention, guaranteed recovery, or SOC 2 / ISO 27001
+  certification. Scope decisions are tracked in
   [#840](https://github.com/jcub-i0/terraform-secure-baseline/issues/840).
 
 ## v1.11.0 — Production Resilience and Operator Contracts

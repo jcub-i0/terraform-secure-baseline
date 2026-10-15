@@ -103,7 +103,7 @@ Configuration in the resource definition (not a report of live AWS state):
 
 Enhanced Monitoring delivers OS metrics through its separate RDS service role. The RDS Insights CMK encrypts performance-metric insights only, **not** the DB storage volume, master secret, or CloudWatch log groups. Account-level KMS IAM permissions and service grants must be verified in deployed AWS; readers of sensitive insights data need permissions to decrypt with this key. Retain the key while encrypted insights remain needed.
 
-**Existing database migration warning:** RDS can reject changing the physical Insights KMS key on an instance where Insights is already enabled. An in-place Terraform plan does not prove AWS will permit that key switch. Qualify this configuration on a newly created DB instance, or establish a separately approved migration procedure for existing databases. Do **not** apply this change directly to an active instance with a different Insights key, and do not destroy production data to make the scanner pass. The existing dev plan currently shows a switch away from its previously assigned Insights KMS key; treat that portion as unqualified.
+**Existing database migration warning:** RDS can reject changing the physical Insights KMS key on an instance where Insights is already enabled. An in-place Terraform plan does not prove AWS will permit that key switch. Qualify this configuration on a newly created DB instance, or establish a separately approved migration procedure for existing databases. Do **not** apply this change directly to an active instance with a different Insights key, and do not destroy production data to make the scanner pass. The disposable dev database was intentionally recreated during v1.11.1 qualification; the [dated evidence](../../CHANGELOG.md) records passing monitoring/Insights checks. That result does not qualify an in-place key migration for existing populated databases.
 
 This remains a PostgreSQL **Multi-AZ DB instance** when enabled, not Aurora or an RDS Multi-AZ DB cluster. A three-AZ DB subnet group is not a declaration of three database instances or read replicas.
 
@@ -548,6 +548,7 @@ Do not describe this as WORM or a universal production destruction guard.
 | `rds_multi_az` | `bool` | Required | Whether the DB instance is Multi-AZ |
 | `db_username` | `string` | Required | Master-username base; environment is appended |
 | `logs_cmk_arn` | `string` | Required | Log-group and centralized logs-bucket key |
+| `rds_performance_insights_cmk_arn` | `string` | Required | Dedicated Performance/Database Insights encryption key |
 | `cloudwatch_retention_days` | `string` | Required | RDS log-group retention; the module declares a string, not a number |
 | `account_id` | `string` | Required | Workload account in policy conditions and log paths |
 | `random_id` | `string` | Required | Centralized logs-bucket naming suffix |
@@ -617,6 +618,7 @@ module "storage" {
 
   logs_cmk_arn                    = module.security.logs_cmk_arn
   secrets_manager_cmk_arn         = module.security.secrets_manager_cmk_arn
+  rds_performance_insights_cmk_arn = module.security.rds_performance_insights_cmk_arn
   cloudtrail_arn                  = module.logging.cloudtrail_arn
   bucket_admin_principals        = var.bucket_admin_principals
   centralized_logs_force_destroy = local.effective_centralized_logs_force_destroy

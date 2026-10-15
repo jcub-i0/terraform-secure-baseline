@@ -30,6 +30,7 @@ Retain external state backups. Bucket versioning can support recovery, but neith
 | `aws_s3_bucket_public_access_block.state` | Enables all four public-access-block settings |
 | `aws_s3_bucket_server_side_encryption_configuration.state` | Default SSE-KMS using the state CMK, with bucket keys enabled |
 | `aws_s3_bucket_versioning.state` | Enables bucket versioning |
+| `aws_s3_bucket_lifecycle_configuration.state` | Aborts incomplete multipart uploads after seven days; does not expire completed state objects |
 | `aws_s3_bucket_ownership_controls.state` | Sets `BucketOwnerEnforced` |
 | `aws_s3_bucket_policy.state` | Applies the generated state-bucket policy |
 

@@ -1212,7 +1212,7 @@ If the security group was replaced but isolation tags are incomplete, treat the 
 
 Direct invocation requires `lambda:InvokeFunction`.
 
-Use an explicitly authorized test principal; do not assume an Engineer or Plan role grants `lambda:InvokeFunction`.
+Use an explicitly authorized test principal; do not assume a customer-defined role or Plan role grants `lambda:InvokeFunction`.
 
 The `SecOps-Operator` Identity Center role is intended for rollback EventBridge actions, not direct Lambda invocation.
 

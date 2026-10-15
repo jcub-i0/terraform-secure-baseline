@@ -245,7 +245,7 @@ Do not disable OIDC or its role flags as a substitute for workload retirement. T
 
 The standalone Terraform Plan supports `control-plane-identity-center` and `control-plane-organizations` through `control-plane-plan`. Export Control Plane Evidence also uses that Plan environment. The account root itself is not in that Plan matrix.
 
-The standard workload Destroy workflow can use the control-plane Apply role for its separately reviewed Identity Center cleanup. This does not make the control-plane account root a generic Apply/Destroy target. Keep Identity Center and this account's roles available until dependent workload lifecycle workflows have finished.
+The standard workload Destroy workflow no longer assumes a control-plane role or performs Identity Center cleanup. Legacy persona migrations and customer-owned access cleanup require separate review before retiring dependent workload policies. Keep Identity Center and this account's roles available while shared administrative operations need them; this account root is not a generic workload Apply/Destroy target.
 
 The example account configuration uses environment-based Apply trust. A GitHub job must present the corresponding subject to assume that role. The AWS stack does not configure GitHub Environment reviewers, branch restrictions, repository variables, or workflow permissions. The Plan role also has state-object write/delete authority; a read-only evidence operation is not an IAM read-only guarantee.
 

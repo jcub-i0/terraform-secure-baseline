@@ -1519,7 +1519,7 @@ Keep shared identity and governance available while dependent operations require
 ## Important Destruction Notes
 
 - Keep workload OIDC roles until the workload workflows are finished; keep backend resources until every dependent root and active state has been handled.
-- Do not remove the whole Identity Center stack before workflows that still plan/apply its environment-specific cleanup.
+- Retain the shared Identity Center stack while Operator/Administrator access is required; workload Destroy does not clean up legacy or customer-owned assignments.
 - Preserve state externally before backend changes. Moving state does not relax the state module’s literal guards or empty a versioned bucket.
 - Production native deletion protection, provider force-deletion flags, and explicitly approved data cleanup are separate mechanisms.
 - The centralized logs bucket has `force_destroy=false` for normal production and `true` only after the reviewed retirement Apply. The final production destroy can purge logs, but the scoped ECR/Backup cleanup helper does not inventory or archive them. Explicitly preserve required logs and their KMS access before retirement. Object Lock remains disabled.

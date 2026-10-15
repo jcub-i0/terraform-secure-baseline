@@ -32,7 +32,7 @@ It supports:
 - Security Hub V2 enablement either locally or through an inherited Organizations policy
 - Vulnerability scanning through Inspector
 - SSM document sharing hardening
-- KMS-backed encryption for logs, Lambda, EBS, Secrets Manager, ECR, and AWS Backup
+- KMS-backed encryption for logs, Lambda, EBS, Secrets Manager, ECR, AWS Backup, and RDS Performance/Database Insights
 - AWS Config baseline deployment through the `config_baseline` child module
 - Security service tamper detection through the `tamper_detection` child module
 
@@ -60,7 +60,7 @@ local-ownership flag from true to false can plan deletion of locally owned
 resources. Review the state/ownership migration and central realization before
 applying that change, rather than toggling it as a repair shortcut.
 
-The six KMS keys, SSM setting, Inspector product subscription, and two child
+The seven KMS keys, SSM setting, Inspector product subscription, and two child
 module calls are unconditional. Inspector enablement and Config recording have
 their own flags. The reusable module has no `deployment_profile` or
 `production_retirement_mode` input and cannot infer those controls itself.
@@ -266,10 +266,11 @@ The current key set includes:
 | Secrets Manager CMK | Secrets Manager secret encryption |
 | ECR CMK | ECR repository encryption |
 | Backup Vault CMK | AWS Backup vault encryption |
+| RDS Insights CMK | Performance/Database Insights encryption; separate from DB storage, secrets, and log groups |
 
-All six keys have rotation enabled and a 30-day deletion window. Logs, EBS,
+All seven keys have rotation enabled and a 30-day deletion window. Logs, EBS,
 Secrets Manager, ECR, and Backup keys explicitly have `prevent_destroy = false`;
-the Lambda key has no `prevent_destroy` guard. These settings do not change with
+the Lambda and RDS Insights keys have no `prevent_destroy` guard. These settings do not change with
 the workload profile or retirement mode. Source comments are not protection.
 
 The Terraform state CMK is owned by the separate state stack, not this module.
@@ -527,7 +528,7 @@ It receives:
 The child is always instantiated. `enable_config=false` disables recorder
 status and omits managed rules/remediation; it does not remove the recorder,
 delivery channel, or the fixed-delay resource. Rule-family toggles do not alter
-the recorder's fixed resource-type list.
+the recorder's all-supported resource scope, including global IAM where supported.
 
 The S3 automatic-remediation rule is independent of `enable_rules.s3_baseline`:
 it follows `enable_config` alone. See the [Config reference](config_baseline/README.md)
@@ -637,6 +638,7 @@ read it at a workload root.
 | Name | Description |
 |---|---|
 | `logs_cmk_arn` | ARN of the logs KMS CMK |
+| `rds_performance_insights_cmk_arn` | ARN of the dedicated RDS Performance/Database Insights CMK |
 | `ebs_cmk_arn` | ARN of the EBS KMS CMK |
 | `ebs_cmk_alias_arn` | ARN of the EBS KMS alias |
 | `lambda_cmk_arn` | ARN of the Lambda KMS CMK |
@@ -699,6 +701,7 @@ Outputs from this module are used by:
 | Output | Typical Consumer |
 |---|---|
 | `logs_cmk_arn` | Logging, storage, monitoring, Config, CloudWatch Logs, SNS/SQS |
+| `rds_performance_insights_cmk_arn` | Storage module: dedicated RDS Performance/Database Insights encryption |
 | `ebs_cmk_arn` | Compute and EC2 storage resources |
 | `lambda_cmk_arn` | Automation Lambda functions |
 | `secrets_manager_cmk_arn` | Storage and automation secrets |
@@ -968,6 +971,7 @@ Expected aliases include:
 - `alias/<name_prefix>/secrets-cmk`
 - `alias/<name_prefix>/backup-cmk`
 - `alias/<name_prefix>/ecr-cmk`
+- `alias/<name_prefix>/rds-performance-insights-cmk`
 
 ---
 

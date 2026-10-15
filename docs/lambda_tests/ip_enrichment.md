@@ -117,7 +117,7 @@ Direct Lambda invocation requires a principal with permission to invoke the func
 
 Use a separately authorized test principal with narrowly approved invocation
 and inspection rights. Emergency break-glass administration is not the default
-way to perform routine tests, and the standard Engineer/Plan role name does
+way to perform routine tests, and a Plan or customer-defined role name does
 not imply direct invocation authority.
 
 Security Hub writeback verification requires read access to Security Hub findings.
