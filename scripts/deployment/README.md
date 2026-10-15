@@ -201,7 +201,6 @@ checksum manifest. Apply verifies that expanded manifest before restoring the ZI
 `terraform plan` or rebuild the ZIPs as a separate workflow step. The source files
 inside the archives use Terraform-managed `0644` permissions for deterministic ZIP hashes.
 
-
 `terraform-plan-artifact.sh` supports `create` and `verify`, with `--mode apply` or `--mode destroy`. Callers supply `--working-directory`, `--artifact-directory`, `--artifact-basename`, and a non-secret `--context-json` object. Workflows own the AWS identity, policy, approval, and eventual Terraform apply.
 
 For a basename such as `baseline-destroy`, the helper produces:
