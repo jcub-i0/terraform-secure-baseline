@@ -292,6 +292,34 @@ jobs:
                     } >> "${GITHUB_STEP_SUMMARY}"
                   fi
 
+            - name: Bundle Lambda ZIPs with saved plan
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  lambda_dir="${GITHUB_WORKSPACE}/modules/automation/lambda"
+                  artifact_dir="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}"
+                  mkdir -p "${artifact_dir}/lambda"
+
+                  for lambda in ec2_isolation ec2_rollback ip_enrichment; do
+                    source_zip="${lambda_dir}/${lambda}.zip"
+                    if [[ ! -f "${source_zip}" || -L "${source_zip}" ]]; then
+                      echo "::error::Expected Lambda ZIP is missing or a symlink: ${source_zip}"
+                      exit 1
+                    fi
+                    cp -- "${source_zip}" "${artifact_dir}/lambda/${lambda}.zip"
+                  done
+
+                  # Bind the ZIPs to the exact saved-plan artifact checksum manifest.
+                  (
+                    cd "${artifact_dir}"
+                    sha256sum \
+                      lambda/ec2_isolation.zip \
+                      lambda/ec2_rollback.zip \
+                      lambda/ip_enrichment.zip >> "${PLAN_BASENAME}-plan.sha256"
+                    sha256sum --check "${PLAN_BASENAME}-plan.sha256"
+                  )
+
             - name: Upload saved plan
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:
@@ -405,6 +433,18 @@ jobs:
                     --artifact-directory "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" \
                     --artifact-basename "${PLAN_BASENAME}" \
                     --context-json "${context}"
+
+                  # The saved-plan verifier checks ZIP hashes before restoration.
+                  artifact_lambda_dir="${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/lambda"
+                  lambda_dir="${GITHUB_WORKSPACE}/modules/automation/lambda"
+                  for lambda in ec2_isolation ec2_rollback ip_enrichment; do
+                    verified_zip="${artifact_lambda_dir}/${lambda}.zip"
+                    if [[ ! -f "${verified_zip}" || -L "${verified_zip}" ]]; then
+                      echo "::error::Verified Lambda ZIP is missing or a symlink: ${verified_zip}"
+                      exit 1
+                    fi
+                    install -m 0600 -- "${verified_zip}" "${lambda_dir}/${lambda}.zip"
+                  done
 
                   terraform -chdir="${WORKING_DIRECTORY}" apply \
                     -input=false \
