@@ -16,6 +16,8 @@
 # - Repository name, ARN, and registry ID match Terraform output
 # - Image tags are immutable
 # - Repository encryption uses a configured KMS key
+# - When Inspector ECR is enabled, registry scanning is ENHANCED and all managed
+#   repositories have effective CONTINUOUS_SCAN coverage (not legacy scanOnPush)
 # - Lifecycle policy contains exactly the approved 30-day untagged expiration
 #   rule and no tagged-image expiration rule
 #
@@ -199,6 +201,51 @@ if [[ -z "$EXPECTED_ECR_CMK_ARN" ]]; then
   fail "ecr_cmk_arn is empty"
 fi
 
+for required_output in \
+  effective_inspector_enabled \
+  effective_inspector_resource_types; do
+  if ! terraform_output_exists "$OUTPUTS_JSON" "$required_output"; then
+    fail "Missing required Terraform output: ${required_output}"
+  fi
+done
+
+EFFECTIVE_INSPECTOR_ENABLED="$(
+  get_terraform_output_value "$OUTPUTS_JSON" effective_inspector_enabled
+)"
+require_value_in_list \
+  "$EFFECTIVE_INSPECTOR_ENABLED" \
+  "true false" \
+  "effective_inspector_enabled"
+
+if ! EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON="$(
+  echo "$OUTPUTS_JSON" |
+    jq -ce '
+      .effective_inspector_resource_types.value
+      | if type == "array" and all(.[]; type == "string")
+        then .
+        else error("effective_inspector_resource_types must be a string array")
+        end
+    '
+)"; then
+  fail "Unable to resolve effective_inspector_resource_types from Terraform outputs."
+fi
+
+VALIDATE_ENHANCED_ECR_SCANNING="false"
+ECR_SCANNING_SUMMARY="not checked (Inspector disabled by configuration)"
+
+if [[ "$EFFECTIVE_INSPECTOR_ENABLED" == "true" ]]; then
+  if ! echo "$EFFECTIVE_INSPECTOR_RESOURCE_TYPES_JSON" |
+    jq -e 'index("ECR") != null' >/dev/null; then
+    fail "ECR repositories exist and Inspector is enabled, but ECR is missing from effective_inspector_resource_types."
+  fi
+
+  VALIDATE_ENHANCED_ECR_SCANNING="true"
+  ECR_SCANNING_SUMMARY="pending live enhanced-scanning validation"
+  success "Inspector ECR scanning is enabled by the Terraform workload configuration"
+else
+  warn "Inspector is disabled by the workload configuration; ECR enhanced scanning is NOT verified."
+fi
+
 section "Checking AWS caller identity"
 
 ACCOUNT_ID="$(get_aws_account_id "$AWS_PROFILE" "$AWS_REGION")"
@@ -214,6 +261,31 @@ info "AWS caller ARN: $CALLER_ARN"
 
 if [[ -n "$EXPECTED_ACCOUNT_ID" && "$ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]]; then
   fail "AWS account ID mismatch. Expected ${EXPECTED_ACCOUNT_ID}, got ${ACCOUNT_ID}"
+fi
+
+VALIDATED_CONTINUOUS_SCAN_REPOSITORIES=0
+
+if [[ "$VALIDATE_ENHANCED_ECR_SCANNING" == "true" ]]; then
+  section "Validating ECR registry enhanced scanning"
+
+  if ! REGISTRY_SCANNING_JSON="$(
+    aws ecr get-registry-scanning-configuration \
+      "${aws_args[@]}" \
+      --output json
+  )"; then
+    fail "Unable to read the ECR registry scanning configuration in ${AWS_REGION}."
+  fi
+
+  if ! echo "$REGISTRY_SCANNING_JSON" |
+    jq -e --arg registry_id "$ACCOUNT_ID" '
+      .registryId == $registry_id
+      and .scanningConfiguration.scanType == "ENHANCED"
+    ' >/dev/null; then
+    echo "$REGISTRY_SCANNING_JSON" | jq '{registryId, scanningConfiguration}'
+    fail "ECR registry must use ENHANCED scanning in account ${ACCOUNT_ID}, region ${AWS_REGION}."
+  fi
+
+  success "ECR registry scanning is ENHANCED for account ${ACCOUNT_ID} in ${AWS_REGION}"
 fi
 
 section "Validating configured ECR repositories"
@@ -328,8 +400,44 @@ while IFS= read -r repository_entry; do
   fi
 
   success "Lifecycle policy expires only untagged images older than 30 days: ${expected_name}"
+  if [[ "$VALIDATE_ENHANCED_ECR_SCANNING" == "true" ]]; then
+    if ! REPOSITORY_SCANNING_JSON="$(
+      aws ecr batch-get-repository-scanning-configuration \
+        "${aws_args[@]}" \
+        --repository-names "$expected_name" \
+        --output json
+    )"; then
+      fail "Unable to read the effective ECR scanning configuration for ${expected_name}."
+    fi
+
+    if ! echo "$REPOSITORY_SCANNING_JSON" |
+      jq -e \
+        --arg name "$expected_name" \
+        --arg arn "$expected_arn" '
+          (.failures | type == "array" and length == 0)
+          and (.scanningConfigurations | type == "array" and length == 1)
+          and (
+            .scanningConfigurations[0]
+            | .repositoryName == $name
+              and .repositoryArn == $arn
+              and .scanFrequency == "CONTINUOUS_SCAN"
+          )
+        ' >/dev/null; then
+      echo "$REPOSITORY_SCANNING_JSON" | jq .
+      fail "ECR repository ${expected_name} is not covered by effective ENHANCED CONTINUOUS_SCAN."
+    fi
+
+    # scanOnPush may be false with registry-level enhanced continuous scanning.
+    success "ECR repository has effective CONTINUOUS_SCAN coverage: ${expected_name}"
+    VALIDATED_CONTINUOUS_SCAN_REPOSITORIES=$((VALIDATED_CONTINUOUS_SCAN_REPOSITORIES + 1))
+  fi
+
   VALIDATED_REPOSITORY_COUNT=$((VALIDATED_REPOSITORY_COUNT + 1))
 done < <(echo "$ECR_REPOSITORIES_JSON" | jq -c 'to_entries[]')
+
+if [[ "$VALIDATE_ENHANCED_ECR_SCANNING" == "true" ]]; then
+  ECR_SCANNING_SUMMARY="ENHANCED / CONTINUOUS_SCAN verified for ${VALIDATED_CONTINUOUS_SCAN_REPOSITORIES} of ${ECR_REPOSITORY_COUNT} repositories"
+fi
 
 section "ECR Summary"
 
@@ -342,6 +450,7 @@ Configured repositories:        ${ECR_REPOSITORY_COUNT}
 Validated repositories:         ${VALIDATED_REPOSITORY_COUNT}
 Expected ECR force_delete:      ${EXPECTED_ECR_FORCE_DELETE}
 Expected ECR CMK ARN:           ${EXPECTED_ECR_CMK_ARN}
+ECR scanning:                   ${ECR_SCANNING_SUMMARY}
 SUMMARY
 
 section "Validation Result"
