@@ -67,6 +67,7 @@ resource "aws_lb_listener" "https" {
 }
 
 resource "aws_lb_target_group" "target_groups" {
+  #checkov:skip=CKV_AWS_378:TLS terminates at the HTTPS-only ALB listener; private Fargate targets intentionally use HTTP behind constrained ALB-to-task security-group rules. Runtime validation checks listener, forwarding rules, and SG paths.
   for_each = var.services
 
   name        = "${var.name_prefix}-${each.key}"
