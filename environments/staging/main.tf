@@ -38,4 +38,5 @@ module "baseline" {
   alb_ingress_cidrs                  = var.alb_ingress_cidrs
   alb_ssl_policy                     = var.alb_ssl_policy
   ecs_services                       = var.ecs_services
+  fargate_platform_version           = var.fargate_platform_version
 }

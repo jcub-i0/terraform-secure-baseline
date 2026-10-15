@@ -14,9 +14,9 @@ fargate_platform_version_at_least() {
   local minimum_minor
   local minimum_patch
 
-  # AWS documents LATEST as GuardDuty-compatible for Linux Fargate. The baseline
-  # currently pins 1.4.0, but accepting LATEST keeps this helper correct if the
-  # module interface is intentionally expanded later.
+  # GuardDuty Runtime Monitoring requires Linux Fargate platform 1.4.0 or later.
+  # LATEST is accepted as meeting this minimum; explicitly pinned versions
+  # must be compared against the minimum supported version.
   if [[ "$actual_version" == "LATEST" ]]; then
     return 0
   fi

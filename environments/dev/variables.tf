@@ -338,3 +338,9 @@ variable "ecs_services" {
 
   default = {}
 }
+
+variable "fargate_platform_version" {
+  description = "AWS Fargate platform version. Defaults to the latest available platform."
+  type        = string
+  default     = "LATEST"
+}

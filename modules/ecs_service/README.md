@@ -63,7 +63,7 @@ Application Auto Scaling creates and manages the CloudWatch alarms associated wi
 | `cluster_name` | `string` | Yes | — | ECS cluster name used to construct Application Auto Scaling resource IDs. |
 | `compute_private_subnet_ids` | `set(string)` | Yes | — | Compute-private subnet IDs used by Fargate tasks. |
 | `cloudwatch_retention_days` | `number` | Yes | — | Retention period for ECS CloudWatch log groups. |
-| `platform_version` | `string` | No | `"1.4.0"` | AWS Fargate platform version used by ECS services. |
+| `platform_version` | `string` | No | `"LATEST"` | AWS Fargate platform version used by ECS services. |
 | `services` | `map(object(...))` | No | `{}` | Deployable ECS/Fargate services keyed by stable service name. |
 | `logs_cmk_arn` | `string` | Yes | — | ARN of the customer-managed KMS key used to encrypt ECS CloudWatch log groups. |
 | `execution_policy_ids` | `map(string)` | No | `{}` | ECS task execution IAM policy IDs keyed by service name and used as launch-readiness dependencies. |
@@ -226,11 +226,7 @@ through `cpu_architecture`.
 
 The module validates supported Fargate CPU and memory combinations before deployment.
 
-The default Fargate platform version is:
-
-```text
-1.4.0
-```
+The Fargate platform version defaults to `LATEST`, but it can be explicitly set to a specific version.
 
 ## Task Networking
 
