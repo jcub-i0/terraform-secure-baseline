@@ -1,9 +1,10 @@
 # EC2 ISOLATION LAMBDA RESOURCES
 ## PACKAGE EC2 ISOLATION LAMBDA
 resource "archive_file" "lambda_ec2_isolation" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/ec2_isolation.py"
-  output_path = "${path.module}/lambda/ec2_isolation.zip"
+  type             = "zip"
+  source_file      = "${path.module}/lambda/ec2_isolation.py"
+  output_path      = "${path.module}/lambda/ec2_isolation.zip"
+  output_file_mode = "0644"
 }
 
 ## EC2 ISOLATION LAMBDA FUNCTION
@@ -252,9 +253,10 @@ resource "aws_cloudwatch_metric_alarm" "ec2_isolation_dlq_visible_messages" {
 # EC2 ROLLBACK LAMBDA RESOURCES
 ## PACKAGE EC2 ROLLBACK LAMBDA
 resource "archive_file" "lambda_ec2_rollback" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/ec2_rollback.py"
-  output_path = "${path.module}/lambda/ec2_rollback.zip"
+  type             = "zip"
+  source_file      = "${path.module}/lambda/ec2_rollback.py"
+  output_path      = "${path.module}/lambda/ec2_rollback.zip"
+  output_file_mode = "0644"
 }
 
 ## EC2 ROLLBACK LAMBDA FUNCTION
@@ -589,13 +591,15 @@ resource "aws_cloudwatch_metric_alarm" "ec2_rollback_dlq_visible_messages" {
 
 # IP ENRICHMENT LAMBDA RESOURCES
 resource "archive_file" "lambda_ip_enrichment" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/ip_enrichment.py"
-  output_path = "${path.module}/lambda/ip_enrichment.zip"
+  type             = "zip"
+  source_file      = "${path.module}/lambda/ip_enrichment.py"
+  output_path      = "${path.module}/lambda/ip_enrichment.zip"
+  output_file_mode = "0644"
 }
 
 resource "aws_lambda_function" "ip_enrichment" {
   #checkov:skip=CKV_AWS_116:Async invocation failures are routed through aws_lambda_function_event_invoke_config.ip_enrichment; EventBridge delivery has a separate DLQ.
+  #checkov:skip=CKV_AWS_117:IP Enrichment intentionally runs outside the customer VPC to access the public AbuseIPDB HTTPS API without NAT; the function has no private VPC resource dependencies.
 
   function_name                  = "${var.name_prefix}-ip-enrichment"
   description                    = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"

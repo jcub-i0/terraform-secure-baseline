@@ -7,6 +7,7 @@ locals {
 
 # CREATE MAIN VPC
 resource "aws_vpc" "main" {
+  #checkov:skip=CKV2_AWS_11:VPC Flow Logs are provisioned by the sibling logging module and verified against live AWS by validate-logging.sh.
   cidr_block           = var.main_vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
