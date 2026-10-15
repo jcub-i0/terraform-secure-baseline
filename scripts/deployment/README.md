@@ -193,6 +193,14 @@ The image-publication scripts and `Deploy Application` workflow own image public
 
 ## Exact Terraform Plan Artifacts
 
+For workload Apply runs, the Plan job also bundles the three Terraform-generated Lambda
+ZIPs (`ec2_isolation`, `ec2_rollback`, and `ip_enrichment`) under `lambda/` inside
+the saved-plan artifact. Their SHA-256 checksums are appended to the existing saved-plan
+checksum manifest. Apply verifies that expanded manifest before restoring the ZIPs to
+`modules/automation/lambda/` and applying the exact reviewed plan. It does not rerun
+`terraform plan` or rebuild the ZIPs as a separate workflow step. The source files
+inside the archives use Terraform-managed `0644` permissions for deterministic ZIP hashes.
+
 `terraform-plan-artifact.sh` supports `create` and `verify`, with `--mode apply` or `--mode destroy`. Callers supply `--working-directory`, `--artifact-directory`, `--artifact-basename`, and a non-secret `--context-json` object. Workflows own the AWS identity, policy, approval, and eventual Terraform apply.
 
 For a basename such as `baseline-destroy`, the helper produces:
