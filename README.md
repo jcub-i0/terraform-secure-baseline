@@ -644,8 +644,16 @@ no ALB and scheduled AWS Backup disabled. After #861 restored the null-digest
 sample, the maintainer separately confirmed cleanup, a no-change plan, and local
 validation before intentional dev teardown. These are historical, distinct
 configurations; no active infrastructure is required to review their evidence.
+The separate October 16 production lifecycle completed publication, deployment,
+**16/16 PASS, 0 failures** validation with ALB and three protected Fargate tasks,
+retirement, and intentional destruction.
+[Production evidence run 38942204719](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38942204719)
+at `4598219b31c9f904ec3e644523c24c699d364c15` retained
+`baseline-validation-prod-38942204719-1` (ID `12063493033`), with validation
+timestamp **2026-10-16T17:46:25Z**. #866 then restored the production
+sample digest to `null` after the qualification image was deleted.
 The [changelog](CHANGELOG.md) retains full SHAs, timestamps, artifact identifiers,
-Checkov counts, and the production/ALB/restore qualification limits. Static
+workflow links, Checkov counts, and the remaining qualification limits. Static
 Analysis success includes Checkov report-integrity checks but does not mean
 zero Checkov failures; remaining findings are tracked in
 [#688](https://github.com/jcub-i0/terraform-secure-baseline/issues/688).
