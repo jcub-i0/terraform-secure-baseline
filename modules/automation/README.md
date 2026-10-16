@@ -89,11 +89,13 @@ When adding another Lambda, review its source/package dependency, IAM, routing, 
 [main.tf](main.tf) configures all three functions with the following settings;
 these are resource settings, not defaults exposed by this module's inputs:
 
-| Function | Runtime | Timeout | Memory | Tracing | Workload VPC attachment | Reserved Concurrency Rate |
+| Function | Runtime | Timeout | Memory | Tracing | Workload VPC attachment | Reserved Concurrency |
 |---|---|---:|---:|---|---|---|
 | EC2 Isolation | `python3.12` | 60 seconds | 256 MB | `Active` | Supplied serverless-private subnets and isolation Lambda SG | `5` |
 | EC2 Rollback | `python3.12` | 60 seconds | 256 MB | `Active` | Supplied serverless-private subnets and rollback Lambda SG | `1` |
 | IP Enrichment | `python3.12` | 60 seconds | 256 MB | `Active` | None | `2` |
+
+The reservations total eight concurrent executions, not a per-second request rate. Check the account concurrency quota and required unreserved capacity before deployment; low-quota accounts may need an increase. These values are resource settings, not exposed module inputs.
 
 The module creates the automation resources independently of the deployment profile. Profile and workload settings are resolved by the calling baseline.
 

@@ -141,13 +141,12 @@ All three roles use the same Lambda service-principal trust document with no sou
 
 ### EC2 Isolation Lambda Permissions
 
-The custom policy grants `ec2:DescribeInstances`, `ec2:ModifyInstanceAttribute`, `ec2:DescribeSecurityGroups`, `ec2:CreateTags`, and `ec2:CreateSnapshot` on `Resource = "*"`, without instance/tag conditions. The handler's `IsolationAllowed`, product, severity, and state checks are application logic, not IAM-enforced restrictions on this role.
+The custom policy retains `ec2:DescribeInstances` on `Resource = "*"`, scopes instance modification and tagging to the workload account/Region, and limits instance tag keys to incident-response metadata. Snapshot creation authorizes source volumes in that account/Region and new snapshot ARNs; snapshot tagging is restricted to `CreateSnapshot` and the declared tag keys. The handler's `IsolationAllowed`, product, severity, and state checks are application logic, not IAM-enforced restrictions on this role.
 
 The policy supports:
 
 - Describe instances
 - Modify instance attributes
-- Describe security groups
 - Create tags
 - Create snapshots
 - Publish alerts to the SecOps SNS topic
@@ -155,7 +154,7 @@ The policy supports:
 
 ### EC2 Rollback Lambda Permissions
 
-The custom policy grants `ec2:DescribeInstances`, `ec2:ModifyInstanceAttribute`, `ec2:DescribeSecurityGroups`, and `ec2:CreateTags` on `Resource = "*"`. It contains no caller-approval, ticket, environment-tag, or quarantined-instance condition.
+The custom policy grants `ec2:DescribeInstances` and `ec2:DescribeSecurityGroups` on `Resource = "*"`. It scopes `ec2:ModifyInstanceAttribute` and `ec2:CreateTags` to instance ARNs in the workload account/Region. It contains no caller-approval, ticket, environment-tag, or quarantined-instance condition.
 
 The policy supports:
 
@@ -178,7 +177,7 @@ The IP Enrichment Lambda policy allows:
 
 Each custom Lambda policy also grants `sqs:SendMessage` to that workflow's supplied DLQ ARN. The three DLQ ARN inputs are required.
 
-IP Enrichment receives `secretsmanager:GetSecretValue` and `DescribeSecret` for the supplied secret and `kms:Decrypt`/`DescribeKey` for the supplied Secrets Manager key. Its `securityhub:BatchUpdateFindings` grant uses `Resource = "*"` and is present regardless of the runtime `WRITE_TO_SECURITYHUB` setting. Disabling writeback changes handler behavior, not this role policy.
+IP Enrichment receives `secretsmanager:GetSecretValue` and `DescribeSecret` for the supplied secret and `kms:Decrypt`/`DescribeKey` for the supplied Secrets Manager key. Its `securityhub:BatchUpdateFindings` grant is scoped to `arn:<partition>:securityhub:<primary_region>:<account_id>:hub/default` and is present regardless of the runtime `WRITE_TO_SECURITYHUB` setting. Disabling writeback changes handler behavior, not this role policy.
 
 All three custom policies grant `sns:Publish` on the supplied topic and logs-key `kms:GenerateDataKey*`, `Decrypt`, and `DescribeKey`. Review key and resource policies separately. The Lambda role ARNs are consumed by automation and monitoring resources; role existence alone does not prove policy propagation, event authorization, or successful execution.
 
@@ -225,6 +224,7 @@ Primary actions:
 
 - `firehose:PutRecord`
 - `firehose:PutRecordBatch`
+- `kms:GenerateDataKey` and `kms:Decrypt` on the logs CMK, constrained by `kms:ViaService` to the regional Firehose endpoint
 
 ### Firehose Flow Logs Role
 
@@ -287,13 +287,7 @@ The role includes a source account condition using:
 "aws:SourceAccount" = var.account_id
 ```
 
-The role is attached to the AWS-managed:
-
-```text
-AmazonSSMAutomationRole
-```
-
-It also includes an inline policy granting `s3:GetBucketPublicAccessBlock`, `PutBucketPublicAccessBlock`, `GetBucketPolicy`, and `PutBucketPolicy` on `Resource = "*"`. This is broader than a single baseline bucket and can modify bucket policies, not just inspect them. The source-account trust condition does not scope those S3 resources.
+The inline policy grants only `s3:GetBucketPublicAccessBlock` and `s3:PutBucketPublicAccessBlock` on `arn:<partition>:s3:::*`, constrained by `s3:ResourceAccount` to the workload account. This can affect account-owned buckets beyond the baseline, but does not grant bucket-policy editing. The broad `AmazonSSMAutomationRole` attachment has been removed.
 
 ---
 
@@ -1120,8 +1114,8 @@ Check:
 - Config remediation role exists
 - Trust policy allows `ssm.amazonaws.com`
 - Source account condition matches the workload account
-- `AmazonSSMAutomationRole` is attached
-- Inline remediation policy includes the required service actions
+- Inline remediation policy permits the required bucket public-access-block operations
+- The target bucket belongs to the workload account required by `s3:ResourceAccount`
 
 ---
 

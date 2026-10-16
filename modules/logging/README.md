@@ -267,9 +267,9 @@ errors/vpc-flow-logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestam
 ```
 
 This configures an S3 archival path in addition to caller-selected CloudWatch
-retention. The `kms_key_arn` above belongs to the extended-S3 destination; the
-resource does not explicitly configure a separate delivery-stream
-`server_side_encryption` block. It also declares no record transformation,
+retention. The `kms_key_arn` above belongs to the extended-S3 destination; a
+separate delivery-stream `server_side_encryption` block also enables
+`CUSTOMER_MANAGED_CMK` encryption using the logs CMK. The resource declares no record transformation,
 decompression, or format-conversion processor. Inspect a delivered object
 before assuming its decoded contents are plain flow-log lines.
 

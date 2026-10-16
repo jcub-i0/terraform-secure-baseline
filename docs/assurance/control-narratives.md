@@ -311,9 +311,10 @@ SecOps-Operator-Prod
 
 Permission-set names are distinct, for example `SecOps-Operator-dev` and
 `SecOps-Administrator-secops`. The central security account requires
-the administrative persona and disables Operator. Analyst and Engineer are
-optional; Engineer includes wildcard-resource response actions, and Administrator
-attaches `AdministratorAccess`.
+the administrative persona and disables Operator. Administrator attaches
+`AdministratorAccess`; additional workforce access is customer-owned. The optional
+Analyst/Engineer personas and their policies/assignments were removed; existing
+users require replacement-access review before applying that migration.
 
 Operator's inline policy omits direct EC2 mutation and Lambda invocation.
 The control-plane caller derives the workload's prefixed bus ARN from
@@ -950,7 +951,7 @@ stores the AbuseIPDB key through a normal secret-version value. Do not claim
 all secret values are absent from Terraform state and plan artifacts.
 
 The logs bucket uses versioning and lifecycle rules but not Object Lock. The
-six workload keys have rotation and a deletion window without effective
+seven workload keys have rotation and a deletion window without effective
 production destruction guards. A pending-deletion key is unavailable for KMS
 cryptographic operations; retaining encrypted records without usable key access
 is not sufficient. [AWS KMS deletion guidance](https://docs.aws.amazon.com/kms/latest/developerguide/deleting-keys.html)

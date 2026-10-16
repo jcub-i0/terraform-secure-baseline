@@ -162,7 +162,8 @@ attachments, and account assignments. Example **group names** are
 `SecOps-Operator-Dev`, `SecOps-Operator-Staging`, and `SecOps-Operator-Prod`;
 permission-set names use the environment suffix, such as `SecOps-Operator-dev`.
 The central security account requires
-`SecOps-Administrator-secops`; Analyst and Engineer are optional.
+`SecOps-Administrator-secops`; additional workforce access is customer-owned.
+The optional Analyst/Engineer personas and their associated interfaces were removed.
 
 The module does not create human users, manage group membership, or configure
 the upstream identity provider's authentication policy.
@@ -236,9 +237,9 @@ an Environment subject; Apply selects Environment or branch subjects, not both a
 an AND condition. Actual GitHub reviewer/branch protections are separately managed.
 
 The [persona module](../../modules/identity_center/main.tf) includes
-`AdministratorAccess` and Engineer response actions on wildcard resources.
-Customer-managed policy references neither create target-account policies nor
-certify their contents. Retain exact grants, membership, approved provisioning,
+`AdministratorAccess` and an Operator policy for scoped rollback-event publication.
+It no longer attaches customer-managed log policies to optional workforce personas.
+Retain exact grants, membership, approved provisioning,
 periodic review, removal, and exception handling rather than relying on role names.
 
 ---
@@ -754,13 +755,14 @@ A.8.9 addresses establishing and maintaining secure configurations.
 
 Terraform defines selected desired properties with explicit exceptions. EC2
 security-group attachments and incident tags are ignored for drift correction;
-AMI lookup can change a plan without a source change. Config uses a fixed recorder
-scope and selected rules, not complete evaluation of every AWS resource.
+AMI lookup can change a plan without a source change. Config uses all-supported
+recording and selected rules, not complete evaluation of every AWS resource.
 
 Retain effective inputs, provider/lockfile context, desired/observed comparisons,
 reviewed exceptions and change records. [Config recording](../../modules/security/config_baseline/main.tf)
-still includes IAM types when IAM rules are disabled and omits KMS keys despite
-enabled KMS rules. Validate actual applicability/results before asserting coverage.
+includes KMS keys and global IAM in the designated supported Region, independently
+of the IAM rule-family toggle. Validate actual applicability/results before
+asserting coverage.
 
 ---
 

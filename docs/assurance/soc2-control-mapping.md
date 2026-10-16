@@ -173,8 +173,9 @@ and [module](../../modules/identity_center/main.tf) discover an existing instanc
 and create configured groups, permission sets, policy attachments, and account
 assignments. Workload group names such as `SecOps-Operator-Dev` differ from
 permission-set names such as `SecOps-Operator-dev`. The central security account
-requires `SecOps-Administrator-secops`; Analyst and Engineer are
-optional, and Operator is disabled there.
+requires `SecOps-Administrator-secops`, and Operator is disabled there. Additional
+workforce access is customer-owned; the optional Analyst/Engineer interfaces
+have been removed.
 
 Human users, group membership, upstream authentication/MFA policy, employment
 status, and periodic access reviews are not managed by this module.
@@ -190,8 +191,8 @@ status, and periodic access reviews are not managed by this module.
 
 The resources support centralized AWS role assignment, but group naming and
 assignment presence do not prove least privilege or an approved access lifecycle.
-Administrator attaches `AdministratorAccess`; Engineer includes response actions
-on wildcard resources. Review effective permissions, membership, assignment
+Administrator attaches `AdministratorAccess`; Operator scopes rollback-event
+publication to the configured bus. Review effective permissions, membership, assignment
 principals, approval/removal records, and actual access tests. The
 [control-plane validator](../../scripts/validation/validate-control-plane.sh)
 does not compare complete policies, membership, or each assignment principal to
@@ -987,9 +988,10 @@ Examples include:
 ### Narrative
 
 Encryption and key-change visibility support data protection, but production
-selection does not add workload-key destruction guards. The six keys in
+selection does not add workload-key destruction guards. The seven keys in
 [security](../../modules/security/main.tf) have rotation and deletion windows;
-five explicitly allow Terraform destruction and the Lambda key has no guard.
+five explicitly allow Terraform destruction; the Lambda and RDS Insights keys
+have no guard.
 Scheduling deletion makes a key unavailable for cryptographic operations while
 pending. Preserve the keys and access paths required by retained data; a tamper
 alert does not reverse deletion or establish recoverability.

@@ -1959,6 +1959,7 @@ aws inspector2 batch-get-account-status \
 Expected:
 
 - If `effective_inspector_enabled = true`, Inspector status exactly matches `effective_inspector_resource_types`, including EC2, ECR, Lambda, Lambda code, and code-repository scanning.
+- With managed ECR repositories and Inspector enabled, `validate-ecr.sh` separately requires regional `ENHANCED` scanning and effective `CONTINUOUS_SCAN` for every repository. Legacy `scanOnPush=false` does not contradict that coverage. Disabled Inspector or an empty repository inventory does not establish live scanning.
 - If disabled by profile or override, Inspector may report disabled resource states.
 
 The validator uses the effective Terraform output and does not infer ECR from the repository map. The baseline and workload roots propagate `local.effective_inspector_resource_types`, so automatic ECR inclusion is validated through that authoritative effective output.
@@ -2656,7 +2657,7 @@ If backup is explicitly enabled for `development` or `minimal`, the default sche
 
 | Check | Evidence established |
 |---|---|
-| Live RDS | Expected DB identifier/ARN, Multi-AZ, DB subnet-group **name**, exact VPC SG set, deletion protection, native backup retention, public accessibility, and storage-encryption flag |
+| Live RDS | Expected DB identifier/ARN, Multi-AZ, DB subnet-group **name**, exact VPC SG set, deletion protection, native backup retention, public accessibility, storage-encryption flag, 60-second Enhanced Monitoring/role, and Insights enablement/KMS key |
 | RDS deletion-time intent | Resource-backed `skip_final_snapshot`, `delete_automated_backups`, and final-snapshot identifier consistency; these are not all live RDS API settings |
 | Backup vault | Live name/ARN/encryption and Terraform `force_destroy` consistency with `lifecycle_protection`; `force_destroy` is Terraform deletion behavior, not a live vault API flag |
 | Scheduled Backup | Effective enablement, plan/selection presence or absence, rule schedule/retention/vault, service-role/tag selection, and EC2/RDS `Backup` tags |

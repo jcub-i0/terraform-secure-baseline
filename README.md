@@ -49,7 +49,7 @@ The platform provides:
 ### Governance and identity
 
 - AWS Organizations OU separation for `Security`, `Workloads/NonProd`, and `Workloads/Prod`
-- Centralized IAM Identity Center access management
+- Centralized IAM Identity Center management of workload `SecOps-Operator` and security-operations `SecOps-Administrator`; additional workforce access is customer-owned
 - Dedicated `SecOps-Administrator` access for security operations
 - Environment-specific workload access boundaries
 - GitHub Actions OIDC federation for Terraform and application publication
@@ -63,7 +63,7 @@ The platform provides:
 - Terraform-managed VPC endpoints for private AWS service access
 - KMS-backed encryption across state, logs, messaging, application resources, and backups
 - Separately managed state storage and workload logs storage, with different deletion and retention controls
-- Private RDS PostgreSQL with profile-derived Multi-AZ and deletion-time settings
+- Private RDS PostgreSQL with profile-derived Multi-AZ and deletion-time settings, 60-second Enhanced Monitoring, and a dedicated Performance/Database Insights CMK
 
 ### Security operations
 
@@ -174,6 +174,8 @@ GitHub Actions authenticates to AWS using OIDC. Plan, Apply, image-publication, 
 ### Exact reviewed-plan application
 
 The protected workload Apply workflow generates its own saved Terraform plan, readable output, metadata, and checksum before approval. The Apply job verifies and applies that exact binary plan without replanning.
+The artifact also carries the three generated Lambda ZIPs and their SHA-256
+checksums so the separate Apply runner can restore the reviewed packages.
 
 ### Resource-granular readiness
 
@@ -247,7 +249,8 @@ digest. Profiles are not an empty-environment or zero-cost switch.
 The supplied EC2 first-boot script still needs Ubuntu repositories; SSM endpoint
 connectivity alone does not satisfy that requirement. Network Firewall inspection
 applies to the configured compute path, not every Lambda or account resource.
-The IP enrichment Lambda is not attached to the workload VPC.
+The IP enrichment Lambda is not attached to the workload VPC: its public HTTPS
+requests to AbuseIPDB bypass VPC Network Firewall inspection.
 
 ## Security Architecture
 
@@ -277,6 +280,16 @@ EKS_ADDON_MANAGEMENT         = NONE
 ```
 
 Central Security Hub CSPM and GuardDuty governance reduce account-level drift while workload Terraform retains AWS Config, Inspector, remediation, logging, and incident-response responsibilities.
+
+When enabled, Config records all supported resource types, including KMS keys
+and global IAM in the designated `us-east-1` Region. The separate S3 public-access
+remediation remains enabled independently of the optional S3 rule family; only
+the redundant catalog rule was removed. Inspector ECR validation checks regional
+`ENHANCED` scanning and each managed repository's effective `CONTINUOUS_SCAN`.
+Recording/scanning configuration does not prove remediation or vulnerability
+resolution. See the [release migration notes](CHANGELOG.md) for Config scope,
+default security-group adoption, removed Identity Center personas, and RDS
+Insights-key migration requirements.
 
 The workload VPC endpoint layer pre-creates `guardduty-data`; endpoint validation requires exactly one such endpoint and exact agreement between the live VPC Endpoint ID and Terraform output. Protected Fargate tasks also use Terraform-owned `ecr.api`, `ecr.dkr`, and S3 private paths.
 
@@ -357,6 +370,11 @@ Container Insights performance logs use:
 ```
 
 Both logging paths are Terraform-owned and use the effective workload retention policy and logs CMK.
+
+The workload `fargate_platform_version` input defaults to `LATEST` and is passed
+through baseline to the ECS service module. The development sample remains
+registered but unreleased (`image_digest = null`); its temporary qualification
+image was removed from the sample after testing.
 
 ### Scaling ownership
 
@@ -481,13 +499,21 @@ The self-contained `Terraform Apply` workflow follows:
 internal Plan job
   -> readable plan
   -> binary saved plan
+  -> generated Lambda ZIPs
   -> metadata + checksum
   -> protected approval
   -> verify exact artifact
+  -> restore verified Lambda ZIPs
   -> apply exact binary plan
 ```
 
 Workload Plan/Apply paths require a valid `DEPLOYMENT_PROFILE` and fail closed when it is missing or invalid.
+
+The internal Plan job bundles `ec2_isolation.zip`, `ec2_rollback.zip`, and
+`ip_enrichment.zip` under `lambda/` in the saved-plan artifact and adds their
+hashes to its manifest. Apply verifies them before restoration to
+`modules/automation/lambda/`; it does not separately rebuild the archives.
+Archive entries use normalized `0644` modes to avoid permission-driven hash drift.
 
 ### Application publication
 
@@ -597,7 +623,8 @@ ALB, alarm, and GuardDuty contracts, with live instrumentation requirements scop
 to applicable running workloads. Administrative configuration, member-account
 realization, and end-user access require their respective evidence layers.
 
-`validate-backup.sh` compares resource-backed RDS resilience and AWS Backup settings.
+`validate-backup.sh` compares resource-backed RDS resilience, Enhanced Monitoring,
+Insights encryption, and AWS Backup settings.
 It is not an exhaustive database configuration, SQL, failover, or application-data
 audit. Restore Testing configuration, actual execution, application validation, and
 temporary-resource cleanup are separate results; some warning states can coexist
@@ -609,6 +636,19 @@ execution time, warnings, and reviewer decisions with the evidence. The summarie
 do not automatically establish every item of provenance or a signed custody chain.
 Earlier qualification remains associated with its original configuration and run;
 this README does not relabel it as fresh testing of the current checkout.
+
+For v1.11.1, [evidence run 38680334147](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38680334147)
+recorded **16/16 PASS** on October 15, 2026 at `c3bc2e6c`: `dev`, `us-east-1`,
+`development` / `nat_only`, one service and three protected Fargate tasks, with
+no ALB and scheduled AWS Backup disabled. After #861 restored the null-digest
+sample, the maintainer separately confirmed cleanup, a no-change plan, and local
+validation before intentional dev teardown. These are historical, distinct
+configurations; no active infrastructure is required to review their evidence.
+The [changelog](CHANGELOG.md) retains full SHAs, timestamps, artifact identifiers,
+Checkov counts, and the production/ALB/restore qualification limits. Static
+Analysis success includes Checkov report-integrity checks but does not mean
+zero Checkov failures; remaining findings are tracked in
+[#688](https://github.com/jcub-i0/terraform-secure-baseline/issues/688).
 
 Detailed guidance:
 
@@ -739,6 +779,9 @@ switch production into a development profile. The reviewed Stage-1 plan derives
 zero ECS capacity and removes the necessary RDS/ALB/firewall deletion protections
 while retaining the production durable-data boundaries. ECR/ECS force deletion
 and Backup-vault force destruction remain disabled for the production profile.
+Centralized logs instead switch from `force_destroy=false` to `true` after the
+approved Stage-1 Apply. Final destruction can purge those logs; required audit
+records and usable keys must be preserved outside that deletion scope.
 
 The implemented workflow separates these stages:
 
@@ -748,7 +791,6 @@ reviewed Stage-1 plan and Apply
   -> separately approved durable-data cleanup
   -> retirement readiness validation
   -> saved workload destroy plan
-  -> separately planned and approved Identity Center cleanup
   -> final workload-destroy approval
   -> artifact verification and readiness recheck
   -> exact saved-plan Apply
@@ -759,6 +801,13 @@ though profile-derived protections can apply elsewhere. Cleanup re-inventories a
 execution; it does not replay a frozen item manifest. Rejecting a later approval
 does not undo earlier cleanup. Required evidence, recovery artifacts, secrets, and
 usable encryption keys need a preservation plan outside the deletion scope.
+
+Production Destroy requires an audit-log disposition acknowledgment/reference
+and checks the live bucket-policy exception for the Apply role before durable
+cleanup and final destruction. These checks do not prove archival or effective
+delete authorization. Workload Destroy no longer changes Identity Center;
+legacy Analyst/Engineer dependencies require a separately reviewed access
+migration before retiring their workload-owned policies.
 
 Follow the [retirement runbook](docs/production-retirement.md), not this overview,
 for the exact inputs, approval gates, and recovery boundaries.
