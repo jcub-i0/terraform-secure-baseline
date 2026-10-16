@@ -1,9 +1,9 @@
 # Changelog
 
-This changelog is ordered newest-first. The `Unreleased` section records
-proposed release content; it is not evidence that a GitHub release has been
-tagged or published. Consult the repository's GitHub Releases for publication
-status and retain tested commits and evidence separately.
+This changelog is ordered newest-first. A versioned entry documents its
+release change set; it does not independently establish that a GitHub release
+has been tagged or published. Consult the repository's GitHub Releases for
+publication status and retain tested commits and evidence separately.
 
 Historical release entries preserve their then-current functionality and
 qualification claims. They are not current deployment instructions or proof
@@ -11,15 +11,15 @@ that earlier tests were repeated on subsequent commits. Use the
 [README](README.md), [adoption guide](docs/adoption-guide.md), and current
 module/runbooks for the implemented contract.
 
-## Unreleased — v1.11.1 candidate: Security Hardening and Operational Safeguards
+## v1.11.1 — Security Hardening and Operational Safeguards
 
-This candidate covers the published `v1.11.0` (`18e579f7`) through `main` at
-`4aac66a71153d5afa2c70a568f1d46fdcef8dd48` (October 15, 2026). The maintainer
-has explicitly retained **v1.11.1**, including the **breaking Identity Center
-interface change** below, because no external customers or repository consumers
-currently depend on those removed interfaces. This decision does not make the
-change backward compatible. Publication remains separately authorized; CI
-success alone is not production qualification.
+This release entry covers the published `v1.11.0` (`18e579f7`) through the
+reviewed implementation on `main` at `4aac66a71153d5afa2c70a568f1d46fdcef8dd48`
+(October 15, 2026). The maintainer explicitly retained **v1.11.1**, including
+the **breaking Identity Center interface change** below, because no external
+customers or repository consumers currently depend on those removed interfaces.
+This decision does not make the change backward compatible. The release entry
+is not proof of publication; CI success alone is not production qualification.
 
 ### Hardening and Corrections
 
