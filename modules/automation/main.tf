@@ -268,8 +268,8 @@ resource "aws_lambda_function" "ec2_rollback" {
   role                           = var.lambda_ec2_rollback_role_arn
   handler                        = "ec2_rollback.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = data.archive_file.ec2_rollback.output_path
-  source_code_hash               = data.archive_file.ec2_rollback.output_base64sha256
+  filename                       = data.archive_file.lambda_ec2_rollback.output_path
+  source_code_hash               = data.archive_file.lambda_ec2_rollback.output_base64sha256
   timeout                        = 60
   memory_size                    = 256
   kms_key_arn                    = var.lambda_cmk_arn
@@ -606,8 +606,8 @@ resource "aws_lambda_function" "ip_enrichment" {
   role                           = var.lambda_ip_enrichment_role_arn
   handler                        = "ip_enrichment.lambda_handler"
   runtime                        = "python3.12"
-  filename                       = data.archive_file.ip_enrichment.output_path
-  source_code_hash               = data.archive_file.ip_enrichmnet.output_base64sha256
+  filename                       = data.archive_file.lambda_ip_enrichment.output_path
+  source_code_hash               = data.archive_file.lambda_ip_enrichment.output_base64sha256
   timeout                        = 60
   memory_size                    = 256
   kms_key_arn                    = var.lambda_cmk_arn
