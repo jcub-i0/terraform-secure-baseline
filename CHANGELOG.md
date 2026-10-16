@@ -71,7 +71,7 @@ is not proof of publication; CI success alone is not production qualification.
 
 ### Functional and Operational Changes
 
-- **Saved-plan Lambda deployment:** Normalize all three archive data sources to
+- **Saved-plan Lambda deployment:** #855/#856 normalized all three archive resources to
   `output_file_mode = "0644"` to avoid permission-driven ZIP hash drift. The
   internal Plan job in `Terraform Apply` bundles the generated isolation,
   rollback, and enrichment ZIPs with the reviewed plan and appends their SHA-256
@@ -79,7 +79,7 @@ is not proof of publication; CI success alone is not production qualification.
   on its separate runner before applying the saved plan; no new plan or separate
   Apply-side archive build is introduced. This fixes missing local ZIPs during
   saved-plan application. (#855, #856) [#862](https://github.com/jcub-i0/terraform-secure-baseline/pull/862)
-  replaced the managed archives with `data.archive_file` data sources so all
+  subsequently replaced the managed archives with `data.archive_file` data sources so all
   three ZIPs are generated during planning, including from fresh state, before
   the workflow bundles them.
 - **Fargate runtime and application qualification:** Expose
@@ -168,10 +168,13 @@ is not proof of publication; CI success alone is not production qualification.
   [#864](https://github.com/jcub-i0/terraform-secure-baseline/pull/864).
   [Application Apply run 38939703297](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38939703297)
   passed at `4598219b31c9f904ec3e644523c24c699d364c15` with **21 added, 2 changed,
-  0 destroyed**. The maintainer reported production baseline validation
-  **16/16 PASS**, including three Fargate tasks, three running GuardDuty agents,
-  healthy runtime coverage, ALB, and operational alarms; no separate timestamped
-  validation artifact is identified here.
+  0 destroyed**.
+  [Production baseline evidence run 38942204719](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38942204719)
+  at `4598219b31c9f904ec3e644523c24c699d364c15` retained artifact
+  `baseline-validation-prod-38942204719-1` (ID `12063493033`), recording
+  **16/16 PASS, 0 failures** at **2026-10-16T17:46:25Z**, including three Fargate
+  tasks, three running GuardDuty agents, healthy runtime coverage, ALB, and
+  operational alarms.
   [Retirement Stage 1 run 38943444739](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38943444739)
   passed with **0 added, 5 changed, 0 destroyed**, and
   [Destroy run 38944960317](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38944960317)
@@ -258,7 +261,7 @@ is not proof of publication; CI success alone is not production qualification.
   production retirement/durable cleanup, Network Firewall egress, or optional
   ALB ingress. Historical tests retain their original revision/configuration.
   The separate October 16 production lifecycle above qualifies application
-  publication/deployment, reported live validation, retirement, and destroy;
+  publication/deployment, retained live validation, retirement, and destroy;
   it does not establish RDS failover, completed AWS Backup Restore Testing,
   or additional behavioral tests not recorded here.
   Neither these results nor the configured controls establish zero residual
