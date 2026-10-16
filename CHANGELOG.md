@@ -14,8 +14,9 @@ module/runbooks for the implemented contract.
 ## v1.11.1 — Security Hardening and Operational Safeguards
 
 This release entry covers the published `v1.11.0` (`18e579f7`) through the
-reviewed implementation on `main` at `4aac66a71153d5afa2c70a568f1d46fdcef8dd48`
-(October 15, 2026). The maintainer explicitly retained **v1.11.1**, including
+reviewed implementation and production sample reset on `main` at
+`bcef1c472a6fe8b1c852be1847fbdc229975d8b3` (October 16, 2026), including
+PRs #862–#864 and #866. The maintainer explicitly retained **v1.11.1**, including
 the **breaking Identity Center interface change** below, because no external
 customers or repository consumers currently depend on those removed interfaces.
 This decision does not make the change backward compatible. The release entry
@@ -70,14 +71,17 @@ is not proof of publication; CI success alone is not production qualification.
 
 ### Functional and Operational Changes
 
-- **Saved-plan Lambda deployment:** Normalize all three archive resources to
+- **Saved-plan Lambda deployment:** Normalize all three archive data sources to
   `output_file_mode = "0644"` to avoid permission-driven ZIP hash drift. The
   internal Plan job in `Terraform Apply` bundles the generated isolation,
   rollback, and enrichment ZIPs with the reviewed plan and appends their SHA-256
   hashes to its manifest. Apply verifies the manifest and restores those ZIPs
   on its separate runner before applying the saved plan; no new plan or separate
   Apply-side archive build is introduced. This fixes missing local ZIPs during
-  saved-plan application. (#855, #856)
+  saved-plan application. (#855, #856) [#862](https://github.com/jcub-i0/terraform-secure-baseline/pull/862)
+  replaced the managed archives with `data.archive_file` data sources so all
+  three ZIPs are generated during planning, including from fresh state, before
+  the workflow bundles them.
 - **Fargate runtime and application qualification:** Expose
   `fargate_platform_version` through the workload roots and baseline; its default
   changes from `1.4.0` to `LATEST`. The minimal HTTP fixture now runs as a non-root
@@ -87,6 +91,10 @@ is not proof of publication; CI success alone is not production qualification.
   scaling, health-alarm, and GuardDuty runtime capabilities predate this patch.
   Temporary digest selection and disabled ingress were restored to the original
   null-digest, optional-ingress sample by #861. (#835, #850, #853, #854, #861)
+- **Application base image:** [#863](https://github.com/jcub-i0/terraform-secure-baseline/pull/863)
+  changed the minimal HTTP application's Alpine base image from Amazon ECR
+  Public to Docker Hub, resolving the ECR Public HTTP 429 failures encountered
+  during production image publication.
 - **Inspector/ECR validation:** Require registry-level `ENHANCED` scanning and
   effective `CONTINUOUS_SCAN` for each managed repository when Inspector ECR is
   enabled. Legacy `scanOnPush=false` is not treated as missing enhanced scanning.
@@ -136,7 +144,7 @@ is not proof of publication; CI success alone is not production qualification.
   workloads to appropriate explicit groups before applying. Direct storage-module
   callers must provide `centralized_logs_force_destroy` and
   `rds_performance_insights_cmk_arn`. Archive mode normalization can cause a
-  one-time archive replacement/Lambda code update. Review Fargate `LATEST`
+  one-time archive regeneration/Lambda code update. Review Fargate `LATEST`
   behavior and any explicit platform override rather than assuming the former
   fixed platform selection remains in effect.
 - **Runtime limits:** Lambda concurrency reservations require account
@@ -148,6 +156,31 @@ is not proof of publication; CI success alone is not production qualification.
 
 ### Validation Evidence
 
+- **Production lifecycle (October 16, 2026):**
+  [Fresh Apply run 38928131042](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38928131042)
+  at `62a0ae8107fe82abb4a5f7d10b70a175d15bbc9a` (#862) passed with
+  **312 added, 0 changed, 0 destroyed**; the Apply log confirms all three Lambda
+  ZIP checksums `OK`.
+  [Publication run 38936199393](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38936199393)
+  passed from source `de00f93fabca5f6591766c0ae63b7dc7bd0936d3` (#863), resolving
+  `sha256:b0fab9cf198b8503b1f2909f8415a0a7d947c569d578e7feefc7d9d2ceebc6a1`
+  for `tf-secure-baseline-prod-test` and generating
+  [#864](https://github.com/jcub-i0/terraform-secure-baseline/pull/864).
+  [Application Apply run 38939703297](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38939703297)
+  passed at `4598219b31c9f904ec3e644523c24c699d364c15` with **21 added, 2 changed,
+  0 destroyed**. The maintainer reported production baseline validation
+  **16/16 PASS**, including three Fargate tasks, three running GuardDuty agents,
+  healthy runtime coverage, ALB, and operational alarms; no separate timestamped
+  validation artifact is identified here.
+  [Retirement Stage 1 run 38943444739](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38943444739)
+  passed with **0 added, 5 changed, 0 destroyed**, and
+  [Destroy run 38944960317](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38944960317)
+  passed with **333 resources destroyed**, both at the same `4598219b` revision.
+  The production workload was intentionally destroyed; these results do not
+  imply active infrastructure. After retirement deleted the qualification
+  image, [#866](https://github.com/jcub-i0/terraform-secure-baseline/pull/866)
+  (`3fa42a7131a5571b85641a2da4423f62899eaa3e`) restored only the production
+  sample's `image_digest` to `null`, preserving its registered service settings.
 - **Historical deployment:** [Publication run 38669309326](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/38669309326)
   generated #853 from source `78b989de47decf801e2e497dabd86f16bb299461`, selecting
   `sha256:24a0c180dd0325ee56870c040be565e152a3bf035011ace67363009c0be526ec`
@@ -224,6 +257,10 @@ is not proof of publication; CI success alone is not production qualification.
   three-AZ topology, RDS failover, AWS Backup Restore Testing execution,
   production retirement/durable cleanup, Network Firewall egress, or optional
   ALB ingress. Historical tests retain their original revision/configuration.
+  The separate October 16 production lifecycle above qualifies application
+  publication/deployment, reported live validation, retirement, and destroy;
+  it does not establish RDS failover, completed AWS Backup Restore Testing,
+  or additional behavioral tests not recorded here.
   Neither these results nor the configured controls establish zero residual
   risk, immutable retention, guaranteed recovery, or SOC 2 / ISO 27001
   certification. Scope decisions are tracked in

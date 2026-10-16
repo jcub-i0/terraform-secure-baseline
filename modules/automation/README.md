@@ -66,19 +66,21 @@ The diagram shows intended processing and configured failure destinations, not a
 
 ## Lambda Packaging and Saved-Plan Deployment
 
-The module packages each Python Lambda handler with a managed `archive_file` resource:
+The module generates each Python Lambda handler's ZIP during Terraform planning with an `archive_file` data source:
 
-| Archive resource | Source file | Generated package |
+| Archive data source | Source file | Generated package |
 |---|---|---|
-| `archive_file.lambda_ec2_isolation` | `lambda/ec2_isolation.py` | `lambda/ec2_isolation.zip` |
-| `archive_file.lambda_ec2_rollback` | `lambda/ec2_rollback.py` | `lambda/ec2_rollback.zip` |
-| `archive_file.lambda_ip_enrichment` | `lambda/ip_enrichment.py` | `lambda/ip_enrichment.zip` |
+| `data.archive_file.lambda_ec2_isolation` | `lambda/ec2_isolation.py` | `lambda/ec2_isolation.zip` |
+| `data.archive_file.lambda_ec2_rollback` | `lambda/ec2_rollback.py` | `lambda/ec2_rollback.zip` |
+| `data.archive_file.lambda_ip_enrichment` | `lambda/ip_enrichment.py` | `lambda/ip_enrichment.zip` |
 
-Each `aws_lambda_function` references the corresponding archive resource's `output_path` and `output_base64sha256`. This creates an explicit Terraform dependency between package creation and Lambda deployment.
+Each `aws_lambda_function` uses the corresponding `data.archive_file` output: `output_path` for `filename` and the base64-encoded SHA-256 `output_base64sha256` for `source_code_hash`.
 
-The archives are generated build outputs. They should not be manually maintained or treated as the source of truth; the `.py` files and Terraform configuration are authoritative.
+The archives are generated outputs, not committed artifacts or manually maintained deployment inputs; the `.py` files and Terraform configuration are authoritative.
 
-Managed archive resources participate in the repository's saved-plan deployment graph. They reference one handler file each; the module does not implement a dependency-installation or third-party-library packaging step. Retain the source checkout, plan, and deployment logs needed to establish what was packaged and applied. Resource dependencies alone are not evidence that a fresh-runner package build or deployed code-hash comparison was executed successfully.
+The internal Plan job in [Terraform Apply](../../.github/workflows/terraform-apply.yml) bundles all three generated ZIPs with the saved plan and appends their SHA-256 checksums to its manifest. The separate protected Apply runner verifies the manifest and restores those packages before applying the exact saved plan, without rebuilding the ZIPs or replanning.
+
+Each archive data source references one handler file; the module does not implement a dependency-installation or third-party-library packaging step. Retain the source checkout, plan, and deployment logs needed to establish what was packaged and applied. Package handoff alone is not evidence of a deployed code-hash comparison.
 
 When adding another Lambda, review its source/package dependency, IAM, routing, failure destinations, and validator inventory together. The three-function validator inventory is explicit; a new function is not automatically covered merely because it uses the same packaging pattern.
 
@@ -172,11 +174,11 @@ IsolationAllowed   = true
 already isolated   = false
 ```
 
-#### Resources
+#### Resources and Data Sources
 
-| Resource | Purpose |
+| Resource or data source | Purpose |
 |---|---|
-| `archive_file.lambda_ec2_isolation` | Generates the EC2 isolation Lambda deployment package from `ec2_isolation.py` |
+| `data.archive_file.lambda_ec2_isolation` | Generates the EC2 isolation Lambda deployment package from `ec2_isolation.py` during planning |
 | `aws_lambda_function.ec2_isolation` | Runs the EC2 isolation workflow |
 | `aws_security_group.lambda_ec2_isolation_sg` | Security group for the VPC-enabled Lambda |
 | `aws_cloudwatch_event_rule.securityhub_ec2_high_critical` | Matches HIGH/CRITICAL, NEW, ACTIVE GuardDuty EC2 findings |
@@ -246,11 +248,11 @@ and notification exceptions can escape. A failure after group replacement can
 leave partially completed recovery. A retry after `Isolated=false` is written
 may skip the remaining work. There is no transactional rollback of these steps.
 
-#### Resources
+#### Resources and Data Sources
 
-| Resource | Purpose |
+| Resource or data source | Purpose |
 |---|---|
-| `archive_file.lambda_ec2_rollback` | Generates the EC2 rollback Lambda deployment package from `ec2_rollback.py` |
+| `data.archive_file.lambda_ec2_rollback` | Generates the EC2 rollback Lambda deployment package from `ec2_rollback.py` during planning |
 | `aws_lambda_function.ec2_rollback` | Runs the rollback workflow |
 | `aws_security_group.lambda_ec2_rollback_sg` | Security group for the VPC-enabled Lambda |
 | `aws_cloudwatch_event_bus.secops` | Custom EventBridge bus for SecOps workflows |
@@ -321,11 +323,11 @@ an explicit expiry/refresh timer. Updating the secret does not prove that every
 warm function environment has fetched the new value. No rotation workflow or
 cache-refresh mechanism is configured by this module.
 
-#### Resources
+#### Resources and Data Sources
 
-| Resource | Purpose |
+| Resource or data source | Purpose |
 |---|---|
-| `archive_file.lambda_ip_enrichment` | Generates the IP enrichment Lambda deployment package from `ip_enrichment.py` |
+| `data.archive_file.lambda_ip_enrichment` | Generates the IP enrichment Lambda deployment package from `ip_enrichment.py` during planning |
 | `aws_lambda_function.ip_enrichment` | Runs threat intelligence enrichment |
 | `aws_secretsmanager_secret.threat_intel_api_keys` | Stores threat intelligence API credentials |
 | `aws_secretsmanager_secret_version.threat_intel_api_keys` | Stores the current AbuseIPDB API key value |
@@ -421,7 +423,7 @@ A visible DLQ message should be treated as an operational signal that the automa
 
 The implemented security controls and their boundaries are:
 
-- Lambda deployment packages are generated by managed Terraform resources, preserving package-to-function dependency ordering during saved-plan Apply.
+- Lambda deployment packages are generated during planning by archive data sources and carried with the checksummed saved-plan artifact to the protected Apply runner.
 - Lambda functions use dedicated IAM roles passed into the module.
 - `kms_key_arn` supplies the customer key for Lambda environment-variable encryption; it does not configure customer-key encryption of the source ZIP. No `source_kms_key_arn` is configured. See [AWS source ZIP encryption](https://docs.aws.amazon.com/lambda/latest/dg/encrypt-zip-package.html).
 - Lambda CloudWatch log groups are encrypted with the logs CMK.
@@ -800,7 +802,7 @@ Check:
 
 ## Important Notes
 
-- Lambda ZIP files are generated by managed `archive_file` resources and are not manually maintained deployment inputs.
+- Lambda ZIP files are generated during planning by `data.archive_file` data sources; they are not committed artifacts or manually maintained deployment inputs.
 - EC2 Isolation receives NEW, ACTIVE GuardDuty EC2 findings at HIGH/CRITICAL; automatic response follows the supplied severity set, with a CRITICAL handler fallback.
 - EC2 Isolation checks normalized opt-in and ACTIVE/NEW finding state in handler logic, not an IAM tag condition.
 - EC2 Isolation requests EBS snapshots before replacing groups, then writes rollback tags; these operations are not atomic and do not wait for snapshot completion.
