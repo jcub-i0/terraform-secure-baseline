@@ -82,6 +82,7 @@ The `ecs.tf` file creates separate ECS task execution and application task roles
 - `aws_iam_role.ecs_task_roles`
 - `data.aws_iam_policy_document.ecs_task_execution_policies`
 - An inline `aws_iam_role_policy` attaching each custom execution policy
+- Optional `aws_iam_role_policy_attachment.ecs_task_managed_policies` entries for application task-role permissions
 
 Both role types trust `ecs-tasks.amazonaws.com`. The shared trust document also requires the configured account through `aws:SourceAccount` and restricts `aws:SourceArn` to ECS resources in the configured Region and account.
 
@@ -99,11 +100,15 @@ The custom execution policy permits:
 - the same three pull actions against exactly the supplied GuardDuty agent repository ARN set when Runtime Monitoring is enabled
 - `logs:CreateLogStream` and `logs:PutLogEvents` against stream ARNs beneath only the service's declared log-group ARNs
 
-The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. It grants neither role `iam:PassRole` and does not automatically add the ECR encryption CMK to execution-role permissions. Explicitly supplied `task_execution_kms_key_arns` still determine any added decrypt grant. The application task role is created without policies; this is not a permissions boundary preventing later attachments or every possible resource-policy grant.
+The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. Its generated grants contain no `iam:PassRole`, and it does not automatically add the ECR encryption CMK to execution-role permissions. Explicitly supplied `task_execution_kms_key_arns` still determine any added decrypt grant.
+
+Application task roles have no policies by default. Optional `task_role_managed_policy_arns` attaches AWS-managed or same-account customer-managed policies **only to the application task role** for a deployable service; the execution role is unchanged. The baseline creates task roles and the selected attachments, **not** application-specific managed policies. Application owners provision and approve their customer-managed policies separately and pass known ARNs through the canonical `ecs_services` map. A first baseline apply with `image_digest = null` needs no task-role policy ARNs and creates no task role or attachments. Policy ARNs must be known during planning and the policies must exist by attachment time; ECS service launch waits for any configured attachments.
+
+The live IAM validator verifies exact attached policy ARNs and rejects unexpected attachments and inline task policies. It does not analyze the contents or effective permissions of externally managed policies. The application owner must review policy grants, versions, permission boundaries, and resource-based access before approval.
 
 The common trust condition covers ECS resources throughout the configured account and Region (`...:ecs:<region>:<account>:*`), not a single service ARN or task definition. Separate role names do not themselves narrow that trust pattern.
 
-The optional execution secret, SSM parameter, and KMS ARN sets are consumed by dynamic resource-scoped statements. When non-empty they grant, respectively, `secretsmanager:GetSecretValue`, `ssm:GetParameters`, or `kms:Decrypt` against only the declared ARNs. `task_execution_kms_key_arns` applies to task-startup authority on the execution role, not application authority on the task role. An empty set creates no `kms:Decrypt` statement; a populated set grants exactly the declared keys. The SSM field is `execution_ssm_parameter_arns`, and the inline policy resource is `aws_iam_role_policy.ecs_task_execution_policies`.
+The optional execution secret, SSM parameter, and KMS ARN sets are consumed by dynamic resource-scoped statements. When non-empty they grant, respectively, `secretsmanager:GetSecretValue`, `ssm:GetParameters`, or `kms:Decrypt` against only the declared ARNs. `task_execution_kms_key_arns` defaults to `[]` and is needed only when ECS startup secret injection requires execution-role decryption with a customer-managed KMS key; it is **not** a list of all baseline-managed CMKs. Obtain the key identity from the referenced secret/parameter, not from the set of keys created by the baseline. An empty set creates no `kms:Decrypt` statement; a populated set grants exactly the declared keys, subject to the key policy. Application-initiated AWS SDK and KMS calls use the separate task role. The SSM field is `execution_ssm_parameter_arns`, and the inline policy resource is `aws_iam_role_policy.ecs_task_execution_policies`.
 
 The GuardDuty Fargate agent scope is intentionally separate from application image scope. Baseline supplies `guardduty_agent_ecr_repository_arns` only for protected `production` and `development` services. The resolved ARN has the exact regional shape:
 
@@ -582,10 +587,11 @@ map(object({
   execution_secret_arns               = optional(set(string), [])
   execution_ssm_parameter_arns        = optional(set(string), [])
   task_execution_kms_key_arns         = optional(set(string), [])
+  task_role_managed_policy_arns       = optional(set(string), [])
 }))
 ```
 
-All fields are consumed by the generated policy. Application ECR and log-group permissions are always present for each configured service. GuardDuty-agent ECR, secret, SSM parameter, and KMS statements are emitted only when their corresponding sets are non-empty.
+Application ECR and log-group permissions are always present in the generated **execution-role** policy. GuardDuty-agent ECR, secret, SSM parameter, and KMS statements are emitted only when their corresponding execution sets are non-empty. `task_role_managed_policy_arns` does **not** feed that policy: it creates separate managed-policy attachments on the **application task role** only.
 
 ---
 
@@ -611,6 +617,7 @@ All fields are consumed by the generated policy. Application ECR and log-group p
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
 | `ecs_task_execution_roles` | Map of ECS task execution role ARN and name objects keyed by service |
 | `ecs_task_execution_policy_ids` | Map of inline execution-policy IDs keyed by service for resource-granular launch readiness |
+| `ecs_task_role_policy_attachment_ids` | Map of optional application task-role managed-policy attachment IDs keyed by service, used for ECS launch readiness |
 | `ecs_task_roles` | Map of ECS application task role ARN and name objects keyed by service |
 
 ---

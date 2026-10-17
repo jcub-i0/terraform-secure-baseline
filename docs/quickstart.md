@@ -889,6 +889,24 @@ A service can be **registered but unreleased** by setting its digest to `null`:
 
 With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, application log group, Application Auto Scaling target/policy, or ECS operational alarm is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
 
+**Application task-role policies are optional.** The baseline creates an ECS application task role for each deployable service, but it does **not** create arbitrary application-specific IAM managed policies. The user does not need a policy ARN for the first baseline apply: `task_role_managed_policy_arns` defaults to `[]`, and `image_digest = null` creates neither an ECS task role nor any policy attachments.
+
+When an application needs AWS API permissions, the application owner first defines and provisions a least-privilege customer-managed policy (for example, in application-owned Terraform), or selects an appropriate AWS-managed policy. The owner then supplies its ARN in the **same** `ecs_services` entry, alongside the published non-null image digest, and reviews the resulting Terraform plan. For example: `"task_role_managed_policy_arns": ["arn:aws:iam::<workload-account-id>:policy/<application-policy>"]`. Customer-managed policies must belong to the workload account; ARNs must be known at plan time, and policies must exist by attachment time. The baseline only attaches the explicitly selected ARNs to the **application task role**, not the ECS execution role. Its IAM validator checks the exact attachment inventory, not effective policy permissions.
+
+**ECS startup-secret KMS permissions are separate.** Leave `task_execution_kms_key_arns` unset (default `[]`) unless an ECS-native `secrets_manager_secrets` or `ssm_parameters` reference needs the **execution role** to decrypt data encrypted with a customer-managed KMS key. Do not list every CMK created by the baseline. Image pulls and normal CloudWatch log delivery do not require this field; AWS SDK calls made by the running application use its **task role** instead. For a Secrets Manager reference, identify the secret's configured key using the read-only CLI command below, then resolve a returned key ID or alias to its ARN when necessary:
+
+```bash
+aws secretsmanager describe-secret \
+  --secret-id "<secret-arn>" \
+  --query 'KmsKeyId' --output text --no-cli-pager
+
+aws kms describe-key \
+  --key-id "<customer-managed-key-id-or-alias>" \
+  --query 'KeyMetadata.Arn' --output text --no-cli-pager
+```
+
+Use the intended account/profile and Region. For SSM SecureString, inspect the parameter's configured KMS key instead. If no customer-managed key is used for startup secret retrieval, leave the set empty. A `kms:Decrypt` IAM grant does not override the key policy or guarantee successful decryption.
+
 The shipped `test` entries are registered-but-unreleased with `image_digest=null`, including production. The production sample retains `desired_count=3` for a later release, but a fresh baseline apply does not start those tasks. Select an actual published digest through the reviewed application release path before claiming live ECS/ALB coverage.
 
 ### GuardDuty Fargate Runtime Monitoring

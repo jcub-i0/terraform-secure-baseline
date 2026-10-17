@@ -413,8 +413,9 @@ module "ecs_service" {
   services     = local.ecs_runtime_services
   force_delete = local.effective_ecs_service_force_delete
 
-  execution_policy_ids     = module.iam.ecs_task_execution_policy_ids
-  security_policy_rule_ids = local.ecs_security_policy_rule_ids
+  execution_policy_ids            = module.iam.ecs_task_execution_policy_ids
+  task_role_policy_attachment_ids = module.iam.ecs_task_role_policy_attachment_ids
+  security_policy_rule_ids        = local.ecs_security_policy_rule_ids
 }
 
 module "application_load_balancer" {

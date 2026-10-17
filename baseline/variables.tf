@@ -646,9 +646,10 @@ variable "ecs_services" {
 
     environment_variables = optional(map(string), {})
 
-    secrets_manager_secrets     = optional(map(string), {})
-    ssm_parameters              = optional(map(string), {})
-    task_execution_kms_key_arns = optional(set(string), [])
+    secrets_manager_secrets       = optional(map(string), {})
+    ssm_parameters                = optional(map(string), {})
+    task_execution_kms_key_arns   = optional(set(string), [])
+    task_role_managed_policy_arns = optional(set(string), [])
 
     ingress = optional(object({
       priority          = number
@@ -659,6 +660,17 @@ variable "ecs_services" {
   }))
 
   default = {}
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_services) : [
+        for policy_arn in service.task_role_managed_policy_arns :
+        can(regex("^arn:(aws|aws-us-gov|aws-cn):iam::(aws|[0-9]{12}):policy/[A-Za-z0-9+=,.@_/-]+$", policy_arn))
+      ]
+    ]))
+
+    error_message = "task_role_managed_policy_arns must contain valid IAM managed policy ARNs, not roles, users, wildcards, or other resources."
+  }
 
   validation {
     condition = alltrue([

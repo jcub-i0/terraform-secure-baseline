@@ -298,22 +298,27 @@ output "ecs_service_configuration" {
 
   value = {
     for service_name, service in local.deployable_ecs_services :
-    service_name => {
-      desired_count = local.ecs_runtime_services[service_name].desired_count
-      scaling       = local.ecs_runtime_services[service_name].scaling
-      deployment    = service.deployment
+    service_name => merge(
+      {
+        desired_count = local.ecs_runtime_services[service_name].desired_count
+        scaling       = local.ecs_runtime_services[service_name].scaling
+        deployment    = service.deployment
 
-      ingress_enabled = service.ingress != null
+        ingress_enabled = service.ingress != null
 
-      database_access             = service.database_access
-      task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
+        database_access             = service.database_access
+        task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
 
-      guardduty_agent_ecr_repository_arns = sort(
-        tolist(
-          local.ecs_iam_services[service_name].guardduty_agent_ecr_repository_arns
+        guardduty_agent_ecr_repository_arns = sort(
+          tolist(
+            local.ecs_iam_services[service_name].guardduty_agent_ecr_repository_arns
+          )
         )
-      )
-    }
+      },
+      length(service.task_role_managed_policy_arns) > 0 ? {
+        task_role_managed_policy_arns = sort(tolist(service.task_role_managed_policy_arns))
+      } : {}
+    )
   }
 }
 
