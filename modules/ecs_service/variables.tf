@@ -69,6 +69,14 @@ variable "services" {
       health_check_grace_period_seconds = optional(number, 0)
     }), {})
 
+    health_check = optional(object({
+      command      = list(string)
+      interval     = optional(number, 30)
+      timeout      = optional(number, 5)
+      retries      = optional(number, 3)
+      start_period = optional(number, 6)
+    }), null)
+
     execution_role_arn = string
     task_role_arn      = string
 

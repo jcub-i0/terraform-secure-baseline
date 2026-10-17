@@ -265,6 +265,7 @@ locals {
       cpu            = service.cpu
       memory         = service.memory
       deployment     = service.deployment
+      health_check   = service.health_check
 
       execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
       task_role_arn      = module.iam.ecs_task_roles[service_name].arn
