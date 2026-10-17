@@ -192,7 +192,7 @@ variable "services" {
 
   validation {
     condition = alltrue([
-      for service in values(var.ecs_services) :
+      for service in values(var.services) :
       service.health_check == null ? true : (
         service.health_check.command == null ? false : (
           contains(
@@ -217,7 +217,7 @@ variable "services" {
 
   validation {
     condition = alltrue([
-      for service in values(var.ecs_services) :
+      for service in values(var.services) :
       service.health_check == null ? true : (
         service.health_check.interval >= 5 &&
         service.health_check.interval <= 300 &&
