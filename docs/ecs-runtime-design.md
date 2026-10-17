@@ -65,6 +65,8 @@ variable "ecs_services" {
     cpu_architecture = optional(string, "X86_64")
     database_access = optional(bool, false)
 
+    task_role_managed_policy_arns = optional(set(string), [])
+
     environment_variables = optional(map(string), {})
 
     secrets_manager_secrets      = optional(map(string), {})
@@ -231,7 +233,7 @@ The cluster-owned Container Insights performance log group uses `/aws/ecs/contai
 
 `modules/iam` creates separate task execution and application task roles for deployable services only.
 
-The task execution role is used by ECS/Fargate during startup. Its custom policy scopes application ECR pulls, CloudWatch Logs writes, declared Secrets Manager/SSM references, and optional KMS decrypt authority required to retrieve startup configuration. The application task role is the role used by application code after the container starts and intentionally begins without broad application permissions.
+The task execution role is used by ECS/Fargate during startup. Its custom policy scopes application ECR pulls, CloudWatch Logs writes, declared Secrets Manager/SSM references, and optional KMS decrypt authority required to retrieve startup configuration. The application task role is used by application code after startup and has no policies by default. Optional `task_role_managed_policy_arns` attaches pre-existing AWS-managed or same-account customer-managed IAM policies only to that task role. Service launch waits for the attachments. A registered null-digest service creates no task role or attachments.
 
 The canonical field `task_execution_kms_key_arns` means: the customer-managed KMS key ARNs that the **task execution role** may use with `kms:Decrypt` during startup. If the configured set is empty, the execution policy must not grant `kms:Decrypt`. If it is populated, the policy must grant `kms:Decrypt` to exactly those key ARNs. This authority is separate from application task-role permissions.
 
@@ -253,7 +255,7 @@ against that repository. Registry authorization remains the existing `ecr:GetAut
 
 When Runtime Monitoring is disabled (`minimal`), the GuardDuty-agent repository set is empty and no GuardDuty-specific ECR statement is emitted. Application ECR repository scope remains separate and unchanged.
 
-Neither ECS role receives `iam:PassRole` as part of the per-service runtime contract, and the module does not attach the broad AWS-managed `AmazonECSTaskExecutionRolePolicy`.
+Baseline-generated ECS IAM grants do not include `iam:PassRole`, and the module does not attach the broad AWS-managed `AmazonECSTaskExecutionRolePolicy`. Customer-provided managed policies can grant additional actions, including broad authority. Exact attachment-inventory validation does not certify policy contents or effective permissions.
 ## Security-group ownership and launch readiness
 
 Security-group ownership remains split by resource owner:
@@ -387,7 +389,7 @@ For `minimal`, healthy coverage is not required. A missing coverage record is va
 
 With no deployable services, coverage lookup is not required. With protected services but no running protected tasks, `HEALTHY` coverage is not required until tasks run. The cluster/intent checks still apply. Record the number of services and protected tasks actually checked rather than treating an empty-runtime PASS as evidence of live GuardDuty instrumentation.
 
-`validate-iam.sh` independently verifies exact profile-aware GuardDuty-agent ECR authority, preserves exact application ECR scope, rejects broad or unexpected ECR permissions, verifies task/execution trust separation, and rejects `iam:PassRole`.
+`validate-iam.sh` independently verifies exact profile-aware GuardDuty-agent ECR authority, preserves exact execution-role ECR scope, rejects broad or unexpected execution-policy permissions, verifies task/execution trust separation and generated `iam:PassRole` absence, and compares task-role managed attachments with the exact configured ARN set while rejecting inline task policies. It does not inspect effective permissions inside attached managed policies.
 
 `validate-vpc-endpoints.sh` requires the complete Terraform-owned Interface Endpoint inventory, exact Terraform/live endpoint IDs, exactly one `guardduty-data` endpoint, and reuse of that endpoint rather than a duplicate unmanaged GuardDuty endpoint.
 

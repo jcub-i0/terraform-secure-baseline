@@ -825,8 +825,8 @@ for the exact inputs, approval gates, and recovery boundaries.
 ## Extension Boundaries
 
 The supplied runtime is for long-running ECS services and standalone EC2 hosts.
-It does not provide first-class scheduled/run-to-completion ECS jobs, generic
-application task-IAM permissions, multi-container application services, ECS Exec,
+It does not provide first-class scheduled/run-to-completion ECS jobs, inline
+application IAM policy authoring, multi-container application services, ECS Exec,
 application database-user/migration lifecycle, WAF/DNS ownership, or cross-Region
 application recovery. Automatic ECS/Fargate containment is also absent.
 

@@ -889,6 +889,8 @@ A service can be **registered but unreleased** by setting its digest to `null`:
 
 With `image_digest = null`, Terraform retains/creates the service-required ECR repository but does not create the per-service ECS runtime: no ECS service, task definition, per-service task/execution roles, task security group, application log group, Application Auto Scaling target/policy, or ECS operational alarm is materialized. This allows ECR to exist before the first application image is published without introducing a separate Terraform state or a second service map.
 
+For an application that needs AWS API access, a deployable service may optionally set `"task_role_managed_policy_arns": ["arn:aws:iam::<account-id>:policy/<approved-application-policy>"]`. This set defaults to empty and attaches only to its **application task role**, not the ECS execution role. Use pre-existing, plan-known AWS-managed or same-account customer-managed policy ARNs in the active partition. Review least privilege separately: baseline validation checks the exact ARN attachment inventory, not effective IAM grants. This field on a registered null-digest service creates no task IAM resources.
+
 The shipped `test` entries are registered-but-unreleased with `image_digest=null`, including production. The production sample retains `desired_count=3` for a later release, but a fresh baseline apply does not start those tasks. Select an actual published digest through the reviewed application release path before claiming live ECS/ALB coverage.
 
 ### GuardDuty Fargate Runtime Monitoring

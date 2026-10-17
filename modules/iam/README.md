@@ -82,6 +82,7 @@ The `ecs.tf` file creates separate ECS task execution and application task roles
 - `aws_iam_role.ecs_task_roles`
 - `data.aws_iam_policy_document.ecs_task_execution_policies`
 - An inline `aws_iam_role_policy` attaching each custom execution policy
+- Optional `aws_iam_role_policy_attachment.ecs_task_managed_policies` entries for application task-role permissions
 
 Both role types trust `ecs-tasks.amazonaws.com`. The shared trust document also requires the configured account through `aws:SourceAccount` and restricts `aws:SourceArn` to ECS resources in the configured Region and account.
 
@@ -99,7 +100,11 @@ The custom execution policy permits:
 - the same three pull actions against exactly the supplied GuardDuty agent repository ARN set when Runtime Monitoring is enabled
 - `logs:CreateLogStream` and `logs:PutLogEvents` against stream ARNs beneath only the service's declared log-group ARNs
 
-The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. It grants neither role `iam:PassRole` and does not automatically add the ECR encryption CMK to execution-role permissions. Explicitly supplied `task_execution_kms_key_arns` still determine any added decrypt grant. The application task role is created without policies; this is not a permissions boundary preventing later attachments or every possible resource-policy grant.
+The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. Its generated grants contain no `iam:PassRole`, and it does not automatically add the ECR encryption CMK to execution-role permissions. Explicitly supplied `task_execution_kms_key_arns` still determine any added decrypt grant.
+
+Application task roles have no policies by default. Optional `task_role_managed_policy_arns` attaches pre-existing AWS-managed or same-account customer-managed policies **only to the application task role** for a deployable service; the execution role is unchanged. Policy ARNs must be known at plan time, and ECS service launch waits for the attachments. A registered `image_digest = null` service creates no task role or policy attachments.
+
+The live IAM validator verifies exact attached policy ARNs and rejects unexpected attachments and inline task policies. It does not analyze the contents or effective permissions of externally managed policies. The application owner must review policy grants, versions, permission boundaries, and resource-based access before approval.
 
 The common trust condition covers ECS resources throughout the configured account and Region (`...:ecs:<region>:<account>:*`), not a single service ARN or task definition. Separate role names do not themselves narrow that trust pattern.
 
