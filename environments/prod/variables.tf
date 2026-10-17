@@ -318,6 +318,14 @@ variable "ecs_services" {
       health_check_grace_period_seconds = optional(number, 0)
     }), {})
 
+    health_check = optional(object({
+      command      = list(string)
+      interval     = optional(number, 30)
+      timeout      = optional(number, 5)
+      retries      = optional(number, 3)
+      start_period = optional(number, 0)
+    }), null)
+
     cpu_architecture = optional(string, "X86_64")
 
     database_access = optional(bool, false)

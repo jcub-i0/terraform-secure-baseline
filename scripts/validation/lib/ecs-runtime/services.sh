@@ -452,6 +452,69 @@ validate_service_logging() {
   success "Task definition image, port, awslogs configuration, and log group are valid: ${service_name}"
 }
 
+# Validate task-definition healthCheck independently from ALB and GuardDuty.
+validate_container_health_check_configuration() {
+  local service_name="$1"
+  local primary_container_json="$2"
+  local expected_health_check_json
+  local actual_health_check_json
+
+  expected_health_check_json="$(
+    echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+      jq -c --arg service "$service_name" '
+        (.[$service].health_check // null)
+        | if . == null then
+            null
+          else
+            {
+              command,
+              interval,
+              timeout,
+              retries,
+              startPeriod: .start_period
+            }
+          end
+      '
+  )"
+
+  if [[ "$expected_health_check_json" == "null" ]]; then
+    if echo "$primary_container_json" |
+      jq -e 'has("healthCheck")' >/dev/null; then
+      echo "$primary_container_json" | jq '.healthCheck'
+      fail "Unexpected ECS-native healthCheck when health_check is disabled: $service_name"
+    fi
+
+    success "ECS-native container health check is absent as configured: $service_name"
+    return 0
+  fi
+
+  actual_health_check_json="$(
+    echo "$primary_container_json" |
+      jq -c '
+        if (.healthCheck | type) == "object" then
+          .healthCheck | . + {startPeriod: (.startPeriod // 0)}
+        else
+          null
+        end
+      '
+  )"
+
+  if ! jq -n -e \
+    --argjson expected "$expected_health_check_json" \
+    --argjson actual "$actual_health_check_json" \
+    '$expected == $actual' >/dev/null; then
+    jq -n \
+      --arg service "$service_name" \
+      --argjson expected "$expected_health_check_json" \
+      --argjson actual "$actual_health_check_json" \
+      '{service: $service, expected_health_check: $expected, actual_health_check: $actual}'
+
+    fail "ECS-native container healthCheck does not match Terraform: $service_name"
+  fi
+
+  success "ECS-native container healthCheck exactly matches Terraform: $service_name"
+}
+
 validate_task_definition() {
   local service_name="$1"
   local expected_task_definition_arn="$2"
@@ -518,6 +581,10 @@ validate_task_definition() {
     echo "$task_definition_response_json" |
       jq -c '.taskDefinition.containerDefinitions[0]'
   )"
+
+  validate_container_health_check_configuration \
+    "$service_name" \
+    "$primary_container_json"
 
   image_reference="$(echo "$primary_container_json" | jq -r '.image // empty')"
 

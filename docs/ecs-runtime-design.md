@@ -62,6 +62,14 @@ variable "ecs_services" {
       health_check_grace_period_seconds = optional(number, 0)
     }), {})
 
+    health_check = optional(object({
+      command      = list(string)
+      interval     = optional(number, 30)
+      timeout      = optional(number, 5)
+      retries      = optional(number, 3)
+      start_period = optional(number, 0)
+    }), null)
+
     cpu_architecture = optional(string, "X86_64")
     database_access = optional(bool, false)
 
@@ -167,7 +175,7 @@ Task definitions use Fargate, `awsvpc`, Linux, and either `X86_64` or `ARM64`. T
 
 Each task definition uses separate per-service task execution and application task roles. The current abstraction contains exactly one essential container named for the stable service key, one TCP port mapping, plaintext environment values, approved ECS-native secret references, and the `awslogs` driver.
 
-The module does not define an ECS-native application-container `healthCheck`. The GuardDuty task check accepts `healthStatus=UNKNOWN` when no such health check exists, rejects `UNHEALTHY`, and requires the application to be running. ALB target health, when present, is a separate health signal; neither proves database queries or business behavior.
+The optional `ecs_services.<service>.health_check` renders a container-native `healthCheck` only when configured. Without it, the task definition remains unchanged and no additional live application-health queries are required. When enabled, `validate-ecs-runtime.sh` checks the exact task-definition fields and verifies that running application containers report `HEALTHY`, independently of GuardDuty and ALB ingress. `UNHEALTHY` fails immediately and `UNKNOWN` receives bounded startup rechecks (13 attempts, five seconds apart by default; configurable through `ECS_NATIVE_HEALTH_MAX_ATTEMPTS` and `ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS`). A configured check on a service intentionally at zero desired capacity is reported as **skipped**, not proven healthy. ALB target health remains separate, and neither signal proves database queries or business behavior.
 
 The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
 
@@ -367,6 +375,7 @@ The runtime validator verifies:
 - service steady state and completed primary rollout;
 - compatible Fargate platform version;
 - canonical task definition remaining application-only;
+- exact optional ECS-native health-check configuration and running application-container health (independent of GuardDuty and ALB checks);
 - digest-pinned application images, configured logging, exact compute-private task networking, exact ALB `ingress_public` placement, and conditional database/ALB relationships;
 - injected GuardDuty agent state on protected running tasks;
 - GuardDuty ECS coverage state;

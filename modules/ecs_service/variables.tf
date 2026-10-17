@@ -69,6 +69,14 @@ variable "services" {
       health_check_grace_period_seconds = optional(number, 0)
     }), {})
 
+    health_check = optional(object({
+      command      = list(string)
+      interval     = optional(number, 30)
+      timeout      = optional(number, 5)
+      retries      = optional(number, 3)
+      start_period = optional(number, 0)
+    }), null)
+
     execution_role_arn = string
     task_role_arn      = string
 
@@ -180,6 +188,56 @@ variable "services" {
     ])
 
     error_message = "ALB request-count scaling requires both target_group_arn and alb_request_resource_label."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      service.health_check == null ? true : (
+        service.health_check.command == null ? false : (
+          contains(
+            ["CMD", "CMD-SHELL"],
+            try(service.health_check.command[0], "")
+          ) &&
+          (
+            try(service.health_check.command[0], "") == "CMD-SHELL"
+            ? length(service.health_check.command) == 2
+            : length(service.health_check.command) >= 2
+          ) &&
+          alltrue([
+            for element in service.health_check.command :
+            element == null ? false : trimspace(element) != ""
+          ])
+        )
+      )
+    ])
+
+    error_message = "ECS health_check.command must start with CMD or CMD-SHELL. CMD-SHELL requires exactly two elements; CMD requires an executable (additional arguments are optional). All command elements must be nonempty."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      service.health_check == null ? true : (
+        service.health_check.interval >= 5 &&
+        service.health_check.interval <= 300 &&
+        service.health_check.interval == floor(service.health_check.interval) &&
+
+        service.health_check.timeout >= 2 &&
+        service.health_check.timeout <= 60 &&
+        service.health_check.timeout == floor(service.health_check.timeout) &&
+
+        service.health_check.retries >= 1 &&
+        service.health_check.retries <= 10 &&
+        service.health_check.retries == floor(service.health_check.retries) &&
+
+        service.health_check.start_period >= 0 &&
+        service.health_check.start_period <= 300 &&
+        service.health_check.start_period == floor(service.health_check.start_period)
+      )
+    ])
+
+    error_message = "ECS health_check timing values must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
   }
 }
 

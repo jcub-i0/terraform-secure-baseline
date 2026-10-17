@@ -315,8 +315,13 @@ output "ecs_service_configuration" {
           )
         )
       },
+
       length(service.task_role_managed_policy_arns) > 0 ? {
         task_role_managed_policy_arns = sort(tolist(service.task_role_managed_policy_arns))
+      } : {},
+
+      service.health_check != null ? {
+        health_check = service.health_check
       } : {}
     )
   }

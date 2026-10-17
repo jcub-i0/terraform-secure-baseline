@@ -57,13 +57,16 @@ AWS region:                         ${AWS_REGION}
 Deployment profile:                 ${DEPLOYMENT_PROFILE}
 ECS cluster:                        ${EXPECTED_CLUSTER_NAME}
 
-Configured ECS services:            ${ECS_SERVICE_COUNT}
-Autoscaled ECS services:            ${autoscaled_service_count}
-CPU scaling policies:               ${cpu_scaling_policy_count}
-Memory scaling policies:            ${memory_scaling_policy_count}
-ALB request scaling policies:       ${alb_request_scaling_policy_count}
-Task-deficit alarms:                ${task_deficit_alarm_count}
-Ingress-health alarms:              ${ingress_health_alarm_count}
+Configured ECS services:              ${ECS_SERVICE_COUNT}
+Native health-check services:         ${ECS_NATIVE_HEALTH_SERVICES_CONFIGURED}
+Healthy application tasks validated:  ${ECS_NATIVE_HEALTH_RUNNING_TASKS_VALIDATED}
+Zero-capacity health checks skipped:  ${ECS_NATIVE_HEALTH_ZERO_CAPACITY_SKIPPED}
+Autoscaled ECS services:              ${autoscaled_service_count}
+CPU scaling policies:                 ${cpu_scaling_policy_count}
+Memory scaling policies:              ${memory_scaling_policy_count}
+ALB request scaling policies:         ${alb_request_scaling_policy_count}
+Task-deficit alarms:                  ${task_deficit_alarm_count}
+Ingress-health alarms:                ${ingress_health_alarm_count}
 
 Expected compute subnets:           ${EXPECTED_COMPUTE_SUBNET_IDS_JSON}
 Expected ingress-public subnets:    ${EXPECTED_INGRESS_PUBLIC_SUBNET_IDS_JSON}

@@ -9,64 +9,6 @@
 readonly GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME="aws-gd-agent"
 readonly GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME_PREFIX="aws-guardduty-agent-"
 
-ecs_runtime_describe_tasks_json() {
-  local task_arns_json="$1"
-  local all_tasks_json='[]'
-  local response_json
-  local response_tasks_json
-  local response_failures_json
-  local i
-  local -a task_arns=()
-  local -a task_batch=()
-
-  mapfile -t task_arns < <(
-    echo "$task_arns_json" |
-      jq -r '.[]'
-  )
-
-  if [[ "${#task_arns[@]}" -eq 0 ]]; then
-    echo "$all_tasks_json"
-    return 0
-  fi
-
-  # ECS DescribeTasks accepts up to 100 task identifiers per request.
-  for ((i = 0; i < ${#task_arns[@]}; i += 100)); do
-    task_batch=("${task_arns[@]:i:100}")
-
-    response_json="$(
-      aws ecs describe-tasks \
-        "${AWS_ARGS[@]}" \
-        --cluster "$EXPECTED_CLUSTER_ARN" \
-        --tasks "${task_batch[@]}" \
-        --output json
-    )"
-
-    response_failures_json="$(
-      echo "$response_json" |
-        jq -c '.failures // []'
-    )"
-
-    if [[ "$(echo "$response_failures_json" | jq 'length')" -ne 0 ]]; then
-      echo "$response_failures_json" | jq .
-      fail "ECS describe-tasks returned one or more failures while validating GuardDuty runtime instrumentation."
-    fi
-
-    response_tasks_json="$(
-      echo "$response_json" |
-        jq -c '.tasks // []'
-    )"
-
-    all_tasks_json="$(
-      jq -c -n \
-        --argjson existing "$all_tasks_json" \
-        --argjson batch "$response_tasks_json" \
-        '$existing + $batch'
-    )"
-  done
-
-  echo "$all_tasks_json"
-}
-
 validate_guardduty_service_tasks() {
   local service_name="$1"
   local expected_service_json
