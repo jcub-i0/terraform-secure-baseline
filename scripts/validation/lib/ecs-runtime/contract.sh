@@ -398,6 +398,24 @@ validate_service_outputs() {
         and (.deployment.maximum_percent | type) == "number"
         and (.deployment.health_check_grace_period_seconds | type) == "number"
 
+        # The Terraform output omits health_check when disabled. If present,
+        # require the complete normalized object before live comparisons.
+        and (
+          if has("health_check") then
+            (.health_check | type) == "object"
+            and (.health_check | keys) == ["command", "interval", "retries", "start_period", "timeout"]
+            and (.health_check.command | type) == "array"
+            and (.health_check.command | length) >= 2
+            and all(.health_check.command[]; type == "string")
+            and (.health_check.interval | type) == "number"
+            and (.health_check.timeout | type) == "number"
+            and (.health_check.retries | type) == "number"
+            and (.health_check.start_period | type) == "number"
+          else
+            true
+          end
+        )
+
         and (.ingress_enabled | type) == "boolean"
         and (.database_access | type) == "boolean"
 
