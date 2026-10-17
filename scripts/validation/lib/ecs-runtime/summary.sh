@@ -58,6 +58,9 @@ Deployment profile:                 ${DEPLOYMENT_PROFILE}
 ECS cluster:                        ${EXPECTED_CLUSTER_NAME}
 
 Configured ECS services:            ${ECS_SERVICE_COUNT}
+Native health-check services:        ${ECS_NATIVE_HEALTH_SERVICES_CONFIGURED}
+Healthy application tasks validated: ${ECS_NATIVE_HEALTH_RUNNING_TASKS_VALIDATED}
+Zero-capacity health checks skipped: ${ECS_NATIVE_HEALTH_ZERO_CAPACITY_SKIPPED}
 Autoscaled ECS services:            ${autoscaled_service_count}
 CPU scaling policies:               ${cpu_scaling_policy_count}
 Memory scaling policies:            ${memory_scaling_policy_count}

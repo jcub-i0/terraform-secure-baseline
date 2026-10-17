@@ -17,6 +17,8 @@ source "${SCRIPT_DIR}/lib/ecs-runtime/contract.sh"
 source "${SCRIPT_DIR}/lib/ecs-runtime/cluster.sh"
 # shellcheck source=lib/ecs-runtime/services.sh
 source "${SCRIPT_DIR}/lib/ecs-runtime/services.sh"
+# shellcheck source=lib/ecs-runtime/health.sh
+source "${SCRIPT_DIR}/lib/ecs-runtime/health.sh"
 # shellcheck source=lib/ecs-runtime/autoscaling.sh
 source "${SCRIPT_DIR}/lib/ecs-runtime/autoscaling.sh"
 # shellcheck source=lib/ecs-runtime/ingress.sh
@@ -75,6 +77,7 @@ declare -A SERVICE_CONTAINER_PORTS=()
 declare -A SERVICE_TARGET_GROUP_ARNS=()
 
 ecs_runtime_validate_services
+ecs_runtime_validate_application_health
 ecs_runtime_validate_guardduty
 ecs_runtime_validate_autoscaling
 ecs_runtime_validate_ingress
