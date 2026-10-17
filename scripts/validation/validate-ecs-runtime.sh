@@ -76,8 +76,10 @@ declare -A SERVICE_CONTAINER_PORTS=()
 # shellcheck disable=SC2034 # Populated and consumed by sourced ecs-runtime helpers.
 declare -A SERVICE_TARGET_GROUP_ARNS=()
 
-ecs_runtime_validate_services
+# Allow opted-in containers to reach HEALTHY before the strict ECS
+# service rollout/steady-state validation executes.
 ecs_runtime_validate_application_health
+ecs_runtime_validate_services
 ecs_runtime_validate_guardduty
 ecs_runtime_validate_autoscaling
 ecs_runtime_validate_ingress
