@@ -11,7 +11,7 @@
 - Attach policies to the **application task role**, never the ECS execution role; keep default task-role permissions empty.
 - Extend IAM validation to check exact configured attachments and reject unexpected permissions or attachments.
 
-**Acceptance criteria**
+### Acceptance criteria
 - A reference task can invoke an explicitly authorized AWS API but is denied an ungranted action.
 - Existing services without policy attachments have no IAM changes; `image_digest = null` still creates no task roles or attachments.
 
@@ -22,7 +22,7 @@
 - Render the check in the ECS task definition and extend runtime validation for configuration and live container health.
 - Preserve independent ALB target-health behavior and existing defaults when disabled.
 
-**Acceptance criteria**
+### Acceptance criteria
 - A reference application with an enabled check reaches ECS `HEALTHY`; an intentional failing check is detected.
 - Services without the setting retain their existing task-definition and validation behavior, including services without ingress.
 
@@ -33,7 +33,7 @@
 - Reuse established endpoint-private subnets, security-group rules, private DNS, and ownership/validation patterns.
 - Defer to a later release if safe implementation requires a broad networking or service-catalog refactor.
 
-**Acceptance criteria**
+### Acceptance criteria**
 - When included, a reference task reaches an explicitly enabled service privately, and endpoint inventory/configuration validation passes.
 - Existing endpoints remain unchanged; no additional endpoints or charges are introduced when the option is unset.
 
@@ -44,7 +44,7 @@
 - Run a generic reference application through the existing publication → reviewed Apply → runtime validation → evidence workflow.
 - Update usage examples, migration notes, and the ECS runtime contract without changing unrelated infrastructure.
 
-**Acceptance criteria**
+### Acceptance criteria
 - Existing default configurations retain no-change Terraform plans; no unintended resource replacements or security regressions.
 - New capabilities are demonstrated with live, retained evidence, including **16/16** workload validator success and GuardDuty Runtime Monitoring health where enabled.
 - Release documentation clearly identifies tested functionality, skipped scenarios, and any deferred endpoint work.
