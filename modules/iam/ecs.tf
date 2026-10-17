@@ -51,6 +51,39 @@ resource "aws_iam_role" "ecs_task_roles" {
   }
 }
 
+# Configured managed policies are attached only to application task roles.
+# The service and its policy ARNs must be known during Terraform planning.
+locals {
+  ecs_task_managed_policy_attachments = {
+    for attachment in flatten([
+      for service_name, service in var.ecs_iam_services : [
+        for policy_arn in service.task_role_managed_policy_arns : {
+          key          = "${service_name}|${policy_arn}"
+          service_name = service_name
+          policy_arn   = policy_arn
+        }
+      ]
+    ]) : attachment.key => attachment
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_managed_policies" {
+  for_each = local.ecs_task_managed_policy_attachments
+
+  role       = aws_iam_role.ecs_task_roles[each.value.service_name].name
+  policy_arn = each.value.policy_arn
+
+  lifecycle {
+    precondition {
+      condition = can(regex(
+        "^arn:${data.aws_partition.current.partition}:iam::(${var.account_id}|aws):policy/[A-Za-z0-9+=,.@_/-]+$",
+        each.value.policy_arn
+      ))
+      error_message = "Task-role managed policies must be AWS-managed or same-account customer-managed policies in the current partition."
+    }
+  }
+}
+
 data "aws_iam_policy_document" "ecs_task_execution_policies" {
   for_each = var.ecs_iam_services
 

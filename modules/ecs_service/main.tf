@@ -136,6 +136,13 @@ resource "terraform_data" "ecs_execution_policy_ready" {
   input = var.execution_policy_ids
 }
 
+## Optional application task-role policy attachments must exist before launch.
+## Empty policy sets create no readiness resources.
+resource "terraform_data" "ecs_task_role_policy_ready" {
+  for_each = var.task_role_policy_attachment_ids
+  input    = each.value
+}
+
 ## ECS Security Group rule IDs that must exist before ECS services launch
 resource "terraform_data" "ecs_security_policy_ready" {
   input = var.security_policy_rule_ids
@@ -184,6 +191,7 @@ resource "aws_ecs_service" "services" {
 
   depends_on = [
     terraform_data.ecs_execution_policy_ready,
+    terraform_data.ecs_task_role_policy_ready,
     terraform_data.ecs_security_policy_ready,
   ]
 
@@ -246,6 +254,7 @@ resource "aws_ecs_service" "autoscaled_services" {
 
   depends_on = [
     terraform_data.ecs_execution_policy_ready,
+    terraform_data.ecs_task_role_policy_ready,
     terraform_data.ecs_security_policy_ready,
   ]
 

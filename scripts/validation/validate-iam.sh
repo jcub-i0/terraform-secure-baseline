@@ -15,6 +15,7 @@
 # - Per-service ECS task/execution-role trust and least-privilege policy scope
 # - GuardDuty Fargate agent ECR pull authority matches deployment_profile exactly
 # - No broad or unexpected ECR authority is present on ECS execution roles
+# - Exact configured application task-role managed policy ARN inventory
 #
 # Usage:
 #   ./scripts/validation/validate-iam.sh dev
@@ -34,6 +35,8 @@ export AWS_PAGER=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/ecs-task-role-managed-policies.sh
+source "${SCRIPT_DIR}/lib/ecs-task-role-managed-policies.sh"
 
 ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
@@ -676,20 +679,29 @@ else
     validate_ecs_task_trust "$live_execution_role_json" "$execution_role_name" "$expected_source_arn"
     validate_ecs_task_trust "$live_task_role_json" "$task_role_name" "$expected_source_arn"
 
-    execution_managed_count="$(aws iam list-attached-role-policies "${aws_args[@]}" --role-name "$execution_role_name" --query 'AttachedPolicies | length(@)' --output text)"
-    task_managed_count="$(aws iam list-attached-role-policies "${aws_args[@]}" --role-name "$task_role_name" --query 'AttachedPolicies | length(@)' --output text)"
+    execution_managed_json="$(aws iam list-attached-role-policies "${aws_args[@]}" --role-name "$execution_role_name" --output json)"
+    task_managed_json="$(aws iam list-attached-role-policies "${aws_args[@]}" --role-name "$task_role_name" --output json)"
+    execution_managed_count="$(echo "$execution_managed_json" | jq '.AttachedPolicies | length')"
     execution_policy_names_json="$(aws iam list-role-policies "${aws_args[@]}" --role-name "$execution_role_name" --output json | jq -c '.PolicyNames | sort')"
     task_policy_names_json="$(aws iam list-role-policies "${aws_args[@]}" --role-name "$task_role_name" --output json | jq -c '.PolicyNames | sort')"
 
-    if [[ "$execution_managed_count" -ne 0 ]] || [[ "$task_managed_count" -ne 0 ]]; then
-      fail "ECS task/execution roles must not have AWS or customer managed policy attachments: ${service_name}"
+    if [[ "$execution_managed_count" -ne 0 ]]; then
+      fail "ECS execution role must not have managed policy attachments: ${service_name}"
     fi
     if [[ "$execution_policy_names_json" != "[\"${execution_role_name}\"]" ]]; then
       fail "ECS task execution role must have exactly its custom inline execution policy: ${service_name}"
     fi
     if [[ "$task_policy_names_json" != "[]" ]]; then
-      fail "ECS application task role must initially have no inline policies: ${service_name}"
+      fail "ECS application task role must have no inline policies: ${service_name}"
     fi
+
+    expected_task_managed_arns_json="$(
+      echo "$ECS_SERVICE_CONFIGURATION_JSON" |
+        jq -c --arg service "$service_name" '.[$service].task_role_managed_policy_arns // []'
+    )"
+    validate_task_role_managed_policy_inventory \
+      "$service_name" "$expected_task_managed_arns_json" "$task_managed_json" \
+      "$partition" "$ACCOUNT_ID"
 
     execution_policy_json="$(
       aws iam get-role-policy \
@@ -926,7 +938,7 @@ else
       fi
     fi
 
-    success "ECS IAM trust, exact application/GuardDuty execution-policy scope, empty task-role authority, and PassRole absence are valid: ${service_name}"
+    success "ECS IAM trust, exact execution-policy scope, declared task-role attachments, and generated PassRole absence are valid: ${service_name}"
   done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 fi
 

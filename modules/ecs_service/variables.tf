@@ -203,6 +203,21 @@ variable "execution_policy_ids" {
   }
 }
 
+variable "task_role_policy_attachment_ids" {
+  description = "Optional application task-role managed-policy attachment IDs keyed by service for launch readiness"
+  type        = map(set(string))
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for service_name in keys(var.task_role_policy_attachment_ids) :
+      contains(keys(var.services), service_name)
+    ])
+
+    error_message = "task_role_policy_attachment_ids keys must match configured ECS services."
+  }
+}
+
 variable "security_policy_rule_ids" {
   description = "Cross-component Security Group rule IDs keyed by service name, used as service launch-readiness dependencies"
   type        = map(set(string))

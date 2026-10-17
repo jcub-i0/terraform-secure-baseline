@@ -104,6 +104,20 @@ output "ecs_task_execution_policy_ids" {
   }
 }
 
+output "ecs_task_role_policy_attachment_ids" {
+  description = "Task-role managed-policy attachment IDs keyed by service; only populated for opted-in services"
+
+  value = {
+    for service_name, service in var.ecs_iam_services :
+    service_name => toset([
+      for key, attachment in aws_iam_role_policy_attachment.ecs_task_managed_policies :
+      attachment.id
+      if local.ecs_task_managed_policy_attachments[key].service_name == service_name
+    ])
+    if length(service.task_role_managed_policy_arns) > 0
+  }
+}
+
 output "ecs_task_roles" {
   description = "ECS application task roles keyed by service name"
 

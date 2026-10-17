@@ -247,7 +247,8 @@ locals {
         values(service.ssm_parameters)
       )
 
-      task_execution_kms_key_arns = service.task_execution_kms_key_arns
+      task_execution_kms_key_arns   = service.task_execution_kms_key_arns
+      task_role_managed_policy_arns = service.task_role_managed_policy_arns
     }
   }
 
