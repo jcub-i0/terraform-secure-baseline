@@ -212,7 +212,7 @@ variable "services" {
       )
     ])
 
-    error_message = "ECS health_check.command must start with CMD or CMD-SHELL. CMD-SHELL requires exactly two elements; CMD requires an executable and at least one argument. All command elements must be nonempty."
+    error_message = "ECS health_check.command must start with CMD or CMD-SHELL. CMD-SHELL requires exactly two elements; CMD requires an executable (additional arguments are optional). All command elements must be nonempty."
   }
 
   validation {
