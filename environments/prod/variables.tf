@@ -323,7 +323,7 @@ variable "ecs_services" {
       interval     = optional(number, 30)
       timeout      = optional(number, 5)
       retries      = optional(number, 3)
-      start_period = optional(number, 6)
+      start_period = optional(number, 0)
     }), null)
 
     cpu_architecture = optional(string, "X86_64")

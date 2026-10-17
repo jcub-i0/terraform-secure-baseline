@@ -645,7 +645,7 @@ variable "ecs_services" {
       interval     = optional(number, 30)
       timeout      = optional(number, 5)
       retries      = optional(number, 3)
-      start_period = optional(number, 6)
+      start_period = optional(number, 0)
     }), null)
 
     cpu_architecture = optional(string, "X86_64")
@@ -820,7 +820,7 @@ variable "ecs_services" {
           (
             try(service.health_check.command[0], "") == "CMD-SHELL"
             ? length(service.health_check.command) == 2
-            : length(service.health_check.command) >= 3
+            : length(service.health_check.command) >= 2
           ) &&
           alltrue([
             for element in service.health_check.command :
