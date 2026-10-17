@@ -61,6 +61,11 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-ecs-task-role-managed-policies.sh
 
+      - name: Test ECS-native application health
+        run: |
+          set -euo pipefail
+          bash scripts/tests/test-ecs-native-health.sh
+
       - name: Terraform format check
         id: terraform_fmt
         continue-on-error: true
