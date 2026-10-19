@@ -353,3 +353,19 @@ variable "fargate_platform_version" {
   type        = string
   default     = "LATEST"
 }
+
+variable "additional_interface_endpoint_services" {
+  description = "Approved additional AWS Interface VPC Endpoint services. Empty by default."
+
+  type    = set(string)
+  default = []
+
+  validation {
+    condition = length(setsubtract(
+      var.additional_interface_endpoint_services,
+      toset(["bedrock-runtime"])
+    )) == 0
+
+    error_message = "Only bedrock-runtime is currently supported as an additional Interface VPC Endpoint."
+  }
+}
