@@ -44,3 +44,19 @@ variable "s3_gateway_endpoint_rt_ids_list" {
   description = "Route table IDs that should use the S3 Gateway VPC Endpoint"
   type        = list(string)
 }
+
+variable "additional_interface_endpoint_services" {
+  description = "Approved additional AWS Interface VPC Endpoint services. Empty by default."
+
+  type    = set(string)
+  default = []
+
+  validation {
+    condition = length(setsubtract(
+      var.additional_interface_endpoint_services,
+      toset(["bedrock-runtime"])
+    )) == 0
+
+    error_message = "Only bedrock-runtime is currently supported as an additional Interface VPC Endpoint."
+  }
+}

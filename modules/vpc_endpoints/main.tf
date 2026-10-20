@@ -5,7 +5,7 @@ locals {
     var.subnet_cidrs["endpoint_private"]
   ])
 
-  interface_endpoints = [
+  required_interface_endpoints = [
     "sts",
     "logs",
     "ssm",
@@ -23,6 +23,11 @@ locals {
     "lambda",
     "guardduty-data",
   ]
+
+  interface_endpoints = setunion(
+    local.required_interface_endpoints,
+    var.additional_interface_endpoint_services
+  )
 }
 
 # GATEWAY ENDPOINTS (S3, DYNAMODB)
