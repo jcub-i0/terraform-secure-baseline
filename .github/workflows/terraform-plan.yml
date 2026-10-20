@@ -89,6 +89,7 @@ jobs:
       ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
       RDS_INSTANCE_CLASS: ${{ vars.RDS_INSTANCE_CLASS }}
       MAIN_VPC_CIDR: ${{ vars.MAIN_VPC_CIDR }}
+      TF_VAR_additional_interface_endpoint_services: ${{ vars.ADDITIONAL_INTERFACE_ENDPOINT_SERVICES || '[]' }}
 
     steps:
       - name: Checkout
