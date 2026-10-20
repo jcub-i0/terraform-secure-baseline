@@ -9,8 +9,9 @@
 # - Endpoint private subnets exist
 # - Endpoint private route tables exist and have no default route
 # - Interface VPC Endpoints exist and are available
-# - Interface VPC Endpoints have the canonical service inventory, private DNS,
-#   exact endpoint-private subnet placement, and the expected endpoint SG
+# - Interface VPC Endpoints have the 16 mandatory services plus only approved,
+#   Terraform-owned optional services, private DNS, exact endpoint-private subnet
+#   placement, and the expected endpoint SG
 # - Live Interface VPC Endpoint IDs exactly match Terraform-owned endpoint IDs
 # - The GuardDuty data endpoint is unique and reuses the Terraform-owned endpoint
 # - S3 Gateway Endpoint exists
@@ -39,9 +40,9 @@ NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
 
-# This inventory is platform-owned by modules/vpc_endpoints and is intentionally
-# not caller-overridable.
-readonly EXPECTED_INTERFACE_ENDPOINT_SERVICES=(
+# This mandatory inventory is platform-owned by modules/vpc_endpoints and cannot
+# be overridden by callers. Optional services must be explicitly approved below.
+readonly REQUIRED_INTERFACE_ENDPOINT_SERVICES=(
   sts
   sqs
   logs
@@ -58,6 +59,13 @@ readonly EXPECTED_INTERFACE_ENDPOINT_SERVICES=(
   securityhub
   lambda
   guardduty-data
+)
+
+# Keep this allowlist synchronized with the validation on the Terraform
+# additional_interface_endpoint_services variable. A service's presence in the
+# Terraform-owned endpoint ID output is not enough to approve an arbitrary API.
+readonly ALLOWED_OPTIONAL_INTERFACE_ENDPOINT_SERVICES=(
+  bedrock-runtime
 )
 
 export AWS_PAGER=""
@@ -143,30 +151,101 @@ if ! echo "$INTERFACE_ENDPOINT_IDS_JSON" |
   fail "interface_endpoint_ids must be a non-empty map of service names to VPC Endpoint IDs."
 fi
 
-EXPECTED_INTERFACE_SERVICES_JSON="$(
-  printf '%s\n' "${EXPECTED_INTERFACE_ENDPOINT_SERVICES[@]}" |
+REQUIRED_INTERFACE_SERVICES_JSON="$(
+  printf '%s\n' "${REQUIRED_INTERFACE_ENDPOINT_SERVICES[@]}" |
     jq -R . |
     jq -s -c 'sort | unique'
 )"
 
+ALLOWED_OPTIONAL_INTERFACE_SERVICES_JSON="$(
+  printf '%s\n' "${ALLOWED_OPTIONAL_INTERFACE_ENDPOINT_SERVICES[@]}" |
+    jq -R . |
+    jq -s -c 'sort | unique'
+)"
+
+# The applied Terraform output is authoritative for which endpoint IDs Terraform
+# actually owns. Do not expand expectations from the live AWS inventory.
 TERRAFORM_INTERFACE_SERVICES_JSON="$(
   echo "$INTERFACE_ENDPOINT_IDS_JSON" |
     jq -c 'keys | sort'
 )"
 
-if [[ "$TERRAFORM_INTERFACE_SERVICES_JSON" != "$EXPECTED_INTERFACE_SERVICES_JSON" ]]; then
+INTERFACE_SERVICE_CONTRACT_JSON="$(
   jq -n \
-    --argjson expected "$EXPECTED_INTERFACE_SERVICES_JSON" \
-    --argjson terraform "$TERRAFORM_INTERFACE_SERVICES_JSON" \
-    '{
-      expected_services: $expected,
-      terraform_services: $terraform,
-      missing_from_terraform: ($expected - $terraform),
-      unexpected_in_terraform: ($terraform - $expected)
-    }'
+    --argjson required "$REQUIRED_INTERFACE_SERVICES_JSON" \
+    --argjson allowed_optional "$ALLOWED_OPTIONAL_INTERFACE_SERVICES_JSON" \
+    --argjson terraform "$TERRAFORM_INTERFACE_SERVICES_JSON" '
+      {
+        required_services: $required,
+        allowed_optional_services: $allowed_optional,
+        terraform_services: $terraform,
+        missing_required: ($required - $terraform),
+        unapproved_services: ($terraform - $required - $allowed_optional),
+        enabled_optional: ($terraform - $required)
+      }
+    '
+)"
 
-  fail "interface_endpoint_ids keys do not exactly match the platform-owned Interface VPC Endpoint service inventory."
+if ! echo "$INTERFACE_SERVICE_CONTRACT_JSON" |
+  jq -e '(.missing_required | length) == 0 and (.unapproved_services | length) == 0' >/dev/null; then
+  echo "$INTERFACE_SERVICE_CONTRACT_JSON" | jq .
+  fail "interface_endpoint_ids must contain all required endpoints and no services outside the approved optional allowlist."
 fi
+
+ENABLED_OPTIONAL_INTERFACE_SERVICES_JSON="$(
+  echo "$INTERFACE_SERVICE_CONTRACT_JSON" | jq -c '.enabled_optional'
+)"
+
+EXPECTED_INTERFACE_SERVICES_JSON="$(
+  jq -n \
+    --argjson required "$REQUIRED_INTERFACE_SERVICES_JSON" \
+    --argjson optional "$ENABLED_OPTIONAL_INTERFACE_SERVICES_JSON" \
+    '$required + $optional | sort | unique'
+)"
+
+# A separate desired-intent output is optional for compatibility with currently
+# deployed stacks. If present, it must independently agree with the applied
+# endpoint identity map; mismatches are always fatal.
+if terraform_output_exists "$OUTPUTS_JSON" configured_additional_interface_endpoint_services; then
+  CONFIGURED_OPTIONAL_INTERFACE_SERVICES_JSON="$(
+    echo "$OUTPUTS_JSON" |
+      jq -c '.configured_additional_interface_endpoint_services.value'
+  )"
+
+  if ! echo "$CONFIGURED_OPTIONAL_INTERFACE_SERVICES_JSON" |
+    jq -e \
+      --argjson allowed "$ALLOWED_OPTIONAL_INTERFACE_SERVICES_JSON" '
+        type == "array"
+        and (length == (unique | length))
+        and all(.[]; type == "string" and IN($allowed[]))
+      ' >/dev/null; then
+    echo "$CONFIGURED_OPTIONAL_INTERFACE_SERVICES_JSON" | jq .
+    fail "configured_additional_interface_endpoint_services must be a unique list of approved optional services."
+  fi
+
+  CONFIGURED_OPTIONAL_INTERFACE_SERVICES_JSON="$(
+    echo "$CONFIGURED_OPTIONAL_INTERFACE_SERVICES_JSON" | jq -c 'sort'
+  )"
+
+  if [[ "$CONFIGURED_OPTIONAL_INTERFACE_SERVICES_JSON" != "$ENABLED_OPTIONAL_INTERFACE_SERVICES_JSON" ]]; then
+    jq -n \
+      --argjson configured "$CONFIGURED_OPTIONAL_INTERFACE_SERVICES_JSON" \
+      --argjson deployed "$ENABLED_OPTIONAL_INTERFACE_SERVICES_JSON" '
+        {configured_optional_services: $configured, terraform_owned_optional_services: $deployed}'
+    fail "Configured optional Interface VPC Endpoint services disagree with Terraform-owned endpoint IDs."
+  fi
+  success "Configured optional endpoint intent exactly matches Terraform-owned endpoint IDs"
+else
+  info "No separate optional-endpoint intent output; verifying the approved optional set from Terraform-owned endpoint IDs."
+fi
+
+# Reuse the approved expected list for individual live-service cardinality checks.
+mapfile -t EXPECTED_INTERFACE_ENDPOINT_SERVICES < <(
+  echo "$EXPECTED_INTERFACE_SERVICES_JSON" | jq -r '.[]'
+)
+
+success "Required Interface Endpoints: ${#REQUIRED_INTERFACE_ENDPOINT_SERVICES[@]}"
+info "Terraform-owned optional Interface Endpoints: ${ENABLED_OPTIONAL_INTERFACE_SERVICES_JSON}"
 
 TERRAFORM_INTERFACE_ENDPOINT_COUNT="$(
   echo "$INTERFACE_ENDPOINT_IDS_JSON" |
@@ -669,7 +748,7 @@ UNEXPECTED_INTERFACE_SERVICES_JSON="$(
 )"
 
 if [[ "$(echo "$UNEXPECTED_INTERFACE_SERVICES_JSON" | jq 'length')" -eq 0 ]]; then
-  success "Interface VPC Endpoint service inventory exactly matches the platform-owned set"
+  success "Interface VPC Endpoint service inventory exactly matches the mandatory and approved optional Terraform-owned set"
 else
   echo "$UNEXPECTED_INTERFACE_SERVICES_JSON" | jq '{unexpected_interface_endpoint_services: .}'
   fail "Unexpected Interface VPC Endpoint services are present."
@@ -882,6 +961,8 @@ Expected AZs:                         ${EXPECTED_AZS_JSON}
 Endpoint private subnets:             ${ENDPOINT_SUBNET_COUNT}
 Endpoint private route tables:        ${ENDPOINT_RT_COUNT}
 Interface VPC Endpoints:              ${INTERFACE_ENDPOINT_COUNT}
+Required Interface Endpoints:         ${#REQUIRED_INTERFACE_ENDPOINT_SERVICES[@]}
+Optional Interface Endpoints:         ${ENABLED_OPTIONAL_INTERFACE_SERVICES_JSON}
 Terraform-owned endpoint IDs:         ${TERRAFORM_INTERFACE_ENDPOINT_COUNT}
 Interface Endpoint security group:    ${INTERFACE_ENDPOINT_SG_ID}
 GuardDuty data endpoint:              ${GUARDDUTY_DATA_ENDPOINT_ID}
