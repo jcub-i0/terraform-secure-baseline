@@ -307,6 +307,8 @@ module "vpc_endpoints" {
   account_id     = var.account_id
   primary_region = data.aws_region.current.region
 
+  additional_interface_endpoint_services = var.additional_interface_endpoint_services
+
   compute_private_subnet_ids_map       = module.networking.compute_private_subnet_ids_map
   serverless_private_subnet_ids_map    = module.networking.serverless_private_subnet_ids_map
   endpoint_private_subnet_ids_map      = module.networking.endpoint_private_subnet_ids_map
