@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document describes the implemented ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
+This document describes the current v1.12.0 ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
@@ -28,6 +28,24 @@ Fargate tasks use `awsvpc`, run in `compute_private` subnets, and receive no pub
 Application HTTPS egress follows the effective workload egress mode: `development` defaults to `nat_only`, `production` defaults to `network_firewall`, and `minimal` defaults to `vpc_endpoints_only`. The task-security-policy path is derived from the same effective mode rather than using a separate ECS egress model.
 
 Production defaults to three eligible AZs and development/minimal to two. Default `/24` families derive from the canonical `/16` `main_vpc_cidr`; service `primary_region` is distinct from the state backend Region. Region/topology configurability does not itself prove multi-Region qualification or a safe in-place migration. See the [networking reference](../modules/networking/README.md).
+
+### Optional private AWS service access
+
+v1.12.0 adds workload-level `additional_interface_endpoint_services`, default `[]`,
+with `bedrock-runtime` as the sole approved addition to the 16 mandatory Interface
+Endpoints. It is independent of `ecs_services`: a null-digest registration does
+not prevent an explicitly enabled shared endpoint from being created or billed.
+All endpoints reuse private DNS, endpoint-private subnets, and the shared SG with
+existing TCP/443 paths. No application-specific endpoint policy or authorization
+logic is created. Existing service-keyed Terraform addresses remain stable.
+
+Configure the same input locally and through GitHub
+`ADDITIONAL_INTERFACE_ENDPOINT_SERVICES` where `<env>-plan` resolves its variables.
+Plan and Apply's internal Plan job default it to `[]`; resetting an enabled set
+removes the optional endpoint. Review the exact plan, costs and regional service
+availability. Private DNS/TLS/HTTP success proves reachability, not permitted
+application API calls or successful inference. The historical M3 Fargate probe
+used a temporary task with the compute SG, not the canonical task SG.
 
 ## Canonical service interface
 
@@ -178,6 +196,19 @@ Each task definition uses separate per-service task execution and application ta
 The optional `ecs_services.<service>.health_check` renders a container-native `healthCheck` only when configured. Without it, the task definition remains unchanged and no additional live application-health queries are required. When enabled, `validate-ecs-runtime.sh` checks the exact task-definition fields and verifies that running application containers report `HEALTHY`, independently of GuardDuty and ALB ingress. `UNHEALTHY` fails immediately and `UNKNOWN` receives bounded startup rechecks (13 attempts, five seconds apart by default; configurable through `ECS_NATIVE_HEALTH_MAX_ATTEMPTS` and `ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS`). A configured check on a service intentionally at zero desired capacity is reported as **skipped**, not proven healthy. ALB target health remains separate, and neither signal proves database queries or business behavior.
 
 The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
+
+Health command validation requires `CMD` plus an executable (and optional
+arguments), or `CMD-SHELL` plus exactly one shell command, with no empty/null
+elements. The image must contain the command and any required shell. Whole-number
+limits/defaults are interval 5–300/30 seconds, timeout 2–60/5 seconds, retries
+1–10/3 and start period 0–300/0 seconds. Native-health polling accepts 1–60 attempts
+and 0–60 seconds between observations. It runs before strict service rollout
+convergence; missing/unresolved health fails when its bound is reached.
+Summaries distinguish configured checks, healthy tasks, and zero-capacity skips.
+The shared task-describe helper batches requests for both native-health and
+GuardDuty checks. The [module reference](../modules/ecs_service/README.md) details
+rendering and validation; the [quickstart](quickstart.md#v1120-opt-in-configuration-and-upgrade)
+provides adoption examples.
 
 ## Deployment health
 
@@ -405,6 +436,18 @@ With no deployable services, coverage lookup is not required. With protected ser
 `validate-eventbridge.sh` verifies the GuardDuty Runtime coverage rule pattern, exact SecOps SNS target, shared DLQ, retry policy, and required input-transformer evidence fields.
 
 `validate-security-operations.sh` owns the centralized organization contract. It compares the Terraform-managed GuardDuty feature subset exactly with AWS and also fails if AWS reports any additional organization feature or additional configuration as enabled outside the Terraform-managed contract.
+
+### v1.12.0 qualification
+
+The [release ledger](assurance/v1.12.0-qualification.md) records 53 offline
+CI cases (13 M1, 18 M2, 22 M3), historical M2 healthy/failing-container observations,
+and historical M3 EC2/Fargate private-connectivity evidence. Exact attachment
+inventory does not evaluate external policy contents or versions. The additional
+M1 live allowed/denied API exercise is explicitly maintainer-deferred, not passed.
+Consolidated M4 application-release evidence and final sign-off are not established.
+The M2 standalone negative task did not qualify managed-service rollback or ALB
+integration, and the M3 probe did not perform an authenticated model invocation.
+Earlier results below remain attached to their own configurations and releases.
 
 ### Historical Runtime Monitoring qualification
 

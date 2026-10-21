@@ -278,7 +278,7 @@ VPC Endpoints for supported AWS services
 
 This makes private networking the default and public exposure the exception.
 
-The optional ALB has an HTTPS frontend but HTTP target groups and health checks; private placement is not end-to-end transport encryption. The fixed endpoint set and security groups supply network paths, not application authorization or custom endpoint-policy isolation.
+The optional ALB has an HTTPS frontend but HTTP target groups and health checks; private placement is not end-to-end transport encryption. The mandatory endpoint set, approved opt-in endpoints, and security groups supply network paths, not application authorization or custom endpoint-policy isolation.
 
 ---
 
@@ -367,6 +367,7 @@ The current endpoint set supports private access to services including:
 - Security Hub
 - Lambda
 - GuardDuty Runtime Monitoring (`guardduty-data`)
+- Optional Bedrock Runtime (`bedrock-runtime`) in v1.12.0, enabled through `additional_interface_endpoint_services` (default `[]`)
 
 Interface VPC Endpoints are deployed into dedicated private endpoint subnets.
 
@@ -578,6 +579,15 @@ EC2 and ECS/Fargate are sibling workload patterns. `modules/compute` remains EC2
 Operators maintain one canonical `ecs_services` map. A service can be registered with `image_digest = null`; baseline still derives its repository requirement while filtering per-service runtime resources until an immutable digest is selected. This avoids a second service inventory and avoids splitting Terraform state merely to bootstrap ECR.
 
 The same canonical map defines ECS capacity ownership. `scaling = null` means Terraform owns `desired_count`. A non-null scaling object means the configured count is bootstrap capacity and Application Auto Scaling owns subsequent runtime count within explicit bounds. The module keeps fixed and autoscaled ECS resources separate so Terraform lifecycle behavior cannot accidentally undo a legitimate scale event. The runtime retains the target-tracking-only model: CPU, memory, and conditional ALB requests per target.
+
+v1.12.0 extends this same interface with opt-in managed-policy attachments on the
+application task role and ECS-native container health checks. Empty policy sets
+and null health settings preserve opt-out behavior. Application owners retain
+policy-document and health-command responsibility; exact policy inventory,
+container health, ALB health, and GuardDuty status are separate assertions.
+Optional private endpoints retain the 16 mandatory services and allow only
+`bedrock-runtime`, reuse shared network controls, and incur costs when enabled.
+Private transport does not establish application authorization.
 
 Deployment health is likewise explicit in the canonical contract through minimum healthy percentage, maximum percentage, and task-startup health-check grace period. AWS-managed target-tracking alarms remain AWS-managed; Terraform-owned task-deficit and ingress unhealthy-target alarms are separate operational notification controls.
 

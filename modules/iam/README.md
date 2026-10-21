@@ -23,7 +23,7 @@ This module includes IAM resources for:
 
 This module does **not** manage GitHub OIDC identities or IAM Identity Center personas. GitHub roles belong to the separate account stacks through [github_oidc](../github_oidc/README.md); Identity Center groups, permission sets, and assignments belong to the [control-plane Identity Center root](../../bootstrap/control_plane/identity_center/README.md). Users and group membership are not created by either this module or that root.
 
-The caller composes these resources through [baseline/main.tf](../../baseline/main.tf). Except for the per-service ECS collections, the roles and policies here are not gated by a deployment profile, backup schedule, or Config enablement flag. A retained service role does not prove its associated service is enabled. This module does not configure permissions boundaries or provide a general application-task policy extension interface.
+The caller composes these resources through [baseline/main.tf](../../baseline/main.tf). Except for the per-service ECS collections, the roles and policies here are not gated by a deployment profile, backup schedule, or Config enablement flag. A retained service role does not prove its associated service is enabled. This module does not configure permissions boundaries or author application policy documents. v1.12.0 provides the typed `task_role_managed_policy_arns` attachment interface for existing managed policies.
 
 ---
 
@@ -105,6 +105,22 @@ The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. I
 Application task roles have no policies by default. Optional `task_role_managed_policy_arns` attaches AWS-managed or same-account customer-managed policies **only to the application task role** for a deployable service; the execution role is unchanged. The baseline creates task roles and the selected attachments, **not** application-specific managed policies. Application owners provision and approve their customer-managed policies separately and pass known ARNs through the canonical `ecs_services` map. A first baseline apply with `image_digest = null` needs no task-role policy ARNs and creates no task role or attachments. Policy ARNs must be known during planning and the policies must exist by attachment time; ECS service launch waits for any configured attachments.
 
 The live IAM validator verifies exact attached policy ARNs and rejects unexpected attachments and inline task policies. It does not analyze the contents or effective permissions of externally managed policies. The application owner must review policy grants, versions, permission boundaries, and resource-based access before approval.
+
+For example, inside an existing canonical `ecs_services.api` object:
+
+```hcl
+task_role_managed_policy_arns = [
+  "arn:aws:iam::123456789012:policy/application/ApprovedAccess"
+]
+```
+
+Replace the illustrative ARN with a reviewed existing policy in the workload
+account/partition. The canonical baseline validates policy-ARN shape, and attachment
+preconditions restrict identity to the current partition and either the workload
+account or AWS-managed policies. This does not prove a policy exists or is least
+privilege. An omitted/empty set adds no attachments or attachment readiness
+instances; removal of an ARN plans detachment. `ecs_service_configuration` emits
+the sorted ARN list only for nonempty sets on deployable services.
 
 The common trust condition covers ECS resources throughout the configured account and Region (`...:ecs:<region>:<account>:*`), not a single service ARN or task definition. Separate role names do not themselves narrow that trust pattern.
 
@@ -664,13 +680,16 @@ This module call wires IAM roles and policies to the rest of the baseline, inclu
 
 ## Validation
 
-The workload baseline derives `ecs_iam_services` from the canonical service map and passes it to this module. `validate-iam.sh` validates each configured execution/task role pair, ECS trust restrictions, custom execution policy scope, optional ARN-identifiable secret/parameter permissions, absence of managed-policy attachments and `iam:PassRole`, and the initially policy-free application task role. It compares the live `kms:Decrypt` resource set exactly with `ecs_service_configuration[*].task_execution_kms_key_arns` and rejects decrypt permission when that set is empty. It also derives the Runtime Monitoring expectation from `deployment_profile`, requires exactly the Terraform-declared GuardDuty agent repository pull scope when enabled, requires no GuardDuty repository scope when disabled, and rejects broad or unexpected ECR authority. Runtime identity relationships are also checked through resource-backed workload outputs by `validate-ecs-runtime.sh`.
+The workload baseline derives `ecs_iam_services` from the canonical service map and passes it to this module. `validate-iam.sh` validates each configured execution/task role pair, ECS trust restrictions, custom execution policy scope, optional ARN-identifiable secret/parameter permissions, absence of execution-role managed-policy attachments and generated `iam:PassRole`, exact configured application task-role managed-policy attachments, and absence of task-role inline policies. It compares the live `kms:Decrypt` resource set exactly with `ecs_service_configuration[*].task_execution_kms_key_arns` and rejects decrypt permission when that set is empty. It also derives the Runtime Monitoring expectation from `deployment_profile`, requires exactly the Terraform-declared GuardDuty agent repository pull scope when enabled, requires no GuardDuty repository scope when disabled, and rejects broad or unexpected ECR authority. Runtime identity relationships are also checked through resource-backed workload outputs by `validate-ecs-runtime.sh`.
 
 The following manual listings are spot checks. They do not compare every
 attached/inline policy, simulate all authorization paths, or reject all extra
 roles. A passing ECS policy check does not certify the wildcard grants on the
-unrelated Lambda/remediation roles. Adding application task policies requires
-reconciling that change with the validator's policy-free task-role contract.
+unrelated Lambda/remediation roles. Application-managed policy contents and later
+default-version changes are outside the attachment validator's scope. Review effective permissions separately; no
+permission boundary is created here. The additional M1 live allowed/denied API
+exercise was explicitly deferred by the maintainer, as recorded in the
+[v1.12.0 qualification ledger](../../docs/assurance/v1.12.0-qualification.md).
 
 From the repository root, first select the initialized workload and credentials
 using the [validation checklist](../../docs/validation-checklist.md). The local

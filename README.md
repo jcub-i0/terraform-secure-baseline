@@ -44,6 +44,37 @@ The platform provides:
 
 ---
 
+## Current release — v1.12.0
+
+v1.12.0 introduces optional application task-role managed-policy attachments,
+ECS-native container health checks, and private `bedrock-runtime` connectivity.
+The defaults are respectively `[]`, `null`, and `[]`; no new application
+permissions or optional endpoint charges arise without opting in. The existing
+16 mandatory Interface Endpoints remain.
+
+Use `ecs_services.<service>.task_role_managed_policy_arns` for approved existing
+policies and `ecs_services.<service>.health_check` for a command shipped in the
+application image. Set the workload-level `additional_interface_endpoint_services`
+to `["bedrock-runtime"]` only where private service access is required. See the
+[complete opt-in examples and upgrade steps](docs/quickstart.md#v1120-opt-in-configuration-and-upgrade)
+and [release changes](CHANGELOG.md#v1120--application-runtime-extensibility).
+Existing users need no configuration changes to retain the opt-out behavior;
+review the actual plan and the dev sample's illustrative health check before
+selecting an image digest. A null digest remains registered but unreleased.
+
+Task-role attachments do not alter execution-role authority. Exact attachment
+validation does not evaluate application policy contents. Native container health
+complements ALB target health and is independent of GuardDuty coverage. PrivateLink
+DNS/TLS reachability does not establish IAM authorization or Bedrock inference.
+Optional endpoints add AWS charges and share the existing endpoint SG access paths.
+
+The [v1.12.0 qualification record](docs/assurance/v1.12.0-qualification.md) records
+53 offline scenarios verified in CI, historical M2 health and M3 connectivity
+observations, and baseline/convergence evidence with its original scope. The
+additional M1 live allowed/denied API exercise was explicitly deferred; consolidated
+M4 application-release evidence and final sign-off are not established. These
+limits remain part of the current release documentation.
+
 ## What This Project Provides
 
 ### Governance and identity

@@ -394,6 +394,32 @@ When the runtime is empty, mark task/ALB instrumentation assertions not applicab
 | RDS `Backup` tag | `<true/false>` | `validate-backup.log` | Must match effective enablement |
 | Backup jobs / recovery-point health | `<PASS/WARN/FAIL/Not Applicable>` | `validate-backup.log` | Applicable when scheduled backup is enabled |
 
+### v1.12.0 Runtime Extension Evidence
+
+Complete these companion fields only from the selected deployment's evidence.
+The [release ledger](v1.12.0-qualification.md) is historical context, not prefilled
+results. Its maintainer-deferred M1 live exercise and missing consolidated M4
+evidence must not be converted into PASS for this report.
+
+| Assertion / record | Result / value | Evidence / limit |
+|---|---|---|
+| Task-role managed-policy expected/live sets | `<ARN sets/PASS/FAIL/Not Reviewed>` | `validate-iam.log`; exact attachments, no inline task policies, separate execution role |
+| Application policy contents/versions and effective access review | `<Reviewed/Not Reviewed>` | `<policy review and resource grants>`; inventory equality does not evaluate permissions |
+| Live allowed and denied application API exercise | `<Observed/Not Run/Deferred>` | `<identity/actions/resources/responses or explicit exception owner/date/rationale>` |
+| Native `health_check` configuration parity | `<PASS/FAIL/Disabled/Not Reviewed>` | `<task definition and normalized config>` |
+| Native health live observations | `<healthy task count/unresolved/failure/not exercised>` | `<task/digest/time and validator log>`; separate from ALB/GuardDuty |
+| Zero-capacity native-health skips | `<service keys/count/none>` | Desired/running/pending all zero is not `HEALTHY` |
+| Native-health polling settings | `<attempts/interval>` | Defaults 13/5 seconds; record overrides and actual outcome |
+| Mandatory/optional endpoint inventory | `<16 required; optional set; PASS/FAIL/Not Reviewed>` | Applied `interface_endpoint_ids` and live IDs; only `bedrock-runtime` approved |
+| Desired optional input and source | `<value/local tfvars/CI variable>` | Current roots do not emit a separate optional-intent output; compare plan separately |
+| Private DNS, TLS and HTTP observation | `<Observed/Not Run>` | `<source subnet/SG, endpoint ENIs, DNS/TLS results>`; not IAM/inference |
+| Canonical application task-SG connectivity | `<Observed/Not Run>` | A temporary compute-SG probe does not establish this path |
+| Authenticated application/model operation | `<Observed/Not Run/Not Applicable>` | `<separate request evidence>`; no implicit inference success |
+| Offline regression | `<counts/revision/CI run/Not Run>` | Historical release CI: 13 + 18 + 22 = 53 mocked cases; not live behavior |
+| Consolidated publication → reviewed Apply → runtime → export | `<Evidence complete/Incomplete/Not Run>` | `<publication digest, plan/Apply IDs, revision, package URI/checksums>` |
+| Reused historical qualification | `<original revision/configuration/run and rationale/none>` | Preserve provenance; do not relabel as execution on this report's revision |
+| Evidence gaps and reviewer disposition | `<gaps/owner/decision/date/Not Reviewed>` | Separate from script success, release publication and certification |
+
 ### RDS Resilience Evidence
 
 | Assertion | Result / Value | Evidence | Limit |

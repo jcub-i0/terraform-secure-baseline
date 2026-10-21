@@ -536,8 +536,25 @@ healthy percent and at least 200 maximum percent.
 The ALB terminates HTTPS; its task target groups and health checks use HTTP.
 Digest pinning selects exact image content but does not establish signature
 verification, absence of vulnerabilities, read-only container filesystems, or
-application transaction correctness. Application task roles start without
-application policies; task-startup secret access belongs to the execution role.
+application transaction correctness. Application task roles have no policies by
+default; v1.12.0 supports explicit managed-policy attachments only on the application
+role. The IAM validator checks exact attachment ARNs, not effective permissions or
+policy versions. Application policy design remains customer-owned; task-startup
+secret access belongs to the separate execution role.
+
+Optional ECS-native `health_check` provides task-definition parity and bounded
+live application-container health checks independently of ALB health and GuardDuty.
+Zero-capacity checks are skipped. Optional `bedrock-runtime` private access adds
+to the 16 mandatory Interface Endpoints through
+`additional_interface_endpoint_services` (default `[]`), with shared endpoint
+SG/private DNS/subnet controls and additional AWS costs. DNS/TLS/HTTP reachability
+does not establish application authorization or model inference.
+
+The [v1.12.0 qualification ledger](v1.12.0-qualification.md) distinguishes the
+53 offline CI scenarios from historical M2/M3 live observations, records the
+maintainer-deferred M1 live authorization exercise, and retains unresolved M4
+application-release provenance. These controls and observations do not establish
+SOC 2 or ISO 27001 certification.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. The monitoring module creates:
 

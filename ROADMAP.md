@@ -1,53 +1,32 @@
-# v1.12.0 Roadmap — Application Runtime Extensibility
+# Release Roadmap — v1.12.0 Application Runtime Extensibility
 
-**Objective:** Enable application-agnostic SaaS workloads to use approved AWS services and report application health through the existing canonical `ecs_services` interface.
+**Current release: v1.12.0.** The baseline provides application-agnostic SaaS
+runtime extensions through the existing canonical `ecs_services` interface and
+an environment-level private-endpoint input. All three capabilities are opt-in.
+Terraform owns baseline infrastructure; application owners retain authorization
+policy, health-command, and data-access decisions.
 
-**Guardrails:** All new capabilities are opt-in. Preserve existing service configurations, ECS task/execution role separation, immutable image deployments, and Terraform ownership boundaries. No application-specific modules, default privilege expansion, or unnecessary baseline costs.
+## Delivered scope and qualification dispositions
 
-## Milestone 1 — Extensible ECS Task IAM (Required)
+| Milestone | v1.12.0 implementation | Evidence and limits |
+|---|---|---|
+| M1 — Extensible ECS task IAM | Optional `task_role_managed_policy_arns`; application-role-only attachments, launch ordering, exact inventory validation; no default privilege expansion | 13 offline cases passed CI and live inventory checks were recorded during M2. The maintainer explicitly deferred the additional live allowed/denied API exercise; that original acceptance criterion is not PASS. |
+| M2 — ECS-native container health | Optional `health_check`, task-definition parity, independent bounded live health polling; ALB and GuardDuty checks remain separate | 18 offline scenarios passed CI. Historical dev healthy-container and deliberately failing standalone-task observations are retained; managed-service rollback, ALB integration and multi-service scaling were not demonstrated by those tests. |
+| M3 — Optional private AWS endpoints | `additional_interface_endpoint_services = []`; only `bedrock-runtime` approved; 16 mandatory endpoints preserved; exact ownership/inventory validation and Plan/Apply input wiring | 22 offline scenarios passed CI. Historical EC2 and temporary Fargate probes established private DNS/TLS/HTTP connectivity, not application IAM or inference. Enabled-state Apply and other archival provenance remain incomplete. |
+| M4 — Integration and documentation | All three suites run in Static Analysis: 53 offline scenarios. Current release docs include usage, migration, security boundaries and qualification limits | CI run 39368786319 passed at `7002a421`. Consolidated application publication → reviewed Apply → runtime validation → evidence is not established by retained M4 evidence. Earlier M2/M3 tests are not new M4 executions. |
 
-### Work
-- Add optional per-service task-role managed policy ARN attachments to `ecs_services` and propagate them through the existing Terraform modules.
-- Attach policies to the **application task role**, never the ECS execution role; keep default task-role permissions empty.
-- Extend IAM validation to check exact configured attachments and reject unexpected permissions or attachments.
+The [qualification record](docs/assurance/v1.12.0-qualification.md) is the detailed
+ledger of acceptance evidence, operator reports, explicit exceptions, and unresolved
+provenance. `16/16` denotes workload-validator results. It does not establish
+complete application behavior, a fresh default/no-change plan, or SOC 2/ISO 27001
+certification. Reviewer approval and release sign-off are not recorded by this
+roadmap; finalized release terminology does not close those evidence gaps.
 
-### Acceptance criteria
-- A reference task can invoke an explicitly authorized AWS API but is denied an ungranted action.
-- Existing services without policy attachments have no IAM changes; `image_digest = null` still creates no task roles or attachments.
-
-## Milestone 2 — ECS-Native Container Health Checks (Required)
-
-### Work
-- Add an optional per-service `health_check` configuration (command, interval, timeout, retries, start period).
-- Render the check in the ECS task definition and extend runtime validation for configuration and live container health.
-- Preserve independent ALB target-health behavior and existing defaults when disabled.
-
-### Acceptance criteria
-- A reference application with an enabled check reaches ECS `HEALTHY`; an intentional failing check is detected.
-- Services without the setting retain their existing task-definition and validation behavior, including services without ingress.
-
-## Milestone 3 — Optional Private AWS Service Endpoints (Conditional)
-
-### Work
-- Assess a tightly scoped, opt-in list of additional regional Interface VPC Endpoint services (e.g., `bedrock-runtime`).
-- Reuse established endpoint-private subnets, security-group rules, private DNS, and ownership/validation patterns.
-- Defer to a later release if safe implementation requires a broad networking or service-catalog refactor.
-
-### Acceptance criteria**
-- When included, a reference task reaches an explicitly enabled service privately, and endpoint inventory/configuration validation passes.
-- Existing endpoints remain unchanged; no additional endpoints or charges are introduced when the option is unset.
-
-## Milestone 4 — Integration Qualification and Documentation (Required)
-
-### Work
-- Add focused positive/negative tests for new inputs, least privilege, and health behavior; include endpoint tests if Milestone 3 ships.
-- Run a generic reference application through the existing publication → reviewed Apply → runtime validation → evidence workflow.
-- Update usage examples, migration notes, and the ECS runtime contract without changing unrelated infrastructure.
-
-### Acceptance criteria
-- Existing default configurations retain no-change Terraform plans; no unintended resource replacements or security regressions.
-- New capabilities are demonstrated with live, retained evidence, including **16/16** workload validator success and GuardDuty Runtime Monitoring health where enabled.
-- Release documentation clearly identifies tested functionality, skipped scenarios, and any deferred endpoint work.
+The [changelog](CHANGELOG.md) records changes since v1.11.1, and the
+[quickstart](docs/quickstart.md#v1120-opt-in-configuration-and-upgrade) explains
+opt-in migration. Existing service defaults, null-digest registration, execution
+role separation, immutable image selection, and production/retirement boundaries
+remain in place. Enabled optional endpoints add AWS charges.
 
 ## Deferred to v1.13.0 — Recovery Assurance and Edge Protection
 
@@ -55,4 +34,6 @@
 - **AWS WAF:** Add opt-in managed-rule protection for public ALBs, with a safe monitoring/count-first rollout and live validation.
 - **ALB access logs:** Add configurable, protected request-log delivery, retention, and validation appropriate to an ingress-enabled workload.
 
-Broader Checkov remediation, cross-Region disaster recovery, generalized secret rotation, and advanced ECS patterns (multi-container, Service Connect, scheduled tasks) remain separate backlog items, not part of this release plan.
+Broader Checkov remediation, cross-Region disaster recovery, generalized secret
+rotation, and advanced ECS patterns (multi-container, Service Connect, scheduled
+tasks) remain separate backlog items outside v1.12.0.

@@ -748,6 +748,13 @@ Workload Plan environments also require an explicit `ISOLATION_ALLOWED` value of
 
 The Apply environment also requires `STATE_STACK_BACKEND_KEY` when workload-account reconciliation materializes the state-stack backend for strict post-apply validation.
 
+For v1.12.0, workload `<env>-plan` settings also support
+`ADDITIONAL_INTERFACE_ENDPOINT_SERVICES`: JSON `[]` by default, or
+`["bedrock-runtime"]` to add the approved private service endpoint. Both Terraform
+Plan and Apply's internal Plan job forward this value; protected Apply uses its
+saved plan. See [opt-in configuration and upgrade](#v1120-opt-in-configuration-and-upgrade)
+for usage, cost and configuration precedence.
+
 Workload plan-producing jobs also read optional `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, `ALB_CERTIFICATE_ARN`, and `ALB_INGRESS_CIDRS`. The workflow exports the supplied values to the corresponding Terraform inputs. Keep these consistent across normal Apply, standalone Plan, and Destroy; in particular, a custom-CIDR deployment must not be destroyed using a reconstructed default configuration. `ALB_INGRESS_CIDRS` is a JSON array, not a shell list. With no supplied CIDR override, the baseline default is `10.0.0.0/16`.
 
 `STATE_STACK_BACKEND_KEY` is the state root's own key, distinct from the workload/account keys. Reconciliation materializes that backend using the **state template's region**, not `PRIMARY_REGION`. The reconciliation workflow does not introduce a parallel GitHub `STATE_REGION` setting.
@@ -858,6 +865,92 @@ lifecycle_protection
 ```
 
 These outputs confirm how profile defaults and explicit overrides resolved for the environment. In the centralized deployment, the three `effective_manage_*_locally` security-service outputs should be `false`.
+
+### v1.12.0 opt-in configuration and upgrade
+
+The current release, v1.12.0, preserves the opt-out defaults for existing
+v1.11.1 configurations. No new settings are required unless an application needs
+one of the following capabilities. Review your actual state-backed plan; this
+compatibility contract does not promise a no-change plan for every deployment.
+Historical qualification and its exceptions are recorded in the
+[v1.12.0 ledger](assurance/v1.12.0-qualification.md).
+
+For task IAM and container health, add either or both optional fields to the
+existing service entry in `environments/<env>/container-workloads.auto.tfvars.json`.
+This JSON is a **service-object fragment**, not a replacement for the full file:
+
+```json
+{
+  "task_role_managed_policy_arns": [
+    "arn:aws:iam::123456789012:policy/application/ApprovedAccess"
+  ],
+  "health_check": {
+    "command": ["CMD", "/app/healthcheck"],
+    "interval": 30,
+    "timeout": 5,
+    "retries": 3,
+    "start_period": 10
+  }
+}
+```
+
+- Replace the policy ARN with an existing approved AWS-managed or same-account
+  customer-managed policy in the active partition. Terraform attaches it only to
+  the application task role. Application owners provision/review policy documents,
+  resource grants and effective authorization separately; the IAM validator checks
+  exact attachment inventory. Leave the set empty if no application AWS access is needed.
+- Replace `/app/healthcheck` with an executable actually included in the image,
+  returning 0 for the intended healthy state. `CMD` requires an executable and
+  optional arguments; `CMD-SHELL` requires exactly one nonempty shell command after
+  the marker, and a usable shell in the image. All elements must be nonempty.
+  Whole-number limits/defaults are interval 5–300/30 seconds, timeout 2–60/5
+  seconds, retries 1–10/3, and start period 0–300/0 seconds.
+- `health_check = null` (or omission) omits task-definition `healthCheck`. Enabling
+  or changing it creates a task-definition change. It does not replace ALB checks,
+  service deployment grace, or GuardDuty status. The tracked dev sample includes
+  a `busybox wget` check for its example image; adapt it before selecting your image.
+- `image_digest = null` still creates neither task-role attachments nor the service
+  runtime. Select a published immutable digest through the existing release flow
+  when ready; adding these fields alone does not deploy an application.
+
+Optional endpoints are a separate **workload-root input**, not a service field.
+For a local planning session, with the correct initialized root and credentials:
+
+```bash
+export TF_VAR_additional_interface_endpoint_services='["bedrock-runtime"]'
+terraform -chdir=environments/dev plan
+```
+
+Persist the approved choice in your normal environment configuration or supply
+it consistently for every plan. For GitHub workflows set
+`ADDITIONAL_INTERFACE_ENDPOINT_SERVICES` to the JSON text `["bedrock-runtime"]`
+where the workload `<env>-plan` Environment resolves its variables. Both standalone
+Terraform Plan and Terraform Apply's internal Plan job pass that setting as
+`TF_VAR_additional_interface_endpoint_services`, defaulting to `[]`.
+The protected Apply job uses the saved plan. Terraform tfvars and explicit CLI
+arguments can override `TF_VAR_*`; avoid conflicting sources and verify the plan.
+
+`bedrock-runtime` is the only approved addition: default inventory is 16 mandatory
+Interface Endpoints, enabled inventory is 17. Private DNS, endpoint-private subnets,
+shared endpoint SG and TLS access reuse the existing network controls. Enabling
+it adds endpoint/AZ hourly and data-processing costs. It grants no model/API
+permissions and supplies no application-specific endpoint policy. Private DNS/TLS
+success is not successful model inference. Review regional service availability
+and the network and application authorization requirements independently.
+
+When upgrading or changing opt-ins:
+
+1. Keep the selected revision, backend and effective inputs consistent with the
+   reviewed plan. No feature-specific state move is required by these additions.
+2. Review policy attachment additions/removals and health-driven task-definition
+   changes. Removing a policy revokes its attachment; changes to an external
+   managed policy's contents are not detected by attachment inventory equality.
+3. Review the endpoint set: changing `["bedrock-runtime"]` to `[]` removes the
+   optional endpoint. Do not omit a previously enabled CI variable unintentionally.
+4. After an authorized deployment, run the existing IAM, ECS runtime and endpoint
+   validators plus the full baseline suite. Retain healthy-task and zero-capacity
+   skip counts separately. New customer authorization and application behavior
+   need their own evidence; the maintainer's M1 exception is not such evidence.
 
 ### Optional ECS/Fargate Application Runtime
 

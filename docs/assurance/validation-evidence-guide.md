@@ -329,6 +329,41 @@ secrets_manager_cmk_arn
 
 Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/manual GitHub workflow testing, or environments where the workload stack has not yet been reconciled back into `bootstrap/<env>/account`.
 
+## v1.12.0 runtime-extension evidence
+
+The current release supports optional task-role managed policies, native container
+health checks, and `bedrock-runtime` private access. The
+[release qualification ledger](v1.12.0-qualification.md) records original M2/M3
+observations separately from the 53 offline CI scenarios (M1 13, M2 18, M3 22).
+The additional M1 live allowed/denied API exercise is explicitly deferred by the
+maintainer, not passed. Consolidated M4 application publication → reviewed
+saved-plan Apply → runtime validation → evidence is not established by retained
+records. Do not infer that final documentation closes either boundary.
+
+| Evidence | Retain | What it does not establish |
+|---|---|---|
+| Task-role inventory | Configured ARNs, live attached-policy list, role identities, `validate-iam.log` | Contents/default versions or effective permissions of external managed policies; a successful/denied API pair |
+| Native-health configuration | Normalized `health_check`, task definition, selected digest, command/image prerequisites | Health command business semantics or actual live success |
+| Native-health observation | Service/task identity, health status, polling settings, healthy-task and zero-capacity-skip counts in `validate-ecs-runtime.log` | ALB target health, GuardDuty coverage, managed-service rollback, or application correctness |
+| Optional endpoint inventory | Intended input, applied `interface_endpoint_ids`, 16 mandatory plus enabled optional set, `validate-vpc-endpoints.log` | Unapplied desired intent; current roots omit the validator's optional separate intent output |
+| Private connectivity | Source workload subnet/SG, endpoint ENI IPs, matching DNS answers, hostname-verified TLS and HTTP output | Application IAM, model permissions, inference, or another workload SG path |
+| Application authorization | Independently reviewed policy versions and actual allowed/denied requests under the application role, if performed | A passing attachment or network validator is not a substitute |
+| Integrated application release | Publication/digest metadata, reviewed plan/Apply IDs, actual source/configuration, runtime logs, exported evidence, final convergence | Historical M2/M3 observations are not a new M4 execution |
+
+Endpoint expectations are all 16 mandatory services plus approved optional
+services from Terraform-owned IDs, currently only `bedrock-runtime`. Enabling it
+adds charges; removing it changes the network inventory. The validator checks
+private DNS configuration, subnet/SG/VPC identity and ownership, but performs no
+TLS or inference probe. Keep the historical M3 compute-SG Fargate probe distinct
+from a canonical Terraform-managed application's network path.
+
+Native-health polling defaults to 13 observations five seconds apart, with
+1–60 attempts and 0–60 seconds supported through the documented overrides in the
+[validation reference](../../scripts/validation/README.md). Retain skips as skips,
+not live `HEALTHY` results. Keep M3 operator reports, missing archival URIs/checksums,
+and missing enabled-Apply provenance explicit. Reviewer acceptance, publication,
+and compliance certification are not supplied by the evidence exporter.
+
 ## What Automated Workload Baseline Validation Covers
 
 The automated workload baseline suite runs 16 read-only validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
@@ -341,7 +376,8 @@ The evidence contract includes the ECS runtime/security checks and exact topolog
 - exact Terraform and live `GuardDutyManaged=true|false` cluster intent;
 - exact Container Insights setting and performance-log identity/retention/KMS encryption;
 - exact live service inventory and service steady state;
-- application-only Terraform task definitions;
+- application-only Terraform task definitions and exact optional native-health configuration;
+- bounded application-container health observations, independently of GuardDuty and ingress, with zero-capacity skips;
 - Fargate platform compatibility;
 - digest-pinned application images and exact logging/network relationships;
 - one running GuardDuty agent per protected running task while the application container remains valid;

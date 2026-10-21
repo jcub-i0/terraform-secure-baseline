@@ -56,7 +56,7 @@ This allows resources in private subnets to reach S3 using private AWS network p
 
 ### Interface VPC Endpoints
 
-Creates Interface VPC Endpoints for the following AWS services:
+Creates the following 16 mandatory Interface VPC Endpoints:
 
 | Service | Purpose |
 |---|---|
@@ -83,7 +83,7 @@ Each endpoint is created using:
 resource "aws_vpc_endpoint" "interface"
 ```
 
-The module uses `for_each` over this fixed 16-service list, so each service receives one Interface Endpoint spanning the supplied endpoint-private subnet set. The list is not a caller-configurable workload service catalog. There is no DynamoDB Gateway Endpoint resource despite the broader gateway comment in `main.tf`.
+The module uses `for_each` over the union of the 16 mandatory services and `additional_interface_endpoint_services` (default `[]`). Each service receives one Interface Endpoint spanning the supplied endpoint-private subnet set. v1.12.0 allows only `bedrock-runtime` as an optional addition; mandatory service keys and resource addresses are preserved. Callers cannot remove mandatory services or supply arbitrary service names through this input. There is no DynamoDB Gateway Endpoint resource despite the broader gateway comment in `main.tf`.
 
 Private DNS is enabled for all Interface Endpoints.
 
@@ -92,6 +92,40 @@ and `ecr.dkr` Interface Endpoints. Image layers are retrieved through the
 existing S3 Gateway Endpoint.
 
 ---
+
+### Optional Bedrock Runtime endpoint
+
+At the workload root, or as an argument to this module, opt in with:
+
+```hcl
+additional_interface_endpoint_services = ["bedrock-runtime"]
+```
+
+The default empty set creates no additional endpoint. Enabled inventory is 17
+Interface Endpoints; disabling it returns to 16 and plans removal of
+`aws_vpc_endpoint.interface["bedrock-runtime"]`. This is shared workload
+infrastructure and exists independently of any application image digest.
+The union also flows through the existing compute endpoint-readiness input;
+adding an ID is not itself a compute-instance replacement trigger.
+
+The new endpoint uses the same VPC, exact endpoint-private subnet set, private
+DNS, and shared endpoint SG/TCP/443 rules as mandatory endpoints. Consequently,
+clients already admitted by that SG, including compute, deployable ECS tasks and
+the existing quarantine path, gain a network path to the optional service. This
+is not per-application endpoint isolation. No custom endpoint-policy document is
+configured by this module, and the input grants no IAM or model permissions.
+
+For CI, `ADDITIONAL_INTERFACE_ENDPOINT_SERVICES` is JSON text (for example,
+`["bedrock-runtime"]`) visible to the workload `<env>-plan` GitHub Environment.
+Standalone Plan and Apply's internal Plan job forward it, defaulting to `[]`;
+Apply consumes its saved plan. Align local tfvars/CLI inputs and CI settings.
+Review regional availability and additional endpoint/AZ hourly and traffic costs.
+
+The [qualification record](../../docs/assurance/v1.12.0-qualification.md) retains
+historical EC2 and temporary Fargate DNS/TLS/HTTP observations. The Fargate probe
+used the compute SG, not a canonical application's task SG. A private HTTPS
+response, including the recorded unauthenticated HTTP 404, proves neither IAM
+authorization nor Bedrock model inference. Retain separate application tests.
 
 ### GuardDuty Runtime Monitoring Endpoint
 
@@ -199,7 +233,7 @@ Baseline passes the concatenated **endpoint-private, compute-private, and server
 
 ## Deployment Profile and Egress Mode Behavior
 
-This module is used across all deployment profiles and egress modes. The 16 Interface Endpoints, shared endpoint SG, and S3 Gateway Endpoint remain configured even with no ECS services or with the minimal profile. Disabling Fargate Runtime Monitoring through the minimal profile does not remove `guardduty-data`.
+This module is used across all deployment profiles and egress modes. The 16 mandatory Interface Endpoints, shared endpoint SG, and S3 Gateway Endpoint remain configured even with no ECS services or with the minimal profile. Disabling Fargate Runtime Monitoring through the minimal profile does not remove `guardduty-data`.
 
 | `egress_mode` | Role of this module |
 |---|---|
@@ -255,6 +289,7 @@ With the intended VPC resolver configuration, those names use the Interface Endp
 | `vpc_id` | `string` | Yes | VPC for all endpoints and the shared SG |
 | `account_id` | `string` | Yes | Retained interface input; no resource argument consumes it here |
 | `primary_region` | `string` | Yes | Region in endpoint service names; baseline supplies the provider region |
+| `additional_interface_endpoint_services` | `set(string)` | No | Default `[]`; only `bedrock-runtime` is approved; mandatory services cannot be removed |
 | `endpoint_private_subnet_ids_map` | `map(string)` | Yes | All Interface Endpoint subnet IDs, keyed by AZ |
 | `compute_private_subnet_ids_map` | `map(string)` | Yes | Retained interface input, not Interface Endpoint placement |
 | `serverless_private_subnet_ids_map` | `map(string)` | Yes | Retained interface input, not Interface Endpoint placement |
@@ -387,7 +422,17 @@ The dedicated endpoint subnets do not need a default route. Interface Endpoint E
 
 ## Validation
 
-The authoritative automated check is [validate-vpc-endpoints.sh](../../scripts/validation/validate-vpc-endpoints.sh), inside the existing 16-script workload suite. It checks the Terraform-owned endpoint inventory, exact subnet and shared-SG placement, private DNS, service identities, live endpoint IDs, and exact S3 route-table coverage. These checks are not an application-level request to every AWS API.
+The authoritative automated check is [validate-vpc-endpoints.sh](../../scripts/validation/validate-vpc-endpoints.sh), inside the existing 16-script workload suite. It checks the Terraform-owned endpoint inventory, exact subnet and shared-SG placement, private DNS, service identities, live endpoint IDs, and exact S3 route-table coverage.
+
+The expected set is all 16 mandatory services plus approved optional services from
+applied `interface_endpoint_ids`, not an allowlist reconstructed from live AWS.
+Unapproved services, duplicates, missing endpoints, and live ID drift fail.
+The validator can compare `configured_additional_interface_endpoint_services`
+when that separate output exists, but the current roots do not emit it. Review
+unapplied desired intent in the plan separately. The endpoint validator checks
+configuration/identity; it does not execute DNS/TLS probes or an application-level
+request to every AWS API. The M3 offline harness exercises 22 mocked scenarios;
+those do not replace live network or authorization evidence.
 
 The commands below are supplemental manual inspection. From the repository root, initialize the deployed workload first, then substitute the intended account/profile:
 
@@ -601,7 +646,7 @@ This account/region-wide SSM inventory is only a manual connectivity indicator. 
 
 ### Cost
 
-Interface Endpoints have hourly and data processing costs.
+Interface Endpoints have hourly and data processing costs. The opt-in `bedrock-runtime` endpoint adds those costs across the selected AZs; leaving the option empty adds no endpoint charge beyond the existing mandatory infrastructure.
 
 This module creates multiple Interface Endpoints, so costs can add up across:
 
