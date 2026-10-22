@@ -366,7 +366,7 @@ This baseline may still work, but will require more customization if your team:
 - Uses Kubernetes or another container orchestrator instead of the implemented ECS/Fargate runtime
 - Requires a different centralized security-services ownership model
 - Requires custom egress paths or proxy-based internet access
-- Requires additional VPC endpoints beyond the default endpoint set
+- Requires VPC endpoint services beyond the 16 mandatory services and the approved opt-in `bedrock-runtime` service
 
 ---
 
@@ -586,7 +586,8 @@ inputs used in planning. Changing `cloud_name` or an IAM state-bucket ARN does n
 rewrite literal backend bucket/key/Region coordinates.
 
 Application log groups, execution/task roles, and networking materialize for a
-non-null digest, but application task roles initially have no application policy.
+non-null digest. Application task roles have no policies by default; v1.12.0
+can attach explicitly configured managed policies through `task_role_managed_policy_arns`.
 Execution-role secret/KMS permissions concern task startup, not automatic runtime
 application access. The optional ALB frontend is HTTPS and its target-group path
 is HTTP; database/application TLS, migrations, least-privilege database access,
@@ -595,6 +596,39 @@ tenant isolation, application observability and recovery need separate design.
 A digest is an image selector, not evidence of signing, vulnerability acceptance,
 application correctness, or immutable runtime behavior. Do not assume scheduled
 jobs or sidecars exist because the underlying AWS service supports them.
+
+### Adopting v1.12.0 runtime extensions
+
+The current release supports three independent opt-ins. Application owners must
+provision and review application IAM policies before supplying plan-known
+`task_role_managed_policy_arns`; only AWS-managed or same-account managed policies
+in the active partition can attach. The baseline does not author those policies
+or validate their effective permissions. Execution-role startup-secret access
+remains separate, and null-digest services create no role attachments.
+
+Use per-service `health_check` only with a command present in the selected image
+and an agreed health meaning. Native ECS health, ALB health, GuardDuty coverage,
+and application/data correctness require separate evidence. Budget validator
+polling for startup time; zero-capacity checks are skipped, not healthy.
+
+Set workload `additional_interface_endpoint_services = ["bedrock-runtime"]`
+only where required. The default `[]` preserves all 16 mandatory endpoints;
+Bedrock adds a seventeenth endpoint and AWS charges. It reuses the shared endpoint
+SG, including its existing compute/quarantine access paths, rather than creating
+per-application network isolation. It grants no application IAM authorization and
+configures no custom endpoint policy. Review regional availability, model/data
+permissions, and application requests independently of PrivateLink connectivity.
+
+Existing v1.11.1 users need no new settings to retain opt-out behavior. Align local
+inputs with `ADDITIONAL_INTERFACE_ENDPOINT_SERVICES` in the workload `<env>-plan`
+GitHub Environment; inspect the saved plan before applying. Removing an enabled
+option can revoke policy attachments, revise task definitions or remove the extra
+endpoint. The dev sample's new health command must suit the actual released image.
+See the [usage and migration steps](quickstart.md#v1120-opt-in-configuration-and-upgrade).
+
+Use the [release notes](../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical test results and exceptions. Validate each customer's policy,
+image and topology against that deployment's requirements.
 
 ## Phase 5 - Validate Controls
 
@@ -1172,9 +1206,9 @@ Common extension areas include:
 - Expanding centralized security governance to additional services or Regions
 - Adding external SIEM forwarding
 - Adding additional AWS Config rules
-- Adding additional VPC endpoint services
+- Extending the approved VPC endpoint allowlist beyond `bedrock-runtime` with corresponding validation
 - Adding additional Lambda responders
-- Adding ECS task-role capabilities through reviewed typed interfaces
+- Supplying reviewed application task-role managed policies through `task_role_managed_policy_arns`
 - Adding support for alternative CI/CD providers
 - Adding more granular Identity Center roles
 - Adding Kubernetes or other workload patterns beyond the supported EC2 and ECS/Fargate runtimes

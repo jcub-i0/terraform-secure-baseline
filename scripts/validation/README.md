@@ -567,7 +567,7 @@ When an ALB is present, the validator compares the resource-backed ALB, listener
 
 Operational alarms are validated independently of the conditional ALB stage. The expected Terraform-owned inventory consists only of task-deficit and ingress unhealthy-target alarms; AWS-managed target-tracking alarms are deliberately outside this operational inventory. Task-deficit alarms must implement the Container Insights `DesiredTaskCount - RunningTaskCount` contract, and ingress alarms must implement `AWS/ApplicationELB` `UnHealthyHostCount` with the resource-backed ALB/target-group suffix dimensions. `OK` passes, `INSUFFICIENT_DATA` warns while metric evaluation completes, and `ALARM` fails validation.
 
-`validate-iam.sh` owns the ECS IAM assertions. For each service it validates the separate execution and task roles, ECS task trust restrictions, the custom repository- and log-group-scoped execution policy, optional ARN-identifiable Secrets Manager and SSM permissions, absence of managed-policy attachments and `iam:PassRole`, and an initially policy-free application task role. It compares the live execution-policy `kms:Decrypt` resources exactly with `ecs_service_configuration[*].task_execution_kms_key_arns`; an empty expected set requires the decrypt action to be absent.
+`validate-iam.sh` owns the ECS IAM assertions. For each service it validates the separate execution and task roles, ECS task trust restrictions, the custom repository- and log-group-scoped execution policy, optional ARN-identifiable Secrets Manager and SSM permissions, absence of managed execution-role attachments and generated `iam:PassRole`, absence of task-role inline policies, and exact equality between configured and live task-role managed-policy ARNs (empty by default). It does not inspect external managed-policy contents or evaluate effective application permissions. It compares the live execution-policy `kms:Decrypt` resources exactly with `ecs_service_configuration[*].task_execution_kms_key_arns`; an empty expected set requires the decrypt action to be absent.
 
 The runtime validator compares the live cluster Container Insights setting with `ecs_cluster.container_insights`, database rule presence/absence with `ecs_service_configuration`, and live service/logging/ALB settings with their resource-backed outputs. Internal SG readiness IDs remain intentionally internal. Repository keys are never treated as ECS service identities. A registered canonical service whose `image_digest` is null is not present in the deployable runtime output maps and therefore does not require live per-service resources.
 
@@ -578,6 +578,64 @@ For deployable production services outside retirement, the canonical floor is tw
 For protected profiles, `guardduty.sh` validates exactly one running injected agent per protected running task and checks `AUTO_MANAGED`/`HEALTHY` coverage with no unresolved issues. It accepts the documented exact/prefixed agent names. With no deployable services, live coverage is not required; with no protected running tasks, protected healthy coverage is not required yet. A PASS with an empty runtime does not exercise instrumentation. The application-container check accepts `UNKNOWN` health when no ECS-native health check exists and rejects `UNHEALTHY`; that is not proof of an application transaction or database connection.
 
 For `minimal`, agents are not required and healthy coverage is not required; when the coverage branch is applicable, absence is valid or the returned expected-cluster record must use `DISABLED` management. Supporting IAM, endpoint and EventBridge validators cover the agent's authority, Terraform-owned endpoint reuse, and configured notification path. Configuration equality is not a test that a real coverage event reached a human recipient.
+
+### v1.12.0 opt-in validation and offline regression
+
+`validate-ecs-runtime.sh` compares each application task definition's optional
+`healthCheck` with normalized Terraform `ecs_service_configuration.health_check`.
+Disabled checks must be absent; enabled fields must match exactly (an omitted live
+`startPeriod` is normalized to zero). Native application health runs before strict
+service rollout convergence, independently of GuardDuty and ALB ingress. It
+checks service/task/container identity and requires all expected running
+application containers to report `HEALTHY`; `UNHEALTHY` fails and unresolved or
+missing health fails after bounded attempts.
+
+| Environment override | Default | Accepted values |
+|---|---:|---|
+| `ECS_NATIVE_HEALTH_MAX_ATTEMPTS` | 13 | Integer 1–60 |
+| `ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS` | 5 | Integer seconds 0–60 |
+
+Thirteen observations include at most twelve five-second sleeps, plus API time;
+this is not a hard wall-clock timeout. Choose a bound that accommodates the
+application's configured startup/check timing. A service with desired, running
+and pending counts all zero is reported as a skip; it is not a healthy task.
+Disabled checks add no native-health AWS queries. Existing runtime and GuardDuty
+queries still apply. The runtime summary reports configured native checks,
+healthy application tasks and zero-capacity skips separately.
+
+`validate-vpc-endpoints.sh` requires 16 mandatory Interface Endpoint services plus
+only approved optional services from applied Terraform `interface_endpoint_ids`.
+Currently `bedrock-runtime` is the sole optional service, so the expected count is
+16 by default and 17 when enabled. Missing/unapproved services, duplicate IDs or
+service instances, unmanaged extra endpoints and live ID drift fail. Availability,
+VPC, private DNS, exact endpoint-private subnet/SG sets, unique GuardDuty ownership,
+no endpoint-private default route, and exact S3 Gateway route coverage remain
+checked. The expected set is never expanded from the live AWS inventory.
+
+If `configured_additional_interface_endpoint_services` is present, the validator
+checks that separate intent against the owned ID map. The current roots **do not
+emit this output**; applied identity is the authority, and unapplied input intent
+must be reviewed in Terraform plans. The endpoint validator does not perform TLS
+or inference requests. IAM policy inventory and network reachability do not prove
+application authorization.
+
+The existing Static Analysis workflow runs these offline suites with mocked
+responses; no live AWS credentials or infrastructure are required:
+
+```bash
+bash scripts/tests/test-ecs-task-role-managed-policies.sh
+bash scripts/tests/test-ecs-native-health.sh
+bash scripts/tests/test-optional-vpc-endpoints.sh
+```
+
+They cover 13, 18 and 22 cases respectively (**53 total**). The M1 suite checks
+attachment inventory, M2 tests native-health runtime behavior, and M3 runs the
+real endpoint validator against synthetic outputs/APIs. These are not exhaustive
+Terraform input/rendering tests or live application tests. All three steps passed
+[CI run 39368786319](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/39368786319)
+at `7002a421`. See the [release notes](../../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical live results and test exceptions. The workload suite still has
+16 top-level scripts.
 
 ### SQS inspection limits
 

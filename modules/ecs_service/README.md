@@ -11,7 +11,7 @@ Each configured service receives its own:
 - ECS task definition
 - ECS service
 
-The module is designed for long-running Fargate services using private `compute_private` subnets, digest-pinned container images, per-service IAM roles, KMS-encrypted CloudWatch log groups, optional Application Load Balancer target-group integration, configurable deployment-health settings, and optional ECS Service Auto Scaling.
+The module is designed for long-running Fargate services using private `compute_private` subnets, digest-pinned container images, per-service IAM roles, KMS-encrypted CloudWatch log groups, optional Application Load Balancer target-group integration, configurable deployment-health settings, optional ECS-native container health checks, and optional ECS Service Auto Scaling.
 
 Services are keyed by stable service name through the `services` map.
 
@@ -44,10 +44,11 @@ For each autoscaled service, the module also creates:
 
 At least one target-tracking metric is required by the canonical baseline contract whenever scaling is configured.
 
-The module also creates two `terraform_data` readiness resources used to ensure that required IAM execution policies and cross-component security-group rules exist before ECS services launch:
+The module creates shared `terraform_data` readiness resources for execution policies and security-group rules, plus per-service readiness instances for configured application task-role policy attachments:
 
 - `terraform_data.ecs_execution_policy_ready`
 - `terraform_data.ecs_security_policy_ready`
+- `terraform_data.ecs_task_role_policy_ready[service]` only for keys in `task_role_policy_attachment_ids`
 
 Application Auto Scaling creates and manages the CloudWatch alarms associated with target-tracking policies. Those AWS-managed alarms are not Terraform-owned operational alarms and are not repurposed by this module.
 
@@ -67,11 +68,12 @@ Application Auto Scaling creates and manages the CloudWatch alarms associated wi
 | `services` | `map(object(...))` | No | `{}` | Deployable ECS/Fargate services keyed by stable service name. |
 | `logs_cmk_arn` | `string` | Yes | — | ARN of the customer-managed KMS key used to encrypt ECS CloudWatch log groups. |
 | `execution_policy_ids` | `map(string)` | No | `{}` | ECS task execution IAM policy IDs keyed by service name and used as launch-readiness dependencies. |
+| `task_role_policy_attachment_ids` | `map(set(string))` | No | `{}` | Optional task-role managed-policy attachment IDs keyed by opted-in service; launch-readiness dependency only. |
 | `security_policy_rule_ids` | `map(set(string))` | No | `{}` | Cross-component security-group rule IDs keyed by service name and used as launch-readiness dependencies. |
 | `availability_zone_rebalancing` | `string` | No | `null` | Explicit ECS service AZ rebalancing: `ENABLED`, `DISABLED`, or `null`. Baseline supplies `ENABLED` for production and `null` otherwise. |
 | `force_delete` | `bool` | Yes | — | Whether ECS service deletion may bypass first scaling the service to zero. Baseline supplies `false` for production, including retirement, and `true` otherwise. |
 
-`execution_policy_ids` and `security_policy_rule_ids` default to empty maps but must each contain every configured service key. A non-empty `services` map therefore needs matching readiness inputs.
+`execution_policy_ids` and `security_policy_rule_ids` default to empty maps but must each contain every configured service key. A non-empty `services` map therefore needs matching readiness inputs. `task_role_policy_attachment_ids` may contain only opted-in services; every supplied key must exist in `services`. Baseline supplies it from IAM attachment outputs, and an empty map creates no task-policy readiness instances.
 
 ## Service Configuration
 
@@ -135,6 +137,7 @@ Each service entry supports:
 | `desired_count` | `number` | No | `1` | Fixed desired count, or bootstrap count when `scaling` is configured. |
 | `scaling` | `object(...)` | No | `null` | Optional Application Auto Scaling configuration. `null` means no scaling target or policy is created. |
 | `deployment` | `object(...)` | No | `{}` | ECS deployment-health configuration. |
+| `health_check` | `object(...)` | No | `null` | Optional ECS-native container health command and timing; omitted from task definitions when null. |
 | `execution_role_arn` | `string` | Yes | — | ECS task execution-role ARN. |
 | `task_role_arn` | `string` | Yes | — | Application task-role ARN. |
 | `target_group_arn` | `string` | No | `null` | Optional ALB target-group ARN. |
@@ -180,6 +183,53 @@ The optional `deployment` object supports:
 | `health_check_grace_period_seconds` | `number` | No | `0` | Time after task startup during which ECS ignores unhealthy load-balancer, VPC Lattice, and container health checks. |
 
 The canonical baseline validates the deployment percentages and grace-period range before passing deployable services to this module.
+
+### Native container health configuration
+
+v1.12.0 supports the same optional `health_check` object at the canonical
+`ecs_services` interface and this module's `services` interface:
+
+```hcl
+health_check = {
+  command      = ["CMD", "/app/healthcheck"]
+  interval     = 30
+  timeout      = 5
+  retries      = 3
+  start_period = 10
+}
+```
+
+This belongs inside an existing service entry. Supply an actual image executable
+that returns 0 for the intended healthy condition; the module supplies no probe
+binary. `CMD` requires an executable and optional arguments. `CMD-SHELL` requires
+exactly two elements: the marker and one shell command; the image must support it.
+All command elements must be non-null and nonempty after trimming whitespace.
+
+| Field | Default | Accepted values |
+|---|---:|---|
+| `command` | Required when enabled | `CMD` with at least one executable element, or `CMD-SHELL` with exactly one command element |
+| `interval` | 30 | Whole seconds, 5–300 |
+| `timeout` | 5 | Whole seconds, 2–60 |
+| `retries` | 3 | Whole number, 1–10 |
+| `start_period` | 0 | Whole seconds, 0–300 |
+
+The task definition conditionally merges `healthCheck` and maps `start_period`
+to ECS `startPeriod`. Null/omitted configuration emits no `healthCheck`; changing
+an enabled check revises the task definition. This is separate from service
+`deployment.health_check_grace_period_seconds`, ALB target health and GuardDuty.
+Baseline's `ecs_service_configuration` output includes the normalized object only
+when enabled. The baseline still filters `image_digest = null` registrations out
+of this low-level deployable map.
+
+Runtime validation compares exact health configuration, normalizing an omitted
+live `startPeriod` to zero. It polls application-container health before strict
+service rollout convergence: 13 observations five seconds apart by default.
+`ECS_NATIVE_HEALTH_MAX_ATTEMPTS` accepts 1–60 and
+`ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS` accepts 0–60. Observed `UNHEALTHY` fails;
+unresolved/missing health fails at the polling bound. Zero desired/running/pending
+capacity is skipped; disabled checks add no native-health task queries.
+ALB and GuardDuty validation still apply independently. See the
+[validation reference](../../scripts/validation/README.md) for evidence boundaries.
 
 ## Image Integrity
 
@@ -326,22 +376,23 @@ The execution role is used by the ECS/Fargate runtime for platform-level actions
 
 The task role represents application-runtime AWS permissions.
 
-Both roles remain owned by `modules/iam` in baseline composition. Creating a task role does not itself grant application AWS permissions; the module does not add a generic application task-policy interface here.
+Both roles remain owned by `modules/iam` in baseline composition. The canonical `task_role_managed_policy_arns` set is attached there, only to the application role; this module consumes the role ARN and optional attachment readiness IDs. It does not author IAM policies or attach execution-role managed policies. Application permissions remain empty by default; policy content/effective authorization is an application-owner responsibility.
 
 ## Launch Readiness
 
-ECS services must not launch before their execution IAM policies and cross-component security-group rules exist.
+ECS services must not launch before their execution IAM policies, configured application task-role managed-policy attachments, and cross-component security-group rules exist.
 
 The module uses:
 
 ```text
 terraform_data.ecs_execution_policy_ready
+terraform_data.ecs_task_role_policy_ready
 terraform_data.ecs_security_policy_ready
 ```
 
 as explicit readiness dependencies.
 
-Both `aws_ecs_service.services` and `aws_ecs_service.autoscaled_services` depend on both readiness resources.
+Both `aws_ecs_service.services` and `aws_ecs_service.autoscaled_services` depend on all three readiness collections. Empty task-policy maps create no per-service readiness instances.
 
 The corresponding variables are keyed by the same stable service names as `services`:
 
@@ -358,7 +409,7 @@ security_policy_rule_ids = {
 }
 ```
 
-Input validation requires readiness-map key coverage for every configured ECS service. Dependency ordering does not by itself verify IAM policy content or live network connectivity; those are separate validation concerns.
+Input validation requires execution-policy and security-policy readiness-map coverage for every configured ECS service. Optional task-policy attachment keys need only identify configured services. Dependency ordering does not by itself verify IAM policy content or live network connectivity; those are separate validation concerns.
 
 This pattern preserves resource-granular dependency ordering:
 

@@ -329,6 +329,38 @@ secrets_manager_cmk_arn
 
 Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/manual GitHub workflow testing, or environments where the workload stack has not yet been reconciled back into `bootstrap/<env>/account`.
 
+## v1.12.0 runtime-extension evidence
+
+The current release supports optional task-role managed policies, native container
+health checks, and `bedrock-runtime` private access. Use the
+[release notes](../../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical test results and exceptions. Record offline tests, live observations
+and operator reports separately for the configuration under review.
+
+| Evidence | Retain | What it does not establish |
+|---|---|---|
+| Task-role inventory | Configured ARNs, live attached-policy list, role identities, `validate-iam.log` | Contents/default versions or effective permissions of external managed policies; a successful/denied API pair |
+| Native-health configuration | Normalized `health_check`, task definition, selected digest, command/image prerequisites | Health command business semantics or actual live success |
+| Native-health observation | Service/task identity, health status, polling settings, healthy-task and zero-capacity-skip counts in `validate-ecs-runtime.log` | ALB target health, GuardDuty coverage, managed-service rollback, or application correctness |
+| Optional endpoint inventory | Intended input, applied `interface_endpoint_ids`, 16 mandatory plus enabled optional set, `validate-vpc-endpoints.log` | Unapplied desired intent; current roots omit the validator's optional separate intent output |
+| Private connectivity | Source workload subnet/SG, endpoint ENI IPs, matching DNS answers, hostname-verified TLS and HTTP output | Application IAM, model permissions, inference, or another workload SG path |
+| Application authorization | Independently reviewed policy versions and actual allowed/denied requests under the application role, if performed | A passing attachment or network validator is not a substitute |
+| Integrated application release | Publication/digest metadata, reviewed plan/Apply IDs, actual source/configuration, runtime logs, exported evidence, final convergence | Historical observations do not establish execution against another revision or configuration |
+
+Endpoint expectations are all 16 mandatory services plus approved optional
+services from Terraform-owned IDs, currently only `bedrock-runtime`. Enabling it
+adds charges; removing it changes the network inventory. The validator checks
+private DNS configuration, subnet/SG/VPC identity and ownership, but performs no
+TLS or inference probe. A compute-SG probe does not establish a canonical
+Terraform-managed application's task-SG network path.
+
+Native-health polling defaults to 13 observations five seconds apart, with
+1–60 attempts and 0–60 seconds supported through the documented overrides in the
+[validation reference](../../scripts/validation/README.md). Retain skips as skips,
+not live `HEALTHY` results. Identify operator reports and missing archival
+URIs/checksums or Apply provenance explicitly. The evidence exporter does not
+establish application correctness or compliance certification.
+
 ## What Automated Workload Baseline Validation Covers
 
 The automated workload baseline suite runs 16 read-only validators covering environment identity, networking, VPC endpoints, ECR, logging, workload security, KMS, Backup, SNS, SQS, EventBridge, Lambda, SSM, EC2 compute, ECS runtime, and IAM.
@@ -341,7 +373,8 @@ The evidence contract includes the ECS runtime/security checks and exact topolog
 - exact Terraform and live `GuardDutyManaged=true|false` cluster intent;
 - exact Container Insights setting and performance-log identity/retention/KMS encryption;
 - exact live service inventory and service steady state;
-- application-only Terraform task definitions;
+- application-only Terraform task definitions and exact optional native-health configuration;
+- bounded application-container health observations, independently of GuardDuty and ingress, with zero-capacity skips;
 - Fargate platform compatibility;
 - digest-pinned application images and exact logging/network relationships;
 - one running GuardDuty agent per protected running task while the application container remains valid;

@@ -1433,7 +1433,21 @@ s3
 
 For the implemented Fargate runtime, private ECR pulls use the `ecr.api` and `ecr.dkr` Interface Endpoints, image layers use the existing S3 Gateway Endpoint, and GuardDuty Runtime Monitoring telemetry uses the Terraform-owned `guardduty-data` Interface Endpoint. `validate-vpc-endpoints.sh` requires the live Interface Endpoint ID map to exactly match Terraform and requires exactly one `guardduty-data` endpoint.
 
-The automated validator treats the Interface Endpoint inventory as platform-owned and non-overridable. It requires exact endpoint-private subnet and shared Interface Endpoint SG placement for every Interface Endpoint, requires private DNS, and requires the S3 Gateway Endpoint route-table set to equal the union of endpoint-private, compute-private, and serverless-private route tables.
+The automated validator requires all 16 platform-owned mandatory Interface Endpoints plus only approved optional endpoints declared by applied Terraform-owned IDs. In v1.12.0, `additional_interface_endpoint_services` defaults to `[]` and can add only `bedrock-runtime`, giving 17 endpoints when enabled. Callers cannot replace the mandatory inventory or approve arbitrary live services. It requires exact endpoint-private subnet and shared Interface Endpoint SG placement for every Interface Endpoint, requires private DNS, and requires the S3 Gateway Endpoint route-table set to equal the union of endpoint-private, compute-private, and serverless-private route tables.
+
+For an optional endpoint, retain the intended input, applied `interface_endpoint_ids`
+and actual service/ID inventory. The current roots do not emit the validator's
+optional `configured_additional_interface_endpoint_services` intent output; a PASS
+therefore does not independently check an unapplied configuration change.
+
+Qualify DNS/TLS connectivity separately from configuration: from the intended
+private workload, compare service-hostname DNS answers with the exact endpoint
+ENI IPs and verify TLS using the service hostname. Retain source subnet/SG,
+endpoint identity, responses and timestamps. A workstation using a public AWS
+address is not PrivateLink evidence, and an HTTP response is not a signed or
+authorized Bedrock inference request. The historical M3 temporary Fargate task
+used the compute SG, so it does not establish the canonical application task-SG
+path. New application IAM/model behavior requires separate authorized testing.
 
 ## Validate ECR Prerequisites
 
@@ -1473,7 +1487,35 @@ For an enabled protected cluster with running tasks, the GuardDuty coverage reco
 
 `validate-iam.sh` separately requires the exact regional `aws-guardduty-agent-fargate` repository pull scope for each protected service and rejects that scope for `minimal` or any broad/unexpected ECR authority. `validate-eventbridge.sh` verifies the GuardDuty Runtime coverage rule, its single SecOps SNS target, shared EventBridge DLQ, three retry attempts, 3600-second maximum age, and required coverage-status evidence fields.
 
-ECS IAM assertions remain in `validate-iam.sh`. It verifies restricted task/execution trust, scoped execution-policy ECR/log/secret/parameter permissions, absence of `iam:PassRole`, initially empty application task-role authority, and exact `task_execution_kms_key_arns` behavior. If the configured KMS-key set is empty, the execution policy must not grant `kms:Decrypt`; if populated, live policy resources must match the configured set exactly.
+ECS IAM assertions remain in `validate-iam.sh`. It verifies restricted task/execution trust, scoped execution-policy ECR/log/secret/parameter permissions, absence of generated `iam:PassRole`, exact configured application task-role managed-policy attachments (empty by default), no inline task policies, no managed execution-role attachments, and exact `task_execution_kms_key_arns` behavior. If the configured KMS-key set is empty, the execution policy must not grant `kms:Decrypt`; if populated, live policy resources must match the configured set exactly.
+
+### v1.12.0 native health and task-policy acceptance
+
+For each deployable service, retain the configured policy ARN set and live
+attachment inventory from `validate-iam.sh`. Review external policy documents,
+versions, resource grants and effective permissions independently. Matching ARNs
+alone do not establish least privilege or allowed/denied API behavior. Record
+customer-specific authorization tests under their actual identity and evidence.
+
+For opted-in `health_check`, `validate-ecs-runtime.sh` checks exact task-definition
+fields and polls native application health before strict rollout convergence.
+Defaults are 13 observations five seconds apart; supported overrides are
+`ECS_NATIVE_HEALTH_MAX_ATTEMPTS` (1–60) and
+`ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS` (0–60 seconds). Account for startup and
+API time. `UNHEALTHY` fails; unresolved or absent health cannot pass at the bound.
+Desired/running/pending counts all zero produce a skip. Record configured checks,
+healthy tasks, skips, task definition, image digest and actual health responses.
+
+Disabled native checks must be absent from the task definition and add no
+native-health task queries. ALB target health and GuardDuty agent/coverage results
+remain independent. A deliberate standalone failing task is not evidence of
+managed-service deployment rollback. Health-check command success is limited to
+the command's actual semantics; it is not proof of all application transactions.
+
+Use the [release notes](../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical results and test exceptions. Record each deployment's actual
+configuration and evidence; `16/16` script results do not establish every
+application behavior.
 
 ### Production ECS acceptance and actual placement
 

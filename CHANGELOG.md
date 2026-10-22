@@ -11,6 +11,142 @@ that earlier tests were repeated on subsequent commits. Use the
 [README](README.md), [adoption guide](docs/adoption-guide.md), and current
 module/runbooks for the implemented contract.
 
+## v1.12.0 — Application Runtime Extensibility
+
+v1.12.0 is the current release. It introduces three opt-in capabilities for
+application-agnostic SaaS workloads handling sensitive data. This entry covers
+`v1.11.1` through implementation `7002a4219e4e8146fd7f2496aa121d089dee7be3`:
+roadmap #868, M1 #869, M2 #870, M3 #873–#875, and M4 regression in #877.
+Publication metadata and reviewer approval are separate from this change record.
+
+### Added and Changed
+
+- **M1 — Application task IAM:** Optional per-service
+  `task_role_managed_policy_arns` defaults to `[]` in all workload roots and
+  baseline. IAM attaches the selected AWS-managed or same-account
+  customer-managed policies in the active partition to application task roles
+  only. ARN validation rejects non-policy resources and wildcard forms; policy
+  ARNs must be known at plan time and policies must exist by attachment time.
+  Optional attachment-ID outputs and per-service readiness dependencies order
+  both fixed and autoscaled ECS launches after attachments. Empty sets create
+  no attachment/readiness instances; null-digest registrations create no task roles.
+- **M2 — Native container health:** Optional `health_check` propagates from
+  `ecs_services` into the essential application's ECS `healthCheck`. The default
+  `null` omits that field. Commands use `CMD` or `CMD-SHELL`; timing values are
+  validated whole numbers. Defaults are interval 30 seconds, timeout 5 seconds,
+  retries 3, and start period 0 seconds. The tracked dev registration now includes
+  an illustrative check while retaining `image_digest = null`.
+- **M3 — Private service access:** `additional_interface_endpoint_services`
+  defaults to an empty set at environment, baseline, and endpoint-module levels.
+  `bedrock-runtime` is the only approved optional service. The 16 mandatory
+  Interface Endpoints keep their service-keyed resource addresses; the optional
+  endpoint reuses dedicated endpoint-private subnets, private DNS, shared endpoint
+  SG and TCP/443 rules. S3 Gateway associations and GuardDuty endpoint ownership
+  are unchanged. Enabled endpoints incur additional hourly/AZ and traffic charges.
+- **Workflow input:** Terraform Plan and Terraform Apply's internal Plan job read
+  `ADDITIONAL_INTERFACE_ENDPOINT_SERVICES` as
+  `TF_VAR_additional_interface_endpoint_services`, falling back to `[]`.
+  The protected Apply job continues to consume its reviewed saved plan.
+- **Applied metadata:** `ecs_service_configuration` includes sorted task-policy
+  ARNs only for nonempty sets and normalized health configuration only when enabled.
+  Consumers must tolerate those optional fields.
+
+### Validation and Qualification
+
+- IAM validation compares the **exact** expected/live managed-policy attachment
+  sets; unexpected/missing task attachments, inline task policies, and managed
+  execution-role attachments fail. Generated execution-policy checks remain
+  separate from customer-managed policy semantics.
+- Runtime validation compares exact task-definition health settings and checks
+  native application health before strict rollout convergence. `UNHEALTHY` fails;
+  unresolved/missing health cannot pass after bounded polling. Defaults are 13
+  observations five seconds apart; allowed overrides are 1–60 attempts and 0–60
+  seconds. Zero desired/running/pending capacity is a skip. Disabled checks add
+  no native-health task queries. Batched task descriptions are shared with
+  GuardDuty validation, and summaries expose configured/healthy/skipped counts.
+- Endpoint validation requires all 16 mandatory services plus only approved
+  optional services from applied Terraform-owned IDs. It rejects unsupported,
+  missing, duplicate, unmanaged or mismatched endpoints and checks availability,
+  VPC, private DNS, exact endpoint subnets/SG, GuardDuty uniqueness, and S3 routes.
+  A separate optional-intent output is checked if supplied, but is not emitted by
+  the current roots; validation therefore does not compare unapplied input intent.
+- **53 offline cases** (M1 13, M2 18, M3 22) passed the three regression steps in
+  [Static Analysis run 39368786319](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/39368786319)
+  at `7002a421`. Terraform validation/TFLint and Checkov report-integrity checks
+  succeeded; this is not a zero-finding security assessment. M4's Plan was skipped.
+- Historical M2 dev observations recorded a healthy running application container
+  and a deliberately failing standalone task reaching `UNHEALTHY`, with ingress
+  disabled. Subsequent workload validation reported `16/16` script success and
+  GuardDuty coverage recovery. These tests did not demonstrate ALB integration,
+  managed-service rollback, or multi-service scaling.
+- Historical M3 observations recorded 17 Terraform-owned endpoints and EC2/Fargate
+  private-connectivity probes. The temporary Fargate task used the compute SG;
+  endpoint-matching DNS answers and hostname-verified TLS/HTTP responses established
+  private reachability, not authenticated model inference or the canonical task-SG
+  path. M3's enabled-state `16/16` and converged plan are operator reported with
+  incomplete archival provenance. These are not newly executed M4 tests.
+
+### Security Boundaries and Known Limitations
+
+- The baseline owns role/attachment infrastructure, not application authorization
+  policy documents. Exact attachment equality does not evaluate effective
+  permissions or policy-version changes. No default application privilege is added.
+- Native container health, ALB target health, GuardDuty coverage, and successful
+  application transactions remain independent. Health commands must exist and
+  function inside the selected image; no health probe binary is supplied.
+- Optional endpoints add network reachability for existing SG-authorized clients,
+  including the existing quarantine path. They do not provide per-service endpoint
+  isolation or custom endpoint policies, grant IAM permissions, or prove Bedrock
+  model inference. The live Fargate probe used the compute SG, not a canonical
+  application task SG. Region/service availability still requires review.
+- The maintainer explicitly deferred the additional **M1 live allowed/denied AWS
+  API exercise** on October 20, 2026. It is a qualification exception, not PASS.
+- `16/16` counts workload-validator results, not every application behavior or
+  compliance certification. Existing production, retirement, encryption and
+  disaster-recovery boundaries remain unchanged. RDS recovery qualification,
+  WAF, and ALB access logs remain future work.
+
+### Migration and Usage
+
+No configuration change is required to retain the three opt-out defaults. There
+is no new state-move procedure for these features, but each deployment still
+needs its own reviewed plan; no universal no-change/replacement guarantee is made.
+Existing users selecting the dev sample's digest must review its newly configured
+health command. Enabling a check changes the task definition; removing an attached
+policy revokes that attachment, and resetting the endpoint set to `[]` removes
+the optional endpoint. Preserve opt-ins consistently across local and CI inputs.
+
+Inside an existing service entry, independently select the needed options:
+
+```hcl
+task_role_managed_policy_arns = [
+  "arn:aws:iam::123456789012:policy/application/ApprovedAccess"
+]
+health_check = {
+  command      = ["CMD", "/app/healthcheck"]
+  interval     = 30
+  timeout      = 5
+  retries      = 3
+  start_period = 10
+}
+```
+
+Replace the policy ARN with an approved existing policy in your account/partition
+and `/app/healthcheck` with a real executable shipped in your image. Exit code 0
+must indicate the health condition your application owner intends to check. A
+non-null published digest is required to materialize the service.
+
+At the workload root, independently opt into private Bedrock transport:
+
+```hcl
+additional_interface_endpoint_services = ["bedrock-runtime"]
+```
+
+For CI, set `ADDITIONAL_INTERFACE_ENDPOINT_SERVICES` to `["bedrock-runtime"]`
+where the workload `<env>-plan` GitHub Environment resolves its variables. Keep
+local inputs aligned; tfvars/explicit CLI settings can override `TF_VAR_*` values.
+See the [quickstart examples and upgrade steps](docs/quickstart.md#v1120-opt-in-configuration-and-upgrade).
+
 ## v1.11.1 — Security Hardening and Operational Safeguards
 
 This release entry covers the published `v1.11.0` (`18e579f7`) through the

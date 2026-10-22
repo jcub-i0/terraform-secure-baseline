@@ -277,6 +277,28 @@ Normal production requires each deployable fixed-count service to declare `desir
 
 The normal runtime validator also requires production deployment minimum healthy percent `100` and maximum percent at least `200`; the general Terraform input validation is broader. During retirement, use the dedicated retirement gates rather than requiring the normal production availability validator to accept zero capacity.
 
+### v1.12.0 application runtime extensions
+
+The canonical service interface includes `task_role_managed_policy_arns = []`
+and `health_check = null` as opt-out defaults. Baseline filters null-digest
+registrations before creating task roles, managed-policy attachments, or ECS
+services. Application-owned approved AWS-managed or same-account policy ARNs
+attach only to the task role; execution-role image/log/startup-secret authority
+is separate. Both fixed and autoscaled ECS services wait for configured attachment
+readiness. The IAM validator compares exact attachment identities, not policy contents.
+
+An enabled health check is rendered into the essential application container's
+`healthCheck`. Native-health validation uses bounded polling before strict service
+rollout checks and operates independently of ALB ingress and GuardDuty. Zero
+capacity is a skip. Existing ALB HTTP target checks and deployment grace remain
+separate controls; none proves business transaction correctness.
+
+The optional regional endpoint is shared workload infrastructure, not part of an
+individual service's IAM contract. Existing task/compute SG relationships provide
+TCP/443 admission to the endpoint tier; private DNS/TLS connectivity does not
+prove service authorization or inference. See the [runtime design](ecs-runtime-design.md)
+and [validation checklist](validation-checklist.md).
+
 ### GuardDuty Fargate Runtime Monitoring
 
 The GuardDuty Runtime Monitoring contract preserves Terraform ownership of workload infrastructure.
@@ -585,7 +607,7 @@ The current Interface Endpoint set includes:
 
 Interface Endpoints are placed in dedicated endpoint private subnets, while the S3 Gateway Endpoint is associated with the private route tables that need S3 access.
 
-The baseline supplies exactly the endpoint-private, compute-private, and serverless-private route-table sets to the S3 Gateway Endpoint. It does not associate data-private or public route tables. The fixed 16-service Interface Endpoint set remains present across profiles, including `guardduty-data` in minimal. The baseline does not configure custom endpoint-policy documents; network reachability, security-group admission, and IAM authorization remain distinct.
+The baseline supplies exactly the endpoint-private, compute-private, and serverless-private route-table sets to the S3 Gateway Endpoint. It does not associate data-private or public route tables. The 16 mandatory Interface Endpoints remain present across profiles, including `guardduty-data` in minimal. In v1.12.0, `additional_interface_endpoint_services` defaults to `[]` and can add only `bedrock-runtime`; this reuses the shared SG and endpoint-private subnets, with private DNS enabled and additional AWS charges. Existing service-keyed endpoint addresses remain unchanged. The baseline does not configure custom endpoint-policy documents; network reachability, security-group admission, and IAM authorization remain distinct.
 
 Private ECR image pulls for the implemented Fargate runtime use the `ecr.api` and `ecr.dkr` Interface Endpoints. ECR image layers use the existing S3 Gateway Endpoint.
 

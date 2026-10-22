@@ -130,7 +130,7 @@ in the selected tracked workload configuration. It requires:
 
 The script requires a clean repository working tree, validates the existing JSON and service registration, rejects an invalid or already-selected digest, and proves that removing the target `image_digest` leaves the before/after JSON semantically identical. It then runs `git diff --check` for the tracked file. It receives the authoritative digest as an input; it does not discover or resolve the digest itself. It does not commit, push, open a PR, plan Terraform, or apply Terraform.
 
-The GitHub release/PR job calls this script with the digest resolved and re-checked by the separate publisher job. Because the mutation is restricted to `image_digest`, releases do not rewrite a service's `scaling`, `deployment`, ingress, IAM, or other canonical runtime configuration.
+The GitHub release/PR job calls this script with the digest resolved and re-checked by the separate publisher job. Because the mutation is restricted to `image_digest`, releases do not rewrite a service's `scaling`, `deployment`, `health_check`, `task_role_managed_policy_arns`, ingress, or other canonical runtime configuration.
 
 ## GitHub `Deploy Application` Workflow
 
@@ -188,6 +188,20 @@ The tooling fails closed for invalid service/repository syntax, unsupported plat
 Successful publication does not imply deployment. Operators must review the release PR and its standalone informational Terraform Plan, merge the PR, run the protected `Terraform Apply` workflow, and confirm ECS convergence with the workload validation suite. For autoscaled services, Terraform applies runtime changes without reasserting the configured bootstrap `desired_count`; Application Auto Scaling retains ownership of the live desired count within the configured bounds.
 
 ## Ownership Boundary
+
+v1.12.0 configuration opt-ins require their own reviewed configuration changes.
+Before selecting a digest, provision/review any referenced application managed
+policies and ensure the image includes its configured health command. A null
+digest still withholds task roles/attachments and application runtime. The
+workload-level optional endpoint is independent of digest publication.
+
+Terraform Plan and Terraform Apply's internal Plan job read
+`ADDITIONAL_INTERFACE_ENDPOINT_SERVICES` from the variables visible in `<env>-plan`,
+forwarding it as `TF_VAR_additional_interface_endpoint_services` with `[]` fallback.
+Use JSON `["bedrock-runtime"]` to opt in and keep local inputs consistent; the
+protected Apply job consumes the reviewed saved plan. This workflow addition is
+specific to Plan/Apply and does not add an endpoint input to image-publication
+scripts. Review endpoint removal if a previously enabled value is omitted.
 
 The image-publication scripts and `Deploy Application` workflow own image publication metadata and digest handoff. They do not own ECR repository provisioning, ECS runtime resources, task IAM roles, security groups, schema migrations, application tests, release approval policy, or Terraform state. Those concerns remain with their existing platform, application, and organizational owners.
 
