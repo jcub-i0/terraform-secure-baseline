@@ -401,7 +401,8 @@ output "restore_testing" {
   description = "Effective and resource-backed AWS Backup Restore Testing configuration used by validation."
 
   value = {
-    enabled = local.effective_restore_testing_enabled
+    enabled               = local.effective_restore_testing_enabled
+    restore_test_db_sg_id = module.storage.restore_test_db_sg_id
 
     schedule = (
       local.effective_restore_testing_schedule

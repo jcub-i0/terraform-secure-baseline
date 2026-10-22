@@ -465,6 +465,8 @@ module "backup" {
   restore_testing_rds_arn                 = module.storage.rds_configuration.arn
   restore_testing_db_subnet_group_name    = module.storage.rds_configuration.db_subnet_group_name
   restore_testing_vpc_security_group_ids = [
-    module.storage.data_sg_id
+    local.effective_restore_testing_enabled
+    ? [module.storage.restore_test_db_sg_id]
+    : []
   ]
 }
