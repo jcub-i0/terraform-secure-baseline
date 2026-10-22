@@ -101,9 +101,6 @@ Publication metadata and reviewer approval are separate from this change record.
   application task SG. Region/service availability still requires review.
 - The maintainer explicitly deferred the additional **M1 live allowed/denied AWS
   API exercise** on October 20, 2026. It is a qualification exception, not PASS.
-  A consolidated M4 publication → reviewed Apply → runtime validation → evidence
-  exercise lacks sufficient retained evidence and is not recorded as passed.
-  Original M2/M3 raw evidence and enabled-state M3 Apply provenance are incomplete.
 - `16/16` counts workload-validator results, not every application behavior or
   compliance certification. Existing production, retirement, encryption and
   disaster-recovery boundaries remain unchanged. RDS recovery qualification,
