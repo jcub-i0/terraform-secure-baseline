@@ -437,18 +437,6 @@ With no deployable services, coverage lookup is not required. With protected ser
 
 `validate-security-operations.sh` owns the centralized organization contract. It compares the Terraform-managed GuardDuty feature subset exactly with AWS and also fails if AWS reports any additional organization feature or additional configuration as enabled outside the Terraform-managed contract.
 
-### v1.12.0 qualification
-
-The [release ledger](assurance/v1.12.0-qualification.md) records 53 offline
-CI cases (13 M1, 18 M2, 22 M3), historical M2 healthy/failing-container observations,
-and historical M3 EC2/Fargate private-connectivity evidence. Exact attachment
-inventory does not evaluate external policy contents or versions. The additional
-M1 live allowed/denied API exercise is explicitly maintainer-deferred, not passed.
-Consolidated M4 application-release evidence and final sign-off are not established.
-The M2 standalone negative task did not qualify managed-service rollback or ALB
-integration, and the M3 probe did not perform an authenticated model invocation.
-Earlier results below remain attached to their own configurations and releases.
-
 ### Historical Runtime Monitoring qualification
 
 Development qualification confirmed the implemented enabled-state path with a real Fargate service:

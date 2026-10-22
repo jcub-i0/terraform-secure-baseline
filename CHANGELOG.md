@@ -74,11 +74,17 @@ Publication metadata and reviewer approval are separate from this change record.
   [Static Analysis run 39368786319](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/39368786319)
   at `7002a421`. Terraform validation/TFLint and Checkov report-integrity checks
   succeeded; this is not a zero-finding security assessment. M4's Plan was skipped.
-- The [qualification record](docs/assurance/v1.12.0-qualification.md) retains
-  historical M2 live healthy/failing-container results, M2 `16/16` workload-script
-  success and GuardDuty recovery, and M3 EC2/Fargate private-connectivity evidence.
-  M3's enabled-state `16/16` and converged plan are operator reported with incomplete
-  archival provenance. These are not newly executed M4 tests.
+- Historical M2 dev observations recorded a healthy running application container
+  and a deliberately failing standalone task reaching `UNHEALTHY`, with ingress
+  disabled. Subsequent workload validation reported `16/16` script success and
+  GuardDuty coverage recovery. These tests did not demonstrate ALB integration,
+  managed-service rollback, or multi-service scaling.
+- Historical M3 observations recorded 17 Terraform-owned endpoints and EC2/Fargate
+  private-connectivity probes. The temporary Fargate task used the compute SG;
+  endpoint-matching DNS answers and hostname-verified TLS/HTTP responses established
+  private reachability, not authenticated model inference or the canonical task-SG
+  path. M3's enabled-state `16/16` and converged plan are operator reported with
+  incomplete archival provenance. These are not newly executed M4 tests.
 
 ### Security Boundaries and Known Limitations
 
@@ -96,8 +102,8 @@ Publication metadata and reviewer approval are separate from this change record.
 - The maintainer explicitly deferred the additional **M1 live allowed/denied AWS
   API exercise** on October 20, 2026. It is a qualification exception, not PASS.
   A consolidated M4 publication → reviewed Apply → runtime validation → evidence
-  exercise lacks sufficient retained evidence. Final approval and several raw
-  evidence/provenance records remain unrecorded; no sign-off is invented here.
+  exercise lacks sufficient retained evidence and is not recorded as passed.
+  Original M2/M3 raw evidence and enabled-state M3 Apply provenance are incomplete.
 - `16/16` counts workload-validator results, not every application behavior or
   compliance certification. Existing production, retirement, encryption and
   disaster-recovery boundaries remain unchanged. RDS recovery qualification,

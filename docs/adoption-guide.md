@@ -626,10 +626,9 @@ option can revoke policy attachments, revise task definitions or remove the extr
 endpoint. The dev sample's new health command must suit the actual released image.
 See the [usage and migration steps](quickstart.md#v1120-opt-in-configuration-and-upgrade).
 
-The [release qualification ledger](assurance/v1.12.0-qualification.md) preserves
-53 offline CI cases, historical live results, the explicit M1 live-authorization
-deferral and incomplete consolidated M4 evidence. It is not customer onboarding
-approval or proof that a customer's policy, image or production topology was tested.
+Use the [release notes](../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical test results and exceptions. Validate each customer's policy,
+image and topology against that deployment's requirements.
 
 ## Phase 5 - Validate Controls
 

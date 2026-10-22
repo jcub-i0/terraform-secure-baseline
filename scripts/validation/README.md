@@ -633,9 +633,9 @@ attachment inventory, M2 tests native-health runtime behavior, and M3 runs the
 real endpoint validator against synthetic outputs/APIs. These are not exhaustive
 Terraform input/rendering tests or live application tests. All three steps passed
 [CI run 39368786319](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/39368786319)
-at `7002a421`. The [qualification ledger](../../docs/assurance/v1.12.0-qualification.md)
-retains the M1 live-test deferral, historical M2/M3 evidence and unresolved M4
-application-release provenance. The workload suite still has 16 top-level scripts.
+at `7002a421`. See the [release notes](../../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical live results and test exceptions. The workload suite still has
+16 top-level scripts.
 
 ### SQS inspection limits
 

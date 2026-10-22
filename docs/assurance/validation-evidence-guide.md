@@ -332,13 +332,10 @@ Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/
 ## v1.12.0 runtime-extension evidence
 
 The current release supports optional task-role managed policies, native container
-health checks, and `bedrock-runtime` private access. The
-[release qualification ledger](v1.12.0-qualification.md) records original M2/M3
-observations separately from the 53 offline CI scenarios (M1 13, M2 18, M3 22).
-The additional M1 live allowed/denied API exercise is explicitly deferred by the
-maintainer, not passed. Consolidated M4 application publication → reviewed
-saved-plan Apply → runtime validation → evidence is not established by retained
-records. Do not infer that final documentation closes either boundary.
+health checks, and `bedrock-runtime` private access. Use the
+[release notes](../../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical test results and exceptions. Record offline tests, live observations
+and operator reports separately for the configuration under review.
 
 | Evidence | Retain | What it does not establish |
 |---|---|---|
@@ -348,21 +345,21 @@ records. Do not infer that final documentation closes either boundary.
 | Optional endpoint inventory | Intended input, applied `interface_endpoint_ids`, 16 mandatory plus enabled optional set, `validate-vpc-endpoints.log` | Unapplied desired intent; current roots omit the validator's optional separate intent output |
 | Private connectivity | Source workload subnet/SG, endpoint ENI IPs, matching DNS answers, hostname-verified TLS and HTTP output | Application IAM, model permissions, inference, or another workload SG path |
 | Application authorization | Independently reviewed policy versions and actual allowed/denied requests under the application role, if performed | A passing attachment or network validator is not a substitute |
-| Integrated application release | Publication/digest metadata, reviewed plan/Apply IDs, actual source/configuration, runtime logs, exported evidence, final convergence | Historical M2/M3 observations are not a new M4 execution |
+| Integrated application release | Publication/digest metadata, reviewed plan/Apply IDs, actual source/configuration, runtime logs, exported evidence, final convergence | Historical observations do not establish execution against another revision or configuration |
 
 Endpoint expectations are all 16 mandatory services plus approved optional
 services from Terraform-owned IDs, currently only `bedrock-runtime`. Enabling it
 adds charges; removing it changes the network inventory. The validator checks
 private DNS configuration, subnet/SG/VPC identity and ownership, but performs no
-TLS or inference probe. Keep the historical M3 compute-SG Fargate probe distinct
-from a canonical Terraform-managed application's network path.
+TLS or inference probe. A compute-SG probe does not establish a canonical
+Terraform-managed application's task-SG network path.
 
 Native-health polling defaults to 13 observations five seconds apart, with
 1–60 attempts and 0–60 seconds supported through the documented overrides in the
 [validation reference](../../scripts/validation/README.md). Retain skips as skips,
-not live `HEALTHY` results. Keep M3 operator reports, missing archival URIs/checksums,
-and missing enabled-Apply provenance explicit. Reviewer acceptance, publication,
-and compliance certification are not supplied by the evidence exporter.
+not live `HEALTHY` results. Identify operator reports and missing archival
+URIs/checksums or Apply provenance explicitly. The evidence exporter does not
+establish application correctness or compliance certification.
 
 ## What Automated Workload Baseline Validation Covers
 

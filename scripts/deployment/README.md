@@ -203,11 +203,6 @@ protected Apply job consumes the reviewed saved plan. This workflow addition is
 specific to Plan/Apply and does not add an endpoint input to image-publication
 scripts. Review endpoint removal if a previously enabled value is omitted.
 
-The [qualification record](../../docs/assurance/v1.12.0-qualification.md) does not
-establish a consolidated M4 execution of this full application-release sequence.
-Historical M2/M3 observations remain separate; no new publication/deployment is
-asserted by this documentation.
-
 The image-publication scripts and `Deploy Application` workflow own image publication metadata and digest handoff. They do not own ECR repository provisioning, ECS runtime resources, task IAM roles, security groups, schema migrations, application tests, release approval policy, or Terraform state. Those concerns remain with their existing platform, application, and organizational owners.
 
 ## Exact Terraform Plan Artifacts

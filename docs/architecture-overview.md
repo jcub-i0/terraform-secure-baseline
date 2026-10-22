@@ -297,7 +297,7 @@ The optional regional endpoint is shared workload infrastructure, not part of an
 individual service's IAM contract. Existing task/compute SG relationships provide
 TCP/443 admission to the endpoint tier; private DNS/TLS connectivity does not
 prove service authorization or inference. See the [runtime design](ecs-runtime-design.md)
-and [qualification boundaries](assurance/v1.12.0-qualification.md).
+and [validation checklist](validation-checklist.md).
 
 ### GuardDuty Fargate Runtime Monitoring
 

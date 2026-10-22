@@ -872,8 +872,8 @@ The current release, v1.12.0, preserves the opt-out defaults for existing
 v1.11.1 configurations. No new settings are required unless an application needs
 one of the following capabilities. Review your actual state-backed plan; this
 compatibility contract does not promise a no-change plan for every deployment.
-Historical qualification and its exceptions are recorded in the
-[v1.12.0 ledger](assurance/v1.12.0-qualification.md).
+Historical test results and exceptions are recorded in the
+[v1.12.0 release notes](../CHANGELOG.md#v1120--application-runtime-extensibility).
 
 For task IAM and container health, add either or both optional fields to the
 existing service entry in `environments/<env>/container-workloads.auto.tfvars.json`.
@@ -950,7 +950,7 @@ When upgrading or changing opt-ins:
 4. After an authorized deployment, run the existing IAM, ECS runtime and endpoint
    validators plus the full baseline suite. Retain healthy-task and zero-capacity
    skip counts separately. New customer authorization and application behavior
-   need their own evidence; the maintainer's M1 exception is not such evidence.
+   need evidence from the deployed policy and application.
 
 ### Optional ECS/Fargate Application Runtime
 

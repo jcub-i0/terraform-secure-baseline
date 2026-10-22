@@ -68,12 +68,10 @@ complements ALB target health and is independent of GuardDuty coverage. PrivateL
 DNS/TLS reachability does not establish IAM authorization or Bedrock inference.
 Optional endpoints add AWS charges and share the existing endpoint SG access paths.
 
-The [v1.12.0 qualification record](docs/assurance/v1.12.0-qualification.md) records
-53 offline scenarios verified in CI, historical M2 health and M3 connectivity
-observations, and baseline/convergence evidence with its original scope. The
-additional M1 live allowed/denied API exercise was explicitly deferred; consolidated
-M4 application-release evidence and final sign-off are not established. These
-limits remain part of the current release documentation.
+The [v1.12.0 release notes](CHANGELOG.md#v1120--application-runtime-extensibility)
+summarize the 53 offline scenarios verified in CI, historical live observations,
+and test limitations. Each deployment needs evidence for its actual configuration
+and application behavior.
 
 ## What This Project Provides
 

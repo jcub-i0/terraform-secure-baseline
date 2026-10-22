@@ -397,9 +397,9 @@ When the runtime is empty, mark task/ALB instrumentation assertions not applicab
 ### v1.12.0 Runtime Extension Evidence
 
 Complete these companion fields only from the selected deployment's evidence.
-The [release ledger](v1.12.0-qualification.md) is historical context, not prefilled
-results. Its maintainer-deferred M1 live exercise and missing consolidated M4
-evidence must not be converted into PASS for this report.
+Historical results in the [release notes](../../CHANGELOG.md#v1120--application-runtime-extensibility)
+do not prefill this report. Leave unperformed tests as `Not Run` or `Deferred`
+with the applicable reason.
 
 | Assertion / record | Result / value | Evidence / limit |
 |---|---|---|
@@ -415,10 +415,10 @@ evidence must not be converted into PASS for this report.
 | Private DNS, TLS and HTTP observation | `<Observed/Not Run>` | `<source subnet/SG, endpoint ENIs, DNS/TLS results>`; not IAM/inference |
 | Canonical application task-SG connectivity | `<Observed/Not Run>` | A temporary compute-SG probe does not establish this path |
 | Authenticated application/model operation | `<Observed/Not Run/Not Applicable>` | `<separate request evidence>`; no implicit inference success |
-| Offline regression | `<counts/revision/CI run/Not Run>` | Historical release CI: 13 + 18 + 22 = 53 mocked cases; not live behavior |
-| Consolidated publication → reviewed Apply → runtime → export | `<Evidence complete/Incomplete/Not Run>` | `<publication digest, plan/Apply IDs, revision, package URI/checksums>` |
+| Offline regression | `<counts/revision/CI run/Not Run>` | Record executed suites and case counts; mocked cases do not establish live behavior |
+| Application release traceability | `<Evidence complete/Incomplete/Not Run>` | `<publication digest, plan/Apply IDs, revision, package URI/checksums>` |
 | Reused historical qualification | `<original revision/configuration/run and rationale/none>` | Preserve provenance; do not relabel as execution on this report's revision |
-| Evidence gaps and reviewer disposition | `<gaps/owner/decision/date/Not Reviewed>` | Separate from script success, release publication and certification |
+| Evidence gaps and reviewer disposition | `<gaps/owner/decision/date/Not Reviewed>` | Script success alone does not establish application correctness or certification |
 
 ### RDS Resilience Evidence
 

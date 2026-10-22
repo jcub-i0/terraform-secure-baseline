@@ -1494,9 +1494,8 @@ ECS IAM assertions remain in `validate-iam.sh`. It verifies restricted task/exec
 For each deployable service, retain the configured policy ARN set and live
 attachment inventory from `validate-iam.sh`. Review external policy documents,
 versions, resource grants and effective permissions independently. Matching ARNs
-alone do not establish least privilege or allowed/denied API behavior. The
-maintainer explicitly deferred the extra M1 live allowed/denied API exercise;
-record any customer-specific authorization test under its own identity and evidence.
+alone do not establish least privilege or allowed/denied API behavior. Record
+customer-specific authorization tests under their actual identity and evidence.
 
 For opted-in `health_check`, `validate-ecs-runtime.sh` checks exact task-definition
 fields and polls native application health before strict rollout convergence.
@@ -1513,11 +1512,10 @@ remain independent. A deliberate standalone failing task is not evidence of
 managed-service deployment rollback. Health-check command success is limited to
 the command's actual semantics; it is not proof of all application transactions.
 
-The [v1.12.0 qualification record](assurance/v1.12.0-qualification.md) retains
-53 offline CI scenarios and historical M2/M3 live observations. Its consolidated
-M4 application-release evidence and final sign-off remain unestablished. Do not
-relabel historical observations or `16/16` script results as completion of those
-separate acceptance items.
+Use the [release notes](../CHANGELOG.md#v1120--application-runtime-extensibility)
+for historical results and test exceptions. Record each deployment's actual
+configuration and evidence; `16/16` script results do not establish every
+application behavior.
 
 ### Production ECS acceptance and actual placement
 

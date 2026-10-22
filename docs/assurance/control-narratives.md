@@ -550,11 +550,10 @@ to the 16 mandatory Interface Endpoints through
 SG/private DNS/subnet controls and additional AWS costs. DNS/TLS/HTTP reachability
 does not establish application authorization or model inference.
 
-The [v1.12.0 qualification ledger](v1.12.0-qualification.md) distinguishes the
-53 offline CI scenarios from historical M2/M3 live observations, records the
-maintainer-deferred M1 live authorization exercise, and retains unresolved M4
-application-release provenance. These controls and observations do not establish
-SOC 2 or ISO 27001 certification.
+The [release notes](../../CHANGELOG.md#v1120--application-runtime-extensibility)
+distinguish offline test results from historical live observations and document
+untested behavior. These controls and observations do not establish SOC 2 or
+ISO 27001 certification.
 
 Terraform-owned operational alarms are separate from AWS-managed target-tracking alarms. The monitoring module creates:
 

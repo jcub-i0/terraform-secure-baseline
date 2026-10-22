@@ -686,10 +686,8 @@ The following manual listings are spot checks. They do not compare every
 attached/inline policy, simulate all authorization paths, or reject all extra
 roles. A passing ECS policy check does not certify the wildcard grants on the
 unrelated Lambda/remediation roles. Application-managed policy contents and later
-default-version changes are outside the attachment validator's scope. Review effective permissions separately; no
-permission boundary is created here. The additional M1 live allowed/denied API
-exercise was explicitly deferred by the maintainer, as recorded in the
-[v1.12.0 qualification ledger](../../docs/assurance/v1.12.0-qualification.md).
+default-version changes are outside the attachment validator's scope. Review
+effective permissions separately; no permission boundary is created here.
 
 From the repository root, first select the initialized workload and credentials
 using the [validation checklist](../../docs/validation-checklist.md). The local

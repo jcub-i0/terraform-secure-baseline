@@ -121,11 +121,12 @@ Standalone Plan and Apply's internal Plan job forward it, defaulting to `[]`;
 Apply consumes its saved plan. Align local tfvars/CLI inputs and CI settings.
 Review regional availability and additional endpoint/AZ hourly and traffic costs.
 
-The [qualification record](../../docs/assurance/v1.12.0-qualification.md) retains
-historical EC2 and temporary Fargate DNS/TLS/HTTP observations. The Fargate probe
-used the compute SG, not a canonical application's task SG. A private HTTPS
-response, including the recorded unauthenticated HTTP 404, proves neither IAM
-authorization nor Bedrock model inference. Retain separate application tests.
+Validate private DNS and hostname-verified TLS from the intended workload's
+subnet and security group. A private HTTPS response, including an unauthenticated
+HTTP 404, proves neither IAM authorization nor Bedrock model inference. A probe
+using the compute SG does not establish the canonical application's task-SG path.
+See the [validation checklist](../../docs/validation-checklist.md) for separate
+network and application evidence requirements.
 
 ### GuardDuty Runtime Monitoring Endpoint
 

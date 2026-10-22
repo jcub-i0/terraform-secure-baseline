@@ -229,7 +229,7 @@ service rollout convergence: 13 observations five seconds apart by default.
 unresolved/missing health fails at the polling bound. Zero desired/running/pending
 capacity is skipped; disabled checks add no native-health task queries.
 ALB and GuardDuty validation still apply independently. See the
-[v1.12.0 evidence limits](../../docs/assurance/v1.12.0-qualification.md).
+[validation reference](../../scripts/validation/README.md) for evidence boundaries.
 
 ## Image Integrity
 
