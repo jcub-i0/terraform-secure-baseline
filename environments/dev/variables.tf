@@ -30,7 +30,7 @@ variable "subnet_cidrs" {
 variable "deployment_profile" {
   description = "Deployment profile controlling cost/security defaults. Valid values: production, development, minimal."
   type        = string
-  default     = "production"
+  default     = "development"
 
   validation {
     condition = contains([
