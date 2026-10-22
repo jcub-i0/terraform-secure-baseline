@@ -82,6 +82,13 @@ variable "backup_enabled" {
   type        = bool
 }
 
+variable "restore_testing_enabled" {
+  description = "Whether to create an isolated security group for temporary RDS Restore Testing instances"
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
 variable "rds_deletion_protection" {
   description = "Whether deletion protection is enabled on the RDS DB instance."
   type        = bool

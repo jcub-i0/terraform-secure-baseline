@@ -149,6 +149,7 @@ module "storage" {
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
 
   backup_enabled            = local.effective_backup_enabled
+  restore_testing_enabled   = local.effective_restore_testing_enabled
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
   logs_cmk_arn                     = module.security.logs_cmk_arn

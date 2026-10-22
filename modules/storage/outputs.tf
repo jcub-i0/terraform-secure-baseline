@@ -18,6 +18,16 @@ output "data_sg_id" {
   value       = aws_security_group.data.id
 }
 
+output "restore_test_db_sg_id" {
+  description = "Dedicated RDS Restore Testing security group ID; null when disabled."
+
+  value = (
+    var.restore_testing_enabled
+    ? aws_security_group.restore_test_db[0].id
+    : null
+  )
+}
+
 output "rds_address" {
   description = "DNS address of the RDS instance"
   value       = aws_db_instance.main.address
