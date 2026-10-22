@@ -396,6 +396,13 @@ if [[ "$RESTORE_TESTING_ENABLED" == "true" ]]; then
   if ! echo "$RESTORE_TESTING_JSON" |
     jq -e '
       (.schedule | type == "string" and length > 0)
+      and (
+        .restore_test_db_sg_id
+        | if type == "string"
+          then test("^sg-[0-9a-f]{8}([0-9a-f]{9})?$")
+          else false
+          end
+      )
       and (.start_window_hours | type == "number" and . >= 1 and floor == .)
       and (.selection_window_days | type == "number" and . >= 1 and floor == .)
       and (.validation_window_hours | type == "number" and . >= 1 and floor == .)
@@ -462,6 +469,7 @@ else
   if ! echo "$RESTORE_TESTING_JSON" |
     jq -e '
       .schedule == null
+      and .restore_test_db_sg_id == null
       and .start_window_hours == null
       and .selection_window_days == null
       and .validation_window_hours == null
@@ -780,6 +788,8 @@ validate_restore_testing_live() {
   local expected_plan_recovery_selection_json
   local expected_selection_json
   local expected_metadata_json
+  local expected_restore_sg_id
+  local expected_restore_sg_ids_json
   local restore_testing_plan_response_json
   local live_plan_json
   local restore_testing_selection_response_json
@@ -805,32 +815,46 @@ validate_restore_testing_live() {
       jq -c '.restore_metadata_overrides'
   )"
 
+  expected_restore_sg_id="$(
+    echo "$RESTORE_TESTING_JSON" |
+      jq -er '.restore_test_db_sg_id'
+  )"
+
+  expected_restore_sg_ids_json="$(
+    jq -nc --arg id "$expected_restore_sg_id" '[$id]'
+  )"
+
+  if echo "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" |
+    jq -e --arg id "$expected_restore_sg_id" \
+      'index($id) != null' >/dev/null; then
+    fail "Restore Testing security group must differ from the source RDS security group."
+  fi
+
   if ! echo "$expected_metadata_json" |
     jq -e \
       --arg subnet_group "$EXPECTED_RDS_DB_SUBNET_GROUP_NAME" \
-      --argjson vpc_security_group_ids "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" '
+      --argjson restore_sgs "$expected_restore_sg_ids_json" '
         .dbSubnetGroupName == $subnet_group
         and (
           (.vpcSecurityGroupIds | fromjson | sort | unique)
-          == $vpc_security_group_ids
+          == $restore_sgs
         )
         and (.publiclyAccessible | ascii_downcase) == "false"
         and (.multiAz | ascii_downcase) == "false"
       ' >/dev/null; then
     jq -n \
-      --arg expected_subnet_group "$EXPECTED_RDS_DB_SUBNET_GROUP_NAME" \
-      --argjson expected_vpc_security_group_ids "$EXPECTED_RDS_VPC_SECURITY_GROUP_IDS_JSON" \
-      --argjson restore_metadata "$expected_metadata_json" '
-        {
-          expected_source_rds_subnet_group: $expected_subnet_group,
-          expected_source_rds_vpc_security_group_ids: $expected_vpc_security_group_ids,
-          restore_testing_metadata: $restore_metadata
-        }
-      '
-    fail "Restore Testing private-network metadata does not align with rds_configuration."
+      --arg subnet_group "$EXPECTED_RDS_DB_SUBNET_GROUP_NAME" \
+      --argjson restore_sgs "$expected_restore_sg_ids_json" \
+      --argjson metadata "$expected_metadata_json" '{
+        expected_db_subnet_group: $subnet_group,
+        expected_restore_security_groups: $restore_sgs,
+        actual_restore_metadata: $metadata
+      }'
+
+    fail "Restore Testing metadata does not match the isolated restore networking contract."
   fi
 
-  success "Restore Testing private-network metadata aligns with the Terraform-owned RDS configuration"
+  success "Restore Testing uses the dedicated security group and private DB subnet group"
 
   # Cross-resource Terraform/live relationship: the Restore Testing contract
   # must target the exact RDS instance already resolved by this validator.
