@@ -19,6 +19,24 @@ resource "aws_security_group" "data" {
   }
 }
 
+# Dedicated security group for temporary RDS Restore Testing instances.
+# Validation ingress will be added separately with a narrowly scoped source.
+resource "aws_security_group" "restore_test_db" {
+  count = var.restore_testing_enabled ? 1 : 0
+
+  name                   = "${var.name_prefix}-Restore-Test-DB-SG"
+  description            = "Isolated temporary RDS Restore Testing database"
+  vpc_id                 = var.vpc_id
+  revoke_rules_on_delete = true
+
+  tags = {
+    Name        = "${var.name_prefix}-Restore-Test-DB-SG"
+    Environment = var.environment
+    Terraform   = "true"
+    Purpose     = "rds-restore-testing"
+  }
+}
+
 ## DB SUBNET GROUP
 resource "aws_db_subnet_group" "data" {
   name       = "${var.name_prefix}-data-db-subnet-group"

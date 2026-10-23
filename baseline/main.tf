@@ -149,6 +149,7 @@ module "storage" {
   data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
 
   backup_enabled            = local.effective_backup_enabled
+  restore_testing_enabled   = local.effective_restore_testing_enabled
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
   logs_cmk_arn                     = module.security.logs_cmk_arn
@@ -463,7 +464,9 @@ module "backup" {
   restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
   restore_testing_rds_arn                 = module.storage.rds_configuration.arn
   restore_testing_db_subnet_group_name    = module.storage.rds_configuration.db_subnet_group_name
-  restore_testing_vpc_security_group_ids = [
-    module.storage.data_sg_id
-  ]
+  restore_testing_vpc_security_group_ids = (
+    local.effective_restore_testing_enabled
+    ? [module.storage.restore_test_db_sg_id]
+    : []
+  )
 }

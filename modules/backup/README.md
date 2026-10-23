@@ -11,7 +11,9 @@ Scheduled backup ownership remains separate from vault ownership:
 
 When backups are enabled, supported resources tagged with `Backup = "true"` are selected by AWS Backup. When backups are disabled, the plan and selection are absent and workload resources are expected to use `Backup = "false"`.
 
-This separation allows the baseline to disable scheduled backups for cost-sensitive environments without coupling that decision to deletion of the backup vault. Separately, `restore_testing_enabled` controls the Restore Testing plan and selection. The baseline enables Restore Testing for the production profile with scheduled Backup enabled.
+This separation allows the baseline to disable scheduled backups for cost-sensitive environments without coupling that decision to deletion of the backup vault. Separately, `restore_testing_enabled` controls the Restore Testing plan and selection. The baseline enables Restore Testing by default for the production profile when scheduled Backup is enabled; any deployment profile may explicitly opt in or out through the baseline-level `restore_testing_enabled` input. Enabling Restore Testing requires effective AWS Backup enablement. An optional `restore_testing_schedule` overrides the default Sunday 08:00 UTC cron expression (`cron(0 8 ? * SUN *)`).
+
+**Cost/safety:** Enabling Restore Testing creates a scheduled plan, not a single on-demand test. AWS Backup will periodically restore temporary RDS instances and charges can accrue. Non-production qualification requires explicit `backup_enabled = true` together with `restore_testing_enabled = true`; do not apply these settings until the validation workflow and its cleanup checks are ready. The dedicated restore security group has no SQL-validator ingress in M1-A3.
 
 This module's scheduled AWS Backup policy is distinct from the RDS instance's native automated-backup retention in `modules/storage`. Disabling scheduled AWS Backup is not a statement that RDS native automated backups are disabled.
 

@@ -30,7 +30,7 @@ variable "subnet_cidrs" {
 variable "deployment_profile" {
   description = "Deployment profile controlling cost/security defaults. Valid values: production, development, minimal."
   type        = string
-  default     = "production"
+  default     = "development"
 
   validation {
     condition = contains([
@@ -150,6 +150,18 @@ variable "enable_rules" {
 variable "backup_enabled" {
   description = "Whether to enable AWS Backup. Set to null to use the deployment_profile default."
   type        = bool
+  default     = null
+}
+
+variable "restore_testing_enabled" {
+  description = "Override RDS Restore Testing; null uses the baseline deployment_profile default."
+  type        = bool
+  default     = null
+}
+
+variable "restore_testing_schedule" {
+  description = "Optional RDS Restore Testing cron schedule (UTC); null uses the existing weekly default."
+  type        = string
   default     = null
 }
 

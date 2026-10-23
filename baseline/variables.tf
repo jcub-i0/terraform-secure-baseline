@@ -338,6 +338,59 @@ variable "backup_enabled" {
   default     = null
 }
 
+variable "restore_testing_enabled" {
+  description = "Override RDS Restore Testing enablement; null uses the production-profile default when AWS Backup is enabled."
+  type        = bool
+  default     = null
+
+  validation {
+    condition = (
+      var.restore_testing_enabled != true ||
+      (
+        var.backup_enabled != null
+        ? var.backup_enabled
+        : var.deployment_profile == "production"
+      )
+    )
+
+    error_message = "restore_testing_enabled=true requires AWS Backup to be enabled."
+  }
+}
+
+variable "restore_testing_schedule" {
+  description = "Optional RDS Restore Testing cron expression (UTC); null uses the existing weekly default when enabled."
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      var.restore_testing_schedule == null ||
+      can(regex(
+        "(?i)^cron\\([0-9*,/-]+\\s+[0-9*,/-]+\\s+[0-9?LW*,/-]+\\s+[0-9A-Z*,/-]+\\s+[0-9A-Z?#L*,/-]+\\s+[0-9*,/-]+\\)$",
+        var.restore_testing_schedule
+      ))
+    )
+
+    error_message = "restore_testing_schedule must use a six-field AWS cron expression: cron(minutes hours day-of-month month day-of-week year)."
+  }
+
+  validation {
+    condition = (
+      var.restore_testing_schedule == null ||
+      (
+        var.restore_testing_enabled != null
+        ? var.restore_testing_enabled
+        : (
+          var.deployment_profile == "production" &&
+          var.backup_enabled != false
+        )
+      )
+    )
+
+    error_message = "restore_testing_schedule may only be specified when Restore Testing is enabled."
+  }
+}
+
 variable "backup_schedule" {
   description = "CRON expression for when backups are performed"
   type        = string
