@@ -365,20 +365,29 @@ variable "restore_testing_schedule" {
   validation {
     condition = (
       var.restore_testing_schedule == null ||
+      can(regex(
+        "(?i)^cron\\([0-9*,/-]+\\s+[0-9*,/-]+\\s+[0-9?LW*,/-]+\\s+[0-9A-Z*,/-]+\\s+[0-9A-Z?#L*,/-]+\\s+[0-9*,/-]+\\)$",
+        var.restore_testing_schedule
+      ))
+    )
+
+    error_message = "restore_testing_schedule must use a six-field AWS cron expression: cron(minutes hours day-of-month month day-of-week year)."
+  }
+
+  validation {
+    condition = (
+      var.restore_testing_schedule == null ||
       (
-        can(regex("^cron\\(.+\\)$", var.restore_testing_schedule)) &&
-        (
-          var.restore_testing_enabled != null
-          ? var.restore_testing_enabled
-          : (
-            var.deployment_profile == "production" &&
-            var.backup_enabled != false
-          )
+        var.restore_testing_enabled != null
+        ? var.restore_testing_enabled
+        : (
+          var.deployment_profile == "production" &&
+          var.backup_enabled != false
         )
       )
     )
 
-    error_message = "restore_testing_schedule requires enabled Restore Testing and a cron(...) expression."
+    error_message = "restore_testing_schedule may only be specified when Restore Testing is enabled."
   }
 }
 
