@@ -17,6 +17,8 @@ module "baseline" {
   enable_config                          = var.enable_config
   enable_rules                           = var.enable_rules
   backup_enabled                         = var.backup_enabled
+  restore_testing_enabled                = var.restore_testing_enabled
+  restore_testing_schedule               = var.restore_testing_schedule
   rds_multi_az                           = var.rds_multi_az
   rds_instance_class                     = var.rds_instance_class
   inspector_enabled                      = var.inspector_enabled

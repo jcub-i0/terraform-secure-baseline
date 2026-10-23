@@ -153,6 +153,18 @@ variable "backup_enabled" {
   default     = null
 }
 
+variable "restore_testing_enabled" {
+  description = "Override RDS Restore Testing; null uses the baseline deployment_profile default."
+  type        = bool
+  default     = null
+}
+
+variable "restore_testing_schedule" {
+  description = "Optional RDS Restore Testing cron schedule (UTC); null uses the existing weekly default."
+  type        = string
+  default     = null
+}
+
 variable "rds_multi_az" {
   description = "Whether the RDS DB instance uses a Multi-AZ deployment. Set to null to use the deployment_profile default."
   type        = bool

@@ -1,6 +1,6 @@
 # v1.13.0 Roadmap — Recovery Assurance & Edge Protection
 
-**Status:** Planned · **Baseline:** [v1.12.0](https://github.com/jcub-i0/terraform-secure-baseline/releases/tag/v1.12.0)
+**Status:** In progress · **Baseline:** [v1.12.0](https://github.com/jcub-i0/terraform-secure-baseline/releases/tag/v1.12.0)
 
 **Objective:** Prove that protected RDS data can be recovered, make public application traffic observable, and introduce controlled HTTP threat protection for SaaS workloads handling sensitive data. Build on existing Terraform modules and validation workflows without introducing application-specific assumptions or unnecessary default costs.
 
@@ -12,7 +12,7 @@ The baseline already provisions AWS Backup RDS Restore Testing when enabled. v1.
 
 | Work item | Intended design | Expected result / acceptance | Status |
 |---|---|---|---|
-| Private restore | Extend existing Restore Testing with isolated networking, least-privilege validation access, and synthetic PostgreSQL data. Prefer a dedicated restore-test security group. | A recovery point restores to a private, temporary RDS instance without modifying the source database. | Planned |
+| Private restore | Extend existing Restore Testing with isolated networking, least-privilege validation access, and synthetic PostgreSQL data. Prefer a dedicated restore-test security group. | A recovery point restores to a private, temporary RDS instance without modifying the source database. | In progress |
 | Data integrity | Provide an application-agnostic validation hook, with a reference synthetic-data query/checksum test; report its result to AWS Backup. | Actual SQL connectivity and known record/integrity assertions succeed; a corrupted or inaccessible restore fails qualification. | Planned |
 | Outcome and cleanup | Distinguish configuration checks, pending jobs, completed validation, failed jobs, and cleanup failures. Capture duration and resource identifiers. | The completed restore and validation pass, temporary resources are removed, and observed recovery time is recorded (not advertised as a guaranteed RTO/RPO). | Planned |
 

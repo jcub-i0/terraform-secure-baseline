@@ -458,13 +458,17 @@ locals {
   # ---------------------------------------------------------------------------
 
   effective_restore_testing_enabled = (
-    local.is_production_profile &&
-    local.effective_backup_enabled
+    local.effective_backup_enabled &&
+    (
+      var.restore_testing_enabled != null
+      ? var.restore_testing_enabled
+      : local.is_production_profile
+    )
   )
 
   effective_restore_testing_schedule = (
     local.effective_restore_testing_enabled
-    ? "cron(0 8 ? * SUN *)"
+    ? coalesce(var.restore_testing_schedule, "cron(0 8 ? * SUN *)")
     : null
   )
 

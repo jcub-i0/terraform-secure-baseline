@@ -76,6 +76,11 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-rds-restore-isolation.sh
 
+      - name: Test RDS Restore Testing opt-in
+        run: |
+          set -euo pipefail
+          bash scripts/tests/test-rds-restore-opt-in.sh
+
       - name: Terraform format check
         id: terraform_fmt
         continue-on-error: true
