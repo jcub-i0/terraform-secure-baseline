@@ -108,9 +108,7 @@ resource "aws_lambda_function" "worker" {
   architectures = ["x86_64"]
 
   filename = "${path.module}/lambda/dist/signed/worker.zip"
-  source_code_hash = filebase64sha256(
-    "${path.module}/lambda/dist/signed/worker.zip"
-  )
+  source_code_hash = fileexists("${path.module}/lambda/dist/signed/worker.zip") ? filebase64sha256("${path.module}/lambda/dist/signed/worker.zip") : null
   #code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   timeout                        = 120
@@ -173,9 +171,7 @@ resource "aws_lambda_function" "coordinator" {
   architectures = ["x86_64"]
 
   filename = "${path.module}/lambda/dist/signed/coordinator.zip"
-  source_code_hash = filebase64sha256(
-    "${path.module}/lambda/dist/signed/coordinator.zip"
-  )
+  source_code_hash = fileexists("${path.module}/lambda/dist/signed/coordinator.zip") ? filebase64sha256("${path.module}/lambda/dist/signed/coordinator.zip") : null
   #code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   # The coordinator synchronously invokes the worker (120s timeout).
