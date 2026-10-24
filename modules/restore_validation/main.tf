@@ -62,38 +62,13 @@ resource "aws_sqs_queue" "validation_dlq" {
 }
 
 # =============================================================================
-# LAMBDA CODE SIGNING
-# =============================================================================
-
-/*resource "aws_signer_signing_profile" "restore_validation" {
-  name_prefix = "restore_validation_"
-  platform_id = "AWSLambda-SHA384-ECDSA"
-}
-
-resource "aws_lambda_code_signing_config" "restore_validation" {
-  description = "Enforce trusted code signatures for RDS Restore Validation Lambdas"
-
-  allowed_publishers {
-    signing_profile_version_arns = [
-      aws_signer_signing_profile.restore_validation.version_arn
-    ]
-  }
-
-  policies {
-    untrusted_artifact_on_deployment = "Enforce"
-  }
-}
-*/
-
-# =============================================================================
 # SQL VALIDATION WORKER LAMBDA
 # =============================================================================
 
 data "archive_file" "worker" {
-  type             = "zip"
-  source_dir       = "${path.module}/lambda/build/worker"
-  output_path      = "${path.module}/lambda/worker.zip"
-  output_file_mode = "0644"
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/build/worker"
+  output_path = "${path.module}/lambda/worker.zip"
 }
 
 resource "aws_lambda_function" "worker" {
@@ -102,14 +77,12 @@ resource "aws_lambda_function" "worker" {
   function_name = "${var.name_prefix}-restore-validation-worker"
   description   = "Verify synthetic-data integrity on a private restored RDS instance"
 
-  role          = aws_iam_role.worker.arn
-  handler       = "worker.lambda_handler"
-  runtime       = "python3.12"
-  architectures = ["x86_64"]
-
-  filename         = "${path.module}/lambda/dist/signed/worker.zip"
-  source_code_hash = fileexists("${path.module}/lambda/dist/signed/worker.zip") ? filebase64sha256("${path.module}/lambda/dist/signed/worker.zip") : null
-  #code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
+  role             = aws_iam_role.worker.arn
+  handler          = "worker.lambda_handler"
+  runtime          = "python3.12"
+  architectures    = ["x86_64"]
+  filename         = data.archive_file.worker.output_path
+  source_code_hash = data.archive_file.worker.output_base64sha256
 
   timeout                        = 120
   memory_size                    = 512
@@ -158,11 +131,10 @@ resource "aws_lambda_function" "worker" {
 # RESTORE VALIDATION COORDINATOR LAMBDA
 # =============================================================================
 
-data "archive_file" "coordinator" {
-  type             = "zip"
-  source_file      = "${path.module}/lambda/coordinator.py"
-  output_path      = "${path.module}/lambda/coordinator.zip"
-  output_file_mode = "0644"
+data "archive_file" "cooridinator" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/build/coordinator"
+  output_path = "${path.module}/lambda/coordinator.zip"
 }
 
 resource "aws_lambda_function" "coordinator" {
@@ -177,9 +149,8 @@ resource "aws_lambda_function" "coordinator" {
   runtime       = "python3.12"
   architectures = ["x86_64"]
 
-  filename         = "${path.module}/lambda/dist/signed/coordinator.zip"
-  source_code_hash = fileexists("${path.module}/lambda/dist/signed/coordinator.zip") ? filebase64sha256("${path.module}/lambda/dist/signed/coordinator.zip") : null
-  #code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
+  filename         = data.archive_file.cooridinator.output_path
+  source_code_hash = data.archive_file.cooridinator.output_base64sha256
 
   # The coordinator synchronously invokes the worker (120s timeout).
   timeout                        = 180
