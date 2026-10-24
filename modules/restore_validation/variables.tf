@@ -25,7 +25,7 @@ variable "worker_subnet_ids" {
   type = list(string)
 }
 
-variable "restore_db_sg_id" {
+variable "restore_test_db_sg_id" {
   type = string
 }
 
