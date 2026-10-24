@@ -102,12 +102,25 @@ class CoordinatorTests(TestCase):
                 finally: b.put_restore_validation_result.assert_not_called()
 
     def test_duplicate_delivery_is_idempotent(self):
-        for status in ("SUCCESSFUL", "FAILED", "TIMED_OUT", "VALIDATING"):
+        for status in ("SUCCESSFUL", "FAILED", "TIMED_OUT"):
             with self.subTest(status=status):
                 b, r, worker = clients(backup_job=job(ValidationStatus=status))
                 self.assertEqual(c.run(event(), CFG, b, r, worker)["status"], "ALREADY_RECORDED")
                 worker.invoke.assert_not_called()
                 b.put_restore_validation_result.assert_not_called()
+
+    def test_validating_is_not_terminal_and_reports_conclusive_result(self):
+        b, r, worker = clients(backup_job=job(ValidationStatus="VALIDATING"))
+        self.assertEqual(c.run(event(), CFG, b, r, worker)["status"], "SUCCESSFUL")
+        worker.invoke.assert_called_once()
+        b.put_restore_validation_result.assert_called_once()
+
+    def test_unexpected_validation_status_does_not_report(self):
+        b, r, worker = clients(backup_job=job(ValidationStatus="UNRECOGNIZED"))
+        with self.assertRaises(c.RetryableFailure):
+            c.run(event(), CFG, b, r, worker)
+        worker.invoke.assert_not_called()
+        b.put_restore_validation_result.assert_not_called()
 
     def test_wrong_isolation_is_definitive_failure(self):
         bad = [instance(VpcSecurityGroups=[]), instance(PubliclyAccessible=True),
