@@ -498,8 +498,8 @@ module "restore_validation" {
   restore_testing_plan_arn = module.backup.restore_testing_plan.arn
   source_rds_arn           = module.storage.rds_configuration.arn
 
-  validation_secret_arn   = var.restore_validation_secret_arn
-  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
+  restore_validation_secret_arn = var.restore_validation_secret_arn
+  secrets_manager_cmk_arn       = module.security.secrets_manager_cmk_arn
 
   lambda_cmk_arn     = module.security.lambda_cmk_arn
   logs_cmk_arn       = module.security.logs_cmk_arn

@@ -100,7 +100,7 @@ resource "aws_lambda_function" "worker" {
 
   environment {
     variables = {
-      VALIDATION_SECRET_ARN = var.validation_secret_arn
+      VALIDATION_SECRET_ARN = var.restore_validation_secret_arn
       DB_NAME               = var.db_name
       DB_PORT               = tostring(var.db_port)
     }

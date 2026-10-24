@@ -42,7 +42,7 @@ variable "source_rds_arn" {
   type = string
 }
 
-variable "validation_secret_arn" {
+variable "restore_validation_secret_arn" {
   type = string
 }
 

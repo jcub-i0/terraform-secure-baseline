@@ -164,7 +164,7 @@ data "aws_iam_policy_document" "worker" {
     ]
 
     resources = [
-      var.validation_secret_arn
+      var.restore_validation_secret_arn
     ]
   }
 
@@ -190,7 +190,7 @@ data "aws_iam_policy_document" "worker" {
     condition {
       test     = "StringEquals"
       variable = "kms:EncryptionContext:SecretARN"
-      values   = [var.validation_secret_arn]
+      values   = [var.restore_validation_secret_arn]
     }
   }
 
