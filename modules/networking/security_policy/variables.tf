@@ -59,10 +59,21 @@ variable "s3_prefix_list_id" {
   }
 }
 
+variable "restore_validation_enabled" {
+  description = "Whether automated RDS restore validation is enabled."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
 variable "restore_test_db_sg_id" {
-  type = string
+  description = "Security group assigned to temporary Restore Testing databases."
+  type        = string
+  default     = null
 }
 
 variable "restore_validation_worker_sg_id" {
-  type = string
+  description = "Security group assigned to the restore validation Lambda worker."
+  type        = string
+  default     = null
 }
