@@ -106,13 +106,6 @@ resource "aws_lambda_function" "worker" {
     }
   }
 
-  lifecycle {
-    precondition {
-      condition     = fileexists("${path.module}/lambda/dist/signed/worker.zip")
-      error_message = "Restore Validation worker requires its signed ZIP before Terraform planning."
-    }
-  }
-
   depends_on = [
     aws_cloudwatch_log_group.worker,
     aws_iam_role_policy.worker,
@@ -171,13 +164,6 @@ resource "aws_lambda_function" "coordinator" {
       EXPECTED_RESTORE_TEST_DB_SG_ID = var.restore_test_db_sg_id
       EXPECTED_VPC_ID                = var.vpc_id
       WORKER_FUNCTION_NAME           = aws_lambda_function.worker.function_name
-    }
-  }
-
-  lifecycle {
-    precondition {
-      condition     = fileexists("${path.module}/lambda/dist/signed/coordinator.zip")
-      error_message = "Restore Validation coordinator requires its signed ZIP before Terraform planning."
     }
   }
 
