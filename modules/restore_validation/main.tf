@@ -23,7 +23,7 @@ resource "aws_iam_role_policy_attachment" "worker_xray" {
 
 resource "aws_cloudwatch_log_group" "coordinator" {
   name              = "/aws/lambda/${var.name_prefix}-restore-validation-coordinator"
-  retention_in_days = var.log_retention_days
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {
@@ -35,7 +35,7 @@ resource "aws_cloudwatch_log_group" "coordinator" {
 
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/aws/lambda/${var.name_prefix}-restore-validation-worker"
-  retention_in_days = var.log_retention_days
+  retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
   tags = {

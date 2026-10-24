@@ -501,9 +501,9 @@ module "restore_validation" {
   restore_validation_secret_arn = var.restore_validation_secret_arn
   secrets_manager_cmk_arn       = module.security.secrets_manager_cmk_arn
 
-  lambda_cmk_arn     = module.security.lambda_cmk_arn
-  logs_cmk_arn       = module.security.logs_cmk_arn
-  log_retention_days = local.effective_cloudwatch_retention_days
+  lambda_cmk_arn            = module.security.lambda_cmk_arn
+  logs_cmk_arn              = module.security.logs_cmk_arn
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
   db_name = module.storage.rds_database_name
   db_port = tonumber(var.db_port)

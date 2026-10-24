@@ -58,7 +58,7 @@ variable "logs_cmk_arn" {
   type = string
 }
 
-variable "log_retention_days" {
+variable "cloudwatch_retention_days" {
   type = number
 }
 
