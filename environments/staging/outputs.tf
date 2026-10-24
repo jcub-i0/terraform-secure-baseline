@@ -278,6 +278,11 @@ output "restore_testing" {
   value       = module.baseline.restore_testing
 }
 
+output "restore_validation" {
+  description = "Resource-backed metadata for the optional RDS Restore Validation workflow; null when disabled."
+  value       = module.baseline.restore_validation
+}
+
 output "rds_configuration" {
   description = "Validator-relevant Terraform-managed RDS configuration."
   value       = module.baseline.rds_configuration

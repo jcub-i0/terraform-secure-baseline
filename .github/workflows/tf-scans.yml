@@ -81,6 +81,11 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-rds-restore-opt-in.sh
 
+      - name: Test RDS Restore Validation runtime, packaging, and artifact contract
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s modules/restore_validation/tests -p 'test_*.py' -v
+
       - name: Terraform format check
         id: terraform_fmt
         continue-on-error: true

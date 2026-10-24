@@ -391,6 +391,54 @@ variable "restore_testing_schedule" {
   }
 }
 
+variable "restore_validation_enabled" {
+  description = "Enable automated SQL validation for AWS Backup RDS Restore Testing."
+  type        = bool
+  default     = false
+  nullable    = false
+
+  validation {
+    condition = (
+      !var.restore_validation_enabled ||
+      (
+        (
+          var.backup_enabled != null
+          ? var.backup_enabled
+          : var.deployment_profile == "production"
+        ) &&
+        (
+          var.restore_testing_enabled != null
+          ? var.restore_testing_enabled
+          : var.deployment_profile == "production"
+        )
+      )
+    )
+
+    error_message = "Restore validation requires AWS Backup and Restore Testing to be enabled."
+  }
+}
+
+variable "restore_validation_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing read-only PostgreSQL validation credentials."
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      !var.restore_validation_enabled ||
+      (
+        var.restore_validation_secret_arn != null &&
+        can(regex(
+          "^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+",
+          var.restore_validation_secret_arn
+        ))
+      )
+    )
+
+    error_message = "Enabled restore validation requires a Secrets Manager credential ARN."
+  }
+}
+
 variable "backup_schedule" {
   description = "CRON expression for when backups are performed"
   type        = string

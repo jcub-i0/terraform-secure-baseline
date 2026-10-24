@@ -165,6 +165,19 @@ variable "restore_testing_schedule" {
   default     = null
 }
 
+variable "restore_validation_enabled" {
+  description = "Enable automated SQL validation for AWS Backup RDS Restore Testing"
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "restore_validation_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing read-only PostgreSQL validation credentials"
+  type        = string
+  default     = null
+}
+
 variable "rds_multi_az" {
   description = "Whether the RDS DB instance uses a Multi-AZ deployment. Set to null to use the deployment_profile default."
   type        = bool

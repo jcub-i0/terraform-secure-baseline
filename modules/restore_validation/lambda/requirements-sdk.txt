@@ -1,0 +1,8 @@
+# Explicit deployment pins; review and refresh security advisories before release.
+boto3==1.43.118
+botocore==1.43.118
+s3transfer==0.18.0
+jmespath==1.1.0
+python-dateutil==2.9.0.post0
+six==1.17.0
+urllib3==2.7.0

@@ -101,6 +101,15 @@ module "security_policy" {
   s3_prefix_list_id          = module.vpc_endpoints.s3_prefix_list_id
 
   ecs_security_policy_services = local.ecs_security_policy_services
+
+  restore_validation_enabled = var.restore_validation_enabled
+  restore_test_db_sg_id      = module.storage.restore_test_db_sg_id
+
+  restore_validation_worker_sg_id = (
+    var.restore_validation_enabled
+    ? module.restore_validation[0].restore_validation_worker_sg_id
+    : null
+  )
 }
 
 module "compute" {
@@ -464,9 +473,40 @@ module "backup" {
   restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
   restore_testing_rds_arn                 = module.storage.rds_configuration.arn
   restore_testing_db_subnet_group_name    = module.storage.rds_configuration.db_subnet_group_name
+
   restore_testing_vpc_security_group_ids = (
     local.effective_restore_testing_enabled
     ? [module.storage.restore_test_db_sg_id]
     : []
   )
+}
+
+module "restore_validation" {
+  count  = var.restore_validation_enabled ? 1 : 0
+  source = "../modules/restore_validation"
+
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  account_id     = var.account_id
+  primary_region = var.primary_region
+
+  vpc_id            = module.networking.vpc_id
+  worker_subnet_ids = module.networking.serverless_private_subnet_ids_list
+
+  restore_test_db_sg_id = module.storage.restore_test_db_sg_id
+
+  restore_testing_plan_arn = module.backup.restore_testing_plan.arn
+  source_rds_arn           = module.storage.rds_configuration.arn
+
+  restore_validation_secret_arn = var.restore_validation_secret_arn
+  secrets_manager_cmk_arn       = module.security.secrets_manager_cmk_arn
+
+  lambda_cmk_arn            = module.security.lambda_cmk_arn
+  logs_cmk_arn              = module.security.logs_cmk_arn
+  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
+
+  db_name = module.storage.rds_database_name
+  db_port = tonumber(var.db_port)
+
+  secops_topic_arn = module.monitoring.secops_topic_arn
 }

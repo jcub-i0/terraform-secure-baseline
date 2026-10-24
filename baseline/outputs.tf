@@ -426,6 +426,33 @@ output "restore_testing" {
   }
 }
 
+output "restore_validation" {
+  description = "Resource-backed metadata for the optional RDS Restore Validation workflow; null when disabled."
+
+  value = var.restore_validation_enabled ? {
+    enabled = true
+
+    coordinator_lambda_arn = module.restore_validation[0].coordinator_lambda_arn
+    worker_lambda_arn      = module.restore_validation[0].worker_lambda_arn
+
+    restore_validation_worker_sg_id = (
+      module.restore_validation[0].restore_validation_worker_sg_id
+    )
+
+    event_rule_arn     = module.restore_validation[0].event_rule_arn
+    validation_dlq_arn = module.restore_validation[0].validation_dlq_arn
+
+    coordinator_log_group_name = (
+      module.restore_validation[0].restore_validation_coordinator_log_group_name
+    )
+
+    worker_log_group_name = (
+      module.restore_validation[0].restore_validation_worker_log_group_name
+    )
+  } : null
+}
+
+
 output "backup_vault_configuration" {
   description = "Validator-relevant Terraform-managed Backup vault configuration."
   value       = module.backup.backup_vault_configuration
