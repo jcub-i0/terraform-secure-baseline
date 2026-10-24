@@ -158,13 +158,13 @@ resource "aws_lambda_function" "coordinator" {
 
   environment {
     variables = {
-      EXPECTED_ACCOUNT_ID       = var.account_id
-      EXPECTED_REGION           = var.primary_region
-      RESTORE_TESTING_PLAN_ARN  = var.restore_testing_plan_arn
-      SOURCE_RDS_ARN            = var.source_rds_arn
-      EXPECTED_RESTORE_DB_SG_ID = var.restore_test_db_sg_id
-      EXPECTED_VPC_ID           = var.vpc_id
-      WORKER_FUNCTION_NAME      = aws_lambda_function.worker.function_name
+      EXPECTED_ACCOUNT_ID            = var.account_id
+      EXPECTED_REGION                = var.primary_region
+      RESTORE_TESTING_PLAN_ARN       = var.restore_testing_plan_arn
+      SOURCE_RDS_ARN                 = var.source_rds_arn
+      EXPECTED_RESTORE_TEST_DB_SG_ID = var.restore_test_db_sg_id
+      EXPECTED_VPC_ID                = var.vpc_id
+      WORKER_FUNCTION_NAME           = aws_lambda_function.worker.function_name
     }
   }
 
