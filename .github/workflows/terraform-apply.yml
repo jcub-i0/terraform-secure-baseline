@@ -21,6 +21,11 @@ on:
                 required: true
                 default: false
                 type: boolean
+            restore_validation_enabled:
+                description: "Opt in to RDS Restore Validation (requires pre-provisioned AWS Signer and an RDS read-only secret)"
+                required: true
+                default: false
+                type: boolean
 
 permissions: {}
 
@@ -73,6 +78,8 @@ jobs:
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
             TF_VAR_production_retirement_mode: ${{ inputs.production_retirement_mode }}
+            TF_VAR_restore_validation_enabled: ${{ inputs.restore_validation_enabled }}
+            TF_VAR_restore_validation_secret_arn: ${{ vars.RESTORE_VALIDATION_SECRET_ARN }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
             RDS_INSTANCE_CLASS: ${{ vars.RDS_INSTANCE_CLASS }}
@@ -220,6 +227,27 @@ jobs:
                   terraform -chdir="${WORKING_DIRECTORY}" init -input=false -no-color
                   terraform -chdir="${WORKING_DIRECTORY}" validate -no-color
 
+            - name: Build and sign Restore Validation Lambdas
+              if: inputs.restore_validation_enabled
+              shell: bash
+              env:
+                  RESTORE_SIGNING_PROFILE_NAME: ${{ vars.RESTORE_SIGNING_PROFILE_NAME }}
+                  RESTORE_SIGNING_BUCKET: ${{ vars.RESTORE_SIGNING_BUCKET }}
+                  RDS_CA_SHA256: ${{ vars.RDS_CA_SHA256 }}
+                  RESTORE_VALIDATION_RELEASE: "true"
+              run: |
+                  set -euo pipefail
+                  : "${RDS_CA_SHA256:?Configure the reviewed RDS_CA_SHA256 in protected environment variables}"
+                  [[ "${RDS_CA_SHA256}" =~ ^[a-f0-9]{64}$ ]] || exit 2
+                  ca_file="${RUNNER_TEMP}/rds-ca-bundle.pem"
+                  [[ "${AWS_REGION}" =~ ^[a-z0-9-]+$ ]] || exit 2
+                  curl --fail --silent --show-error --location \
+                    "https://truststore.pki.rds.amazonaws.com/${AWS_REGION}/${AWS_REGION}-bundle.pem" \
+                    --output "${ca_file}"
+                  echo "${RDS_CA_SHA256}  ${ca_file}" | sha256sum --check --status
+                  python3 scripts/restore_validation/build.py --rds-ca-bundle "${ca_file}"
+                  bash scripts/restore_validation/sign.sh
+
             - name: Create exact saved plan
               shell: bash
               run: |
@@ -320,6 +348,7 @@ jobs:
                       lambda/ip_enrichment.zip >> "${PLAN_BASENAME}-plan.sha256"
                     sha256sum --check "${PLAN_BASENAME}-plan.sha256"
                   )
+                  bash scripts/restore_validation/stage-artifacts.sh plan "${artifact_dir}" "${PLAN_BASENAME}"
 
             - name: Upload saved plan
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -446,6 +475,8 @@ jobs:
                     fi
                     install -m 0600 -- "${verified_zip}" "${lambda_dir}/${lambda}.zip"
                   done
+                  bash scripts/restore_validation/stage-artifacts.sh apply \
+                    "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" "${PLAN_BASENAME}"
 
                   terraform -chdir="${WORKING_DIRECTORY}" apply \
                     -input=false \

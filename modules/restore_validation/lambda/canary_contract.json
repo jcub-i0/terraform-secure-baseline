@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "records": [
+    {"id": "alpha", "value": "terraform-secure-baseline:restore-validation:v1"},
+    {"id": "bravo", "value": "aws-backup:rds:synthetic-integrity-marker"},
+    {"id": "charlie", "value": "no-production-data-or-pii"}
+  ]
+}
