@@ -66,14 +66,33 @@ variable "restore_validation_enabled" {
   nullable    = false
 }
 
+
 variable "restore_test_db_sg_id" {
   description = "Security group assigned to temporary Restore Testing databases."
   type        = string
   default     = null
+
+  validation {
+    condition = (
+      !var.restore_validation_enabled ||
+      can(regex("^sg-[0-9a-f]{8}([0-9a-f]{9})?$", var.restore_test_db_sg_id))
+    )
+
+    error_message = "restore_test_db_sg_id must be a valid EC2 security group ID when restore_validation_enabled is true."
+  }
 }
 
 variable "restore_validation_worker_sg_id" {
   description = "Security group assigned to the restore validation Lambda worker."
   type        = string
   default     = null
+
+  validation {
+    condition = (
+      !var.restore_validation_enabled ||
+      can(regex("^sg-[0-9a-f]{8}([0-9a-f]{9})?$", var.restore_validation_worker_sg_id))
+    )
+
+    error_message = "restore_validation_worker_sg_id must be a valid EC2 security group ID when restore_validation_enabled is true."
+  }
 }
