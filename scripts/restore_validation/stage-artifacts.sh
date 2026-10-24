@@ -7,6 +7,11 @@ set -euo pipefail
 mode="${1:?Expected plan or apply}"
 artifact_dir="${2:?Expected saved-plan artifact directory}"
 plan_basename="${3:?Expected saved-plan basename}"
+restore_validation_enabled="${4:?Expected explicit restore-validation enabled flag true or false}"
+case "$restore_validation_enabled" in
+  true|false) ;;
+  *) echo "Restore Validation flag must be true or false" >&2; exit 2 ;;
+esac
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source_dir="${RESTORE_VALIDATION_SIGNED_DIR:-${repo_root}/modules/restore_validation/lambda/dist/signed}"
 staged="${artifact_dir}/lambda/restore_validation"
@@ -32,9 +37,20 @@ verify_signed() {
   done
 }
 
+# Never infer feature activation from the presence or absence of artifacts.
+# Disabled deployments must not silently ship leftover signed packages.
+if [[ "$restore_validation_enabled" == "false" ]]; then
+  case "$mode" in plan|apply) ;; *) echo "Mode must be plan or apply" >&2; exit 2 ;; esac
+  if [[ -e "$source_dir" || -L "$source_dir" || -e "$staged" || -L "$staged" ]]; then
+    echo "Restore Validation disabled but signed artifacts exist; refusing ambiguous artifact state" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
 case "$mode" in
   plan)
-    [[ -d "$source_dir" ]] || exit 0   # feature remains disabled
+    [[ -d "$source_dir" && ! -L "$source_dir" ]] || { echo "Enabled restore validation requires signed Plan artifacts" >&2; exit 1; }
     verify_signed "$source_dir"
     [[ -f "${artifact_dir}/${plan_basename}-plan.sha256" ]] || exit 1
     mkdir -p "$staged"
@@ -52,7 +68,7 @@ case "$mode" in
     )
     ;;
   apply)
-    [[ -d "$staged" ]] || exit 0       # feature was disabled in reviewed plan
+    [[ -d "$staged" && ! -L "$staged" ]] || { echo "Enabled restore validation requires signed artifacts in the reviewed plan" >&2; exit 1; }
     # The parent protected workflow MUST verify saved plan manifest first.
     verify_signed "$staged"
     mkdir -p "$source_dir"
