@@ -101,6 +101,9 @@ module "security_policy" {
   s3_prefix_list_id          = module.vpc_endpoints.s3_prefix_list_id
 
   ecs_security_policy_services = local.ecs_security_policy_services
+
+  restore_test_db_sg_id = module.storage.restore_test_db_sg_id
+  worker_sg_id          = module.restore_validation.worker_sg_id
 }
 
 module "compute" {
@@ -469,4 +472,35 @@ module "backup" {
     ? [module.storage.restore_test_db_sg_id]
     : []
   )
+}
+
+module "restore_validation" {
+  count  = var.restore_validation_enabled ? 1 : 0
+  source = "../modules/restore_validation"
+
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  account_id     = var.account_id
+  primary_region = var.primary_region
+
+  vpc_id            = module.networking.vpc_id
+  worker_subnet_ids = module.networking.serverless_private_subnet_ids_list
+
+  restore_test_db_sg_id          = module.storage.restore_test_db_sg_id
+  interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
+
+  restore_testing_plan_arn = module.backup.restore_testing_plan.arn
+  source_rds_arn           = module.storage.rds_configuration.arn
+
+  validation_secret_arn   = var.restore_validation_secret_arn
+  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
+
+  lambda_cmk_arn     = module.storage.rds_database_name
+  logs_cmk_arn       = module.security.logs_cmk_arn
+  log_retention_days = local.effective_cloudwatch_retention_days
+
+  db_name = module.storage.rds_database_name
+  db_port = tonumber(var.db_port)
+
+  secops_topic_arn = module.monitoring.secops_topic_arn
 }

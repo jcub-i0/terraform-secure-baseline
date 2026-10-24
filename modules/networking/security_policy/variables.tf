@@ -58,3 +58,11 @@ variable "s3_prefix_list_id" {
     error_message = "s3_prefix_list_id must be provided when ECS security-policy services are configured."
   }
 }
+
+variable "restore_test_db_sg_id" {
+  type = string
+}
+
+variable "worker_sg_id" {
+  type = string
+}

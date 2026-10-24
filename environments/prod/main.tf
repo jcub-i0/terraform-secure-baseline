@@ -19,6 +19,8 @@ module "baseline" {
   backup_enabled                         = var.backup_enabled
   restore_testing_enabled                = var.restore_testing_enabled
   restore_testing_schedule               = var.restore_testing_schedule
+  restore_validation_enabled             = var.restore_validation_enabled
+  restore_validation_secret_arn          = var.restore_validation_secret_arn
   rds_multi_az                           = var.rds_multi_az
   rds_instance_class                     = var.rds_instance_class
   inspector_enabled                      = var.inspector_enabled
