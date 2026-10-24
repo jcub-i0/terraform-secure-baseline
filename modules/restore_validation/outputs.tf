@@ -17,3 +17,13 @@ output "event_rule_arn" {
 output "validation_dlq_arn" {
   value = aws_sqs_queue.validation_dlq.arn
 }
+
+output "restore_validation_coordinator_log_group_name" {
+  description = "CloudWatch Logs group name for the Restore Validation coordinator."
+  value       = aws_cloudwatch_log_group.coordinator.name
+}
+
+output "restore_validation_worker_log_group_name" {
+  description = "CloudWatch Logs group name for the Restore Validation SQL worker."
+  value       = aws_cloudwatch_log_group.worker.name
+}
