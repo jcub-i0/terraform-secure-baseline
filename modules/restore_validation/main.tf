@@ -124,7 +124,7 @@ resource "aws_lambda_function" "worker" {
 # RESTORE VALIDATION COORDINATOR LAMBDA
 # =============================================================================
 
-data "archive_file" "cooridinator" {
+data "archive_file" "coordinator" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/build/coordinator"
   output_path = "${path.module}/lambda/coordinator.zip"
@@ -142,8 +142,8 @@ resource "aws_lambda_function" "coordinator" {
   runtime       = "python3.12"
   architectures = ["x86_64"]
 
-  filename         = data.archive_file.cooridinator.output_path
-  source_code_hash = data.archive_file.cooridinator.output_base64sha256
+  filename         = data.archive_file.coordinator.output_path
+  source_code_hash = data.archive_file.coordinator.output_base64sha256
 
   # The coordinator synchronously invokes the worker (120s timeout).
   timeout                        = 180
