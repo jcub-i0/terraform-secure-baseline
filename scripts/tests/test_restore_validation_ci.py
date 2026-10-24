@@ -43,6 +43,8 @@ class CIIntegrationTests(TestCase):
         self.assertIn("TF_VAR_restore_validation_secret_arn", updated)
         self.assertIn('stage-artifacts.sh plan "${artifact_dir}"', updated)
         self.assertIn("stage-artifacts.sh apply", updated)
+        self.assertIn('stage-artifacts.sh plan "${artifact_dir}" "${PLAN_BASENAME}" "${{ inputs.restore_validation_enabled }}"', updated)
+        self.assertIn('"${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" "${PLAN_BASENAME}" "${{ inputs.restore_validation_enabled }}"', updated)
         self.assertIn("sha256sum --check --status", updated)
         self.assertEqual(integration.tf_apply(updated), updated)
 
