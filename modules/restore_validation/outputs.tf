@@ -6,7 +6,7 @@ output "worker_lambda_arn" {
   value = aws_lambda_function.worker.arn
 }
 
-output "worker_sg_id" {
+output "restore_validation_worker_sg_id" {
   value = aws_security_group.worker.id
 }
 

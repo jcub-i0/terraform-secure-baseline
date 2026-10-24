@@ -63,6 +63,6 @@ variable "restore_test_db_sg_id" {
   type = string
 }
 
-variable "worker_sg_id" {
+variable "restore_validation_worker_sg_id" {
   type = string
 }

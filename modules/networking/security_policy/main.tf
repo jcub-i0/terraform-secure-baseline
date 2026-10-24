@@ -251,7 +251,7 @@ resource "aws_security_group_rule" "alb_egress_to_ecs_tasks" {
 # RESTORE VALIDATION WORKER -> RESTORED RDS
 resource "aws_security_group_rule" "restore_worker_to_db" {
   type                     = "egress"
-  security_group_id        = var.worker_sg_id
+  security_group_id        = var.restore_validation_worker_sg_id
   from_port                = var.db_port
   to_port                  = var.db_port
   protocol                 = "tcp"
@@ -266,14 +266,14 @@ resource "aws_security_group_rule" "restore_db_from_worker" {
   from_port                = var.db_port
   to_port                  = var.db_port
   protocol                 = "tcp"
-  source_security_group_id = var.worker_sg_id
+  source_security_group_id = var.restore_validation_worker_sg_id
   description              = "Allow PostgreSQL access from restore validation worker"
 }
 
 # RESTORE VALIDATION WORKER -> VPC INTERFACE ENDPOINTS
 resource "aws_security_group_rule" "restore_worker_to_endpoints" {
   type                     = "egress"
-  security_group_id        = var.worker_sg_id
+  security_group_id        = var.restore_validation_worker_sg_id
   from_port                = 443
   to_port                  = 443
   protocol                 = "tcp"
@@ -288,6 +288,6 @@ resource "aws_security_group_rule" "endpoints_from_restore_worker" {
   from_port                = 443
   to_port                  = 443
   protocol                 = "tcp"
-  source_security_group_id = var.worker_sg_id
+  source_security_group_id = var.restore_validation_worker_sg_id
   description              = "Allow restore validation worker to access interface endpoints"
 }
