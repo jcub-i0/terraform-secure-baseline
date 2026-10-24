@@ -22,7 +22,7 @@ on:
                 default: false
                 type: boolean
             restore_validation_enabled:
-                description: "Opt in to RDS Restore Validation (requires pre-provisioned AWS Signer and an RDS read-only secret)"
+                description: "Enable RDS SQL validation (requires AWS Backup, Restore Testing, and read-only credentials)"
                 required: true
                 default: false
                 type: boolean
@@ -80,6 +80,8 @@ jobs:
             TF_VAR_production_retirement_mode: ${{ inputs.production_retirement_mode }}
             TF_VAR_restore_validation_enabled: ${{ inputs.restore_validation_enabled }}
             TF_VAR_restore_validation_secret_arn: ${{ vars.RESTORE_VALIDATION_SECRET_ARN }}
+            BACKUP_ENABLED: ${{ vars.BACKUP_ENABLED }}
+            RESTORE_TESTING_ENABLED: ${{ vars.RESTORE_TESTING_ENABLED }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
             RDS_INSTANCE_CLASS: ${{ vars.RDS_INSTANCE_CLASS }}
@@ -163,6 +165,18 @@ jobs:
                     echo "::error::PLAN_ROLE_GITHUB_ARN belongs to the wrong AWS account."
                     exit 1
                   }
+
+                  # Unset overrides preserve deployment_profile defaults.
+                  for name in BACKUP_ENABLED RESTORE_TESTING_ENABLED; do
+                    value="${!name:-}"
+                    if [[ -n "$value" ]]; then
+                      if [[ ! "$value" =~ ^(true|false)$ ]]; then
+                        echo "::error::${name} must be exactly true or false when set."
+                        exit 1
+                      fi
+                      echo "TF_VAR_${name,,}=${value}" >> "${GITHUB_ENV}"
+                    fi
+                  done
 
                   if [[ -n "${ALB_CERTIFICATE_ARN:-}" ]]; then
                     echo "TF_VAR_alb_certificate_arn=${ALB_CERTIFICATE_ARN}" >> "${GITHUB_ENV}"

@@ -71,6 +71,8 @@ jobs:
       TF_VAR_environment: ${{ vars.ENVIRONMENT }}
       TF_VAR_primary_region: ${{ vars.PRIMARY_REGION }}
       TF_VAR_deployment_profile: ${{ vars.DEPLOYMENT_PROFILE }}
+      BACKUP_ENABLED: ${{ vars.BACKUP_ENABLED }}
+      RESTORE_TESTING_ENABLED: ${{ vars.RESTORE_TESTING_ENABLED }}
       TF_VAR_identity_center_workloads: ${{ vars.IDENTITY_CENTER_WORKLOADS }}
       TF_VAR_identity_center_secops: ${{ vars.IDENTITY_CENTER_SECOPS }}
       TF_VAR_abuseipdb_api_key: ${{ secrets.ABUSEIPDB_API_KEY }}
@@ -190,6 +192,18 @@ jobs:
               exit 1
               ;;
           esac
+
+          # Unset overrides preserve deployment_profile defaults.
+          for name in BACKUP_ENABLED RESTORE_TESTING_ENABLED; do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then
+              if [[ ! "$value" =~ ^(true|false)$ ]]; then
+                echo "::error::${name} must be exactly true or false when set."
+                exit 1
+              fi
+              echo "TF_VAR_${name,,}=${value}" >> "${GITHUB_ENV}"
+            fi
+          done
 
           if [[ -n "${ALB_CERTIFICATE_ARN:-}" ]]; then
             echo "TF_VAR_alb_certificate_arn=${ALB_CERTIFICATE_ARN}" >> "${GITHUB_ENV}"
