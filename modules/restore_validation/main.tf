@@ -62,6 +62,29 @@ resource "aws_sqs_queue" "validation_dlq" {
 }
 
 # =============================================================================
+# LAMBDA CODE SIGNING
+# =============================================================================
+
+resource "aws_signer_signing_profile" "restore_validation" {
+  name_prefix = "restore_validation_"
+  platform_id = "AWSLambda-SHA384-ECDSA"
+}
+
+resource "aws_lambda_code_signing_config" "restore_validation" {
+  description = "Enforce trusted code signatures for RDS Restore Validation Lambdas"
+
+  allowed_publishers {
+    signing_profile_version_arns = [
+      aws_signer_signing_profile.restore_validation.version_arn
+    ]
+  }
+
+  policies {
+    untrusted_artifact_on_deployment = "Enforce"
+  }
+}
+
+# =============================================================================
 # SQL VALIDATION WORKER LAMBDA
 # =============================================================================
 
@@ -73,6 +96,8 @@ data "archive_file" "worker" {
 }
 
 resource "aws_lambda_function" "worker" {
+  #checkov:skip=CKV_AWS_116:Worker is invoked synchronously by the coordinator. Synchronous errors are handled by the coordinator; async DLQ is not applicable.
+  
   function_name = "${var.name_prefix}-restore-validation-worker"
   description   = "Verify synthetic-data integrity on a private restored RDS instance"
 
@@ -83,6 +108,7 @@ resource "aws_lambda_function" "worker" {
 
   filename         = data.archive_file.worker.output_path
   source_code_hash = data.archive_file.worker.output_base64sha256
+  code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   timeout                        = 120
   memory_size                    = 512
@@ -145,6 +171,7 @@ resource "aws_lambda_function" "coordinator" {
 
   filename         = data.archive_file.coordinator.output_path
   source_code_hash = data.archive_file.coordinator.output_base64sha256
+  code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   # The coordinator synchronously invokes the worker (120s timeout).
   timeout                        = 180
