@@ -1,130 +1,110 @@
-# RDS Restore Validation — M1-B2 runtime
+# RDS Restore Validation
 
-This module orchestrates **AWS Backup Restore Testing** (which creates a temporary
-RDS instance) and **Restore Validation** (which independently checks isolation
-and a synthetic PostgreSQL fixture). It does not read or connect to the
-production database. Keep `restore_validation_enabled = false` until the signed
-artifact pipeline and first nonproduction recovery exercise are qualified.
+Optional, default-disabled SQL verification for RDS recovery points restored by AWS Backup Restore Testing.
 
-## Trust boundaries and validation sequence
+**Restore Testing** creates a temporary RDS instance from a recovery point.
+**Restore Validation** checks that this particular restored instance is private and
+isolated, and that three synthetic PostgreSQL canary records are intact. It does
+not connect to the live production database.
 
-1. EventBridge accepts completed RDS restore-testing jobs from the exact plan.
-2. `coordinator.py` checks account, Region, plan and event fields; calls
-   `DescribeRestoreJob` to verify the **authoritative** source database and
-   created resource. A mismatched source is rejected without publishing a result.
-3. The coordinator reads restored RDS metadata and checks DB ARN, state,
-   engine (`postgres`), encryption, public accessibility, single-AZ, VPC,
-   dedicated SG (sole and active), and endpoint before invoking the SQL worker.
-4. The VPC worker retrieves only its named Secrets Manager credential,
-   connects over TLS using a verified RDS CA certificate and hostname,
-   begins a **read-only transaction**, and checks three fixed, synthetic rows
-   and the role's inability to modify the canary.
-5. The coordinator publishes `SUCCESSFUL` or `FAILED` only for definite results.
-   Retryable API, DB-not-ready or invocation failures are *not* recorded as
-   conclusive restore failures. Lambda retries/DLQ preserve those failures.
-6. A terminal `ValidationStatus` (`SUCCESSFUL`, `FAILED`, `TIMED_OUT`)
-   is not overwritten. AWS Backup may report `VALIDATING` while the restore
-   test awaits application validation; it is **not** a completed result.
+This is a technical recovery check, **not** a guarantee of application recovery,
+data correctness outside the canary, RTO/RPO achievement, SOC 2 compliance, or
+ISO 27001 certification.
 
-This tests the snapshot's canary integrity; it does **not** independently prove
-full application recovery, arbitrary PII accuracy, RTO/RPO, or data currency.
+## How it works
 
-## Provision synthetic source data
+1. AWS Backup completes a Restore Testing job using the dedicated restore-test
+   database security group.
+2. EventBridge invokes the coordinator Lambda, which checks the event against
+   authoritative AWS Backup job metadata and verifies the restored RDS network,
+   engine, encryption, and isolation settings.
+3. The private VPC worker Lambda retrieves a restricted PostgreSQL credential
+   from Secrets Manager, connects to the restored instance over verified TLS,
+   and checks the synthetic canary and read-only SQL role.
+4. The coordinator submits an AWS Backup validation result only for a conclusive
+   outcome. Transient failures are retried; exhausted asynchronous failures
+   are delivered to the validation DLQ.
 
-Execute `sql/seed_canary.sql` against the **source** PostgreSQL database, using
-an operator account. It is idempotent and does not contain PII. The worker
-expects *exactly* these three rows, specified in `lambda/canary_contract.json`.
-Create a separate login role, e.g. `restore_validation_reader`, with only:
+The coordinator cannot reach the database. The worker cannot access the live
+database security group. AWS Backup controls the temporary restore lifecycle.
 
-```sql
-GRANT CONNECT ON DATABASE your_database TO restore_validation_reader;
-GRANT USAGE ON SCHEMA restore_validation TO restore_validation_reader;
-GRANT SELECT ON restore_validation.canary TO restore_validation_reader;
-```
+## Enablement prerequisites
 
-No INSERT, UPDATE, DELETE, TRUNCATE, CREATE, or other schema privileges should
-be granted. Store the role's password in a dedicated AWS Secrets Manager secret,
-encrypted by the baseline's Secrets Manager CMK:
+1. Enable AWS Backup and RDS Restore Testing in the workload environment.
+   Restore Validation is a separate opt-in: `restore_validation_enabled = true`.
+   Deployment profiles are independent of environment names.
+2. Run `sql/seed_canary.sql` as a database operator on the **source**
+   PostgreSQL database. Its three records are synthetic, with no customer data.
+3. Create a dedicated LOGIN role (for example, `restore_validation_reader`)
+   without database-administrator or write permissions, and grant only the
+   access needed to read the fixture:
 
-```json
-{"username":"restore_validation_reader","password":"<redacted>"}
-```
+   ```sql
+   GRANT CONNECT ON DATABASE your_database TO restore_validation_reader;
+   GRANT USAGE ON SCHEMA restore_validation TO restore_validation_reader;
+   GRANT SELECT ON restore_validation.canary TO restore_validation_reader;
+   ```
 
-Set `restore_validation_secret_arn` to that **exact** secret ARN. Never pass the
-master RDS secret and never store the password in Terraform tfvars or Git.
-After seeding, take a **new** AWS Backup recovery point. Older snapshots may
-lack the fixture and are expected to fail the integrity test.
+4. Store that role's credentials in a dedicated Secrets Manager secret encrypted
+   with the baseline Secrets Manager CMK. The secret contains:
 
-## Runtime packaging
+   ```json
+   {"username":"restore_validation_reader","password":"<redacted>"}
+   ```
 
-The coordinator uses pinned boto3/botocore, because the managed Lambda SDK
-may lag the AWS Backup API. The worker uses pinned, pure-Python `pg8000` for
-PostgreSQL. Both packages are Python 3.12-compatible ZIP archives.
+   Pass the **exact secret ARN** as `restore_validation_secret_arn`.
+   Do not use RDS master credentials or put the password in Terraform variables.
+5. Take a **new** AWS Backup recovery point after creating the canary. Older
+   recovery points will not contain it and should fail the integrity check.
+6. Configure the protected Plan environment with
+   `RESTORE_VALIDATION_SECRET_ARN` (Terraform receives it as an ARN) and
+   `RDS_CA_SHA256` (the reviewed SHA-256 of the official regional RDS
+   CA bundle). The protected workflow downloads and hash-verifies the bundle.
 
-1. Obtain the AWS-maintained RDS root certificate bundle, e.g.:
-   `https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem`.
-2. Review its SHA-256 and set a pinned `RDS_CA_SHA256` in the protected Plan
-   environment. CI checks the downloaded bytes against this exact hash.
-3. Run `python3 scripts/restore_validation/build.py --rds-ca-bundle ./us-east-1-bundle.pem`.
-   The resulting unsigned ZIPs and `unsigned-manifest.json` are under
-   `modules/restore_validation/lambda/dist/`.
-4. Sign the ZIPs with a **pre-existing** AWS Signer profile (platform
-   `AWSLambda-SHA384-ECDSA`) and versioned S3 bucket using
-   `RESTORE_VALIDATION_RELEASE=true RESTORE_SIGNING_PROFILE_NAME=... RESTORE_SIGNING_BUCKET=... bash scripts/restore_validation/sign.sh`.
-5. The signing script verifies S3 versioning and signing-job completion and
-   downloads the signed ZIPs to `lambda/dist/signed/`, with a SHA-256 manifest.
-6. Configure Terraform Lambda `filename` and `source_code_hash` to use these
-   **signed** ZIPs and attach an enforcing Lambda Code Signing configuration.
-   `archive_file` alone produces **unsigned** ZIPs and must not be used as the
-   deployment package when `Enforce` is enabled.
+Enable `restore_validation_enabled` in the existing **Terraform Apply**
+workflow only when these prerequisites are satisfied. The Plan and Apply jobs
+remain protected by the repository's existing AWS OIDC roles and approvals.
 
-Only the Plan job can sign artifacts. Its signed packages are bound into the
-saved-plan SHA-256 manifest; the Apply job restores exactly those verified
-packages and does not sign again. New signed ZIPs require a **new** reviewed
-Terraform plan.
+## Packaging and deployment
 
-**Bootstrap requirement:** An AWS Signer signing profile and a versioned,
-private S3 signing bucket must exist in Terraform **before** enabling
-Restore Validation, and the protected Plan role must be authorized to call
-Signer and the relevant S3 object APIs. Prefer provisioning these once in a
-separate baseline/control-plane Terraform change. `code_signing_config_arn` must
-use the matching profile version ARN with `Enforce`.
+Only enabled Plan jobs prepare Restore Validation packages:
 
-## CI and testing
+- `prepare.py` installs the pinned pure-Python dependencies and stages
+  `lambda/build/coordinator/` and `lambda/build/worker/`.
+  The latter contains the verified RDS CA bundle and canary contract.
+- The module's existing Terraform `archive_file` data sources produce
+  `lambda/coordinator.zip` and `lambda/worker.zip`.
+- The shared Terraform Plan workflow appends both ZIPs to its saved-plan
+  SHA-256 manifest. The separate Apply job verifies the manifest and restores
+  those exact ZIPs at the original paths **before** applying the approved plan.
+  Apply does not install dependencies or rebuild archives.
 
-Offline regression tests run with:
+Disabled plans do not need RDS CA downloads, Python packages, or extra ZIPs.
+
+For local enabled planning, first supply a CA bundle whose SHA-256 you have
+independently verified, then run:
 
 ```bash
-python3 -m unittest discover -s scripts/tests -p 'test_restore_validation_*.py' -v
+python3 modules/restore_validation/prepare.py --rds-ca-bundle /path/to/region-bundle.pem
 ```
 
-They cover valid and forged EventBridge events, AWS Backup job identity,
-network isolation, duplicate delivery, recoverable failures, synthetic data
-corruption, excessive SQL permissions, TLS, archive reproducibility and the
-saved-plan artifact staging contract. No AWS credentials or live DB required.
+The protected GitHub workflow performs those steps automatically.
 
-`python3 scripts/restore_validation/integrate_ci.py --check` inspects the
-repository workflow anchors; run without `--check` to integrate the tests and
-protected Plan/Apply signing steps.
+## Testing and operational qualification
 
-The `terraform-apply.yml` workflow provides an explicit, default-false
-`restore_validation_enabled` input. The protected `*-plan` environment must
-configure `RESTORE_VALIDATION_SECRET_ARN`, `RESTORE_SIGNING_PROFILE_NAME`,
-`RESTORE_SIGNING_BUCKET`, and `RDS_CA_SHA256` before opting in. The temporary
-CA file is downloaded from AWS's official trust store only in that opt-in path.
+Offline tests (no AWS credentials or live database required):
 
-## Outstanding qualification requirements
+```bash
+python3 -m unittest discover -s modules/restore_validation/tests -p 'test_*.py' -v
+```
 
-- Terraform resources must be wired to the **signed** ZIPs and AWS Signer
-  Code Signing configuration. These Terraform changes remain with the IaC
-  owner (do not attach `Enforce` to an unsigned source archive).
-- An isolated positive **enabled** Terraform plan must succeed. Default-disabled
-  root `terraform validate` is insufficient to prove this.
-- The RDS canary must be seeded before the selected recovery point is made.
-- Validate AWS Backup `DescribeRestoreJob` fields and cleanup lifecycle with a
-  real controlled dev recovery test; the current tests are mock-only.
-- Add CloudWatch alarms for DLQ depth, function failures, and missed Restore
-  Validation results to the existing `secops_topic_arn`. This input is currently
-  reserved; SNS alarm resources are not yet implemented.
-- AWS Backup's result is immutable. Never manually change a `FAILED` result to
-  `SUCCESSFUL` or suppress a real synthetic-data failure.
+They exercise event/job identity checks, read-only canary verification, failure
+handling, dependency preparation, and exact Plan/Apply ZIP staging. Mock tests
+are not evidence of a successful live restore.
+
+Before production use, perform a controlled nonproduction restore and verify
+the AWS Backup result, read-only credentials, VPC endpoint access, retry/DLQ
+behavior, expected failures, and temporary-resource cleanup.
+
+The `secops_topic_arn` input is reserved for future Restore Validation
+alarms. Dedicated DLQ/function-failure alarms have **not** been implemented yet.

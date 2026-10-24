@@ -10,8 +10,8 @@ import sys
 import tempfile
 from unittest import TestCase, main, mock
 
-BASE = Path(__file__).resolve().parents[2]
-LAMBDA = BASE / "modules/restore_validation/lambda"
+MODULE = Path(__file__).resolve().parents[1]
+LAMBDA = MODULE / "lambda"
 sys.path.insert(0, str(LAMBDA))
 import coordinator as c  # noqa: E402
 import worker as w  # noqa: E402
@@ -247,7 +247,7 @@ class WorkerTests(TestCase):
         self.assertEqual(self.run_worker()["status"], "RETRY")
 
     def test_fixture_values_match_sql_seed(self):
-        sql = (BASE / "modules/restore_validation/sql/seed_canary.sql").read_text()
+        sql = (MODULE / "sql/seed_canary.sql").read_text()
         for key, value in self.contract:
             self.assertIn("'" + key + "', '" + value + "'", sql)
 
