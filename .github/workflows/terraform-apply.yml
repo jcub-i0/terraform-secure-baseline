@@ -348,7 +348,7 @@ jobs:
                       lambda/ip_enrichment.zip >> "${PLAN_BASENAME}-plan.sha256"
                     sha256sum --check "${PLAN_BASENAME}-plan.sha256"
                   )
-                  bash scripts/restore_validation/stage-artifacts.sh plan "${artifact_dir}" "${PLAN_BASENAME}"
+                  bash scripts/restore_validation/stage-artifacts.sh plan "${artifact_dir}" "${PLAN_BASENAME}" "${{ inputs.restore_validation_enabled }}"
 
             - name: Upload saved plan
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -476,7 +476,7 @@ jobs:
                     install -m 0600 -- "${verified_zip}" "${lambda_dir}/${lambda}.zip"
                   done
                   bash scripts/restore_validation/stage-artifacts.sh apply \
-                    "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" "${PLAN_BASENAME}"
+                    "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" "${PLAN_BASENAME}" "${{ inputs.restore_validation_enabled }}"
 
                   terraform -chdir="${WORKING_DIRECTORY}" apply \
                     -input=false \
