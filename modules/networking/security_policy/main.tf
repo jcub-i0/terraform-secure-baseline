@@ -250,6 +250,8 @@ resource "aws_security_group_rule" "alb_egress_to_ecs_tasks" {
 
 # RESTORE VALIDATION WORKER -> RESTORED RDS
 resource "aws_security_group_rule" "restore_worker_to_db" {
+  count = var.restore_validation_enabled ? 1 : 0
+
   type                     = "egress"
   security_group_id        = var.restore_validation_worker_sg_id
   from_port                = var.db_port
@@ -261,6 +263,8 @@ resource "aws_security_group_rule" "restore_worker_to_db" {
 
 # RESTORED RDS <- RESTORE VALIDATION WORKER
 resource "aws_security_group_rule" "restore_db_from_worker" {
+  count = var.restore_validation_enabled ? 1 : 0
+
   type                     = "ingress"
   security_group_id        = var.restore_test_db_sg_id
   from_port                = var.db_port
@@ -272,6 +276,8 @@ resource "aws_security_group_rule" "restore_db_from_worker" {
 
 # RESTORE VALIDATION WORKER -> VPC INTERFACE ENDPOINTS
 resource "aws_security_group_rule" "restore_worker_to_endpoints" {
+  count = var.restore_validation_enabled ? 1 : 0
+
   type                     = "egress"
   security_group_id        = var.restore_validation_worker_sg_id
   from_port                = 443
@@ -283,6 +289,8 @@ resource "aws_security_group_rule" "restore_worker_to_endpoints" {
 
 # VPC INTERFACE ENDPOINTS <- RESTORE VALIDATION WORKER
 resource "aws_security_group_rule" "endpoints_from_restore_worker" {
+  count = var.restore_validation_enabled ? 1 : 0
+
   type                     = "ingress"
   security_group_id        = var.interface_endpoints_sg_id
   from_port                = 443
