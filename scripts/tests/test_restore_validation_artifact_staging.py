@@ -30,8 +30,8 @@ class StageTests(TestCase):
         (self.artifacts / "demo-plan.sha256").write_text("")
         self.env = {**os.environ, "RESTORE_VALIDATION_SIGNED_DIR": str(self.stage)}
 
-    def run_stage(self, mode, *, expect_success=True):
-        result = subprocess.run(["bash", str(SCRIPT), mode, str(self.artifacts), "demo"],
+    def run_stage(self, mode, enabled="true", *, expect_success=True):
+        result = subprocess.run(["bash", str(SCRIPT), mode, str(self.artifacts), "demo", enabled],
                                 env=self.env, capture_output=True, text=True)
         if expect_success:
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -53,8 +53,24 @@ class StageTests(TestCase):
         subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
 
     def test_missing_artifacts_are_disabled_noop(self):
-        self.run_stage("plan")
+        self.run_stage("plan", enabled="false")
+        self.run_stage("apply", enabled="false")
         self.assertFalse((self.artifacts / "lambda/restore_validation").exists())
+
+    def test_enabled_requires_signed_artifacts_in_both_jobs(self):
+        self.run_stage("plan", expect_success=False)
+        self.run_stage("apply", expect_success=False)
+
+    def test_disabled_rejects_unexpected_artifacts(self):
+        self.create_signed_fixtures()
+        self.run_stage("plan", enabled="false", expect_success=False)
+        shutil.rmtree(self.stage)
+        (self.artifacts / "lambda/restore_validation").mkdir(parents=True)
+        self.run_stage("apply", enabled="false", expect_success=False)
+
+    def test_invalid_or_missing_explicit_flag_is_rejected(self):
+        self.run_stage("plan", enabled="yes", expect_success=False)
+        self.run_stage("plan", enabled="", expect_success=False)
 
     def test_stages_exact_hash_and_restores_in_apply(self):
         self.create_signed_fixtures()
