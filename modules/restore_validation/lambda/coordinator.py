@@ -152,9 +152,12 @@ def run(event: dict[str, Any], env: dict[str, str], backup: Any, rds: Any, worke
     job_id = event_identity(event, env)
     job = backup.describe_restore_job(RestoreJobId=job_id)
     arn = check_job(job, job_id, env)
-    if job.get("ValidationStatus") is not None:
-        LOG.info("Validation already recorded for job %s; no mutation", job_id)
+    validation_status = job.get("ValidationStatus")
+    if validation_status in {"SUCCESSFUL", "FAILED", "TIMED_OUT"}:
+        LOG.info("Terminal validation already recorded for job %s; no mutation", job_id)
         return {"status": "ALREADY_RECORDED", "job_id": job_id}
+    if validation_status not in {None, "VALIDATING"}:
+        raise RetryableFailure("UNRECOGNIZED_VALIDATION_STATUS")
     try:
         rows = rds.describe_db_instances(DBInstanceIdentifier=arn).get("DBInstances", [])
         if len(rows) != 1:
