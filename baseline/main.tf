@@ -473,7 +473,7 @@ module "backup" {
   restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
   restore_testing_rds_arn                 = module.storage.rds_configuration.arn
   restore_testing_db_subnet_group_name    = module.storage.rds_configuration.db_subnet_group_name
-  
+
   restore_testing_vpc_security_group_ids = (
     local.effective_restore_testing_enabled
     ? [module.storage.restore_test_db_sg_id]
@@ -493,8 +493,7 @@ module "restore_validation" {
   vpc_id            = module.networking.vpc_id
   worker_subnet_ids = module.networking.serverless_private_subnet_ids_list
 
-  restore_test_db_sg_id     = module.storage.restore_test_db_sg_id
-  interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
+  restore_test_db_sg_id = module.storage.restore_test_db_sg_id
 
   restore_testing_plan_arn = module.backup.restore_testing_plan.arn
   source_rds_arn           = module.storage.rds_configuration.arn

@@ -29,11 +29,6 @@ variable "restore_test_db_sg_id" {
   type = string
 }
 
-variable "interface_endpoints_sg_id" {
-  description = "Security group ID shared by the Interface VPC Endpoints"
-  type        = string
-}
-
 variable "restore_testing_plan_arn" {
   type = string
 }
