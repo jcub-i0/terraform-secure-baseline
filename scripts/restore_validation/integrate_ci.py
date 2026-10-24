@@ -95,7 +95,7 @@ def tf_apply(text: str) -> str:
             - name: Upload saved plan"""
     after = """                    sha256sum --check "${PLAN_BASENAME}-plan.sha256"
                   )
-                  bash scripts/restore_validation/stage-artifacts.sh plan "${artifact_dir}" "${PLAN_BASENAME}"
+                  bash scripts/restore_validation/stage-artifacts.sh plan "${artifact_dir}" "${PLAN_BASENAME}" "${{ inputs.restore_validation_enabled }}"
 
             - name: Upload saved plan"""
     text = replace_once(text, before, after, "Terraform Plan artifact staging")
@@ -107,7 +107,7 @@ def tf_apply(text: str) -> str:
     after = """                    install -m 0600 -- "${verified_zip}" "${lambda_dir}/${lambda}.zip"
                   done
                   bash scripts/restore_validation/stage-artifacts.sh apply \\
-                    "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" "${PLAN_BASENAME}"
+                    "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" "${PLAN_BASENAME}" "${{ inputs.restore_validation_enabled }}"
 
                   terraform -chdir="${WORKING_DIRECTORY}" apply"""
     text = replace_once(text, before, after, "Terraform Apply artifact restoration")
