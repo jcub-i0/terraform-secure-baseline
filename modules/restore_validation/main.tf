@@ -66,9 +66,9 @@ resource "aws_sqs_queue" "validation_dlq" {
 # =============================================================================
 
 data "archive_file" "worker" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/build/worker"
-  output_path = "${path.module}/lambda/worker.zip"
+  type             = "zip"
+  source_dir       = "${path.module}/lambda/build/worker"
+  output_path      = "${path.module}/lambda/worker.zip"
   output_file_mode = "0644"
 }
 
@@ -126,9 +126,9 @@ resource "aws_lambda_function" "worker" {
 # =============================================================================
 
 data "archive_file" "coordinator" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/build/coordinator"
-  output_path = "${path.module}/lambda/coordinator.zip"
+  type             = "zip"
+  source_dir       = "${path.module}/lambda/build/coordinator"
+  output_path      = "${path.module}/lambda/coordinator.zip"
   output_file_mode = "0644"
 }
 
