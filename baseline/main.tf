@@ -102,12 +102,12 @@ module "security_policy" {
 
   ecs_security_policy_services = local.ecs_security_policy_services
 
-  restore_validation_enabled = var.restore_testing_enabled
+  restore_validation_enabled = var.restore_validation_enabled
   restore_test_db_sg_id      = module.storage.restore_test_db_sg_id
 
   restore_validation_worker_sg_id = (
     var.restore_validation_enabled
-    ? module.restore_validation[0].worker_sg_id
+    ? module.restore_validation[0].restore_validation_worker_sg_id
     : null
   )
 }
