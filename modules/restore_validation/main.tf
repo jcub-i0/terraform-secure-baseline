@@ -65,7 +65,7 @@ resource "aws_sqs_queue" "validation_dlq" {
 # LAMBDA CODE SIGNING
 # =============================================================================
 
-resource "aws_signer_signing_profile" "restore_validation" {
+/*resource "aws_signer_signing_profile" "restore_validation" {
   name_prefix = "restore_validation_"
   platform_id = "AWSLambda-SHA384-ECDSA"
 }
@@ -83,6 +83,7 @@ resource "aws_lambda_code_signing_config" "restore_validation" {
     untrusted_artifact_on_deployment = "Enforce"
   }
 }
+*/
 
 # =============================================================================
 # SQL VALIDATION WORKER LAMBDA
@@ -108,7 +109,7 @@ resource "aws_lambda_function" "worker" {
 
   filename                = data.archive_file.worker.output_path
   source_code_hash        = data.archive_file.worker.output_base64sha256
-  code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
+  #code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   timeout                        = 120
   memory_size                    = 512
@@ -171,7 +172,7 @@ resource "aws_lambda_function" "coordinator" {
 
   filename                = data.archive_file.coordinator.output_path
   source_code_hash        = data.archive_file.coordinator.output_base64sha256
-  code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
+  #code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   # The coordinator synchronously invokes the worker (120s timeout).
   timeout                        = 180
