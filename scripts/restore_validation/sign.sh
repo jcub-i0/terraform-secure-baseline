@@ -19,6 +19,8 @@ command -v unzip >/dev/null
 [[ -f "${dist}/unsigned-manifest.json" ]] || { echo 'Missing unsigned build manifest' >&2; exit 2; }
 jq -e '.deployable == true and .format_version == 1' "${dist}/unsigned-manifest.json" >/dev/null
 mkdir -p "${dist}/signed"
+# A failed signing attempt must not leave an older deployable manifest.
+rm -f "${dist}/signed/signed-manifest.json"
 signing_jobs='{}'
 for name in coordinator worker; do
   unsigned="${dist}/${name}.zip"
@@ -65,4 +67,4 @@ for name in coordinator worker; do
   echo "Verified signed ${name} artifact sha256=${signed_sha}"
 done
 jq -n --arg profile "$profile" --arg bucket "$bucket" --argjson jobs "$signing_jobs" \
-   '{format_version:1,signing_profile:$profile,bucket:$bucket,artifacts:$jobs}' > "${dist}/signed-manifest.json"
+   '{format_version:1,signing_profile:$profile,bucket:$bucket,artifacts:$jobs}' > "${dist}/signed/signed-manifest.json"
