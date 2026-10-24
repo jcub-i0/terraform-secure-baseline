@@ -97,7 +97,7 @@ data "archive_file" "worker" {
 
 resource "aws_lambda_function" "worker" {
   #checkov:skip=CKV_AWS_116:Worker is invoked synchronously by the coordinator. Synchronous errors are handled by the coordinator; async DLQ is not applicable.
-  
+
   function_name = "${var.name_prefix}-restore-validation-worker"
   description   = "Verify synthetic-data integrity on a private restored RDS instance"
 
@@ -106,8 +106,8 @@ resource "aws_lambda_function" "worker" {
   runtime       = "python3.12"
   architectures = ["x86_64"]
 
-  filename         = data.archive_file.worker.output_path
-  source_code_hash = data.archive_file.worker.output_base64sha256
+  filename                = data.archive_file.worker.output_path
+  source_code_hash        = data.archive_file.worker.output_base64sha256
   code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   timeout                        = 120
@@ -169,8 +169,8 @@ resource "aws_lambda_function" "coordinator" {
   runtime       = "python3.12"
   architectures = ["x86_64"]
 
-  filename         = data.archive_file.coordinator.output_path
-  source_code_hash = data.archive_file.coordinator.output_base64sha256
+  filename                = data.archive_file.coordinator.output_path
+  source_code_hash        = data.archive_file.coordinator.output_base64sha256
   code_signing_config_arn = aws_lambda_code_signing_config.restore_validation.arn
 
   # The coordinator synchronously invokes the worker (120s timeout).
