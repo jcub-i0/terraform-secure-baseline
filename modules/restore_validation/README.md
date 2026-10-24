@@ -22,8 +22,9 @@ artifact pipeline and first nonproduction recovery exercise are qualified.
 5. The coordinator publishes `SUCCESSFUL` or `FAILED` only for definite results.
    Retryable API, DB-not-ready or invocation failures are *not* recorded as
    conclusive restore failures. Lambda retries/DLQ preserve those failures.
-6. A preexisting `ValidationStatus` is not overwritten (AWS Backup statuses
-   cannot be changed once recorded).
+6. A terminal `ValidationStatus` (`SUCCESSFUL`, `FAILED`, `TIMED_OUT`)
+   is not overwritten. AWS Backup may report `VALIDATING` while the restore
+   test awaits application validation; it is **not** a completed result.
 
 This tests the snapshot's canary integrity; it does **not** independently prove
 full application recovery, arbitrary PII accuracy, RTO/RPO, or data currency.
