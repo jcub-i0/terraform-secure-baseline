@@ -27,3 +27,22 @@ output "restore_validation_worker_log_group_name" {
   description = "CloudWatch Logs group name for the Restore Validation SQL worker."
   value       = aws_cloudwatch_log_group.worker.name
 }
+
+output "alarm_names" {
+  description = "CloudWatch alarms protecting Restore Validation."
+
+  value = {
+    validation_dlq = (
+      aws_cloudwatch_metric_alarm.validation_dlq_messages.alarm_name
+    )
+
+    lambda_errors = {
+      for name, alarm in aws_cloudwatch_metric_alarm.lambda_errors :
+      name => alarm.alarm_name
+    }
+
+    validation_failed = (
+      aws_cloudwatch_metric_alarm.validation_failed.alarm_name
+    )
+  }
+}
