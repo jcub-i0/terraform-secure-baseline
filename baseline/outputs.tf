@@ -449,6 +449,10 @@ output "restore_validation" {
     worker_log_group_name = (
       module.restore_validation[0].restore_validation_worker_log_group_name
     )
+
+    alarm_names = (
+      module.restore_validation[0].alarm_names
+    )
   } : null
 }
 
