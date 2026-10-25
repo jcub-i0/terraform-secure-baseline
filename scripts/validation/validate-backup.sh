@@ -26,6 +26,8 @@
 # - Restore Testing targets the exact Terraform-managed RDS instance
 # - RDS Restore Testing uses Terraform-owned private networking metadata
 # - Latest Restore Testing execution, validation, and cleanup state are reported
+# - Optional strict qualification requires a completed, SQL-validated, cleaned-up
+#   latest Restore Testing job tied to the exact source RDS and testing plan
 #
 # Usage:
 #   ./scripts/validation/validate-backup.sh dev
@@ -38,6 +40,9 @@
 #
 # Optional override:
 #   NAME_PREFIX=tf-secure-baseline-dev ./scripts/validation/validate-backup.sh dev
+#
+# Opt-in strict recovery acceptance (default remains configuration/reporting):
+#   REQUIRE_RESTORE_QUALIFICATION=true AWS_PROFILE=dev ./scripts/validation/validate-backup.sh dev
 #
 # shellcheck source-path=SCRIPTDIR
 
@@ -52,6 +57,7 @@ CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
 AWS_PROFILE="${AWS_PROFILE:-}"
 NAME_PREFIX="${NAME_PREFIX:-${CLOUD_NAME}-${ENV_NAME:-unknown}}"
 EXPECTED_ACCOUNT_ID="${EXPECTED_ACCOUNT_ID:-}"
+REQUIRE_RESTORE_QUALIFICATION="${REQUIRE_RESTORE_QUALIFICATION-false}"
 
 export AWS_PAGER=""
 
@@ -60,6 +66,10 @@ if [[ -z "$ENV_NAME" ]]; then
 fi
 
 require_env_name "$ENV_NAME"
+require_value_in_list \
+  "$REQUIRE_RESTORE_QUALIFICATION" \
+  "true false" \
+  "REQUIRE_RESTORE_QUALIFICATION"
 
 section "${CLOUD_NAME} Backup Validation"
 
@@ -87,6 +97,7 @@ info "Environment: $ENV_NAME"
 info "Environment dir: $ENV_DIR"
 info "Name prefix: $NAME_PREFIX"
 info "AWS_PROFILE: ${AWS_PROFILE:-<default>}"
+info "Strict restore qualification required: ${REQUIRE_RESTORE_QUALIFICATION}"
 
 require_directory "$ENV_DIR"
 success "Environment directory exists"
@@ -487,6 +498,22 @@ info "restore_testing.enabled: ${RESTORE_TESTING_ENABLED}"
 info "restore_testing.schedule: ${RESTORE_TESTING_SCHEDULE}"
 info "restore_testing.plan: ${RESTORE_TESTING_PLAN_NAME}"
 info "restore_testing.selection: ${RESTORE_TESTING_SELECTION_NAME}"
+
+# Routine baseline validation remains non-strict. Explicit recovery acceptance
+# also requires the SQL validation module to be deployed and enabled.
+if [[ "$REQUIRE_RESTORE_QUALIFICATION" == "true" ]]; then
+  if [[ "$RESTORE_TESTING_ENABLED" != "true" ]]; then
+    fail "Strict restore qualification requires Restore Testing to be enabled."
+  fi
+
+  if ! terraform_output_exists "$OUTPUTS_JSON" restore_validation ||
+     ! echo "$OUTPUTS_JSON" |
+       jq -e '.restore_validation.value | type == "object" and .enabled == true' >/dev/null; then
+    fail "Strict restore qualification requires the Terraform Restore Validation module to be enabled."
+  fi
+
+  success "Strict restore qualification prerequisites are enabled"
+fi
 
 EXPECTED_BACKUP_PLAN_NAME="${NAME_PREFIX}-backup-plan"
 EXPECTED_BACKUP_SELECTION_NAME="${NAME_PREFIX}-backup-selection"
@@ -1013,6 +1040,9 @@ validate_restore_testing_live() {
   )"
 
   if [[ "$latest_restore_job_json" == "null" ]]; then
+    if [[ "$REQUIRE_RESTORE_QUALIFICATION" == "true" ]]; then
+      fail "Strict restore qualification requires a completed Restore Testing job, but none were found."
+    fi
     warn "No Restore Testing jobs exist yet. Configuration is valid, but live restore qualification has not occurred."
     return 0
   fi
@@ -1046,6 +1076,67 @@ validate_restore_testing_live() {
       jq -r '.DeletionStatus // "<none>"'
   )"
 
+  # Strict recovery acceptance is deliberately separate from configuration
+  # validation. Require all three terminal outcomes from the latest job, then
+  # read authoritative job metadata to prove this was our SQL canary workflow.
+  if [[ "$REQUIRE_RESTORE_QUALIFICATION" == "true" ]]; then
+    if [[ "$LATEST_RESTORE_TEST_STATUS" != "COMPLETED" ]]; then
+      fail "Strict restore qualification requires COMPLETED restore; latest job ${LATEST_RESTORE_TEST_JOB_ID} is ${LATEST_RESTORE_TEST_STATUS}."
+    fi
+    if [[ "$LATEST_RESTORE_TEST_VALIDATION_STATUS" != "SUCCESSFUL" ]]; then
+      fail "Strict restore qualification requires SUCCESSFUL SQL validation; latest job ${LATEST_RESTORE_TEST_JOB_ID} is ${LATEST_RESTORE_TEST_VALIDATION_STATUS}."
+    fi
+    if [[ "$LATEST_RESTORE_TEST_DELETION_STATUS" != "SUCCESSFUL" ]]; then
+      fail "Strict restore qualification requires SUCCESSFUL cleanup; latest job ${LATEST_RESTORE_TEST_JOB_ID} is ${LATEST_RESTORE_TEST_DELETION_STATUS}."
+    fi
+
+    local qualified_job_json
+    if ! qualified_job_json="$(
+      aws backup describe-restore-job \
+        "${aws_args[@]}" \
+        --restore-job-id "$LATEST_RESTORE_TEST_JOB_ID" \
+        --output json
+    )"; then
+      fail "Unable to describe latest Restore Testing job for strict qualification: ${LATEST_RESTORE_TEST_JOB_ID}."
+    fi
+
+    if ! echo "$qualified_job_json" |
+      jq -e \
+        --arg job_id "$LATEST_RESTORE_TEST_JOB_ID" \
+        --arg account_id "$ACCOUNT_ID" \
+        --arg plan_arn "$RESTORE_TESTING_PLAN_ARN" \
+        --arg source_arn "$EXPECTED_RDS_ARN" \
+        --arg restored_arn_prefix "${EXPECTED_RDS_ARN%:*}:" \
+        --arg success_message "RDS restore isolation and synthetic SQL canary verified" '
+          .RestoreJobId == $job_id
+          and .AccountId == $account_id
+          and .CreatedBy.RestoreTestingPlanArn == $plan_arn
+          and .SourceResourceArn == $source_arn
+          and .ResourceType == "RDS"
+          and .Status == "COMPLETED"
+          and .ValidationStatus == "SUCCESSFUL"
+          and .ValidationStatusMessage == $success_message
+          and .DeletionStatus == "SUCCESSFUL"
+          and (.RecoveryPointArn | type == "string" and length > 0)
+          and (.CompletionDate | type == "string" and length > 0)
+          and (
+            .CreatedResourceArn
+            | type == "string"
+              and startswith($restored_arn_prefix)
+              and . != $source_arn
+          )
+        ' >/dev/null; then
+      echo "$qualified_job_json" | jq '{
+        RestoreJobId, SourceResourceArn, CreatedResourceArn,
+        CreatedBy, Status, ValidationStatus, ValidationStatusMessage,
+        DeletionStatus, CompletionDate
+      }'
+      fail "Strict restore qualification failed job identity, SQL-canary provenance, or cleanup verification."
+    fi
+
+    success "Strict restore qualification passed for latest job: ${LATEST_RESTORE_TEST_JOB_ID}"
+  fi
+
   case "$LATEST_RESTORE_TEST_STATUS" in
     COMPLETED)
       success "Latest Restore Testing job completed successfully: ${LATEST_RESTORE_TEST_JOB_ID}"
@@ -1065,7 +1156,7 @@ validate_restore_testing_live() {
 
   case "$LATEST_RESTORE_TEST_VALIDATION_STATUS" in
     FAILED|TIMED_OUT)
-      warn "Latest Restore Testing validation status is ${LATEST_RESTORE_TEST_VALIDATION_STATUS}; R6.4 reports this state but does not enforce application-level validation."
+      warn "Latest Restore Testing validation status is ${LATEST_RESTORE_TEST_VALIDATION_STATUS}; normal baseline validation reports rather than enforces SQL success (use REQUIRE_RESTORE_QUALIFICATION=true for strict acceptance)."
       ;;
     VALIDATING)
       warn "Latest Restore Testing validation is still in progress."
@@ -1083,7 +1174,7 @@ validate_restore_testing_live() {
 
   case "$LATEST_RESTORE_TEST_DELETION_STATUS" in
     FAILED)
-      warn "Restore Testing cleanup reports FAILED. R6.5 live qualification must resolve and prove cleanup."
+      warn "Restore Testing cleanup reports FAILED; normal baseline validation reports rather than enforces cleanup success (use REQUIRE_RESTORE_QUALIFICATION=true for strict acceptance)."
       ;;
     DELETING)
       warn "Restore Testing temporary resource cleanup is still in progress."
@@ -1199,6 +1290,7 @@ effective_backup_schedule:                ${EFFECTIVE_BACKUP_SCHEDULE}
 effective_delete_backups_after_days:      ${EFFECTIVE_DELETE_BACKUPS_AFTER_DAYS}
 
 Backup validation mode:                   disabled
+Strict restore qualification required:     ${REQUIRE_RESTORE_QUALIFICATION}
 Retained backup vault:                    ${BACKUP_VAULT_NAME}
 Backup vault ARN:                         ${BACKUP_VAULT_ARN}
 Backup vault KMS key ID:                  ${BACKUP_VAULT_KMS_KEY_ID}
@@ -1640,6 +1732,7 @@ Latest in-progress backup jobs:                     ${LATEST_IN_PROGRESS_BACKUP_
 Latest failed backup jobs:                          ${LATEST_FAILED_BACKUP_JOB_COUNT}
 Older failed backup jobs:                           ${OLDER_FAILED_BACKUP_JOB_COUNT}
 
+Strict restore qualification required:              ${REQUIRE_RESTORE_QUALIFICATION}
 Restore Testing enabled:                            ${RESTORE_TESTING_ENABLED}
 Restore Testing plan:                               ${RESTORE_TESTING_PLAN_NAME}
 Restore Testing plan ARN:                           ${RESTORE_TESTING_PLAN_ARN}

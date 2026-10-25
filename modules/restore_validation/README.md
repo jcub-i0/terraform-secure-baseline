@@ -106,5 +106,63 @@ Before production use, perform a controlled nonproduction restore and verify
 the AWS Backup result, read-only credentials, VPC endpoint access, retry/DLQ
 behavior, expected failures, and temporary-resource cleanup.
 
-The `secops_topic_arn` input is reserved for future Restore Validation
-alarms. Dedicated DLQ/function-failure alarms have **not** been implemented yet.
+### Strict recovery qualification (opt-in)
+
+The ordinary `validate-backup.sh` check validates deployed AWS Backup and
+Restore Testing configuration and reports the latest execution result. It
+intentionally does **not** fail solely because no restore has run yet, SQL
+validation failed, or temporary-resource cleanup has not finished. This
+preserves the existing behavior of routine baseline evidence exports.
+
+To require a successful **live** recovery exercise, run from the repository
+root after initializing the workload's remote backend:
+
+```bash
+AWS_PROFILE=dev AWS_REGION=us-east-1 \
+REQUIRE_RESTORE_QUALIFICATION=true \
+./scripts/validation/validate-backup.sh dev
+```
+
+`REQUIRE_RESTORE_QUALIFICATION` defaults to `false` and accepts only the
+literal values `true` and `false`. In strict mode, the validator fails unless:
+
+- AWS Backup and the RDS Restore Testing and SQL Restore Validation modules are
+  currently enabled in Terraform.
+- At least one Restore Testing job exists for the configured plan, and the
+  **latest** job has `Status=COMPLETED`, `ValidationStatus=SUCCESSFUL`, and
+  `DeletionStatus=SUCCESSFUL`. Pending jobs, failed/timed-out SQL validation,
+  failed cleanup, and missing outcomes **fail** qualification.
+- An independent `DescribeRestoreJob` read agrees with the expected account,
+  Restore Testing plan, source RDS ARN, resource type, and distinct restored RDS
+  instance; a recovery point and completion time are recorded.
+- AWS Backup's validation message is exactly
+  `RDS restore isolation and synthetic SQL canary verified`, submitted by the
+  existing coordinator only after the SQL worker verifies all three canary
+  records and the restricted reader role.
+
+The strict check is **read-only**: it neither creates a restore nor invokes the
+validator Lambdas. It evaluates the latest job rather than an operator-selected
+historical success; it does not enforce a maximum evidence age or establish an
+application-level RTO/RPO. Preserve the job ID, source commit, validation and
+cleanup timestamps, and private evidence separately. The GitHub **Export
+Baseline Evidence** workflow remains in its normal non-strict mode unless
+explicitly configured to pass the strict environment variable.
+
+### Failure monitoring
+
+When Restore Validation is enabled, `alarms.tf` creates four CloudWatch alarms
+routed through the existing `secops_topic_arn` (no separate SNS topic):
+
+- `validation_dlq_messages`: one or more visible messages in the validation DLQ.
+- `lambda_errors["coordinator"]` and `lambda_errors["worker"]`: one or more
+  Lambda invocation errors in a five-minute period.
+- `validation_failed`: a CloudWatch Logs metric filter counts the coordinator's
+  `validation submitted: FAILED` log message when definitive SQL verification
+  fails. A legitimate worker `FAIL` result may not increment Lambda `Errors`.
+
+These alarms do not independently detect absent Restore Testing executions,
+AWS Backup validation timeouts without a Lambda error, or failed AWS-managed
+restore cleanup. Strict qualification checks the latest observed result; an
+operational owner must also review schedule execution and notifications. Verify
+SNS subscription confirmation, alarm action history, and actual recipient
+delivery before claiming end-to-end alerting.
