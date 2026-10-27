@@ -439,7 +439,7 @@ module "application_load_balancer" {
   account_id  = var.account_id
   random_id   = var.random_id
 
-  access_logs_enabled        = var.alb_access_logs_enabled
+  access_logs_enabled        = local.effective_alb_access_logs_enabled
   access_logs_retention_days = local.effective_alb_access_logs_retention_days
   access_logs_force_destroy  = local.effective_alb_access_logs_force_destroy
   bucket_admin_principals    = var.bucket_admin_principals

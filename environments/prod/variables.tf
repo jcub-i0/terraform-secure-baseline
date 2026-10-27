@@ -316,9 +316,9 @@ variable "alb_ssl_policy" {
 }
 
 variable "alb_access_logs_enabled" {
-  description = "Whether to enable S3 access logging for the shared ALB."
+  description = "Whether to enable ALB access logging. Null uses the deployment_profile default."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "alb_access_logs_retention_days" {

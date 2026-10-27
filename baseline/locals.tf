@@ -157,6 +157,12 @@ locals {
     service_name => "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${var.account_id}:log-group:/aws/ecs/${local.name_prefix}/${service_name}"
   }
 
+  effective_alb_access_logs_enabled = (
+    var.alb_access_logs_enabled != null
+    ? var.alb_access_logs_enabled
+    : local.is_production_profile
+  )
+
   effective_alb_access_logs_retention_days = (
     var.alb_access_logs_retention_days != null
     ? var.alb_access_logs_retention_days
