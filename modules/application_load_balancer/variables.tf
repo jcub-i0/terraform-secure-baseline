@@ -91,3 +91,35 @@ variable "enable_deletion_protection" {
   description = "Whether deletion protection is enabled on the Application Load Balancer."
   type        = bool
 }
+
+variable "random_id" {
+  description = "Existing workload random suffix used for globally unique S3 bucket naming"
+  type        = string
+}
+
+variable "access_logs_enabled" {
+  description = "Whether to enable ALB access logging"
+  type        = bool
+  default     = false
+}
+
+variable "access_logs_retention_days" {
+  description = "S3 Lifecycle expiration period for ALB access logs"
+  type        = number
+  default     = 14
+
+  validation {
+    condition = (
+      var.access_logs_enabled >= 1 &&
+      var.access_logs_retention_days == floor(var.access_logs_retention_days)
+    )
+
+    error_message = "access_logs_retention_days must be a positive whole number."
+  }
+}
+
+variable "access_logs_force_destroy" {
+  description = "Whether the ALB access-log bucket may be force-destroyed during Terraform destruction"
+  type        = bool
+  default     = true
+}
