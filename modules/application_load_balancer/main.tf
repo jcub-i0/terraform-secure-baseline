@@ -34,6 +34,17 @@ resource "aws_lb" "load_balancer" {
   enable_deletion_protection = var.enable_deletion_protection
   drop_invalid_header_fields = true
 
+  access_logs {
+    bucket = (
+      var.access_logs_enabled
+      ? aws_s3_bucket.access_logs[0].id
+      : local.access_logs_bucket_name
+    )
+
+    prefix = "alb"
+    enabled = var.access_logs_enabled
+  }
+
   lifecycle {
     precondition {
       condition     = length("${var.name_prefix}-alb") <= 32
