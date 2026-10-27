@@ -163,6 +163,10 @@ locals {
     : local.profile_default_logs_retention_days
   )
 
+  effective_alb_access_logs_force_destroy = (
+    local.effective_centralized_logs_force_destroy
+  )
+
   # ---------------------------------------------------------------------------
   # GuardDuty Fargate agent regional ECR metadata
   # ---------------------------------------------------------------------------
