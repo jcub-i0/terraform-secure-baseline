@@ -123,3 +123,13 @@ variable "access_logs_force_destroy" {
   type        = bool
   default     = true
 }
+
+variable "account_id" {
+  description = "AWS account ID owning the Application Load Balancer"
+  type        = string
+}
+
+variable "bucket_admin_principals" {
+  description = "Approved principals permitted to administer the access-log bucket policy and versioning"
+  type        = list(string)
+}
