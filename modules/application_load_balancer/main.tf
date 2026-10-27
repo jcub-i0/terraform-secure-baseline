@@ -41,7 +41,7 @@ resource "aws_lb" "load_balancer" {
       : local.access_logs_bucket_name
     )
 
-    prefix = "alb"
+    prefix  = "alb"
     enabled = var.access_logs_enabled
   }
 
@@ -51,6 +51,10 @@ resource "aws_lb" "load_balancer" {
       error_message = "The complete Application Load Balancer name must not exceed 32 characters."
     }
   }
+
+  depends_on = [
+    aws_s3_bucket.access_logs
+  ]
 
   tags = {
     Name        = "${var.name_prefix}-alb"
