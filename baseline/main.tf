@@ -196,6 +196,12 @@ module "iam" {
   lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
   lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
 
+  alb_access_logs_bucket_arn = (
+    length(local.ecs_alb_services) > 0
+    ? module.application_load_balancer[0].access_logs.bucket_arn
+    : null
+  )
+
   ecs_iam_services = local.ecs_iam_services
 }
 

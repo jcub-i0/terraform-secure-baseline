@@ -12,7 +12,10 @@ data "aws_iam_policy_document" "logs_s3_readonly" {
       "s3:GetBucketLocation"
     ]
 
-    resources = [var.centralized_logs_bucket_arn]
+    resources = compact([
+      var.centralized_logs_bucket_arn,
+      var.alb_access_logs_bucket_arn,
+    ])
   }
 
   statement {
@@ -25,7 +28,12 @@ data "aws_iam_policy_document" "logs_s3_readonly" {
       "s3:GetObjectVersionTagging"
     ]
 
-    resources = ["${var.centralized_logs_bucket_arn}/*"]
+    resources = compact([
+      "${var.centralized_logs_bucket_arn}/*",
+      var.alb_access_logs_bucket_arn != null
+      ? "${var.alb_access_logs_bucket_arn}/alb/*"
+      : null
+    ])
   }
 }
 

@@ -74,6 +74,12 @@ variable "lambda_ip_enrichment_dlq_arn" {
   type = string
 }
 
+variable "alb_access_logs_bucket_arn" {
+  description = "Optional ALB access-log bucket ARN for the shared read-only logs policy"
+  type        = string
+  default     = null
+}
+
 variable "ecs_iam_services" {
   description = "ECS services requiring task execution and task IAM roles"
 
