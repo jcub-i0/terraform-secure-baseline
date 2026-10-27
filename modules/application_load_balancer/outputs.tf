@@ -39,3 +39,39 @@ output "target_groups" {
     }
   }
 }
+
+output "access_logs" {
+  description = "ALB access logging configuration and S3 destination metadata."
+
+  value = {
+    enabled = var.access_logs_enabled
+
+    bucket_name = (
+      var.access_logs_enabled
+      ? aws_s3_bucket.access_logs[0].id
+      : null
+    )
+
+    bucket_arn = (
+      var.access_logs_enabled
+      ? aws_s3_bucket.access_logs[0].arn
+      : null
+    )
+
+    expected_bucket_name = local.access_logs_bucket_name
+
+    prefix = var.access_logs_enabled ? "alb" : null
+
+    retention_days = (
+      var.access_logs_enabled
+      ? var.access_logs_retention_days
+      : null
+    )
+
+    force_destroy = (
+      var.access_logs_enabled
+      ? aws_s3_bucket.access_logs[0].force_destroy
+      : null
+    )
+  }
+}

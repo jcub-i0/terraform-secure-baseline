@@ -171,6 +171,16 @@ output "effective_cloudwatch_retention_days" {
   value       = local.effective_cloudwatch_retention_days
 }
 
+output "effective_alb_access_logs_enabled" {
+  description = "Profile-resolved ALB access logging setting"
+  value       = local.effective_alb_access_logs_enabled
+}
+
+output "effective_alb_access_logs_retention_days" {
+  description = "Profile-resolved ALB access-log retention in days"
+  value       = local.effective_alb_access_logs_retention_days
+}
+
 output "effective_enable_config" {
   description = "Effective AWS Config enablement after resolving deployment_profile and enable_config override."
   value       = local.effective_enable_config
@@ -243,6 +253,7 @@ output "lifecycle_protection" {
     ecs_service_force_delete           = local.effective_ecs_service_force_delete
     backup_vault_force_destroy         = local.effective_backup_vault_force_destroy
     centralized_logs_force_destroy     = local.effective_centralized_logs_force_destroy
+    alb_access_logs_force_destroy      = local.effective_alb_access_logs_force_destroy
   }
 }
 
@@ -266,6 +277,7 @@ output "application_load_balancer" {
     security_group_id = module.application_load_balancer[0].security_group_id
     https_listener    = module.application_load_balancer[0].https_listener
     target_groups     = module.application_load_balancer[0].target_groups
+    access_logs       = module.application_load_balancer[0].access_logs
   } : null
 }
 
