@@ -434,11 +434,15 @@ module "application_load_balancer" {
   count  = length(local.ecs_alb_services) > 0 ? 1 : 0
   source = "../modules/application_load_balancer"
 
-  name_prefix             = local.name_prefix
-  environment             = var.environment
-  account_id              = var.account_id
-  random_id               = var.random_id
-  bucket_admin_principals = var.bucket_admin_principals
+  name_prefix = local.name_prefix
+  environment = var.environment
+  account_id  = var.account_id
+  random_id   = var.random_id
+
+  access_logs_enabled        = var.alb_access_logs_enabled
+  access_logs_retention_days = local.effective_alb_access_logs_retention_days
+  access_logs_force_destroy  = local.effective_centralized_logs_force_destroy
+  bucket_admin_principals    = var.bucket_admin_principals
 
   vpc_id = module.networking.vpc_id
 
