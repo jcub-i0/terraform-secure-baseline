@@ -110,7 +110,7 @@ variable "access_logs_retention_days" {
 
   validation {
     condition = (
-      var.access_logs_enabled >= 1 &&
+      var.access_logs_retention_days >= 1 &&
       var.access_logs_retention_days == floor(var.access_logs_retention_days)
     )
 
