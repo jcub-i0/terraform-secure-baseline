@@ -53,7 +53,7 @@ resource "aws_lb" "load_balancer" {
   }
 
   depends_on = [
-    aws_s3_bucket.access_logs
+    aws_s3_bucket_policy.access_logs
   ]
 
   tags = {
