@@ -62,7 +62,7 @@ locals {
   # If cloudwatch_retention_days is null, the deployment profile selects the
   # default retention period. Explicit values override the profile default.
   # ---------------------------------------------------------------------------
-  profile_default_cloudwatch_retention_days = (
+  profile_default_logs_retention_days = (
     local.is_production_profile ? 90 :
     local.is_development_profile ? 30 :
     14
@@ -71,7 +71,7 @@ locals {
   effective_cloudwatch_retention_days = (
     var.cloudwatch_retention_days != null
     ? var.cloudwatch_retention_days
-    : local.profile_default_cloudwatch_retention_days
+    : local.profile_default_logs_retention_days
   )
 
   # ---------------------------------------------------------------------------
