@@ -34,17 +34,17 @@ resource "aws_lb" "load_balancer" {
   enable_deletion_protection = var.enable_deletion_protection
   drop_invalid_header_fields = true
 
-  tags = {
-    Name        = "${var.name_prefix}-alb"
-    Environment = var.environment
-    Terraform   = "true"
-  }
-
   lifecycle {
     precondition {
       condition     = length("${var.name_prefix}-alb") <= 32
       error_message = "The complete Application Load Balancer name must not exceed 32 characters."
     }
+  }
+
+  tags = {
+    Name        = "${var.name_prefix}-alb"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 
