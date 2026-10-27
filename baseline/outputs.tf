@@ -171,16 +171,6 @@ output "effective_cloudwatch_retention_days" {
   value       = local.effective_cloudwatch_retention_days
 }
 
-output "effective_alb_access_logs_enabled" {
-  description = "Profile-resolved ALB access logging setting"
-  value       = local.effective_alb_access_logs_enabled
-}
-
-output "effective_alb_access_logs_retention_days" {
-  description = "Profile-resolved ALB access-log retention in days"
-  value       = local.effective_alb_access_logs_retention_days
-}
-
 output "effective_enable_config" {
   description = "Effective AWS Config enablement after resolving deployment_profile and enable_config override."
   value       = local.effective_enable_config
