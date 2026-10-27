@@ -2,10 +2,10 @@ data "aws_partition" "current" {}
 
 # SHARED POLICIES ATTACHED TO MULTIPLE ROLES
 
-# GENERIC POLICY TO ALLOW READ ACCESS TO CENTRALIZED LOGS S3 BUCKET
+# SHARED READ-ONLY ACCESS TO TERRAFORM-MANAGED S3 LOG BUCKETS
 data "aws_iam_policy_document" "logs_s3_readonly" {
   statement {
-    sid    = "ListCentralizedLogsBucket"
+    sid    = "ListManagedLogBuckets"
     effect = "Allow"
     actions = [
       "s3:ListBucket",
@@ -19,7 +19,7 @@ data "aws_iam_policy_document" "logs_s3_readonly" {
   }
 
   statement {
-    sid    = "ReadCentralizedLogsObjects"
+    sid    = "ReadManagedLogObjects"
     effect = "Allow"
     actions = [
       "s3:GetObject",
