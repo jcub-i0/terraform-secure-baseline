@@ -118,7 +118,7 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
     $s.Principal == "*" or $s.Principal.AWS == "*";
 
   # Check the resulting AWS bucket-policy contract, not whether it changed.
-  # known. An initial create may leave it unknown until the bucket ARN exists;
+  # An initial create may leave it unknown until the bucket ARN exists;
   # require that case to be a genuine policy creation, not an existing update.
   def policy_ok($r; $bucket_name):
     kept($r) and (
@@ -228,10 +228,10 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
         kept($ownership) and $ownership.change.after.rule[0].object_ownership == "BucketOwnerEnforced"
       ) | not)) then "ALB bucket must retain BucketOwnerEnforced ownership" else empty end,
       if ($requires_bucket and (lifecycle_ok($lifecycle) | not)) then "ALB lifecycle rule or noncurrent expiration is unsafe" else empty end,
+      # Authorized in-place policy updates are allowed if the final contract holds.
       if ($requires_bucket and (policy_ok($policy; $bucket.change.after.bucket) | not)) then "ALB bucket policy is missing or lacks expected statements" else empty end,
       if ($protected and (old_retention($lifecycle) | type) != "number") then "Cannot establish existing production retention" else empty end,
       if ($protected and (retention($lifecycle) < old_retention($lifecycle))) then "Existing production log retention cannot be shortened" else empty end
-      # In-place policy updates are allowed when the resulting policy is valid.
     ]
   | .[]
 ' "$plan_json")" || fail 'Unable to evaluate the saved ALB logging plan.'
