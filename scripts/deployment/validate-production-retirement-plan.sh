@@ -202,6 +202,7 @@ if ! echo "$LIFECYCLE_JSON" |
     and .ecs_service_force_delete == false
     and .backup_vault_force_destroy == false
     and .centralized_logs_force_destroy == true
+    and .alb_access_logs_force_destroy == true
   ' >/dev/null; then
   echo "$LIFECYCLE_JSON" | jq .
   fail "Planned lifecycle_protection output is not the required production retirement posture."
@@ -274,6 +275,7 @@ ECR force_delete:                $(echo "$LIFECYCLE_JSON" | jq -r '.ecr_force_de
 ECS service force_delete:        $(echo "$LIFECYCLE_JSON" | jq -r '.ecs_service_force_delete')
 Backup vault force_destroy:      $(echo "$LIFECYCLE_JSON" | jq -r '.backup_vault_force_destroy')
 Centralized logs force_destroy:  $(echo "$LIFECYCLE_JSON" | jq -r '.centralized_logs_force_destroy')
+ALB access logs force_destroy: $(echo "$LIFECYCLE_JSON" | jq -r '.alb_access_logs_force_destroy')
 SUMMARY
 
 section "Validation Result"
