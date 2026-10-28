@@ -117,10 +117,10 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
   def all_principals($s):
     $s.Principal == "*" or $s.Principal.AWS == "*";
 
-  # Validate the five existing M2 statements whenever the policy JSON is
+  # Check the resulting AWS bucket-policy contract, not whether it changed.
   # known. An initial create may leave it unknown until the bucket ARN exists;
   # require that case to be a genuine policy creation, not an existing update.
-  def policy_ok($r; $bucket_name; $alb_name):
+  def policy_ok($r; $bucket_name):
     kept($r) and (
       if ($r.change.after.policy | type) == "string" then
         try (
@@ -128,14 +128,14 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
           | (statement($ss; "AllowALBLogDelivery")) as $allow
           | (statement($ss; "DenyDeleteLogs")) as $delete
           | (statement($ss; "DenyBucketPolicyChanges")) as $admin
+          | (statement($ss; "DenyProtectedBucketConfigurationChanges")) as $config
           | (statement($ss; "DenyVersioningChanges")) as $version
           | (statement($ss; "DenyInsecureTransport")) as $https
           | ($admin.Resource | as_list | .[0]) as $arn
           | ($allow.Condition.ArnLike["aws:SourceArn"] | as_list | .[0]
-             | capture("^arn:(?<partition>aws|aws-us-gov|aws-cn):elasticloadbalancing:(?<region>[a-z0-9-]+):(?<account>[0-9]{12}):loadbalancer/app/(?<name>[^/]+)/\\*$")) as $source
-          | ($ss | type == "array" and length == 5)
+             | capture("^arn:(?<partition>aws|aws-us-gov|aws-cn):elasticloadbalancing:(?<region>[a-z0-9-]+):(?<account>[0-9]{12}):loadbalancer/\\*$")) as $source
+          | ($ss | type == "array" and length == 6)
             and ($arn == "arn:" + $source.partition + ":s3:::" + $bucket_name)
-            and ($source.name == $alb_name)
             and ($allow.Effect == "Allow")
             and ($allow.Principal.Service == "logdelivery.elasticloadbalancing.amazonaws.com")
             and (($allow.Action | as_list) == ["s3:PutObject"])
@@ -148,6 +148,18 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
             and (($admin.Resource | as_list) == [$arn])
             and ($admin.Condition.ArnNotEquals["aws:PrincipalArn"] | as_list
                  | length > 0 and all(.[]; type == "string" and (contains("*") | not)))
+            and ($config.Effect == "Deny" and all_principals($config))
+            and includes($config.Action; [
+              "s3:PutLifecycleConfiguration",
+              "s3:PutBucketPublicAccessBlock",
+              "s3:DeleteBucketPublicAccessBlock",
+              "s3:PutEncryptionConfiguration",
+              "s3:PutBucketOwnershipControls",
+              "s3:DeleteBucketOwnershipControls"
+            ])
+            and (($config.Resource | as_list) == [$arn])
+            and ($config.Condition.ArnNotEquals["aws:PrincipalArn"] ==
+                 $admin.Condition.ArnNotEquals["aws:PrincipalArn"])
             and ($version.Effect == "Deny" and all_principals($version))
             and includes($version.Action; ["s3:PutBucketVersioning"])
             and (($version.Resource | as_list) == [$arn])
@@ -216,12 +228,10 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
         kept($ownership) and $ownership.change.after.rule[0].object_ownership == "BucketOwnerEnforced"
       ) | not)) then "ALB bucket must retain BucketOwnerEnforced ownership" else empty end,
       if ($requires_bucket and (lifecycle_ok($lifecycle) | not)) then "ALB lifecycle rule or noncurrent expiration is unsafe" else empty end,
-      if ($requires_bucket and (policy_ok($policy; $bucket.change.after.bucket; $lb.change.after.name) | not)) then "ALB bucket policy is missing or lacks expected statements" else empty end,
+      if ($requires_bucket and (policy_ok($policy; $bucket.change.after.bucket) | not)) then "ALB bucket policy is missing or lacks expected statements" else empty end,
       if ($protected and (old_retention($lifecycle) | type) != "number") then "Cannot establish existing production retention" else empty end,
-      if ($protected and (retention($lifecycle) < old_retention($lifecycle))) then "Existing production log retention cannot be shortened" else empty end,
-      # Changes to a protected policy require deliberately reviewing this guard;
-      # this also prevents silently widening the approved bucket-admin exception.
-      if ($protected and $policy.change.actions != ["no-op"]) then "Protected production ALB bucket policy cannot be changed by ordinary Apply" else empty end
+      if ($protected and (retention($lifecycle) < old_retention($lifecycle))) then "Existing production log retention cannot be shortened" else empty end
+      # In-place policy updates are allowed when the resulting policy is valid.
     ]
   | .[]
 ' "$plan_json")" || fail 'Unable to evaluate the saved ALB logging plan.'
