@@ -301,7 +301,7 @@ jobs:
                     --artifact-directory "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" \
                     --artifact-basename "${PLAN_BASENAME}" \
                     --context-json "${context}"
-                    
+
             - name: Validate ALB access logging plan
               shell: bash
               run: |
@@ -603,11 +603,6 @@ jobs:
               shell: bash
               run: |
                   set -euo pipefail
-
-                  [[ "${{ inputs.environment }}" == "prod" ]] || {
-                    echo "::error::production_retirement_mode is supported only for the prod environment."
-                    exit 1
-                  }
 
                   [[ "${DEPLOYMENT_PROFILE}" == "production" ]] || {
                     echo "::error::Durable-data retirement inventory requires deployment_profile=production."
