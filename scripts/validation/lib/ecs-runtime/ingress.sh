@@ -241,13 +241,18 @@ ecs_runtime_validate_alb_access_logs() {
       and ($allow.Principal.Service == "logdelivery.elasticloadbalancing.amazonaws.com")
       and ($allow.Action | as_list) == ["s3:PutObject"]
       and ($allow.Resource | as_list) == [$arn + "/alb/AWSLogs/" + $account + "/*"]
+      and ($allow.Condition | keys) == ["ArnLike"]
+      and ($allow.Condition.ArnLike | keys) == ["aws:SourceArn"]
       and ($allow.Condition.ArnLike["aws:SourceArn"] | as_list) == [$source]
       and ($delete.Effect == "Deny" and ($delete | everyone))
+      and $delete.Condition == null
       and (($delete.Action | as_list | sort) == (["s3:DeleteObject","s3:DeleteObjectVersion"] | sort))
       and ($delete.Resource | as_list) == [$arn + "/*"]
       and ($admin.Effect == "Deny" and ($admin | everyone))
       and (($admin.Action | as_list | sort) == (["s3:PutBucketPolicy","s3:DeleteBucketPolicy"] | sort))
       and ($admin.Resource | as_list) == [$arn]
+      and ($admin.Condition | keys) == ["ArnNotEquals"]
+      and ($admin.Condition.ArnNotEquals | keys) == ["aws:PrincipalArn"]
       and (($admin.Condition.ArnNotEquals["aws:PrincipalArn"] | as_list) as $principals
         | ($principals | length) > 0
         and all($principals[]; type == "string" and length > 0 and (contains("*") | not)))
@@ -258,6 +263,8 @@ ecs_runtime_validate_alb_access_logs() {
         $admin.Condition.ArnNotEquals["aws:PrincipalArn"]
       and ($https.Effect == "Deny" and ($https | everyone))
       and ($https.Action | as_list) == ["s3:*"]
+      and ($https.Condition | keys) == ["Bool"]
+      and ($https.Condition.Bool | keys) == ["aws:SecureTransport"]
       and (($https.Resource | as_list | sort) == ([$arn, $arn + "/*"] | sort))
       and ($https.Condition.Bool["aws:SecureTransport"] | as_list) == ["false"]
   ' <<< "$policy_json" >/dev/null; then
