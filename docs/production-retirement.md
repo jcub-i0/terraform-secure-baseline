@@ -33,7 +33,7 @@ production_retirement_mode = false
 | Effective ECS desired capacity | Normal configured capacity | `0` |
 | Effective ECS autoscaling bounds, when configured | Normal min/max | `0` / `0` |
 
-Set `production_retirement_mode = true` through the retirement Apply. Do not switch `deployment_profile` to `development` or `minimal` to bypass production controls. When an ingress ALB and its access-log bucket exist, Stage 1 keeps logging enabled and changes only the bucket's retirement posture; it does not delete the bucket.
+Set `production_retirement_mode = true` through the retirement Apply. Do not switch `deployment_profile` to `development` or `minimal` to bypass production controls. When an ingress ALB and its access-log bucket exist, Stage 1 keeps logging enabled and changes that bucket's `force_destroy` setting; it does not delete the bucket.
 
 Retirement mode derives zero-capacity runtime inputs; it does not require editing the canonical service's ordinary `desired_count` or scaling limits. It also does not delete ECR images or AWS Backup recovery points. Those are handled by a separate approved cleanup operation.
 
@@ -96,7 +96,8 @@ The workflows pin Terraform `1.15.8`; use the committed provider lockfiles and r
 Dispatch **Terraform Apply** with:
 
 ```text
-environment                = <dev|staging|prod> (choose the root with applied production profile)
+environment                = staging
+# Example: select the workload root whose applied profile is production
 production_retirement_mode = true
 ```
 
@@ -112,11 +113,11 @@ For a separately generated saved Stage-1 plan, the guard's actual invocation is:
 
 ```bash
 bash scripts/deployment/validate-production-retirement-plan.sh \
-  --working-directory environments/<env> \
+  --working-directory environments/staging \
   --plan-file /absolute/path/to/reviewed-stage1.tfplan
 ```
 
-Replace `<env>` with the selected workload root. Both validators read the plan and never apply it. Do not fabricate a placeholder plan file or substitute a new plan after approval.
+Replace `staging` with the selected workload root (`dev`, `staging`, or `prod`). Both validators read the plan and never apply it. Do not fabricate a placeholder plan file or substitute a new plan after approval.
 
 ### 4. Approve and apply that exact plan
 
@@ -145,7 +146,8 @@ A readiness failure caused only by remaining ECR images or recovery points is ex
 Dispatch **Terraform Destroy** with:
 
 ```text
-environment                   = <dev|staging|prod> (same production-profile workload)
+environment                   = staging
+# Use the same production-profile workload selected in Stage 1
 confirm                       = DESTROY
 delete_durable_retirement_data = true
 confirm_audit_log_disposition  = true
@@ -172,7 +174,7 @@ The cleanup job runs the following command; the helper performs its policy check
 
 ```text
 cleanup-retirement-durable-data.sh
-  --environment <dev|staging|prod>
+  --environment staging
   --mode apply
   --confirm DELETE-DURABLE-DATA
   --region <workload-service-region>
@@ -211,10 +213,10 @@ AWS_PROFILE="<workload-aws-profile>" \
 AWS_REGION="<workload-service-region>" \
 EXPECTED_ACCOUNT_ID="<workload-account-id>" \
 bash scripts/deployment/validate-retirement-readiness.sh \
-  --environment <dev|staging|prod>
+  --environment staging
 ```
 
-Use the actual service Region. A supplied Region that disagrees with Terraform's `primary_region` output is rejected.
+Replace `staging` with the selected workload root and supply the actual AWS profile, Region, and account ID. Use the actual service Region. A supplied Region that disagrees with Terraform's `primary_region` output is rejected.
 
 The artifact helper creates:
 
