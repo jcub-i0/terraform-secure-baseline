@@ -84,6 +84,8 @@ jobs:
             RESTORE_TESTING_ENABLED: ${{ vars.RESTORE_TESTING_ENABLED }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
+            ALB_ACCESS_LOGS_ENABLED: ${{ vars.ALB_ACCESS_LOGS_ENABLED }}
+            ALB_ACCESS_LOGS_RETENTION_DAYS: ${{ vars.ALB_ACCESS_LOGS_RETENTION_DAYS }}
             RDS_INSTANCE_CLASS: ${{ vars.RDS_INSTANCE_CLASS }}
             MAIN_VPC_CIDR: ${{ vars.MAIN_VPC_CIDR }}
             TF_VAR_additional_interface_endpoint_services: ${{ vars.ADDITIONAL_INTERFACE_ENDPOINT_SERVICES || '[]' }}
@@ -167,7 +169,7 @@ jobs:
                   }
 
                   # Unset overrides preserve deployment_profile defaults.
-                  for name in BACKUP_ENABLED RESTORE_TESTING_ENABLED; do
+                  for name in BACKUP_ENABLED RESTORE_TESTING_ENABLED ALB_ACCESS_LOGS_ENABLED; do
                     value="${!name:-}"
                     if [[ -n "$value" ]]; then
                       if [[ ! "$value" =~ ^(true|false)$ ]]; then
@@ -191,6 +193,14 @@ jobs:
                     fi
 
                     echo "TF_VAR_alb_ingress_cidrs=${ALB_INGRESS_CIDRS}" >> "${GITHUB_ENV}"
+                  fi
+
+                  if [[ -n "${ALB_ACCESS_LOGS_RETENTION_DAYS:-}" ]]; then
+                    if [[ ! "${ALB_ACCESS_LOGS_RETENTION_DAYS}" =~ ^[1-9][0-9]*$ ]]; then
+                      echo "::error::ALB_ACCESS_LOGS_RETENTION_DAYS must be a positive whole number."
+                      exit 1
+                    fi
+                    echo "TF_VAR_alb_access_logs_retention_days=${ALB_ACCESS_LOGS_RETENTION_DAYS}" >> "${GITHUB_ENV}"
                   fi
 
                   if [[ -n "${RDS_INSTANCE_CLASS:-}" ]]; then
@@ -291,6 +301,16 @@ jobs:
                     --artifact-directory "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}" \
                     --artifact-basename "${PLAN_BASENAME}" \
                     --context-json "${context}"
+
+            - name: Validate ALB access logging plan
+              shell: bash
+              run: |
+                set -euo pipefail
+
+                bash scripts/deployment/validate-alb-access-logging-plan.sh \
+                  --working-directory "${WORKING_DIRECTORY}" \
+                  --plan-file "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_BASENAME}.tfplan" \
+                  --retirement-mode "${{ inputs.production_retirement_mode }}"
 
             - name: Validate production retirement Stage 1 plan
               if: ${{ inputs.production_retirement_mode }}
@@ -583,11 +603,6 @@ jobs:
               shell: bash
               run: |
                   set -euo pipefail
-
-                  [[ "${{ inputs.environment }}" == "prod" ]] || {
-                    echo "::error::production_retirement_mode is supported only for the prod environment."
-                    exit 1
-                  }
 
                   [[ "${DEPLOYMENT_PROFILE}" == "production" ]] || {
                     echo "::error::Durable-data retirement inventory requires deployment_profile=production."

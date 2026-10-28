@@ -53,13 +53,14 @@ require_command() {
 usage() {
   cat <<'USAGE'
 Usage:
-  cleanup-retirement-durable-data.sh <prod> [options]
+  cleanup-retirement-durable-data.sh <dev|staging|prod> [options]
 
 Or:
-  cleanup-retirement-durable-data.sh --environment prod [options]
+  cleanup-retirement-durable-data.sh --environment <dev|staging|prod> [options]
 
 Options:
-  --environment <env>          Workload environment. This script requires prod.
+  --environment <env>          Workload root: dev, staging, or prod.
+                               Applied deployment_profile must be production.
   --mode <plan|apply>          plan is read-only; apply performs deletion.
                                Default: plan.
   --confirm <token>            Required for --mode apply. Must be exactly:
@@ -146,8 +147,10 @@ done
   fail "Environment is required."
 }
 
-[[ "$ENVIRONMENT" == "prod" ]] ||
-  fail "Durable production-retirement cleanup may only run for environment=prod."
+case "$ENVIRONMENT" in
+  dev|staging|prod) ;;
+  *) fail "Invalid environment: ${ENVIRONMENT}. Expected dev, staging, or prod." ;;
+esac
 
 case "$MODE" in
   plan|apply) ;;
@@ -264,6 +267,8 @@ if ! echo "$LIFECYCLE_JSON" |
     and .ecr_force_delete == false
     and .ecs_service_force_delete == false
     and .backup_vault_force_destroy == false
+    and .centralized_logs_force_destroy == true
+    and .alb_access_logs_force_destroy == true
   ' >/dev/null; then
   echo "$LIFECYCLE_JSON" | jq .
   fail "Terraform lifecycle_protection is not in the complete production retirement posture."

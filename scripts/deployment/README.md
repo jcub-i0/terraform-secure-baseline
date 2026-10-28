@@ -9,10 +9,11 @@
 | `deploy-application.sh` | Build and publish an image; resolve its authoritative digest | Writes ECR images and optional local metadata; does not deploy ECS |
 | `update-application-digest.sh` | Select one service image digest | Changes one canonical JSON field locally; does not commit, push, or apply |
 | `terraform-plan-artifact.sh` | Create/verify a saved Terraform plan artifact | Creates local plan files; never applies Terraform |
-| `validate-production-retirement-plan.sh` | Check a saved retirement Stage-1 plan | Reads the plan; does not apply it |
+| `validate-production-retirement-plan.sh` | Check a saved retirement Stage-1 plan, including ALB log lifecycle posture | Reads the plan; does not apply it |
+| `validate-alb-access-logging-plan.sh` | Protect ALB logging resources in the exact saved Apply plan | Read-only; uses prior state and the existing retirement workflow input |
 | `cleanup-retirement-durable-data.sh` | Inventory or explicitly delete production ECR/Backup contents | `plan` inventories; `apply` first checks the live S3 policy/Apply role, then deletes approved durable data |
 | `validate-retirement-readiness.sh` | Check converged retirement state and live AWS readiness | Read-only AWS checks; does not clean up or apply |
-| `validate-log-bucket-destroy-principal.sh` | Check the live log-bucket deny-policy exemption for the assumed Apply role | Read-only; does not prove IAM authorization or actual S3 teardown |
+| `validate-log-bucket-destroy-principal.sh` | Check centralized and conditional ALB log-bucket deny-policy exceptions for the assumed Apply role | Read-only; does not prove IAM authorization or actual S3 teardown |
 
 The canonical production lifecycle procedure is [Production Retirement](../../docs/production-retirement.md). The image-publication flow below is separate from that destructive lifecycle.
 
@@ -236,13 +237,14 @@ Workload Apply and Destroy use separate saved-plan artifacts, retained for one d
 
 Use the [runbook](../../docs/production-retirement.md) for the complete order and approvals. These helpers must not be treated as interchangeable:
 
-- `validate-production-retirement-plan.sh` accepts `--working-directory` and `--plan-file`. It checks allowed resource action types and the planned production/lifecycle/zero-capacity outputs. It does not whitelist every permissible in-place attribute update, so the full plan still needs review.
-- `cleanup-retirement-durable-data.sh` accepts only `prod`. It requires the expected account ID and checks the deployed production retirement outputs. `--mode plan` inventories; `--mode apply --confirm DELETE-DURABLE-DATA --expected-apply-role-arn <role-arn>` re-inventories, checks the live S3 policy/Apply role under the same AWS CLI profile, and then deletes scoped ECR images and Backup recovery points. Its role preflight is enforced for direct invocations, not only GitHub Actions. The inventory is not a saved Terraform plan or immutable item-level approval artifact. Active Backup jobs prevent apply-mode cleanup.
-- `validate-retirement-readiness.sh` accepts a workload environment, reads its Terraform state/outputs, and checks production posture, live deletion protections, ECS quiescence, zero autoscaling bounds, empty ECR repositories, and an empty Backup vault without active backup jobs. It performs no deletion. It must pass after cleanup and immediately before the final destroy operations.
+- `validate-production-retirement-plan.sh` accepts `--working-directory` and `--plan-file`. It checks Stage-1 allowed actions and the planned production, centralized/ALB log-bucket lifecycle, and zero-capacity outputs. It does not whitelist every in-place attribute change; review the full plan.
+- `validate-alb-access-logging-plan.sh` checks the same exact saved Apply plan for ALB logging safeguards using prior state, planned changes, and `--retirement-mode` from the existing protected Apply workflow. It rejects unsafe production log-bucket changes and does not verify live S3 delivery or deletion ordering.
+- `cleanup-retirement-durable-data.sh` accepts `dev`, `staging`, or `prod` **only with applied `deployment_profile=production`** and complete retirement posture. `--mode plan` inventories; `--mode apply --confirm DELETE-DURABLE-DATA --expected-apply-role-arn <role-arn>` re-inventories, checks both live logging bucket policies when applicable under the same AWS CLI profile, then deletes scoped ECR images and Backup recovery points. The policy check also applies to direct calls. The inventory is not an immutable saved-plan approval artifact; active Backup jobs block deletion.
+- `validate-retirement-readiness.sh` accepts any workload root with an applied production profile; it checks production lifecycle outputs, actual log-bucket state (`force_destroy=true` when the ALB bucket exists), live ALB logging attributes, other deletion protections, ECS quiescence, empty ECR repositories, and an empty Backup vault without active jobs. It is read-only and must pass before final Destroy.
 
-The latter two helpers derive the service region from deployed `primary_region` and reject conflicting explicit region inputs. Their optional `--region`/`--profile` inputs are unrelated to the Terraform state backend's location. The full cleanup workflow is not supported for a production-profile `dev` or `staging` environment because of the cleanup helper's explicit `prod` restriction.
+The cleanup and readiness helpers derive the service region from deployed `primary_region` and reject conflicting explicit region inputs. Their optional `--region`/`--profile` inputs are unrelated to the Terraform state backend. Production-profile retirement is available for `dev`, `staging`, and `prod` workload roots; required reviewers must be configured for the selected Plan and Apply GitHub Environments.
 
-Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow validates explicit durable-data authorization and the audit-log/key disposition confirmation/reference in its request preflight, and requires protected durable-cleanup and final workload-destroy approvals. The cleanup helper itself checks the live log bucket policy/Apply-role exception before ECR/Backup deletion; the final-destroy workflow rechecks that live policy. Neither check verifies external archives or guarantees the caller can delete the policy. It does not mutate the Identity Center stack. Later cancellation does not undo earlier approved deletions.
+Production retirement mode does not enable ECR/ECS force deletion or Backup vault force destruction. The Destroy workflow requires explicit durable-data authorization, audit-log disposition confirmation/reference, and protected durable-cleanup and final-destroy approvals. The cleanup helper and final Destroy job check the centralized and, when present, ALB log-bucket policy/Apply-role exceptions. These checks do not verify external archives, effective IAM permissions, or successful bucket teardown. Identity Center remains separate; cancellation does not undo earlier approved deletions.
 
 ## Implementation References
 
@@ -252,6 +254,7 @@ This page does not assert a new live publication or retirement test. Test claims
 - [Publication workflow](../../.github/workflows/deploy-application.yml)
 - [Plan artifact helper](terraform-plan-artifact.sh)
 - [Retirement plan guard](validate-production-retirement-plan.sh)
+- [ALB saved-plan guard](validate-alb-access-logging-plan.sh)
 - [Durable-data cleanup](cleanup-retirement-durable-data.sh)
 - [Retirement readiness](validate-retirement-readiness.sh)
 - [Log-bucket destroy principal preflight](validate-log-bucket-destroy-principal.sh)

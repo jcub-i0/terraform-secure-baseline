@@ -713,6 +713,27 @@ variable "alb_ssl_policy" {
   default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
 }
 
+variable "alb_access_logs_enabled" {
+  description = "Whether to enable ALB access logging. Null uses the deployment_profile default"
+  type        = bool
+  default     = null
+}
+
+variable "alb_access_logs_retention_days" {
+  description = "S3 Lifecycle expiration period for ALB access logs. Null uses the deployment profile default"
+  type        = number
+  default     = null
+
+  validation {
+    condition = var.alb_access_logs_retention_days == null ? true : (
+      var.alb_access_logs_retention_days >= 1 &&
+      var.alb_access_logs_retention_days == floor(var.alb_access_logs_retention_days)
+    )
+
+    error_message = "alb_access_logs_retention_days must be null or a positive whole number."
+  }
+}
+
 variable "ecs_services" {
   description = "ECS/Fargate workload services keyed by stable service name"
 

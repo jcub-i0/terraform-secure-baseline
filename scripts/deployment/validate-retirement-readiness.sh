@@ -12,7 +12,7 @@ set -euo pipefail
 # The script proves:
 # - Terraform reports production_retirement_mode=true;
 # - production ECR/ECS/Backup force-delete behavior remains disabled while
-#   centralized logs force-destroy is enabled only after retirement Apply;
+#   centralized and ALB log-bucket force-destroy is enabled after retirement Apply;
 # - RDS/ALB/Network Firewall native deletion protection is disabled live;
 # - RDS final-snapshot and automated-backup retention behavior remains intact;
 # - Terraform derives zero-capacity ECS retirement state;
@@ -268,6 +268,7 @@ if ! echo "$LIFECYCLE_JSON" |
     and .ecs_service_force_delete == false
     and .backup_vault_force_destroy == false
     and .centralized_logs_force_destroy == true
+    and .alb_access_logs_force_destroy == true
   ' >/dev/null; then
   echo "$LIFECYCLE_JSON" | jq .
   fail "Terraform lifecycle_protection output is not in the required retirement posture."
@@ -400,6 +401,86 @@ if ! echo "$CENTRALIZED_LOGS_STATE_JSON" |
   echo "$CENTRALIZED_LOGS_STATE_JSON" |
     jq '[.[] | {address, bucket: .values.bucket, force_destroy: .values.force_destroy}]'
   fail "The centralized logs S3 bucket must have force_destroy=true in applied retirement state before final destruction."
+fi
+
+section "Checking ALB access-log bucket retirement state"
+
+# Verify actual applied resources; output-only force_destroy intent is insufficient.
+ALB_LOG_RESOURCES_JSON="$(
+  jq -c '
+    [
+      .values.root_module
+      | recurse(.child_modules[]?)
+      | .resources[]?
+      | select(
+          .mode == "managed"
+          and .name == "access_logs"
+          and (.type | startswith("aws_s3_bucket"))
+          and ((.address // "") |
+            test("(^|\\.)module\\.application_load_balancer\\[[0-9]+\\]\\.aws_s3_bucket"))
+        )
+    ]
+  ' "$STATE_JSON_FILE"
+)" || fail "Unable to inspect ALB access-log resources in Terraform state."
+
+ALB_LOGGING_ENABLED=false
+ALB_LOG_BUCKET_NAME=""
+
+if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
+  ALB_LOGGING_ENABLED="$(
+    jq -er '.access_logs.enabled |
+      if type == "boolean" then tostring
+      else error("Missing ALB logging setting") end' \
+      <<< "$APPLICATION_LOAD_BALANCER_JSON"
+  )" || fail "Application Load Balancer logging metadata is missing or invalid."
+fi
+
+if [[ "$ALB_LOGGING_ENABLED" == "true" ]]; then
+  ALB_LOG_BUCKET_NAME="$(
+    jq -er '
+      .access_logs as $logs
+      | if (
+          ($logs.bucket_name | type) == "string"
+          and ($logs.bucket_name | length) > 0
+          and ($logs.bucket_arn | type) == "string"
+          and ($logs.bucket_arn | endswith(":s3:::" + $logs.bucket_name))
+          and $logs.prefix == "alb"
+          and $logs.force_destroy == true
+          and ($logs.retention_days | type) == "number"
+          and $logs.retention_days >= 1
+        ) then $logs.bucket_name
+        else error("Incomplete ALB logging retirement metadata") end
+    ' <<< "$APPLICATION_LOAD_BALANCER_JSON"
+  )" || fail "ALB access-log bucket metadata is not retirement-ready."
+
+  if ! jq -e --arg expected "$ALB_LOG_BUCKET_NAME" '
+    ([.[] | select(.type == "aws_s3_bucket")] | length) == 1
+    and ([.[] | select(.type == "aws_s3_bucket")][0].values |
+      .bucket == $expected and .force_destroy == true)
+    and ([.[] | select(.type == "aws_s3_bucket_policy")] | length) == 1
+  ' <<< "$ALB_LOG_RESOURCES_JSON" >/dev/null; then
+    echo "$ALB_LOG_RESOURCES_JSON" |
+      jq '[.[] | {address, type, bucket: .values.bucket, force_destroy: .values.force_destroy}]'
+    fail "ALB log bucket/policy missing, mismatched, or not force-destroy-ready in applied state."
+  fi
+
+  success "Applied ALB log bucket and policy are retirement-ready: $ALB_LOG_BUCKET_NAME"
+else
+  if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]] &&
+    ! jq -e '
+      .access_logs.enabled == false
+      and .access_logs.bucket_name == null
+      and .access_logs.bucket_arn == null
+      and .access_logs.force_destroy == null
+    ' <<< "$APPLICATION_LOAD_BALANCER_JSON" >/dev/null; then
+    fail "Disabled ALB access logging unexpectedly references a bucket."
+  fi
+
+  if ! jq -e 'length == 0' <<< "$ALB_LOG_RESOURCES_JSON" >/dev/null; then
+    echo "$ALB_LOG_RESOURCES_JSON" | jq '[.[] | {address, type}]'
+    fail "ALB logging is disabled/absent but bucket resources remain in Terraform state."
+  fi
+  success "No ALB log bucket remains in state when ALB logging is disabled/absent"
 fi
 
 [[ "$(echo "$RDS_STATE_JSON" | jq 'length')" -eq 1 ]] ||
@@ -584,6 +665,19 @@ else
       jq '[.Attributes[] | select(.Key == "deletion_protection.enabled")]'
     fail "Application Load Balancer deletion protection is still enabled."
   fi
+
+  if ! jq -e --arg enabled "$ALB_LOGGING_ENABLED" \
+    --arg bucket "$ALB_LOG_BUCKET_NAME" '
+    [.Attributes[] | select(.Key == "access_logs.s3.enabled") | .Value] == [$enabled]
+    and (if $enabled == "true" then
+      [.Attributes[] | select(.Key == "access_logs.s3.bucket") | .Value] == [$bucket]
+      and [.Attributes[] | select(.Key == "access_logs.s3.prefix") | .Value] == ["alb"]
+    else true end)
+  ' <<< "$ALB_ATTRIBUTES_JSON" >/dev/null; then
+    fail "Live ALB access logging differs from the applied Terraform setting."
+  fi
+
+  success "Live ALB logging matches Terraform: $ALB_LOGGING_ENABLED"
 
   success "Application Load Balancer deletion protection is disabled"
 fi
@@ -962,6 +1056,9 @@ Name prefix:                   ${NAME_PREFIX}
 effective_egress_mode:         ${EFFECTIVE_EGRESS_MODE}
 production_retirement_mode:    ${PRODUCTION_RETIREMENT_MODE}
 Centralized logs force_destroy: true (applied retirement state)
+ALB logs force_destroy:      true (required retirement posture)
+ALB logging enabled:         $ALB_LOGGING_ENABLED
+ALB log bucket:              $ALB_LOG_BUCKET_NAME
 
 RDS identifier:                ${RDS_IDENTIFIER}
 RDS deletion protection:       ${RDS_DELETION_PROTECTION}

@@ -34,10 +34,15 @@ resource "aws_lb" "load_balancer" {
   enable_deletion_protection = var.enable_deletion_protection
   drop_invalid_header_fields = true
 
-  tags = {
-    Name        = "${var.name_prefix}-alb"
-    Environment = var.environment
-    Terraform   = "true"
+  access_logs {
+    bucket = (
+      var.access_logs_enabled
+      ? aws_s3_bucket.access_logs[0].id
+      : local.access_logs_bucket_name
+    )
+
+    prefix  = "alb"
+    enabled = var.access_logs_enabled
   }
 
   lifecycle {
@@ -45,6 +50,16 @@ resource "aws_lb" "load_balancer" {
       condition     = length("${var.name_prefix}-alb") <= 32
       error_message = "The complete Application Load Balancer name must not exceed 32 characters."
     }
+  }
+
+  depends_on = [
+    aws_s3_bucket_policy.access_logs
+  ]
+
+  tags = {
+    Name        = "${var.name_prefix}-alb"
+    Environment = var.environment
+    Terraform   = "true"
   }
 }
 

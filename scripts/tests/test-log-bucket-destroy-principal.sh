@@ -39,7 +39,8 @@ case "$3:$4" in
   -raw:deployment_profile) printf '%s\n' "${MOCK_TF_PROFILE:-production}" ;;
   -raw:centralized_logs_bucket_name) printf 'sample-prod-centralized-logs-12345678\n' ;;
   -json:lifecycle_protection)
-    printf '{"production_retirement_mode":true,"centralized_logs_force_destroy":%s}\n' "${MOCK_FORCE_DESTROY:-true}" ;;
+    printf '{"production_retirement_mode":true,"centralized_logs_force_destroy":%s,"alb_access_logs_force_destroy":%s}\n' "${MOCK_FORCE_DESTROY:-true}" "${MOCK_ALB_FORCE_DESTROY:-true}" ;;
+  -json:application_load_balancer) printf '%s\n' "${MOCK_ALB_JSON:-null}" ;;
   *) exit 1 ;;
 esac
 MOCK
@@ -56,7 +57,11 @@ case "$1:$2" in
   sts:get-caller-identity)
     printf '{"Account":"123456789012","Arn":"%s"}\n' "${MOCK_CALLER_ARN:-arn:aws:sts::123456789012:assumed-role/TerraformApplyRole/test-run}" ;;
   s3api:get-bucket-policy)
-    cat "$MOCK_POLICY_FILE" ;;
+    case " $* " in
+      *" --bucket sample-prod-centralized-logs-12345678 "*) cat "$MOCK_POLICY_FILE" ;;
+      *" --bucket sample-prod-alb-access-logs-12345678 "*) cat "$MOCK_ALB_POLICY_FILE" ;;
+      *) exit 2 ;;
+    esac ;;
   *) exit 1 ;;
 esac
 MOCK
@@ -113,5 +118,49 @@ assert_failure env PATH="$tmp/bin:$PATH" MOCK_POLICY_FILE="$tmp/legacy-set-opera
 jq '(.Statement[] | select(.Sid == "DenyDeleteLogs") | .Action) = ["s3:DeleteObject"]' \
   "$tmp/policy.json" > "$tmp/missing-version-deny.json"
 assert_failure env PATH="$tmp/bin:$PATH" MOCK_POLICY_FILE="$tmp/missing-version-deny.json" bash "$guard" "${args[@]}"
+
+
+# When an ALB log bucket is deployed, verify both live policies.
+cat >"$tmp/alb-policy.json" <<'ALB_POLICY'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid":"DenyBucketPolicyChanges","Effect":"Deny","Principal":"*",
+     "Action":["s3:PutBucketPolicy","s3:DeleteBucketPolicy"],
+     "Resource":"arn:aws:s3:::sample-prod-alb-access-logs-12345678",
+     "Condition":{"ArnNotEquals":{"aws:PrincipalArn":[
+       "arn:aws:iam::123456789012:role/TerraformApplyRole"
+     ]}}},
+    {"Sid":"DenyDeleteLogs","Effect":"Deny","Principal":"*",
+     "Action":["s3:DeleteObject","s3:DeleteObjectVersion"],
+     "Resource":"arn:aws:s3:::sample-prod-alb-access-logs-12345678/*"}
+  ]
+}
+ALB_POLICY
+
+export MOCK_ALB_POLICY_FILE="$tmp/alb-policy.json"
+export MOCK_ALB_JSON='{"access_logs":{"enabled":true,"bucket_name":"sample-prod-alb-access-logs-12345678","bucket_arn":"arn:aws:s3:::sample-prod-alb-access-logs-12345678","prefix":"alb","force_destroy":true}}'
+
+assert_success env PATH="$tmp/bin:$PATH" bash "$guard" "${args[@]}"
+assert_failure env PATH="$tmp/bin:$PATH" MOCK_ALB_FORCE_DESTROY=false bash "$guard" "${args[@]}"
+
+jq 'del(.Statement[] | select(.Sid == "DenyDeleteLogs"))' \
+  "$tmp/alb-policy.json" > "$tmp/alb-no-delete-deny.json"
+assert_failure env PATH="$tmp/bin:$PATH" MOCK_ALB_POLICY_FILE="$tmp/alb-no-delete-deny.json" bash "$guard" "${args[@]}"
+
+jq '(.Statement[] | select(.Sid == "DenyBucketPolicyChanges") |
+  .Condition.ArnNotEquals["aws:PrincipalArn"]) =
+  ["arn:aws:iam::123456789012:role/OtherRole"]' \
+  "$tmp/alb-policy.json" > "$tmp/alb-wrong-role.json"
+assert_failure env PATH="$tmp/bin:$PATH" MOCK_ALB_POLICY_FILE="$tmp/alb-wrong-role.json" bash "$guard" "${args[@]}"
+
+assert_failure env PATH="$tmp/bin:$PATH" MOCK_ALB_JSON='{"access_logs":{"enabled":true,"bucket_name":null}}' \
+  bash "$guard" "${args[@]}"
+
+assert_success env PATH="$tmp/bin:$PATH" \
+  MOCK_ALB_JSON='{"access_logs":{"enabled":false,"bucket_name":null,"bucket_arn":null}}' \
+  bash "$guard" "${args[@]}"
+
+unset MOCK_ALB_JSON
 
 printf '[PASS] %d offline log-bucket role preflight cases.\n' "$pass"

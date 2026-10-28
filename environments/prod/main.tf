@@ -41,6 +41,8 @@ module "baseline" {
   alb_certificate_arn                    = var.alb_certificate_arn
   alb_ingress_cidrs                      = var.alb_ingress_cidrs
   alb_ssl_policy                         = var.alb_ssl_policy
+  alb_access_logs_enabled                = var.alb_access_logs_enabled
+  alb_access_logs_retention_days         = var.alb_access_logs_retention_days
   ecs_services                           = var.ecs_services
   fargate_platform_version               = var.fargate_platform_version
   additional_interface_endpoint_services = var.additional_interface_endpoint_services

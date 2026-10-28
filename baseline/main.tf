@@ -196,6 +196,12 @@ module "iam" {
   lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
   lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
 
+  alb_access_logs_bucket_arn = (
+    length(local.ecs_alb_services) > 0
+    ? module.application_load_balancer[0].access_logs.bucket_arn
+    : null
+  )
+
   ecs_iam_services = local.ecs_iam_services
 }
 
@@ -436,6 +442,13 @@ module "application_load_balancer" {
 
   name_prefix = local.name_prefix
   environment = var.environment
+  account_id  = var.account_id
+  random_id   = var.random_id
+
+  access_logs_enabled        = local.effective_alb_access_logs_enabled
+  access_logs_retention_days = local.effective_alb_access_logs_retention_days
+  access_logs_force_destroy  = local.effective_alb_access_logs_force_destroy
+  bucket_admin_principals    = var.bucket_admin_principals
 
   vpc_id = module.networking.vpc_id
 

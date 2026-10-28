@@ -62,7 +62,7 @@ locals {
   # If cloudwatch_retention_days is null, the deployment profile selects the
   # default retention period. Explicit values override the profile default.
   # ---------------------------------------------------------------------------
-  profile_default_cloudwatch_retention_days = (
+  profile_default_logs_retention_days = (
     local.is_production_profile ? 90 :
     local.is_development_profile ? 30 :
     14
@@ -71,7 +71,7 @@ locals {
   effective_cloudwatch_retention_days = (
     var.cloudwatch_retention_days != null
     ? var.cloudwatch_retention_days
-    : local.profile_default_cloudwatch_retention_days
+    : local.profile_default_logs_retention_days
   )
 
   # ---------------------------------------------------------------------------
@@ -156,6 +156,22 @@ locals {
     for service_name in keys(local.deployable_ecs_services) :
     service_name => "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${var.account_id}:log-group:/aws/ecs/${local.name_prefix}/${service_name}"
   }
+
+  effective_alb_access_logs_enabled = (
+    var.alb_access_logs_enabled != null
+    ? var.alb_access_logs_enabled
+    : local.is_production_profile
+  )
+
+  effective_alb_access_logs_retention_days = (
+    var.alb_access_logs_retention_days != null
+    ? var.alb_access_logs_retention_days
+    : local.profile_default_logs_retention_days
+  )
+
+  effective_alb_access_logs_force_destroy = (
+    local.effective_centralized_logs_force_destroy
+  )
 
   # ---------------------------------------------------------------------------
   # GuardDuty Fargate agent regional ECR metadata

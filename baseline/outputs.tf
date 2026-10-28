@@ -243,6 +243,7 @@ output "lifecycle_protection" {
     ecs_service_force_delete           = local.effective_ecs_service_force_delete
     backup_vault_force_destroy         = local.effective_backup_vault_force_destroy
     centralized_logs_force_destroy     = local.effective_centralized_logs_force_destroy
+    alb_access_logs_force_destroy      = local.effective_alb_access_logs_force_destroy
   }
 }
 
@@ -266,6 +267,7 @@ output "application_load_balancer" {
     security_group_id = module.application_load_balancer[0].security_group_id
     https_listener    = module.application_load_balancer[0].https_listener
     target_groups     = module.application_load_balancer[0].target_groups
+    access_logs       = module.application_load_balancer[0].access_logs
   } : null
 }
 

@@ -315,6 +315,18 @@ variable "alb_ssl_policy" {
   default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
 }
 
+variable "alb_access_logs_enabled" {
+  description = "Whether to enable ALB access logging. Null uses the deployment_profile default."
+  type        = bool
+  default     = null
+}
+
+variable "alb_access_logs_retention_days" {
+  description = "ALB access-log retention in days. Null uses the deployment profile default."
+  type        = number
+  default     = null
+}
+
 variable "ecs_services" {
   description = "ECS/Fargate workload services keyed by stable service name."
 
