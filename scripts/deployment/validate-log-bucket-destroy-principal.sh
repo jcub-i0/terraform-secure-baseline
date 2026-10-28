@@ -57,7 +57,7 @@ deployment_profile="$(terraform -chdir="$working_dir" output -raw deployment_pro
 lifecycle="$(terraform -chdir="$working_dir" output -json lifecycle_protection)" ||
   fail 'Cannot read applied lifecycle posture.'
 
-jq -e '.production_retirement_mode == true and .centralized_logs_force_destroy == true' \
+jq -e '.production_retirement_mode == true and .centralized_logs_force_destroy == true and .alb_access_logs_force_destroy == true' \
   <<< "$lifecycle" >/dev/null || fail 'Production log force_destroy is not enabled in applied outputs.'
 
 bucket="$(terraform -chdir="$working_dir" output -raw centralized_logs_bucket_name)" ||
@@ -83,31 +83,84 @@ expected_session_prefix="arn:${partition}:sts::${expected_account}:assumed-role/
 [[ "$caller_arn" == "$expected_session_prefix"* ]] ||
   fail 'AWS caller is not a session of the expected Apply role.'
 
-policy="$(aws s3api get-bucket-policy --bucket "$bucket" "${aws_args[@]}" \
-  --query Policy --output text)" ||
-  fail 'Cannot read the live centralized logs bucket policy.'
+verify_log_bucket_policy() {
+  local bucket_name="$1"
+  local policy_json
 
-# Require precisely the expected policy SIDs and ArnNotEquals role exception.
-# aws:PrincipalArn is single-valued; reject obsolete ForAnyValue:ArnNotEquals
-# rather than treating that incorrect IAM condition operator as equivalent.
-jq -e --arg role "$expected_role" --arg bucket "arn:${partition}:s3:::${bucket}" '
-  def as_list: if type == "array" then . else [.] end;
-  (.Statement | as_list) as $statements
-  | ([$statements[] | select(
-      .Sid == "DenyBucketPolicyChanges" and .Effect == "Deny"
-      and (.Action | as_list | index("s3:DeleteBucketPolicy") != null)
-      and (.Resource | as_list | index($bucket) != null)
-      and (.Condition.ArnNotEquals["aws:PrincipalArn"]
-           | as_list | index($role) != null)
-    )] | length == 1)
-  and ([$statements[] | select(
-      .Sid == "DenyDeleteLogs" and .Effect == "Deny"
-      and (.Action | as_list | index("s3:DeleteObject") != null)
-      and (.Action | as_list | index("s3:DeleteObjectVersion") != null)
-      and (.Resource | as_list | index($bucket + "/*") != null)
-    )] | length == 1)
-' <<< "$policy" >/dev/null ||
-  fail 'Live S3 policy does not contain the expected log-delete deny and Apply-role exception.'
+  policy_json="$(aws s3api get-bucket-policy \
+    --bucket "$bucket_name" "${aws_args[@]}" \
+    --query Policy --output text)" ||
+    fail "Cannot read live log-bucket policy: $bucket_name"
 
-printf '[PASS] Live log bucket %s policy allows the expected Apply-role exception; caller identity matches.\n' "$bucket"
-printf '[WARN] This read-only check cannot prove s3:DeleteBucketPolicy authorization or successful provider teardown.\n'
+  # Both buckets must exempt the actual Apply role from their policy-change
+  # denial and prohibit direct deletion of objects and versions.
+  jq -e --arg role "$expected_role" --arg bucket "arn:$partition:s3:::$bucket_name" '
+    def as_list: if type == "array" then . else [.] end;
+    def everyone: .Principal == "*" or .Principal.AWS == "*";
+    (.Statement | as_list) as $statements
+    | ([$statements[] | select(
+        .Sid == "DenyBucketPolicyChanges" and .Effect == "Deny"
+        and everyone
+        and (.Action | as_list | index("s3:PutBucketPolicy") != null)
+        and (.Action | as_list | index("s3:DeleteBucketPolicy") != null)
+        and (.Resource | as_list | index($bucket) != null)
+        and (.Condition.ArnNotEquals["aws:PrincipalArn"]
+             | as_list | index($role) != null)
+      )] | length == 1)
+    and ([$statements[] | select(
+        .Sid == "DenyDeleteLogs" and .Effect == "Deny"
+        and everyone
+        and (.Action | as_list | index("s3:DeleteObject") != null)
+        and (.Action | as_list | index("s3:DeleteObjectVersion") != null)
+        and (.Resource | as_list | index($bucket + "/*") != null)
+      )] | length == 1)
+  ' <<< "$policy_json" >/dev/null ||
+    fail "Log-bucket policy lacks required denies or Apply-role exception: $bucket_name"
+
+  printf '[PASS] Live log-bucket policy and Apply-role exception verified: %s\n' "$bucket_name"
+}
+
+verify_log_bucket_policy "$bucket"
+
+alb_json="$(terraform -chdir="$working_dir" output -json application_load_balancer)" ||
+  fail 'Cannot read applied Application Load Balancer metadata.'
+
+if [[ "$alb_json" != "null" ]]; then
+  if ! jq -e '
+    .access_logs as $logs
+    | ($logs | type) == "object" and ($logs.enabled | type) == "boolean"
+  ' <<< "$alb_json" >/dev/null; then
+    fail 'Applied ALB output contains malformed logging metadata.'
+  fi
+
+  alb_logging_enabled="$(jq -r '.access_logs.enabled' <<< "$alb_json")"
+  if [[ "$alb_logging_enabled" == "true" ]]; then
+    alb_bucket="$(
+      jq -er '
+        .access_logs as $logs
+        | if (
+            ($logs.bucket_name | type) == "string"
+            and ($logs.bucket_name | length) > 0
+            and ($logs.bucket_arn | type) == "string"
+            and ($logs.bucket_arn | endswith(":s3:::" + $logs.bucket_name))
+            and $logs.prefix == "alb"
+            and $logs.force_destroy == true
+          ) then $logs.bucket_name
+          else error("ALB log bucket metadata is not retirement-ready") end
+      ' <<< "$alb_json"
+    )" || fail 'Cannot resolve the protected ALB access-log bucket.'
+
+    [[ "$alb_bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] ||
+      fail 'Invalid ALB access-log bucket name.'
+
+    verify_log_bucket_policy "$alb_bucket"
+  else
+    jq -e '
+      .access_logs.bucket_name == null
+      and .access_logs.bucket_arn == null
+    ' <<< "$alb_json" >/dev/null ||
+      fail 'Disabled ALB access logging unexpectedly references a bucket.'
+  fi
+fi
+
+printf '[WARN] Policy inspection does not prove effective S3 deletion permissions or a successful Terraform Destroy.\n'
