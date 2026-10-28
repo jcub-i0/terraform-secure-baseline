@@ -91,6 +91,11 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-alb-access-logging-plan.sh
 
+      - name: Test ALB access logging runtime checks
+        run: |
+          set -euo pipefail
+          bash scripts/tests/test-alb-access-logging-runtime.sh
+
       - name: Test production retirement ALB safeguards
         run: |
           set -euo pipefail
