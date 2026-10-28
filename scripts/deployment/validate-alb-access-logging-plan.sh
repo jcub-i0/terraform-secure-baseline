@@ -132,9 +132,10 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
           | (statement($ss; "DenyVersioningChanges")) as $version
           | (statement($ss; "DenyInsecureTransport")) as $https
           | ($admin.Resource | as_list | .[0]) as $arn
-          | ($allow.Condition.ArnLike["aws:SourceArn"] | as_list | .[0]
-             | capture("^arn:(?<partition>aws|aws-us-gov|aws-cn):elasticloadbalancing:(?<region>[a-z0-9-]+):(?<account>[0-9]{12}):loadbalancer/\\*$")) as $source
+          | ([$allow.Condition.ArnLike["aws:SourceArn"] | as_list | .[0]
+              | capture("^arn:(?<partition>aws|aws-us-gov|aws-cn):elasticloadbalancing:(?<region>[a-z0-9-]+):(?<account>[0-9]{12}):loadbalancer/\\*$")] | .[0]) as $source
           | ($ss | type == "array" and length == 6)
+            and ($source != null)
             and ($arn == "arn:" + $source.partition + ":s3:::" + $bucket_name)
             and ($allow.Effect == "Allow")
             and ($allow.Principal.Service == "logdelivery.elasticloadbalancing.amazonaws.com")
