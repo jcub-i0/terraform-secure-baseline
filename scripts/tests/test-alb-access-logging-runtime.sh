@@ -133,6 +133,12 @@ jq 'del(.Statement[] | select(.Sid == "DenyDeleteLogs"))' \
   "$tmp/policy.json" >"$tmp/bad-policy.json"
 MOCK_POLICY_FILE="$tmp/bad-policy.json" expect_fail "Missing object-delete deny"
 
+jq '(.Statement[] | select(.Sid == "DenyDeleteLogs") | .Condition) =
+  {"StringEquals":{"aws:PrincipalArn":"arn:aws:iam::123456789012:root"}}' \
+  "$tmp/policy.json" >"$tmp/conditional-delete-deny.json"
+MOCK_POLICY_FILE="$tmp/conditional-delete-deny.json" \
+  expect_fail "Conditional object-delete deny is insufficient"
+
 bad_attributes="$(jq '.Attributes[] |= if .Key == "access_logs.s3.enabled" then .Value="false" else . end' \
   <<< "$ALB_ATTRIBUTES_JSON")"
 ALB_ATTRIBUTES_JSON="$bad_attributes" expect_fail "Live ALB logging disabled unexpectedly"
