@@ -35,12 +35,7 @@ resource "aws_lb" "load_balancer" {
   drop_invalid_header_fields = true
 
   access_logs {
-    bucket = (
-      var.access_logs_enabled
-      ? aws_s3_bucket.access_logs[0].id
-      : local.access_logs_bucket_name
-    )
-
+    bucket  = local.access_logs_bucket_name
     prefix  = "alb"
     enabled = var.access_logs_enabled
   }
