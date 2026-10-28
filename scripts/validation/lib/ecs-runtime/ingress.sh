@@ -88,6 +88,8 @@ ecs_runtime_validate_ingress() {
 
     success "ALB deletion protection matches Terraform: ${LIVE_ALB_DELETION_PROTECTION}"
 
+    ecs_runtime_validate_alb_access_logs "$alb_attributes_json" "$expected_alb_arn"
+
     validate_alb_identity \
       "$alb_response_json" \
       "$expected_alb_arn" \
@@ -124,6 +126,145 @@ ecs_runtime_validate_ingress() {
 
     success "Shared Application Load Balancer runtime is valid"
   fi
+}
+
+
+# Validate ALB log delivery settings and bucket controls; do not require a
+# delivered object here. End-to-end .log.gz delivery is qualified separately.
+ecs_runtime_validate_alb_access_logs() {
+  local attributes_json="$1"
+  local alb_arn="$2"
+  local logs_json
+  local bucket_name bucket_arn retention_days partition source_arn
+  local encryption_json public_json ownership_json versioning_json lifecycle_json policy_json
+
+  section "Validating ALB access logging"
+
+  logs_json="$(echo "$APPLICATION_LOAD_BALANCER_JSON" | jq -c '.access_logs')"
+
+  if ! jq -e --argjson logs "$logs_json" '
+    [.Attributes[] | select(.Key == "access_logs.s3.enabled") | .Value] ==
+      [($logs.enabled | tostring)]
+    and (if $logs.enabled then
+      [.Attributes[] | select(.Key == "access_logs.s3.bucket") | .Value] ==
+        [$logs.bucket_name]
+      and [.Attributes[] | select(.Key == "access_logs.s3.prefix") | .Value] ==
+        [$logs.prefix]
+    else true end)
+  ' <<< "$attributes_json" >/dev/null; then
+    fail "Live ALB access logging attributes do not match Terraform."
+  fi
+
+  if [[ "$(echo "$logs_json" | jq -r '.enabled')" != "true" ]]; then
+    success "ALB access logging is disabled as configured; no bucket checks required"
+    return 0
+  fi
+
+  bucket_name="$(echo "$logs_json" | jq -r '.bucket_name')"
+  bucket_arn="$(echo "$logs_json" | jq -r '.bucket_arn')"
+  retention_days="$(echo "$logs_json" | jq -r '.retention_days')"
+  partition="${alb_arn#arn:}"
+  partition="${partition%%:*}"
+  source_arn="${alb_arn%/*}/*"
+
+  aws s3api head-bucket "${AWS_ARGS[@]}" --bucket "$bucket_name" >/dev/null ||
+    fail "ALB access-log bucket is not accessible: $bucket_name"
+
+  encryption_json="$(aws s3api get-bucket-encryption "${AWS_ARGS[@]}" \
+    --bucket "$bucket_name" --output json)" ||
+    fail "Cannot read ALB log-bucket encryption."
+  jq -e '
+    (.ServerSideEncryptionConfiguration.Rules | length) == 1
+    and .ServerSideEncryptionConfiguration.Rules[0]
+      .ApplyServerSideEncryptionByDefault.SSEAlgorithm == "AES256"
+  ' <<< "$encryption_json" >/dev/null ||
+    fail "ALB log bucket must use SSE-S3 (AES256)."
+
+  public_json="$(aws s3api get-public-access-block "${AWS_ARGS[@]}" \
+    --bucket "$bucket_name" --output json)" ||
+    fail "Cannot read ALB log-bucket public-access controls."
+  jq -e '
+    .PublicAccessBlockConfiguration |
+      .BlockPublicAcls == true
+      and .BlockPublicPolicy == true
+      and .IgnorePublicAcls == true
+      and .RestrictPublicBuckets == true
+  ' <<< "$public_json" >/dev/null ||
+    fail "ALB log bucket does not block all public access."
+
+  ownership_json="$(aws s3api get-bucket-ownership-controls "${AWS_ARGS[@]}" \
+    --bucket "$bucket_name" --output json)" ||
+    fail "Cannot read ALB log-bucket ownership controls."
+  jq -e '
+    (.OwnershipControls.Rules | length) == 1
+    and .OwnershipControls.Rules[0].ObjectOwnership == "BucketOwnerEnforced"
+  ' <<< "$ownership_json" >/dev/null ||
+    fail "ALB log bucket must enforce bucket ownership."
+
+  versioning_json="$(aws s3api get-bucket-versioning "${AWS_ARGS[@]}" \
+    --bucket "$bucket_name" --output json)" ||
+    fail "Cannot read ALB log-bucket versioning."
+  jq -e '.Status == "Enabled"' <<< "$versioning_json" >/dev/null ||
+    fail "ALB log bucket must have versioning enabled."
+
+  lifecycle_json="$(aws s3api get-bucket-lifecycle-configuration "${AWS_ARGS[@]}" \
+    --bucket "$bucket_name" --output json)" ||
+    fail "Cannot read ALB log-bucket lifecycle."
+  jq -e --argjson days "$retention_days" '
+    (.Rules | length) == 1
+    and .Rules[0].ID == "alb-access-logs-retention"
+    and .Rules[0].Status == "Enabled"
+    and .Rules[0].Filter.Prefix == "alb/"
+    and .Rules[0].Expiration.Days == $days
+    and .Rules[0].NoncurrentVersionExpiration.NoncurrentDays == 1
+  ' <<< "$lifecycle_json" >/dev/null ||
+    fail "ALB log-bucket lifecycle does not match Terraform retention."
+
+  policy_json="$(aws s3api get-bucket-policy "${AWS_ARGS[@]}" \
+    --bucket "$bucket_name" --query Policy --output text)" ||
+    fail "Cannot read ALB log-bucket policy."
+
+  if ! jq -e --arg arn "$bucket_arn" \
+    --arg source "$source_arn" \
+    --arg account "$ACCOUNT_ID" '
+    def as_list: if type == "array" then . else [.] end;
+    def everyone: .Principal == "*" or .Principal.AWS == "*";
+    (.Statement | as_list) as $ss
+    | ([$ss[] | select(.Sid == "AllowALBLogDelivery")][0]) as $allow
+    | ([$ss[] | select(.Sid == "DenyDeleteLogs")][0]) as $delete
+    | ([$ss[] | select(.Sid == "DenyBucketPolicyChanges")][0]) as $admin
+    | ([$ss[] | select(.Sid == "DenyVersioningChanges")][0]) as $version
+    | ([$ss[] | select(.Sid == "DenyInsecureTransport")][0]) as $https
+    | ($ss | length) == 5
+      and ($ss | map(.Sid) | unique | length) == 5
+      and ($allow.Effect == "Allow")
+      and ($allow.Principal.Service == "logdelivery.elasticloadbalancing.amazonaws.com")
+      and ($allow.Action | as_list) == ["s3:PutObject"]
+      and ($allow.Resource | as_list) == [$arn + "/alb/AWSLogs/" + $account + "/*"]
+      and ($allow.Condition.ArnLike["aws:SourceArn"] | as_list) == [$source]
+      and ($delete.Effect == "Deny" and ($delete | everyone))
+      and (($delete.Action | as_list | sort) == (["s3:DeleteObject","s3:DeleteObjectVersion"] | sort))
+      and ($delete.Resource | as_list) == [$arn + "/*"]
+      and ($admin.Effect == "Deny" and ($admin | everyone))
+      and (($admin.Action | as_list | sort) == (["s3:PutBucketPolicy","s3:DeleteBucketPolicy"] | sort))
+      and ($admin.Resource | as_list) == [$arn]
+      and (($admin.Condition.ArnNotEquals["aws:PrincipalArn"] | as_list) as $principals
+        | ($principals | length) > 0
+        and all($principals[]; type == "string" and length > 0 and (contains("*") | not)))
+      and ($version.Effect == "Deny" and ($version | everyone))
+      and ($version.Action | as_list) == ["s3:PutBucketVersioning"]
+      and ($version.Resource | as_list) == [$arn]
+      and $version.Condition.ArnNotEquals["aws:PrincipalArn"] ==
+        $admin.Condition.ArnNotEquals["aws:PrincipalArn"]
+      and ($https.Effect == "Deny" and ($https | everyone))
+      and ($https.Action | as_list) == ["s3:*"]
+      and (($https.Resource | as_list | sort) == ([$arn, $arn + "/*"] | sort))
+      and ($https.Condition.Bool["aws:SecureTransport"] | as_list) == ["false"]
+  ' <<< "$policy_json" >/dev/null; then
+    fail "ALB log-bucket delivery and protection policy does not match Terraform."
+  fi
+
+  success "ALB access logging and S3 bucket protections match Terraform: $bucket_name"
 }
 
 validate_alb_identity() {
