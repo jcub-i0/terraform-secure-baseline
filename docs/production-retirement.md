@@ -2,11 +2,11 @@
 
 ## Purpose and Supported Scope
 
-This runbook describes the implemented retirement path for `environments/prod` with `deployment_profile = "production"`. It is an operator procedure, not evidence that a new live qualification was performed.
+This runbook covers retirement of `environments/{dev,staging,prod}` when the selected workload has `deployment_profile = "production"`, including production-profile staging. It is an operator procedure, not evidence of a live retirement qualification.
 
-Production retirement differs from ordinary development/minimal teardown. It separates a reviewed Terraform retirement preparation from explicitly authorized durable-data deletion, Identity Center dependency cleanup, and the final reviewed workload destroy.
+Production retirement differs from ordinary development/minimal teardown. It separates a reviewed Terraform retirement preparation from explicitly authorized durable-data deletion, separately coordinated Identity Center dependencies, and the final reviewed workload destroy.
 
-**Scope limitation:** baseline resilience/lifecycle policy is selected by `deployment_profile`, not the name `prod`. However, `cleanup-retirement-durable-data.sh` explicitly accepts only `environment=prod`. Both the retirement Apply's inventory job and the production Destroy path invoke that helper. Do not represent this complete workflow as supported for a production-profile `dev` or `staging` environment. The Stage-1 plan validator and readiness validator have broader input scope, but that does not remove the cleanup helper's restriction.
+**Scope:** Retirement eligibility follows the *applied* `deployment_profile`, not the directory name. The existing workflows and cleanup helper accept `dev`, `staging`, or `prod` when the deployed profile is `production` and the retirement checks pass. The matching `<env>-plan` and `<env>` GitHub Environments must have their intended access controls and required reviewers configured; merely naming an environment in workflow YAML does not enforce approval.
 
 Workload destruction does not destroy the account or self-managed state roots. Those are separate, later operations with their own dependencies and protection decisions.
 
@@ -27,12 +27,13 @@ production_retirement_mode = false
 | ECS service `force_delete` | `false` | Remains `false` |
 | Backup vault `force_destroy` | `false` | Remains `false` |
 | Centralized logs S3 `force_destroy` | `false` | `true` after Stage-1 Apply |
+| ALB access-log S3 `force_destroy`, when logging is enabled | `false` | `true` after Stage-1 Apply |
 | RDS `skip_final_snapshot` | `false` | Remains `false` |
 | RDS `delete_automated_backups` | `false` | Remains `false` |
 | Effective ECS desired capacity | Normal configured capacity | `0` |
 | Effective ECS autoscaling bounds, when configured | Normal min/max | `0` / `0` |
 
-Set `production_retirement_mode = true` through the retirement Apply. Do not switch `deployment_profile` to `development` or `minimal` to bypass production controls.
+Set `production_retirement_mode = true` through the retirement Apply. Do not switch `deployment_profile` to `development` or `minimal` to bypass production controls. When an ingress ALB and its access-log bucket exist, Stage 1 keeps logging enabled and changes only the bucket's retirement posture; it does not delete the bucket.
 
 Retirement mode derives zero-capacity runtime inputs; it does not require editing the canonical service's ordinary `desired_count` or scaling limits. It also does not delete ECR images or AWS Backup recovery points. Those are handled by a separate approved cleanup operation.
 
@@ -45,7 +46,7 @@ The implementation uses the following sequence:
 ```text
 Terraform Apply: production_retirement_mode=true
   internal saved retirement plan
-    -> Stage-1 plan validation
+    -> ALB access-logging saved-plan guard and Stage-1 plan validation
     -> workload-environment approval
     -> verify and apply exact saved plan
     -> read-only durable-data inventory
@@ -68,13 +69,13 @@ The workflows reference protected environments, but repository administrators mu
 
 ## Stage 0 — Decide Durable Asset Disposition
 
-Before approving deletion, identify required application images, recovery points, audit logs, and retention obligations. Copy/retain required assets outside the repositories, vault, and centralized logs bucket that will be destroyed, or stop retirement. The workflow is not an archival/copy tool. **The later approved Terraform destroy can permanently purge audit logs once the Stage-1 Apply has set `force_destroy=true`.** Preserve any required log evidence and access to its KMS keys independently before advancing.
+Before approving deletion, identify required application images, recovery points, audit logs, and retention obligations. Preserve required assets outside the repositories, Backup vault, centralized logs bucket, and (when present) dedicated ALB access-log bucket that will be destroyed, or stop retirement. The workflow does not archive or copy assets. **Final approved Terraform Destroy may permanently purge objects and versions from both logging buckets after Stage 1 sets `force_destroy=true`.** Preserve needed log evidence and, for the SSE-KMS centralized logs bucket, its decrypt-key access independently before advancing. The ALB access-log bucket uses SSE-S3.
 
-Record a human-reviewed log/key disposition decision in an externally retained ticket or evidence record. For logs that must survive, the record should identify the source bucket and object-version scope, the out-of-workload archive destination, integrity/completeness checks, and the retained KMS key/decrypt-access plan. If approved deletion without preservation is permissible, record the applicable authority and rationale instead. The Destroy workflow's initial preflight checks the acknowledgment and non-secret record reference in its existing request-validation step; **it does not independently verify the record, archive copies, or KMS recoverability**. GitHub Environment reviewers must check the evidence before approving destructive steps.
+Record a human-reviewed log/key disposition decision in an externally retained ticket or evidence record. For logs that must survive, identify **each applicable logging bucket**, its object-version scope, the out-of-workload archive destination, integrity/completeness checks, and any necessary KMS key/decrypt-access plan. If approved deletion without preservation is permissible, record the applicable authority and rationale instead. The Destroy workflow's initial preflight checks the acknowledgment and non-secret record reference in its existing request-validation step; **it does not independently verify the record, archive copies, or KMS recoverability**. GitHub Environment reviewers must check the evidence before approving destructive steps.
 
 Production ECR repositories use `force_delete = false`, and the Backup vault uses `force_destroy = false`. Terraform therefore does not implicitly purge their contents to make deletion succeed. The explicit cleanup script inventories **all image digests in Terraform-listed ECR repositories and all recovery points in the Terraform-listed Backup vault**, not only the sample service's active image or one RDS recovery point. Treat that entire scope as the deletion authorization boundary.
 
-The scoped ECR/Backup cleanup operation does not enumerate, archive, or delete centralized logs; their deletion is part of the final Terraform destroy when permitted by the bucket policy and provider behavior. The `delete_durable_retirement_data=true` input and protected final-destroy approval must be understood to authorize this outcome, not merely ECR/Backup cleanup.
+The scoped ECR/Backup cleanup does not enumerate, archive, or delete either S3 logging bucket. Both are subject to final Terraform Destroy when permitted by their policies and provider behavior. The `delete_durable_retirement_data=true` input and protected final-destroy approval must be understood to authorize this outcome, not merely ECR/Backup cleanup.
 
 The final RDS snapshot requirement and retention of RDS automated backups are separate from AWS Backup vault cleanup. `delete_automated_backups = false` is not indefinite archival retention. Decide how retained snapshots, backups, and their necessary encryption keys will be managed after workload deletion. The cleanup script does not implement that retention program.
 
@@ -86,7 +87,7 @@ Coordinate with image publishers, operators, and scheduled jobs. The workload Ap
 
 Use the reviewed source revision and the same effective workload configuration that owns the live resources. Preserve the service digest and normal canonical capacity settings while enabling retirement mode.
 
-Confirm the `prod-plan` and `prod` GitHub Environment settings. Relevant inputs include `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, the Plan/Apply role ARNs, `DEPLOYMENT_PROFILE`, state bucket/key information required by the roots, and the workload's other inputs. Keep `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, and ALB certificate/ingress settings consistent with the deployment. A local-only `TF_VAR_*` override is not automatically available in Actions.
+Confirm the selected `<env>-plan` and `<env>` GitHub Environment settings and required reviewer rules. Relevant inputs include `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, Plan/Apply role ARNs, `DEPLOYMENT_PROFILE`, and the workload's other state and infrastructure settings. Keep `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, ALB certificate/ingress settings, and optional `ALB_ACCESS_LOGS_ENABLED` / `ALB_ACCESS_LOGS_RETENTION_DAYS` overrides consistent with the deployed workload. When unset, ALB logging uses profile defaults. Local `TF_VAR_*` overrides are not automatically present in Actions.
 
 The workflows pin Terraform `1.15.8`; use the committed provider lockfiles and root requirements. This procedure does not authorize provider upgrades or topology changes.
 
@@ -95,15 +96,15 @@ The workflows pin Terraform `1.15.8`; use the committed provider lockfiles and r
 Dispatch **Terraform Apply** with:
 
 ```text
-environment                = prod
+environment                = <dev|staging|prod> (choose the root with applied production profile)
 production_retirement_mode = true
 ```
 
-The workflow creates a saved plan using `terraform-plan-artifact.sh`. It runs `validate-production-retirement-plan.sh` against that same binary plan before the protected Apply job.
+The workflow creates a saved plan using `terraform-plan-artifact.sh`. It runs both `validate-alb-access-logging-plan.sh` (with the existing retirement workflow input) and `validate-production-retirement-plan.sh` against that same binary plan before the protected Apply job.
 
 ### 3. Review the Stage-1 plan and guard result
 
-The guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement or unsupported actions and requires planned outputs showing production profile, retirement mode, the specified deletion-protection/force-delete posture (including centralized logs `force_destroy=true`), and zero effective ECS capacity (including zero min/max for autoscaled services). The Stage-1 Apply must update the logs bucket's force-destroy flag in state before any final destroy.
+The Stage-1 guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement actions and requires production profile, retirement mode, centralized **and ALB** logging `force_destroy=true` lifecycle outputs, other deletion-protection/force-delete safeguards, and zero effective ECS capacity. The ALB saved-plan guard additionally checks prior state for protected production logging and rejects bucket deletion/replacement, retention shortening, disabling logging, and weakened bucket protections. Stage 1 must persist the enabled ALB bucket's `force_destroy=true` in Terraform state before final Destroy.
 
 This is not a whitelist of every allowed in-place attribute change. Review the full readable plan for unrelated updates, credential changes, or security-policy changes; a passing action-type check does not authorize them. Verify that the RDS final-snapshot and automated-backup behavior remains intact.
 
@@ -111,11 +112,11 @@ For a separately generated saved Stage-1 plan, the guard's actual invocation is:
 
 ```bash
 bash scripts/deployment/validate-production-retirement-plan.sh \
-  --working-directory environments/prod \
+  --working-directory environments/<env> \
   --plan-file /absolute/path/to/reviewed-stage1.tfplan
 ```
 
-That validator reads the plan and never applies it. Do not fabricate a placeholder plan file or substitute a new plan after approval.
+Replace `<env>` with the selected workload root. Both validators read the plan and never apply it. Do not fabricate a placeholder plan file or substitute a new plan after approval.
 
 ### 4. Approve and apply that exact plan
 
@@ -144,7 +145,7 @@ A readiness failure caused only by remaining ECR images or recovery points is ex
 Dispatch **Terraform Destroy** with:
 
 ```text
-environment                   = prod
+environment                   = <dev|staging|prod> (same production-profile workload)
 confirm                       = DESTROY
 delete_durable_retirement_data = true
 confirm_audit_log_disposition  = true
@@ -163,15 +164,15 @@ Review all listed repositories, image digests, vault recovery points, and active
 
 ### 3. Approve durable-data cleanup
 
-`production-durable-cleanup` uses the workload Apply environment and its Apply role. After the environment gate and AWS role assumption, the **apply-mode durable-data cleanup helper itself enforces a read-only live S3 bucket-policy/Apply-role preflight before any ECR or Backup deletions**. This also guards direct script invocations. It confirms the current assumed-role caller and the expected `DenyBucketPolicyChanges` exception for that IAM role, plus the `DenyDeleteLogs` statement. It requires the supported `ArnNotEquals` IAM condition (the former `ForAnyValue:ArnNotEquals` must be updated through an approved Terraform Apply before retirement cleanup).
+`production-durable-cleanup` uses the selected workload Apply environment and its Apply role. Before any ECR/Backup deletions, the cleanup helper verifies the current assumed-role caller and checks the live `DenyBucketPolicyChanges` Apply-role exception and `DenyDeleteLogs` on **the centralized logs bucket and the ALB access-log bucket when present**. This also guards direct script invocations. The exception must use `ArnNotEquals`, not the obsolete `ForAnyValue:ArnNotEquals` form.
 
-Terraform's dependency on the S3 bucket normally schedules the bucket-policy resource for removal before bucket deletion. These checks are **not** proof of `s3:DeleteBucketPolicy` effective permission (IAM/SCP/boundary denies can still apply), nor proof that deletion of every object version will succeed. Review the actual destroy plan and qualify that ordering against a disposable versioned bucket; do not claim a live regression is complete unless executed.
+Terraform normally schedules bucket-policy removal before its owning S3 bucket, but the preflight **does not prove** effective `s3:DeleteBucketPolicy` permission (IAM/SCP/boundary denies can still apply), nor deletion ordering or success for every object version in either bucket. Review the saved Destroy plan and qualify ordering against a disposable versioned bucket; the offline tests are not a live regression.
 
 The cleanup job runs the following command; the helper performs its policy check before deleting durable data:
 
 ```text
 cleanup-retirement-durable-data.sh
-  --environment prod
+  --environment <dev|staging|prod>
   --mode apply
   --confirm DELETE-DURABLE-DATA
   --region <workload-service-region>
@@ -191,7 +192,8 @@ The workflow then runs `validate-retirement-readiness.sh`.
 
 Readiness checks include:
 
-- Terraform's production retirement posture and disabled force-delete controls;
+- Terraform's production retirement posture, including both logging lifecycle flags, and disabled force-delete controls;
+- applied ALB access-log bucket/policy state and `force_destroy=true` when logging is enabled (or no leftover bucket resources when absent), plus live ALB logging attributes;
 - resource-backed RDS final-snapshot/automated-backup intent;
 - live RDS, ALB, and Network Firewall deletion protection, as applicable;
 - availability of the selected final RDS snapshot identifier;
@@ -205,11 +207,11 @@ It is read-only with respect to AWS infrastructure, but reads Terraform state an
 For an operator check after cleanup:
 
 ```bash
-AWS_PROFILE=prod \
-AWS_REGION=us-east-1 \
-EXPECTED_ACCOUNT_ID="<PROD-ACCOUNT-ID>" \
+AWS_PROFILE="<workload-aws-profile>" \
+AWS_REGION="<workload-service-region>" \
+EXPECTED_ACCOUNT_ID="<workload-account-id>" \
 bash scripts/deployment/validate-retirement-readiness.sh \
-  --environment prod
+  --environment <dev|staging|prod>
 ```
 
 Use the actual service Region. A supplied Region that disagrees with Terraform's `primary_region` output is rejected.
@@ -227,7 +229,7 @@ Destroy-mode validation permits only delete/no-op/read resource actions and requ
 
 ### 5. Approve and apply the workload destroy plan
 
-When `terraform-destroy-plan` succeeds, `terraform-destroy-apply` becomes eligible for its own protected workload-environment approval. It downloads the reviewed destroy artifact, verifies checksums and exact context, rechecks the live bucket-policy/Apply-role exception for production, rechecks production readiness, and applies the saved `.tfplan` without generating a new plan. The initial destroy preflight already validated the workflow-dispatch disposition inputs; the final protected-environment reviewer must independently review the referenced evidence. The pre-destroy role check cannot guarantee the eventual S3 API operations succeed.
+When `terraform-destroy-plan` succeeds, `terraform-destroy-apply` becomes eligible for its own protected workload-environment approval. It downloads the reviewed destroy artifact, verifies checksums and exact context, rechecks the live centralized/conditional ALB bucket-policy Apply-role exceptions, rechecks production readiness, and applies the saved `.tfplan` without generating a new plan. The initial destroy preflight already validated the workflow-dispatch disposition inputs; the final protected-environment reviewer must independently review the referenced evidence. The pre-destroy role check cannot guarantee the eventual S3 API operations succeed.
 
 There is no additional Identity Center cleanup stage in this workflow. The baseline no longer creates optional customer Analyst/Engineer permission sets or policy attachments, so workload teardown no longer needs to detach those personas from workload-created IAM policies. If upgrading an older deployed Identity Center state with those personas enabled, review and apply their removal separately **before** destroying the workload that owns any referenced IAM policies. Plan and perform any additional customer-owned identity cleanup under its own governance.
 
@@ -255,9 +257,9 @@ Do not change them to independent Apply/Destroy keys. This key does not lock out
 
 Record the workflow run, source commit, plan artifacts, readiness result, deletion result, and disposition of retained recovery assets and audit logs. A successful workload root destroy is not evidence that all account resources, historical snapshots, or state backends are gone.
 
-Only consider removing `bootstrap/prod/account` after its roles and access are no longer required. The state root is handled last and only from independent state with retained external backups. Its bucket and CMK remain guarded by literal `prevent_destroy = true`; workload retirement does not remove these guards or supply a turnkey state teardown.
+Only consider removing `bootstrap/<env>/account` for the selected workload after its roles and access are no longer required. Its state root (`bootstrap/<env>/state`) is handled last and only from independent state with retained external backups. Its bucket and CMK remain guarded by literal `prevent_destroy = true`; workload retirement does not remove these guards or supply a turnkey state teardown.
 
-See the [workload state procedure](../bootstrap/prod/state/README.md) and [state module](../modules/state/README.md) for those boundaries.
+See the matching workload state procedure (for example, [prod state](../bootstrap/prod/state/README.md)) and the [state module](../modules/state/README.md) for those boundaries.
 
 ## Abort / Recovery
 
@@ -269,7 +271,7 @@ If final destruction fails part-way, inspect the failed resource and Terraform s
 
 ## Production Retirement Exit Criteria
 
-Stage 1 is complete when the reviewed saved plan passes its guard and applies, the retirement inputs converge to no change, and actual ECS/scaling capacity is quiescent. Remaining durable data is inventoried but has not been implicitly deleted.
+Stage 1 is complete when the reviewed saved plan passes both retirement/ALB guards and applies, the retirement inputs converge to no change, applied log-bucket state reflects the retirement posture, and actual ECS/scaling capacity is quiescent. Remaining durable data is inventoried but has not been implicitly deleted.
 
 Final retirement is complete when scoped durable deletion has been explicitly approved and verified, audit-log/key preservation or disposal has an independently reviewed disposition record, readiness has passed, the exact reviewed workload destroy plan has applied, and retained assets/state/account responsibilities are recorded. Account/state deletion is not a prerequisite to calling the workload root destroyed.
 
@@ -280,6 +282,7 @@ Final retirement is complete when scoped durable deletion has been explicitly ap
 - [Terraform Destroy](../.github/workflows/terraform-destroy.yml)
 - [Saved-plan artifact helper](../scripts/deployment/terraform-plan-artifact.sh)
 - [Stage-1 plan validator](../scripts/deployment/validate-production-retirement-plan.sh)
+- [ALB saved-plan guard](../scripts/deployment/validate-alb-access-logging-plan.sh)
 - [Durable-data cleanup](../scripts/deployment/cleanup-retirement-durable-data.sh)
 - [Read-only log-bucket policy/role guard](../scripts/deployment/validate-log-bucket-destroy-principal.sh)
 - [Retirement readiness](../scripts/deployment/validate-retirement-readiness.sh)

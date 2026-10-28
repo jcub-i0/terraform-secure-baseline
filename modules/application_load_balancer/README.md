@@ -4,7 +4,7 @@
 
 The `application_load_balancer` module creates the shared Application Load Balancer ingress layer for ECS/Fargate workloads in a workload environment.
 
-It owns the public-facing ALB, its security group, HTTPS listener, per-service target groups, and HTTPS listener rules. ECS services consume the target groups created by this module but remain owned by `modules/ecs_service`.
+It owns the public-facing ALB, its security group, HTTPS listener, per-service target groups, HTTPS listener rules, and an optional dedicated S3 bucket for ALB access logs. ECS services consume the target groups created by this module but remain owned by `modules/ecs_service`.
 
 The baseline instantiates this module only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it. This condition is owned by `baseline/main.tf`, not by the module: a direct module call with `services = {}` still creates the shared ALB, security group, ingress rule, and listener.
 
@@ -25,6 +25,7 @@ The module creates:
 - One HTTPS listener
 - One target group per configured service
 - One listener rule per configured service
+- When access logging is enabled, one dedicated S3 bucket with encryption, public-access, ownership, versioning, lifecycle, and bucket-policy controls
 
 The ALB is internet-facing and placed only in the workload environment's `ingress_public` subnets.
 
@@ -40,6 +41,12 @@ The ALB is internet-facing and placed only in the workload environment's `ingres
 | `ingress_cidrs` | `set(string)` | Yes | — | IPv4 CIDR blocks allowed to reach the ALB over HTTPS. |
 | `ssl_policy` | `string` | No | `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` | TLS security policy used by the HTTPS listener. |
 | `enable_deletion_protection` | `bool` | Yes | — | Whether ALB deletion protection is enabled. Baseline supplies the profile/retirement-resolved value. |
+| `account_id` | `string` | Yes | — | Owning workload AWS account ID for ALB log delivery. |
+| `random_id` | `string` | Yes | — | Existing workload suffix for globally unique ALB log-bucket naming. |
+| `bucket_admin_principals` | `list(string)` | Yes | — | Approved IAM principals exempt from log-bucket policy/versioning change denies. |
+| `access_logs_enabled` | `bool` | No | `false` | Create a dedicated log bucket and enable ALB log delivery. Baseline resolves profile defaults. |
+| `access_logs_retention_days` | `number` | No | `14` | S3 Lifecycle current-object expiration period; baseline resolves profile defaults. |
+| `access_logs_force_destroy` | `bool` | No | `true` | Terraform bucket teardown behavior; baseline resolves production retirement safeguards. |
 | `services` | `map(object(...))` | No | `{}` | Per-service target-group and HTTPS routing configuration keyed by ECS service name. |
 
 ## Service Configuration
@@ -124,7 +131,7 @@ The `ip` target type is required for the Fargate/`awsvpc` runtime model because 
 
 The ECS service module consumes the target-group ARN and attaches the service to that target group.
 
-HTTPS terminates at the ALB. The configured target-group and health-check protocols are HTTP, so this module does not provide TLS encryption on the ALB-to-task leg. It also does not configure WAF, application authentication, or ALB access-log delivery. These are not implied by the HTTPS-only public listener.
+HTTPS terminates at the ALB. The configured target-group and health-check protocols are HTTP, so this module does not provide TLS encryption on the ALB-to-task leg. It does not configure WAF or application authentication. ALB access-log delivery is an independent, opt-in module setting, resolved by baseline according to deployment profile.
 
 Each target-group output also exposes the resource-backed `arn_suffix`. Baseline uses that suffix for:
 
@@ -202,6 +209,16 @@ The ALB module itself does not infer deployment profiles; it applies the already
 Production baseline defaults supply the exact three-AZ `ingress_public` subnet set. The module validates a minimum of two supplied subnet IDs; it does not independently enforce the production AZ count or verify subnet roles. Baseline topology and the live runtime validator provide those integration checks. NAT Gateways belong to the separate `egress_public` family; ALB-to-task traffic stays on VPC-local routing, not the stateful firewall egress return path.
 
 Retirement relaxes ALB deletion protection through the reviewed Stage-1 plan. It does not change the ALB to use egress-public subnets or remove the shared ingress layer merely to stop task capacity. Follow the [production retirement runbook](../../docs/production-retirement.md).
+
+## ALB Access Logging
+
+The module enables ALB-to-S3 delivery only when `access_logs_enabled=true`. It then creates a dedicated bucket using **SSE-S3 (`AES256`)**, versioning, BucketOwnerEnforced ownership, all four public-access blocks, and a TLS-only policy. Log delivery is restricted to `alb/AWSLogs/<account-id>/*` from the expected ALB. The bucket policy denies direct object/version deletion and restricts policy/versioning changes to approved administrators.
+
+Baseline defaults logging to **enabled for `production`** and disabled for `development`/`minimal`, whenever a deployable ingress ALB exists. Optional `alb_access_logs_enabled` and `alb_access_logs_retention_days` overrides are passed through each workload root (and its GitHub Plan/Apply/Destroy configuration). With no ingress ALB, no ALB log bucket is created.
+
+The S3 Lifecycle rule expires current log objects after **90/30/14 days** by default for production/development/minimal (or the configured positive-day override), and noncurrent versions after one day. Expiration is asynchronous, not guaranteed deletion at an exact timestamp.
+
+In ordinary production the logging bucket has `force_destroy=false`. The reviewed Stage-1 retirement Apply changes it to `true` without deleting the bucket; final deletion requires separately authorized durable-data disposition and the protected saved-plan Destroy sequence. The [ALB saved-plan guard](../../scripts/deployment/validate-alb-access-logging-plan.sh) checks planned protections. Offline plan checks do not establish live S3 delivery or bucket deletion ordering; see the [retirement runbook](../../docs/production-retirement.md).
 
 ## Conditional Baseline Integration
 
@@ -288,6 +305,7 @@ The module exposes:
 | `dns_name` | DNS name assigned to the Application Load Balancer. |
 | `https_listener` | HTTPS listener metadata, including ARN, certificate ARN, and SSL policy. |
 | `target_groups` | Target-group metadata keyed by ECS service name, including ARN, ARN suffix, and name. |
+| `access_logs` | Logging enabled status, bucket name/ARN, `alb` prefix, retention, and `force_destroy` metadata (null bucket fields when disabled). |
 
 The `target_groups` output is consumed by baseline when deriving ECS service runtime inputs.
 
@@ -322,7 +340,8 @@ This module owns:
 - Fixed default listener response
 - Target groups
 - Listener rules
-- Resource-backed ALB and target-group metadata outputs, including ARN suffixes
+- Optional dedicated ALB log bucket and its security/lifecycle controls
+- Resource-backed ALB and target-group metadata outputs, including ARN suffixes and access logs
 
 This module does **not** own:
 
