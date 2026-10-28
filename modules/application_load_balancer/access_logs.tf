@@ -118,7 +118,7 @@ data "aws_iam_policy_document" "access_logs" {
       test     = "ArnLike"
       variable = "aws:SourceArn"
       values = [
-        "arn:${data.aws_partition.current.partition}:elasticloadbalancing:${data.aws_region.current.region}:${var.account_id}:loadbalancer/app/${var.name_prefix}-alb/*"
+        "arn:${data.aws_partition.current.partition}:elasticloadbalancing:${data.aws_region.current.region}:${var.account_id}:loadbalancer/*"
       ]
     }
   }
