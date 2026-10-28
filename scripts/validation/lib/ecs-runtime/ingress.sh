@@ -165,7 +165,7 @@ ecs_runtime_validate_alb_access_logs() {
   retention_days="$(echo "$logs_json" | jq -r '.retention_days')"
   partition="${alb_arn#arn:}"
   partition="${partition%%:*}"
-  source_arn="${alb_arn%/*}/*"
+  source_arn="${alb_arn%%:loadbalancer/*}:loadbalancer/*"
 
   aws s3api head-bucket "${AWS_ARGS[@]}" --bucket "$bucket_name" >/dev/null ||
     fail "ALB access-log bucket is not accessible: $bucket_name"
@@ -233,10 +233,11 @@ ecs_runtime_validate_alb_access_logs() {
     | ([$ss[] | select(.Sid == "AllowALBLogDelivery")][0]) as $allow
     | ([$ss[] | select(.Sid == "DenyDeleteLogs")][0]) as $delete
     | ([$ss[] | select(.Sid == "DenyBucketPolicyChanges")][0]) as $admin
+    | ([$ss[] | select(.Sid == "DenyProtectedBucketConfigurationChanges")][0]) as $config
     | ([$ss[] | select(.Sid == "DenyVersioningChanges")][0]) as $version
     | ([$ss[] | select(.Sid == "DenyInsecureTransport")][0]) as $https
-    | ($ss | length) == 5
-      and ($ss | map(.Sid) | unique | length) == 5
+    | ($ss | length) == 6
+      and ($ss | map(.Sid) | unique | length) == 6
       and ($allow.Effect == "Allow")
       and ($allow.Principal.Service == "logdelivery.elasticloadbalancing.amazonaws.com")
       and ($allow.Action | as_list) == ["s3:PutObject"]
@@ -256,6 +257,20 @@ ecs_runtime_validate_alb_access_logs() {
       and (($admin.Condition.ArnNotEquals["aws:PrincipalArn"] | as_list) as $principals
         | ($principals | length) > 0
         and all($principals[]; type == "string" and length > 0 and (contains("*") | not)))
+      and ($config.Effect == "Deny" and ($config | everyone))
+      and (($config.Action | as_list | sort) == ([
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:DeleteBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutBucketOwnershipControls",
+        "s3:DeleteBucketOwnershipControls"
+      ] | sort))
+      and ($config.Resource | as_list) == [$arn]
+      and ($config.Condition | keys) == ["ArnNotEquals"]
+      and ($config.Condition.ArnNotEquals | keys) == ["aws:PrincipalArn"]
+      and ($config.Condition.ArnNotEquals["aws:PrincipalArn"] ==
+        $admin.Condition.ArnNotEquals["aws:PrincipalArn"])
       and ($version.Effect == "Deny" and ($version | everyone))
       and ($version.Action | as_list) == ["s3:PutBucketVersioning"]
       and ($version.Resource | as_list) == [$arn]
