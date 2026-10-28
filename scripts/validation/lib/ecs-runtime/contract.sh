@@ -287,10 +287,18 @@ ecs_runtime_validate_alarm_output_membership() {
 
 validate_alb_output() {
   local unexpected_target_group_keys_json
+  local expected_logs_force_destroy
+
+  expected_logs_force_destroy="$(
+    echo "$LIFECYCLE_PROTECTION_JSON" |
+      jq -er '.alb_access_logs_force_destroy |
+        if type == "boolean" then tostring
+        else error("Missing ALB log-bucket lifecycle posture") end'
+  )" || fail "Unable to resolve ALB access-log lifecycle protection."
 
   if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
     if ! echo "$APPLICATION_LOAD_BALANCER_JSON" |
-      jq -e '
+      jq -e --argjson force_destroy "$expected_logs_force_destroy" '
         type == "object"
         and (.arn | type == "string" and length > 0)
         and (.dns_name | type == "string" and length > 0)
@@ -301,8 +309,34 @@ validate_alb_output() {
         and (.https_listener.ssl_policy | type == "string" and length > 0)
         and (.target_groups | type == "object" and length > 0)
         and (.arn_suffix | type == "string" and length > 0)
+        and (.access_logs | type == "object")
+        and (
+          .access_logs as $logs
+          | ($logs.enabled | type) == "boolean"
+          and ($logs.expected_bucket_name | type == "string" and length > 0)
+          and (
+            if $logs.enabled then
+              ($logs.bucket_name == $logs.expected_bucket_name)
+              and ($logs.bucket_arn | type == "string")
+              and ($logs.bucket_arn | test("^arn:[a-z0-9-]+:s3:::[a-z0-9.-]+$"))
+              and ($logs.bucket_arn | endswith(":s3:::" + $logs.bucket_name))
+              and $logs.prefix == "alb"
+              and ($logs.retention_days | type) == "number"
+              and $logs.retention_days >= 1
+              and $logs.retention_days == ($logs.retention_days | floor)
+              and $logs.force_destroy == $force_destroy
+            else
+              $logs.bucket_name == null
+              and $logs.bucket_arn == null
+              and $logs.prefix == null
+              and $logs.retention_days == null
+              and $logs.force_destroy == null
+            end
+          )
+        )
       ' >/dev/null; then
-      fail "application_load_balancer output is not null and lacks required runtime metadata"
+      echo "$APPLICATION_LOAD_BALANCER_JSON" | jq '.access_logs'
+      fail "application_load_balancer output has invalid runtime or ALB access logging metadata"
     fi
 
     unexpected_target_group_keys_json="$(
