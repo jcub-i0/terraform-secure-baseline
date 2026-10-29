@@ -244,8 +244,11 @@ validate_sns_producer_for_queue() {
       jq --arg queue_arn "$queue_arn" '
         [
           .Subscriptions[]
-          | select(.Protocol == "sqs")
-          | select(.Endpoint == $queue_arn)
+          | select(
+              .Protocol == "sqs"
+              and .Endpoint == $queue_arn
+              and (.SubscriptionArn | startswith("arn:"))
+            )
         ]
         | length
       '
@@ -253,10 +256,14 @@ validate_sns_producer_for_queue() {
 
   pending_subscription_count="$(
     echo "$subscriptions_json" |
-      jq '
+      jq --arg queue_arn "$queue_arn" '
         [
           .Subscriptions[]
-          | select(.SubscriptionArn == "PendingConfirmation")
+          | select(
+              .Protocol == "sqs"
+              and .Endpoint == $queue_arn
+              and .SubscriptionArn == "PendingConfirmation"
+            )
         ]
         | length
       '
