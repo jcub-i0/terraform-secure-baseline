@@ -105,9 +105,9 @@ The workflow creates a saved plan using `terraform-plan-artifact.sh` and runs `v
 
 ### 3. Review the Stage-1 plan and guard result
 
-The Stage-1 guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement actions and requires production profile, retirement mode, centralized **and ALB** logging `force_destroy=true` lifecycle outputs, other deletion-protection/force-delete safeguards, and zero effective ECS capacity. It does **not** validate individual ALB bucket-policy statements or detect every unsafe in-place update. Review the full readable plan, including S3 policy changes and values deferred until Apply. Stage 1 must persist the enabled ALB bucket's `force_destroy=true` in Terraform state before final Destroy; subsequent retirement-readiness checks verify applied ALB bucket state and live logging attributes.
+The Stage-1 guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement actions and requires production profile, retirement mode, centralized **and ALB** logging `force_destroy=true` lifecycle outputs, other deletion-protection/force-delete safeguards, and zero effective ECS capacity. It does **not** inspect individual ALB bucket-policy statements or validate every in-place change. Stage 1 must persist the enabled ALB bucket's `force_destroy=true` in Terraform state before final Destroy; later retirement-readiness checks verify applied ALB bucket state and live logging attributes.
 
-This is not a whitelist of every allowed in-place attribute change. Review the full readable plan for unrelated updates, credential changes, or security-policy changes; a passing action-type check does not authorize them. Verify that the RDS final-snapshot and automated-backup behavior remains intact.
+Review the full readable plan for unrelated updates, credential or security-policy changes, and values deferred until Apply. A passing Stage-1 guard does not authorize them. Verify that RDS final-snapshot and automated-backup behavior remain intact.
 
 For a separately generated saved Stage-1 plan, the guard's actual invocation is:
 
