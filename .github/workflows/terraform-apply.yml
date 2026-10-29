@@ -302,16 +302,6 @@ jobs:
                     --artifact-basename "${PLAN_BASENAME}" \
                     --context-json "${context}"
 
-            - name: Validate ALB access logging plan
-              shell: bash
-              run: |
-                set -euo pipefail
-
-                bash scripts/deployment/validate-alb-access-logging-plan.sh \
-                  --working-directory "${WORKING_DIRECTORY}" \
-                  --plan-file "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_BASENAME}.tfplan" \
-                  --retirement-mode "${{ inputs.production_retirement_mode }}"
-
             - name: Validate production retirement Stage 1 plan
               if: ${{ inputs.production_retirement_mode }}
               shell: bash

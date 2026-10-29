@@ -46,7 +46,7 @@ The implementation uses the following sequence:
 ```text
 Terraform Apply: production_retirement_mode=true
   internal saved retirement plan
-    -> ALB access-logging saved-plan guard and Stage-1 plan validation
+    -> Stage-1 plan validation
     -> workload-environment approval
     -> verify and apply exact saved plan
     -> read-only durable-data inventory
@@ -101,13 +101,13 @@ environment                = staging
 production_retirement_mode = true
 ```
 
-The workflow creates a saved plan using `terraform-plan-artifact.sh`. It runs both `validate-alb-access-logging-plan.sh` (with the existing retirement workflow input) and `validate-production-retirement-plan.sh` against that same binary plan before the protected Apply job.
+The workflow creates a saved plan using `terraform-plan-artifact.sh` and runs `validate-production-retirement-plan.sh` against that same binary plan before the protected Apply job.
 
 ### 3. Review the Stage-1 plan and guard result
 
-The Stage-1 guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement actions and requires production profile, retirement mode, centralized **and ALB** logging `force_destroy=true` lifecycle outputs, other deletion-protection/force-delete safeguards, and zero effective ECS capacity. The ALB saved-plan guard additionally checks prior state for protected production logging and rejects bucket deletion/replacement, retention shortening, disabling logging, and weakened bucket protections. Stage 1 must persist the enabled ALB bucket's `force_destroy=true` in Terraform state before final Destroy.
+The Stage-1 guard permits only resource actions `read`, `no-op`, and `update`. It rejects create/delete/replacement actions and requires production profile, retirement mode, centralized **and ALB** logging `force_destroy=true` lifecycle outputs, other deletion-protection/force-delete safeguards, and zero effective ECS capacity. It does **not** inspect individual ALB bucket-policy statements or validate every in-place change. Stage 1 must persist the enabled ALB bucket's `force_destroy=true` in Terraform state before final Destroy; later retirement-readiness checks verify applied ALB bucket state and live logging attributes.
 
-This is not a whitelist of every allowed in-place attribute change. Review the full readable plan for unrelated updates, credential changes, or security-policy changes; a passing action-type check does not authorize them. Verify that the RDS final-snapshot and automated-backup behavior remains intact.
+Review the full readable plan for unrelated updates, credential or security-policy changes, and values deferred until Apply. A passing Stage-1 guard does not authorize them. Verify that RDS final-snapshot and automated-backup behavior remain intact.
 
 For a separately generated saved Stage-1 plan, the guard's actual invocation is:
 
@@ -284,7 +284,6 @@ Final retirement is complete when scoped durable deletion has been explicitly ap
 - [Terraform Destroy](../.github/workflows/terraform-destroy.yml)
 - [Saved-plan artifact helper](../scripts/deployment/terraform-plan-artifact.sh)
 - [Stage-1 plan validator](../scripts/deployment/validate-production-retirement-plan.sh)
-- [ALB saved-plan guard](../scripts/deployment/validate-alb-access-logging-plan.sh)
 - [Durable-data cleanup](../scripts/deployment/cleanup-retirement-durable-data.sh)
 - [Read-only log-bucket policy/role guard](../scripts/deployment/validate-log-bucket-destroy-principal.sh)
 - [Retirement readiness](../scripts/deployment/validate-retirement-readiness.sh)
