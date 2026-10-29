@@ -261,10 +261,8 @@ ecs_runtime_validate_alb_access_logs() {
       and (($config.Action | as_list | sort) == ([
         "s3:PutLifecycleConfiguration",
         "s3:PutBucketPublicAccessBlock",
-        "s3:DeleteBucketPublicAccessBlock",
         "s3:PutEncryptionConfiguration",
-        "s3:PutBucketOwnershipControls",
-        "s3:DeleteBucketOwnershipControls"
+        "s3:PutBucketOwnershipControls"
       ] | sort))
       and ($config.Resource | as_list) == [$arn]
       and ($config.Condition | keys) == ["ArnNotEquals"]
