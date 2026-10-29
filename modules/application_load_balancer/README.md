@@ -218,7 +218,7 @@ Baseline defaults logging to **enabled for `production`** and disabled for `deve
 
 The S3 Lifecycle rule expires current log objects after **90/30/14 days** by default for production/development/minimal (or the configured positive-day override), and noncurrent versions after one day. Expiration is asynchronous, not guaranteed deletion at an exact timestamp.
 
-In ordinary production the logging bucket has `force_destroy=false`. The reviewed Stage-1 retirement Apply changes it to `true` without deleting the bucket; final deletion requires separately authorized durable-data disposition and the protected saved-plan Destroy sequence. The [ALB saved-plan guard](../../scripts/deployment/validate-alb-access-logging-plan.sh) checks planned protections. Offline plan checks do not establish live S3 delivery or bucket deletion ordering; see the [retirement runbook](../../docs/production-retirement.md).
+In ordinary production the logging bucket has `force_destroy=false`. The reviewed Stage-1 retirement Apply changes it to `true` without deleting the bucket; final deletion requires separately authorized durable-data disposition and the protected saved-plan Destroy sequence. The retained [Stage-1 plan validator](../../scripts/deployment/validate-production-retirement-plan.sh) checks the retirement posture and permitted plan actions, not individual S3 bucket-policy statements. Runtime validation checks deployed logging settings and bucket protections; neither check proves actual log delivery or bucket deletion ordering. See the [retirement runbook](../../docs/production-retirement.md).
 
 ## Conditional Baseline Integration
 
