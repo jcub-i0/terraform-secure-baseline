@@ -153,10 +153,8 @@ violations="$(jq -r --argjson retirement "$retirement_mode" '
             and includes($config.Action; [
               "s3:PutLifecycleConfiguration",
               "s3:PutBucketPublicAccessBlock",
-              "s3:DeleteBucketPublicAccessBlock",
               "s3:PutEncryptionConfiguration",
-              "s3:PutBucketOwnershipControls",
-              "s3:DeleteBucketOwnershipControls"
+              "s3:PutBucketOwnershipControls"
             ])
             and (($config.Resource | as_list) == [$arn])
             and ($config.Condition.ArnNotEquals["aws:PrincipalArn"] ==
