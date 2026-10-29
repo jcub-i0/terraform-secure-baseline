@@ -16,17 +16,17 @@ on:
                 required: true
                 type: string
             delete_durable_retirement_data:
-                description: "Authorize ECR/Backup cleanup and final logs-bucket deletion during prod retirement"
+                description: "Authorize ECR/Backup cleanup and final logs-bucket deletion (deployment_profile=production only)"
                 required: true
                 default: false
                 type: boolean
             confirm_audit_log_disposition:
-                description: "Confirm reviewed audit-log/key retention or approved disposal (production deployment_profile only)"
+                description: "Confirm reviewed audit-log/key retention or approved disposal (deployment_profile=production only)"
                 required: true
                 default: false
                 type: boolean
             audit_log_disposition_reference:
-                description: "Approved audit-log/key disposition record ID (production deployment_profile only; non-secret)"
+                description: "Approved audit-log/key disposition record ID (deployment_profile=production only; non-secret)"
                 required: false
                 default: ""
                 type: string
