@@ -178,10 +178,10 @@ data "aws_iam_policy_document" "access_logs" {
     }
 
     actions = [
-    "s3:PutLifecycleConfiguration",
-    "s3:PutBucketPublicAccessBlock",
-    "s3:PutEncryptionConfiguration",
-    "s3:PutBucketOwnershipControls",
+      "s3:PutLifecycleConfiguration",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutBucketOwnershipControls",
     ]
 
     resources = [aws_s3_bucket.access_logs[0].arn]
