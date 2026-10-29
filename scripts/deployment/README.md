@@ -10,7 +10,6 @@
 | `update-application-digest.sh` | Select one service image digest | Changes one canonical JSON field locally; does not commit, push, or apply |
 | `terraform-plan-artifact.sh` | Create/verify a saved Terraform plan artifact | Creates local plan files; never applies Terraform |
 | `validate-production-retirement-plan.sh` | Check a saved retirement Stage-1 plan, including ALB log lifecycle posture | Reads the plan; does not apply it |
-| `validate-alb-access-logging-plan.sh` | Protect ALB logging resources in the exact saved Apply plan | Read-only; uses prior state and the existing retirement workflow input |
 | `cleanup-retirement-durable-data.sh` | Inventory or explicitly delete production ECR/Backup contents | `plan` inventories; `apply` first checks the live S3 policy/Apply role, then deletes approved durable data |
 | `validate-retirement-readiness.sh` | Check converged retirement state and live AWS readiness | Read-only AWS checks; does not clean up or apply |
 | `validate-log-bucket-destroy-principal.sh` | Check centralized and conditional ALB log-bucket deny-policy exceptions for the assumed Apply role | Read-only; does not prove IAM authorization or actual S3 teardown |
@@ -237,8 +236,7 @@ Workload Apply and Destroy use separate saved-plan artifacts, retained for one d
 
 Use the [runbook](../../docs/production-retirement.md) for the complete order and approvals. These helpers must not be treated as interchangeable:
 
-- `validate-production-retirement-plan.sh` accepts `--working-directory` and `--plan-file`. It checks Stage-1 allowed actions and the planned production, centralized/ALB log-bucket lifecycle, and zero-capacity outputs. It does not whitelist every in-place attribute change; review the full plan.
-- `validate-alb-access-logging-plan.sh` checks the same exact saved Apply plan for ALB logging safeguards using prior state, planned changes, and `--retirement-mode` from the existing protected Apply workflow. It rejects unsafe production log-bucket changes and does not verify live S3 delivery or deletion ordering.
+- `validate-production-retirement-plan.sh` accepts `--working-directory` and `--plan-file`. It checks Stage-1 allowed actions and the planned production, centralized/ALB log-bucket lifecycle, and zero-capacity outputs. It does not inspect individual ALB bucket-policy statements or whitelist every in-place attribute change; review the full plan.
 - `cleanup-retirement-durable-data.sh` accepts `dev`, `staging`, or `prod` **only with applied `deployment_profile=production`** and complete retirement posture. `--mode plan` inventories; `--mode apply --confirm DELETE-DURABLE-DATA --expected-apply-role-arn <role-arn>` re-inventories, checks both live logging bucket policies when applicable under the same AWS CLI profile, then deletes scoped ECR images and Backup recovery points. The policy check also applies to direct calls. The inventory is not an immutable saved-plan approval artifact; active Backup jobs block deletion.
 - `validate-retirement-readiness.sh` accepts any workload root with an applied production profile; it checks production lifecycle outputs, actual log-bucket state (`force_destroy=true` when the ALB bucket exists), live ALB logging attributes, other deletion protections, ECS quiescence, empty ECR repositories, and an empty Backup vault without active jobs. It is read-only and must pass before final Destroy.
 
@@ -254,7 +252,6 @@ This page does not assert a new live publication or retirement test. Test claims
 - [Publication workflow](../../.github/workflows/deploy-application.yml)
 - [Plan artifact helper](terraform-plan-artifact.sh)
 - [Retirement plan guard](validate-production-retirement-plan.sh)
-- [ALB saved-plan guard](validate-alb-access-logging-plan.sh)
 - [Durable-data cleanup](cleanup-retirement-durable-data.sh)
 - [Retirement readiness](validate-retirement-readiness.sh)
 - [Log-bucket destroy principal preflight](validate-log-bucket-destroy-principal.sh)
