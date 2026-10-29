@@ -30,13 +30,23 @@
 
 ## M2 — Protected ALB Access Logging
 
+**Status: Complete (2026-10-28).** Enabled ALB logging was qualified in the `staging` workload account (`us-east-1`) under `deployment_profile=production`. The dedicated, Terraform-managed SSE-S3 bucket received actual HTTPS request records. This is live delivery evidence for the tested requests, not a completeness guarantee.
+
 | Work item | Intended design | Expected result / acceptance | Status |
 |---|---|---|---|
-| Delivery architecture | Choose a supported path: dedicated S3 for legacy ALB logs or CloudWatch Logs delivery, based on encryption compatibility, least privilege, querying, and cost. Do not assume the existing SSE-KMS-enforced logs bucket supports legacy ALB delivery. | An approved destination and documented encryption/permissions design are selected. | Planned |
-| Terraform integration | Add configurable, opt-in logging only when a real ingress ALB exists; manage destination protection, retention, and ownership. | Existing environments remain unchanged when disabled; enabled logging has no unnecessary public exposure or persistent resources without an ALB. | Planned |
-| Validation | Check exact ALB delivery configuration, storage protections, and a controlled HTTPS request's resulting log record. | An actual request is recorded and retrievable; log sensitivity, best-effort delivery limits, and costs are documented. | Planned |
+| Delivery architecture | Choose a supported path: dedicated S3 for legacy ALB logs or CloudWatch Logs delivery, based on encryption compatibility, least privilege, querying, and cost. Do not assume the existing SSE-KMS-enforced logs bucket supports legacy ALB delivery. | An approved destination and documented encryption/permissions design are selected. | Complete |
+| Terraform integration | Add configurable, opt-in logging only when a real ingress ALB exists; manage destination protection, retention, and ownership. | Existing environments remain unchanged when disabled; enabled logging has no unnecessary public exposure or persistent resources without an ALB. | Complete |
+| Validation | Check exact ALB delivery configuration, storage protections, and a controlled HTTPS request's resulting log record. | An actual request is recorded and retrievable; log sensitivity, best-effort delivery limits, and costs are documented. | Complete |
 
-**M2 closeout:** Destination decision — TBD · PR/commit — TBD · CI — TBD · Delivery evidence (private) — TBD
+**Live acceptance evidence (2026-10-28 EDT, `staging`):**
+
+- **Configuration and protection:** The deployed ALB used `alb` as its S3 prefix. Runtime validation verified the dedicated bucket's SSE-S3 (`AES256`), BucketOwnerEnforced ownership, versioning, public access blocks, IAM bucket-policy protections, and configured 90-day current-object/one-day noncurrent-version lifecycle expiration. AWS-enforced configuration changes allow designated bucket administrators, including the GitHub Apply role.
+- **Observed HTTPS delivery:** A controlled HTTPS request with a unique correlation token produced two matching HTTP/2, TLS 1.3 ALB log entries at `2026-10-29T01:07:19Z` and `01:07:44Z`. Both reached private ECS targets and returned HTTP `404`, acceptable for the test route. The operator retrieved a genuine `.log.gz` object under `alb/AWSLogs/027326805885/elasticloadbalancing/us-east-1/` and matched the request token inside its decompressed contents. The object was last modified `2026-10-29T01:10:09Z`, measured 558 bytes, and reported `AES256` encryption. Full request records, client addresses, and the unique token are deliberately excluded from this public roadmap.
+- **Baseline regression:** [Export Baseline Evidence run #40796511254](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/40796511254) on `main` commit `8f87b1fbb7154f45008917b54ff2f32c5938881c` passed **16/16** staging validators, including SNS, SQS, ECS runtime, and logging checks.
+
+**M2 implementation references:** [#890](https://github.com/jcub-i0/terraform-secure-baseline/pull/890) introduced protected ALB access logging; [#895](https://github.com/jcub-i0/terraform-secure-baseline/pull/895), [#896](https://github.com/jcub-i0/terraform-secure-baseline/pull/896), [#897](https://github.com/jcub-i0/terraform-secure-baseline/pull/897), and [#898](https://github.com/jcub-i0/terraform-secure-baseline/pull/898) corrected the S3 integration and policy validation; [#900](https://github.com/jcub-i0/terraform-secure-baseline/pull/900) and [#901](https://github.com/jcub-i0/terraform-secure-baseline/pull/901) corrected SNS/SQS evidence validation. The live delivery test was conducted separately from the 16/16 automated baseline export.
+
+**Scope and limits:** ALB logs are best-effort and may contain sensitive request details (client addresses, paths, and user agents); restrict access and avoid committing raw records to this public repository. S3 storage, request, and retrieval costs apply. The 90-day lifecycle is a configured expiration policy, **not** Object Lock or immutable 90-day retention. A durable off-platform archive of the live log object/CLI proof has not been independently verified; retain private evidence before S3 lifecycle expiration or GitHub artifact expiry. The `staging` workload remains deployed; this milestone did not authorize teardown.
 
 ## M3 — Optional AWS WAF Protection
 
