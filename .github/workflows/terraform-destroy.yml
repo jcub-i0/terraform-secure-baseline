@@ -21,12 +21,12 @@ on:
                 default: false
                 type: boolean
             confirm_audit_log_disposition:
-                description: "Confirm reviewed audit-log/key retention or approved disposal (prod only)"
+                description: "Confirm reviewed audit-log/key retention or approved disposal (production deployment_profile only)"
                 required: true
                 default: false
                 type: boolean
             audit_log_disposition_reference:
-                description: "Approved audit-log/key disposition record ID (prod only; non-secret)"
+                description: "Approved audit-log/key disposition record ID (production deployment_profile only; non-secret)"
                 required: false
                 default: ""
                 type: string
@@ -86,6 +86,7 @@ jobs:
             TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
+            TF_VAR_additional_interface_endpoint_services: ${{ vars.ADDITIONAL_INTERFACE_ENDPOINT_SERVICES || '[]' }}
             TF_VAR_production_retirement_mode: ${{ vars.DEPLOYMENT_PROFILE == 'production' && 'true' || 'false' }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
@@ -508,6 +509,7 @@ jobs:
             TF_VAR_break_glass_trusted_principal_arns: ${{ vars.BREAK_GLASS_TRUSTED_PRINCIPAL_ARNS }}
             TF_VAR_secops_emails: ${{ vars.SECOPS_EMAILS }}
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
+            TF_VAR_additional_interface_endpoint_services: ${{ vars.ADDITIONAL_INTERFACE_ENDPOINT_SERVICES || '[]' }}
             TF_VAR_production_retirement_mode: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
