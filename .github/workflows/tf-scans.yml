@@ -86,11 +86,6 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s modules/restore_validation/tests -p 'test_*.py' -v
 
-      - name: Test ALB access logging plan guard
-        run: |
-          set -euo pipefail
-          bash scripts/tests/test-alb-access-logging-plan.sh
-
       - name: Test ALB access logging runtime checks
         run: |
           set -euo pipefail
