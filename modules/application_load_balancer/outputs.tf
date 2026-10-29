@@ -75,3 +75,41 @@ output "access_logs" {
     )
   }
 }
+
+output "waf" {
+  description = "AWS WAF configuration and association metadata."
+
+  value = {
+    enabled = var.waf_enabled
+
+    mode = (
+      var.waf_enabled
+      ? var.waf_mode
+      : null
+    )
+
+    web_acl_arn = (
+      var.waf_enabled
+      ? aws_wafv2_web_acl.alb[0].arn
+      : null
+    )
+
+    web_acl_id = (
+      var.waf_enabled
+      ? aws_wafv2_web_acl.alb[0].id
+      : null
+    )
+
+    association_id = (
+      var.waf_enabled
+      ? aws_wafv2_web_acl_association.alb[0].id
+      : null
+    )
+
+    rate_limit_requests = (
+      var.waf_enabled
+      ? var.waf_rate_limit_requests
+      : null
+    )
+  }
+}
