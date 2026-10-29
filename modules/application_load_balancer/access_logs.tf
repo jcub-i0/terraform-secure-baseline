@@ -168,6 +168,33 @@ data "aws_iam_policy_document" "access_logs" {
     }
   }
 
+  statement {
+    sid    = "DenyProtectedBucketConfigurationChanges"
+    effect = "Deny"
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions = [
+      "s3:PutLifecycleConfiguration",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:DeleteBucketPublicAccessBlock",
+      "s3:PutEncryptionConfiguration",
+      "s3:PutBucketOwnershipControls",
+      "s3:DeleteBucketOwnershipControls",
+    ]
+
+    resources = [aws_s3_bucket.access_logs[0].arn]
+
+    condition {
+      test     = "ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values   = var.bucket_admin_principals
+    }
+  }
+
   # Protect bucket versioning from unauthorized changes
   statement {
     sid    = "DenyVersioningChanges"

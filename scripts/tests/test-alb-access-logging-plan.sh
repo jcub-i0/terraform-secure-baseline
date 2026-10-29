@@ -30,12 +30,18 @@ jq -n '
      Principal:{Service:"logdelivery.elasticloadbalancing.amazonaws.com"},
      Action:["s3:PutObject"],
      Resource:"arn:aws:s3:::example-prod-alb-access-logs-abcd1234/alb/AWSLogs/123456789012/*",
-     Condition:{ArnLike:{"aws:SourceArn":"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/tf-secure-baseline-prod-alb/*"}}},
+     Condition:{ArnLike:{"aws:SourceArn":"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/*"}}},
     {Sid:"DenyDeleteLogs",Effect:"Deny",Principal:"*",
      Action:["s3:DeleteObject","s3:DeleteObjectVersion"],
      Resource:"arn:aws:s3:::example-prod-alb-access-logs-abcd1234/*"},
     {Sid:"DenyBucketPolicyChanges",Effect:"Deny",Principal:"*",
      Action:["s3:PutBucketPolicy","s3:DeleteBucketPolicy"],
+     Resource:"arn:aws:s3:::example-prod-alb-access-logs-abcd1234",
+     Condition:{ArnNotEquals:{"aws:PrincipalArn":["arn:aws:iam::123456789012:role/TerraformApplyRole"]}}},
+    {Sid:"DenyProtectedBucketConfigurationChanges",Effect:"Deny",Principal:"*",
+     Action:["s3:PutLifecycleConfiguration","s3:PutBucketPublicAccessBlock",
+             "s3:DeleteBucketPublicAccessBlock","s3:PutEncryptionConfiguration",
+             "s3:PutBucketOwnershipControls","s3:DeleteBucketOwnershipControls"],
      Resource:"arn:aws:s3:::example-prod-alb-access-logs-abcd1234",
      Condition:{ArnNotEquals:{"aws:PrincipalArn":["arn:aws:iam::123456789012:role/TerraformApplyRole"]}}},
     {Sid:"DenyVersioningChanges",Effect:"Deny",Principal:"*",
@@ -95,6 +101,28 @@ make() {
   jq "$2" "$tmp/base.json" >"$tmp/$1.json"
 }
 check pass 'Existing production logging unchanged' "$tmp/base.json"
+
+# A normal Apply must be able to repair a previously deployed policy and
+# update the configured administrators without changing the protected bucket.
+make repaired_policy '(.resource_changes[] | select(.type == "aws_s3_bucket_policy") | .change) |=
+  (.actions = ["update"] |
+   .before.policy |= (fromjson |
+     del(.Statement[] | select(.Sid == "DenyProtectedBucketConfigurationChanges")) |
+     (.Statement[] | select(.Sid == "AllowALBLogDelivery") | .Condition.ArnLike["aws:SourceArn"]) =
+       "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/tf-secure-baseline-prod-alb/*" |
+     tojson))'
+check pass 'Ordinary Apply can repair the previous bucket policy' "$tmp/repaired_policy.json"
+
+make admins_updated '(.resource_changes[] | select(.type == "aws_s3_bucket_policy") | .change) |=
+  (.actions = ["update"] |
+   .after.policy |= (fromjson |
+     (.Statement[] | select(.Sid == "DenyBucketPolicyChanges" or
+                              .Sid == "DenyProtectedBucketConfigurationChanges" or
+                              .Sid == "DenyVersioningChanges") |
+      .Condition.ArnNotEquals["aws:PrincipalArn"]) +=
+       ["arn:aws:iam::123456789012:role/BreakGlass-Admin"] |
+     tojson))'
+check pass 'Ordinary Apply can update bucket administrators' "$tmp/admins_updated.json"
 make increase '(.resource_changes[] | select(.type == "aws_s3_bucket_lifecycle_configuration") | .change.after.rule[0].expiration[0].days) = 120'
 check pass 'Production retention increase' "$tmp/increase.json"
 make stage1 '.planned_values.outputs.lifecycle_protection.value.production_retirement_mode = true |
@@ -182,9 +210,16 @@ check fail 'Delete-object-version deny cannot be removed' "$tmp/weak_policy.json
 make weak_admin '(.resource_changes[] | select(.type == "aws_s3_bucket_policy") | .change.after.policy) |=
   (fromjson | (.Statement[] | select(.Sid == "DenyBucketPolicyChanges") | .Condition.ArnNotEquals["aws:PrincipalArn"]) = ["*"] | tojson)'
 check fail 'Bucket admin deny cannot be opened to wildcard' "$tmp/weak_admin.json"
+make missing_config '(.resource_changes[] | select(.type == "aws_s3_bucket_policy") | .change.after.policy) |=
+  (fromjson | del(.Statement[] | select(.Sid == "DenyProtectedBucketConfigurationChanges")) | tojson)'
+check fail 'Protected bucket configuration deny must exist' "$tmp/missing_config.json"
+make weak_config '(.resource_changes[] | select(.type == "aws_s3_bucket_policy") | .change.after.policy) |=
+  (fromjson | (.Statement[] | select(.Sid == "DenyProtectedBucketConfigurationChanges") | .Action) |=
+    map(select(. != "s3:PutLifecycleConfiguration")) | tojson)'
+check fail 'Lifecycle configuration deny cannot be removed' "$tmp/weak_config.json"
 make edited_policy '(.resource_changes[] | select(.type == "aws_s3_bucket_policy") | .change) |=
   (.actions = ["update"] | .after.policy = "{\"Statement\":[]}")'
-check fail 'Production policy cannot be silently modified' "$tmp/edited_policy.json"
+check fail 'Policy update missing mandatory protections is rejected' "$tmp/edited_policy.json"
 make lb_disabled '(.resource_changes[] | select(.type == "aws_lb") | .change.after.access_logs[0].enabled) = false'
 check fail 'Protected ALB logging cannot be disabled' "$tmp/lb_disabled.json"
 make wrong_prefix '(.resource_changes[] | select(.type == "aws_lb") | .change.after.access_logs[0].prefix) = "other"'

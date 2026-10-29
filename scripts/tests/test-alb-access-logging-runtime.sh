@@ -52,12 +52,18 @@ cat >"$tmp/policy.json" <<'POLICY'
       "Principal":{"Service":"logdelivery.elasticloadbalancing.amazonaws.com"},
       "Action":"s3:PutObject",
       "Resource":"arn:aws:s3:::test-prod-alb-access-logs-12345678/alb/AWSLogs/123456789012/*",
-      "Condition":{"ArnLike":{"aws:SourceArn":"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test-prod-alb/*"}}},
+      "Condition":{"ArnLike":{"aws:SourceArn":"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/*"}}},
     {"Sid":"DenyDeleteLogs","Effect":"Deny","Principal":"*",
       "Action":["s3:DeleteObject","s3:DeleteObjectVersion"],
       "Resource":"arn:aws:s3:::test-prod-alb-access-logs-12345678/*"},
     {"Sid":"DenyBucketPolicyChanges","Effect":"Deny","Principal":"*",
       "Action":["s3:PutBucketPolicy","s3:DeleteBucketPolicy"],
+      "Resource":"arn:aws:s3:::test-prod-alb-access-logs-12345678",
+      "Condition":{"ArnNotEquals":{"aws:PrincipalArn":["arn:aws:iam::123456789012:role/ApplyRole"]}}},
+    {"Sid":"DenyProtectedBucketConfigurationChanges","Effect":"Deny","Principal":"*",
+      "Action":["s3:PutLifecycleConfiguration","s3:PutBucketPublicAccessBlock",
+                "s3:DeleteBucketPublicAccessBlock","s3:PutEncryptionConfiguration",
+                "s3:PutBucketOwnershipControls","s3:DeleteBucketOwnershipControls"],
       "Resource":"arn:aws:s3:::test-prod-alb-access-logs-12345678",
       "Condition":{"ArnNotEquals":{"aws:PrincipalArn":["arn:aws:iam::123456789012:role/ApplyRole"]}}},
     {"Sid":"DenyVersioningChanges","Effect":"Deny","Principal":"*",
@@ -132,6 +138,15 @@ MOCK_MISSING_BUCKET=true expect_fail "Missing log bucket"
 jq 'del(.Statement[] | select(.Sid == "DenyDeleteLogs"))' \
   "$tmp/policy.json" >"$tmp/bad-policy.json"
 MOCK_POLICY_FILE="$tmp/bad-policy.json" expect_fail "Missing object-delete deny"
+
+jq 'del(.Statement[] | select(.Sid == "DenyProtectedBucketConfigurationChanges"))' \
+  "$tmp/policy.json" >"$tmp/missing-config-deny.json"
+MOCK_POLICY_FILE="$tmp/missing-config-deny.json" expect_fail "Missing bucket-configuration deny"
+
+jq '(.Statement[] | select(.Sid == "DenyProtectedBucketConfigurationChanges") | .Action) |=
+  map(select(. != "s3:PutLifecycleConfiguration"))' \
+  "$tmp/policy.json" >"$tmp/weak-config-deny.json"
+MOCK_POLICY_FILE="$tmp/weak-config-deny.json" expect_fail "Lifecycle configuration change must be restricted"
 
 jq '(.Statement[] | select(.Sid == "DenyDeleteLogs") | .Condition) =
   {"StringEquals":{"aws:PrincipalArn":"arn:aws:iam::123456789012:root"}}' \
