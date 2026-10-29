@@ -381,4 +381,8 @@ fi
 
 section "Validation Result"
 
+if (( TOTAL_PENDING_SUBSCRIPTION_COUNT > 0 )); then
+  fail "SNS validation found ${TOTAL_PENDING_SUBSCRIPTION_COUNT} pending subscription confirmation(s) for: ${ENV_NAME}"
+fi
+
 success "SNS validation completed successfully for: ${ENV_NAME}"
