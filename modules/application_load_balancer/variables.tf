@@ -133,3 +133,42 @@ variable "bucket_admin_principals" {
   description = "Approved principals permitted to administer the access-log bucket policy and versioning"
   type        = list(string)
 }
+
+variable "waf_enabled" {
+  description = "Whether to create and associate a regional AWS WAF Web ACL."
+  type        = bool
+  default     = false
+}
+
+variable "waf_mode" {
+  description = "WAF operating mode: count or enforce."
+  type        = string
+  default     = "count"
+
+  validation {
+    condition     = contains(["count", "enforce"], var.waf_mode)
+    error_message = "waf_mode must be count or enforce."
+  }
+}
+
+variable "waf_rate_limit_requests" {
+  description = "Optional requests per IP per 300 seconds. Null disables rate limiting."
+  type        = number
+  default     = null
+
+  validation {
+    condition = var.waf_rate_limit_requests == null ? true : (
+      var.waf_rate_limit_requests >= 10 &&
+      var.waf_rate_limit_requests <= 2000000000 &&
+      var.waf_rate_limit_requests == floor(var.waf_rate_limit_requests)
+    )
+
+    error_message = "waf_rate_limit_requests must be null or an integer between 10 and 2000000000."
+  }
+}
+
+variable "waf_sampled_requests_enabled" {
+  description = "Whether AWS WAF request sampling is enabled."
+  type        = bool
+  default     = false
+}
