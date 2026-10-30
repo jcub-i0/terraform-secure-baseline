@@ -450,6 +450,11 @@ module "application_load_balancer" {
   access_logs_force_destroy  = local.effective_alb_access_logs_force_destroy
   bucket_admin_principals    = var.bucket_admin_principals
 
+  waf_enabled                  = var.waf_enabled
+  waf_mode                     = var.waf_mode
+  waf_rate_limit_requests      = var.waf_rate_limit_requests
+  waf_sampled_requests_enabled = var.waf_sampled_requests_enabled
+
   vpc_id = module.networking.vpc_id
 
   ingress_public_subnet_ids = toset(

@@ -268,6 +268,7 @@ output "application_load_balancer" {
     https_listener    = module.application_load_balancer[0].https_listener
     target_groups     = module.application_load_balancer[0].target_groups
     access_logs       = module.application_load_balancer[0].access_logs
+    waf               = module.application_load_balancer[0].waf
   } : null
 }
 
