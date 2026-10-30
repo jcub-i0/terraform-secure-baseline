@@ -735,7 +735,7 @@ variable "alb_access_logs_retention_days" {
 }
 
 variable "waf_enabled" {
-  description = "Whether to eanble AWS WAF protection for the shared Application Load Balancer"
+  description = "Whether to enable AWS WAF protection for the shared Application Load Balancer"
   type        = bool
   default     = false
 }
