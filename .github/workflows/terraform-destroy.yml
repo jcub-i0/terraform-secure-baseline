@@ -90,7 +90,7 @@ jobs:
             TF_VAR_production_retirement_mode: ${{ vars.DEPLOYMENT_PROFILE == 'production' && 'true' || 'false' }}
             TF_VAR_waf_enabled: ${{ vars.WAF_ENABLED || 'false' }}
             TF_VAR_waf_mode: ${{ vars.WAF_MODE || 'count' }}
-            TF_VAR_waf_rate_limit_requests: ${{ vars.WAF_RATE_LIMIT_REQUESTS || 'null' }}
+            WAF_RATE_LIMIT_REQUESTS: ${{ vars.WAF_RATE_LIMIT_REQUESTS }}
             TF_VAR_waf_sampled_requests_enabled: ${{ vars.WAF_SAMPLED_REQUESTS_ENABLED || 'false' }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
@@ -291,6 +291,11 @@ jobs:
               with:
                   terraform_version: ${{ env.TERRAFORM_VERSION }}
                   terraform_wrapper: false
+
+            - name: Configure optional WAF rate limit
+              if: vars.WAF_RATE_LIMIT_REQUESTS != '' && vars.WAF_RATE_LIMIT_REQUESTS != 'null'
+              shell: bash
+              run: printf 'TF_VAR_waf_rate_limit_requests=%s\n' "$WAF_RATE_LIMIT_REQUESTS" >> "$GITHUB_ENV"
 
             - name: Initialize and validate Terraform
               shell: bash
@@ -517,7 +522,7 @@ jobs:
             TF_VAR_production_retirement_mode: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
             TF_VAR_waf_enabled: ${{ vars.WAF_ENABLED || 'false' }}
             TF_VAR_waf_mode: ${{ vars.WAF_MODE || 'count' }}
-            TF_VAR_waf_rate_limit_requests: ${{ vars.WAF_RATE_LIMIT_REQUESTS || 'null' }}
+            WAF_RATE_LIMIT_REQUESTS: ${{ vars.WAF_RATE_LIMIT_REQUESTS }}
             TF_VAR_waf_sampled_requests_enabled: ${{ vars.WAF_SAMPLED_REQUESTS_ENABLED || 'false' }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
@@ -623,6 +628,11 @@ jobs:
               with:
                   terraform_version: ${{ env.TERRAFORM_VERSION }}
                   terraform_wrapper: false
+
+            - name: Configure optional WAF rate limit
+              if: vars.WAF_RATE_LIMIT_REQUESTS != '' && vars.WAF_RATE_LIMIT_REQUESTS != 'null'
+              shell: bash
+              run: printf 'TF_VAR_waf_rate_limit_requests=%s\n' "$WAF_RATE_LIMIT_REQUESTS" >> "$GITHUB_ENV"
 
             - name: Initialize and validate Terraform
               shell: bash
