@@ -734,6 +734,45 @@ variable "alb_access_logs_retention_days" {
   }
 }
 
+variable "waf_enabled" {
+  description = "Whether to enable AWS WAF protection for the shared Application Load Balancer"
+  type        = bool
+  default     = false
+}
+
+variable "waf_mode" {
+  description = "AWS WAF operating mode: count or enforce"
+  type        = string
+  default     = "count"
+
+  validation {
+    condition     = contains(["count", "enforce"], var.waf_mode)
+    error_message = "waf_mode must be set to count or enforce"
+  }
+}
+
+variable "waf_rate_limit_requests" {
+  description = "Optional per-IP request limit over 300 seconds. Null disables rate limiting."
+  type        = number
+  default     = null
+
+  validation {
+    condition = var.waf_rate_limit_requests == null ? true : (
+      var.waf_rate_limit_requests >= 10 &&
+      var.waf_rate_limit_requests <= 2000000000 &&
+      var.waf_rate_limit_requests == floor(var.waf_rate_limit_requests)
+    )
+
+    error_message = "waf_rate_limit_requests must be null or an integer between 10 and 2000000000."
+  }
+}
+
+variable "waf_sampled_requests_enabled" {
+  description = "Whether AWS WAF sampled request inspection is enabled"
+  type        = bool
+  default     = false
+}
+
 variable "ecs_services" {
   description = "ECS/Fargate workload services keyed by stable service name"
 

@@ -4,7 +4,7 @@
 
 The `application_load_balancer` module creates the shared Application Load Balancer ingress layer for ECS/Fargate workloads in a workload environment.
 
-It owns the public-facing ALB, its security group, HTTPS listener, per-service target groups, HTTPS listener rules, and an optional dedicated S3 bucket for ALB access logs. ECS services consume the target groups created by this module but remain owned by `modules/ecs_service`.
+It owns the public-facing ALB, its security group, HTTPS listener, per-service target groups, HTTPS listener rules, an optional dedicated S3 bucket for ALB access logs, and an optional regional AWS WAFv2 Web ACL associated with the shared ALB. ECS services consume the target groups created by this module but remain owned by `modules/ecs_service`.
 
 The baseline instantiates this module only when one or more deployable ECS services have ingress enabled. Registered services with a null image digest do not instantiate it. This condition is owned by `baseline/main.tf`, not by the module: a direct module call with `services = {}` still creates the shared ALB, security group, ingress rule, and listener.
 
@@ -26,6 +26,7 @@ The module creates:
 - One target group per configured service
 - One listener rule per configured service
 - When access logging is enabled, one dedicated S3 bucket with encryption, public-access, ownership, versioning, lifecycle, and bucket-policy controls
+- When WAF is enabled, one regional WAFv2 Web ACL and one association to this ALB
 
 The ALB is internet-facing and placed only in the workload environment's `ingress_public` subnets.
 
@@ -47,6 +48,10 @@ The ALB is internet-facing and placed only in the workload environment's `ingres
 | `access_logs_enabled` | `bool` | No | `false` | Create a dedicated log bucket and enable ALB log delivery. Baseline resolves profile defaults. |
 | `access_logs_retention_days` | `number` | No | `14` | S3 Lifecycle current-object expiration period; baseline resolves profile defaults. |
 | `access_logs_force_destroy` | `bool` | No | `true` | Terraform bucket teardown behavior; baseline resolves production retirement safeguards. |
+| `waf_enabled` | `bool` | No | `false` | Create and associate a regional Web ACL with the shared ALB when enabled. |
+| `waf_mode` | `string` | No | `"count"` | `count` (observe at the group-result level) or `enforce` (use managed rule actions). |
+| `waf_rate_limit_requests` | `number` | No | `null` | Optional per-IP rate rule over a 300-second window; null omits the rule. |
+| `waf_sampled_requests_enabled` | `bool` | No | `false` | Explicitly enable sampled requests; sampling can expose request metadata. |
 | `services` | `map(object(...))` | No | `{}` | Per-service target-group and HTTPS routing configuration keyed by ECS service name. |
 
 ## Service Configuration
@@ -131,7 +136,7 @@ The `ip` target type is required for the Fargate/`awsvpc` runtime model because 
 
 The ECS service module consumes the target-group ARN and attaches the service to that target group.
 
-HTTPS terminates at the ALB. The configured target-group and health-check protocols are HTTP, so this module does not provide TLS encryption on the ALB-to-task leg. It does not configure WAF or application authentication. ALB access-log delivery is an independent, opt-in module setting, resolved by baseline according to deployment profile.
+HTTPS terminates at the ALB. The configured target-group and health-check protocols are HTTP, so this module does not provide TLS encryption on the ALB-to-task leg. Optional WAF protects the shared ALB but does not provide application authentication. ALB access-log delivery is a separate opt-in setting, resolved by baseline according to deployment profile.
 
 Each target-group output also exposes the resource-backed `arn_suffix`. Baseline uses that suffix for:
 
@@ -220,6 +225,27 @@ The S3 Lifecycle rule expires current log objects after **90/30/14 days** by def
 
 In ordinary production the logging bucket has `force_destroy=false`. The reviewed Stage-1 retirement Apply changes it to `true` without deleting the bucket; final deletion requires separately authorized durable-data disposition and the protected saved-plan Destroy sequence. The retained [Stage-1 plan validator](../../scripts/deployment/validate-production-retirement-plan.sh) checks the retirement posture and permitted plan actions, not individual S3 bucket-policy statements. Runtime validation checks deployed logging settings and bucket protections; neither check proves actual log delivery or bucket deletion ordering. See the [retirement runbook](../../docs/production-retirement.md).
 
+## Optional AWS WAF Protection
+
+WAF is disabled by default in all deployment profiles. With `waf_enabled = true`, the module creates one regional WAFv2 Web ACL and associates it with the existing shared ALB; enabling WAF does not replace the ALB. In the baseline, neither ALB nor WAF is created unless an ECS service has both an image digest and ingress configuration. Direct module calls still create the ALB regardless of the `services` map.
+
+The Web ACL has a default `allow` action and two standard AWS-managed rule groups: `AWSManagedRulesCommonRuleSet` (priority 10) and `AWSManagedRulesKnownBadInputsRuleSet` (priority 20). An optional per-source-IP rate rule (priority 30) is created only when `waf_rate_limit_requests` is an integer from 10 to 2,000,000,000; its evaluation window is 300 seconds. AWS rate limiting is approximate, not an exact request quota.
+
+`waf_mode = "count"` is the initial observation posture: each managed group uses a **group-level** Count result override, and the optional rate rule counts instead of blocking. This override does **not** change the actions of individual managed rules; a terminating match can stop evaluation inside a group, so Count mode is not exhaustive per-rule false-positive testing. In `waf_mode = "enforce"`, AWS applies the managed groups' rule actions and the optional rate rule blocks. Review observed traffic before changing modes. Per-rule overrides, if needed, require a separately reviewed change.
+
+CloudWatch metrics are enabled for the Web ACL and its rules. Request sampling is off unless explicitly enabled, because samples can include sensitive request paths, query parameters, or headers. M3 does not create full WAF request logging, a new log destination, paid Bot/Fraud Control rule groups, or application authentication. WAF does not replace the existing ALB security-group CIDR restrictions or M2 access logging.
+
+Example optional configuration:
+
+```hcl
+waf_enabled                  = true
+waf_mode                     = "count"
+waf_rate_limit_requests      = null
+waf_sampled_requests_enabled = false
+```
+
+The `waf` output reports `enabled`, `mode`, `web_acl_arn`, `web_acl_id`, `association_id`, and `rate_limit_requests`. When disabled, the resource-backed identifiers and operating mode are null. At baseline level, `application_load_balancer` is null when no ALB is instantiated.
+
 ## Conditional Baseline Integration
 
 The baseline derives this module's service configuration from the canonical `ecs_services` map.
@@ -306,6 +332,7 @@ The module exposes:
 | `https_listener` | HTTPS listener metadata, including ARN, certificate ARN, and SSL policy. |
 | `target_groups` | Target-group metadata keyed by ECS service name, including ARN, ARN suffix, and name. |
 | `access_logs` | Logging enabled status, bucket name/ARN, `alb` prefix, retention, and `force_destroy` metadata (null bucket fields when disabled). |
+| `waf` | WAF enabled status, mode, Web ACL ARN/ID, association ID, and optional rate limit (resource fields null when disabled). |
 
 The `target_groups` output is consumed by baseline when deriving ECS service runtime inputs.
 
@@ -469,6 +496,6 @@ The module intentionally remains independent of ECS service implementation detai
 
 ## Validation and Sources
 
-Within the workload suite, `validate-ecs-runtime.sh` compares the live ALB deletion-protection attribute, exact ingress-public subnet membership, target-group/listener relationships, and declared security-group paths with Terraform. Operational unhealthy-target alarms are validated separately within that same entry point. A configured ALB is not by itself proof of application correctness or failure recovery.
+Within the workload suite, `validate-ecs-runtime.sh` compares the live ALB deletion-protection attribute, exact ingress-public subnet membership, target-group/listener relationships, and declared security-group paths with Terraform. Operational unhealthy-target alarms are validated separately within that same entry point. For WAF acceptance, independently check the live Web ACL association, observed Count metrics, and reviewed enforcement behavior using synthetic HTTPS requests; the existing ECS validator does not establish those outcomes. A configured ALB or Web ACL is not by itself proof of application correctness or protection effectiveness.
 
-Implementation references: [resources](main.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline composition](../../baseline/main.tf), and [ingress validation helper](../../scripts/validation/lib/ecs-runtime/ingress.sh).
+Implementation references: [ALB resources](main.tf), [WAF resources](waf.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline composition](../../baseline/main.tf), and [ingress validation helper](../../scripts/validation/lib/ecs-runtime/ingress.sh).

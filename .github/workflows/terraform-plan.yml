@@ -87,6 +87,10 @@ jobs:
       TF_VAR_securityhub_cspm_account_policies: ${{ vars.SECURITYHUB_CSPM_ACCOUNT_POLICIES }}
       TF_VAR_enable_guardduty_organization_configuration: ${{ vars.ENABLE_GUARDDUTY_ORGANIZATION_CONFIGURATION }}
       TF_VAR_enable_securityhub_v2_organization_policy: ${{ vars.ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY }}
+      TF_VAR_waf_enabled: ${{ vars.WAF_ENABLED || 'false' }}
+      TF_VAR_waf_mode: ${{ vars.WAF_MODE || 'count' }}
+      WAF_RATE_LIMIT_REQUESTS: ${{ vars.WAF_RATE_LIMIT_REQUESTS }}
+      TF_VAR_waf_sampled_requests_enabled: ${{ vars.WAF_SAMPLED_REQUESTS_ENABLED || 'false' }}
       ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
       ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
       ALB_ACCESS_LOGS_ENABLED: ${{ vars.ALB_ACCESS_LOGS_ENABLED }}
@@ -247,6 +251,17 @@ jobs:
 
             echo "TF_VAR_main_vpc_cidr=${MAIN_VPC_CIDR}" >> "${GITHUB_ENV}"
           fi
+
+      - name: Configure optional WAF rate limit
+        if: >-
+          (github.event_name != 'workflow_dispatch' ||
+          matrix.environment == inputs.target_environment) &&
+          (matrix.environment == 'dev' ||
+          matrix.environment == 'staging' ||
+          matrix.environment == 'prod') &&
+          vars.WAF_RATE_LIMIT_REQUESTS != '' &&
+          vars.WAF_RATE_LIMIT_REQUESTS != 'null'
+        run: printf 'TF_VAR_waf_rate_limit_requests=%s\n' "$WAF_RATE_LIMIT_REQUESTS" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment

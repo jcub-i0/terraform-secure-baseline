@@ -327,6 +327,30 @@ variable "alb_access_logs_retention_days" {
   default     = null
 }
 
+variable "waf_enabled" {
+  description = "Whether to enable AWS WAF protection for the shared Application Load Balancer."
+  type        = bool
+  default     = false
+}
+
+variable "waf_mode" {
+  description = "AWS WAF operating mode: count or enforce."
+  type        = string
+  default     = "count"
+}
+
+variable "waf_rate_limit_requests" {
+  description = "Optional per-IP request limit over 300 seconds. Null disables rate limiting."
+  type        = number
+  default     = null
+}
+
+variable "waf_sampled_requests_enabled" {
+  description = "Whether AWS WAF request sampling is enabled."
+  type        = bool
+  default     = false
+}
+
 variable "ecs_services" {
   description = "ECS/Fargate workload services keyed by stable service name."
 
