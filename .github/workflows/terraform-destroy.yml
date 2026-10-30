@@ -88,6 +88,10 @@ jobs:
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
             TF_VAR_additional_interface_endpoint_services: ${{ vars.ADDITIONAL_INTERFACE_ENDPOINT_SERVICES || '[]' }}
             TF_VAR_production_retirement_mode: ${{ vars.DEPLOYMENT_PROFILE == 'production' && 'true' || 'false' }}
+            TF_VAR_waf_enabled: ${{ vars.WAF_ENABLED || 'false' }}
+            TF_VAR_waf_mode: ${{ vars.WAF_MODE || 'count' }}
+            TF_VAR_waf_rate_limit_requests: ${{ vars.WAF_RATE_LIMIT_REQUESTS || 'null' }}
+            TF_VAR_waf_sampled_requests_enabled: ${{ vars.WAF_SAMPLED_REQUESTS_ENABLED || 'false' }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
             ALB_ACCESS_LOGS_ENABLED: ${{ vars.ALB_ACCESS_LOGS_ENABLED }}
@@ -511,6 +515,10 @@ jobs:
             TF_VAR_isolation_allowed: ${{ vars.ISOLATION_ALLOWED }}
             TF_VAR_additional_interface_endpoint_services: ${{ vars.ADDITIONAL_INTERFACE_ENDPOINT_SERVICES || '[]' }}
             TF_VAR_production_retirement_mode: ${{ needs.terraform-destroy-preflight.outputs.production_retirement_mode }}
+            TF_VAR_waf_enabled: ${{ vars.WAF_ENABLED || 'false' }}
+            TF_VAR_waf_mode: ${{ vars.WAF_MODE || 'count' }}
+            TF_VAR_waf_rate_limit_requests: ${{ vars.WAF_RATE_LIMIT_REQUESTS || 'null' }}
+            TF_VAR_waf_sampled_requests_enabled: ${{ vars.WAF_SAMPLED_REQUESTS_ENABLED || 'false' }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
             ALB_INGRESS_CIDRS: ${{ vars.ALB_INGRESS_CIDRS }}
             ALB_ACCESS_LOGS_ENABLED: ${{ vars.ALB_ACCESS_LOGS_ENABLED }}

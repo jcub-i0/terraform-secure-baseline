@@ -80,6 +80,10 @@ jobs:
             TF_VAR_production_retirement_mode: ${{ inputs.production_retirement_mode }}
             TF_VAR_restore_validation_enabled: ${{ inputs.restore_validation_enabled }}
             TF_VAR_restore_validation_secret_arn: ${{ vars.RESTORE_VALIDATION_SECRET_ARN }}
+            TF_VAR_waf_enabled: ${{ vars.WAF_ENABLED || 'false' }}
+            TF_VAR_waf_mode: ${{ vars.WAF_MODE || 'count' }}
+            TF_VAR_waf_rate_limit_requests: ${{ vars.WAF_RATE_LIMIT_REQUESTS || 'null' }}
+            TF_VAR_waf_sampled_requests_enabled: ${{ vars.WAF_SAMPLED_REQUESTS_ENABLED || 'false' }}
             BACKUP_ENABLED: ${{ vars.BACKUP_ENABLED }}
             RESTORE_TESTING_ENABLED: ${{ vars.RESTORE_TESTING_ENABLED }}
             ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
