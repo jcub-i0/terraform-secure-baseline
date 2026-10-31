@@ -260,7 +260,6 @@ AWS creates and manages the CloudWatch alarms that support target-tracking polic
 
 When an ingress ALB exists, baseline can deliver its access logs to a separate dedicated SSE-S3 bucket. Logging defaults on for production and off for development/minimal unless overridden. This is separate from the centralized SSE-KMS logs bucket; S3 Lifecycle is not immutable retention, and actual HTTP-request delivery must be verified separately.
 
-
 Each deployable service receives a Terraform-owned application log group:
 
 ```text
