@@ -52,15 +52,15 @@
 
 ## M3 — Optional AWS WAF Protection
 
-**Status: Validated (2026-10-30 EDT); staging teardown successful.** [PR #906](https://github.com/jcub-i0/terraform-secure-baseline/pull/906) delivered optional regional AWS WAF protection for the shared ALB; [PR #911](https://github.com/jcub-i0/terraform-secure-baseline/pull/911) added conditional WAF checks to the existing ECS runtime validator. The final `Complete` gate remains an independently reviewed empty workload state and private evidence disposition.
+**Status: Complete (2026-10-30 EDT).** [PR #906](https://github.com/jcub-i0/terraform-secure-baseline/pull/906) delivered optional regional AWS WAF protection for the shared ALB; [PR #911](https://github.com/jcub-i0/terraform-secure-baseline/pull/911) added conditional checks to the existing ECS runtime validator. Live acceptance, baseline validation, and protected staging teardown succeeded; the operator confirmed the workload Terraform state contains no resources.
 
 | Work item | Intended design | Observed acceptance | Status |
 |---|---|---|---|
-| Web ACL and association | Conditionally associate a regional Web ACL with the existing shared ALB; use the Common Rule Set, Known Bad Inputs Rule Set, and optional rate rule. | AWS readback confirmed the exact ALB association, `Allow` default action, managed-rule priorities 10/20, and metrics. Enabling WAF added only the Web ACL and association; the ALB was not replaced. | Validated |
-| Count observation | Start with group-level Count overrides and optional request sampling. | Benign and synthetic missing-User-Agent requests returned HTTP `200`; the managed Common Rule Set recorded `COUNT` for `NoUserAgent_HEADER`. | Validated |
-| Reviewed enforcement | Allow benign traffic while the selected AWS-managed rule actions are enforced. | With both groups in `OverrideAction=None`, benign traffic returned HTTP `200`; the matching synthetic request returned HTTP `403` and was sampled as `BLOCK`. | Validated |
-| Conditional regression | Check WAF identity, association, managed groups, actions, metrics, optional rate rule, and sampling only when Terraform reports WAF enabled. | The existing ECS runtime validator passed in the [16/16 staging baseline evidence run #41157394879](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41157394879); no 17th validator or new CI step was added. | Validated |
-| Staging retirement | Use the protected, saved-plan Destroy workflow; verify workload state and retained-data disposition. | [Destroy #41160908973](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41160908973) passed preflight, plan, and exact saved-plan Apply (**0 added, 0 changed, 298 destroyed**). A separate post-destroy `terraform state list` and any retained manual snapshots have not been independently reviewed. | Validated; final check pending |
+| Web ACL and association | Conditionally associate a regional Web ACL with the existing shared ALB; use the Common Rule Set, Known Bad Inputs Rule Set, and optional rate rule. | AWS readback confirmed the exact ALB association, `Allow` default action, managed-rule priorities 10/20, and metrics. Enabling WAF added only the Web ACL and association; the ALB was not replaced. | Complete |
+| Count observation | Start with group-level Count overrides and optional request sampling. | Benign and synthetic missing-User-Agent requests returned HTTP `200`; the managed Common Rule Set recorded `COUNT` for `NoUserAgent_HEADER`. | Complete |
+| Reviewed enforcement | Allow benign traffic while the selected AWS-managed rule actions are enforced. | With both groups in `OverrideAction=None`, benign traffic returned HTTP `200`; the matching synthetic request returned HTTP `403` and was sampled as `BLOCK`. | Complete |
+| Conditional regression | Check WAF identity, association, managed groups, actions, metrics, optional rate rule, and sampling only when Terraform reports WAF enabled. | The existing ECS runtime validator passed in the [16/16 staging baseline evidence run #41157394879](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41157394879); no 17th validator or new CI step was added. | Complete |
+| Staging retirement | Retire the workload through the protected saved-plan Destroy; verify the workload state is empty. | [Destroy #41160908973](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41160908973) passed preflight, plan, and exact saved-plan Apply (**0 added, 0 changed, 298 destroyed**). The operator confirmed `terraform state list` returned no resources; retained manual snapshots were not independently reviewed. | Complete |
 
 **Live acceptance evidence (2026-10-30 EDT, `staging`, `deployment_profile=development`):**
 
@@ -69,9 +69,9 @@
 - The later [baseline evidence export #41157394879](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41157394879) passed **16/16**, including live WAF configuration, mode `count`, sampling disabled, SNS/SQS, and ECS runtime. Its artifact `baseline-validation-staging-41157394879-1` is scheduled to expire **2026-11-30**; retain a private copy before then.
 - Protected [staging Destroy #41160908973](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41160908973) completed successfully. The tracked staging test service's `image_digest` was restored to `null` on `main` in [PR #915](https://github.com/jcub-i0/terraform-secure-baseline/pull/915); the operator reports restoring staging's GitHub Environment WAF variables. Workload bootstrap, remote-state resources, and the AWS account are outside this Destroy scope.
 
-**Scope and limits:** Live traffic tested the Common Rule Set's `NoUserAgent_HEADER` behavior, not every AWS-managed rule. Known Bad Inputs was verified as configured but not independently triggered; the optional rate rule was disabled and not exercised. Group-level Count is not exhaustive false-positive qualification. Request samples can contain sensitive data; raw requests are omitted here. Durable off-platform evidence retention, exact post-destroy workload-state emptiness, and any retained snapshots require separate confirmation.
+**Scope and limits:** Live traffic tested the Common Rule Set's `NoUserAgent_HEADER` behavior, not every AWS-managed rule. Known Bad Inputs was verified as configured but not independently triggered; the optional rate rule was disabled and not exercised. Group-level Count is not exhaustive false-positive qualification. Request samples can contain sensitive data; raw requests are omitted here. The empty post-destroy workload state is operator-confirmed, not independently read back by this review. Off-platform evidence preservation and any retained manual snapshots or recovery points have not been independently verified.
 
-**M3 final closeout:** Confirm `terraform -chdir=environments/staging state list` is empty, review any retained manual snapshots or recovery points, and retain the relevant evidence privately. Then mark this milestone `Complete` without repeating the already-qualified live tests.
+**M3 closeout:** Complete. Live Count/Block behavior, conditional WAF configuration validation (16/16 baseline checks), protected teardown, and operator-confirmed empty workload state satisfy the scoped acceptance criteria. Privately archive `baseline-validation-staging-41157394879-1` before its 2026-11-30 expiration; separately review any retained manual snapshots or recovery points. These evidence-retention and resource-inventory follow-ups are not claimed as independently verified.
 
 ## M4 — Integration Regression & Release Qualification
 
@@ -85,7 +85,7 @@
 
 **Final CI note:** [Terraform Plan #41161550327](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41161550327) failed for staging because its state-lock attempt overlapped the protected Destroy. This was a concurrent state-lock conflict, not a demonstrated Terraform configuration failure; rerun the full plan matrix after teardown before final sign-off. Do not force-unlock a healthy active operation.
 
-**M4 closeout:** M3 state/evidence sign-off — pending · offline and release documentation review — pending · final CI — pending · maintainer approval and release tag — pending
+**M4 closeout:** M3 accepted and staging retired · private evidence archival — follow-up · offline and release documentation review — pending · final CI — pending · maintainer approval and release tag — pending
 
 ## Global guardrails and non-goals
 
