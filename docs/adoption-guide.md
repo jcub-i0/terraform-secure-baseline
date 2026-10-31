@@ -630,7 +630,7 @@ Use the [release notes](../CHANGELOG.md#v1120--application-runtime-extensibility
 for historical test results and exceptions. Validate each customer's policy,
 image and topology against that deployment's requirements.
 
-### Adopting v1.13.0 recovery and edge options (release candidate)
+### Adopting v1.13.0 recovery and edge options
 
 For deployable ingress workloads, choose ALB access-log retention and who
 may access its separate SSE-S3 bucket. Logging defaults on in production
@@ -643,7 +643,7 @@ Production with scheduled AWS Backup enabled configures RDS Restore Testing.
 Separate optional SQL canary validation requires read-only credentials and
 explicit enablement. A configuration PASS alone is not successful recovery.
 Budget for restore, WAF and access-log charges and preserve evidence before
-teardown. See [v1.13.0 upgrade notes](quickstart.md#v1130-opt-in-configuration-and-upgrade-release-candidate).
+teardown. See [v1.13.0 upgrade notes](quickstart.md#v1130-opt-in-configuration-and-upgrade).
 
 ## Phase 5 - Validate Controls
 

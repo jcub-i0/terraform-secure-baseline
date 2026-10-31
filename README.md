@@ -46,7 +46,23 @@ The platform provides:
 
 ---
 
-## Current release — v1.12.0
+## Current release documentation — v1.13.0
+
+**Recovery Assurance & Edge Protection** adds opt-in SQL integrity checks for
+private RDS Restore Testing, protected S3 ALB access logging, and optional regional
+AWS WAF protection for the shared HTTPS ALB. WAF starts disabled; when enabled,
+`count` is the default mode and request sampling remains off unless explicitly
+requested. ALB logging defaults on only for production-profile deployments with
+a deployable ingress ALB.
+
+The [v1.13.0 release notes](CHANGELOG.md#v1130--recovery-assurance--edge-protection)
+record historical M1–M3 live qualification, subsequent regression checks, and
+their limits. Review the [upgrade guidance](docs/quickstart.md#v1130-opt-in-configuration-and-upgrade),
+especially the changed dev-root profile default. These documents describe the
+v1.13.0 change set; consult [GitHub Releases](https://github.com/jcub-i0/terraform-secure-baseline/releases)
+for tag and publication status.
+
+## v1.12.0 upgrade context
 
 v1.12.0 introduces optional application task-role managed-policy attachments,
 ECS-native container health checks, and private `bedrock-runtime` connectivity.
@@ -74,20 +90,6 @@ The [v1.12.0 release notes](CHANGELOG.md#v1120--application-runtime-extensibilit
 summarize the 53 offline scenarios verified in CI, historical live observations,
 and test limitations. Each deployment needs evidence for its actual configuration
 and application behavior.
-
-## v1.13.0 release candidate — Recovery Assurance & Edge Protection
-
-**Not yet published:** v1.12.0 remains the current release until M4 sign-off.
-The v1.13.0 candidate adds opt-in SQL integrity checks for private RDS Restore Testing,
-protected S3 ALB access logging, and optional regional AWS WAF protection for the
-shared HTTPS ALB. WAF starts disabled; when enabled, `count` is the default mode
-and request sampling remains off unless explicitly requested. ALB logging defaults
-on only for production-profile deployments with a deployable ingress ALB.
-
-Live M1–M3 qualification and 16/16 staging baseline validation are documented
-in [ROADMAP.md](ROADMAP.md). See the [candidate release notes](CHANGELOG.md#v1130--recovery-assurance--edge-protection-release-candidate)
-and [upgrade guidance](docs/quickstart.md#v1130-opt-in-configuration-and-upgrade-release-candidate).
-M4 still requires the final regression/CI review and explicit release approval.
 
 ## What This Project Provides
 

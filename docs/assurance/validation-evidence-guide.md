@@ -361,7 +361,7 @@ not live `HEALTHY` results. Identify operator reports and missing archival
 URIs/checksums or Apply provenance explicitly. The evidence exporter does not
 establish application correctness or compliance certification.
 
-## v1.13.0 recovery and edge evidence (release candidate)
+## v1.13.0 recovery and edge evidence
 
 Keep Terraform configuration and actual behavior separate under the exact
 tested source/configuration:

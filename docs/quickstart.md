@@ -952,10 +952,10 @@ When upgrading or changing opt-ins:
    skip counts separately. New customer authorization and application behavior
    need evidence from the deployed policy and application.
 
-### v1.13.0 opt-in configuration and upgrade (release candidate)
+### v1.13.0 opt-in configuration and upgrade
 
-The [v1.13.0 candidate](../CHANGELOG.md#v1130--recovery-assurance--edge-protection-release-candidate)
-is **not yet published**. The new options below are workload-root Terraform inputs
+The [v1.13.0 release notes](../CHANGELOG.md#v1130--recovery-assurance--edge-protection)
+describe recovery assurance and edge protection. The new options below are workload-root Terraform inputs
 (`environments/<env>`), **not** fields within `ecs_services`. Each enabled
 ingress ALB still requires a deployed digest-pinned service, an ACM certificate,
 and allowed HTTPS CIDRs.
@@ -988,10 +988,10 @@ requires `restore_validation_enabled=true`, a reviewed read-only Secrets
 Manager credential ARN, and its Lambda packaging prerequisites. It is **off**
 by default and is not proof of application-level recoverability. See the
 [Backup module](../modules/backup/README.md) and the
-[release roadmap](../ROADMAP.md).
+[Restore Validation module](../modules/restore_validation/README.md).
 
 The `environments/dev` root's implicit `deployment_profile` default changed
-from `production` in v1.12.0 to `development` in this release candidate. This
+from `production` in v1.12.0 to `development` in v1.13.0. This
 is intentional for new dev environments. An existing dev deployment that
 relied on the previous default must explicitly choose its prior profile before
 planning: otherwise AZ topology, egress, Backup, RDS resilience, and deletion
