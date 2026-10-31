@@ -51,6 +51,25 @@ jobs:
         with:
           terraform_version: 1.15.8
 
+      - name: Verify workload validator executable permissions
+        run: |
+          set -euo pipefail
+          # Derive the validator list from the baseline runner; do not duplicate it.
+          mapfile -t validators < <(
+            sed -n '/^VALIDATION_SCRIPTS=($/,/^)$/{s/^[[:space:]]*"\(validate-[a-z0-9-]*\.sh\)"[[:space:]]*$/\1/p;}' scripts/validation/validate-baseline.sh
+          )
+          if (( ${#validators[@]} != 16 )); then
+            echo "::error::Expected 16 workload validators; found ${#validators[@]}."
+            exit 1
+          fi
+          for validator in "${validators[@]}"; do
+            if [[ ! -x "scripts/validation/$validator" ]]; then
+              echo "::error file=scripts/validation/$validator::Workload validator is missing or not executable."
+              exit 1
+            fi
+          done
+          echo "All ${#validators[@]} workload validators are executable."
+
       - name: Test production log-bucket role preflight
         run: |
           set -euo pipefail
