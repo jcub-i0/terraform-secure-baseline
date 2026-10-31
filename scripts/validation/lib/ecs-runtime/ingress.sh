@@ -15,6 +15,7 @@ ecs_runtime_validate_ingress() {
   local service_name
 
   LIVE_ALB_DELETION_PROTECTION="<not-applicable>"
+  WAF_VALIDATION_STATUS="skipped (no ALB)"
 
   section "Validating conditional shared Application Load Balancer"
 
@@ -95,10 +96,11 @@ ecs_runtime_validate_ingress() {
       "$expected_alb_arn" \
       "$expected_alb_dns_name"
 
-    # WAF is optional. Perform no WAF inspection when disabled.
+    WAF_VALIDATION_STATUS="skipped (disabled)"
     if jq -e '.waf.enabled == true' \
       <<< "$APPLICATION_LOAD_BALANCER_JSON" >/dev/null; then
       ecs_runtime_validate_alb_waf "$expected_alb_arn"
+      WAF_VALIDATION_STATUS="passed"
     fi
 
     alb_sg_json="$(
@@ -315,6 +317,7 @@ ecs_runtime_validate_alb_waf() {
     --arg prefix "$NAME_PREFIX" '
       ($expected.waf.mode) as $mode |
       ($expected.waf.rate_limit_requests) as $limit |
+      ($expected.waf.sampled_requests_enabled) as $sample |
 
       def managed_group($name; $priority; $metric):
         .Name == $name
@@ -326,6 +329,7 @@ ecs_runtime_validate_alb_waf() {
         and ((.OverrideAction // {} | keys) ==
           (if $mode == "count" then ["Count"] else ["None"] end))
         and .VisibilityConfig.CloudWatchMetricsEnabled == true
+        and .VisibilityConfig.SampledRequestsEnabled == $sample
         and .VisibilityConfig.MetricName == $metric;
 
       def rate_rule:
@@ -337,12 +341,14 @@ ecs_runtime_validate_alb_waf() {
         and ((.Action // {} | keys) ==
           (if $mode == "count" then ["Count"] else ["Block"] end))
         and .VisibilityConfig.CloudWatchMetricsEnabled == true
+        and .VisibilityConfig.SampledRequestsEnabled == $sample
         and .VisibilityConfig.MetricName == ($prefix + "-waf-rate-limit");
 
       .WebACL as $acl |
         $acl != null
         and ($mode == "count" or $mode == "enforce")
-        and ($expected.waf.association_id | type == "string" and length > 0)
+        and ($expected.waf.association_id == ($expected.waf.web_acl_arn + "," + $expected.arn))
+        and ($acl.ARN | contains(":regional/webacl/"))
         and (
           $limit == null
           or ($limit | type == "number"
@@ -353,6 +359,7 @@ ecs_runtime_validate_alb_waf() {
         and $acl.Name == ($prefix + "-waf")
         and (($acl.DefaultAction // {} | keys) == ["Allow"])
         and $acl.VisibilityConfig.CloudWatchMetricsEnabled == true
+        and $acl.VisibilityConfig.SampledRequestsEnabled == $sample
         and $acl.VisibilityConfig.MetricName == ($prefix + "-waf")
         and (
           ($acl.Rules | map(.Name) | sort) ==
@@ -382,7 +389,7 @@ ecs_runtime_validate_alb_waf() {
     fail "Live AWS WAF configuration does not match Terraform outputs."
   fi
 
-  success "ALB WAF association, managed rules, actions, and metrics match Terraform"
+  success "ALB WAF association, managed rules, actions, metrics, and sampling match Terraform"
 }
 
 validate_alb_identity() {
