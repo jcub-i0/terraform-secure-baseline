@@ -952,6 +952,51 @@ When upgrading or changing opt-ins:
    skip counts separately. New customer authorization and application behavior
    need evidence from the deployed policy and application.
 
+### v1.13.0 opt-in configuration and upgrade (release candidate)
+
+The [v1.13.0 candidate](../CHANGELOG.md#v1130--recovery-assurance--edge-protection-release-candidate)
+is **not yet published**. The new options below are workload-root Terraform inputs
+(`environments/<env>`), **not** fields within `ecs_services`. Each enabled
+ingress ALB still requires a deployed digest-pinned service, an ACM certificate,
+and allowed HTTPS CIDRs.
+
+For example, a reviewed **non-production** environment may explicitly opt into
+ALB access logs and Count-mode WAF:
+
+```hcl
+alb_access_logs_enabled        = true
+alb_access_logs_retention_days = 30
+waf_enabled                    = true
+waf_mode                       = "count"
+waf_rate_limit_requests        = null
+waf_sampled_requests_enabled   = false
+```
+
+Production already defaults ALB access logging **on** for a deployable ingress
+ALB; development/minimal default it **off**. WAF remains **off** by default in
+all profiles and creates nothing without an ALB. `count` observes managed-rule
+matches without group-level blocking; switch to `enforce` only after reviewed
+traffic tests. WAF adds charges. Log delivery is best-effort, and S3 Lifecycle
+expiration is not immutable retention. See the
+[ALB/WAF module](../modules/application_load_balancer/README.md).
+
+Private RDS Restore Testing runs automatically when effective AWS Backup is
+enabled under the production profile. Non-production opt-in requires both
+`backup_enabled=true` and `restore_testing_enabled=true`; scheduled restores
+can incur ongoing costs. Optional synthetic SQL qualification additionally
+requires `restore_validation_enabled=true`, a reviewed read-only Secrets
+Manager credential ARN, and its Lambda packaging prerequisites. It is **off**
+by default and is not proof of application-level recoverability. See the
+[Backup module](../modules/backup/README.md) and the
+[release roadmap](../ROADMAP.md).
+
+Before upgrading, review a saved plan for newly enabled resources, permissions,
+schedule/cost changes, log bucket lifecycle, and WAF protection settings. No
+feature-specific state migration is intended. After approved deployment, run the
+existing workload validation suite; preserve real recovery/log-delivery/WAF
+behavioral evidence separately. The documented M1–M3 tests apply only to their
+recorded configurations.
+
 ### Optional ECS/Fargate Application Runtime
 
 EC2 remains supported. For modern long-running SaaS services, use the canonical tracked workload configuration:
