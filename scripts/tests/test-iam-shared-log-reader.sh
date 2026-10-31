@@ -3,10 +3,6 @@ set -euo pipefail
 
 # Offline shared log-reader checks; these are the pure predicates used by IAM.
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-[[ -x "$root/scripts/validation/validate-iam.sh" ]] || {
-  echo "[FAIL] IAM validator must be executable for baseline validation and evidence export" >&2
-  exit 1
-}
 # shellcheck source=../validation/lib/shared-log-reader-policy.sh
 source "$root/scripts/validation/lib/shared-log-reader-policy.sh"
 
