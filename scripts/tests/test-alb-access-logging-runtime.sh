@@ -34,6 +34,10 @@ APPLICATION_LOAD_BALANCER_JSON="$(
       enabled:true, bucket_name:$bucket, bucket_arn:$bucket_arn,
       expected_bucket_name:$bucket, prefix:"alb", retention_days:90,
       force_destroy:false
+    },
+    waf:{
+      enabled:false, mode:null, web_acl_arn:null, web_acl_id:null,
+      association_id:null, rate_limit_requests:null, sampled_requests_enabled:null
     }
   }'
 )"
@@ -167,6 +171,30 @@ disabled="$(jq '.access_logs |= (.enabled=false | .bucket_name=null | .bucket_ar
 disabled_attributes='{"Attributes":[{"Key":"access_logs.s3.enabled","Value":"false"}]}'
 APPLICATION_LOAD_BALANCER_JSON="$disabled" ALB_ATTRIBUTES_JSON="$disabled_attributes" \
   MOCK_NO_S3_CALLS=true expect_pass "Disabled logging never contacts S3"
+
+
+bad_metadata="$(jq 'del(.waf.enabled)' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+APPLICATION_LOAD_BALANCER_JSON="$bad_metadata" expect_fail "Missing WAF enabled flag"
+
+bad_metadata="$(jq '.waf.enabled = true | .waf.mode = "count"' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+APPLICATION_LOAD_BALANCER_JSON="$bad_metadata" expect_fail "Enabled WAF missing identifiers"
+
+waf_arn="arn:aws:wafv2:us-east-1:123456789012:regional/webacl/test-prod-alb-waf/abc123"
+enabled_waf="$(jq --arg arn "$waf_arn" --arg alb "$ALB_ARN" '
+  .waf.enabled = true
+  | .waf.mode = "count"
+  | .waf.web_acl_arn = $arn
+  | .waf.web_acl_id = "abc123"
+  | .waf.association_id = ($arn + "," + $alb)
+  | .waf.sampled_requests_enabled = false
+' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+APPLICATION_LOAD_BALANCER_JSON="$enabled_waf" expect_pass "Enabled WAF output contract"
+
+bad_metadata="$(jq 'del(.waf.sampled_requests_enabled)' <<< "$enabled_waf")"
+APPLICATION_LOAD_BALANCER_JSON="$bad_metadata" expect_fail "Enabled WAF sampling expectation missing"
+
+bad_metadata="$(jq '.waf.association_id = "wrong-alb"' <<< "$enabled_waf")"
+APPLICATION_LOAD_BALANCER_JSON="$bad_metadata" expect_fail "WAF association ID does not match ALB"
 
 APPLICATION_LOAD_BALANCER_JSON='null'
 if ! (validate_alb_output) >"$tmp/out" 2>&1; then

@@ -47,6 +47,22 @@ ecs_runtime_print_summary() {
       ;;
   esac
 
+  local waf_enabled="false"
+  local waf_mode="n/a"
+  local waf_acl_arn="n/a"
+  local waf_rate_limit="disabled"
+  local waf_sampling="n/a"
+
+  if [[ "$APPLICATION_LOAD_BALANCER_JSON" != "null" ]]; then
+    waf_enabled="$(jq -r '.waf.enabled' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+    if [[ "$waf_enabled" == "true" ]]; then
+      waf_mode="$(jq -r '.waf.mode' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+      waf_acl_arn="$(jq -r '.waf.web_acl_arn' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+      waf_rate_limit="$(jq -r 'if .waf.rate_limit_requests == null then "disabled" else (.waf.rate_limit_requests | tostring) end' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+      waf_sampling="$(jq -r '.waf.sampled_requests_enabled' <<< "$APPLICATION_LOAD_BALANCER_JSON")"
+    fi
+  fi
+
   section "ECS Runtime Summary"
 
 
@@ -76,6 +92,13 @@ Live ALB deletion protection:       ${LIVE_ALB_DELETION_PROTECTION}
 Effective egress mode:              ${EFFECTIVE_EGRESS_MODE}
 CloudWatch retention days:          ${EFFECTIVE_CLOUDWATCH_RETENTION_DAYS}
 Application Load Balancer present:  $([[ "$APPLICATION_LOAD_BALANCER_JSON" == "null" ]] && echo false || echo true)
+
+AWS WAF enabled:                   ${waf_enabled}
+AWS WAF mode:                      ${waf_mode}
+AWS WAF Web ACL:                   ${waf_acl_arn}
+AWS WAF rate limiting:             ${waf_rate_limit}
+AWS WAF sampled requests:          ${waf_sampling}
+AWS WAF validation:                ${WAF_VALIDATION_STATUS}
 
 GuardDuty Runtime Monitoring:       ${guardduty_runtime_state}
 GuardDutyManaged Terraform value:   ${GUARDDUTY_MANAGED_TAG_VALUE}

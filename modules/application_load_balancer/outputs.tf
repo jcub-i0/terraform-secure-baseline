@@ -106,6 +106,12 @@ output "waf" {
       : null
     )
 
+    sampled_requests_enabled = (
+      var.waf_enabled
+      ? var.waf_sampled_requests_enabled
+      : null
+    )
+
     rate_limit_requests = (
       var.waf_enabled
       ? var.waf_rate_limit_requests
