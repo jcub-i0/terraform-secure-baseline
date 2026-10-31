@@ -233,7 +233,7 @@ The Web ACL has a default `allow` action and two standard AWS-managed rule group
 
 `waf_mode = "count"` is the initial observation posture: each managed group uses a **group-level** Count result override, and the optional rate rule counts instead of blocking. This override does **not** change the actions of individual managed rules; a terminating match can stop evaluation inside a group, so Count mode is not exhaustive per-rule false-positive testing. In `waf_mode = "enforce"`, AWS applies the managed groups' rule actions and the optional rate rule blocks. Review observed traffic before changing modes. Per-rule overrides, if needed, require a separately reviewed change.
 
-CloudWatch metrics are enabled for the Web ACL and its rules. Request sampling is off unless explicitly enabled, because samples can include sensitive request paths, query parameters, or headers. M3 does not create full WAF request logging, a new log destination, paid Bot/Fraud Control rule groups, or application authentication. WAF does not replace the existing ALB security-group CIDR restrictions or M2 access logging.
+CloudWatch metrics are enabled for the Web ACL and its rules. Request sampling is off unless explicitly enabled, because samples can include sensitive request paths, query parameters, or headers. The WAF implementation does not create full WAF request logging, a new log destination, paid Bot/Fraud Control rule groups, or application authentication. WAF does not replace the existing ALB security-group CIDR restrictions or M2 access logging.
 
 Example optional configuration:
 
@@ -244,7 +244,7 @@ waf_rate_limit_requests      = null
 waf_sampled_requests_enabled = false
 ```
 
-The `waf` output reports `enabled`, `mode`, `web_acl_arn`, `web_acl_id`, `association_id`, and `rate_limit_requests`. When disabled, the resource-backed identifiers and operating mode are null. At baseline level, `application_load_balancer` is null when no ALB is instantiated.
+The `waf` output reports `enabled`, `mode`, `web_acl_arn`, `web_acl_id`, `association_id`, `rate_limit_requests`, and `sampled_requests_enabled`. When disabled, the resource-backed identifiers and optional settings are null. At baseline level, `application_load_balancer` is null when no ALB is instantiated.
 
 ## Conditional Baseline Integration
 
@@ -332,7 +332,7 @@ The module exposes:
 | `https_listener` | HTTPS listener metadata, including ARN, certificate ARN, and SSL policy. |
 | `target_groups` | Target-group metadata keyed by ECS service name, including ARN, ARN suffix, and name. |
 | `access_logs` | Logging enabled status, bucket name/ARN, `alb` prefix, retention, and `force_destroy` metadata (null bucket fields when disabled). |
-| `waf` | WAF enabled status, mode, Web ACL ARN/ID, association ID, and optional rate limit (resource fields null when disabled). |
+| `waf` | WAF enabled status, mode, Web ACL ARN/ID, association ID, optional rate limit, and sampled-request setting (disabled fields are null). |
 
 The `target_groups` output is consumed by baseline when deriving ECS service runtime inputs.
 
@@ -496,6 +496,6 @@ The module intentionally remains independent of ECS service implementation detai
 
 ## Validation and Sources
 
-Within the workload suite, `validate-ecs-runtime.sh` compares the live ALB deletion-protection attribute, exact ingress-public subnet membership, target-group/listener relationships, and declared security-group paths with Terraform. Operational unhealthy-target alarms are validated separately within that same entry point. For WAF acceptance, independently check the live Web ACL association, observed Count metrics, and reviewed enforcement behavior using synthetic HTTPS requests; the existing ECS validator does not establish those outcomes. A configured ALB or Web ACL is not by itself proof of application correctness or protection effectiveness.
+Within the workload suite, `validate-ecs-runtime.sh` compares the live ALB deletion-protection attribute, exact ingress-public subnet membership, target-group/listener relationships, and declared security-group paths with Terraform. Operational unhealthy-target alarms are validated separately within that same entry point. When WAF is enabled, the ECS validator also reads the associated Web ACL and compares managed groups, Count/enforce actions, optional rate rule, CloudWatch metrics, and sampling with Terraform outputs. It skips WAF API calls when disabled. Controlled HTTPS Count/Block tests remain separate evidence of behavioral enforcement. A configured ALB or Web ACL is not by itself proof of application correctness or protection effectiveness.
 
 Implementation references: [ALB resources](main.tf), [WAF resources](waf.tf), [inputs](variables.tf), [outputs](outputs.tf), [baseline composition](../../baseline/main.tf), and [ingress validation helper](../../scripts/validation/lib/ecs-runtime/ingress.sh).
