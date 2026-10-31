@@ -661,7 +661,7 @@ v1.10.0 extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, depl
 ### Deferred / Future
 
 - Automatic ECS/Fargate task containment or remediation remains deferred pending a separate fail-closed design.
-- The ReconoSense reference deployment remains future work.
+- The application-specific reference deployment remains future work.
 - Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, more sophisticated historical ECR retention, and broader platform-resilience work remain future design areas.
 
 ## v1.9.0
@@ -754,7 +754,7 @@ v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownershi
 
 - GuardDuty Fargate managed-agent enablement remains outside the current release boundary.
 - Fail-closed ECS task-level containment/remediation remains future work.
-- The ReconoSense reference deployment remains future work.
+- The application-specific reference deployment remains future work.
 - Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, and more sophisticated historical ECR retention remain future design work.
 
 ## v1.8.0 — Secure Container Workloads
@@ -802,7 +802,7 @@ v1.8.0 adds a generic secure ECS/Fargate application runtime and release path wh
 
 ### Deferred / Future
 
-- ECS Service Auto Scaling, GuardDuty Fargate agent management, ECS task-level containment, and the ReconoSense reference deployment are post-v1.8.0 work, not release blockers.
+- ECS Service Auto Scaling, GuardDuty Fargate agent management, ECS task-level containment, and the application-specific reference deployment are post-v1.8.0 work, not release blockers.
 - GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`; operating the ECS runtime does not itself enable central Fargate agent management.
 - Scheduled/run-to-completion tasks, migration-task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, and application database-user lifecycle remain future design work.
 

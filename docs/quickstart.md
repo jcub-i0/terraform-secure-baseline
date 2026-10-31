@@ -180,13 +180,13 @@ In `network_firewall` mode the compute default route and egress-public return ro
 
 Normal production resolves RDS Multi-AZ and enables native RDS/ALB/Network Firewall deletion protection where those resources exist; ECR/ECS force deletion and Backup vault force destruction resolve to `false`. RDS remains a PostgreSQL DB instance, not Aurora or a Multi-AZ DB cluster. RDS-native automated-backup retention remains 14 days; AWS Backup scheduling/retention is a separate contract.
 
-Restore Testing is derived from production and effective backup enablement. The configured test restores privately with `multiAz=false`, using the source RDS subnet group and data SG; this does not change the source database's production Multi-AZ posture. A configured restore plan is not evidence of an executed restore or application-data correctness. See [Backup](../modules/backup/README.md).
+Restore Testing defaults on for the production profile when effective AWS Backup is enabled. Development/minimal profiles default it off but may explicitly enable it when AWS Backup is enabled. The configured test restores privately with `multiAz=false`, using the source RDS subnet group and a dedicated restore-test DB security group; this does not change the source database's production Multi-AZ posture. A configured restore plan is not evidence of an executed restore or application-data correctness. See [Backup](../modules/backup/README.md).
 
 Deployable production ECS services require at least **two** fixed tasks or an autoscaling minimum of two outside retirement. The shipped production sample chooses three. Baseline enables service AZ rebalancing; one live task in every AZ must be checked separately. Normal runtime validation requires deployment-health settings `100` minimum and at least `200` maximum.
 
 The production profile does not enable every possible protection. In particular, the logs bucket has `force_destroy=false` in normal production and `true` after retirement preparation, while `prevent_destroy=false` and Object Lock remain unchanged; Network Firewall policy/subnet change protections remain disabled. See [storage limits](../modules/storage/README.md) and [firewall limits](../modules/firewall/README.md).
 
-**Retirement scope:** baseline production policy is profile-driven, but the complete retirement workflow/durable cleanup supports **environment `prod` only**. Do not assume a production-profile `staging` or `dev` deployment has the same end-to-end automated teardown path. Do not bypass the limitation by changing its profile during destruction.
+**Retirement scope:** protected retirement and durable cleanup support `dev`, `staging`, and `prod` when the deployed `deployment_profile` is `production` and all guards and approvals are satisfied. Configure the matching `<env>-plan` and `<env>` GitHub Environments with the required access controls and reviewers. Development/minimal profiles follow their separate destruction rules. Do not change the deployed profile to bypass retirement safeguards.
 
 ## Prerequisites
 
@@ -1585,7 +1585,7 @@ This command is not a substitute for the protected GitHub workflow or production
 
 ### Production profile
 
-The complete automated retirement path supports **`prod`**. Its order is:
+The complete automated retirement path supports **`dev`, `staging`, and `prod` with the deployed production profile**, subject to all retirement guards and protected approvals. Its order is:
 
 ```text
 normal production (production_retirement_mode=false)
@@ -1609,12 +1609,15 @@ Stage 1 derives service capacity zero while keeping the canonical image selectio
 The production Destroy request requires:
 
 ```text
-environment                    = prod
-confirm                        = DESTROY
-delete_durable_retirement_data = true
+environment                     = prod
+# Select the same production-profile dev, staging, or prod workload prepared in Stage 1.
+confirm                         = DESTROY
+delete_durable_retirement_data  = true
+confirm_audit_log_disposition   = true
+audit_log_disposition_reference = CHG-123456
 ```
 
-That explicit cleanup authorization is required even when the scoped repositories/vault are already empty. The cleanup helper permanently deletes the current scoped inventory; it does not archive assets for you. Decide retention and perform separately approved preservation first.
+That explicit cleanup authorization is required even when the scoped repositories/vault are already empty. Replace `CHG-123456` with the approved, non-secret audit-log disposition record ID (4–200 characters, starting with a letter/digit and containing only letters/digits and `._:/#-`; no placeholders). The reference records approval, not proof of archival. Development/minimal-profile destroys must leave `delete_durable_retirement_data` and `confirm_audit_log_disposition` false and `audit_log_disposition_reference` empty. The cleanup helper permanently deletes the current scoped inventory; it does not archive assets for you. Decide retention and perform separately approved preservation first.
 
 Do not change the deployment profile, delete the service entry, or set its digest to `null` merely to bypass retirement. Do not claim the cleanup is covered by the later Terraform destroy-plan approval. Rejecting a later job does not restore assets already deleted by an earlier approved job.
 
@@ -1664,7 +1667,7 @@ Complete reviewed workload destruction, then separately assess whether its accou
 
 ### 2. Staging
 
-Apply the same dependency rule. A production-profile staging environment does not gain a supported prod-only durable-cleanup workflow simply by selecting that profile; establish a separate approved path rather than bypassing the restriction.
+Apply the same dependency rule. If the deployed staging profile is `production`, follow the [production retirement runbook](production-retirement.md) with all guards and approvals satisfied. Development/minimal-profile staging follows the separate nonproduction-profile destruction rules.
 
 ### 3. Prod
 

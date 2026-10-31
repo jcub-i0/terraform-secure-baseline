@@ -1141,8 +1141,9 @@ Separate workload accounts create strong boundaries between development, staging
 **Boundary:** Confirm actual account ownership and access paths; names and state
 separation are not IAM denies. Shared human administrators and authorized
 cross-account grants require their own review. Resilience policy follows
-`deployment_profile`, not only the directory name; the complete protected cleanup
-workflow remains limited to `prod`.
+`deployment_profile`, not only the directory name. Protected retirement and durable
+cleanup support `dev`, `staging`, and `prod` when the deployed profile is `production`
+and all guards and approvals are satisfied.
 
 ---
 

@@ -192,7 +192,7 @@ Environment stacks can include:
 
 In the centralized multi-account deployment, `dev`, `staging`, and `prod` set `manage_securityhub_cspm_locally = false`, `manage_guardduty_locally = false`, and `manage_securityhub_v2_locally = false`. AWS Config, Inspector, workload logging, remediation, and response automation remain workload-local.
 
-Workload environments have separate Terraform roots and state; their ordinary lifecycle does not destroy the centralized security-services root. This is not dependency-free teardown: optional Identity Center attachments must be handled, production must pass the retirement gates, and the durable-cleanup workflow is limited to `prod`.
+Workload environments have separate Terraform roots and state; their ordinary lifecycle does not destroy the centralized security-services root. This is not dependency-free teardown: optional Identity Center attachments must be handled. Protected retirement and durable cleanup support `dev`, `staging`, and `prod` when the deployed profile is `production` and all guards and approvals are satisfied.
 
 ---
 
@@ -1126,7 +1126,7 @@ This avoids treating a cost-control toggle as authorization to remove the enviro
 
 ### AWS Backup Restore Testing
 
-Production with effective AWS Backup enabled also creates an RDS Restore Testing plan and selection. The plan selects snapshots from the Terraform-managed vault using `LATEST_WITHIN_WINDOW`, a two-day selection window, Sunday `08:00` UTC scheduling, a two-hour start window, and a one-hour validation window. The selection uses the exact source RDS ARN, Backup role, private DB subnet group and dedicated restore-test security group. Its temporary restore explicitly uses `publiclyAccessible=false` and `multiAz=false`; this does not change the source production database's Multi-AZ setting.
+Restore Testing defaults on for the production profile when effective AWS Backup is enabled. Development/minimal profiles default it off but may explicitly enable it when AWS Backup is enabled. The plan selects snapshots from the Terraform-managed vault using `LATEST_WITHIN_WINDOW`, a two-day selection window, a two-hour start window, and a one-hour validation window. Scheduling defaults to Sunday `08:00` UTC; workload roots may override it with `restore_testing_schedule`, independently of those derived windows. The selection uses the exact source RDS ARN, Backup role, source RDS private DB subnet group and dedicated restore-test security group. Its temporary restore explicitly uses `publiclyAccessible=false` and `multiAz=false`; this does not change the source production database's Multi-AZ setting.
 
 The validator distinguishes configuration equality from job execution. An absent restore job or pending/running execution produces a warning. Failed/timed-out application validation and cleanup failure are also warning-only in this validator; a failed/aborted restore execution fails. A successful configuration check alone is not proof of a restorable application, achieved recovery objectives, or completed temporary-resource cleanup.
 

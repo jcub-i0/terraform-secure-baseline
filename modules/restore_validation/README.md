@@ -67,15 +67,15 @@ remain protected by the repository's existing AWS OIDC roles and approvals.
 
 ## Packaging and deployment
 
-Only enabled Plan jobs prepare Restore Validation packages:
+The Plan job in the **Terraform Apply** workflow prepares Restore Validation packages only when `restore_validation_enabled` is enabled. The separate informational **Terraform Plan** workflow does not prepare these packages:
 
 - `prepare.py` installs the pinned pure-Python dependencies and stages
   `lambda/build/coordinator/` and `lambda/build/worker/`.
   The latter contains the verified RDS CA bundle and canary contract.
 - The module's existing Terraform `archive_file` data sources produce
   `lambda/coordinator.zip` and `lambda/worker.zip`.
-- The shared Terraform Plan workflow appends both ZIPs to its saved-plan
-  SHA-256 manifest. The separate Apply job verifies the manifest and restores
+- That Plan job appends both ZIPs to its saved-plan SHA-256 manifest.
+  The Apply job in the same workflow verifies the manifest and restores
   those exact ZIPs at the original paths **before** applying the approved plan.
   Apply does not install dependencies or rebuild archives.
 

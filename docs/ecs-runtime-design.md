@@ -709,7 +709,7 @@ must not be coupled to an unproven containment mechanism.
 The following capabilities remain unimplemented:
 
 - fail-closed ECS task containment/remediation
-- ReconoSense reference deployment
+- application-specific reference deployment
 
 Other potential extensions include scheduled/run-to-completion task abstractions, first-class Route53/ACM ownership, general-purpose WAF policy authoring, audited ECS Exec, multi-container services, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention.
 

@@ -217,7 +217,7 @@ Retirement relaxes ALB deletion protection through the reviewed Stage-1 plan. It
 
 ## ALB Access Logging
 
-The module enables ALB-to-S3 delivery only when `access_logs_enabled=true`. It then creates a dedicated bucket using **SSE-S3 (`AES256`)**, versioning, BucketOwnerEnforced ownership, all four public-access blocks, and a TLS-only policy. Log delivery is restricted to `alb/AWSLogs/<account-id>/*` from the expected ALB. The bucket policy denies direct object/version deletion and restricts policy/versioning changes to approved administrators.
+The module enables ALB-to-S3 delivery only when `access_logs_enabled=true`. It then creates a dedicated bucket using **SSE-S3 (`AES256`)**, versioning, BucketOwnerEnforced ownership, all four public-access blocks, and a TLS-only policy. Log delivery is restricted to the account-specific `alb/AWSLogs/<account-id>/*` object prefix. The separate `aws:SourceArn` condition covers load balancers in the configured account and Region (`loadbalancer/*`), rather than one exact ALB. The bucket policy denies direct object/version deletion and restricts policy/versioning changes to approved administrators.
 
 Baseline defaults logging to **enabled for `production`** and disabled for `development`/`minimal`, whenever a deployable ingress ALB exists. Optional `alb_access_logs_enabled` and `alb_access_logs_retention_days` overrides are passed through each workload root (and its GitHub Plan/Apply/Destroy configuration). With no ingress ALB, no ALB log bucket is created.
 
@@ -433,7 +433,7 @@ The ALB remains ingress infrastructure; scaling and monitoring ownership stay in
 
 ## Example
 
-Illustrative two-AZ development module call. Replace all sample resource IDs, certificate ARN, hostname, and client CIDR with approved values from the same workload deployment. Production baseline composition supplies its own three-AZ subnet set and lifecycle-protection value; do not copy the development boolean into production.
+Illustrative two-AZ development module call. Replace all sample resource IDs, certificate ARN, hostname, and client CIDR with approved values from the same workload deployment. The `var.random_id`, `var.account_id`, and `var.bucket_admin_principals` references assume caller inputs containing the existing workload bucket-name suffix, owning AWS account ID, and approved bucket-administrator principal ARNs, respectively, as in baseline composition. Production baseline composition supplies its own three-AZ subnet set and lifecycle-protection value; do not copy the development boolean into production.
 
 ```hcl
 module "application_load_balancer" {
@@ -442,6 +442,10 @@ module "application_load_balancer" {
   name_prefix = "tf-secure-baseline-dev"
   environment = "dev"
   vpc_id      = "vpc-0123456789abcdef0"
+
+  random_id               = var.random_id
+  account_id              = var.account_id
+  bucket_admin_principals = var.bucket_admin_principals
 
   ingress_public_subnet_ids = [
     "subnet-aaaaaaaaaaaaaaaaa",
