@@ -56,10 +56,11 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-log-bucket-destroy-principal.sh
 
-      - name: Test ECS task-role managed policy inventory
+      - name: Test IAM policy contracts
         run: |
           set -euo pipefail
           bash scripts/tests/test-ecs-task-role-managed-policies.sh
+          bash scripts/tests/test-iam-shared-log-reader.sh
 
       - name: Test ECS-native application health
         run: |
