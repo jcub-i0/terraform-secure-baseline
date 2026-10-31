@@ -95,6 +95,12 @@ ecs_runtime_validate_ingress() {
       "$expected_alb_arn" \
       "$expected_alb_dns_name"
 
+    # WAF is optional. Perform no WAF inspection when disabled.
+    if jq -e '.waf.enabled == true' \
+      <<< "$APPLICATION_LOAD_BALANCER_JSON" >/dev/null; then
+      ecs_runtime_validate_alb_waf "$expected_alb_arn"
+    fi
+
     alb_sg_json="$(
       aws ec2 describe-security-groups \
         "${AWS_ARGS[@]}" \
@@ -285,6 +291,98 @@ ecs_runtime_validate_alb_access_logs() {
   fi
 
   success "ALB access logging and S3 bucket protections match Terraform: $bucket_name"
+}
+
+# Validate the optional WAF attached to the Terraform-managed ALB.
+# Called only when application_load_balancer.waf.enabled == true.
+ecs_runtime_validate_alb_waf() {
+  local alb_arn="$1"
+  local waf_json
+
+  section "Validating ALB AWS WAF"
+
+  if ! waf_json="$(
+    aws wafv2 get-web-acl-for-resource \
+      "${AWS_ARGS[@]}" \
+      --resource-arn "$alb_arn" \
+      --output json
+  )"; then
+    fail "Unable to retrieve the Web ACL associated with the ALB."
+  fi
+
+  if ! jq -e \
+    --argjson expected "$APPLICATION_LOAD_BALANCER_JSON" \
+    --arg prefix "$NAME_PREFIX" '
+      ($expected.waf.mode) as $mode |
+      ($expected.waf.rate_limit_requests) as $limit |
+
+      def managed_group($name; $priority; $metric):
+        .Name == $name
+        and .Priority == $priority
+        and .Statement.ManagedRuleGroupStatement.Name == $name
+        and .Statement.ManagedRuleGroupStatement.VendorName == "AWS"
+        and ((.Statement.ManagedRuleGroupStatement.RuleActionOverrides // []) | length == 0)
+        and ((.Statement.ManagedRuleGroupStatement.ExcludedRules // []) | length == 0)
+        and ((.OverrideAction // {} | keys) ==
+          (if $mode == "count" then ["Count"] else ["None"] end))
+        and .VisibilityConfig.CloudWatchMetricsEnabled == true
+        and .VisibilityConfig.MetricName == $metric;
+
+      def rate_rule:
+        .Name == "IPRateLimit"
+        and .Priority == 30
+        and .Statement.RateBasedStatement.Limit == $limit
+        and .Statement.RateBasedStatement.AggregateKeyType == "IP"
+        and .Statement.RateBasedStatement.EvaluationWindowSec == 300
+        and ((.Action // {} | keys) ==
+          (if $mode == "count" then ["Count"] else ["Block"] end))
+        and .VisibilityConfig.CloudWatchMetricsEnabled == true
+        and .VisibilityConfig.MetricName == ($prefix + "-waf-rate-limit");
+
+      .WebACL as $acl |
+        $acl != null
+        and ($mode == "count" or $mode == "enforce")
+        and ($expected.waf.association_id | type == "string" and length > 0)
+        and (
+          $limit == null
+          or ($limit | type == "number"
+              and . >= 10 and . <= 2000000000 and . == floor)
+        )
+        and $acl.ARN == $expected.waf.web_acl_arn
+        and $acl.Id == $expected.waf.web_acl_id
+        and $acl.Name == ($prefix + "-waf")
+        and (($acl.DefaultAction // {} | keys) == ["Allow"])
+        and $acl.VisibilityConfig.CloudWatchMetricsEnabled == true
+        and $acl.VisibilityConfig.MetricName == ($prefix + "-waf")
+        and (
+          ($acl.Rules | map(.Name) | sort) ==
+          ((
+            ["AWSManagedRulesCommonRuleSet", "AWSManagedRulesKnownBadInputsRuleSet"]
+            + (if $limit == null then [] else ["IPRateLimit"] end)
+          ) | sort)
+        )
+        and ([
+          $acl.Rules[] |
+          select(managed_group(
+            "AWSManagedRulesCommonRuleSet"; 10; ($prefix + "-waf-common")
+          ))
+        ] | length == 1)
+        and ([
+          $acl.Rules[] |
+          select(managed_group(
+            "AWSManagedRulesKnownBadInputsRuleSet"; 20; ($prefix + "-waf-bad-inputs")
+          ))
+        ] | length == 1)
+        and (
+          if $limit == null then true
+          else ([$acl.Rules[] | select(rate_rule)] | length == 1)
+          end
+        )
+    ' <<< "$waf_json" >/dev/null; then
+    fail "Live AWS WAF configuration does not match Terraform outputs."
+  fi
+
+  success "ALB WAF association, managed rules, actions, and metrics match Terraform"
 }
 
 validate_alb_identity() {
