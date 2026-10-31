@@ -11,9 +11,42 @@ that earlier tests were repeated on subsequent commits. Use the
 [README](README.md), [adoption guide](docs/adoption-guide.md), and current
 module/runbooks for the implemented contract.
 
+## v1.13.0 — Recovery Assurance & Edge Protection
+
+v1.13.0 adds recoverability assurance, ALB traffic evidence, and optional HTTP threat protection to the existing sensitive-data SaaS baseline. This entry records the release change set and qualification evidence; consult [GitHub Releases](https://github.com/jcub-i0/terraform-secure-baseline/releases) for tag and publication status.
+
+### Added and Changed
+
+- **M1 — Verified RDS recovery:** Private AWS Backup RDS Restore Testing uses an isolated temporary DB and a selectable recovery point. Optional `restore_validation_enabled` adds coordinator/worker Lambdas, read-only PostgreSQL canary validation, failure reporting, and cleanup qualification. It defaults to `false`; production-profile Restore Testing is enabled when effective AWS Backup is enabled, whereas non-production Restore Testing requires explicit opt-in. A configured plan alone does not prove successful recovery.
+- **M2 — Protected ALB access logging:** A dedicated, optional SSE-S3 ALB access-log bucket provides versioning, public-access and ownership controls, lifecycle expiration, and constrained delivery/protection policies. Logging defaults **on** for a deployable ingress ALB in the production profile and **off** in development/minimal, subject to explicit overrides. Production retirement retains the approved staged destruction/disposition procedure.
+- **M3 — Optional AWS WAF:** One regional WAFv2 Web ACL can protect the existing shared HTTPS ALB. It includes AWS-managed Common Rule Set and Known Bad Inputs Rule Set (priorities 10 and 20), optional per-IP rate limiting over 300 seconds, default-Allow and group-level `count` / `enforce` modes. WAF is disabled by default; request sampling is also disabled by default. Neither an ALB nor WAF materializes for registered ECS services without a selected image digest and ingress configuration.
+- **Runtime evidence:** The existing **16-validator** workload suite conditionally inspects WAF outputs and the live ALB Web ACL association, group actions, metrics, sampling, and optional rate rule. Disabled WAF requires no WAF API calls. Existing CI validation structure is preserved; no new baseline validator or WAF-specific workflow step was added.
+- **M4 validation hardening:** [PR #919](https://github.com/jcub-i0/terraform-secure-baseline/pull/919) fixed omitted optional ALB outputs in the shared log-reader IAM validator and retirement preflight while preserving exact policy checks; the existing Static Analysis job now checks executable permissions for all 16 validators. [PR #920](https://github.com/jcub-i0/terraform-secure-baseline/pull/920) strengthened WAF readback to reject unexpected managed-rule and rate-rule scope-down restrictions, with offline positive/negative regression tests. Neither correction changes Terraform-managed resources.
+
+### Qualification Evidence
+
+- **M1:** Live tests in disposable `dev` on 2026-10-24–25 verified a private, isolated RDS restore and all three synthetic SQL canary records. AWS Backup reported successful validation and cleanup; the opt-in strict qualifier accepted the job. A deliberately corrupted snapshot then produced `WORKER_SYNTHETIC_CANARY_MISMATCH`, failed validation, successful cleanup, and a nonzero strict-qualification exit. The [positive-path baseline evidence export #40153194720](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/40153194720) passed **16/16 validators**; negative-path job, alarm, and strict-validator outputs were separately inspected through the AWS CLI. The failed-validation alarm invoked SecOps SNS, but recipient delivery of that actual notification was not separately confirmed. [Protected dev Destroy #40163291473](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/40163291473) succeeded after both tests. This establishes the tested canary contract, not application-level recovery or an RTO/RPO guarantee.
+- **M2:** Real HTTPS requests were retrieved from a delivered `.log.gz` S3 access-log object; [staging baseline validation #40796511254](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/40796511254) passed 16/16.
+- **M3:** [staging baseline evidence #41157394879](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41157394879) passed 16/16, including WAF drift checks. The same synthetic managed-rule match was sampled as `COUNT` (HTTP 200) and, after reviewed enforcement, `BLOCK` (HTTP 403), while benign traffic remained HTTP 200. [Protected staging Destroy #41160908973](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41160908973) succeeded (**298 destroyed**); the operator confirmed the workload state was empty. The canonical staging image digest is again `null`.
+- **M4:** Independent read-only reviews identified three findings: the changed dev-root profile default was explicitly accepted; the missing-ALB-output defect and WAF scope-down drift gap were corrected in [#919](https://github.com/jcub-i0/terraform-secure-baseline/pull/919) and [#920](https://github.com/jcub-i0/terraform-secure-baseline/pull/920), respectively. Their focused regression tests and CI passed. At reviewed commit [`c8dbf93`](https://github.com/jcub-i0/terraform-secure-baseline/commit/c8dbf93df76cc7a2fca4e4e6a8fb20e7e6290650), [Terraform Static Analysis #41170851188](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41170851188), [Terraform Plan #41170851209](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41170851209) across all six matrix roots, and [Docs Validation #41170851227](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41170851227) passed. Passing plans are not no-change or deployment claims. Earlier live evidence is **not** relabeled as a new test on later commits, and these CI results apply to the recorded commit rather than subsequent documentation edits.
+
+Workload-local evidence was subject to teardown. Durable off-platform preservation of the M1 negative-path outputs, M2 delivered log object, and M3 behavioral evidence was not independently verified; preserve required artifacts privately. The recorded staging post-destroy workload state was operator-confirmed, and retained manual snapshots/recovery points require separate review. Automated baseline exports establish configuration checks, not independently repeated SQL, HTTP log-delivery, or WAF Count/Block tests.
+
+### Upgrade, Cost, and Limitations
+
+**Dev-root compatibility:** The implicit `environments/dev` `deployment_profile` default changed from `production` in v1.12.0 to `development` in v1.13.0, an intentional maintainer-accepted change. For an existing dev deployment that relied on the old default, explicitly retain `deployment_profile = "production"` when planning to avoid unintended changes to AZ count, egress, backups, RDS resilience, and deletion protections. GitHub Actions workload Plan requires an explicit `DEPLOYMENT_PROFILE`.
+
+No new feature-specific Terraform state migration is intended. **Always review the actual saved plan before Apply**, especially for existing production-profile environments where Restore Testing and ALB logging may create resources when their prerequisites are present. RDS Restore Testing can incur periodic restore charges; access logging incurs storage/operation costs, and enabling WAF incurs AWS WAF charges. The optional rate rule is not exercised by the recorded M3 live tests.
+
+ALB access-log delivery is best-effort, and S3 Lifecycle expiration is not immutable retention. WAF Count at the managed-group level is not exhaustive per-rule qualification; Known Bad Inputs was configured but not independently triggered. Request samples and log objects may reveal sensitive request metadata. Keep validation artifacts private and preserve required evidence, snapshots, and encryption keys before destructive cleanup. These technical controls do not constitute SOC 2 or ISO 27001 certification.
+
+See the [Backup module](modules/backup/README.md), [Restore Validation module](modules/restore_validation/README.md), [ALB/WAF module](modules/application_load_balancer/README.md), [recovery and edge evidence guide](docs/assurance/validation-evidence-guide.md#v1130-recovery-and-edge-evidence), and [production retirement runbook](docs/production-retirement.md) for configuration, strict qualification, evidence limits, and operator procedures.
+
+---
+
 ## v1.12.0 — Application Runtime Extensibility
 
-v1.12.0 is the current release. It introduces three opt-in capabilities for
+v1.12.0 introduced three opt-in capabilities for
 application-agnostic SaaS workloads handling sensitive data. This entry covers
 `v1.11.1` through implementation `7002a4219e4e8146fd7f2496aa121d089dee7be3`:
 roadmap #868, M1 #869, M2 #870, M3 #873–#875, and M4 regression in #877.
@@ -630,7 +663,7 @@ v1.10.0 extends the ECS/Fargate platform with GuardDuty Runtime Monitoring, depl
 ### Deferred / Future
 
 - Automatic ECS/Fargate task containment or remediation remains deferred pending a separate fail-closed design.
-- The ReconoSense reference deployment remains future work.
+- The application-specific reference deployment remains future work.
 - Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, more sophisticated historical ECR retention, and broader platform-resilience work remain future design areas.
 
 ## v1.9.0
@@ -723,7 +756,7 @@ v1.9.0 extends the v1.8 ECS/Fargate runtime with explicit service-count ownershi
 
 - GuardDuty Fargate managed-agent enablement remains outside the current release boundary.
 - Fail-closed ECS task-level containment/remediation remains future work.
-- The ReconoSense reference deployment remains future work.
+- The application-specific reference deployment remains future work.
 - Scheduled/run-to-completion task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, application database-user lifecycle, and more sophisticated historical ECR retention remain future design work.
 
 ## v1.8.0 — Secure Container Workloads
@@ -771,7 +804,7 @@ v1.8.0 adds a generic secure ECS/Fargate application runtime and release path wh
 
 ### Deferred / Future
 
-- ECS Service Auto Scaling, GuardDuty Fargate agent management, ECS task-level containment, and the ReconoSense reference deployment are post-v1.8.0 work, not release blockers.
+- ECS Service Auto Scaling, GuardDuty Fargate agent management, ECS task-level containment, and the application-specific reference deployment are post-v1.8.0 work, not release blockers.
 - GuardDuty `ECS_FARGATE_AGENT_MANAGEMENT` remains `NONE`; operating the ECS runtime does not itself enable central Fargate agent management.
 - Scheduled/run-to-completion tasks, migration-task abstractions, audited ECS Exec, advanced WAF/DNS ownership, multi-container services, and application database-user lifecycle remain future design work.
 

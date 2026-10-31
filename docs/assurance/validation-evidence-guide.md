@@ -331,7 +331,7 @@ Set `STRICT_WORKLOAD_CMK_POLICY_CHECKS=false` only for transitional runs, early/
 
 ## v1.12.0 runtime-extension evidence
 
-The current release supports optional task-role managed policies, native container
+v1.12.0 introduced optional task-role managed policies, native container
 health checks, and `bedrock-runtime` private access. Use the
 [release notes](../../CHANGELOG.md#v1120--application-runtime-extensibility)
 for historical test results and exceptions. Record offline tests, live observations
@@ -360,6 +360,21 @@ Native-health polling defaults to 13 observations five seconds apart, with
 not live `HEALTHY` results. Identify operator reports and missing archival
 URIs/checksums or Apply provenance explicitly. The evidence exporter does not
 establish application correctness or compliance certification.
+
+## v1.13.0 recovery and edge evidence
+
+Keep Terraform configuration and actual behavior separate under the exact
+tested source/configuration:
+
+| Control | Evidence to retain | Not established by configuration alone |
+|---|---|---|
+| RDS Restore Testing and opt-in SQL validation | Restore job/recovery point, private restored instance, synthetic canary result, validation submission and cleanup status | Full application recovery or RTO/RPO; `validate-backup.sh` does not execute SQL |
+| Protected ALB logs | Enabled ALB attributes, separate SSE-S3 bucket posture, request-correlated `.log.gz` delivery | Complete delivery, immutable retention, or preservation after Destroy |
+| Optional WAF | Live association, groups/actions, metrics, rate rule and sampling from `validate-ecs-runtime.log` plus controlled HTTP observations | Exhaustive managed-rule coverage or blocking effectiveness without behavior tests |
+| Retirement/regression | Approved Destroy, post-destroy state, 16/16 evidence and retained artifacts | Unreviewed snapshots or repeated tests at a different SHA |
+
+Disabled WAF and null-digest services legitimately skip WAF live checks.
+Do not label skips, absent restore jobs or earlier observations as new tests.
 
 ## What Automated Workload Baseline Validation Covers
 
@@ -434,7 +449,7 @@ The validator then reports the latest job returned for the configured plan. Its 
 | Restore `FAILED` / `ABORTED` | Failure | Investigate failed execution |
 | Application validation `FAILED` / `TIMED_OUT` | Warning | Do not claim successful application validation |
 | Application validation `VALIDATING` | Warning | Validation incomplete |
-| Application validation `SUCCESSFUL` | Reported success | Retain what validation actually did; the baseline does not implement application validation logic |
+| Application validation `SUCCESSFUL` | Reported success | Retain what validation actually did; the Backup module does not execute SQL; separate opt-in Restore Validation can check synthetic canaries |
 | Cleanup/deletion `FAILED` or `DELETING` | Warning | Cleanup unresolved or incomplete |
 | Cleanup/deletion `SUCCESSFUL` | Reported success | Retain the job/resource cleanup evidence |
 

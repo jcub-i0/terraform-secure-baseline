@@ -636,7 +636,7 @@ metadata, not packet payloads, and use a CloudWatch-to-Firehose-to-S3 path.
 Other modules create Config records, Lambda logs, RDS exports, ECS service logs,
 and Container Insights logs. They do not all share one automatic archival path.
 The workload's centralized logs bucket is local to that workload account, not
-an independently administered organization-wide log archive.
+an independently administered organization-wide log archive. Optional ALB access logging uses a distinct protected SSE-S3 bucket, on by default for production ingress. Actual delivery needs a retrieved request log; lifecycle is not Object Lock. WAF sampling is a separate, sensitive-metadata option.
 
 [Storage](../../modules/storage/main.tf) configures KMS encryption, public-access
 blocks, versioning, and lifecycle transitions. **Object Lock remains disabled**
@@ -1067,8 +1067,7 @@ Record separately: plan/selection correctness, an actual restore job, applicatio
 and data-validation results, and cleanup of temporary resources. A
 [backup-validator](../../scripts/validation/validate-backup.sh) PASS can coexist
 with warnings for absent jobs, application validation, or cleanup; it is not
-complete recovery acceptance. The module does not supply application-specific
-restore validation.
+complete recovery acceptance. The Backup module does not itself execute SQL. Baseline's separate opt-in Restore Validation coordinator/worker can validate configured synthetic canaries; this does not qualify arbitrary application-data recovery.
 
 The [retirement runbook](../production-retirement.md) describes Stage-1 protected
 planning and zero ECS capacity, separately authorized durable-data cleanup,

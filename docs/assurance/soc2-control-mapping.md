@@ -389,6 +389,28 @@ or a naming prefix with preventative coverage for every S3 resource.
 
 ---
 
+## Optional Public Application Edge Protection
+
+### Baseline Control
+
+A deployable HTTPS ALB may have a regional AWS WAF Web ACL with managed
+Common/Known Bad Inputs rule groups and optional rate limiting. WAF is
+disabled by default; group-level Count precedes reviewed enforcement.
+
+### SOC 2 Alignment
+
+- CC6.6 - Supports restriction of selected malicious HTTP requests.
+- CC7.2 - WAF metrics/observations can support monitoring.
+
+### Narrative
+
+This optional safeguard does not replace application authentication, tenant
+authorization or human review. The runtime validator checks configuration;
+controlled Count/Block requests establish only the exercised rule's behavior.
+It is not a comprehensive filtering or audit-certification claim.
+
+---
+
 # CC6 - CI/CD and Infrastructure Access Controls
 
 ## GitHub OIDC Federation
@@ -484,6 +506,7 @@ The baseline captures security-relevant activity using:
 - Lambda logs
 - ECS service application logs
 - ECS Container Insights performance logs when enabled
+- Optional ALB HTTPS access logs in a separate protected SSE-S3 bucket
 
 CloudTrail is configured to send logs to protected storage.
 
@@ -534,7 +557,7 @@ Encryption contributes to confidentiality and versioning aids recovery, but neit
 establishes immutable retention or completed integrity verification. Configured
 CloudTrail log-file validation is not an executed digest-chain check. The logging
 validator does not validate Firehose archival or fresh S3 objects; delivery
-warnings may coexist with PASS. Collect those observations and retain usable key
+warnings may coexist with PASS. The ECS validator checks ALB logging configuration/protection separately; actual delivery requires a request-matched S3 log. Collect those observations and retain usable key
 access for the evidence lifetime before accepting preservation claims.
 
 ---
@@ -1133,8 +1156,7 @@ When production backups are enabled, Restore Testing is configured for the manag
 private Single-AZ temporary restore. Record four distinct outcomes: correct
 configuration, actual restore execution, application/data validation, and
 cleanup. [Backup validation](../../scripts/validation/validate-backup.sh) can
-PASS with missing-job, application-validation, or cleanup warnings. The module
-supplies no application-specific validation. A no-change plan and a configured
+PASS with missing-job, application-validation, or cleanup warnings. The Backup module does not execute SQL; separate opt-in baseline canary validation is available without proving general application recovery. A no-change plan and a configured
 restore selection do not establish RPO/RTO or recovery from ransomware.
 
 ## Patch Management

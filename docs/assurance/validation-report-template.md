@@ -420,6 +420,20 @@ with the applicable reason.
 | Reused historical qualification | `<original revision/configuration/run and rationale/none>` | Preserve provenance; do not relabel as execution on this report's revision |
 | Evidence gaps and reviewer disposition | `<gaps/owner/decision/date/Not Reviewed>` | Script success alone does not establish application correctness or certification |
 
+### v1.13.0 Recovery and Edge Protection Evidence
+
+Fill only from actual source-specific evidence; mark unperformed cases
+`Not Run` / `Not Applicable`, not PASS.
+
+| Assertion / behavior | Result / value | Evidence / limit |
+|---|---|---|
+| SQL restore canary and strict recovery qualification | `<Pass/Fail/Disabled/Not Run>` | `<restore job and worker/coordinator evidence>`; not application recovery |
+| ALB access-log bucket/configuration | `<PASS/FAIL/Disabled/Not Reviewed>` | `validate-ecs-runtime.log`; encryption/policy/lifecycle |
+| Delivered ALB HTTPS log entry | `<Observed/Not Run/Not Applicable>` | `<matched request and private .log.gz evidence>`; best-effort |
+| WAF association, groups, actions, metrics and sampling | `<PASS/FAIL/Disabled/Not Reviewed>` | `validate-ecs-runtime.log`; skipped when disabled |
+| Synthetic WAF Count / approved Block behavior | `<Observed/Not Run/Not Applicable>` | `<request, response, rule/action, tested revision>` |
+| Teardown and retained artifacts | `<Verified/Not Run/Not Reviewed>` | `<Destroy, state inventory, snapshots, evidence preservation>` |
+
 ### RDS Resilience Evidence
 
 | Assertion | Result / Value | Evidence | Limit |
@@ -439,6 +453,7 @@ with the applicable reason.
 | Latest job ID / time / source and created resource ARNs | `<values/no job/not recorded>` | `<job evidence>` |
 | Restore execution status | `<COMPLETED/PENDING/RUNNING/FAILED/ABORTED/no job/other>` | `<actual observed status>` |
 | Application validation status / method | `<status/not run>` | `<what was tested and by whom>` |
+| Optional SQL canary / strict qualification | `<PASS/FAIL/Disabled/Not Run>` | `<worker/coordinator and canary/cleanup evidence>` |
 | Temporary-resource cleanup status | `<SUCCESSFUL/DELETING/FAILED/no result/other>` | `<job and resource evidence>` |
 | Reviewer recovery acceptance | `<accepted/conditional/not accepted/not reviewed>` | `<scope, exceptions and rationale>` |
 | Earlier qualification relied upon | `<separate SHA/configuration/run reference/none>` | Do not relabel earlier evidence as execution against a different commit or configuration |
@@ -600,7 +615,7 @@ Use only when an authorized retirement was actually performed. This is a compani
 | Customer workforce access dependencies reviewed | `<Complete/Outstanding/Not Applicable>` | `<separate IAM Identity Center governance>` |
 | Aborted/partial operation and remaining obligations | `<description/none>` | Earlier cleanup is not undone by rejecting a later approval |
 
-The complete durable-cleanup path is `prod`-only and requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. During the subsequently approved final Terraform destroy, the centralized logs bucket can also be force-deleted; the earlier ECR/Backup cleanup helper does not archive or inventory those logs. Preserve required audit evidence and keys outside the workload before retirement. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
+Protected retirement and durable cleanup support `dev`, `staging`, and `prod` when the deployed profile is `production` and all guards and approvals are satisfied. Production-profile Destroy requires `delete_durable_retirement_data=true` even when the scoped ECR/vault inventory is empty. During the subsequently approved final Terraform destroy, the centralized logs bucket can also be force-deleted; the earlier ECR/Backup cleanup helper does not archive or inventory those logs. Preserve required audit evidence and keys outside the workload before retirement. The cleanup operation does not consume a frozen item manifest. State-resource/account decommissioning and literal `prevent_destroy` guards remain separate. Follow [Production Retirement](../production-retirement.md).
 
 ## Warnings / Exceptions
 

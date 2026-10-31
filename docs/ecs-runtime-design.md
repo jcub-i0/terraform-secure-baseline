@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document describes the current v1.12.0 ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
+This document describes the implemented ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
@@ -258,6 +258,8 @@ AWS creates and manages the CloudWatch alarms that support target-tracking polic
 
 ## Logging
 
+When an ingress ALB exists, baseline can deliver its access logs to a separate dedicated SSE-S3 bucket. Logging defaults on for production and off for development/minimal unless overridden. This is separate from the centralized SSE-KMS logs bucket; S3 Lifecycle is not immutable retention, and actual HTTP-request delivery must be verified separately.
+
 Each deployable service receives a Terraform-owned application log group:
 
 ```text
@@ -319,7 +321,7 @@ The listener uses a caller-supplied ACM certificate and defaults to `ELBSecurity
 
 The certificate must be in `primary_region` at the baseline interface. Target groups and their health checks use HTTP, so the implementation terminates frontend TLS rather than providing end-to-end TLS. The shared `alb_ingress_cidrs` set is not per-service authorization. Production deletion protection is enabled in normal posture and disabled through retirement intent, not by editing the module for each release.
 
-The ALB module does not own Route53, ACM certificate creation, WAF, or application deployment orchestration. Its resource-backed ALB and target-group ARN suffix outputs are consumed by both ALB request-count scaling and ingress-health monitoring.
+The ALB module owns optional protected S3 access logging and, when enabled, one regional AWS WAFv2 Web ACL associated with the shared ALB. It does not own Route53, ACM certificate issuance, or application deployment orchestration. WAF is disabled by default; when enabled it starts in group-level Count mode with sampled requests disabled. ECS runtime validation compares the live association, managed rules, mode, metrics and sampling with Terraform, but observed Count/Block HTTP behavior requires separately controlled requests. Its resource-backed ALB and target-group ARN suffix outputs are consumed by both ALB request-count scaling and ingress-health monitoring.
 
 ## Operational health monitoring
 
@@ -707,9 +709,9 @@ must not be coupled to an unproven containment mechanism.
 The following capabilities remain unimplemented:
 
 - fail-closed ECS task containment/remediation
-- ReconoSense reference deployment
+- application-specific reference deployment
 
-Other potential extensions include scheduled/run-to-completion task abstractions, first-class Route53/ACM ownership, WAF, audited ECS Exec, multi-container services, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention.
+Other potential extensions include scheduled/run-to-completion task abstractions, first-class Route53/ACM ownership, general-purpose WAF policy authoring, audited ECS Exec, multi-container services, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention.
 
 No `modules/ecs_task` module is part of the current architecture.
 

@@ -31,6 +31,8 @@ The platform provides:
 - Workload-local AWS Config, Inspector, remediation, and response automation
 - EC2 as a supported host-based runtime
 - ECS/Fargate as the preferred modern application runtime
+- Optional RDS Restore Testing with synthetic SQL recovery validation
+- Protected ALB access logs and optional AWS WAF protection for ingress workloads
 - Optional ECS target-tracking auto scaling with explicit service-count ownership
 - ECS deployment-health configuration and Terraform-owned operational alarms
 - GuardDuty Fargate Runtime Monitoring for production/development with explicit minimal-profile opt-out
@@ -44,7 +46,23 @@ The platform provides:
 
 ---
 
-## Current release — v1.12.0
+## Current release documentation — v1.13.0
+
+**Recovery Assurance & Edge Protection** adds opt-in SQL integrity checks for
+private RDS Restore Testing, protected S3 ALB access logging, and optional regional
+AWS WAF protection for the shared HTTPS ALB. WAF starts disabled; when enabled,
+`count` is the default mode and request sampling remains off unless explicitly
+requested. ALB logging defaults on only for production-profile deployments with
+a deployable ingress ALB.
+
+The [v1.13.0 release notes](CHANGELOG.md#v1130--recovery-assurance--edge-protection)
+record historical M1–M3 live qualification, subsequent regression checks, and
+their limits. Review the [upgrade guidance](docs/quickstart.md#v1130-opt-in-configuration-and-upgrade),
+especially the changed dev-root profile default. These documents describe the
+v1.13.0 change set; consult [GitHub Releases](https://github.com/jcub-i0/terraform-secure-baseline/releases)
+for tag and publication status.
+
+## v1.12.0 upgrade context
 
 v1.12.0 introduces optional application task-role managed-policy attachments,
 ECS-native container health checks, and private `bedrock-runtime` connectivity.
@@ -803,8 +821,9 @@ separate mechanisms with separate scopes and retention behavior.
 AWS Backup Restore Testing is configured for the production profile when scheduled
 backup is enabled. It selects the latest eligible snapshot within the configured
 window from the workload vault for the exact managed RDS instance. The temporary
-restore uses private networking and `multiAz=false`; no application-data validation
-handler is supplied by the Backup module. Configuration presence is not a measured
+restore uses private networking and `multiAz=false`. The Backup module does not
+run SQL assertions; baseline offers a separate, opt-in synthetic SQL validation
+coordinator/worker. Configuration presence is not a measured
 recovery time or proof of a completed restore, successful application checks, or
 cleanup. See the [Backup reference](modules/backup/README.md) and
 [evidence guide](docs/assurance/validation-evidence-guide.md).
@@ -856,7 +875,8 @@ for the exact inputs, approval gates, and recovery boundaries.
 The supplied runtime is for long-running ECS services and standalone EC2 hosts.
 It does not provide first-class scheduled/run-to-completion ECS jobs, inline
 application IAM policy authoring, multi-container application services, ECS Exec,
-application database-user/migration lifecycle, WAF/DNS ownership, or cross-Region
+application database-user/migration lifecycle, general-purpose WAF policy
+management, Terraform-managed DNS zone/record ownership, or cross-Region
 application recovery. Automatic ECS/Fargate containment is also absent.
 
 These are separate design and implementation decisions, not promised deliverables.

@@ -13,7 +13,7 @@ When backups are enabled, supported resources tagged with `Backup = "true"` are 
 
 This separation allows the baseline to disable scheduled backups for cost-sensitive environments without coupling that decision to deletion of the backup vault. Separately, `restore_testing_enabled` controls the Restore Testing plan and selection. The baseline enables Restore Testing by default for the production profile when scheduled Backup is enabled; any deployment profile may explicitly opt in or out through the baseline-level `restore_testing_enabled` input. Enabling Restore Testing requires effective AWS Backup enablement. An optional `restore_testing_schedule` overrides the default Sunday 08:00 UTC cron expression (`cron(0 8 ? * SUN *)`).
 
-**Cost/safety:** Enabling Restore Testing creates a scheduled plan, not a single on-demand test. AWS Backup will periodically restore temporary RDS instances and charges can accrue. Non-production qualification requires explicit `backup_enabled = true` together with `restore_testing_enabled = true`; do not apply these settings until the validation workflow and its cleanup checks are ready. The dedicated restore security group has no SQL-validator ingress in M1-A3.
+**Cost/safety:** Enabling Restore Testing creates a scheduled plan, not a single on-demand test. AWS Backup will periodically restore temporary RDS instances and charges can accrue. Non-production qualification requires explicit `backup_enabled = true` together with `restore_testing_enabled = true`; do not apply these settings until the validation workflow and its cleanup checks are ready. The dedicated restore-test security group stays isolated unless the separate, opt-in [Restore Validation](../restore_validation/README.md) worker security group is explicitly allowed to reach PostgreSQL.
 
 This module's scheduled AWS Backup policy is distinct from the RDS instance's native automated-backup retention in `modules/storage`. Disabling scheduled AWS Backup is not a statement that RDS native automated backups are disabled.
 
@@ -177,7 +177,12 @@ module "backup" {
   restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
   restore_testing_rds_arn                 = module.storage.rds_configuration.arn
   restore_testing_db_subnet_group_name    = module.storage.rds_configuration.db_subnet_group_name
-  restore_testing_vpc_security_group_ids  = [module.storage.data_sg_id]
+
+  restore_testing_vpc_security_group_ids = (
+    local.effective_restore_testing_enabled
+    ? [module.storage.restore_test_db_sg_id]
+    : []
+  )
 }
 ```
 
@@ -239,20 +244,20 @@ The plan name replaces hyphens in `name_prefix` with underscores and appends `_r
 | Public-access override | String `"false"` |
 | Multi-AZ override for the temporary restored instance | String `"false"` |
 
-The restored test instance is deliberately configured as private and Single-AZ. This does not change the source production RDS instance's Multi-AZ policy. The baseline supplies the source RDS subnet-group name and data security-group ID; this is infrastructure restore verification, not application/business-data validation.
+The restored test instance is deliberately configured as private and Single-AZ. This does not change the source production RDS instance's Multi-AZ policy. The baseline reuses the source RDS private subnet-group name and supplies the dedicated restore-test security-group ID, not the source database's security group. This module configures restoration only; optional [Restore Validation](../restore_validation/README.md) performs separate read-only synthetic SQL checks when enabled.
 
 The baseline's current enabled defaults are:
 
 | Setting | Production Restore Testing value |
 |---|---|
-| Schedule | `cron(0 8 ? * SUN *)` |
+| Schedule | `cron(0 8 ? * SUN *)` unless overridden by `restore_testing_schedule` |
 | Start window | 2 hours |
 | Recovery-point selection window | 2 days |
 | Validation window | 1 hour |
 
-These are derived in `baseline/locals.tf`, not defaults in the reusable module's input declarations. Development/minimal profiles do not enable Restore Testing through the baseline, even when ordinary scheduled Backup is explicitly enabled there. When disabled, the baseline's effective schedule/window values and this module's Restore Testing metadata outputs are `null`.
+These are derived in `baseline/locals.tf`, not defaults in the reusable module's input declarations. Development/minimal profiles do not enable Restore Testing by default, even if scheduled Backup is enabled; they may explicitly opt in when effective Backup is enabled. When disabled, the baseline's effective schedule/window values and this module's Restore Testing metadata outputs are `null`.
 
-The module does not seed a recovery point, force an immediate restore, run SQL/application assertions, or implement a custom validation-result submitter. Keep test configuration, actual restore execution, validation results, and cleanup evidence separate.
+This Backup module does not seed a recovery point, force an immediate restore, run SQL/application assertions, or implement a custom validation-result submitter. Baseline's separate opt-in Restore Validation module can check synthetic canary data and submit validation outcomes. Keep configuration, execution, SQL validation and cleanup evidence separate.
 
 ---
 
@@ -310,7 +315,7 @@ All inputs except `backup_tag_key` have no default and must be supplied in a mod
 | `restore_testing_db_subnet_group_name` | `string` | Required | DB subnet group for the restored instance |
 | `restore_testing_vpc_security_group_ids` | `list(string)` | Required | Security groups for the restored instance |
 
-The baseline does not expose every module input as a public workload override. In particular, its Restore Testing windows/schedule and vault deletion policy are derived rather than independent workload toggles.
+The baseline does not expose every module input as a public workload override. Its Restore Testing windows and vault deletion policy are derived rather than independent workload toggles. Workload roots do expose the optional `restore_testing_schedule` UTC cron override; `null` uses the weekly default when Restore Testing is enabled. Development/minimal profiles leave Restore Testing disabled by default, but may set `restore_testing_enabled=true` when effective AWS Backup is enabled.
 
 ---
 
@@ -402,7 +407,7 @@ For release/recovery evidence, retain the actual job identifiers, source revisio
 
 `force_destroy` is a required module input. Baseline supplies `false` for production in both normal and retirement mode, and `true` for development/minimal. It is provider destruction behavior, not a live vault attribute or a substitute for IAM restrictions.
 
-The production retirement workflow uses separately authorized durable-data cleanup rather than setting this flag to `true`. Cleanup targets all recovery points in the Terraform-listed vault and requires deliberate retention decisions first. RDS final snapshots and retained native automated backups are separate from that vault cleanup. See [Production Retirement](../../docs/production-retirement.md), including its `prod`-only cleanup limitation.
+The production retirement workflow uses separately authorized durable-data cleanup rather than setting this flag to `true`. Cleanup targets all recovery points in the Terraform-listed vault and requires deliberate retention decisions first. RDS final snapshots and retained native automated backups are separate from that vault cleanup. Protected retirement supports `dev`, `staging`, and `prod` when the deployed profile is `production` and all guards and approvals are satisfied. See [Production Retirement](../../docs/production-retirement.md).
 
 ---
 
