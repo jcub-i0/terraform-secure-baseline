@@ -990,6 +990,14 @@ by default and is not proof of application-level recoverability. See the
 [Backup module](../modules/backup/README.md) and the
 [release roadmap](../ROADMAP.md).
 
+The `environments/dev` root's implicit `deployment_profile` default changed
+from `production` in v1.12.0 to `development` in this release candidate. This
+is intentional for new dev environments. An existing dev deployment that
+relied on the previous default must explicitly choose its prior profile before
+planning: otherwise AZ topology, egress, Backup, RDS resilience, and deletion
+protections can change. Workload GitHub Actions Plan already requires an explicit
+`DEPLOYMENT_PROFILE` setting.
+
 Before upgrading, review a saved plan for newly enabled resources, permissions,
 schedule/cost changes, log bucket lifecycle, and WAF protection settings. No
 feature-specific state migration is intended. After approved deployment, run the
