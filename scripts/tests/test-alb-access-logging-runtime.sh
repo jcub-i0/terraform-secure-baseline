@@ -203,4 +203,144 @@ if ! (validate_alb_output) >"$tmp/out" 2>&1; then
 fi
 passed=$((passed + 1))
 
-echo "[PASS] $passed offline ALB logging runtime validation scenarios."
+
+# Exercise the actual WAF readback predicate using synthetic AWS responses.
+# Restricting a managed or rate rule by ScopeDownStatement must fail, even if
+# its name, priority, action, and monitoring settings otherwise match.
+NAME_PREFIX="test-prod-alb"
+waf_enforce_output="$(jq '.waf.mode = "enforce" | .waf.rate_limit_requests = 1000' <<< "$enabled_waf")"
+
+waf_response="$(jq -nc --arg arn "$waf_arn" --arg prefix "$NAME_PREFIX" '{
+  WebACL: {
+    ARN: $arn, Id: "abc123", Name: ($prefix + "-waf"),
+    DefaultAction: {Allow: {}},
+    VisibilityConfig: {
+      CloudWatchMetricsEnabled: true, SampledRequestsEnabled: false,
+      MetricName: ($prefix + "-waf")
+    },
+    Rules: [
+      {
+        Name: "AWSManagedRulesCommonRuleSet", Priority: 10,
+        Statement: {ManagedRuleGroupStatement: {
+          Name: "AWSManagedRulesCommonRuleSet", VendorName: "AWS"
+        }},
+        OverrideAction: {None: {}},
+        VisibilityConfig: {
+          CloudWatchMetricsEnabled: true, SampledRequestsEnabled: false,
+          MetricName: ($prefix + "-waf-common")
+        }
+      },
+      {
+        Name: "AWSManagedRulesKnownBadInputsRuleSet", Priority: 20,
+        Statement: {ManagedRuleGroupStatement: {
+          Name: "AWSManagedRulesKnownBadInputsRuleSet", VendorName: "AWS"
+        }},
+        OverrideAction: {None: {}},
+        VisibilityConfig: {
+          CloudWatchMetricsEnabled: true, SampledRequestsEnabled: false,
+          MetricName: ($prefix + "-waf-bad-inputs")
+        }
+      },
+      {
+        Name: "IPRateLimit", Priority: 30,
+        Statement: {RateBasedStatement: {
+          Limit: 1000, AggregateKeyType: "IP", EvaluationWindowSec: 300
+        }},
+        Action: {Block: {}},
+        VisibilityConfig: {
+          CloudWatchMetricsEnabled: true, SampledRequestsEnabled: false,
+          MetricName: ($prefix + "-waf-rate-limit")
+        }
+      }
+    ]
+  }
+}')"
+
+aws() {
+  [[ "$1:$2" == "wafv2:get-web-acl-for-resource" ]] ||
+    fail "Unexpected AWS call during WAF readback test."
+  [[ " $* " == *" --resource-arn $ALB_ARN "* ]] ||
+    fail "WAF validator queried the wrong ALB."
+  printf '%s\n' "$MOCK_WAF_RESPONSE"
+}
+
+expect_waf_pass() {
+  local label="$1" output="$2" response="$3"
+  if ! (
+    APPLICATION_LOAD_BALANCER_JSON="$output"
+    MOCK_WAF_RESPONSE="$response"
+    ecs_runtime_validate_alb_waf "$ALB_ARN"
+  ) >"$tmp/out" 2>&1; then
+    echo "[FAIL] Expected WAF pass: $label" >&2
+    cat "$tmp/out" >&2
+    exit 1
+  fi
+  passed=$((passed + 1))
+}
+
+expect_waf_fail() {
+  local label="$1" output="$2" response="$3"
+  if (
+    APPLICATION_LOAD_BALANCER_JSON="$output"
+    MOCK_WAF_RESPONSE="$response"
+    ecs_runtime_validate_alb_waf "$ALB_ARN"
+  ) >"$tmp/out" 2>&1; then
+    echo "[FAIL] Expected WAF rejection: $label" >&2
+    exit 1
+  fi
+  passed=$((passed + 1))
+}
+
+expect_waf_pass "Unrestricted managed groups and rate rule in Enforce mode" \
+  "$waf_enforce_output" "$waf_response"
+
+waf_count_output="$(jq '.waf.mode = "count"' <<< "$waf_enforce_output")"
+waf_count_response="$(jq '
+  .WebACL.Rules |= map(
+    if .Statement.ManagedRuleGroupStatement != null
+    then .OverrideAction = {Count: {}}
+    else .Action = {Count: {}}
+    end
+  )
+' <<< "$waf_response")"
+expect_waf_pass "Unrestricted managed groups and rate rule in Count mode" \
+  "$waf_count_output" "$waf_count_response"
+
+waf_no_rate_output="$(jq '.waf.rate_limit_requests = null' <<< "$waf_enforce_output")"
+waf_no_rate_response="$(jq '.WebACL.Rules |= map(select(.Name != "IPRateLimit"))' <<< "$waf_response")"
+expect_waf_pass "Unrestricted managed groups with optional rate rule disabled" \
+  "$waf_no_rate_output" "$waf_no_rate_response"
+
+# A valid scope-down statement that matches only paths beginning with
+# /only-this-path. Terraform intentionally creates neither such restriction.
+scope_down='{"ByteMatchStatement":{"SearchString":"L29ubHktdGhpcy1wYXRo","FieldToMatch":{"UriPath":{}},"PositionalConstraint":"STARTS_WITH","TextTransformations":[{"Priority":0,"Type":"NONE"}]}}'
+
+scoped_common="$(jq --argjson scope "$scope_down" '
+  (.WebACL.Rules[] | select(.Name == "AWSManagedRulesCommonRuleSet") |
+    .Statement.ManagedRuleGroupStatement.ScopeDownStatement) = $scope
+' <<< "$waf_response")"
+expect_waf_fail "Common managed group unexpectedly scoped down" \
+  "$waf_enforce_output" "$scoped_common"
+
+scoped_bad_inputs="$(jq --argjson scope "$scope_down" '
+  (.WebACL.Rules[] | select(.Name == "AWSManagedRulesKnownBadInputsRuleSet") |
+    .Statement.ManagedRuleGroupStatement.ScopeDownStatement) = $scope
+' <<< "$waf_response")"
+expect_waf_fail "Known Bad Inputs managed group unexpectedly scoped down" \
+  "$waf_enforce_output" "$scoped_bad_inputs"
+
+scoped_rate="$(jq --argjson scope "$scope_down" '
+  (.WebACL.Rules[] | select(.Name == "IPRateLimit") |
+    .Statement.RateBasedStatement.ScopeDownStatement) = $scope
+' <<< "$waf_response")"
+expect_waf_fail "Rate-based rule unexpectedly scoped down" \
+  "$waf_enforce_output" "$scoped_rate"
+
+scoped_count="$(jq --argjson scope "$scope_down" '
+  (.WebACL.Rules[] | select(.Name == "AWSManagedRulesCommonRuleSet") |
+    .Statement.ManagedRuleGroupStatement.ScopeDownStatement) = $scope
+' <<< "$waf_count_response")"
+expect_waf_fail "Count-mode managed group unexpectedly scoped down" \
+  "$waf_count_output" "$scoped_count"
+
+echo "[PASS] $passed offline ALB logging and WAF runtime validation scenarios."

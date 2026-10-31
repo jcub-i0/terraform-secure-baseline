@@ -324,6 +324,7 @@ ecs_runtime_validate_alb_waf() {
         and .Priority == $priority
         and .Statement.ManagedRuleGroupStatement.Name == $name
         and .Statement.ManagedRuleGroupStatement.VendorName == "AWS"
+        and (.Statement.ManagedRuleGroupStatement.ScopeDownStatement == null)
         and ((.Statement.ManagedRuleGroupStatement.RuleActionOverrides // []) | length == 0)
         and ((.Statement.ManagedRuleGroupStatement.ExcludedRules // []) | length == 0)
         and ((.OverrideAction // {} | keys) ==
@@ -338,6 +339,7 @@ ecs_runtime_validate_alb_waf() {
         and .Statement.RateBasedStatement.Limit == $limit
         and .Statement.RateBasedStatement.AggregateKeyType == "IP"
         and .Statement.RateBasedStatement.EvaluationWindowSec == 300
+        and (.Statement.RateBasedStatement.ScopeDownStatement == null)
         and ((.Action // {} | keys) ==
           (if $mode == "count" then ["Count"] else ["Block"] end))
         and .VisibilityConfig.CloudWatchMetricsEnabled == true
