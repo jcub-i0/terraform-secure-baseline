@@ -11,6 +11,34 @@ that earlier tests were repeated on subsequent commits. Use the
 [README](README.md), [adoption guide](docs/adoption-guide.md), and current
 module/runbooks for the implemented contract.
 
+## v1.13.0 — Recovery Assurance & Edge Protection (release candidate)
+
+**Unreleased — M4 qualification and maintainer sign-off pending.** The latest published release remains [v1.12.0](https://github.com/jcub-i0/terraform-secure-baseline/releases/tag/v1.12.0). The work below adds recoverability assurance, ALB traffic evidence, and optional HTTP threat protection to the existing sensitive-data SaaS baseline.
+
+### Added and Changed
+
+- **M1 — Verified RDS recovery:** Private AWS Backup RDS Restore Testing uses an isolated temporary DB and a selectable recovery point. Optional `restore_validation_enabled` adds coordinator/worker Lambdas, read-only PostgreSQL canary validation, failure reporting, and cleanup qualification. It defaults to `false`; production-profile Restore Testing is enabled when effective AWS Backup is enabled, whereas non-production Restore Testing requires explicit opt-in. A configured plan alone does not prove successful recovery.
+- **M2 — Protected ALB access logging:** A dedicated, optional SSE-S3 ALB access-log bucket provides versioning, public-access and ownership controls, lifecycle expiration, and constrained delivery/protection policies. Logging defaults **on** for a deployable ingress ALB in the production profile and **off** in development/minimal, subject to explicit overrides. Production retirement retains the approved staged destruction/disposition procedure.
+- **M3 — Optional AWS WAF:** One regional WAFv2 Web ACL can protect the existing shared HTTPS ALB. It includes AWS-managed Common Rule Set and Known Bad Inputs Rule Set (priorities 10 and 20), optional per-IP rate limiting over 300 seconds, default-Allow and group-level `count` / `enforce` modes. WAF is disabled by default; request sampling is also disabled by default. Neither an ALB nor WAF materializes for registered ECS services without a selected image digest and ingress configuration.
+- **Runtime evidence:** The existing **16-validator** workload suite conditionally inspects WAF outputs and the live ALB Web ACL association, group actions, metrics, sampling, and optional rate rule. Disabled WAF requires no WAF API calls. Existing CI validation structure is preserved; no new baseline validator or WAF-specific workflow step was added.
+
+### Qualification Evidence
+
+- **M1:** [Roadmap](ROADMAP.md#M1--Verified-RDS-Recovery) records positive and deliberately corrupted synthetic SQL restore outcomes, strict failure qualification, alerts, and temporary-resource cleanup. This establishes the tested canary contract, not application-level recovery or an RTO/RPO guarantee.
+- **M2:** Real HTTPS requests were retrieved from a delivered `.log.gz` S3 access-log object; [staging baseline validation #40796511254](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/40796511254) passed 16/16.
+- **M3:** [staging baseline evidence #41157394879](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41157394879) passed 16/16, including WAF drift checks. The same synthetic managed-rule match was sampled as `COUNT` (HTTP 200) and, after reviewed enforcement, `BLOCK` (HTTP 403), while benign traffic remained HTTP 200. [Protected staging Destroy #41160908973](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41160908973) succeeded (**298 destroyed**); the operator confirmed the workload state was empty. The canonical staging image digest is again `null`.
+- **M4:** Offline regression and final release-candidate CI review remain separate sign-off gates. Earlier live evidence is retained under the tested configurations; it is **not** a claim that those tests were rerun against every subsequent commit.
+
+### Upgrade, Cost, and Limitations
+
+No new feature-specific Terraform state migration is intended. **Always review the actual saved plan before Apply**, especially for existing production-profile environments where Restore Testing and ALB logging may create resources when their prerequisites are present. RDS Restore Testing can incur periodic restore charges; access logging incurs storage/operation costs, and enabling WAF incurs AWS WAF charges. The optional rate rule is not exercised by the recorded M3 live tests.
+
+ALB access-log delivery is best-effort, and S3 Lifecycle expiration is not immutable retention. WAF Count at the managed-group level is not exhaustive per-rule qualification; Known Bad Inputs was configured but not independently triggered. Request samples and log objects may reveal sensitive request metadata. Keep validation artifacts private and preserve required evidence, snapshots, and encryption keys before destructive cleanup. These technical controls do not constitute SOC 2 or ISO 27001 certification.
+
+See [ROADMAP.md](ROADMAP.md) and the [ALB module](modules/application_load_balancer/README.md) for scoped implementation and qualification details. **Do not tag/publish v1.13.0 until M4 final CI and maintainer approval are complete.**
+
+---
+
 ## v1.12.0 — Application Runtime Extensibility
 
 v1.12.0 is the current release. It introduces three opt-in capabilities for
