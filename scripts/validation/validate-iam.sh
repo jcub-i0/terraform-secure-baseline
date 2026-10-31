@@ -37,6 +37,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/ecs-task-role-managed-policies.sh
 source "${SCRIPT_DIR}/lib/ecs-task-role-managed-policies.sh"
+# shellcheck source=lib/shared-log-reader-policy.sh
+source "${SCRIPT_DIR}/lib/shared-log-reader-policy.sh"
 
 ENV_NAME="${1:-}"
 CLOUD_NAME="${CLOUD_NAME:-tf-secure-baseline}"
@@ -538,50 +540,15 @@ if terraform_output_exists "$OUTPUTS_JSON" logs_s3_readonly_policy_name; then
     success "Shared IAM policy exists: $LOGS_S3_READONLY_POLICY_NAME"
     info "Policy ARN: $LOGS_S3_POLICY_ARN"
 
-    # Validate the deployed default managed policy, not just its existence.
-    # Its ALB bucket scopes must appear only while ALB logging is enabled.
-    for output_name in centralized_logs_bucket_name application_load_balancer; do
-      terraform_output_exists "$OUTPUTS_JSON" "$output_name" ||
-        fail "Missing Terraform output for shared S3 reader validation: $output_name"
-    done
-
-    centralized_bucket="$(get_terraform_output_value "$OUTPUTS_JSON" centralized_logs_bucket_name)"
-    [[ "$centralized_bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] ||
-      fail "Invalid centralized logs bucket name in Terraform output."
+    # Centralized logs are mandatory; the ALB output may be absent when no
+    # service has deployable ingress. Never relax the exact IAM policy comparison.
+    terraform_output_exists "$OUTPUTS_JSON" centralized_logs_bucket_name ||
+      fail "Missing Terraform output for shared S3 reader validation: centralized_logs_bucket_name"
 
     policy_partition="$(get_aws_partition_from_caller_arn "$CALLER_ARN")"
-    centralized_bucket_arn="arn:${policy_partition}:s3:::${centralized_bucket}"
-
-    alb_bucket_arn="$(
-      echo "$OUTPUTS_JSON" | jq -er '
-        .application_load_balancer.value as $alb
-        | if $alb == null then ""
-          elif $alb.access_logs.enabled == true then
-            $alb.access_logs as $logs
-            | if (
-                ($logs.bucket_name | type) == "string"
-                and ($logs.bucket_arn | type) == "string"
-                and ($logs.bucket_arn | endswith(":s3:::" + $logs.bucket_name))
-              ) then $logs.bucket_arn
-              else error("Invalid ALB access-log bucket metadata") end
-          elif $alb.access_logs.enabled == false
-            and $alb.access_logs.bucket_name == null
-            and $alb.access_logs.bucket_arn == null then ""
-          else error("Invalid disabled ALB access-log metadata") end
-      '
-    )" || fail "Unable to resolve conditional ALB logging scope."
-
-    expected_bucket_resources_json="$(
-      jq -nc --arg central "$centralized_bucket_arn" --arg alb "$alb_bucket_arn" '
-        [$central] + (if $alb == "" then [] else [$alb] end) | sort
-      '
-    )"
-
-    expected_object_resources_json="$(
-      jq -nc --arg central "$centralized_bucket_arn" --arg alb "$alb_bucket_arn" '
-        [$central + "/*"] + (if $alb == "" then [] else [$alb + "/alb/*"] end) | sort
-      '
-    )"
+    expected_log_scopes_json="$(
+      shared_log_reader_expected_scopes "$OUTPUTS_JSON" "$policy_partition"
+    )" || fail "Unable to resolve centralized and conditional ALB logging scopes."
 
     policy_version_id="$(aws iam get-policy \
       "${aws_args[@]}" \
@@ -597,27 +564,7 @@ if terraform_output_exists "$OUTPUTS_JSON" logs_s3_readonly_policy_name; then
         jq -c '.PolicyVersion.Document'
     )" || fail "Cannot read deployed shared log-reader IAM policy."
 
-    if ! echo "$log_reader_policy_json" | jq -e \
-      --argjson bucket_resources "$expected_bucket_resources_json" \
-      --argjson object_resources "$expected_object_resources_json" '
-        def as_list: if type == "array" then . else [.] end;
-        (.Statement | as_list) as $ss
-        | ($ss | length) == 2
-          and ([$ss[].Sid] | sort) == ["ListManagedLogBuckets","ReadManagedLogObjects"]
-          and all($ss[];
-            .Effect == "Allow"
-            and (.Condition == null)
-            and (.NotAction == null)
-            and (.NotResource == null)
-          )
-          and ([$ss[] | select(.Sid == "ListManagedLogBuckets")][0] as $list
-            | ($list.Action | as_list | sort) == (["s3:ListBucket","s3:GetBucketLocation"] | sort)
-            and ($list.Resource | as_list | sort) == $bucket_resources)
-          and ([$ss[] | select(.Sid == "ReadManagedLogObjects")][0] as $read
-            | ($read.Action | as_list | sort) ==
-              (["s3:GetObject","s3:GetObjectVersion","s3:GetObjectTagging","s3:GetObjectVersionTagging"] | sort)
-            and ($read.Resource | as_list | sort) == $object_resources)
-      ' >/dev/null; then
+    if ! shared_log_reader_policy_matches "$log_reader_policy_json" "$expected_log_scopes_json"; then
       echo "$log_reader_policy_json" | jq .
       fail "Shared S3 log-reader IAM policy does not match centralized and conditional ALB logging scope."
     fi

@@ -49,18 +49,26 @@ for command in aws terraform jq; do
   command -v "$command" >/dev/null 2>&1 || fail "Missing command: $command"
 done
 
-deployment_profile="$(terraform -chdir="$working_dir" output -raw deployment_profile)" ||
+# Read one complete Terraform output snapshot. Null root outputs can be omitted,
+# and querying an absent optional output by name would fail.
+outputs_json="$(terraform -chdir="$working_dir" output -json)" ||
+  fail 'Cannot read applied Terraform outputs.'
+[[ -n "$outputs_json" ]] &&
+  jq -e 'type == "object"' <<< "$outputs_json" >/dev/null ||
+  fail 'Terraform outputs must be a JSON object.'
+
+deployment_profile="$(jq -er '.deployment_profile.value | select(type == "string")' <<< "$outputs_json")" ||
   fail 'Cannot read applied deployment profile.'
 
 [[ "$deployment_profile" == production ]] || fail 'Log-bucket preflight requires applied production profile.'
 
-lifecycle="$(terraform -chdir="$working_dir" output -json lifecycle_protection)" ||
+lifecycle="$(jq -ce '.lifecycle_protection.value | select(type == "object")' <<< "$outputs_json")" ||
   fail 'Cannot read applied lifecycle posture.'
 
 jq -e '.production_retirement_mode == true and .centralized_logs_force_destroy == true and .alb_access_logs_force_destroy == true' \
   <<< "$lifecycle" >/dev/null || fail 'Production log force_destroy is not enabled in applied outputs.'
 
-bucket="$(terraform -chdir="$working_dir" output -raw centralized_logs_bucket_name)" ||
+bucket="$(jq -er '.centralized_logs_bucket_name.value | select(type == "string")' <<< "$outputs_json")" ||
   fail 'Cannot read centralized logs bucket name.'
 
 [[ "$bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] ||
@@ -122,8 +130,15 @@ verify_log_bucket_policy() {
 
 verify_log_bucket_policy "$bucket"
 
-alb_json="$(terraform -chdir="$working_dir" output -json application_load_balancer)" ||
-  fail 'Cannot read applied Application Load Balancer metadata.'
+alb_json="$(jq -c '
+  if has("application_load_balancer") then
+    if (.application_load_balancer | type) == "object"
+       and (.application_load_balancer | has("value")) then
+      .application_load_balancer.value
+    else error("Malformed application_load_balancer output") end
+  else null end
+' <<< "$outputs_json")" ||
+  fail 'Cannot resolve optional Application Load Balancer metadata.'
 
 if [[ "$alb_json" != "null" ]]; then
   if ! jq -e '

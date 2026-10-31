@@ -34,15 +34,27 @@ assert_failure bash "$cleanup" prod --mode apply \
 
 cat >"$tmp/bin/terraform" <<'MOCK'
 #!/usr/bin/env bash
-[[ "$1" == -chdir=* && "$2" == output ]] || exit 1
-case "$3:$4" in
-  -raw:deployment_profile) printf '%s\n' "${MOCK_TF_PROFILE:-production}" ;;
-  -raw:centralized_logs_bucket_name) printf 'sample-prod-centralized-logs-12345678\n' ;;
-  -json:lifecycle_protection)
-    printf '{"production_retirement_mode":true,"centralized_logs_force_destroy":%s,"alb_access_logs_force_destroy":%s}\n' "${MOCK_FORCE_DESTROY:-true}" "${MOCK_ALB_FORCE_DESTROY:-true}" ;;
-  -json:application_load_balancer) printf '%s\n' "${MOCK_ALB_JSON:-null}" ;;
-  *) exit 1 ;;
-esac
+[[ "$1" == -chdir=* && "$2" == output && "$3" == -json && $# -eq 3 ]] || exit 1
+[[ "${MOCK_TF_OUTPUT_FAIL:-false}" != "true" ]] || exit 1
+# Full output JSON. The optional ALB output is genuinely absent when requested.
+jq -nc \
+  --arg profile "${MOCK_TF_PROFILE:-production}" \
+  --arg bucket "sample-prod-centralized-logs-12345678" \
+  --arg force "${MOCK_FORCE_DESTROY:-true}" \
+  --arg alb_force "${MOCK_ALB_FORCE_DESTROY:-true}" \
+  --arg absent "${MOCK_ALB_OUTPUT_ABSENT:-false}" \
+  --arg missing "${MOCK_TF_OMIT_BUCKET:-false}" \
+  --argjson alb "${MOCK_ALB_JSON:-null}" '{
+    deployment_profile:{value:$profile},
+    lifecycle_protection:{value:{
+      production_retirement_mode:true,
+      centralized_logs_force_destroy:($force == "true"),
+      alb_access_logs_force_destroy:($alb_force == "true")
+    }},
+    centralized_logs_bucket_name:{value:$bucket}
+  }
+  + (if $absent == "true" then {} else {application_load_balancer:{value:$alb}} end)
+  | if $missing == "true" then del(.centralized_logs_bucket_name) else . end'
 MOCK
 cat >"$tmp/bin/aws" <<'MOCK'
 #!/usr/bin/env bash
@@ -92,6 +104,9 @@ args=(
   --region us-east-1
 )
 assert_success env PATH="$tmp/bin:$PATH" bash "$guard" "${args[@]}"
+assert_success env PATH="$tmp/bin:$PATH" MOCK_ALB_OUTPUT_ABSENT=true bash "$guard" "${args[@]}"
+assert_failure env PATH="$tmp/bin:$PATH" MOCK_TF_OUTPUT_FAIL=true bash "$guard" "${args[@]}"
+assert_failure env PATH="$tmp/bin:$PATH" MOCK_TF_OMIT_BUCKET=true bash "$guard" "${args[@]}"
 assert_success env PATH="$tmp/bin:$PATH" MOCK_EXPECT_PROFILE=target-account \
   bash "$guard" "${args[@]}" --profile target-account
 assert_failure env PATH="$tmp/bin:$PATH" MOCK_TF_PROFILE=development bash "$guard" "${args[@]}"
@@ -105,6 +120,7 @@ assert_failure env PATH="$tmp/bin:$PATH" bash "$guard" \
 jq '(.Statement[] | select(.Sid == "DenyBucketPolicyChanges") | .Condition.ArnNotEquals["aws:PrincipalArn"]) = ["arn:aws:iam::123456789012:role/OtherRole"]' \
   "$tmp/policy.json" > "$tmp/wrong-role.json"
 assert_failure env PATH="$tmp/bin:$PATH" MOCK_POLICY_FILE="$tmp/wrong-role.json" bash "$guard" "${args[@]}"
+assert_failure env PATH="$tmp/bin:$PATH" MOCK_ALB_OUTPUT_ABSENT=true MOCK_POLICY_FILE="$tmp/wrong-role.json" bash "$guard" "${args[@]}"
 
 jq 'del(.Statement[] | select(.Sid == "DenyDeleteLogs"))' \
   "$tmp/policy.json" > "$tmp/no-deny.json"
