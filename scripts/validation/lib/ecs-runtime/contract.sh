@@ -339,6 +339,30 @@ validate_alb_output() {
       fail "application_load_balancer output has invalid runtime or ALB access logging metadata"
     fi
 
+    # Only validate the enabled-WAF contract; no AWS calls when disabled.
+    if ! jq -e '
+      (.waf | type == "object")
+      and (.waf.enabled | type == "boolean")
+      and (if .waf.enabled then
+        (.waf.mode == "count" or .waf.mode == "enforce")
+        and (.waf.web_acl_arn | type == "string" and contains(":regional/webacl/"))
+        and (.waf.web_acl_id | type == "string" and length > 0)
+        and (.waf.association_id == (.waf.web_acl_arn + "," + .arn))
+        and (.waf.sampled_requests_enabled | type == "boolean")
+        and (
+          .waf.rate_limit_requests == null
+          or (
+            (.waf.rate_limit_requests | type) == "number"
+            and .waf.rate_limit_requests >= 10
+            and .waf.rate_limit_requests <= 2000000000
+            and .waf.rate_limit_requests == (.waf.rate_limit_requests | floor)
+          )
+        )
+      else true end)
+    ' <<< "$APPLICATION_LOAD_BALANCER_JSON" >/dev/null; then
+      fail "application_load_balancer.waf output metadata is invalid"
+    fi
+
     unexpected_target_group_keys_json="$(
       jq -n \
         --argjson services "$ECS_SERVICES_JSON" \
