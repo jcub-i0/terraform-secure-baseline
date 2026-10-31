@@ -87,7 +87,7 @@ Coordinate with image publishers, operators, and scheduled jobs. The workload Ap
 
 Use the reviewed source revision and the same effective workload configuration that owns the live resources. Preserve the service digest and normal canonical capacity settings while enabling retirement mode.
 
-Confirm the selected `<env>-plan` and `<env>` GitHub Environment settings and required reviewer rules. Relevant inputs include `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, Plan/Apply role ARNs, `DEPLOYMENT_PROFILE`, and the workload's other state and infrastructure settings. Keep `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, ALB certificate/ingress settings, and optional `ALB_ACCESS_LOGS_ENABLED` / `ALB_ACCESS_LOGS_RETENTION_DAYS` overrides consistent with the deployed workload. When unset, ALB logging uses profile defaults. Local `TF_VAR_*` overrides are not automatically present in Actions.
+Confirm the selected `<env>-plan` and `<env>` GitHub Environment settings and required reviewer rules. Relevant inputs include `ACCOUNT_ID`, `PRIMARY_REGION`, `CLOUD_NAME`, Plan/Apply role ARNs, `DEPLOYMENT_PROFILE`, and the workload's other state and infrastructure settings. Keep `MAIN_VPC_CIDR`, `RDS_INSTANCE_CLASS`, ALB certificate/ingress settings, optional `ALB_ACCESS_LOGS_ENABLED` / `ALB_ACCESS_LOGS_RETENTION_DAYS`, and WAF enablement/mode/rate/sampling settings consistent with the deployed workload. When unset, ALB logging uses profile defaults. Local `TF_VAR_*` overrides are not automatically present in Actions.
 
 The workflows pin Terraform `1.15.8`; use the committed provider lockfiles and root requirements. This procedure does not authorize provider upgrades or topology changes.
 

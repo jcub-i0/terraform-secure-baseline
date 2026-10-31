@@ -247,7 +247,7 @@ selected immutable digest
 
 Fargate tasks run in compute-private subnets with `awsvpc`, no public IP, and one task security group per service. Private ECR API/registry traffic uses `ecr.api` and `ecr.dkr` Interface Endpoints in endpoint-private subnets, while ECR image layers use the S3 Gateway Endpoint. Optional ingress uses a shared internet-facing HTTPS ALB in `ingress_public` subnets; NAT Gateways use the separate `egress_public` subnets.
 
-The ALB terminates frontend TLS; task target groups and their health checks use HTTP. This is not end-to-end TLS. One application container per task is configured by Terraform; GuardDuty's service-managed agent does not create a general user-configurable sidecar abstraction.
+The ALB terminates frontend TLS; task target groups and their health checks use HTTP. This is not end-to-end TLS. With an ingress ALB, baseline can enable protected S3 access logging (default on in production) and a regional AWS WAF Web ACL (disabled by default). WAF offers Common/Known Bad Inputs managed groups in reviewed Count/Enforce modes; it does not replace application authentication. Controlled traffic evidence is separate from configuration readback. One application container per task is configured by Terraform; GuardDuty's service-managed agent does not create a general user-configurable sidecar abstraction.
 
 Task images are constructed only from the managed repository URL and a reviewed immutable digest:
 
@@ -815,6 +815,8 @@ CloudWatch retention is profile-aware by default:
 | `development` | 30 days |
 | `minimal` | 14 days |
 
+ALB access logging uses a distinct protected SSE-S3 bucket when enabled, not the centralized SSE-KMS log bucket. Logs are best-effort and may contain request details; S3 Lifecycle is not Object Lock. Retain retrieved request-correlated log evidence separately.
+
 Long-term centralized log storage remains encrypted, versioned, lifecycle-managed, and access-restricted. These controls support monitoring continuity, incident response, and audit-readiness evidence without representing the platform as independently certified.
 
 Here, centralized log storage is a bucket within each workload account, not a separate cross-account log-archive service. The logs bucket has `object_lock_enabled=false`, `force_destroy=true`, and `prevent_destroy=false` in every profile. The 2555-day lifecycle expiration policy is not WORM retention or a guarantee that logs survive workload destruction. Review retention/export obligations before retirement; the [storage reference](../modules/storage/README.md) documents the actual limits.
@@ -1124,11 +1126,11 @@ This avoids treating a cost-control toggle as authorization to remove the enviro
 
 ### AWS Backup Restore Testing
 
-Production with effective AWS Backup enabled also creates an RDS Restore Testing plan and selection. The plan selects snapshots from the Terraform-managed vault using `LATEST_WITHIN_WINDOW`, a two-day selection window, Sunday `08:00` UTC scheduling, a two-hour start window, and a one-hour validation window. The selection uses the exact source RDS ARN, Backup role, private DB subnet group and data security group. Its temporary restore explicitly uses `publiclyAccessible=false` and `multiAz=false`; this does not change the source production database's Multi-AZ setting.
+Production with effective AWS Backup enabled also creates an RDS Restore Testing plan and selection. The plan selects snapshots from the Terraform-managed vault using `LATEST_WITHIN_WINDOW`, a two-day selection window, Sunday `08:00` UTC scheduling, a two-hour start window, and a one-hour validation window. The selection uses the exact source RDS ARN, Backup role, private DB subnet group and dedicated restore-test security group. Its temporary restore explicitly uses `publiclyAccessible=false` and `multiAz=false`; this does not change the source production database's Multi-AZ setting.
 
 The validator distinguishes configuration equality from job execution. An absent restore job or pending/running execution produces a warning. Failed/timed-out application validation and cleanup failure are also warning-only in this validator; a failed/aborted restore execution fails. A successful configuration check alone is not proof of a restorable application, achieved recovery objectives, or completed temporary-resource cleanup.
 
-The module does not implement cross-account/cross-Region copies, Vault Lock, application validation automation, or a recovery-time/recovery-point guarantee. Record behavioral qualification and cleanup separately in the [evidence guide](assurance/validation-evidence-guide.md).
+The Backup module does not implement cross-account/cross-Region copies, Vault Lock or SQL validation itself. A separate opt-in baseline Restore Validation worker can validate configured synthetic PostgreSQL canaries using read-only credentials. Neither mechanism establishes full application recovery or an RTO/RPO guarantee. Record behavioral qualification and cleanup separately in the [evidence guide](assurance/validation-evidence-guide.md).
 ## Break-Glass Monitoring
 
 The baseline includes a break-glass administrative role for emergency access.

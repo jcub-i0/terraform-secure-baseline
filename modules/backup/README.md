@@ -13,7 +13,7 @@ When backups are enabled, supported resources tagged with `Backup = "true"` are 
 
 This separation allows the baseline to disable scheduled backups for cost-sensitive environments without coupling that decision to deletion of the backup vault. Separately, `restore_testing_enabled` controls the Restore Testing plan and selection. The baseline enables Restore Testing by default for the production profile when scheduled Backup is enabled; any deployment profile may explicitly opt in or out through the baseline-level `restore_testing_enabled` input. Enabling Restore Testing requires effective AWS Backup enablement. An optional `restore_testing_schedule` overrides the default Sunday 08:00 UTC cron expression (`cron(0 8 ? * SUN *)`).
 
-**Cost/safety:** Enabling Restore Testing creates a scheduled plan, not a single on-demand test. AWS Backup will periodically restore temporary RDS instances and charges can accrue. Non-production qualification requires explicit `backup_enabled = true` together with `restore_testing_enabled = true`; do not apply these settings until the validation workflow and its cleanup checks are ready. The dedicated restore security group has no SQL-validator ingress in M1-A3.
+**Cost/safety:** Enabling Restore Testing creates a scheduled plan, not a single on-demand test. AWS Backup will periodically restore temporary RDS instances and charges can accrue. Non-production qualification requires explicit `backup_enabled = true` together with `restore_testing_enabled = true`; do not apply these settings until the validation workflow and its cleanup checks are ready. The dedicated restore-test security group stays isolated unless the separate, opt-in [Restore Validation](../restore_validation/README.md) worker security group is explicitly allowed to reach PostgreSQL.
 
 This module's scheduled AWS Backup policy is distinct from the RDS instance's native automated-backup retention in `modules/storage`. Disabling scheduled AWS Backup is not a statement that RDS native automated backups are disabled.
 
@@ -239,7 +239,7 @@ The plan name replaces hyphens in `name_prefix` with underscores and appends `_r
 | Public-access override | String `"false"` |
 | Multi-AZ override for the temporary restored instance | String `"false"` |
 
-The restored test instance is deliberately configured as private and Single-AZ. This does not change the source production RDS instance's Multi-AZ policy. The baseline supplies the source RDS subnet-group name and data security-group ID; this is infrastructure restore verification, not application/business-data validation.
+The restored test instance is deliberately configured as private and Single-AZ. This does not change the source production RDS instance's Multi-AZ policy. The baseline supplies the private RDS subnet-group name and dedicated restore-test security-group ID. This module configures restoration only; optional [Restore Validation](../restore_validation/README.md) performs separate read-only synthetic SQL checks when enabled.
 
 The baseline's current enabled defaults are:
 
@@ -250,9 +250,9 @@ The baseline's current enabled defaults are:
 | Recovery-point selection window | 2 days |
 | Validation window | 1 hour |
 
-These are derived in `baseline/locals.tf`, not defaults in the reusable module's input declarations. Development/minimal profiles do not enable Restore Testing through the baseline, even when ordinary scheduled Backup is explicitly enabled there. When disabled, the baseline's effective schedule/window values and this module's Restore Testing metadata outputs are `null`.
+These are derived in `baseline/locals.tf`, not defaults in the reusable module's input declarations. Development/minimal profiles do not enable Restore Testing by default, even if scheduled Backup is enabled; they may explicitly opt in when effective Backup is enabled. When disabled, the baseline's effective schedule/window values and this module's Restore Testing metadata outputs are `null`.
 
-The module does not seed a recovery point, force an immediate restore, run SQL/application assertions, or implement a custom validation-result submitter. Keep test configuration, actual restore execution, validation results, and cleanup evidence separate.
+This Backup module does not seed a recovery point, force an immediate restore, run SQL/application assertions, or implement a custom validation-result submitter. Baseline's separate opt-in Restore Validation module can check synthetic canary data and submit validation outcomes. Keep configuration, execution, SQL validation and cleanup evidence separate.
 
 ---
 

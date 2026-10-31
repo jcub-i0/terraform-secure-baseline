@@ -599,7 +599,7 @@ jobs or sidecars exist because the underlying AWS service supports them.
 
 ### Adopting v1.12.0 runtime extensions
 
-The current release supports three independent opt-ins. Application owners must
+v1.12.0 introduced three independent opt-ins. Application owners must
 provision and review application IAM policies before supplying plan-known
 `task_role_managed_policy_arns`; only AWS-managed or same-account managed policies
 in the active partition can attach. The baseline does not author those policies
@@ -629,6 +629,21 @@ See the [usage and migration steps](quickstart.md#v1120-opt-in-configuration-and
 Use the [release notes](../CHANGELOG.md#v1120--application-runtime-extensibility)
 for historical test results and exceptions. Validate each customer's policy,
 image and topology against that deployment's requirements.
+
+### Adopting v1.13.0 recovery and edge options (release candidate)
+
+For deployable ingress workloads, choose ALB access-log retention and who
+may access its separate SSE-S3 bucket. Logging defaults on in production
+and off in development/minimal. Decide whether regional AWS WAF is required.
+It defaults off and, when enabled, starts in group-level `count` mode;
+switch to `enforce` only after reviewing controlled request behavior.
+WAF sampling may expose sensitive metadata and is not authentication.
+
+Production with scheduled AWS Backup enabled configures RDS Restore Testing.
+Separate optional SQL canary validation requires read-only credentials and
+explicit enablement. A configuration PASS alone is not successful recovery.
+Budget for restore, WAF and access-log charges and preserve evidence before
+teardown. See [v1.13.0 upgrade notes](quickstart.md#v1130-opt-in-configuration-and-upgrade-release-candidate).
 
 ## Phase 5 - Validate Controls
 
@@ -904,6 +919,8 @@ Record ALB frontend/backend and database transport requirements explicitly.
 - What AWS Config rules are required locally in workload accounts?
 - Should findings be exported to an external SIEM?
 - Should CloudWatch retention follow deployment profile defaults or explicit overrides?
+- Is ALB access logging configured for ingress and who owns retention/access/export?
+- Should optional AWS WAF use Count or approved enforcement, and is sampling permitted?
 
 Object Lock is not enabled by the supplied storage resource and is not a simple
 profile toggle. Although normal production disables logs-bucket `force_destroy`,
@@ -942,6 +959,7 @@ payload approver/ticket fields are not an approval service.
 - What patch windows are acceptable?
 - Who reviews patch compliance?
 - What recovery testing is required?
+- Is synthetic SQL restore validation needed, and who owns the read-only credentials/canary?
 
 Separate RDS-native backups, AWS Backup plans, production Restore Testing,
 application/data validation, and restore cleanup. Preserve required keys along
@@ -1179,6 +1197,7 @@ Before using this baseline for production workloads, confirm:
 - Snapshot creation, quarantine networking, SNS notification, and rollback permissions are validated.
 - IP enrichment tests pass.
 - Backup scope and usable keys are preserved; restore execution, application/data validation, cleanup, and required recovery objectives have their own accepted evidence.
+- For any ingress ALB, review access-log delivery/lifecycle, WAF opt-in/mode/sampling, and independently observed Count/Block behavior where required.
 - Patch targeting/reboot impact and per-target results are reviewed; no application health gate or quarantine exclusion is assumed.
 - Production uses the expected deployment profile.
 - Production uses the expected egress mode.

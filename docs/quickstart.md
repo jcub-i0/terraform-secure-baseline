@@ -868,7 +868,7 @@ These outputs confirm how profile defaults and explicit overrides resolved for t
 
 ### v1.12.0 opt-in configuration and upgrade
 
-The current release, v1.12.0, preserves the opt-out defaults for existing
+v1.12.0 preserved the opt-out defaults for existing
 v1.11.1 configurations. No new settings are required unless an application needs
 one of the following capabilities. Review your actual state-backed plan; this
 compatibility contract does not promise a no-change plan for every deployment.

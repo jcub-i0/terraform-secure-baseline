@@ -41,7 +41,7 @@ See [ROADMAP.md](ROADMAP.md) and the [ALB module](modules/application_load_balan
 
 ## v1.12.0 — Application Runtime Extensibility
 
-v1.12.0 is the current release. It introduces three opt-in capabilities for
+v1.12.0 introduced three opt-in capabilities for
 application-agnostic SaaS workloads handling sensitive data. This entry covers
 `v1.11.1` through implementation `7002a4219e4e8146fd7f2496aa121d089dee7be3`:
 roadmap #868, M1 #869, M2 #870, M3 #873–#875, and M4 regression in #877.

@@ -601,7 +601,7 @@ These scripts validate:
 - Lambda functions, runtime, state, execution role, timeout, memory, KMS config, VPC config, environment variables, resource policies, and EventBridge permissions
 - SSM managed instance registration, online status, associations, maintenance windows, and patch baseline visibility
 - EC2 compute instances, private placement, public IP absence, IMDSv2, detailed monitoring, instance profiles, security groups, required tags, isolation eligibility, and EBS encryption
-- ECS cluster identity and state; deployment-profile Runtime Monitoring intent and exact `GuardDutyManaged` tag; injected GuardDuty agent state; GuardDuty ECS coverage management/status/issues; fixed-versus-autoscaled desired-count ownership; exact Application Auto Scaling targets and CPU/memory/conditional ALB target-tracking policies; deployment-health settings; Fargate service placement and deployment safeguards; application-only task-definition contract, digest-pinned ECR image, port, and `awslogs` contracts; Terraform-owned application log groups; runtime task-SG relationships; conditional shared-ALB state; and Terraform-owned task-deficit / ingress unhealthy-target operational alarms
+- ECS cluster identity and state; deployment-profile Runtime Monitoring intent and exact `GuardDutyManaged` tag; injected GuardDuty agent state; GuardDuty ECS coverage management/status/issues; fixed-versus-autoscaled desired-count ownership; exact Application Auto Scaling targets and CPU/memory/conditional ALB target-tracking policies; deployment-health settings; Fargate service placement and deployment safeguards; application-only task-definition contract, digest-pinned ECR image, port, and `awslogs` contracts; Terraform-owned application log groups; runtime task-SG relationships; conditional shared-ALB, access-log and WAF state; and Terraform-owned task-deficit / ingress unhealthy-target operational alarms
 - IAM roles, service trust policies, key service roles, GitHub OIDC roles where present, break-glass MFA conditions, shared log access policies, and per-service ECS task/execution role separation with exact application and GuardDuty-agent ECR authority
 
 A successful run should end with:
@@ -1478,6 +1478,8 @@ Per-service application log groups must match the Terraform output, use `/aws/ec
 Cluster validation also checks the exact Container Insights setting and, when enabled, the Terraform-owned performance log group `/aws/ecs/containerinsights/<cluster-name>/performance`, including exact resource identity, retention, and KMS encryption.
 
 The same validator checks task-SG relationships to Interface Endpoints and the S3 prefix list, effective-mode HTTPS egress, database SG presence/absence, and conditional shared-ALB relationships. It validates Terraform-owned task-deficit alarms for deployable services when Container Insights is enabled and ingress unhealthy-target alarms for deployable ingress services. AWS-managed target-tracking alarms are not treated as Terraform operational alarms. Operational alarm state is interpreted as `OK` = pass, `INSUFFICIENT_DATA` = warning, and `ALARM` = failure.
+
+With an ingress ALB, ECS runtime validation checks Terraform-declared access logging and log-bucket protection. When `application_load_balancer.waf.enabled=true`, it compares the associated Web ACL's managed groups, Count/Enforce posture, optional rate rule, metrics and sampling to applied Terraform outputs. WAF API inspection is skipped when disabled or when no ALB exists. Configuration parity does not prove delivered access logs or effective Count/Block behavior: retain correlated `.log.gz` and controlled synthetic HTTP evidence separately.
 
 Runtime Monitoring validation derives the expected state directly from `deployment_profile`. `production` and `development` require `GuardDutyManaged=true`; `minimal` requires `GuardDutyManaged=false`. The Terraform task definition must remain application-only even when GuardDuty injects a live agent.
 
@@ -2722,7 +2724,7 @@ When Restore Testing is disabled, the validator returns without requiring live R
 | Temporary-resource deletion `FAILED` | Warning | Cleanup has not been proven successful |
 | Unknown/in-progress validation or cleanup status | Informational message or warning | Retain the exact status and follow up; do not infer completion |
 
-A `validate-backup.sh` PASS may therefore coexist with an unexecuted restore, failed application validation, or unresolved cleanup. Keep the raw log and record the reviewer's recovery/cleanup acceptance separately. See the [Backup module](../modules/backup/README.md), [storage reference](../modules/storage/README.md), and [evidence guide](assurance/validation-evidence-guide.md).
+A `validate-backup.sh` PASS may therefore coexist with an unexecuted restore, failed application validation, or unresolved cleanup. Optional `restore_validation_enabled=true` adds a separate SQL canary coordinator/worker and strict recovery qualification; a Backup-validator PASS does not execute that SQL check. Keep the raw log and record the reviewer's recovery/cleanup acceptance separately. See the [Backup module](../modules/backup/README.md), [storage reference](../modules/storage/README.md), and [evidence guide](assurance/validation-evidence-guide.md).
 
 ### Scoped read-only RDS inspection
 

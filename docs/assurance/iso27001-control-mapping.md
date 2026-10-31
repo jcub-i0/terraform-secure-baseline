@@ -827,8 +827,7 @@ A.8.13 addresses maintaining backup copies of information, software, and systems
 [Backup configuration](../../modules/backup/main.tf) includes RDS Restore
 Testing when both production profile and effective backup enablement are true,
 distinct from RDS-native backups and source Multi-AZ availability.
-A temporary private Single-AZ restore is used; the module does not supply an
-application-specific data validator.
+A temporary private Single-AZ restore is used. The Backup module does not execute SQL; separate opt-in baseline Restore Validation can verify synthetic canaries, not arbitrary application recovery.
 
 Record configuration, completed restore execution, application/data validation,
 and temporary-resource cleanup separately. The backup validator can PASS with
@@ -845,6 +844,8 @@ The [logging module](../../modules/logging/main.tf) configures management-event
 CloudTrail collection and VPC Flow Logs with CloudWatch/S3 paths. Config,
 application, Lambda, RDS, and Container Insights records have their own resources
 and retention. There is no universal S3 archival path for every log group.
+
+ALB access logs, when enabled, use a separate protected SSE-S3 bucket; production ingress defaults logging on. Actual delivery requires a request-correlated log object, not just configured settings. S3 Lifecycle is not immutable retention.
 
 The logs bucket has encryption, versioning, access policy and lifecycle rules,
 but Object Lock is disabled; force destruction is disabled in normal production
@@ -917,6 +918,7 @@ Network security controls include:
 - NAT Gateway
 - VPC endpoints
 - Endpoint security groups
+- Optional regional AWS WAF Web ACL on the shared HTTPS ALB
 
 ### ISO 27001 Alignment
 
@@ -924,7 +926,7 @@ A.8.20 addresses securing networks and network devices.
 
 ### Narrative
 
-The baseline uses layered AWS network controls to reduce public exposure and control outbound traffic.
+The baseline uses layered AWS network controls to reduce public exposure and control outbound traffic. Optional WAF employs reviewed group-level Count/Enforce modes; configuration parity does not establish complete rule coverage or application authorization.
 
 **Scope:** Effective modes differ: firewall inspection, NAT-only, or endpoint-only
 compute routing. Validate the selected mode, full subnet/route inventory, private
