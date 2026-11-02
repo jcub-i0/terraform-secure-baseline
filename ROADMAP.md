@@ -1,7 +1,7 @@
 # v1.14.0 Roadmap — Production Deployment Assurance & Security Hardening
 
-**Status:** Planned — implementation not started  
-**Baseline:** [v1.13.0 — Recovery Assurance & Edge Protection](https://github.com/jcub-i0/terraform-secure-baseline/releases/tag/v1.13.0) (`0ebfea2d675e1d443b2f610ff329fea2cd70363d`)  
+**Status:** Planned — implementation not started
+**Baseline:** [v1.13.0 — Recovery Assurance & Edge Protection](https://github.com/jcub-i0/terraform-secure-baseline/releases/tag/v1.13.0) (`0ebfea2d675e1d443b2f610ff329fea2cd70363d`)
 **Objective:** Strengthen the security and operational reliability of the existing AWS baseline, then demonstrate that a supported, single-container ECS/Fargate SaaS application can be deployed, monitored, and recovered under a production configuration.
 
 This release prioritizes **correctness and evidence over new features**. It does not claim that every application or organization is production-ready simply because the baseline passes its infrastructure checks.
