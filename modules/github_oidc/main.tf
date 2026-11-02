@@ -88,14 +88,21 @@ data "aws_iam_policy_document" "github_plan" {
   }
 
   statement {
-    sid    = "TerraformStateObjectAccess"
+    sid       = "TerraformStateObjectAccess"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.tf_state_bucket_arn}/*"]
+  }
+
+  statement {
+    sid    = "TerraformStateLockfileAccess"
     effect = "Allow"
     actions = [
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject"
     ]
-    resources = ["${var.tf_state_bucket_arn}/*"]
+    resources = ["${var.tf_state_bucket_arn}/*.tflock"]
   }
 
   statement {
