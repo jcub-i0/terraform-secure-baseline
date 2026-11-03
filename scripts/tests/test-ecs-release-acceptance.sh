@@ -18,7 +18,13 @@ cat > "$tmp/bin/aws" <<'MOCK'
 [[ "${MOCK_FORBID_AWS:-0}" != 1 ]] || { echo "Unexpected AWS call" >&2; exit 99; }
 case "$1:$2" in
   sts:get-caller-identity) echo 123456789012 ;;
-  ecs:describe-services) cat "$MOCK_SERVICE" ;;
+  ecs:describe-services)
+    if [[ -n "${MOCK_FIRST_SERVICE:-}" && ! -e "$MOCK_FIRST_SERVICE_SEEN" ]]; then
+      touch "$MOCK_FIRST_SERVICE_SEEN"
+      cat "$MOCK_FIRST_SERVICE"
+    else
+      cat "$MOCK_SERVICE"
+    fi ;;
   ecs:list-tasks)
     [[ "${MOCK_FORBID_TASKS:-0}" != 1 ]] || exit 99
     echo '{"taskArns":["task-test"]}' ;;
@@ -43,7 +49,10 @@ jq -n --arg c "$cluster" --arg s "$service" --arg d "$definition" --arg tg "$tar
   ecs_cluster:{value:{arn:$c}},
   ecs_services:{value:{test:{arn:$s,name:"test-service"}}},
   ecs_task_definition_arns:{value:{test:$d}},
-  ecs_service_configuration:{value:{test:{ingress_enabled:true,health_check:{command:["CMD","true"]}}}},
+  ecs_service_configuration:{value:{test:{
+    desired_count:1,scaling:null,
+    ingress_enabled:true,health_check:{command:["CMD","true"]}
+  }}},
   lifecycle_protection:{value:{production_retirement_mode:false}},
   application_load_balancer:{value:{target_groups:{test:{arn:$tg}}}}
 }' > "$tmp/base-outputs.json"
@@ -110,6 +119,9 @@ mv "$tmp/modified.json" "$MOCK_OUTPUTS"
 MOCK_FORBID_ALB=1 check 'Service without ingress skips ALB' pass 'ECS release accepted: test'
 
 reset
+jq '.ecs_service_configuration.value.test.desired_count=0' \
+  "$MOCK_OUTPUTS" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_OUTPUTS"
 jq '.services[0].desiredCount=0 | .services[0].runningCount=0' \
   "$MOCK_SERVICE" > "$tmp/modified.json"
 mv "$tmp/modified.json" "$MOCK_SERVICE"
@@ -117,11 +129,72 @@ MOCK_FORBID_TASKS=1 MOCK_FORBID_ALB=1 \
   check 'Zero-capacity revision verified without health checks' pass 'runtime health skipped at zero desired capacity'
 
 reset
+jq '.ecs_service_configuration.value.test.desired_count=2' \
+  "$MOCK_OUTPUTS" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_OUTPUTS"
+check 'Fixed-count drift (expected 2, live 1)' fail 'Timed out awaiting intended ECS revision'
+
+reset
+jq '.services[0].desiredCount=0 | .services[0].runningCount=0' \
+  "$MOCK_SERVICE" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_SERVICE"
+MOCK_FORBID_TASKS=1 MOCK_FORBID_ALB=1 \
+  check 'Fixed-count live zero is not an accepted skip' fail 'Timed out awaiting intended ECS revision'
+
+reset
+jq '.ecs_service_configuration.value.test.scaling={min_capacity:2,max_capacity:4} |
+    .ecs_service_configuration.value.test.desired_count=2' \
+  "$MOCK_OUTPUTS" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_OUTPUTS"
+jq '.services[0].desiredCount=0 | .services[0].runningCount=0' \
+  "$MOCK_SERVICE" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_SERVICE"
+MOCK_FORBID_TASKS=1 MOCK_FORBID_ALB=1 \
+  check 'Autoscaled below minimum cannot skip health' fail 'Timed out awaiting intended ECS revision'
+
+reset
+jq '.ecs_service_configuration.value.test.scaling={min_capacity:0,max_capacity:4} |
+    .ecs_service_configuration.value.test.desired_count=2' \
+  "$MOCK_OUTPUTS" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_OUTPUTS"
+jq '.services[0].desiredCount=0 | .services[0].runningCount=0' \
+  "$MOCK_SERVICE" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_SERVICE"
+MOCK_FORBID_TASKS=1 MOCK_FORBID_ALB=1 \
+  check 'Autoscaled zero within bounds skips runtime health' pass 'runtime health skipped at zero desired capacity'
+
+reset
+jq '.ecs_service_configuration.value.test.scaling={min_capacity:1,max_capacity:3} |
+    .ecs_service_configuration.value.test.desired_count=2' \
+  "$MOCK_OUTPUTS" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_OUTPUTS"
+check 'Autoscaled count within bounds is accepted' pass 'ECS release accepted: test'
+
+reset
+jq '.ecs_service_configuration.value.test.scaling={min_capacity:0,max_capacity:1} |
+    .ecs_service_configuration.value.test.desired_count=1' \
+  "$MOCK_OUTPUTS" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_OUTPUTS"
+jq '.services[0].desiredCount=2 | .services[0].runningCount=2' \
+  "$MOCK_SERVICE" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_SERVICE"
+check 'Autoscaled above maximum cannot be accepted' fail 'Timed out awaiting intended ECS revision'
+
+reset
 jq '.services[0].taskDefinition="arn:aws:ecs:us-east-1:123456789012:task-definition/test:1" |
     .services[0].deployments[0].taskDefinition="arn:aws:ecs:us-east-1:123456789012:task-definition/test:1"' \
   "$MOCK_SERVICE" > "$tmp/modified.json"
 mv "$tmp/modified.json" "$MOCK_SERVICE"
-check 'Rollback to older completed revision' fail 'possible rollback'
+check 'Persistent rollback to older completed revision' fail 'Timed out awaiting intended ECS revision'
+
+reset
+jq '.services[0].taskDefinition="arn:aws:ecs:us-east-1:123456789012:task-definition/test:1" |
+    .services[0].deployments[0].taskDefinition="arn:aws:ecs:us-east-1:123456789012:task-definition/test:1"' \
+  "$MOCK_SERVICE" > "$tmp/stale-service.json"
+export MOCK_FIRST_SERVICE="$tmp/stale-service.json"
+export MOCK_FIRST_SERVICE_SEEN="$tmp/stale-seen"
+check 'Stale completed revision converges to intended' pass 'ECS release accepted: test'
+unset MOCK_FIRST_SERVICE MOCK_FIRST_SERVICE_SEEN
 
 reset
 jq '.services[0].deployments[0].rolloutState="FAILED"' \

@@ -46,7 +46,21 @@ if ! jq -e '
   and ((.ecs_services.value | keys) == (.ecs_service_configuration.value | keys))
   and all(.ecs_services.value[]; (.arn | type == "string") and (.name | type == "string"))
   and all(.ecs_task_definition_arns.value[]; type == "string" and startswith("arn:"))
-  and all(.ecs_service_configuration.value[]; (.ingress_enabled | type) == "boolean")
+  and all(.ecs_service_configuration.value[];
+    (.ingress_enabled | type) == "boolean"
+    and (.desired_count | type) == "number"
+    and .desired_count >= 0
+    and (
+      .scaling == null
+      or (
+        (.scaling | type) == "object"
+        and (.scaling.min_capacity | type) == "number"
+        and (.scaling.max_capacity | type) == "number"
+        and .scaling.min_capacity >= 0
+        and .scaling.max_capacity >= .scaling.min_capacity
+      )
+    )
+  )
 ' <<< "$outputs" >/dev/null; then
   fail "Missing or inconsistent ECS Terraform outputs for $ENV_NAME"
 fi
@@ -95,6 +109,7 @@ describe_tasks() {
 
 service_ready() {
   local key="$1" arn="$2" name="$3" definition="$4" ingress="$5" health_check="$6" target_group="$7"
+  local expected_count="$8" scaling_json="$9"
   local response count listed task_arns tasks target_response ips port
 
   if ! response="$(aws ecs describe-services "${AWS_ARGS[@]}" \
@@ -119,9 +134,11 @@ service_ready() {
     any(.services[0].deployments[]?;
       .status == "PRIMARY" and .rolloutState == "COMPLETED" and .taskDefinition != $expected_definition)
   ' <<< "$response" >/dev/null; then
-    fail "ECS service completed a different revision (possible rollback): $key"
+    info "Completed ECS primary revision differs from intended (possible rollback); awaiting convergence: $key"
+    return 1
   fi
-  if ! jq -e --arg expected_definition "$definition" '
+  if ! jq -e --arg expected_definition "$definition" \
+    --argjson expected_count "$expected_count" --argjson scaling "$scaling_json" '
     .services[0] as $s
     | $s.taskDefinition == $expected_definition
       and ($s.deployments | length) == 1
@@ -130,6 +147,13 @@ service_ready() {
       and $s.deployments[0].rolloutState == "COMPLETED"
       and ($s.desiredCount | type) == "number"
       and $s.desiredCount >= 0
+      and (
+        if $scaling == null
+        then $s.desiredCount == $expected_count
+        else $s.desiredCount >= $scaling.min_capacity
+          and $s.desiredCount <= $scaling.max_capacity
+        end
+      )
       and $s.runningCount == $s.desiredCount
       and $s.pendingCount == 0
   ' <<< "$response" >/dev/null; then
@@ -215,6 +239,8 @@ for key in "${service_keys[@]}"; do
   health_check="$(jq -r --arg k "$key" '
     .ecs_service_configuration.value[$k].health_check != null
   ' <<< "$outputs")"
+  expected_count="$(jq -r --arg k "$key" '.ecs_service_configuration.value[$k].desired_count' <<< "$outputs")"
+  scaling_json="$(jq -c --arg k "$key" '.ecs_service_configuration.value[$k].scaling' <<< "$outputs")"
   target_group=""
   if [[ "$ingress" == "true" ]]; then
     target_group="$(jq -r --arg k "$key" '
@@ -226,7 +252,7 @@ for key in "${service_keys[@]}"; do
 
   info "Awaiting intended ECS revision: $key ($definition)"
   while true; do
-    if service_ready "$key" "$arn" "$name" "$definition" "$ingress" "$health_check" "$target_group"; then
+    if service_ready "$key" "$arn" "$name" "$definition" "$ingress" "$health_check" "$target_group" "$expected_count" "$scaling_json"; then
       success "ECS release accepted: $key ($definition)"
       break
     else
