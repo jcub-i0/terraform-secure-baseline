@@ -1,6 +1,6 @@
 # v1.14.0 Roadmap — Production Deployment Assurance & Security Hardening
 
-**Status:** Planned — implementation not started
+**Status:** `In progress`
 **Baseline:** [v1.13.0 — Recovery Assurance & Edge Protection](https://github.com/jcub-i0/terraform-secure-baseline/releases/tag/v1.13.0) (`0ebfea2d675e1d443b2f610ff329fea2cd70363d`)
 **Objective:** Strengthen the security and operational reliability of the existing AWS baseline, then demonstrate that a supported, single-container ECS/Fargate SaaS application can be deployed, monitored, and recovered under a production configuration.
 
@@ -10,7 +10,7 @@ This release prioritizes **correctness and evidence over new features**. It does
 
 | Milestone | Scope | Acceptance target | Status |
 |---|---|---|---|
-| **M1 — CI/CD State Protection** | Separate GitHub Plan state-read permission from S3 lockfile mutation permissions; retain required Apply capabilities. | Plan cannot modify Terraform state; legitimate plans and locking still work; affected account roots and workflows remain compatible. | Design reviewed; not implemented |
+| **M1 — CI/CD State Protection** | Separate GitHub Plan state-read permission from S3 lockfile mutation permissions; retain required Apply capabilities. | Plan cannot modify Terraform state; legitimate plans and locking still work; affected account roots and workflows remain compatible. | `Complete` |
 | **M2 — Deployment & Backup Assurance** | Correct backup-job API error handling and establish explicit application-release acceptance after Terraform Apply. | API failures fail validation; failed ECS releases cannot be reported as accepted merely because Terraform Apply succeeded. | Planned |
 | **M3 — Production Operational Qualification** | Qualify a synthetic production-profile workload; close material monitoring and recovery gaps discovered by testing. | Measured deployment, availability, database recovery, notification and evidence-retention outcomes meet explicitly agreed test criteria, or are documented as gaps. | Planned |
 | **M4 — Regression & Release Qualification** | Review changes, run relevant CI and live validation, document results, and publish the release. | All approved milestones are qualified, residual risks are documented, and the maintainer explicitly authorizes publication. | Planned |
@@ -19,7 +19,7 @@ This release prioritizes **correctness and evidence over new features**. It does
 
 **Purpose:** Remove unnecessary production-state modification authority from the GitHub Plan role without breaking native S3 state locking.
 
-**Approved design direction, pending implementation and final owner authorization:**
+**Approved design direction - `Complete`:**
 
 - Permit Plan to **read** state objects (`s3:GetObject`), while granting `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` only to S3 `*.tflock` objects in the configured state bucket.
 - Preserve required bucket listing and state-KMS access. Keep the Apply role's existing state permissions and OIDC trust behavior unchanged for this milestone.
