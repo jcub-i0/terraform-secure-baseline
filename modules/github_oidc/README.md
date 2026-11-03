@@ -124,7 +124,7 @@ All roles use `sts:AssumeRoleWithWebIdentity`, this module's `token.actions.gith
 | Apply with null `environment_apply_github` | One `repo:<owner>/<repo>:ref:refs/heads/<branch>` per `branches_apply_github` entry | `StringLike` |
 | Image Publisher | One `repo:<owner>/<repo>:ref:refs/heads/<branch>` per `branches_image_publisher_github` entry | `StringEquals` |
 
-Apply environment trust **replaces**, rather than combines with, branch subjects. Set allowed deployment branches and required reviewers in GitHub separately; those settings are not created or verified by this AWS module. Plan/Apply use pattern comparison, so use reviewed literal names and do not assume wildcard-containing inputs are rejected. Publisher values are exact: a branch wildcard is not a pattern grant there.
+Apply environment trust **replaces**, rather than combines with, branch subjects. Set allowed deployment branches and required reviewers in GitHub separately; those settings are not created or verified by this AWS module. The legacy `branches_plan_github` and `allow_pull_requests_plan_github` inputs do not restrict Plan-role assumption; see [issue #925](https://github.com/jcub-i0/terraform-secure-baseline/issues/925). Plan/Apply use pattern comparison, so use reviewed literal names and do not assume wildcard-containing inputs are rejected. Publisher values are exact: a branch wildcard is not a pattern grant there.
 
 None of these subjects binds a role to a particular workflow file, selected application service, or image digest. A branch-based publisher job must not declare a GitHub Environment that changes its expected subject. The repository's `publish-image` job deliberately omits one, while its separate configuration-resolution job reads variables through `<env>-plan`.
 
@@ -135,13 +135,14 @@ Plan attaches AWS-managed `ReadOnlyAccess` and a custom policy that includes:
 | Custom scope | Allowed actions |
 |---|---|
 | `tf_state_bucket_arn` | `s3:ListBucket` |
-| Every object under `${tf_state_bucket_arn}/*` | `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` |
+| Every object under `${tf_state_bucket_arn}/*` | `s3:GetObject` |
+| Objects matching `${tf_state_bucket_arn}/*.tflock` | `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` |
 | `arn:<partition>:secretsmanager:<primary_region>:<account_id>:secret:<name_prefix>/*` | `secretsmanager:GetSecretValue` |
 | `*` | `secretsmanager:GetRandomPassword` |
 | Supplied state CMK | `kms:Decrypt`, `kms:DescribeKey`, `kms:Encrypt`, `kms:GenerateDataKey` |
 | Supplied Lambda/Secrets Manager CMKs | `kms:Decrypt`, `kms:DescribeKey` |
 
-The object-write/delete grant is **not restricted to lockfiles**. Plan can access state objects across the supplied bucket, and selected secret reads can return sensitive values. A workflow performing read-only inspection does not make these IAM permissions read-only. The attached AWS-managed policy is additional authority; this table is not its complete effective-permissions definition.
+The custom Plan policy allows state-object reads throughout the bucket but restricts object writes and deletions to `*.tflock` keys for native S3 state locking; it does not grant writes or deletions to ordinary state objects. Selected secret reads can return sensitive data. The attached AWS-managed `ReadOnlyAccess` is additional authority, and effective permissions also depend on other applicable IAM, resource, and organizational policies. See the [v1.14.0-M1 evidence and limitations](../../ROADMAP.md).
 
 ### Apply authority
 

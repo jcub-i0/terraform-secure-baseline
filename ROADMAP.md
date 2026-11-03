@@ -17,17 +17,19 @@ This release prioritizes **correctness and evidence over new features**. It does
 
 ## M1 — CI/CD State Protection
 
-**Purpose:** Remove unnecessary production-state modification authority from the GitHub Plan role without breaking native S3 state locking.
+**Status:** Complete
 
-**Approved design direction - `Complete`:**
+**Implementation:** [PR #924](https://github.com/jcub-i0/terraform-secure-baseline/pull/924) separated the GitHub Plan role's bucket-wide state read (`s3:GetObject`) from `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on `*.tflock` keys. Bucket listing, required state-KMS permissions, Apply-role permissions, and OIDC trust were unchanged. The existing Static Analysis workflow runs `scripts/tests/test-github-plan-state-permissions.py`, a lightweight source-level policy guard rather than a rendered/effective-IAM test.
 
-- Permit Plan to **read** state objects (`s3:GetObject`), while granting `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` only to S3 `*.tflock` objects in the configured state bucket.
-- Preserve required bucket listing and state-KMS access. Keep the Apply role's existing state permissions and OIDC trust behavior unchanged for this milestone.
-- Account for all relevant committed backends and migrated state-stack layouts across the five account buckets; do not assume there is only one state key per bucket.
-- Extend existing IAM regression coverage to check actual rendered policy actions/resources, including negative state-write cases and alternative effective grants. Reuse the existing Static Analysis workflow; avoid a new workflow.
-- Qualify with disposable, synthetic, versioned state before any approved account-root rollout. **Never attempt destructive permission tests against real state.**
+**Qualification evidence:**
 
-**Exit gate:** Offline positive/negative tests pass; disposable Plan and Apply operations succeed as expected; prohibited Plan state mutations are denied; affected roots are reviewed and the approved IAM rollout is verified. Record residual bucket-wide lockfile access and broad state-read permissions explicitly.
+- The source regression test and independent PR review passed; the operator reported applying the updated account-root IAM stacks in all five AWS accounts.
+- Read-only IAM simulations across the five accounts, including actual control-plane and security-operations backend keys, showed state reads allowed, state writes/deletions denied, and native lockfile Get/Put/Delete allowed. `s3:DeleteObjectVersion` was denied in both cases.
+- The [post-rollout Terraform Plan matrix](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41381370052/attempts/2) passed all six jobs.
+- A dev Plan-role attachment/inline-policy review and state-bucket policy inspection found the expected custom policy and AWS-managed `ReadOnlyAccess`, with no unexpected object-write grant.
+- The [one-time dev GitHub OIDC test](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41564136709) denied synthetic state Put/Delete, permitted lockfile Get/Put/Delete, and passed Terraform Plan. The operator reported cleanup of the versioned synthetic test artifacts. No real state object was modified.
+
+**Qualification deviations and residual scope:** The disposable authorization test followed, rather than preceded, the IAM rollout. A separate disposable Apply-role test was not performed; Apply permissions were unchanged. Permanent CI validates HCL policy source, with deployed IAM simulation across accounts and actual S3 authorization tested in dev. Plan retains bucket-wide state-read and `*.tflock` mutation access. GitHub Environment/branch-access clarity is tracked separately in [issue #925](https://github.com/jcub-i0/terraform-secure-baseline/issues/925).
 
 ## M2 — Deployment & Backup Assurance
 
