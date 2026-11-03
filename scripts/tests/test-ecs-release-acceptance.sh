@@ -19,8 +19,12 @@ cat > "$tmp/bin/aws" <<'MOCK'
 case "$1:$2" in
   sts:get-caller-identity) echo 123456789012 ;;
   ecs:describe-services) cat "$MOCK_SERVICE" ;;
-  ecs:list-tasks) echo '{"taskArns":["task-test"]}' ;;
-  ecs:describe-tasks) cat "$MOCK_TASKS" ;;
+  ecs:list-tasks)
+    [[ "${MOCK_FORBID_TASKS:-0}" != 1 ]] || exit 99
+    echo '{"taskArns":["task-test"]}' ;;
+  ecs:describe-tasks)
+    [[ "${MOCK_FORBID_TASKS:-0}" != 1 ]] || exit 99
+    cat "$MOCK_TASKS" ;;
   elbv2:describe-target-health)
     [[ "${MOCK_FORBID_ALB:-0}" != 1 ]] || exit 99
     cat "$MOCK_TARGETS" ;;
@@ -106,11 +110,24 @@ mv "$tmp/modified.json" "$MOCK_OUTPUTS"
 MOCK_FORBID_ALB=1 check 'Service without ingress skips ALB' pass 'ECS release accepted: test'
 
 reset
+jq '.services[0].desiredCount=0 | .services[0].runningCount=0' \
+  "$MOCK_SERVICE" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_SERVICE"
+MOCK_FORBID_TASKS=1 MOCK_FORBID_ALB=1 \
+  check 'Zero-capacity revision verified without health checks' pass 'runtime health skipped at zero desired capacity'
+
+reset
 jq '.services[0].taskDefinition="arn:aws:ecs:us-east-1:123456789012:task-definition/test:1" |
     .services[0].deployments[0].taskDefinition="arn:aws:ecs:us-east-1:123456789012:task-definition/test:1"' \
   "$MOCK_SERVICE" > "$tmp/modified.json"
 mv "$tmp/modified.json" "$MOCK_SERVICE"
 check 'Rollback to older completed revision' fail 'possible rollback'
+
+reset
+jq '.services[0].deployments[0].rolloutState="FAILED"' \
+  "$MOCK_SERVICE" > "$tmp/modified.json"
+mv "$tmp/modified.json" "$MOCK_SERVICE"
+check 'Intended deployment reports FAILED' fail 'Intended ECS deployment FAILED'
 
 reset
 jq '.tasks[0].taskDefinitionArn="arn:aws:ecs:us-east-1:123456789012:task-definition/test:1"' \

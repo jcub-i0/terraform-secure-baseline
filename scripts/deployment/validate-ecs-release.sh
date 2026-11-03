@@ -129,7 +129,7 @@ service_ready() {
       and $s.deployments[0].taskDefinition == $expected_definition
       and $s.deployments[0].rolloutState == "COMPLETED"
       and ($s.desiredCount | type) == "number"
-      and $s.desiredCount > 0
+      and $s.desiredCount >= 0
       and $s.runningCount == $s.desiredCount
       and $s.pendingCount == 0
   ' <<< "$response" >/dev/null; then
@@ -137,6 +137,10 @@ service_ready() {
   fi
 
   count="$(jq -r '.services[0].desiredCount' <<< "$response")"
+  # The intended revision is complete, with no tasks left to health-check.
+  if ((count == 0)); then
+    return 2
+  fi
   if ! listed="$(aws ecs list-tasks "${AWS_ARGS[@]}" \
     --cluster "$EXPECTED_CLUSTER_ARN" --service-name "$name" \
     --desired-status RUNNING --output json)"; then
@@ -225,6 +229,12 @@ for key in "${service_keys[@]}"; do
     if service_ready "$key" "$arn" "$name" "$definition" "$ingress" "$health_check" "$target_group"; then
       success "ECS release accepted: $key ($definition)"
       break
+    else
+      result=$?
+      if ((result == 2)); then
+        info "ECS intended revision verified; runtime health skipped at zero desired capacity: $key ($definition)"
+        break
+      fi
     fi
     ((SECONDS < deadline)) || fail "Timed out awaiting intended ECS revision: $key"
     sleep "$poll"
