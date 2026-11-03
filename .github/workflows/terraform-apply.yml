@@ -321,14 +321,6 @@ jobs:
                   --working-directory "${WORKING_DIRECTORY}" \
                   --plan-file "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_BASENAME}.tfplan"
 
-            - name: Validate ECS release acceptance
-              if: ${{ !inputs.production_retirement_mode }}
-              shell: bash
-              run: |
-                set -euo pipefail
-                bash scripts/deployment/validate-ecs-release.sh \
-                  "${{ inputs.environment }}"
-
             - name: Publish plan summary
               if: always()
               shell: bash
@@ -489,6 +481,14 @@ jobs:
               with:
                   name: ${{ env.PLAN_ARTIFACT_NAME }}
                   path: ${{ github.workspace }}/${{ env.PLAN_ARTIFACT_DIR }}
+
+            - name: Validate ECS release acceptance
+              if: ${{ !inputs.production_retirement_mode }}
+              shell: bash
+              run: |
+                set -euo pipefail
+                bash scripts/deployment/validate-ecs-release.sh \
+                  "${{ inputs.environment }}"
 
             - name: Verify and apply exact saved plan
               shell: bash
