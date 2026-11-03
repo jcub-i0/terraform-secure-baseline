@@ -548,6 +548,14 @@ jobs:
                     -lock-timeout=5m \
                     "${GITHUB_WORKSPACE}/${PLAN_ARTIFACT_DIR}/${PLAN_BASENAME}.tfplan"
 
+            - name: Validate ECS release acceptance
+              if: ${{ !inputs.production_retirement_mode }}
+              shell: bash
+              run: |
+                set -euo pipefail
+                bash scripts/deployment/validate-ecs-release.sh \
+                  "${{ inputs.environment }}"
+
             - name: Publish apply summary
               if: always()
               shell: bash
