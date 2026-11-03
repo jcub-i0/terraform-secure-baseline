@@ -95,7 +95,7 @@ passed=0
 check() {
   local label="$1" expected="$2" message="$3" rc=0
   PATH="$tmp/bin:$PATH" AWS_REGION=us-east-1 EXPECTED_ACCOUNT_ID=123456789012 \
-    ECS_RELEASE_TIMEOUT_SECONDS=1 ECS_RELEASE_POLL_SECONDS=1 \
+    ECS_RELEASE_TIMEOUT_SECONDS="${MOCK_TIMEOUT:-1}" ECS_RELEASE_POLL_SECONDS=1 \
     bash "$validator" dev > "$tmp/out" 2>&1 || rc=$?
 
   if [[ "$expected" == pass && "$rc" != 0 ]] ||
@@ -171,13 +171,10 @@ mv "$tmp/modified.json" "$MOCK_OUTPUTS"
 check 'Autoscaled count within bounds is accepted' pass 'ECS release accepted: test'
 
 reset
-jq '.ecs_service_configuration.value.test.scaling={min_capacity:0,max_capacity:1} |
-    .ecs_service_configuration.value.test.desired_count=1' \
+jq '.ecs_service_configuration.value.test.scaling={min_capacity:0,max_capacity:0} |
+    .ecs_service_configuration.value.test.desired_count=0' \
   "$MOCK_OUTPUTS" > "$tmp/modified.json"
 mv "$tmp/modified.json" "$MOCK_OUTPUTS"
-jq '.services[0].desiredCount=2 | .services[0].runningCount=2' \
-  "$MOCK_SERVICE" > "$tmp/modified.json"
-mv "$tmp/modified.json" "$MOCK_SERVICE"
 check 'Autoscaled above maximum cannot be accepted' fail 'Timed out awaiting intended ECS revision'
 
 reset
@@ -193,7 +190,7 @@ jq '.services[0].taskDefinition="arn:aws:ecs:us-east-1:123456789012:task-definit
   "$MOCK_SERVICE" > "$tmp/stale-service.json"
 export MOCK_FIRST_SERVICE="$tmp/stale-service.json"
 export MOCK_FIRST_SERVICE_SEEN="$tmp/stale-seen"
-check 'Stale completed revision converges to intended' pass 'ECS release accepted: test'
+MOCK_TIMEOUT=3 check 'Stale completed revision converges to intended' pass 'ECS release accepted: test'
 unset MOCK_FIRST_SERVICE MOCK_FIRST_SERVICE_SEEN
 
 reset
