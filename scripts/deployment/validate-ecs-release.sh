@@ -110,23 +110,23 @@ service_ready() {
   ' <<< "$response" >/dev/null; then
     fail "ECS service missing, inactive, or unexpected: $key"
   fi
-  if jq -e --arg def "$definition" '
-    any(.services[0].deployments[]?; .taskDefinition == $def and .rolloutState == "FAILED")
+  if jq -e --arg expected_definition "$definition" '
+    any(.services[0].deployments[]?; .taskDefinition == $expected_definition and .rolloutState == "FAILED")
   ' <<< "$response" >/dev/null; then
     fail "Intended ECS deployment FAILED: $key ($definition)"
   fi
-  if jq -e --arg def "$definition" '
+  if jq -e --arg expected_definition "$definition" '
     any(.services[0].deployments[]?;
-      .status == "PRIMARY" and .rolloutState == "COMPLETED" and .taskDefinition != $def)
+      .status == "PRIMARY" and .rolloutState == "COMPLETED" and .taskDefinition != $expected_definition)
   ' <<< "$response" >/dev/null; then
     fail "ECS service completed a different revision (possible rollback): $key"
   fi
-  if ! jq -e --arg def "$definition" '
+  if ! jq -e --arg expected_definition "$definition" '
     .services[0] as $s
-    | $s.taskDefinition == $def
+    | $s.taskDefinition == $expected_definition
       and ($s.deployments | length) == 1
       and $s.deployments[0].status == "PRIMARY"
-      and $s.deployments[0].taskDefinition == $def
+      and $s.deployments[0].taskDefinition == $expected_definition
       and $s.deployments[0].rolloutState == "COMPLETED"
       and ($s.desiredCount | type) == "number"
       and $s.desiredCount > 0
@@ -150,11 +150,11 @@ service_ready() {
   if ! tasks="$(describe_tasks "$task_arns")"; then
     fail "Unable to describe running ECS tasks: $key"
   fi
-  if ! jq -e --arg def "$definition" --arg cluster "$EXPECTED_CLUSTER_ARN" \
+  if ! jq -e --arg expected_definition "$definition" --arg cluster "$EXPECTED_CLUSTER_ARN" \
     --arg group "service:$name" --arg service "$key" \
     --argjson count "$count" --argjson check "$health_check" '
     length == $count and all(.[];
-      .clusterArn == $cluster and .taskDefinitionArn == $def
+      .clusterArn == $cluster and .taskDefinitionArn == $expected_definition
       and .group == $group and .launchType == "FARGATE"
       and .desiredStatus == "RUNNING" and .lastStatus == "RUNNING"
       and ([.containers[]? | select(
