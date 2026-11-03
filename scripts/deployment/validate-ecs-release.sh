@@ -147,7 +147,9 @@ service_ready() {
   fi
   task_arns="$(jq -c '.taskArns | unique' <<< "$listed")"
   [[ "$(jq 'length' <<< "$task_arns")" -eq "$count" ]] || return 1
-  tasks="$(describe_tasks "$task_arns")"
+  if ! tasks="$(describe_tasks "$task_arns")"; then
+    fail "Unable to describe running ECS tasks: $key"
+  fi
   if ! jq -e --arg def "$definition" --arg cluster "$EXPECTED_CLUSTER_ARN" \
     --arg group "service:$name" --arg service "$key" \
     --argjson count "$count" --argjson check "$health_check" '
