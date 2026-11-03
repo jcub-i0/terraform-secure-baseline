@@ -1530,13 +1530,20 @@ fi
 
 section "Reporting recent backup jobs"
 
-BACKUP_JOBS_JSON="$(
+if ! BACKUP_JOBS_JSON="$(
   aws backup list-backup-jobs \
     "${aws_args[@]}" \
     --by-backup-vault-name "$BACKUP_VAULT_NAME" \
     --max-results 25 \
-    --output json 2>/dev/null || echo '{"BackupJobs":[]}'
-)"
+    --output json
+)"; then
+  fail "Unable to list AWS Backup jobs for vault: ${BACKUP_VAULT_NAME}"
+fi
+
+if ! jq -e '(.BackupJobs | type) == "array"' \
+  <<< "$BACKUP_JOBS_JSON" >/dev/null; then
+  fail "Invalid AWS Backup job response for vault: ${BACKUP_VAULT_NAME}"
+fi
 
 BACKUP_JOB_COUNT="$(echo "$BACKUP_JOBS_JSON" | jq '.BackupJobs | length')"
 
