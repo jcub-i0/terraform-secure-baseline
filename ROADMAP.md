@@ -11,7 +11,7 @@ This release prioritizes **correctness and evidence over new features**. It does
 | Milestone | Scope | Acceptance target | Status |
 |---|---|---|---|
 | **M1 — CI/CD State Protection** | Separate GitHub Plan state-read permission from S3 lockfile mutation permissions; retain required Apply capabilities. | Plan cannot modify Terraform state; legitimate plans and locking still work; affected account roots and workflows remain compatible. | `Complete` |
-| **M2 — Deployment & Backup Assurance** | Correct backup-job API error handling and establish explicit application-release acceptance after Terraform Apply. | API failures fail validation; failed ECS releases cannot be reported as accepted merely because Terraform Apply succeeded. | Planned |
+| **M2 — Deployment & Backup Assurance** | Correct backup-job API error handling and establish explicit application-release acceptance after Terraform Apply. | API failures fail validation; failed ECS releases cannot be reported as accepted merely because Terraform Apply succeeded. | `Validated` — teardown pending |
 | **M3 — Production Operational Qualification** | Qualify a synthetic production-profile workload; close material monitoring and recovery gaps discovered by testing. | Measured deployment, availability, database recovery, notification and evidence-retention outcomes meet explicitly agreed test criteria, or are documented as gaps. | Planned |
 | **M4 — Regression & Release Qualification** | Review changes, run relevant CI and live validation, document results, and publish the release. | All approved milestones are qualified, residual risks are documented, and the maintainer explicitly authorizes publication. | Planned |
 
@@ -33,14 +33,33 @@ This release prioritizes **correctness and evidence over new features**. It does
 
 ## M2 — Deployment & Backup Assurance
 
-**Purpose:** Make a successful infrastructure Apply distinguishable from a successful application release, and prevent backup API errors from being misreported as empty job history.
+**Status:** `Validated` — the M2 exit gate was exercised in disposable `staging` with `deployment_profile=development`. Staging teardown and residual-resource disposition have not yet been verified. Do not mark the environment destroyed or M2 `Complete` until that evidence is available.
 
-- Fix `scripts/validation/validate-backup.sh` so failure of `aws backup list-backup-jobs` causes validation failure. A **successful** but empty response may retain its documented no-history warning. Add regression tests for both cases.
-- Define a bounded post-Apply acceptance check for **deployable** ECS services: intended task-definition revision, completed primary rollout, desired/running counts, relevant task and target health, and a clear failure result when ECS rolls back an unhealthy release.
-- Preserve existing behavior for `ecs_services = {}`, null image digests, services without ingress, and approved retirement paths. Do not treat a generic ECS health check as proof that an application's business endpoints or SQL operations work.
-- Exercise both a healthy release and an intentionally unhealthy release in disposable AWS infrastructure. Determine whether the acceptance step belongs in the existing Apply workflow or an explicitly required release gate before implementation.
+**Purpose:** Distinguish a successful infrastructure Apply from an accepted application release, and prevent AWS Backup API errors from appearing as an empty backup-job history.
 
-**Exit gate:** Backup API errors fail closed; an unsuccessful application rollout cannot be silently accepted; successful deployments prove the intended revision is healthy. Existing empty/disabled-state workflows remain compatible.
+**Implementation and source-level qualification:**
+
+- **M2A — Backup fail-closed:** [PR #927](https://github.com/jcub-i0/terraform-secure-baseline/pull/927) updated `scripts/validation/validate-backup.sh` so a failed `aws backup list-backup-jobs` request or invalid response fails validation instead of silently substituting `{"BackupJobs":[]}`. A valid but empty history retains the documented warning. Five offline regression cases were added to the existing Static Analysis workflow. No live AWS Backup API fault injection is claimed.
+- **M2B — ECS post-Apply acceptance:** [PR #928](https://github.com/jcub-i0/terraform-secure-baseline/pull/928) added `scripts/deployment/validate-ecs-release.sh` to the existing protected `Terraform Apply` workflow, **after** applying the verified saved plan. It checks the intended task-definition revision, completed primary deployment, Terraform-owned fixed capacity or autoscaling bounds, running application tasks, configured container health, and applicable ALB target health. It polls with a bounded deadline, rejects a failed rollout, and reports nonacceptance on persistent rollback or nonconvergence. It preserves empty/null-image and approved retirement paths; legitimate zero-capacity services receive an explicit runtime-health skip, not a healthy-task attestation.
+- **Independent review and offline regression:** After remediation of capacity-ownership and ECS eventual-consistency findings, Codex issued a read-only `READY TO MERGE` verdict at `b25e4f7b5e9d0d220bce64b0df4d57365ed97ec0`: 0 blocking and 0 nonblocking findings, 17 repository regression scenarios and 23 independent mock cases passed. This review did not execute AWS operations.
+
+**Live AWS qualification — synthetic `staging` workload (November 3, 2026, US Eastern; November 4 UTC):**
+
+| Exercise | Evidence | Observed outcome |
+|---|---|---|
+| Bootstrap with no deployable ECS application | [Initial staging Apply #41759248089](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41759248089) | Apply succeeded with `image_digest = null`; post-Apply gate explicitly skipped disabled ECS runtime. |
+| Publish healthy image and deploy | [Image publication #41761558253](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41761558253), [release PR #929](https://github.com/jcub-i0/terraform-secure-baseline/pull/929), [Apply #41762965690](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41762965690) | Apply succeeded; post-Apply gate accepted intended task revision `:5`, including its running tasks and ALB health. |
+| Publish intentionally unhealthy image and deploy | [Fixture PR #930](https://github.com/jcub-i0/terraform-secure-baseline/pull/930), [release PR #931](https://github.com/jcub-i0/terraform-secure-baseline/pull/931), [Apply #41766021594](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41766021594) | Terraform reported `Apply complete` (1 add, 1 change, 1 destroy), but post-Apply acceptance **failed** after its 10-minute deadline while waiting for intended revision `:6`. The protected Apply job therefore reported failure, as required. |
+| Independent ECS rollback observation after negative test | Operator-provided `ecs describe-services` event capture (raw JSON not committed; SHA-256 `b863f3a46566e326dd87599cb8d6eb6e92915bf94b59c89f16343af682767030`) | ECS events show ALB health checks receiving HTTP `404`, the unhealthy deployment failing, and ECS explicitly rolling back to previous revision `:5`. Its subsequent completed primary deployment reached steady state with desired/running/pending counts `2/2/0`. The rollback events were observed **after** the acceptance gate's timeout; do not misreport this as immediate fail-fast detection by the validator. |
+| Restore the healthy digest and reapply | [Recovery PR #934](https://github.com/jcub-i0/terraform-secure-baseline/pull/934), [Apply #41768896931](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41768896931) | Apply succeeded (1 add, 1 change, 1 destroy); the gate accepted newly registered intended revision `:7` using the previously validated healthy image digest. |
+
+**M2 exit gate:** Source-level backup API failures fail closed, a successful Terraform Apply with an unhealthy ECS release is not reported as an accepted application release, and healthy intended revisions pass live ECS/task/ALB acceptance. Both the rejection and ECS automatic rollback are corroborated; the latter is evidenced by the separately captured ECS events, not just GitHub Actions status.
+
+**Outstanding disposition / limits:**
+
+- [Staging Terraform Destroy #41769873364](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/41769873364) was initiated after recovery. **Completion is pending verification.** Record its terminal outcome, resource inventory, durable ECR/Backup or RDS snapshot disposition, retained log/evidence decisions, and any residual charges before marking teardown done and moving M2 from `Validated` to `Complete`. Do not equate a requested Destroy with confirmed cleanup.
+- Keep the raw ECS event capture in an operator-controlled private evidence store; the public roadmap contains only sanitized findings and its integrity hash. Do not commit account-specific infrastructure identifiers or sensitive service details.
+- This exercised the `development` deployment profile and generic synthetic HTTP health behavior. It does **not** qualify the `production` profile, SQL transactions, business readiness, all app-level endpoints, M3 recovery tests, or a production go-live.
 
 ## M3 — Production Operational Qualification
 
