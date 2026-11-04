@@ -12,7 +12,7 @@ This release prioritizes **correctness and evidence over new features**. It does
 |---|---|---|---|
 | **M1 — CI/CD State Protection** | Separate GitHub Plan state-read permission from S3 lockfile mutation permissions; retain required Apply capabilities. | Plan cannot modify Terraform state; legitimate plans and locking still work; affected account roots and workflows remain compatible. | `Complete` |
 | **M2 — Deployment & Backup Assurance** | Correct backup-job API error handling and establish explicit application-release acceptance after Terraform Apply. | API failures fail validation; failed ECS releases cannot be reported as accepted merely because Terraform Apply succeeded. | `Validated` — Terraform teardown verified; residual audit pending |
-| **M3 — Production Operational Qualification** | Qualify a synthetic production-profile workload; close material monitoring and recovery gaps discovered by testing. | Measured deployment, availability, database recovery, notification and evidence-retention outcomes meet explicitly agreed test criteria, or are documented as gaps. | Planned |
+| **M3 — Production Operational Qualification** | Qualify a synthetic production-profile workload; close material monitoring and recovery gaps discovered by testing. | Measured deployment, availability, database recovery, notification and evidence-retention outcomes meet explicitly agreed test criteria, or are documented as gaps. | `In progress` — pre-deployment design only |
 | **M4 — Regression & Release Qualification** | Review changes, run relevant CI and live validation, document results, and publish the release. | All approved milestones are qualified, residual risks are documented, and the maintainer explicitly authorizes publication. | Planned |
 
 ## M1 — CI/CD State Protection
@@ -65,6 +65,8 @@ This release prioritizes **correctness and evidence over new features**. It does
 - This exercised the `development` deployment profile and generic synthetic HTTP health behavior. It does **not** qualify the `production` profile, SQL transactions, business readiness, all app-level endpoints, M3 recovery tests, or a production go-live.
 
 ## M3 — Production Operational Qualification
+
+**Status:** `In progress` — pre-deployment planning. Execution and AWS spending are **not authorized** by this status change. The [M3 execution plan](docs/qualification/v1.14.0-m3-execution-plan.md) records authorization gates, test cases, evidence and production-profile retirement procedure. All live M3 tests remain `Not Run`.
 
 **Purpose:** Verify that the current platform can support a representative PostgreSQL-backed HTTPS application with realistic failures, and implement only narrowly justified hardening.
 
