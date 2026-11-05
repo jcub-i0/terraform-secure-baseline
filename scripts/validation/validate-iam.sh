@@ -785,15 +785,18 @@ else
         --arg partition "$partition" '
           type == "array"
           and all(.[];
-            type == "string"
-            and (split(":")) as $parts
-            | ($parts | length) == 6
-            and $parts[0] == "arn"
-            and $parts[1] == $partition
-            and $parts[2] == "ecr"
-            and $parts[3] == $region
-            and ($parts[4] | test("^[0-9]{12}$"))
-            and $parts[5] == "repository/aws-guardduty-agent-fargate"
+            if type != "string" then
+              false
+            else
+              split(":") as $parts
+              | (($parts | length) == 6
+                and $parts[0] == "arn"
+                and $parts[1] == $partition
+                and $parts[2] == "ecr"
+                and $parts[3] == $region
+                and ($parts[4] | test("^[0-9]{12}$"))
+                and $parts[5] == "repository/aws-guardduty-agent-fargate")
+            end
           )
         ' >/dev/null; then
       echo "$expected_guardduty_ecr_arns_json" | jq .
