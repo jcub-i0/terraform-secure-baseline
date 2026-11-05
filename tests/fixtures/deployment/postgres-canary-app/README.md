@@ -68,4 +68,4 @@ python3 -m unittest discover \
 
 These tests use an in-memory fake store and a stub PostgreSQL module; they require no Docker, AWS, external Python packages or running database. They test the HTTP/auth/error contract and connection TLS options, **not** a real RDS connection. The existing Terraform Static Analysis workflow runs them.
 
-**Retirement:** An applied `deployment_profile=production` requires the protected [production retirement procedure](../../../../docs/production-retirement.md). Do not switch the profile to development to destroy it or set `image_digest=null` to quiesce a running production-profile service.
+**Retirement:** The two application secrets created manually in Secrets Manager are not Terraform-managed and must be separately inventoried and disposed of (or deliberately retained) after testing. An applied `deployment_profile=production` requires the protected [production retirement procedure](../../../../docs/production-retirement.md). Do not switch the profile to development to destroy it or set `image_digest=null` to quiesce a running production-profile service.
