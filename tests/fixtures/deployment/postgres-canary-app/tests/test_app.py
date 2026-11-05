@@ -86,6 +86,9 @@ class HandlerTests(unittest.TestCase):
             self.assertEqual(self.request("/canary/test", method, token="wrong", body=payload)[0], 401)
         self.assertEqual(self.store.items, {})
 
+    def test_non_ascii_auth_header_is_rejected_without_exception(self):
+        self.assertEqual(self.request("/canary/test", token="non-ascii-é")[0], 401)
+
     def test_canary_is_idempotent_and_immutable(self):
         digest = hashlib.sha256(b"committed-v1").hexdigest()
         created = self.request("/canary/record-01", "PUT", token=TOKEN, body={"value": "committed-v1"})
