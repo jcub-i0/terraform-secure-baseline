@@ -22,16 +22,18 @@ The connection uses `sslmode=verify-full` and the AWS `us-east-1` RDS CA bundle 
 1. **Initial bootstrap:** The maintainer is resetting the canonical `test` service's `image_digest` to `null` independently. **This PR intentionally leaves `environments/staging/container-workloads.auto.tfvars.json` untouched.** With the service still registered and `repository_name="test"`, a protected production-profile staging Apply provisions its ECR repo and RDS but does not create ECS/ALB for the null digest.
 2. **Confirm effective topology:** Before the initial Apply, review the saved Plan for the staging account in `us-east-1` with `deployment_profile=production`, three AZs, Network Firewall, Multi-AZ RDS, AWS Backup, logging and deletion protection. Set `production_retirement_mode=false` for normal deployment. After a successful initial Apply, use Terraform outputs for the **new** RDS DNS hostname, DB name and master secret ARN; do not reuse the destroyed M2 endpoint.
 3. **Bootstrap least-privilege DB credentials:** From an authorized *private* connection to PostgreSQL (such as a controlled SSM session to a VPC host), use an administrator to run `CREATE ROLE m3_canary_app LOGIN;` and set its password interactively with `psql`'s `\password m3_canary_app`. As a database owner, execute [`sql/schema.sql`](sql/schema.sql), which creates `public.m3_canary` and grants only schema usage, table SELECT and table INSERT to that login. Do not store SQL passwords, RDS master credentials, or credential-bearing DSNs in Git.
-4. **Create startup secrets:** Use AWS Secrets Manager to create two independent **raw-string** values: `M3_DB_PASSWORD` (application role password) and `M3_CANARY_TOKEN` (a new, random bearer token of at least 32 characters). Record their full ARNs. If using customer-managed KMS keys, include only the required key ARNs in `task_execution_kms_key_arns` and verify execution-role/key-policy permissions. AWS-managed `aws/secretsmanager` encryption does not use the same explicit decrypt grant.
+4. **Create startup configuration:** Use AWS Secrets Manager to create two independent **raw-string** values: `M3_DB_PASSWORD` (application role password) and `M3_CANARY_TOKEN` (a new, random bearer token of at least 32 characters). Put the RDS DNS hostname in a **separate SSM Parameter Store String parameter** for `M3_DB_HOST`. Record the full ARNs of all three references, but do **not** commit the actual RDS hostname or credentials to Git. If using customer-managed KMS keys, include only the required key ARNs in `task_execution_kms_key_arns` and verify execution-role/key-policy permissions. AWS-managed `aws/secretsmanager` encryption does not use the same explicit decrypt grant.
 5. **Configure service:** In a separate reviewed change (not this PR), preserve the canonical `test` service's ingress and port 8080 and configure `database_access=true`, `desired_count=3`, `scaling=null`, a container health command hitting `/health`, and these *partial* input examples:
 
    ```json
    {
      "environment_variables": {
-       "M3_DB_HOST": "<RDS DNS hostname from current Terraform output>",
        "M3_DB_PORT": "5432",
        "M3_DB_NAME": "appdb",
        "M3_DB_USER": "m3_canary_app"
+     },
+     "ssm_parameters": {
+       "M3_DB_HOST": "<full ARN of SSM String parameter containing RDS DNS hostname>"
      },
      "secrets_manager_secrets": {
        "M3_DB_PASSWORD": "<full ARN of raw-string password secret>",
@@ -68,4 +70,4 @@ python3 -m unittest discover \
 
 These tests use an in-memory fake store and a stub PostgreSQL module; they require no Docker, AWS, external Python packages or running database. They test the HTTP/auth/error contract and connection TLS options, **not** a real RDS connection. The existing Terraform Static Analysis workflow runs them.
 
-**Retirement:** The two application secrets created manually in Secrets Manager are not Terraform-managed and must be separately inventoried and disposed of (or deliberately retained) after testing. An applied `deployment_profile=production` requires the protected [production retirement procedure](../../../../docs/production-retirement.md). Do not switch the profile to development to destroy it or set `image_digest=null` to quiesce a running production-profile service.
+**Retirement:** The two application secrets created manually in Secrets Manager and the SSM RDS-host parameter are not Terraform-managed and must be separately inventoried and disposed of (or deliberately retained) after testing. An applied `deployment_profile=production` requires the protected [production retirement procedure](../../../../docs/production-retirement.md). Do not switch the profile to development to destroy it or set `image_digest=null` to quiesce a running production-profile service.
