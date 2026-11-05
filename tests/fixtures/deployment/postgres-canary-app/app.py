@@ -85,6 +85,10 @@ class CanaryServer(ThreadingHTTPServer):
 class CanaryHandler(BaseHTTPRequestHandler):
     server: CanaryServer
 
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(10)
+
     def log_message(self, fmt, *args):
         # Avoid logging request content, query strings, tokens, or error details.
         LOG.info("http request from client")
@@ -110,8 +114,8 @@ class CanaryHandler(BaseHTTPRequestHandler):
         return candidate if CANARY_ID.fullmatch(candidate) else None
 
     def _authorized(self) -> bool:
-        provided = self.headers.get("Authorization", "")
-        expected = "Bearer " + self.server.token
+        provided = self.headers.get("Authorization", "").encode("utf-8")
+        expected = ("Bearer " + self.server.token).encode("utf-8")
         return hmac.compare_digest(provided, expected)
 
     def do_GET(self):
