@@ -162,12 +162,6 @@ jobs:
           fi
 
           if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
-            <<< "${TF_VAR_branches_plan_github}" >/dev/null; then
-            echo "::error::BRANCHES_PLAN_GITHUB must be a JSON array of non-empty strings."
-            exit 1
-          fi
-
-          if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' \
             <<< "${TF_VAR_branches_apply_github}" >/dev/null; then
             echo "::error::BRANCHES_APPLY_GITHUB must be a JSON array of non-empty strings."
             exit 1
