@@ -45,7 +45,7 @@ module/runbooks for the implemented contract.
 - **OIDC documentation residual:** `branches_plan_github` and `allow_pull_requests_plan_github` still imply trust restrictions they do not implement when Plan uses an environment OIDC subject; environment branch restrictions require independent GitHub Environment configuration. This pre-existing limitation remains tracked by [issue #925](https://github.com/jcub-i0/terraform-secure-baseline/issues/925), not a newly discovered unauthorized trust expansion.
 - **IAM attestation boundary:** The hardened ECS execution-policy validator checks the generated inline-policy contract, **not** all effective IAM grants after SCPs, permission boundaries or external policies. The standalone ECS runtime module can use customer-supplied execution roles whose configuration is not necessarily in the integrated baseline validation contract.
 
-See the [v1.14.0 roadmap](ROADMAP.md), [M3 qualification record](docs/qualification/v1.14.0-m3-execution-plan.md), and [production retirement runbook](docs/production-retirement.md). This release does not constitute SOC 2/ISO 27001 certification.
+See the [production retirement runbook](docs/production-retirement.md) for retirement procedures. This release does not constitute SOC 2 or ISO 27001 certification.
 
 ---
 
