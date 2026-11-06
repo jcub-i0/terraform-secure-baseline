@@ -61,19 +61,6 @@ variable "tf_state_bucket_cmk_arn" {
   default     = null
 }
 
-# GitHub-Plan role-related variables
-variable "branches_plan_github" {
-  description = "List of branches allowed to assume the github_oidc role"
-  type        = list(string)
-  default     = ["main"]
-}
-
-variable "allow_pull_requests_plan_github" {
-  description = "Allow pull_request subject in OIDC trust policy"
-  type        = bool
-  default     = false
-}
-
 # GitHub-Apply Role-related variables
 variable "enable_apply_role_github" {
   description = "Enable the GitHub-Apply role"
@@ -82,7 +69,7 @@ variable "enable_apply_role_github" {
 }
 
 variable "branches_apply_github" {
-  description = "Branches allowed to assume the GitHub-Apply role"
+  description = "Allowed GitHub branches when environment_apply_github is null. Otherwise, branch restrictions are managed through GitHub Environment settings."
   type        = list(string)
   default     = ["main"]
 }

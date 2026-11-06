@@ -85,8 +85,6 @@ All eight required inputs have type `string` and no default. See [variables.tf](
 | `tf_state_bucket_cmk_arn` | `string` | `null` | Conditional state-CMK decrypt/describe/encrypt/data-key grant in custom Plan/Apply policies. |
 | `lambda_cmk_arn` | `string` | `null` | Conditional Lambda-CMK decrypt/describe grant in custom Plan/Apply policies. |
 | `secrets_manager_cmk_arn` | `string` | `null` | Conditional Secrets Manager-CMK decrypt/describe grant in custom Plan/Apply policies. |
-| `branches_plan_github` | `list(string)` | `["main"]` | Legacy declaration; not referenced by current Plan trust construction. |
-| `allow_pull_requests_plan_github` | `bool` | `false` | Legacy declaration; does not add a PR subject or control workflow triggers. |
 | `enable_apply_role_github` | `bool` | `false` | Creates Apply role, custom policy and managed-policy attachments. |
 | `branches_apply_github` | `list(string)` | `["main"]` | Used only when `environment_apply_github` is null. |
 | `environment_apply_github` | `string` | `null` | When non-null, uses the environment subject instead of all branch subjects. |
@@ -124,7 +122,7 @@ All roles use `sts:AssumeRoleWithWebIdentity`, this module's `token.actions.gith
 | Apply with null `environment_apply_github` | One `repo:<owner>/<repo>:ref:refs/heads/<branch>` per `branches_apply_github` entry | `StringLike` |
 | Image Publisher | One `repo:<owner>/<repo>:ref:refs/heads/<branch>` per `branches_image_publisher_github` entry | `StringEquals` |
 
-Apply environment trust **replaces**, rather than combines with, branch subjects. Set allowed deployment branches and required reviewers in GitHub separately; those settings are not created or verified by this AWS module. The legacy `branches_plan_github` and `allow_pull_requests_plan_github` inputs do not restrict Plan-role assumption; see [issue #925](https://github.com/jcub-i0/terraform-secure-baseline/issues/925). Plan/Apply use pattern comparison, so use reviewed literal names and do not assume wildcard-containing inputs are rejected. Publisher values are exact: a branch wildcard is not a pattern grant there.
+Apply environment trust **replaces**, rather than combines with, branch subjects. Set allowed deployment branches and required reviewers in GitHub separately; those settings are not created or verified by this AWS module. Plan/Apply use pattern comparison, so use reviewed literal names and do not assume wildcard-containing inputs are rejected. Publisher values are exact: a branch wildcard is not a pattern grant there.
 
 None of these subjects binds a role to a particular workflow file, selected application service, or image digest. A branch-based publisher job must not declare a GitHub Environment that changes its expected subject. The repository's `publish-image` job deliberately omits one, while its separate configuration-resolution job reads variables through `<env>-plan`.
 

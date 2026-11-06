@@ -176,8 +176,6 @@ module "github_oidc" {
   environment                     = var.environment
   owner_github                    = var.owner_github
   repo_github                     = var.repo_github
-  branches_plan_github            = var.branches_plan_github
-  allow_pull_requests_plan_github = var.allow_pull_requests_plan_github
   name_prefix                     = local.name_prefix
 
   tf_state_bucket_arn     = var.tf_state_bucket_arn
@@ -208,8 +206,6 @@ All defaults below are from this root's [variables.tf](variables.tf), not from t
 | `repo_github` | `string` | `null` | When OIDC enabled | Repository name with the same conditional non-null check. |
 | `tf_state_bucket_arn` | `string` | `null` | When OIDC enabled | State-bucket ARN used in IAM permission statements. It does not configure or migrate the Terraform backend. |
 | `tf_state_bucket_cmk_arn` | `string` | `null` | No | Adds the custom state-CMK actions when non-null. Supply the actual backend CMK for the intended encrypted-state access; key/bucket policy restrictions still require review. |
-| `branches_plan_github` | `list(string)` | `["main"]` | No | Legacy declared/pass-through input; unused by the current Plan subject construction. |
-| `allow_pull_requests_plan_github` | `bool` | `false` | No | Legacy declared/pass-through input; does not add a `pull_request` subject or enable GitHub PR execution. |
 | `enable_apply_role_github` | `bool` | `false` | No | Creates Apply resources only when the enclosing OIDC module is also enabled. |
 | `branches_apply_github` | `list(string)` | `["main"]` | No | Used for Apply trust only when `environment_apply_github` is null. |
 | `environment_apply_github` | `string` | `null` | No | When non-null, becomes the sole Apply environment subject instead of branch subjects. Standard configuration here uses `security-operations`. |
