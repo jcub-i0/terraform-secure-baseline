@@ -248,9 +248,9 @@ jobs:
           CHECKOV_VENV="${RUNNER_TEMP}/checkov-venv"
 
           python3 -m venv "$CHECKOV_VENV"
-          "$CHECKOV_VENV/bin/python" -m pip install 'checkov=3.3.26'
+          "$CHECKOV_VENV/bin/python" -m pip install 'checkov==3.3.26'
           "$CHECKOV_VENV/bin/python" -m pip check
-          "$CHECKOV_VENV/bin/python" --version
+          "$CHECKOV_VENV/bin/checkov" --version
 
           echo "$CHECKOV_VENV" >> "$GITHUB_PATH"
 
