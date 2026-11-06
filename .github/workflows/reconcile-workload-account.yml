@@ -103,7 +103,6 @@ jobs:
       TF_VAR_enable_github_oidc: "true"
       TF_VAR_owner_github: ${{ github.repository_owner }}
       TF_VAR_repo_github: ${{ github.event.repository.name }}
-      TF_VAR_branches_plan_github: ${{ vars.BRANCHES_PLAN_GITHUB || '["main"]' }}
       TF_VAR_allow_pull_requests_plan_github: ${{ vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB || 'false' }}
       TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
       TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}
@@ -356,7 +355,6 @@ jobs:
       TF_VAR_enable_github_oidc: "true"
       TF_VAR_owner_github: ${{ github.repository_owner }}
       TF_VAR_repo_github: ${{ github.event.repository.name }}
-      TF_VAR_branches_plan_github: ${{ vars.BRANCHES_PLAN_GITHUB || '["main"]' }}
       TF_VAR_allow_pull_requests_plan_github: ${{ vars.ALLOW_PULL_REQUESTS_PLAN_GITHUB || 'false' }}
       TF_VAR_tf_state_bucket_arn: ${{ vars.TF_STATE_BUCKET_ARN }}
       TF_VAR_tf_state_bucket_cmk_arn: ${{ vars.TF_STATE_BUCKET_CMK_ARN }}

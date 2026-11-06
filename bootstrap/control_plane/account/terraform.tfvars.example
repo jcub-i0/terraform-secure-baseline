@@ -9,7 +9,6 @@ owner_github                    = "example-org"
 repo_github                     = "terraform-secure-baseline"
 enable_github_oidc              = true
 enable_apply_role_github        = true
-branches_plan_github            = ["main"]
 branches_apply_github           = ["main"]
 allow_pull_requests_plan_github = true
 environment_apply_github        = "control-plane"
