@@ -908,7 +908,7 @@ else
       fail "ECS execution policy ECR authority does not exactly match application and GuardDuty repository requirements: ${service_name}"
     fi
 
-    success "ECS execution policy ECR authority is exact and contains no broad or unexpected permissions: ${service_name}"
+    success "ECS execution policy ECR statements exactly match application and GuardDuty requirements: ${service_name}"
 
     if ! policy_statement_allows_exact_resources \
       "$execution_policy_json" \
@@ -932,7 +932,7 @@ else
     fi
 
     if [[ "$(echo "$ambiguous_secret_references_json" | jq 'length')" -gt 0 ]]; then
-      warn "Secret references without service-identifying ARNs cannot be classified from workload outputs: ${service_name}"
+      fail "Cannot establish exact execution-policy scope for secret references without service-identifying ARNs: ${service_name}"
     fi
 
     expected_kms_key_arns_json="$(
@@ -975,7 +975,57 @@ else
       fi
     fi
 
-    success "ECS IAM trust, exact execution-policy scope, declared task-role attachments, and generated PassRole absence are valid: ${service_name}"
+    # The checks above require individual grants and preserve exact ECR scope.
+    # Also compare the entire inline policy: finding an expected statement does
+    # not rule out additional grants (for example iam:* or undeclared secrets).
+    # This is the existing modules/iam/ecs.tf contract, not effective IAM evaluation.
+    if ! jq -e \
+      --argjson ecr "$expected_ecr_policy_statements_json" \
+      --argjson logs "$expected_log_resources_json" \
+      --argjson secrets "$expected_secret_arns_json" \
+      --argjson ssm "$expected_ssm_arns_json" \
+      --argjson kms "$expected_kms_key_arns_json" '
+        def as_list: if type == "array" then . else [.] end;
+        def statement($actions; $resources): {
+          effect: "Allow", actions: ($actions | sort),
+          resources: ($resources | sort | unique),
+          condition: null, not_resource: null
+        };
+        def ordered: sort_by(.effect, (.actions | join(",")), (.resources | join(",")));
+        ($ecr
+          + [statement(["logs:createlogstream", "logs:putlogevents"]; $logs)]
+          + (if ($secrets | length) > 0 then
+              [statement(["secretsmanager:getsecretvalue"]; $secrets)] else [] end)
+          + (if ($ssm | length) > 0 then
+              [statement(["ssm:getparameters"]; $ssm)] else [] end)
+          + (if ($kms | length) > 0 then
+              [statement(["kms:decrypt"]; $kms)] else [] end)
+          | ordered) as $expected
+        # Only ECR authorization and the exact service log-stream suffix need
+        # wildcard resources. Startup-secret and KMS inputs must be literal ARNs.
+        | (($secrets + $ssm + $kms) | all(.[];
+            type == "string" and startswith("arn:") and (test("[*?]") | not)))
+          and (
+            .Statement | as_list | map(
+              if type != "object"
+                or ((keys - ["Sid", "Effect", "Action", "Resource"]) | length) != 0
+                or .Effect != "Allow"
+                or (.Action | as_list | all(.[]; type == "string" and length > 0) | not)
+                or (.Resource | as_list | all(.[]; type == "string" and length > 0) | not)
+              then error("Unexpected execution-policy statement")
+              else {
+                effect: .Effect,
+                actions: (.Action | as_list | map(ascii_downcase) | sort | unique),
+                resources: (.Resource | as_list | sort | unique),
+                condition: null, not_resource: null
+              } end
+            ) | ordered | . == $expected
+          )
+      ' <<< "$execution_policy_json" >/dev/null; then
+      fail "ECS execution inline policy does not exactly match the generated permission contract: ${service_name}"
+    fi
+
+    success "ECS execution inline policy matches the generated contract; required trust conditions and declared task-role attachments checked (not effective IAM permissions): ${service_name}"
   done < <(echo "$ECS_SERVICES_JSON" | jq -r 'keys[]')
 fi
 
