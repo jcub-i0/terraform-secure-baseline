@@ -252,7 +252,7 @@ jobs:
           "$CHECKOV_VENV/bin/python" -m pip check
           "$CHECKOV_VENV/bin/checkov" --version
 
-          echo "$CHECKOV_VENV" >> "$GITHUB_PATH"
+          echo "$CHECKOV_VENV/bin" >> "$GITHUB_PATH"
 
       - name: Run repository Checkov scan
         if: always()
