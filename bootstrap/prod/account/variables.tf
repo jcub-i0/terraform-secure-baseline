@@ -69,7 +69,7 @@ variable "enable_apply_role_github" {
 }
 
 variable "branches_apply_github" {
-  description = "Branches allowed to assume the GitHub-Apply role"
+  description = "Allowed GitHub branches when environment_apply_github is null. Otherwise, branch restrictions are managed through GitHub Environment settings."
   type        = list(string)
   default     = ["main"]
 }
