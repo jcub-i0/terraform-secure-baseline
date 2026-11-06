@@ -85,7 +85,6 @@ All eight required inputs have type `string` and no default. See [variables.tf](
 | `tf_state_bucket_cmk_arn` | `string` | `null` | Conditional state-CMK decrypt/describe/encrypt/data-key grant in custom Plan/Apply policies. |
 | `lambda_cmk_arn` | `string` | `null` | Conditional Lambda-CMK decrypt/describe grant in custom Plan/Apply policies. |
 | `secrets_manager_cmk_arn` | `string` | `null` | Conditional Secrets Manager-CMK decrypt/describe grant in custom Plan/Apply policies. |
-| `allow_pull_requests_plan_github` | `bool` | `false` | Legacy declaration; does not add a PR subject or control workflow triggers. |
 | `enable_apply_role_github` | `bool` | `false` | Creates Apply role, custom policy and managed-policy attachments. |
 | `branches_apply_github` | `list(string)` | `["main"]` | Used only when `environment_apply_github` is null. |
 | `environment_apply_github` | `string` | `null` | When non-null, uses the environment subject instead of all branch subjects. |

@@ -22,7 +22,6 @@ module "github_oidc" {
   environment                     = var.environment
   owner_github                    = var.owner_github
   repo_github                     = var.repo_github
-  allow_pull_requests_plan_github = var.allow_pull_requests_plan_github
   name_prefix                     = local.name_prefix
 
   tf_state_bucket_arn     = var.tf_state_bucket_arn

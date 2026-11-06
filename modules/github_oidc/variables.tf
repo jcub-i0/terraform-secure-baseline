@@ -43,12 +43,6 @@ variable "tf_state_bucket_cmk_arn" {
   default     = null
 }
 
-variable "allow_pull_requests_plan_github" {
-  description = "Allow pull_request subject in OIDC trust policy"
-  type        = bool
-  default     = false
-}
-
 # GitHub-Apply Role-related variables
 variable "enable_apply_role_github" {
   description = "Enable the GitHub-Apply role"
