@@ -11,6 +11,32 @@ that earlier tests were repeated on subsequent commits. Use the
 [README](README.md), [adoption guide](docs/adoption-guide.md), and current
 module/runbooks for the implemented contract.
 
+## v1.14.1 — Configuration Consistency & CI Maintenance
+
+**Release scope:** v1.14.1 is a maintenance release focused on Terraform configuration consistency, GitHub OIDC module interface cleanup, and CI dependency isolation. It introduces no new AWS infrastructure capabilities or application runtime features. The existing v1.14.0 qualification evidence remains historical and is not represented as having been repeated for this patch.
+
+### Fixed and Changed
+
+- **GitHub OIDC module interface cleanup:** [PR #952](https://github.com/jcub-i0/terraform-secure-baseline/pull/952) removed unused `branches_plan_github` and `allow_pull_requests_plan_github` inputs from the OIDC module, bootstrap account roots, examples, and associated workflow references. These inputs did not enforce branch restrictions on environment-based GitHub OIDC Plan roles. The existing trust-policy behavior is preserved; GitHub Environment deployment restrictions remain independently managed.
+
+- **AWS caller identity naming consistency:** [PR #953](https://github.com/jcub-i0/terraform-secure-baseline/pull/953) standardized `aws_caller_identity` data source names to `current` throughout the bootstrap and workload Terraform configurations. References and relevant outputs were updated without intentionally changing AWS resource behavior.
+
+- **Region configuration consistency:** [PR #954](https://github.com/jcub-i0/terraform-secure-baseline/pull/954) standardized `var.primary_region` as the explicit Region configuration passed to child modules and used in applicable security-operations service configuration. Unused `aws_region.current` declarations and redundant postconditions were removed from the five bootstrap account roots. Provider-derived Region lookups remain where independently needed.
+
+- **Checkov dependency isolation:** [PR #956](https://github.com/jcub-i0/terraform-secure-baseline/pull/956) moved the pinned Checkov `3.3.26` installation into a dedicated Python virtual environment in Static Analysis. The workflow now verifies the isolated dependency environment with `pip check`, avoiding conflicts with the GitHub Actions runner's preinstalled Python packages.
+
+### Validation and Compatibility
+
+- **CI verification:** At merged implementation commit [`fde914e`](https://github.com/jcub-i0/terraform-secure-baseline/commit/fde914ebcee3973cc93ebcbd8fde698564c6f23e), [Terraform Plan #42286835770](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/42286835770) and [Terraform Static Analysis #42286835697](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/42286835697) passed. [Docs Validation #42284519694](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/42284519694) passed at the preceding PR #954 merge commit. Final release-candidate CI must be evaluated at the actual tagged commit.
+
+- **OIDC input compatibility:** Existing callers supplying the removed `branches_plan_github` or `allow_pull_requests_plan_github` module arguments must remove them. The removal changes the accepted module interface but does not implement new GitHub branch restrictions. Apply-role trust configuration remains unchanged.
+
+- **Infrastructure and state:** No Terraform-managed resource additions, removals, or address migrations are intended by this patch. The changes do not require a dedicated infrastructure redeployment, but existing deployments must still review their Terraform plans before Apply.
+
+- **Qualification boundary:** No new live AWS recovery, failover, workload deployment, or security-control qualification is claimed. The v1.14.0 evidence limitations and outstanding operational follow-ups remain applicable.
+
+This maintenance release does not constitute SOC 2 or ISO 27001 certification.
+
 ## v1.14.0 — Production Deployment Assurance & Security Hardening
 
 **Release scope:** This entry records the `v1.14.0` changes since `v1.13.0`. M1 and the maintainer-accepted M3 qualification are closed; M2's deployment/backup behavior was validated, while its historical residual-resource audit remains an open follow-up. M4-A/B and M4-C's independent source review, targeted IAM validation correction and code-commit regression checks were completed. Consult [GitHub Actions](https://github.com/jcub-i0/terraform-secure-baseline/actions) and [GitHub Releases](https://github.com/jcub-i0/terraform-secure-baseline/releases) for release-candidate CI and publication status; this changelog is not itself a production go-live approval.
