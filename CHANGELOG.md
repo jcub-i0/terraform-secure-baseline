@@ -40,7 +40,7 @@ module/runbooks for the implemented contract.
 - **Retirement and costs:** Terraform-managed M3 workload retirement passed. A post-destroy inventory identified one final RDS snapshot (50 GiB allocated), two manually provisioned canary secrets, and one SSM hostname parameter; the maintainer later reported cleanup/disposition. **No independent subsequent residual-resource, snapshot/KMS-access, archive-retrieval, or cost audit is claimed.** M2's earlier residual audit remains separately open; account bootstrap/state stacks were not destroyed.
 - **M4 gate:** Review the *final* release candidate and full CI matrix (Plan, Static Analysis, Docs Validation and focused regressions), record accepted risk decisions, and obtain maintainer approval of the exact release SHA before publishing `v1.14.0`. No new AWS deployment is asserted or required solely for documentation closeout.
 
-See the [v1.14.0 roadmap](ROADMAP.md), [M3 qualification record](docs/qualification/v1.14.0-m3-execution-plan.md), and [production retirement runbook](docs/production-retirement.md). This release does not constitute SOC 2/ISO 27001 certification.
+See the [production retirement runbook](docs/production-retirement.md) for retirement procedures. This release does not constitute SOC 2 or ISO 27001 certification.
 
 ---
 

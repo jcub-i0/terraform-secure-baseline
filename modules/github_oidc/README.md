@@ -142,7 +142,7 @@ Plan attaches AWS-managed `ReadOnlyAccess` and a custom policy that includes:
 | Supplied state CMK | `kms:Decrypt`, `kms:DescribeKey`, `kms:Encrypt`, `kms:GenerateDataKey` |
 | Supplied Lambda/Secrets Manager CMKs | `kms:Decrypt`, `kms:DescribeKey` |
 
-The custom Plan policy allows state-object reads throughout the bucket but restricts object writes and deletions to `*.tflock` keys for native S3 state locking; it does not grant writes or deletions to ordinary state objects. Selected secret reads can return sensitive data. The attached AWS-managed `ReadOnlyAccess` is additional authority, and effective permissions also depend on other applicable IAM, resource, and organizational policies. See the [v1.14.0-M1 evidence and limitations](../../ROADMAP.md).
+The custom Plan policy allows state-object reads throughout the bucket but restricts object writes and deletions to `*.tflock` keys for native S3 state locking; it does not grant writes or deletions to ordinary state objects. Selected secret reads can return sensitive data. The attached AWS-managed `ReadOnlyAccess` is additional authority, and effective permissions also depend on other applicable IAM, resource, and organizational policies. See the [v1.14.0 release changelog](../../CHANGELOG.md) for qualification evidence and remaining limitations.
 
 ### Apply authority
 
