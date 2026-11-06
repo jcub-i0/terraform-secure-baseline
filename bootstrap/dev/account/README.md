@@ -189,7 +189,7 @@ module "github_oidc" {
   tf_state_bucket_arn     = var.tf_state_bucket_arn
   tf_state_bucket_cmk_arn = var.tf_state_bucket_cmk_arn
 
-  primary_region           = data.aws_region.current.region
+  primary_region           = var.primary_region
   account_id               = data.aws_caller_identity.current.account_id
   enable_apply_role_github = var.enable_apply_role_github
   branches_apply_github    = var.branches_apply_github
@@ -211,7 +211,7 @@ All defaults below are from this root's [variables.tf](variables.tf), not from t
 |---|---|---|---|---|
 | `cloud_name` | `string` | none | Yes | Naming component; the root derives `name_prefix` as `${cloud_name}-${environment}`. |
 | `environment` | `string` | none | Yes | Explicit logical environment; not inferred from the directory. Use `dev` for this root and its standard workflow trust. |
-| `primary_region` | `string` | none | Yes | Account provider/service Region. Passed to the module from `data.aws_region.current.region` after a matching postcondition. |
+| `primary_region` | `string` | none | Yes | Account provider/service Region. Passed to the module from `var.primary_region` after a matching postcondition with `data.aws_region.current.region`. |
 | `enable_github_oidc` | `bool` | `false` | No | Controls the entire module instance. False omits the OIDC provider and all three roles; changing true to false can plan their deletion. |
 | `owner_github` | `string` | `null` | When OIDC enabled | Repository owner. The root checks non-null when OIDC is enabled; operators must still supply the correct non-empty identity. |
 | `repo_github` | `string` | `null` | When OIDC enabled | Repository name with the same conditional non-null check. |

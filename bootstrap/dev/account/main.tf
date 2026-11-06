@@ -27,7 +27,7 @@ module "github_oidc" {
   tf_state_bucket_arn     = var.tf_state_bucket_arn
   tf_state_bucket_cmk_arn = var.tf_state_bucket_cmk_arn
 
-  primary_region           = data.aws_region.current.region
+  primary_region           = var.primary_region
   account_id               = data.aws_caller_identity.current.account_id
   enable_apply_role_github = var.enable_apply_role_github
   branches_apply_github    = var.branches_apply_github

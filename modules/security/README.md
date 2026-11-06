@@ -666,7 +666,7 @@ module "security" {
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   account_id                   = var.account_id
-  primary_region               = data.aws_region.current.region
+  primary_region               = var.primary_region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   manage_securityhub_cspm_locally = var.manage_securityhub_cspm_locally

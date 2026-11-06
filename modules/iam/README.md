@@ -650,7 +650,7 @@ module "iam" {
   name_prefix    = local.name_prefix
   environment    = var.environment
   account_id     = var.account_id
-  primary_region = data.aws_region.current.region
+  primary_region = var.primary_region
 
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   secops_topic_arn         = module.monitoring.secops_topic_arn
