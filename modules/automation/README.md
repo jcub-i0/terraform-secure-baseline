@@ -454,7 +454,7 @@ module "automation" {
   account_id                               = var.account_id
   name_prefix                              = local.name_prefix
   environment                              = var.environment
-  primary_region                           = data.aws_region.current.region
+  primary_region                           = var.primary_region
 
   vpc_id                                   = module.networking.vpc_id
   serverless_private_subnet_ids            = module.networking.serverless_private_subnet_ids_list
@@ -553,7 +553,7 @@ module "automation" {
   account_id     = var.account_id
   name_prefix    = local.name_prefix
   environment    = var.environment
-  primary_region = data.aws_region.current.region
+  primary_region = var.primary_region
 
   vpc_id                        = module.networking.vpc_id
   serverless_private_subnet_ids = module.networking.serverless_private_subnet_ids_list

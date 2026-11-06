@@ -177,7 +177,7 @@ The GuardDuty detector is discovered rather than created:
 
 ```hcl
 data "aws_guardduty_detector" "main" {
-  region = data.aws_region.current.region
+  region = var.primary_region
 }
 ```
 
