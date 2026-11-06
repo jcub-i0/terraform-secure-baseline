@@ -80,6 +80,7 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-ecs-task-role-managed-policies.sh
           bash scripts/tests/test-iam-shared-log-reader.sh
+          python3 scripts/tests/test-ecs-execution-policy.py
           python3 scripts/tests/test-github-plan-state-permissions.py
 
       - name: Test AWS Backup job error handling
