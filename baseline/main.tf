@@ -139,7 +139,7 @@ module "storage" {
   cloud_name     = var.cloud_name
   name_prefix    = local.name_prefix
   environment    = var.environment
-  primary_region = data.aws_region.current.region
+  primary_region = var.primary_region
   vpc_id         = module.networking.vpc_id
   account_id     = var.account_id
   random_id      = var.random_id
@@ -176,7 +176,7 @@ module "iam" {
   name_prefix    = local.name_prefix
   environment    = var.environment
   account_id     = var.account_id
-  primary_region = data.aws_region.current.region
+  primary_region = var.primary_region
 
   cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   secops_topic_arn         = module.monitoring.secops_topic_arn
@@ -212,7 +212,7 @@ module "security" {
   cloud_name                   = var.cloud_name
   environment                  = var.environment
   account_id                   = var.account_id
-  primary_region               = data.aws_region.current.region
+  primary_region               = var.primary_region
   centralized_logs_bucket_name = module.storage.centralized_logs_bucket_name
 
   manage_securityhub_cspm_locally = var.manage_securityhub_cspm_locally
@@ -286,7 +286,7 @@ module "automation" {
   account_id     = var.account_id
   name_prefix    = local.name_prefix
   environment    = var.environment
-  primary_region = data.aws_region.current.region
+  primary_region = var.primary_region
 
   vpc_id                        = module.networking.vpc_id
   serverless_private_subnet_ids = module.networking.serverless_private_subnet_ids_list
@@ -321,7 +321,7 @@ module "vpc_endpoints" {
   vpc_id         = module.networking.vpc_id
   environment    = var.environment
   account_id     = var.account_id
-  primary_region = data.aws_region.current.region
+  primary_region = var.primary_region
 
   additional_interface_endpoint_services = var.additional_interface_endpoint_services
 
@@ -410,7 +410,7 @@ module "ecs_service" {
 
   name_prefix    = local.name_prefix
   environment    = var.environment
-  primary_region = data.aws_region.current.region
+  primary_region = var.primary_region
 
   availability_zone_rebalancing = (
     local.effective_ecs_availability_zone_rebalancing

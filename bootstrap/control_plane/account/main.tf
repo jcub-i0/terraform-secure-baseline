@@ -5,15 +5,6 @@ locals {
 # GLOBAL RESOURCES
 data "aws_caller_identity" "current" {}
 
-data "aws_region" "current" {
-  lifecycle {
-    postcondition {
-      condition     = self.region == var.primary_region
-      error_message = "primary_region must match the AWS provider region."
-    }
-  }
-}
-
 module "github_oidc" {
   source = "../../../modules/github_oidc"
   count  = var.enable_github_oidc ? 1 : 0
@@ -27,7 +18,7 @@ module "github_oidc" {
   tf_state_bucket_arn     = var.tf_state_bucket_arn
   tf_state_bucket_cmk_arn = var.tf_state_bucket_cmk_arn
 
-  primary_region           = data.aws_region.current.region
+  primary_region           = var.primary_region
   account_id               = data.aws_caller_identity.current.account_id
   enable_apply_role_github = var.enable_apply_role_github
   branches_apply_github    = var.branches_apply_github
