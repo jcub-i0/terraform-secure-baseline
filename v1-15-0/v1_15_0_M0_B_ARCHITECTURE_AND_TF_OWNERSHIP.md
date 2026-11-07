@@ -156,8 +156,6 @@ Never publish RDS master password/secret contents, app credentials, or full Terr
 
 Private-source verification was performed by local Codex against `~/recon-engine/infra/terraform/`; no local ReconoSense files or AWS resources were modified by that review. The present revisions themselves still require targeted independent re-review.
 
-
-
 ## Source inventory
 
 - Baseline (public, same repository): [`baseline/main.tf`](../baseline/main.tf), [`baseline/locals.tf`](../baseline/locals.tf), [`baseline/outputs.tf`](../baseline/outputs.tf), [`modules/ecs_service`](../modules/ecs_service/README.md), [`modules/application_load_balancer`](../modules/application_load_balancer/README.md), [`modules/networking/security_policy`](../modules/networking/security_policy/main.tf), [`environments/staging/backend.tf`](../environments/staging/backend.tf).
