@@ -1,13 +1,13 @@
 # v1.15.0 — M0-B: Architecture and Terraform State Ownership
 
-**Status:** Proposed for owner review; not accepted
+**Status:** D1, D2 and B-3 owner-approved; M0-B design review and downstream implementation gates remain open
 **Scope:** D1 (composition/state) and D2 (baseline ECS/ALB boundaries), documentation only
 **Baseline:** `v1.14.1`; M0-A at `v1_15_0_M0_ARCHITECTURE_OWNERSHIP.md`
 **Reference application:** ReconoSense (private repository; contract: `infra/terraform/BASELINE_INTEGRATION.md`)
 
-## 1. Proposed decision
+## 1. Owner-approved architecture decision
 
-**Recommend two workload Terraform states with a one-way dependency: platform foundation -> application workload.** Reuse the modules in this repository as a version-pinned library, but let the root configuration containing each module determine who owns its AWS resources.
+**Owner-approved (2026-11-06): adopt two workload Terraform states with a one-way dependency: platform foundation -> application workload.** Reuse the modules in this repository as a version-pinned library, but let the root configuration containing each module determine who owns its AWS resources.
 
 - **Foundation root/state:** retain the existing `environments/staging` -> `baseline/` stack and its established security, networking, database, backup, ECS cluster, logging and governance responsibilities.
 - **Application root/state:** create a separate, thin ReconoSense-owned integration root for ECS services/tasks, application ingress, scoped IAM, identity, data buckets, scheduling, observability and releases. It may call generic modules from `terraform-secure-baseline`; those module-created resources are owned by the **application state**, not both states.
@@ -117,18 +117,18 @@ Never publish RDS master password/secret contents, app credentials, or full Terr
 
 ## 8. Decisions for owner acceptance
 
-| ID | Proposed decision | Status |
+| ID | Decision | Status |
 |---|---|---|
-| D1 | Separate foundation and application states, same target account for first synthetic qualification; one-way dependency; app root consumes pinned generic modules | **Proposed — owner approval required** |
-| D2 | Preserve existing `baseline/` composition and resource addresses; keep integration app ECS/ALB out of foundation state; app-owned root calls generic modules | **Proposed — owner approval required** |
+| D1 | Separate foundation and application states, same target account for first synthetic qualification; one-way dependency; app root consumes pinned generic modules | **Owner-approved (2026-11-06)** |
+| D2 | Preserve existing `baseline/` composition and resource addresses; keep integration app ECS/ALB out of foundation state; app-owned root calls generic modules | **Owner-approved (2026-11-06)** |
 | B-1 | Publish a non-secret, versioned output contract rather than giving app CI remote-state access | **Proposed — M0-C detail pending** |
 | B-2 | Narrowly scoped application SG connectivity to foundation-owned data/endpoints without broad SG mutation authority | **Open security gate (M0-D)** |
-| B-3 | Use baseline staging account for first qualification; leave dedicated ReconoSense account/bootstrap untouched | **Proposed — owner approval required** |
+| B-3 | Use baseline staging account for first qualification; leave dedicated ReconoSense account/bootstrap untouched | **Owner-approved (2026-11-06)** |
 | B-4 | Application state/backend key and IAM trust, encryption and lockfile restrictions | **Open implementation gate (M0-C/D)** |
 
 ## 9. M0-B acceptance and handoff
 
-**M0-B can close after owner review confirms D1/D2 and B-3, resolves or explicitly assigns B-1/B-2/B-4, and the reviewer verifies:**
+**Owner approval for D1, D2 and B-3 has been recorded.** M0-B can close after an independent design review verifies the architecture checklist below and confirms that B-1 (output contract) is assigned to M0-C, B-2 (cross-boundary SG enforcement) is assigned to M0-D, and B-4 (application backend/OIDC/IAM) is assigned to M0-C/M0-D. These are **not** implemented or approved security controls.
 
 - [ ] A single authoritative owner is identified for every proposed AWS resource **and individual SG rule**; no overlapping Terraform states.
 - [ ] No foundation -> application dependency, no application Plan/Apply authority over foundation state, and no secret-bearing state reads.
@@ -136,7 +136,7 @@ Never publish RDS master password/secret contents, app credentials, or full Terr
 - [ ] The initial deployment account/state paths, qualification boundary, lifecycle sequencing and migration/rollback rules are recorded.
 - [ ] M0-C owns module/output and Terraform graph verification; M0-D owns OIDC/IAM/KMS and network grant enforcement.
 
-**Not yet claimed:** Terraform graph pass, Plans, CI results, AWS deployment or production readiness. Do not mark M0-B accepted until its architectural decisions are approved.
+**Not yet claimed:** Independent design review, Terraform graph pass, Plans, CI results, AWS deployment or production readiness. D1/D2/B-3 are approved design decisions; do not mark the M0-B checkpoint complete until review and the handoff checklist are accepted.
 
 ## Source inventory
 
