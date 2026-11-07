@@ -1,10 +1,14 @@
 # v1.15.0 — M0 Architecture & Ownership
 
-**Status:** In progress — initial design inventory; **not yet accepted**  
-**Scope:** Architecture and documentation only; no AWS deployments, state changes, or Terraform implementation  
-**Starting release:** `terraform-secure-baseline` v1.14.1  
-**Reference:** [ReconoSense integration contracts](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/BASELINE_INTEGRATION.md)  
-**Release roadmap:** [`ROADMAPv1-15-0.md`](https://github.com/jcub-i0/terraform-secure-baseline/blob/main/ROADMAPv1-15-0.md)
+**Status:** In progress — initial design inventory; **not yet accepted**
+
+**Scope:** Architecture and documentation only; no AWS deployments, state changes, or Terraform implementation
+
+**Starting release:** `terraform-secure-baseline` v1.14.1
+
+**Reference:** [ReconoSense integration contracts](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/BASELINE_INTEGRATION.md)
+
+**Release roadmap:** [`ROADMAP_v1_15_0.md`](./ROADMAP_v1_15_0.md)
 
 ## 1. Objective and non-negotiable architecture rules
 
@@ -89,7 +93,7 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 
 - Baseline: [`modules/ecs_service`](https://github.com/jcub-i0/terraform-secure-baseline/tree/main/modules/ecs_service), [`baseline/main.tf`](https://github.com/jcub-i0/terraform-secure-baseline/blob/main/baseline/main.tf), [`modules/storage/main.tf`](https://github.com/jcub-i0/terraform-secure-baseline/blob/main/modules/storage/main.tf), [`modules/application_load_balancer`](https://github.com/jcub-i0/terraform-secure-baseline/tree/main/modules/application_load_balancer).
 - ReconoSense: [`infra/terraform/README.md`](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/README.md), [`environments/staging/main.tf`](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/environments/staging/main.tf), [`BASELINE_INTEGRATION.md`](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/BASELINE_INTEGRATION.md).
-- AWS WAF ALB body inspection limit: (https://docs.aws.amazon.com/waf/latest/developerguide/web-acl-setting-body-inspection-limit.html).
-- RDS stop behavior: (https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
-- AWS provider `aws_rds_instance_state`: (https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_instance_state).
-- HashiCorp provider `aws_secretsmanager_secret_version` write-only: (https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version).
+- AWS WAF ALB body inspection limit: [AWS documentation](https://docs.aws.amazon.com/waf/latest/developerguide/web-acl-setting-body-inspection-limit.html).
+- RDS stop behavior: [AWS documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
+- AWS provider `aws_rds_instance_state`: [Terraform Registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_instance_state).
+- HashiCorp provider `aws_secretsmanager_secret_version` write-only: [Terraform Registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_version).
