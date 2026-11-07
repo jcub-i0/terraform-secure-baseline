@@ -1,13 +1,13 @@
 # v1.15.0 — M0-C2–C4: Consolidated Reusable Interface Design
 
-**Status:** Proposed for consolidated owner review; documentation only
+**Status:** C2–C4 consolidated interface design **owner-approved (2026-11-07)**; independent cross-repository review and downstream implementation/security gates remain open; documentation only
 **Baseline:** `main` after PR #961 (merge `127ecae`); M0-A/B complete, C1 design accepted
 **Scope:** C2 ECS and background work, C3 database/lifecycle, C4 ingress/security integration
 **Reference application:** ReconoSense (private contract at `infra/terraform/BASELINE_INTEGRATION.md`)
 
 ## 1. Objective and fixed boundaries
 
-Define the remaining reusable module **interfaces** in one design work package, not three separate approval cycles. ReconoSense exercises the requirements, but jobs, tenant policy, SQL, model access, identity configuration and release commands remain in the adopter's repository. This document makes **proposals**, not Terraform or AWS changes.
+Define the remaining reusable module **interfaces** in one design work package, not three separate approval cycles. ReconoSense exercises the requirements, but jobs, tenant policy, SQL, model access, identity configuration and release commands remain in the adopter's repository. This document records **owner-approved interface design choices** only, not authorization to implement or deploy Terraform or AWS changes.
 
 The approved [M0-B ownership model](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) is fixed: the existing baseline staging root owns VPC, endpoints, RDS configuration/deletion, KMS, ECS cluster, security governance and approved ECR repositories; the separate application state owns application services, tasks, ALB, IAM subject to platform controls, identity and data resources. The foundation consumes **no application-state outputs**. Reuse version-pinned baseline modules without duplicating their AWS resource instances. The accepted [C1 publication contract](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md) is a non-secret SSM interface plus a separately protected publication eligibility/coordination protocol; it has **not been implemented**.
 
@@ -125,22 +125,24 @@ Do not use unconditional module-level dependencies that introduce ALB ↔ SG ↔
 
 | Decision | Proposed default | Status |
 |---|---|---|
-| **C2-D1** | Additive sidecars and optional task storage to existing `ecs_service`; preserve single-container input defaults and service/task addresses. | Proposed |
-| **C2-D2** | New optional standalone-task and Scheduler modules; per-job task/execution roles, bounded RunTask, disabled schedules. | Proposed |
-| **C2-D3** | Explicit foundation ECR repository inventory independent of image/deployable-service registration; application owns digest publication only. | Proposed |
-| **C3-D1** | Configurable **new-instance** PostgreSQL 16 with baseline `17.10` default; observed-version publication and separate app credentials. | Proposed |
-| **C3-D2** | Implement previously owner-approved **B-5** lifecycle split only for designated synthetic staging; hold full-release coordination. | Implementation/security gates open |
-| **C4-D1** | Application-owned ALB/ACM/DNS records, canonical ALB zone output and opt-in exact-200 health match. | Proposed |
-| **C4-D2** | Evaluate platform-created connectivity-grant SGs plus independently bounded app attachment as first no-reverse-dependency mechanism. | Candidate; requires M0-D proof/approval |
-| **C4-D3** | Narrow per-rule upload WAF treatment, application egress qualification, mandatory IAM/CMK/GuardDuty safeguards. | Proposed |
+| **C2-D1** | Additive sidecars and optional task storage to existing `ecs_service`; preserve single-container input defaults and service/task addresses. | **Design owner-approved (2026-11-07); not implemented** |
+| **C2-D2** | New optional standalone-task and Scheduler modules; per-job task/execution roles, bounded RunTask, disabled schedules. | **Design owner-approved (2026-11-07); not implemented** |
+| **C2-D3** | Explicit foundation ECR repository inventory independent of image/deployable-service registration; application owns digest publication only. | **Design owner-approved (2026-11-07); not implemented** |
+| **C3-D1** | Configurable **new-instance** PostgreSQL 16 with baseline `17.10` default; observed-version publication and separate app credentials. | **Design owner-approved (2026-11-07); not implemented** |
+| **C3-D2** | Implement previously owner-approved **B-5** lifecycle split only for designated synthetic staging; hold full-release coordination. | **Design reaffirmed**; staging exclusivity and implementation/security gates open |
+| **C4-D1** | Application-owned ALB/ACM/DNS records, canonical ALB zone output and opt-in exact-200 health match. | **Design owner-approved (2026-11-07); not implemented** |
+| **C4-D2** | Evaluate platform-created connectivity-grant SGs plus independently bounded app attachment as first no-reverse-dependency mechanism. | **Evaluation approach owner-approved; no security mechanism or IAM permissions approved**; M0-D must prove/enforce or propose a safer two-state alternative |
+| **C4-D3** | Narrow per-rule upload WAF treatment, application egress qualification, mandatory IAM/CMK/GuardDuty safeguards. | **Design owner-approved (2026-11-07); not implemented** |
 
 **Consolidated acceptance checklist (design only):**
 
-- [ ] Owner accepts or amends the above C2–C4 reusable interface choices **as one package**.
+- [x] Owner approved C2–C4 as **one design package** (2026-11-07), explicitly prohibiting actual Terraform configuration or infrastructure changes in this approval.
 - [ ] An independent source-based review finds no unresolved *architecture-level* blocker across all 17 ReconoSense contracts; preserve nonblocking implementation/security requirements.
-- [ ] Current single-container defaults, resource ownership, initial-account separation and C1 protected coordination remain explicit.
-- [ ] C5 owns one focused dependency/compatibility plan; M0-D/E/F own the **single combined final security, cost, licensing and architecture closeout**.
+- [x] Design explicitly preserves existing single-container defaults, two-state ownership, initial-account separation and the C1 protected coordination protocol; these remain unimplemented or unverified where noted.
+- [x] C5 is assigned one focused dependency/compatibility review; M0-D/E/F own a **single combined final security, cost, licensing and architecture closeout**. Neither follow-up is complete.
 - [ ] Docs CI/Static Analysis pass at the final PR head; no Terraform Plan/Apply/AWS test is represented as completed.
+
+**Approval boundary:** Owner approval covers the documented C2–C4 *interface design only*. It does not authorize changes to `.tf`/`.tfvars`, Terraform state/backends, CI workflow or IAM configuration, AWS resources, or deployment. C4-D2 is still a security-review candidate, not an authorized SG-grant mechanism. The independent local cross-repository review and M0 security closeout remain open.
 
 **Release work remains:** M1 implements multi-container services; M2 implements jobs/schedules; M3 implements data/network/security interfaces; M4 implements migration-aware promotion; M5 live-qualifies ReconoSense with synthetic data. This document authorizes none of those operations.
 
