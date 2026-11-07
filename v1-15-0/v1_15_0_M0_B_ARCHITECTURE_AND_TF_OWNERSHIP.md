@@ -1,6 +1,6 @@
 # v1.15.0 — M0-B: Architecture and Terraform State Ownership
 
-**Status:** D1/D2/B-3/B-5 owner-approved; M0-B final review and CI pending (no AWS authorization or implementation)
+**Status:** M0-B architecture checkpoint accepted; D1/D2/B-3/B-5 approved; M0-C/D implementation and security gates remain open
 **Scope:** D1 (composition/state), D2 (baseline ECS/ALB boundaries), and B-5 (owner-approved, staging-only RDS run-state delegation); documentation only
 **Baseline:** `v1.14.1`; M0-A at `v1_15_0_M0_ARCHITECTURE_OWNERSHIP.md`
 **Reference application:** ReconoSense (private repository; contract: `infra/terraform/BASELINE_INTEGRATION.md`)
@@ -132,16 +132,16 @@ Never publish RDS master password/secret contents, app credentials, or full Terr
 
 ## 9. M0-B acceptance and handoff
 
-**Owner approval for D1, D2, B-3 and B-5 has been recorded. Codex's independent cross-repository review of the prior PR head reported B1 BLOCKING, N1–N4 NONBLOCKING and F1 FUTURE.** The owner-approved B-5 design resolves the B1 resource-ownership ambiguity on paper; the lifecycle and IAM enforcement remain required M0-C/D implementation gates. Independent review must verify the revised documented disposition before closing M0-B. The reviewer must also verify that B-1 is assigned to M0-C, B-2 to M0-D, and B-4 to M0-C/D. None of these controls has been implemented or validated in AWS.
+**M0-B design acceptance:** The owner approved D1/D2/B-3/B-5. The local independent cross-repository review of `fd63e47` identified B1 BLOCKING, N1–N4 NONBLOCKING and F1 FUTURE; B1 was corrected in the documented ownership model as B-5, while N1–N4/F1 are explicitly assigned below. GitHub Codex's subsequent read-only review of `1f3e9de` found no major issues, and the docs-only CI runs at that SHA passed [Docs Validation](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/42341547590) and [Terraform Static Analysis](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/42341547609) (Terraform Plan skipped). This accepts **only the M0-B architecture checkpoint**; M0-C/D controls, Terraform graph and live AWS validation remain open. The reviewer must also verify that B-1 is assigned to M0-C, B-2 to M0-D, and B-4 to M0-C/D. None of these controls has been implemented or validated in AWS.
 
 - [x] B-5 RDS instance/run-state split and staging-only, exact-resource Start/Stop delegation **approved as a design** by the owner (2026-11-07). No competing controller may be introduced; exclusive DB use and denied permissions remain mandatory pre-deployment tests.
-- [ ] A single authoritative owner is identified for every proposed AWS resource and individual SG rule **or the unresolved per-rule choices are explicitly assigned to M0-C/D without implying deployer permission**; no overlapping Terraform states.
-- [ ] The foundation consumes **no application outputs**; application roles cannot read foundation state snapshots, alter foundation RDS configuration or access foundation master secrets. B-5's permitted start/stop operations are explicitly bounded.
-- [ ] Existing `baseline/` paths and single-container consumers remain stable; app ECS/ALB ownership is isolated.
-- [ ] The initial deployment account/state paths, qualification boundary, lifecycle sequencing and migration/rollback rules are recorded.
-- [ ] M0-C owns exact module/output contracts, RDS lifecycle orchestration and Terraform graph verification; M0-D owns OIDC/IAM/KMS and network-grant enforcement and negative tests.
+- [x] Resource and rule ownership boundaries documented; unresolved **individual** cross-boundary SG-rule ownership is assigned to M0-C/D without granting application CI broader authority. No dual state ownership is proposed.
+- [x] The **design** prohibits foundation consumption of application outputs and prohibits application-role foundation-state reads, RDS configuration changes and master-secret access. B-5's potential Start/Stop operations are explicitly bounded; **M0-D must prove AWS authorization enforcement before deployment**.
+- [x] Existing `baseline/` paths and single-container consumers are preserved by this documentation-only PR; app ECS/ALB are assigned to application state, with future implementation compatibility tests required.
+- [x] Initial staging account, proposed separate state path, qualification boundary, lifecycle sequencing and migration/rollback rules recorded; no application backend has been provisioned.
+- [x] M0-C owns exact module/output contracts, RDS lifecycle orchestration and Terraform graph verification; M0-D owns OIDC/IAM/KMS and network-grant enforcement and negative tests.
 
-**Not yet claimed:** Reviewer acceptance of the final head, Terraform graph pass, Plans, AWS IAM simulations, AWS changes or production readiness. D1/D2/B-3/B-5 have design approval; **the application has not been granted RDS start/stop permission**. Do not mark M0-B complete until final review and CI pass; M0-C/D must implement the actual controls under separate authorization.
+**Acceptance boundary:** M0-B is **accepted as architecture/documentation only**, supported by the cited Codex review and checks of `1f3e9de`; this acceptance-record edit requires its own final CI before merge. No Terraform graph pass, Apply, AWS IAM simulation, AWS changes or production readiness is claimed. **The application has not been granted RDS Start/Stop permission.** M0-C/D implementation requires separate authorization and focused negative tests.
 
 ## 10. Cross-repository Codex review disposition (against prior head `fd63e47`)
 
