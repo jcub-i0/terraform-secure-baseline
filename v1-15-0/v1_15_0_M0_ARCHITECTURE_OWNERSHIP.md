@@ -60,7 +60,7 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 | 13 | Worker → migration exits 0 → API promotion | Enhance | Reusable protected release orchestration with explicitly staged changes, failed-migration block, and incompatible-schema drain/approval. No single Terraform Apply that prematurely promotes API. | M4 |
 | 14 | AWS/Cognito/Bedrock egress 443, no direct inbound | Shared | Prefer baseline private-subnet networking with explicit NAT/firewall/endpoints; application defines required destinations. Measure functionality and cost against ReconoSense's public-subnet reference. | M0, M3, M5 |
 | 15 | us-east-1 extraction origin | Existing | Baseline already accepts a Region input; ReconoSense pins application-specific Region/model destinations. | M0, M5 |
-| 16 | Declarative running/maintenance/parked state | Enhance | Existing baseline ECS `desired_count` helps; generic schedules and optional RDS state interface needed. App supplies lifecycle intent, guarded staging-only behavior. | M2, M3, M4 |
+| 16 | Declarative running/maintenance/parked state | Enhance | **M0-B proposal B-5 (owner approval pending):** foundation exclusively owns RDS configuration while application owns the dedicated staging RDS start/stop controller, with narrowly scoped AWS authorization. App supplies lifecycle intent; M0-C/D must prove staging-only eligibility, safe drain/resume and least privilege. | M0-B, M2, M3, M4 |
 | 17 | Disposable teardown vs protected evidence | Shared | Baseline owns shared-resource retirement guards; application owns document/retention lifecycle; dedicated state and denial of unsafe deletion/bypass; residual inventory required. | M3, M5 |
 
 ## 4. Architecture decisions to resolve before implementation
@@ -81,7 +81,7 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 ## 5. M0 execution order (docs/design only)
 
 - [x] **M0-A — Inventory:** Inspect both repositories, record 17 contracts, classify preliminary baseline gaps and application-owned resources.
-- [ ] **M0-B — Ownership (decisions approved; review pending):** [Terraform composition and state ownership record](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) covers the account/state/resource graph, integration-root pattern and rollback/cutover boundaries. **D1, D2 and B-3 owner-approved (2026-11-06); independent design review and M0-C/D handoff remain open.**
+- [ ] **M0-B — Ownership (B-5 approval pending):** [Terraform composition and state ownership record](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) covers the account/state/resource graph, integration-root pattern, rollback/cutover boundaries and cross-repository Codex findings. **D1, D2 and B-3 owner-approved (2026-11-06); B-5 (RDS start/stop delegation) remains proposed pending explicit owner approval and re-review.**
 - [ ] **M0-C — Interfaces:** Specify optional ECS service containers, tasks, schedules, IAM, RDS version, outputs, lifecycle, and deployment-gate contracts without application-specific names.
 - [ ] **M0-D — Security/operations:** Approve OIDC and CI ownership, egress/Bedrock paths, secrets, WAF upload handling, staged migration order, RDS lifecycle and protected teardown.
 - [ ] **M0-E — Economics/legal:** Price development/disposable and production-profile scenarios and record licensing disposition.
