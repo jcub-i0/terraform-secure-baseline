@@ -81,7 +81,7 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 ## 5. M0 execution order (docs/design only)
 
 - [x] **M0-A — Inventory:** Inspect both repositories, record 17 contracts, classify preliminary baseline gaps and application-owned resources.
-- [ ] **M0-B — Ownership (final review pending):** [Terraform composition and state ownership record](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) covers the account/state/resource graph, integration-root pattern, rollback/cutover boundaries and cross-repository Codex findings. **D1/D2/B-3 owner-approved (2026-11-06); B-5 staging-only RDS run-state delegation owner-approved as a design (2026-11-07).** Final review/CI and M0-C/D handoff are required before checkpoint closeout.
+- [x] **M0-B — Ownership (architecture accepted):** [Terraform composition and state ownership record](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) documents the approved two-state model, staging integration, limited RDS run-state delegation, independent review findings and M0-C/D handoff. D1/D2/B-3/B-5 are owner-approved; no AWS permissions or infrastructure were changed.
 - [ ] **M0-C — Interfaces:** Specify optional ECS service containers, tasks, schedules, IAM, RDS version, outputs, lifecycle, and deployment-gate contracts without application-specific names.
 - [ ] **M0-D — Security/operations:** Approve OIDC and CI ownership, egress/Bedrock paths, secrets, WAF upload handling, staged migration order, RDS lifecycle and protected teardown.
 - [ ] **M0-E — Economics/legal:** Price development/disposable and production-profile scenarios and record licensing disposition.
