@@ -1,8 +1,8 @@
 # v1.15.0 — M0-C: Reusable Module Interface Contracts
 
-**Status:** In progress — C1-01/C1-02 review blockers addressed in revised proposal; **not accepted**
+**Status:** **C1 architecture/design accepted** following local cross-repository re-review and PR #961 merge; publication and security controls remain unimplemented
 **Starting point:** M0-B approved two-state architecture (PR #960, merge `2730b3b`)
-**Scope of this PR:** Documentation only; define C1 and track C2–C5 design gates
+**Scope:** C1 accepted design record; C2–C4 consolidated in [one follow-up design](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md); C5/M0-D verification remains open
 **Reference application:** ReconoSense (private checkout: `~/recon-engine/infra/terraform/`)
 
 ## Objective and boundaries
@@ -15,13 +15,13 @@ Define reusable interfaces that allow any sensitive-data SaaS application to con
 
 | Checkpoint | Status | Deliverable and acceptance |
 |---|---|---|
-| **C1 — Foundation publication** | **Revised proposal; review pending** | Versioned non-secret infrastructure contract, exact publication identity, protected cross-state deployment coordination, ownership, schema/gap inventory and fail-closed consumer checks |
-| **C2 — ECS and jobs** | Not started | Optional multi-container service, standalone task, Scheduler, per-task execution/task-role and launch-readiness interfaces; synthetic single-container regression |
-| **C3 — Database and lifecycle** | Not started | Configurable new-instance PG16 (preserving existing 17.10 default), app credential separation, dedicated staging RDS `aws_rds_instance_state` interface and ordering/drain invariants |
-| **C4 — Ingress and security integration** | Not started | ALB/ACM/DNS, per-rule SG connectivity ownership, app IAM boundaries, KMS/GuardDuty/WAF and private egress compatibility |
+| **C1 — Foundation publication** | **Design accepted, not deployed** | Versioned non-secret infrastructure contract, exact publication identity, protected cross-state deployment coordination, ownership, schema/gap inventory and fail-closed consumer checks |
+| **C2 — ECS and jobs** | **Consolidated design proposed** | Optional multi-container service, standalone task, Scheduler, per-task execution/task-role and launch-readiness interfaces; [C2–C4 package](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md) |
+| **C3 — Database and lifecycle** | **Consolidated design proposed** | Configurable new-instance PG16 (preserving existing 17.10 default), app credential separation, dedicated staging RDS `aws_rds_instance_state` interface and ordering/drain invariants |
+| **C4 — Ingress and security integration** | **Consolidated design proposed** | ALB/ACM/DNS, per-rule SG connectivity ownership, app IAM boundaries, KMS/GuardDuty/WAF and private egress compatibility |
 | **C5 — Verification and handoff** | Not started | Actual Terraform dependency-graph review, backward-compatible synthetic consumer, negative security tests specification, independent review and M0-D handoff |
 
-**Do not treat C1 as completed** by merging this initial design PR. The remaining checkpoints and their separate implementation acceptance are not in scope here.
+**C1 is complete as an architecture-design checkpoint only** after the owner merged PR #961 (merge `127ecae`), following an independent local cross-repository review that returned **ACCEPT WITH DEFERRED ITEMS** and no blockers. C2–C4 are now designed together in the linked follow-up package; C5 and implementation/security acceptance remain open.
 
 ## C1 — Proposed foundation-to-application publication contract
 
@@ -183,15 +183,15 @@ The schema must not include the foundation RDS master username/password/secret A
 
 **Security acceptance is deferred to M0-D:** IAM trust, S3 state-object and lockfile isolation, KMS restrictions, SG-grant authorization and exact-ARN RDS Start/Stop rights must be independently proven through positive and negative tests. This PR does not grant any such permissions.
 
-### 5. C1 acceptance criteria (currently open)
+### 5. C1 design acceptance and deferred implementation criteria
 
-- [ ] Owner approves the JSON schema, supported versions, AZ-keyed subnets, typed ECR entries, naming, producer/reader identities and allowlisted field inventory.
-- [ ] The publication identity is precisely SSM ARN/name + version + SHA-256 of retrieved raw value, recorded with source commit, eligibility epoch and saved-plan checksum; missing/pruned versions fail closed.
-- [ ] The protected coordinator protocol covers in-progress/failed foundation Apply, post-success approval, fresh Plan, just-before-Apply recheck, cross-repository exclusive lock, failure recovery and retirement without a second SSM writer or third workload state.
-- [ ] Account/Region, schema, approval epoch and lifecycle flags fail closed; endpoint SG, observed RDS version, GuardDuty ECR ARN and ECR inventory gaps have explicit owners. Monitoring-enabled consumers reject absent/wildcard agent ARNs.
-- [ ] C5/M0-D own positive/negative publication race, history/size, shared lease and saved-plan identity tests. Boundary references, app resource grants and the coordinator's IAM remain M0-D-owned without widening existing deployer roles.
-- [ ] Existing baseline single-container workflows and resource addresses remain unaffected.
-- [ ] CI and independent design review complete; no new AWS resources claimed.
+- [x] C1 schema, versioning, publication identity and approved field classes accepted **as a design** when PR #961 was merged.
+- [x] Protocol defines SSM ARN/name + exact AWS version + SHA-256 of retrieved value, source revision, epoch and protected saved-plan manifest; unsafe history/recreation cases fail closed **by design**.
+- [x] Coordinator design covers partial foundation Apply, blocked eligibility, post-Apply approval and cross-repository exclusive release admission without a second SSM writer or third Terraform workload state.
+- [x] All 17 ReconoSense integration contracts were cross-referenced by local Codex; original C1-01/C1-02 blockers were resolved with a final **ACCEPT WITH DEFERRED ITEMS** recommendation. Owner merged PR #961.
+- [ ] **Implementation outstanding:** actual SSM publication, independent coordinator, permissions boundaries, KMS/IAM, state isolation and fail-closed controls (M0-D and implementation milestones).
+- [ ] **Verification outstanding:** exact identity/version/history/size and concurrent saved-plan/failure negative tests, executable Terraform graphs and backward-compatible deployments (C5/M0-D/M5).
+- [ ] **Later interfaces outstanding:** C2–C4 application/runtime interfaces require consolidated design acceptance and implementation through M1–M4.
 
 ## Handoff to C2–C5 and M0-D
 
@@ -207,7 +207,7 @@ The schema must not include the foundation RDS master username/password/secret A
 
 ## Independent cross-repository Codex review dispositions
 
-The local read-only review at `183eae1` of the private ReconoSense checkout reported **C1-01/C1-02 BLOCKING** and **C1-03–C1-07 NONBLOCKING**, with verdict **NOT ACCEPTED**. This revision addresses the two blockers **in proposed design text**, not in AWS or executable controls. It still needs independent re-review and owner approval.
+The initial local read-only review at `183eae1` of private ReconoSense reported **C1-01/C1-02 BLOCKING** and **C1-03–C1-07 NONBLOCKING**. The subsequent local cross-repository re-review of `c651cbba` resolved both blockers as architecture requirements, added nonblocking C1-R1 (coordinate *complete* releases/lifecycle paths) and returned **ACCEPT WITH DEFERRED ITEMS**; the owner merged PR #961. The decisions are accepted as design **only**: no SSM/IAM/lease implementation or live qualification exists.
 
 | Finding | Revised disposition | Remaining verification |
 |---|---|---|
@@ -235,4 +235,4 @@ Public baseline source:
 - [ECS cluster outputs](../modules/ecs_cluster/outputs.tf)
 - [ALB outputs](../modules/application_load_balancer/outputs.tf)
 
-**No Terraform changes, AWS deployment, published SSM parameter, live contract, or security qualification is claimed.**
+**C1 acceptance is design-only. No Terraform changes, AWS deployment, published SSM parameter, live contract or security qualification is claimed by the C1 and consolidated C2–C4 documentation PRs.**
