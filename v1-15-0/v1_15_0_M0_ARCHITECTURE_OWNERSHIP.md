@@ -1,6 +1,6 @@
 # v1.15.0 — M0 Architecture & Ownership
 
-**Status:** M0 in progress — M0-A/B and C1 design accepted; consolidated C2–C4 proposed; overall M0 acceptance open
+**Status:** M0 in progress — M0-A/B/C1 and consolidated C2–C4 design owner-approved; C5 and final security/cost/licensing acceptance open
 
 **Scope:** Architecture and documentation only; no AWS deployments, state changes, or Terraform implementation
 
@@ -82,7 +82,7 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 
 - [x] **M0-A — Inventory:** Inspect both repositories, record 17 contracts, classify preliminary baseline gaps and application-owned resources.
 - [x] **M0-B — Ownership (architecture accepted):** [Terraform composition and state ownership record](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) documents the approved two-state model, staging integration, limited RDS run-state delegation, independent review findings and M0-C/D handoff. D1/D2/B-3/B-5 are owner-approved; no AWS permissions or infrastructure were changed.
-- [ ] **M0-C — Interfaces (C1 accepted; C2–C4 consolidated design proposed):** [Accepted C1 publication design](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md) was merged in PR #961; the [single C2–C4 interface package](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md) defines proposed ECS/job, database/lifecycle and ALB/network/security extensions. C5 remains one focused graph/compatibility review. No Terraform, SSM, IAM or AWS implementation is accepted.
+- [ ] **M0-C — Interfaces (C1 and consolidated C2–C4 designs accepted):** [Accepted C1 publication design](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md) merged in PR #961; the [single C2–C4 interface package](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md) was owner-approved as a **design only** (2026-11-07). C5 graph/compatibility review and independent cross-repository verification remain open. No `.tf`, CI, IAM, SSM, state or AWS changes are authorized.
 - [ ] **M0-D/E/F — Consolidated final architecture closeout:** In one final work package, resolve protected IAM/OIDC/CI coordination and SG security authority, realistic cost scenarios, licensing authorization and independent acceptance; keep any actual deployment/testing in M1–M5. M0-D/E/F remain distinct requirements, not three separate review cycles.
 **M0 acceptance:** Every one of the 17 requirements has an implementation owner and specific validation target; one Terraform state owns each AWS resource; no unapproved destructive migration or cross-state overlap is proposed; modular interfaces and backwards compatibility are recorded; deployment order, realistic operating costs and authorization/licensing are resolved.
 
