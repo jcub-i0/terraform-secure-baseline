@@ -83,7 +83,8 @@ The example is illustrative, contains placeholders, and is **not a deployed para
   "ecs": {
     "cluster_name": "<ecs-cluster-name>",
     "cluster_arn": "<ecs-cluster-arn>",
-    "guardduty_runtime_monitoring_expected": false
+    "guardduty_runtime_monitoring_expected": false,
+    "guardduty_agent_ecr_repository_arn": null
   },
   "ecr_repositories": {},
   "security": {
@@ -94,6 +95,8 @@ The example is illustrative, contains placeholders, and is **not a deployed para
 ```
 
 A production contract should never expose an application-controlled `staging_run_state_eligible=true` flag. Both lifecycle gates default to `false` and can be set only through **independently approved, foundation-owned configuration** following a documented dedicated-use review. M0-C3/D must validate that the two conditions are true **and** that the actual instance ARN/account/Region match before enabling the controller or granting Start/Stop rights.
+
+When `ecs.guardduty_runtime_monitoring_expected` is `true`, `ecs.guardduty_agent_ecr_repository_arn` must be an exact, non-null regional AWS-owned repository ARN published by the foundation; otherwise the application must fail closed rather than widen ECR permissions or reconstruct a regional account map. When monitoring is disabled, the ARN is `null`. The resolved ARN is **not** one of the application ECR repositories. M0-D must verify that task execution-role agent image pull grants are read-only and scoped to this exact ARN, with no wildcard repository substitution.
 
 **Exact shape is proposed, not ratified.** M0-C1 review should decide whether subnets should also be keyed by AZ and whether the contract should encode supported capabilities separately from currently configured outputs. The foundation revision must be a reviewed, stable value, not a volatile `timestamp()` field that causes a plan diff on every run. A data change requires a protected foundation publication and an application re-plan.
 
@@ -106,7 +109,7 @@ A production contract should never expose an application-controlled `staging_run
 | Endpoint SG and S3 prefix list | `modules/vpc_endpoints/outputs.tf`: `interface_endpoints_sg_id`; root `s3_prefix_list_id` | **Foundation:** expose endpoint SG only in reviewed non-secret contract |
 | RDS ID/ARN/endpoint/port/name/SG | `modules/storage/outputs.tf` `rds_configuration.identifier/arn`; root `rds_address`, `rds_port`, `rds_database_name`, `data_sg_id` | **Foundation:** purpose-built fields, not broad `rds_configuration` publication |
 | RDS engine and lifecycle eligibility | Storage instance currently hardcodes `17.10`; no dedicated-use/run-state approval input exists | **C3:** new-instance engine input and protected staging eligibility; never downgrade PG17 in place |
-| ECS cluster and monitoring | Root `ecs_cluster` output includes ARN/name and GuardDuty expected participation | **Foundation:** publish explicit approved expectations; app reproduces required execution grants |
+| ECS cluster and monitoring | Root `ecs_cluster` output includes ARN/name and GuardDuty expected participation; `baseline/locals.tf` resolves `local.guardduty_fargate_agent_ecr_repository_arn` by supported Region, but the root does **not** publish that value when there is no deployable foundation service | **Foundation:** add an explicit resolved `guardduty_agent_ecr_repository_arn` contract field independent of `ecs_services`; require it when monitoring is enabled. **M0-D:** test exact agent-repository pull-only grants and reject missing/wildcard scopes |
 | ECR repository inventory | Root `ecr_repositories` provides name/ARN/URL; null-digest service registration may still derive a repository | **Foundation:** identify and pin explicit repository ownership; avoid unintended ECR creation/removal |
 | Logs and secrets CMK ARNs | Root `logs_cmk_arn`, `secrets_manager_cmk_arn` | **Foundation publishes references only; M0-D** enforces actual use permissions and KMS key policy |
 | Mandatory role permissions boundary | Platform/bootstrap-governed, not currently a `baseline/outputs.tf` field | **M0-D:** publish/validate a platform-administered ceiling separately or via protected input; do not fabricate an ARN or let app CI control the boundary |
@@ -139,7 +142,7 @@ The schema must not include the foundation RDS master username/password/secret A
 - [ ] Owner approves the JSON schema, versioning/naming, publisher identity and allowed field inventory.
 - [ ] Publication mechanism does not require foundation to consume application resources or application to read foundation state.
 - [ ] Account/Region/revision/lifecycle flags fail closed under both synthetic positive and negative contracts.
-- [ ] Missing endpoint SG ID and DB identity/engine-version output gaps have explicit implementation owners.
+- [ ] Missing endpoint SG, DB identity/engine-version, and resolved GuardDuty agent repository ARN output gaps have explicit implementation owners; monitoring-enabled consumers reject absent/wildcard agent ARNs.
 - [ ] The mandatory boundary reference and app resource-grant scheme are assigned to M0-D without widening existing deployer roles.
 - [ ] Existing baseline single-container workflows and resource addresses remain unaffected.
 - [ ] CI and independent design review complete; no new AWS resources claimed.
