@@ -6,7 +6,7 @@
 
 **Starting release:** `terraform-secure-baseline` v1.14.1
 
-**Reference:** [ReconoSense integration contracts](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/BASELINE_INTEGRATION.md)
+**Reference:** ReconoSense (private repository), `infra/terraform/BASELINE_INTEGRATION.md`
 
 **Release roadmap:** [`ROADMAP_v1_15_0.md`](./ROADMAP_v1_15_0.md)
 
@@ -92,7 +92,7 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 ## References and technical notes
 
 - Baseline: [`modules/ecs_service`](https://github.com/jcub-i0/terraform-secure-baseline/tree/main/modules/ecs_service), [`baseline/main.tf`](https://github.com/jcub-i0/terraform-secure-baseline/blob/main/baseline/main.tf), [`modules/storage/main.tf`](https://github.com/jcub-i0/terraform-secure-baseline/blob/main/modules/storage/main.tf), [`modules/application_load_balancer`](https://github.com/jcub-i0/terraform-secure-baseline/tree/main/modules/application_load_balancer).
-- ReconoSense: [`infra/terraform/README.md`](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/README.md), [`environments/staging/main.tf`](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/environments/staging/main.tf), [`BASELINE_INTEGRATION.md`](https://github.com/jcub-i0/reconosense/blob/main/infra/terraform/BASELINE_INTEGRATION.md).
+- ReconoSense (private repository; paths for authorized readers): `infra/terraform/README.md`, `infra/terraform/environments/staging/main.tf`, `infra/terraform/BASELINE_INTEGRATION.md`.
 - AWS WAF ALB body inspection limit: [AWS documentation](https://docs.aws.amazon.com/waf/latest/developerguide/web-acl-setting-body-inspection-limit.html).
 - RDS stop behavior: [AWS documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
 - AWS provider `aws_rds_instance_state`: [Terraform Registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_instance_state).
