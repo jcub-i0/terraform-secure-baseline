@@ -124,10 +124,15 @@ locals {
   }
 
   ecs_required_repositories = {
-    for repository_name in toset([
-      for service in values(var.ecs_services) :
-      service.repository_name
-    ]) :
+    for repository_name in toset(flatten([
+      for service in values(var.ecs_services) : concat(
+        [service.repository_name],
+        [
+          for sidecar in values(service.sidecars) :
+          sidecar.repository_name
+        ]
+      )
+    ])) :
     repository_name => {}
   }
 
@@ -239,9 +244,15 @@ locals {
   ecs_iam_services = {
     for service_name, service in local.deployable_ecs_services :
     service_name => {
-      ecr_repository_arns = toset([
-        module.ecr.repositories[service.repository_name].arn
-      ])
+      ecr_repository_arns = toset(concat(
+        [
+          module.ecr.repositories[service.repository_name].arn
+        ],
+        [
+          for sidecar in values(service.sidecars) :
+          module.ecr.repositories[sidecar.repository_name].arn
+        ]
+      ))
 
       guardduty_agent_ecr_repository_arns = (
         local.effective_guardduty_fargate_runtime_monitoring_enabled
@@ -255,13 +266,23 @@ locals {
         local.ecs_log_group_arns[service_name]
       ])
 
-      execution_secret_arns = toset(
-        values(service.secrets_manager_secrets)
-      )
+      execution_secret_arns = toset(concat(
+        values(service.secrets_manager_secrets),
+        flatten([
+          for sidecar in values(service.sidecars) : [
+            for value_from in values(sidecar.secrets_manager_secrets) :
+            join(":", slice(split(":", value_from), 0, 7))
+          ]
+        ])
+      ))
 
-      execution_ssm_parameter_arns = toset(
-        values(service.ssm_parameters)
-      )
+      execution_ssm_parameter_arns = toset(concat(
+        values(service.ssm_parameters),
+        flatten([
+          for sidecar in values(service.sidecars) :
+          values(sidecar.ssm_parameters)
+        ])
+      ))
 
       task_execution_kms_key_arns   = service.task_execution_kms_key_arns
       task_role_managed_policy_arns = service.task_role_managed_policy_arns
@@ -335,6 +356,23 @@ locals {
         service.secrets_manager_secrets,
         service.ssm_parameters,
       )
+
+      depends_on = service.depends_on
+
+      sidecars = {
+        for sidecar_name, sidecar in service.sidecars :
+        sidecar_name => merge(
+          sidecar,
+          {
+            image = "${module.ecr.repositories[sidecar.repository_name].repository_url}@${sidecar.image_digest}"
+
+            secrets = merge(
+              sidecar.secrets_manager_secrets,
+              sidecar.ssm_parameters
+            )
+          }
+        )
+      }
     }
   }
 

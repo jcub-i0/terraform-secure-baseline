@@ -837,8 +837,62 @@ variable "ecs_services" {
       read_only      = optional(bool, false)
     })), [])
 
+    depends_on = optional(list(object({
+      container_name = string
+      condition      = string
+    })), [])
+
     start_timeout_seconds = optional(number)
     stop_timeout_seconds  = optional(number)
+
+    sidecars = optional(map(object({
+      repository_name = string
+      image_digest    = optional(string)
+
+      essential = optional(bool, true)
+
+      cpu_units              = optional(number)
+      memory_limit_mib       = optional(number)
+      memory_reservation_mib = optional(number)
+
+      environment_variables   = optional(map(string), {})
+      secrets_manager_secrets = optional(map(string), {})
+      ssm_parameters          = optional(map(string), {})
+
+      command     = optional(list(string))
+      entry_point = optional(list(string))
+
+      port_mappings = optional(list(object({
+        container_port = number
+        protocol       = optional(string, "tcp")
+      })), [])
+
+      read_only_root_filesystem = optional(bool)
+
+      health_check = optional(object({
+        command      = list(string)
+        interval     = optional(number, 30)
+        timeout      = optional(number, 5)
+        retries      = optional(number, 3)
+        start_period = optional(number, 0)
+      }), null)
+
+      start_timeout_seconds = optional(number)
+      stop_timeout_seconds  = optional(number)
+
+      dependency_rank = optional(number, 0)
+
+      depends_on = optional(list(object({
+        container_name = string
+        condition      = string
+      })), [])
+
+      mount_points = optional(list(object({
+        source_volume  = string
+        container_path = string
+        read_only      = optional(bool, false)
+      })), [])
+    })), {})
   }))
 
   default = {}
@@ -1075,6 +1129,58 @@ variable "ecs_services" {
     )
 
     error_message = "Deployable production ECS services require desired_count >= 2 for fixed-count services or min_capacity >= 2 for autoscaled services unless production_retirement_mode is enabled."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_services) : [
+        for sidecar in values(service.sidecars) :
+        can(regex(
+          "^[a-z0-9]+([._-][a-z0-9]+)*$",
+          sidecar.repository_name
+        )) &&
+        (
+          sidecar.image_digest == null ? true :
+          can(regex("^sha256:[0-9a-f]{64}$", sidecar.image_digest))
+        )
+      ]
+    ]))
+
+    error_message = "Sidecar repositories must have valid ECR names, and supplied image digests must be SHA-256 digests."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.image_digest == null ? true : alltrue([
+        for sidecar in values(service.sidecars) :
+        sidecar.image_digest != null
+      ])
+    ])
+
+    error_message = "Every sidecar must have an image digest before its parent ECS service can be deployed."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_services) : [
+        for sidecar in values(service.sidecars) :
+        length(setintersection(
+          toset(keys(sidecar.secrets_manager_secrets)),
+          toset(keys(sidecar.ssm_parameters))
+        )) == 0 &&
+
+        length(setintersection(
+          toset(keys(sidecar.environment_variables)),
+          setunion(
+            toset(keys(sidecar.secrets_manager_secrets)),
+            toset(keys(sidecar.ssm_parameters))
+          )
+        )) == 0
+      ]
+    ]))
+
+    error_message = "Sidecar environment variables, Secrets Manager references, and SSM parameters must use distinct names."
   }
 }
 
