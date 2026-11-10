@@ -95,7 +95,21 @@ variable "services" {
 
       environment_variables = optional(map(string), {})
       secrets               = optional(map(string), {})
+
+      health_check = optional(object({
+        command      = list(string)
+        interval     = optional(number, 30)
+        timeout      = optional(number, 5)
+        retries      = optional(number, 3)
+        start_period = optional(number, 0)
+      }), null)
+
+      start_timeout_seconds = optional(number)
+      stop_timeout_seconds  = optional(number)
     })), {})
+
+    start_timeout_seconds = optional(number)
+    stop_timeout_seconds  = optional(number)
   }))
 
   default = {}
@@ -274,6 +288,32 @@ variable "services" {
     ]))
 
     error_message = "A sidecar cannot define the same environment variable name in both environment_variable and secrets."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for timeout in concat(
+          [
+            service.start_timeout_seconds,
+            service.stop_timeout_seconds
+          ],
+          flatten([
+            for sidecar in values(service.sidecars) : [
+              sidecar.start_timeout_seconds,
+              sidecar.stop_timeout_seconds
+            ]
+          ])
+        ) :
+        timeout == null ? true : (
+          timeout >= 2 &&
+          timeout <= 120 &&
+          timeout == floor(timeout)
+        )
+      ]
+    ]))
+
+    error_message = "Container start and stop timeouts must be whole numbers between 2 and 120 seconds."
   }
 }
 

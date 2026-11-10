@@ -110,6 +110,7 @@ resource "aws_ecs_task_definition" "task_definitions" {
             }
           }
         },
+
         each.value.health_check == null ? {} : {
           healthCheck = {
             command     = each.value.health_check.command
@@ -118,41 +119,69 @@ resource "aws_ecs_task_definition" "task_definitions" {
             retries     = each.value.health_check.retries
             startPeriod = each.value.health_check.start_period
           }
+        },
+
+        each.value.start_timeout_seconds == null ? {} : {
+          startTimeout = each.value.start_timeout_seconds
+        },
+
+        each.value.stop_timeout_seconds == null ? {} : {
+          stopTimeout = each.value.stop_timeout_seconds
         }
       )
     ],
     [
-      for sidecar_name in sort(keys(each.value.sidecars)) : {
-        name      = sidecar_name
-        image     = each.value.sidecars[sidecar_name].image
-        essential = each.value.sidecars[sidecar_name].essential
+      for sidecar_name in sort(keys(each.value.sidecars)) : merge(
+        {
+          name      = sidecar_name
+          image     = each.value.sidecars[sidecar_name].image
+          essential = each.value.sidecars[sidecar_name].essential
 
-        environment = [
-          for name, value in each.value.sidecars[sidecar_name].environment_variables : {
-            name  = name
-            value = value
+          environment = [
+            for name, value in each.value.sidecars[sidecar_name].environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
+
+          secrets = [
+            for name, value_from in each.value.sidecars[sidecar_name].secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.service_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+
+              mode = "non-blocking"
+            }
           }
-        ]
+        },
 
-        secrets = [
-          for name, value_from in each.value.sidecars[sidecar_name].secrets : {
-            name      = name
-            valueFrom = value_from
+        each.value.sidecars[sidecar_name].health_check == null ? {} : {
+          healthCheck = {
+            command     = each.value.sidecars[sidecar_name].health_check.command
+            interval    = each.value.sidecars[sidecar_name].health_check.interval
+            timeout     = each.value.sidecars[sidecar_name].health_check.timeout
+            retries     = each.value.sidecars[sidecar_name].health_check.retries
+            startPeriod = each.value.sidecars[sidecar_name].health_check.start_period
           }
-        ]
+        },
 
-        logconfiguration = {
-          logDriver = "awslogs"
+        each.value.sidecars[sidecar_name].start_timeout_seconds == null ? {} : {
+          startTimeout = each.value.sidecars[sidecar_name].start_timeout_seconds
+        },
 
-          options = {
-            awslogs-group         = aws_cloudwatch_log_group.service_logs[each.key].name
-            awslogs-region        = var.primary_region
-            awslogs-stream-prefix = "ecs"
-
-            mode = "non-blocking"
-          }
+        each.value.sidecars[sidecar_name].stop_timeout_seconds == null ? {} : {
+          stopTimeout = each.value.sidecars[sidecar_name].stop_timeout_seconds
         }
-      }
+      )
     ]
   ))
 
