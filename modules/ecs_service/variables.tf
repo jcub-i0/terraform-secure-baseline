@@ -90,6 +90,11 @@ variable "services" {
 
     sidecars = optional(map(object({
       image = string
+
+      essential = optional(bool, true)
+
+      environment_variables = optional(map(string), {})
+      secrets = optional(map(string), {})
     })), {})
   }))
 
