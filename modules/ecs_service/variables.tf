@@ -88,6 +88,14 @@ variable "services" {
     environment_variables = optional(map(string), {})
     secrets               = optional(map(string), {})
 
+    task_volumes = optional(set(string), [])
+
+    mount_points = optional(list(object({
+      source_volume  = string
+      container_path = string
+      read_only      = optional(bool, false)
+    })), [])
+
     sidecars = optional(map(object({
       image = string
 
@@ -112,6 +120,12 @@ variable "services" {
       depends_on = optional(list(object({
         container_name = string
         condition      = string
+      })), [])
+
+      mount_points = optional(list(object({
+        source_volume  = string
+        container_path = string
+        read_only      = optional(bool, false)
       })), [])
     })), {})
 
@@ -483,6 +497,45 @@ variable "services" {
     ]))
 
     error_message = "Sidecar dependencies must reference distinct, existing sidecars with lower dependency ranks and valid ECS conditions. HEALTHY requires a health check; COMPLETE and SUCCESS require nonessential prerequisites."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for name in service.task_volumes :
+        can(regex("^[A-Za-z0-9_-]{1,255}$", name))
+      ]
+    ]))
+
+    error_message = "Task volume names must be 1-255 characters and contain only letters, numbers, hyphens, or underscores."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for mounts in concat(
+          [service.mount_points],
+          [
+            for sidecar in values(service.sidecars) :
+            sidecar.mount_points
+          ]
+          ) : (
+          length(distinct([
+            for mount in mounts : mount.container_path
+          ])) == length(mounts) &&
+
+          alltrue([
+            for mount in mounts :
+            contains(service.task_volumes, mount.source_volume) &&
+            startswith(mount.container_path, "/") &&
+            mount.container_path != "/" &&
+            trimspace(mount.container_path) == mount.container_path
+          ])
+        )
+      ]
+    ]))
+
+    error_message = "Container mount points must reference declared task volumes, use absolute non-root paths without surrounding whitespace, and have unique destination paths per container."
   }
 }
 

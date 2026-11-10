@@ -68,6 +68,14 @@ resource "aws_ecs_task_definition" "task_definitions" {
     cpu_architecture        = each.value.cpu_architecture
   }
 
+  dynamic "volume" {
+    for_each = each.value.task_volumes
+
+    content {
+      name = volume.value
+    }
+  }
+
   container_definitions = jsonencode(concat(
     [
       merge(
@@ -136,6 +144,16 @@ resource "aws_ecs_task_definition" "task_definitions" {
               condition     = dependency.condition
             }
           ]
+        },
+
+        length(each.value.mount_points) == 0 ? {} : {
+          mountPoints = [
+            for mount in each.value.mount_points : {
+              sourceVolume  = mount.source_volume
+              containerPath = mount.container_path
+              readOnly      = mount.read_only
+            }
+          ]
         }
       )
     ],
@@ -196,6 +214,16 @@ resource "aws_ecs_task_definition" "task_definitions" {
             for dependency in each.value.sidecars[sidecar_name].depends_on : {
               containerName = dependency.container_name
               condition     = dependency.condition
+            }
+          ]
+        },
+
+        length(each.value.sidecars[sidecar_name].mount_points) == 0 ? {} : {
+          mountPoints = [
+            for mount in each.value.sidecars[sidecar_name].mount_points : {
+              sourceVolume  = mount.source_volume
+              containerPath = mount.container_path
+              readOnly      = mount.read_only
             }
           ]
         }
