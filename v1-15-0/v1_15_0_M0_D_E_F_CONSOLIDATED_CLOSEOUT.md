@@ -1,9 +1,9 @@
 # v1.15.0 — M0-D/E/F: Consolidated Architecture Closeout
 
 **Status:** Draft decision and acceptance register — security, cost and licensing approvals **OPEN**
-**Baseline:** \`main\` at PR #964 merge \`30f916bccfbd123ce189c65330070b2e4845551e\`
+**Baseline:** `main` at PR #964 merge `30f916bccfbd123ce189c65330070b2e4845551e`
 **Scope:** One **documentation-only** M0-D (security/operations), M0-E (economics/IP) and M0-F (architecture acceptance) work package
-**Reference application:** ReconoSense, private contract \`infra/terraform/BASELINE_INTEGRATION.md\` in \`~/recon-engine/\`
+**Reference application:** ReconoSense, private contract `infra/terraform/BASELINE_INTEGRATION.md` in `~/recon-engine/`
 **No authorization:** This PR cannot create Terraform/IAM/SSM/network resources, change workflows/state, deploy to AWS or execute licensing documents.
 
 ## 1. Scope, decisions already established and release boundary
@@ -15,11 +15,11 @@ M0-A inventory, M0-B two-state ownership, M0-C1 publication design, M0-C2–C4 r
 1. The **foundation state** owns shared VPC/subnets, endpoints, centralized security, KMS, ECS cluster, foundation ECR inventory, and the RDS instance/configuration/deletion. The **separate application state** owns app ECS services/tasks, app ALB/WAF, schedules, app IAM under platform controls, app secrets/data/identity. No duplicate resource instance or reverse state dependency.
 2. The initial integration is **synthetic data in the existing baseline staging AWS account**. ReconoSense's dedicated account and standalone Terraform root remain unchanged. The application consumes a version-pinned, non-secret SSM foundation contract, **not** the foundation state snapshot.
 3. B-5 permits a distinct **application run-state controller** for one designated, exclusively used staging RDS instance, **not** application authority over RDS configuration/master secret/deletion. Actual Start/Stop grants remain unimplemented.
-4. **C3-D3**: Future extraction of RDS from \`modules/storage\` into \`modules/database\` is optional, **within the same foundation state**, guarded by complete Terraform \`moved\` address mappings and a reviewed non-destructive plan. It is not a prerequisite for M1 or automatic part of M3.
+4. **C3-D3**: Future extraction of RDS from `modules/storage` into `modules/database` is optional, **within the same foundation state**, guarded by complete Terraform `moved` address mappings and a reviewed non-destructive plan. It is not a prerequisite for M1 or automatic part of M3.
 5. New capabilities are generic/optional, preserve existing single-container ECS addresses and defaults, and put ReconoSense-specific job names/SQL/model selection behind the application-owned composition.
 6. **No runtime implementation or permission grant is approved by this document.** M1–M5 carry out Terraform implementation and positive/negative testing through separately approved changes.
 
-**Decision classification:** \`APPROVED DESIGN\` means architecture already accepted; \`PROPOSED\` means a recommendation awaiting owner decision; \`BLOCKING BEFORE DEPLOY\` means approval/implementation evidence is mandatory before first integration Apply. Do **not** mark M0 final acceptance as complete when any owner, pricing, or IP authorization question below remains unresolved.
+**Decision classification:** `APPROVED DESIGN` means architecture already accepted; `PROPOSED` means a recommendation awaiting owner decision; `BLOCKING BEFORE DEPLOY` means approval/implementation evidence is mandatory before first integration Apply. Do **not** mark M0 final acceptance as complete when any owner, pricing, or IP authorization question below remains unresolved.
 
 ## 2. M0-D — Identity, deployment and security authority
 
@@ -28,20 +28,20 @@ M0-A inventory, M0-B two-state ownership, M0-C1 publication design, M0-C2–C4 r
 | Principal / operation | Protected owner | Required minimum scope | Deny/negative-proof obligation |
 |---|---|---|---|
 | Account and state/bootstrap administrators | Existing protected platform/bootstrap authority | OIDC provider, state bucket/key policies, mandatory permission boundaries, trust and IAM ceilings | Application CI cannot impersonate, edit, weaken or detach boundary/trust, read platform state, or self-grant admin rights. |
-| Foundation Plan role | Foundation CI, independent of application | Approved read-only foundation discovery plus **its own** backend object/lock operations; no production mutations | Deny application state snapshots, application secrets and arbitrary AWS writes. Backend \`.tflock\` operations are an explicit narrowly scoped Plan exception. |
-| Foundation Apply role | Protected foundation CI/environments | Own foundation resource instances and **sole** Terraform writer to the SSM publication parameter | Application cannot assume this role, modify baseline security/RDS or gain its permissions via repository/branch/environment spoofing. Existing broad \`AdministratorAccess\` baseline role is **not reusable as app role**. |
-| Application Plan role | Platform/bootstrap-provisioned application identity, app CI | Exact SSM parameter \`GetParameter\`, approved non-sensitive discovery, **application** state read and lockfile only | No \`terraform_remote_state\`/foundation state object or versions, no SSM parameter write, recursive parent-path reads, master-secret retrieval, role/trust mutation or arbitrary resource changes. |
-| Application Apply role | Platform/bootstrap-governed protected environment and review | Application state and approved app-owned ALB/ECS/IAM/network resources within mandatory boundary, scoped \`PassRole\` | Cannot change foundation SGs, configuration/deletion RDS, key policies, bootstrap, foundation ECR ownership or security evidence. Explicitly deny unapproved SG attachments and direct alternate task launches where enforceable. |
+| Foundation Plan role | Foundation CI, independent of application | Approved read-only foundation discovery plus **its own** backend object/lock operations; no production mutations | Deny application state snapshots, application secrets and arbitrary AWS writes. Backend `.tflock` operations are an explicit narrowly scoped Plan exception. |
+| Foundation Apply role | Protected foundation CI/environments | Own foundation resource instances and **sole** Terraform writer to the SSM publication parameter | Application cannot assume this role, modify baseline security/RDS or gain its permissions via repository/branch/environment spoofing. Existing broad `AdministratorAccess` baseline role is **not reusable as app role**. |
+| Application Plan role | Platform/bootstrap-provisioned application identity, app CI | Exact SSM parameter `GetParameter`, approved non-sensitive discovery, **application** state read and lockfile only | No `terraform_remote_state`/foundation state object or versions, no SSM parameter write, recursive parent-path reads, master-secret retrieval, role/trust mutation or arbitrary resource changes. |
+| Application Apply role | Platform/bootstrap-governed protected environment and review | Application state and approved app-owned ALB/ECS/IAM/network resources within mandatory boundary, scoped `PassRole` | Cannot change foundation SGs, configuration/deletion RDS, key policies, bootstrap, foundation ECR ownership or security evidence. Explicitly deny unapproved SG attachments and direct alternate task launches where enforceable. |
 | Image publisher | App CI under separate trust subject | Push only approved ECR repository digests and read only required image metadata | No ECS service promotion, foundation repo administration, state writes, wildcard repository/broad IAM grants. |
-| Release coordinator | Independently protected authority outside ordinary app Plan | Durable publication eligibility/epoch, cross-repository admission/lease, saved-plan checksum validation, full-release serialization and protected operator reconciliation | App repository cannot forge \`ELIGIBLE\`, move an epoch backward, bypass stale-plan checks, release a lease during unresolved mutation, or grant itself foundation privileges. |
+| Release coordinator | Independently protected authority outside ordinary app Plan | Durable publication eligibility/epoch, cross-repository admission/lease, saved-plan checksum validation, full-release serialization and protected operator reconciliation | App repository cannot forge `ELIGIBLE`, move an epoch backward, bypass stale-plan checks, release a lease during unresolved mutation, or grant itself foundation privileges. |
 | Application ECS task/execution/Scheduler roles | Application state within protected IAM ceiling | Separated task vs execution role, exact Secrets Manager and KMS grants, GuardDuty agent ECR pull, app-specific RunTask/Schedule/PassRole | Deny master credential, cross-tenant/object/model access, unrelated task families, unrelated schedule/DLQ manipulation and wildcard role assumption. |
-| Staging RDS operational controller | Application Apply under separately approved platform restriction | Only \`rds:StartDBInstance\`/\`rds:StopDBInstance\` for the **exact** eligible staging DB ARN/Region, necessary describe access | Deny \`ModifyDBInstance\`, \`DeleteDBInstance\`, master-secret access, other DB ARNs, production DBs; enforce exclusive use, drain and operation sequencing. |
+| Staging RDS operational controller | Application Apply under separately approved platform restriction | Only `rds:StartDBInstance`/`rds:StopDBInstance` for the **exact** eligible staging DB ARN/Region, necessary describe access | Deny `ModifyDBInstance`, `DeleteDBInstance`, master-secret access, other DB ARNs, production DBs; enforce exclusive use, drain and operation sequencing. |
 
-**IAM implementation findings:** Current \`modules/github_oidc/main.tf\` grants broad state-bucket reads to foundation Plan and attaches \`AdministratorAccess\` to foundation Apply. The current platform-wide \`modules/iam/ecs.tf\` does not impose mandatory per-role boundaries. Neither module should simply be reused to create application deployment principals. Separate bootstrap-administered application identities, permissions-boundary ceiling, trust conditions, state key/lockfile restrictions and KMS conditions are required.
+**IAM implementation findings:** Current `modules/github_oidc/main.tf` grants broad state-bucket reads to foundation Plan and attaches `AdministratorAccess` to foundation Apply. The current platform-wide `modules/iam/ecs.tf` does not impose mandatory per-role boundaries. Neither module should simply be reused to create application deployment principals. Separate bootstrap-administered application identities, permissions-boundary ceiling, trust conditions, state key/lockfile restrictions and KMS conditions are required.
 
-**State backend alternative:** \`applications/<app>/<env>.tfstate\` within the foundation state bucket is **only a candidate** if exact per-key versions, bucket-list conditions, object/lockfile IAM and KMS isolation can be proved. Otherwise approve a distinct application bucket with independent protected policy. No shared \`bucket/*\` application access.
+**State backend alternative:** `applications/<app>/<env>.tfstate` within the foundation state bucket is **only a candidate** if exact per-key versions, bucket-list conditions, object/lockfile IAM and KMS isolation can be proved. Otherwise approve a distinct application bucket with independent protected policy. No shared `bucket/*` application access.
 
-**GuardDuty and data protection:** Execution-role pulls for the regional GuardDuty Fargate agent must use the exact C1-published AWS-owned ECR repository ARN; \`ecr:GetAuthorizationToken\` may require its separate \`*\` statement. KMS decrypt must target the appropriate application secret keys and encryption contexts without exposing foundation RDS master. Application alerts, DLQs, logs and data buckets require service-compatible key policies, source restrictions and evidence-retention guards. ReconoSense's current execution/alert policies are **not** qualification evidence.
+**GuardDuty and data protection:** Execution-role pulls for the regional GuardDuty Fargate agent must use the exact C1-published AWS-owned ECR repository ARN; `ecr:GetAuthorizationToken` may require its separate `*` statement. KMS decrypt must target the appropriate application secret keys and encryption contexts without exposing foundation RDS master. Application alerts, DLQs, logs and data buckets require service-compatible key policies, source restrictions and evidence-retention guards. ReconoSense's current execution/alert policies are **not** qualification evidence.
 
 ### 2.2 Security-group admission: C4-D2 remains UNAPPROVED
 
@@ -51,9 +51,9 @@ The C2–C4 design offers **foundation-created connectivity-grant SGs** as a can
 
 **M0-D authority requirements before connectivity implementation:**
 
-1. Enumerate **every** network-capable entry point: ECS service create/update, task-definition and task-role change, direct \`RunTask\`, Scheduler create/update and target launch, deployment break-glass, and any console/CLI bypass. Distinguish who controls task subnets, SG attachments and policies.
+1. Enumerate **every** network-capable entry point: ECS service create/update, task-definition and task-role change, direct `RunTask`, Scheduler create/update and target launch, deployment break-glass, and any console/CLI bypass. Distinguish who controls task subnets, SG attachments and policies.
 2. Protect all relevant launch paths via independent deployment admission, least-privilege IAM, permission ceilings and monitored resource mutations. Reject arbitrary task SGs, permissive task rules, unrelated role assumption and unreviewed alternate egress. Repository validation alone is insufficient.
-3. Assign each foundation DB/endpoint ingress rule exactly one state owner. Platform-managed grants should be provisioned **without** referring to an app-created SG. Existing foundation \`security_policy\` module cannot be called wholesale from app state.
+3. Assign each foundation DB/endpoint ingress rule exactly one state owner. Platform-managed grants should be provisioned **without** referring to an app-created SG. Existing foundation `security_policy` module cannot be called wholesale from app state.
 4. If AWS IAM/controls cannot enforce the desired attachment and network restrictions in practice, **reject** the SG-grant candidate and obtain an owner-approved two-state alternative **before any deployment**. Never silently widen foundation SG authority or add a third workload state.
 5. Prove positive allowed traffic and negative unauthorized SG, RDS, endpoint and direct-launch scenarios under M3–M5; document effective controls and any monitoring/detection assumptions. Do not call detection-only controls prevention.
 
@@ -61,11 +61,11 @@ The C2–C4 design offers **foundation-created connectivity-grant SGs** as a can
 
 ### 2.3 Protected SSM publication, release and lifecycle coordination
 
-C1's Terraform-owned SSM parameter contains versioned, non-secret resource identifiers. **Only foundation Terraform writes it.** An independently protected coordinator maintains a durable \`BLOCKED\`/\`ELIGIBLE\` publication eligibility record plus monotonic approval epoch and serializes actions across **both repositories**.
+C1's Terraform-owned SSM parameter contains versioned, non-secret resource identifiers. **Only foundation Terraform writes it.** An independently protected coordinator maintains a durable `BLOCKED`/`ELIGIBLE` publication eligibility record plus monotonic approval epoch and serializes actions across **both repositories**.
 
 | Transition | Required gate | Failure behavior |
 |---|---|---|
-| Before foundation mutation/retirement | Acquire environment-wide exclusion; set publication eligibility \`BLOCKED\` **before** Terraform/AWS mutation | A failed, interrupted or partially successful Apply leaves the environment blocked. Existing SSM values alone do not reauthorize. |
+| Before foundation mutation/retirement | Acquire environment-wide exclusion; set publication eligibility `BLOCKED` **before** Terraform/AWS mutation | A failed, interrupted or partially successful Apply leaves the environment blocked. Existing SSM values alone do not reauthorize. |
 | After successful foundation Apply | Validate AWS resource/interface state, account/Region and protected controls; record SSM ARN/name, AWS version, raw-UTF-8 SHA-256, full foundation source SHA and eligibility epoch | Any post-Apply qualification failure stays blocked. No competing CLI SSM writer. |
 | Application saved Plan | Read only approved exact SSM and eligibility; bind publication identity, epoch, app revision and saved-plan digest in protected manifest | Unsupported schema, stale/missing publication, account mismatch or unauthorized capability fails closed. |
 | Immediately before application Apply | Obtain same environment lease; re-read current SSM/epoch and compare against reviewed plan manifest; **hold lease through Apply, worker/migration/API promotion and acceptance** | A/B publication mismatch or mutation race aborts. Failed migration blocks promotion. |
@@ -75,8 +75,8 @@ C1's Terraform-owned SSM parameter contains versioned, non-secret resource ident
 
 ### 2.4 Other downstream security obligations
 
-- **Ingress/WAF:** app owns ALB, ACM records and scoped Web ACL; handle \`SizeRestrictions_BODY\` narrowly for approved upload routes, never blanket-allow; WAF does not inspect the full 50 MiB upload. M5 validates accepted large uploads and denied oversized/malicious requests.
-- **Network reachability:** private task networking and C1 \`effective_egress_mode\` do not prove Cognito/JWKS, Bedrock, ClamAV updates or external APIs are reachable. Establish approved endpoints/DNS/domains, negative no-unrestricted-egress evidence and traffic flow tests.
+- **Ingress/WAF:** app owns ALB, ACM records and scoped Web ACL; handle `SizeRestrictions_BODY` narrowly for approved upload routes, never blanket-allow; WAF does not inspect the full 50 MiB upload. M5 validates accepted large uploads and denied oversized/malicious requests.
+- **Network reachability:** private task networking and C1 `effective_egress_mode` do not prove Cognito/JWKS, Bedrock, ClamAV updates or external APIs are reachable. Establish approved endpoints/DNS/domains, negative no-unrestricted-egress evidence and traffic flow tests.
 - **Database-owner bootstrap:** foundation master remains platform-only; authorized first-install process creates a distinct application SQL owner with required PostgreSQL 16 roles/extensions/grants; no substitution with master credentials. Document rotation/recovery and migration privileges.
 - **Release and observability:** ECS listener+forwarding route, IAM and SG readiness precede service start; applications scope task failures by their own task-family identity and correctly attribute per-container exits; test KMS-compatible alert publisher/consumer roles.
 - **Retention:** application teardown cannot destroy foundation RDS, state, backup or centralized evidence. Object Lock/legal hold bypass cannot become normal application privilege. Preserve deletion protection on any production-profile component.
@@ -89,16 +89,16 @@ This is a **priced scenario model of selected infrastructure components**, **not
 
 | Component / unit | Model rate | Pricing source / qualification |
 |---|---|---|
-| Interface VPC endpoints (per endpoint ENI per AZ-hour) | **$0.01/hour** plus **$0.01/GB** processing in initial tier | [AWS PrivateLink](https://aws.amazon.com/privatelink/pricing/). The baseline defines **16** required interface services in \`modules/vpc_endpoints/main.tf\`; additional services increase costs. S3 *Gateway* endpoint hourly charge not modeled. |
+| Interface VPC endpoints (per endpoint ENI per AZ-hour) | **$0.01/hour** plus **$0.01/GB** processing in initial tier | [AWS PrivateLink](https://aws.amazon.com/privatelink/pricing/). The baseline defines **16** required interface services in `modules/vpc_endpoints/main.tf`; additional services increase costs. S3 *Gateway* endpoint hourly charge not modeled. |
 | NAT gateway | **$0.045/hour/AZ** plus **$0.045/GB** data processed | [AWS VPC](https://aws.amazon.com/vpc/pricing/). Each NAT public IPv4 address modeled at **$0.005/hour**. Confirm current regional/endpoint rebates. |
 | AWS Network Firewall | **$0.395/hour/endpoint/AZ** plus **$0.065/GB** processed | [AWS Network Firewall](https://aws.amazon.com/network-firewall/pricing/). NAT gateway hourly and processing allowances may apply when eligibility is met; do not double-charge qualifying traffic. |
 | ECS Fargate Linux/x86 | **$0.04048/vCPU-hour**, **$0.004445/GB-hour** | [AWS Fargate](https://aws.amazon.com/fargate/pricing/); model uses 1 vCPU, 2 GiB/task, ordinary on-demand, excludes task storage beyond default and image transfer. |
 | ALB | **$0.0225/hour** + **$0.008/LCU-hour** | [AWS ELB](https://aws.amazon.com/elasticloadbalancing/pricing/); model assumes **one LCU**, but real loads and traffic may exceed it. |
-| RDS PostgreSQL \`db.t4g.medium\` | **$0.065/hour Single-AZ; $0.129/hour Multi-AZ** | Indicative PostgreSQL/us-east-1 engine-specific rates from [Cloud Credits (2026-10)](https://cloud-credits.org/prices/rds/db-t4g-medium/us-east-1); **reverify official AWS calculator quote**. Storage, snapshots/backup and CPU-credit bursts excluded. |
+| RDS PostgreSQL `db.t4g.medium` | **$0.065/hour Single-AZ; $0.129/hour Multi-AZ** | Indicative PostgreSQL/us-east-1 engine-specific rates from [Cloud Credits (2026-10)](https://cloud-credits.org/prices/rds/db-t4g-medium/us-east-1); **reverify official AWS calculator quote**. Storage, snapshots/backup and CPU-credit bursts excluded. |
 | AWS WAF base | **$5/Web ACL-month + $1/rule-month** | [AWS WAF](https://aws.amazon.com/waf/pricing/), plus $0.60/million requests, extra rule groups/capacity and special features. Model assumes two managed groups. |
 | KMS keys and Secrets Manager | **$1/customer-managed KMS key-month; $0.40/secret-month** | [AWS KMS](https://aws.amazon.com/kms/pricing/) and [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/pricing/). Request charges and rotation surcharge not included. |
 
-**Observed source profiles:** \`baseline/locals.tf\` defaults to **2 AZs** for development/minimal and **3 AZs** for production, with effective egress \`nat_only\` for development, \`network_firewall\` for production and \`vpc_endpoints_only\` for minimal. Explicit overrides can change these. The 16-endpoint inventory is a **source count**, not proof that every endpoint service deploys successfully or that all ReconoSense egress paths are covered.
+**Observed source profiles:** `baseline/locals.tf` defaults to **2 AZs** for development/minimal and **3 AZs** for production, with effective egress `nat_only` for development, `network_firewall` for production and `vpc_endpoints_only` for minimal. Explicit overrides can change these. The 16-endpoint inventory is a **source count**, not proof that every endpoint service deploys successfully or that all ReconoSense egress paths are covered.
 
 ### 3.2 Three transparent monthly scenarios (not all-in)
 
@@ -123,14 +123,14 @@ This is a **priced scenario model of selected infrastructure components**, **not
 ### 3.3 Operating conclusions and pre-deployment cost signoff
 
 - **Parking the application is not the same as parking the foundation.** NAT and interface endpoints stay provisioned and billable when ECS scales to zero or RDS is stopped. Scenarios A/B make that fixed-cost difference visible; S3 evidence retention can outlive both.
-- A \`minimal\` endpoint-only profile might avoid NAT/firewall hours, but is **not approved** for ReconoSense until Cognito/JWKS, Bedrock, ClamAV image/update and other egress is proven. Do not trade away mandatory connectivity/security just for lower bills.
+- A `minimal` endpoint-only profile might avoid NAT/firewall hours, but is **not approved** for ReconoSense until Cognito/JWKS, Bedrock, ClamAV image/update and other egress is proven. Do not trade away mandatory connectivity/security just for lower bills.
 - Production-profile Network Firewall adds a large fixed hourly component; compare approved egress architectures using same traffic assumptions and AWS discount terms. Never silently switch the approved production posture to NAT-only without security signoff.
 - **Before first integrated Apply:** platform/finance owner validates an official AWS Pricing Calculator estimate with actual AZ count, endpoint list, RDS Multi-AZ/storage/backup, tasks/hours, security services and data volume; defines maximum staging budget, AWS Budgets alarms and evidence retention cost. Record planned vs actual usage in M5.
 - **Decision E1 (PROPOSED):** Treat the above numbers only as **indicative line-item estimates**, not an approved financial commitment. Actual spend approval remains **OPEN** until modeled totals, exclusions and Budget alerts are signed off.
 
 ## 4. M0-E — Proprietary IP and ReconoSense licensing
 
-The repository root [\`LICENSE\`](../LICENSE) identifies **“Jacob Molland, doing business as Nano Nexus Holdings LLC”** as its stated copyright owner and allows use/deployment, derivative modifications, distribution, commercialization or incorporation **only under a separate written agreement signed by the Copyright Owner**. Prior Apache-licensed revisions retain the rights previously granted. No general license is granted by GitHub visibility alone.
+The repository root [`LICENSE`](../LICENSE) identifies **“Jacob Molland, doing business as Nano Nexus Holdings LLC”** as its stated copyright owner and allows use/deployment, derivative modifications, distribution, commercialization or incorporation **only under a separate written agreement signed by the Copyright Owner**. Prior Apache-licensed revisions retain the rights previously granted. No general license is granted by GitHub visibility alone.
 
 **Ownership and authority must be verified rather than inferred:** The current license text names **Nano Nexus Holdings LLC** and an individual doing business as that entity. Other Nano Nexus entities/names may exist in prior business records; **do not assume they are the same legal person** or that any corporation can sign for the stated owner without a confirmed rights chain. Likewise, the ReconoSense legal entity, authorized signatories and 50/50 cofounder governance must be verified from executed company documents, not from a proposed founder bio.
 
@@ -138,14 +138,14 @@ The repository root [\`LICENSE\`](../LICENSE) identifies **“Jacob Molland, doi
 
 **Document/evidence required:** owner identity and chain of title; exact licensed repo/version/IP; ReconoSense legal name; executed permission/license signed by all authorized parties; approval of no-fee/royalty conditions and customer-facing rights; record/repository location for executed documents **outside the public repo**. Do not publish signatures, addresses, private license exhibits or trade secrets in these docs.
 
-**Current status:** **BLOCKING BEFORE ANY USE/DEPLOYMENT of this proprietary baseline by ReconoSense** unless existing valid written authorization is independently produced and confirmed. This PR does not change \`LICENSE\`, transfer IP or grant any permission; **M0 cannot claim license closeout without executed evidence**. Seek legal advice for binding IP agreements.
+**Current status:** **BLOCKING BEFORE ANY USE/DEPLOYMENT of this proprietary baseline by ReconoSense** unless existing valid written authorization is independently produced and confirmed. This PR does not change `LICENSE`, transfer IP or grant any permission; **M0 cannot claim license closeout without executed evidence**. Seek legal advice for binding IP agreements.
 
 ## 5. M0-F — Final acceptance register and milestone handoff
 
 | Gate | Evidence / decision | Status |
 |---|---|---|
 | F-1 M0-A/B ownership and 17-contract coverage | Prior approved M0 inventory/B document, C1 publication, C2–C4 interfaces; no overlapping workload state ownership | **Design accepted** |
-| F-2 M0-C5 dependencies/compatibility | PR #964 merged; local independent review \`ACCEPT WITH DEFERRED ITEMS\`; executable graphs/plans intentionally moved to M1–M5 | **Design accepted** |
+| F-2 M0-C5 dependencies/compatibility | PR #964 merged; local independent review `ACCEPT WITH DEFERRED ITEMS`; executable graphs/plans intentionally moved to M1–M5 | **Design accepted** |
 | F-3 Application IAM, SG connectivity and SSM coordinator | Role/authority and bypass matrix in §§2.1–2.3; connectivity candidate specifically unapproved | **Open — security design/owner approval required**, then implementation+negative tests |
 | F-4 Operating costs | Three transparent priced subsets and excluded costs; official workload quote and AWS Budget limits not yet verified | **Open — cost approval required before deployment** |
 | F-5 Licensing and third-party rights | Root LICENSE restriction, entity/rights chain, proposed royalty-free agreement | **Open — executed authorization required before ReconoSense use** |
