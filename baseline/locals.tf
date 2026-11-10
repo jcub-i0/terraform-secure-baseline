@@ -283,6 +283,13 @@ locals {
       deployment     = service.deployment
       health_check   = service.health_check
 
+      task_volumes          = service.task_volumes
+      ephemeral_storage_gib = service.ephemeral_storage_gib
+      mount_points          = service.mount_points
+
+      start_timeout_seconds = service.start_timeout_seconds
+      stop_timeout_seconds  = service.stop_timeout_seconds
+
       execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
       task_role_arn      = module.iam.ecs_task_roles[service_name].arn
 

@@ -826,6 +826,19 @@ variable "ecs_services" {
       path_patterns     = optional(set(string), [])
       health_check_path = optional(string, "/health")
     }), null)
+
+    task_volumes = optional(set(string), [])
+
+    ephemeral_storage_gib = optional(number)
+
+    mount_points = optional(list(object({
+      source_volume  = string
+      container_path = string
+      read_only      = optional(bool, false)
+    })), [])
+
+    start_timeout_seconds = optional(number)
+    stop_timeout_seconds  = optional(number)
   }))
 
   default = {}
