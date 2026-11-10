@@ -118,6 +118,16 @@ variable "services" {
       environment_variables = optional(map(string), {})
       secrets               = optional(map(string), {})
 
+      command     = optional(list(string))
+      entry_point = optional(list(string))
+
+      port_mappings = optional(list(object({
+        container_port = number
+        protocol       = optional(string, "tcp")
+      })), [])
+
+      read_only_root_filesystem = optional(bool)
+
       health_check = optional(object({
         command      = list(string)
         interval     = optional(number, 30)
@@ -610,6 +620,63 @@ variable "services" {
     ])
 
     error_message = "Combined sidecar CPU shares and memory reservations must remain below the task-level CPU and memory allocations."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+        alltrue([
+          for args in [sidecar.command, sidecar.entry_point] :
+          args == null ? true : (
+            length(args) > 0 &&
+            alltrue([
+              for arg in args :
+              arg == null ? false : trimspace(arg) != ""
+            ])
+          )
+        ])
+      ]
+    ]))
+
+    error_message = "Sidecar command and entry_point overrides must contain at least one nonempty string."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+        alltrue([
+          for port in sidecar.port_mappings :
+          port.container_port >= 1 &&
+          port.container_port <= 65535 &&
+          port.container_port == floor(port.container_port) &&
+          contains(["tcp", "udp"], port.protocol)
+        ])
+      ]
+    ]))
+
+    error_message = "Sidecar ports must be whole numbers between 1 and 65535, using tcp or udp."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      length(distinct(concat(
+        [service.container_port],
+        flatten([
+          for sidecar in values(service.sidecars) : [
+            for port in sidecar.port_mappings :
+            port.container_port
+          ]
+        ])
+        ))) == 1 + sum([
+        for sidecar in values(service.sidecars) :
+        length(sidecar.port_mappings)
+      ])
+    ])
+
+    error_message = "The primary container and sidecars must not declare duplicate container ports within the same ECS task."
   }
 }
 

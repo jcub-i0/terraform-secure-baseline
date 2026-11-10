@@ -229,6 +229,28 @@ resource "aws_ecs_task_definition" "task_definitions" {
           memoryReservation = each.value.sidecars[sidecar_name].memory_reservation_mib
         },
 
+        each.value.sidecars[sidecar_name].command == null ? {} : {
+          command = each.value.sidecars[sidecar_name].command
+        },
+
+        each.value.sidecars[sidecar_name].entry_point == null ? {} : {
+          entryPoint = each.value.sidecars[sidecar_name].entry_point
+        },
+
+        length(each.value.sidecars[sidecar_name].port_mappings) == 0 ? {} : {
+          portMappings = [
+            for port in each.value.sidecars[sidecar_name].port_mappings : {
+              containerPort = port.container_port
+              hostPort      = port.container_port
+              protocol      = port.protocol
+            }
+          ]
+        },
+
+        each.value.sidecars[sidecar_name].read_only_root_filesystem == null ? {} : {
+          readonlyRootFilesystem = each.value.sidecars[sidecar_name].read_only_root_filesystem
+        },
+
         length(each.value.sidecars[sidecar_name].depends_on) == 0 ? {} : {
           dependsOn = [
             for dependency in each.value.sidecars[sidecar_name].depends_on : {
