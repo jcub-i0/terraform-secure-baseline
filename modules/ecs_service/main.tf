@@ -189,6 +189,15 @@ resource "aws_ecs_task_definition" "task_definitions" {
 
         each.value.sidecars[sidecar_name].stop_timeout_seconds == null ? {} : {
           stopTimeout = each.value.sidecars[sidecar_name].stop_timeout_seconds
+        },
+
+        length(each.value.sidecars[sidecar_name].depends_on) == 0 ? {} : {
+          dependsOn = [
+            for dependency in each.value.sidecars[sidecar_name].depends_on : {
+              containerName = dependency.container_name
+              condition     = dependency.condition
+            }
+          ]
         }
       )
     ]

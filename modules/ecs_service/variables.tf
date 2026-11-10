@@ -106,6 +106,13 @@ variable "services" {
 
       start_timeout_seconds = optional(number)
       stop_timeout_seconds  = optional(number)
+
+      dependency_rank = optional(number, 0)
+
+      depends_on = optional(list(object({
+        container_name = string
+        condition      = string
+      })), [])
     })), {})
 
     start_timeout_seconds = optional(number)
@@ -413,6 +420,69 @@ variable "services" {
     ])
 
     error_message = "Primary container dependencies must reference distinct, existing sidecars with valid ECS conditions. HEALTHY requires a health check; COMPLETE and SUCCESS require a nonessential sidecar."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+        sidecar.dependency_rank >= 0 &&
+        sidecar.dependency_rank == floor(sidecar.dependency_rank)
+      ]
+    ]))
+
+    error_message = "Sidecar dependency_rank must be a non-negative whole number."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar_name, sidecar in service.sidecars : (
+
+          length(distinct([
+            for dependency in sidecar.depends_on :
+            dependency.container_name
+          ])) == length(sidecar.depends_on) &&
+
+          alltrue([
+            for dependency in sidecar.depends_on :
+
+            contains(keys(service.sidecars), dependency.container_name) &&
+
+            dependency.container_name != sidecar_name &&
+
+            contains(
+              ["START", "HEALTHY", "COMPLETE", "SUCCESS"],
+              dependency.condition
+            ) &&
+
+            (
+              dependency.condition != "HEALTHY" ||
+              try(
+                service.sidecars[dependency.container_name].health_check != null,
+                false
+              )
+            ) &&
+
+            (
+              !contains(["COMPLETE", "SUCCESS"], dependency.condition) ||
+              try(
+                service.sidecars[dependency.container_name].essential == false,
+                false
+              )
+            ) &&
+
+            try(
+              service.sidecars[dependency.container_name].dependency_rank <
+              sidecar.dependency_rank,
+              false
+            )
+          ])
+        )
+      ]
+    ]))
+
+    error_message = "Sidecar dependencies must reference distinct, existing sidecars with lower dependency ranks and valid ECS conditions. HEALTHY requires a health check; COMPLETE and SUCCESS require nonessential prerequisites."
   }
 }
 
