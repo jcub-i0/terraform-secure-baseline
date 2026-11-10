@@ -606,17 +606,23 @@ variable "services" {
     condition = alltrue([
       for service in values(var.services) :
 
-      sum([
-        for sidecar in values(service.sidecars) :
-        coalesce(sidecar.cpu_units, 0)
-      ]) < service.cpu &&
+      sum(concat(
+        [0],
+        [
+          for sidecar in values(service.sidecars) :
+          coalesce(sidecar.cpu_units, 0)
+        ]
+      )) < service.cpu &&
 
-      sum([
-        for sidecar in values(service.sidecars) :
-        sidecar.memory_reservation_mib != null
-        ? sidecar.memory_reservation_mib
-        : coalesce(sidecar.memory_limit_mib, 0)
-      ]) < service.memory
+      sum(concat(
+        [0],
+        [
+          for sidecar in values(service.sidecars) :
+          sidecar.memory_reservation_mib != null
+          ? sidecar.memory_reservation_mib
+          : coalesce(sidecar.memory_limit_mib, 0)
+        ]
+      )) < service.memory
     ])
 
     error_message = "Combined sidecar CPU shares and memory reservations must remain below the task-level CPU and memory allocations."
@@ -670,10 +676,13 @@ variable "services" {
             port.container_port
           ]
         ])
-        ))) == 1 + sum([
-        for sidecar in values(service.sidecars) :
-        length(sidecar.port_mappings)
-      ])
+        ))) == 1 + sum(concat(
+        [0],
+        [
+          for sidecar in values(service.sidecars) :
+          length(sidecar.port_mappings)
+        ]
+      ))
     ])
 
     error_message = "The primary container and sidecars must not declare duplicate container ports within the same ECS task."
