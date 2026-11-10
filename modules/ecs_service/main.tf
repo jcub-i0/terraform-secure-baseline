@@ -125,7 +125,21 @@ resource "aws_ecs_task_definition" "task_definitions" {
       for sidecar_name in sort(keys(each.value.sidecars)) : {
         name      = sidecar_name
         image     = each.value.sidecars[sidecar_name].image
-        essential = true
+        essential = each.value.sidecars[sidecar_name].essential
+
+        environment = [
+          for name, value in each.value.sidecars[sidecar_name].environment_variables : {
+            name  = name
+            value = value
+          }
+        ]
+
+        secrets = [
+          for name, value_from in each.value.sidecars[sidecar_name].secrets : {
+            name      = name
+            valueFrom = value_from
+          }
+        ]
 
         logconfiguration = {
           logDriver = "awslogs"

@@ -261,6 +261,20 @@ variable "services" {
 
     error_message = "Sidecar names msut be valid ECS container names, must differ from the primary container name, and images must be pinned to SHA-256 digests."
   }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+        length(setintersection(
+          toset(keys(sidecar.environment_variables)),
+          toset(keys(sidecar.secrets))
+        )) == 0
+      ]
+    ]))
+
+    error_message = "A sidecar cannot define the same environment variable name in both environment_variable and secrets."
+  }
 }
 
 variable "logs_cmk_arn" {
