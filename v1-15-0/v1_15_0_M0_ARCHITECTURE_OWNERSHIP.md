@@ -1,6 +1,6 @@
 # v1.15.0 — M0 Architecture & Ownership
 
-**Status:** In progress — initial design inventory; **not yet accepted**
+**Status:** M0 in progress — M0-A/B/C1 and consolidated C2–C4 design owner-approved; C5 and final security/cost/licensing acceptance open
 
 **Scope:** Architecture and documentation only; no AWS deployments, state changes, or Terraform implementation
 
@@ -82,11 +82,8 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 
 - [x] **M0-A — Inventory:** Inspect both repositories, record 17 contracts, classify preliminary baseline gaps and application-owned resources.
 - [x] **M0-B — Ownership (architecture accepted):** [Terraform composition and state ownership record](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) documents the approved two-state model, staging integration, limited RDS run-state delegation, independent review findings and M0-C/D handoff. D1/D2/B-3/B-5 are owner-approved; no AWS permissions or infrastructure were changed.
-- [ ] **M0-C — Interfaces (C1 design proposed):** [Reusable interface contract plan](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md) specifies the proposed foundation publication schema and tracks C2–C5. Approval, graph verification and implementation remain open; keep all new interfaces application-agnostic.
-- [ ] **M0-D — Security/operations:** Approve OIDC and CI ownership, egress/Bedrock paths, secrets, WAF upload handling, staged migration order, RDS lifecycle and protected teardown.
-- [ ] **M0-E — Economics/legal:** Price development/disposable and production-profile scenarios and record licensing disposition.
-- [ ] **M0-F — Acceptance:** Independent design review, no unresolved critical dependency/ownership incompatibilities, roadmap status update. No Terraform implementation until approval.
-
+- [ ] **M0-C — Interfaces (C1 accepted; consolidated C2–C4 design owner-approved and independently reviewed):** [Accepted C1 publication design](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md) merged in PR #961; the [single C2–C4 design package](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md) was owner-approved (2026-11-07) and independently reviewed against ReconoSense with **0 architecture blockers / six deferred nonblocking findings**. C5 remains open for focused graph/compatibility review. No `.tf`, CI, IAM, SSM, state or AWS changes are authorized.
+- [ ] **M0-D/E/F — Consolidated final architecture closeout:** In one final work package, resolve protected IAM/OIDC/CI coordination and SG security authority, realistic cost scenarios, licensing authorization and independent acceptance; keep any actual deployment/testing in M1–M5. M0-D/E/F remain distinct requirements, not three separate review cycles.
 **M0 acceptance:** Every one of the 17 requirements has an implementation owner and specific validation target; one Terraform state owns each AWS resource; no unapproved destructive migration or cross-state overlap is proposed; modular interfaces and backwards compatibility are recorded; deployment order, realistic operating costs and authorization/licensing are resolved.
 
 ## References and technical notes
