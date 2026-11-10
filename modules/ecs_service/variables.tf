@@ -110,6 +110,11 @@ variable "services" {
 
     start_timeout_seconds = optional(number)
     stop_timeout_seconds  = optional(number)
+
+    depends_on = optional(list(object({
+      container_name = string
+      condition      = string
+    })), [])
   }))
 
   default = {}
@@ -368,6 +373,46 @@ variable "services" {
     ]))
 
     error_message = "Sidecar health-check timings must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
+  }
+
+  validation {
+    condition = alltrue([
+      for service_name, service in var.services :
+
+      length(distinct([
+        for dependency in service.depends_on :
+        dependency.container_name
+      ])) == length(service.depends_on) &&
+
+      alltrue([
+        for dependency in service.depends_on :
+
+        contains(keys(service.sidecars), dependency.container_name) &&
+
+        contains(
+          ["START", "HEALTHY", "COMPLETE", "SUCCESS"],
+          dependency.condition
+        ) &&
+
+        (
+          dependency.condition != "HEALTHY" ||
+          try(
+            service.sidecars[dependency.container_name].health_check != null,
+            false
+          )
+        ) &&
+
+        (
+          !contains(["COMPLETE", "SUCCESS"], dependency.condition) ||
+          try(
+            service.sidecars[dependency.container_name].essential == false,
+            false
+          )
+        )
+      ])
+    ])
+
+    error_message = "Primary container dependencies must reference distinct, existing sidecars with valid ECS conditions. HEALTHY requires a health check; COMPLETE and SUCCESS require a nonessential sidecar."
   }
 }
 
