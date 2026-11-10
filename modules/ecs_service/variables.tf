@@ -315,6 +315,60 @@ variable "services" {
 
     error_message = "Container start and stop timeouts must be whole numbers between 2 and 120 seconds."
   }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+        sidecar.health_check == null ? true : (
+          sidecar.health_check.command == null ? false : (
+            contains(
+              ["CMD", "CMD-SHELL"],
+              try(sidecar.health_check.command[0], "")
+            ) &&
+            (
+              try(sidecar.health_check.command[0], "") == "CMD-SHELL"
+              ? length(sidecar.health_check.command) == 2
+              : length(sidecar.health_check.command) >= 2
+            ) &&
+            alltrue([
+              for element in sidecar.health_check.command :
+              element == null ? false : trimspace(element) != ""
+            ])
+          )
+        )
+      ]
+    ]))
+
+    error_message = "Sidecar health_check.command must start with CMD or CMD-SHELL, contain the required arguments, and have no empty elements."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+        sidecar.health_check == null ? true : (
+          sidecar.health_check.interval >= 5 &&
+          sidecar.health_check.interval <= 300 &&
+          sidecar.health_check.interval == floor(sidecar.health_check.interval) &&
+
+          sidecar.health_check.timeout >= 2 &&
+          sidecar.health_check.timeout <= 60 &&
+          sidecar.health_check.timeout == floor(sidecar.health_check.timeout) &&
+
+          sidecar.health_check.retries >= 1 &&
+          sidecar.health_check.retries <= 10 &&
+          sidecar.health_check.retries == floor(sidecar.health_check.retries) &&
+
+          sidecar.health_check.start_period >= 0 &&
+          sidecar.health_check.start_period <= 300 &&
+          sidecar.health_check.start_period == floor(sidecar.health_check.start_period)
+        )
+      ]
+    ]))
+
+    error_message = "Sidecar health-check timings must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
+  }
 }
 
 variable "logs_cmk_arn" {
