@@ -90,6 +90,8 @@ variable "services" {
 
     task_volumes = optional(set(string), [])
 
+    ephemeral_storage = optional(number)
+
     mount_points = optional(list(object({
       source_volume  = string
       container_path = string
@@ -536,6 +538,19 @@ variable "services" {
     ]))
 
     error_message = "Container mount points must reference declared task volumes, use absolute non-root paths without surrounding whitespace, and have unique destination paths per container."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+      service.ephemeral_storage_gib == null ? true : (
+        service.ephemeral_storage_gib >= 21 &&
+        service.ephemeral_storage_gib <= 200 &&
+        service.ephemeral_storage_gib == floor(service.ephemeral_storage_gib)
+      )
+    ])
+
+    error_message = "Fargate ephemeral_storage_gib must be a whole number between 21 and 200 GiB when explicitly configured."
   }
 }
 

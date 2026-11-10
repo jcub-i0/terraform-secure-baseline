@@ -76,6 +76,14 @@ resource "aws_ecs_task_definition" "task_definitions" {
     }
   }
 
+  dynamic "ephemeral_storage" {
+    for_each = each.value.ephemeral_storage_gib == null ? [] : [each.value.ephemeral_storage_gib]
+
+    content {
+      size_in_gib = ephemeral_storage.value
+    }
+  }
+
   container_definitions = jsonencode(concat(
     [
       merge(
