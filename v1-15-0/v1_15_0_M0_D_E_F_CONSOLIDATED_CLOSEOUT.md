@@ -21,6 +21,14 @@ M0-A inventory, M0-B two-state ownership, M0-C1 publication design, M0-C2–C4 r
 
 **Decision classification:** `APPROVED DESIGN` means the owner accepted an architecture direction; `OWNER PREFERENCE` is an operating preference rather than pricing/deployment authorization; `PROPOSED` means a further choice remains; `BLOCKING BEFORE DEPLOY` requires real approval/evidence before the first integrated Apply. The owner approved M0's design direction and an M1 **planning** handoff on 2026-11-09, but no technical change, deployment, SG enforcement model or legal agreement was authorized merely by this PR. Do **not** treat outstanding pricing/IP/security gates as completed.
 
+### 1.1 ReconoSense technical decision authority (owner-reported)
+
+**Owner clarification (2026-11-09):** The owner is a **ReconoSense cofounder and CTO**, leads the technical work on both ReconoSense and `terraform-secure-baseline`, and states that they have delegated/established authority to approve essentially all ReconoSense **technical architecture, infrastructure and engineering decisions**, provided they consult cofounder Adam Poindexter and he has no objection. The owner reports Adam is already aware that `terraform-secure-baseline` is ReconoSense's intended official hosting foundation and is not opposed to that direction.
+
+**Operating approval process:** The CTO records the scoped technical approval in the relevant review/PR or architecture decision, with Adam informed/consulted in accordance with the founders' arrangement. **Do not invent a separate board, CEO, second-engineer or cofounder technical review for each Terraform PR** absent a demonstrated corporate governance requirement. A prior design approval does **not** grant blanket authorization for new technical implementation, privileged cloud changes or deployments: each separately scoped technical change still follows owner approval and applicable security gates.
+
+**Evidence limit:** The foregoing is an **owner statement**, not independent verification of company bylaws, corporate resolutions, authority to bind the legal entity or a legally executed agreement. Technical signoff and Adam's awareness **do not replace** a written IP license, licensor/licensee signature authority, related-party transaction approval or other corporate/legal requirements, which remain separate in §4.
+
 ## 2. M0-D — Identity, deployment and security authority
 
 ### 2.1 IAM/OIDC/CI role ownership matrix (design, no grants)
@@ -161,7 +169,7 @@ The repository root [`LICENSE`](../LICENSE) identifies **“Jacob Molland, doing
 
 **Document/evidence required:** owner identity and chain of title; exact licensed repo/version/IP; ReconoSense legal name; executed permission/license signed by all authorized parties; approval of no-fee/royalty conditions and customer-facing rights; record/repository location for executed documents **outside the public repo**. Do not publish signatures, addresses, private license exhibits or trade secrets in these docs.
 
-**Current status:** Founders' agreement in principle and the owner's approval of license terms are **recorded intentions, not a signed copyright permission**. First integrated ReconoSense use/deployment of the **proprietary current baseline** remains **BLOCKED** until the written agreement is executed by authorized parties or existing valid authorization is independently confirmed. Generic baseline module work and synthetic tests using the code within its permitted rights require separate engineering authorization. This PR neither changes `LICENSE`, assigns IP, nor grants permission; full licensing closeout needs executed evidence. Seek legal review for a binding agreement.
+**Current status:** The CTO's owner-reported technical signoff authority and Adam's awareness/non-objection support the **technology selection and design direction**. They are **not a signed copyright permission** or verified licensee/licensor contract authority. Founders' agreement in principle and approval of license terms remain recorded intentions. First integrated ReconoSense use/deployment of the **proprietary current baseline** remains **BLOCKED** until the written agreement is executed by authorized parties or existing valid authorization is independently confirmed. Generic baseline module work and synthetic tests using the code within its permitted rights require separate engineering authorization. This PR neither changes `LICENSE`, assigns IP, nor grants permission; full licensing closeout needs executed evidence. Seek legal review for a binding agreement.
 
 ## 5. M0-F — Final acceptance register and milestone handoff
 
@@ -174,7 +182,7 @@ The repository root [`LICENSE`](../LICENSE) identifies **“Jacob Molland, doing
 | F-5 Licensing and third-party rights | Owner asserted Nano Nexus Holdings LLC ownership and founders' agreement in principle; approved drafting nonexclusive no-fee hosted SaaS license | **Terms direction approved; chain of title, legal entity and signed document outstanding** |
 | F-6 C3-D3 future database module separation | Optional same-state refactor, non-destructive reviewed plan, postpone if unsafe | **Design accepted; optional implementation** |
 | F-7 Release implementation authorization | M1–M5 tasks need **separate owner-approved technical PRs** with Terraform graph/plan, least-privilege and failure tests | **Not authorized by M0 documentation** |
-| F-8 Final M0 checkpoint acceptance | Owner approved M0 design direction and handoff to M1 **planning** (2026-11-09); independent review and genuine pre-deploy legal, cost and security controls remain | **Design direction approved; do not mark all final gates complete** |
+| F-8 Final M0 checkpoint acceptance | ReconoSense CTO/cofounder reports authority for technical signoff with Adam consulted and no objection; approved M0 design direction and M1 **planning** handoff (2026-11-09). Independent cross-repo review, legal, cost and security controls remain separate | **Technical direction approved; final evidence and deployment gates remain open** |
 
 ### 5.1 One-package owner decision requests
 
