@@ -87,6 +87,10 @@ variable "services" {
 
     environment_variables = optional(map(string), {})
     secrets               = optional(map(string), {})
+
+    sidecars = optional(map(object({
+      image = string
+    })), {})
   }))
 
   default = {}
@@ -238,6 +242,19 @@ variable "services" {
     ])
 
     error_message = "ECS health_check timing values must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service_name, service in var.services : [
+        for sidecar_name, sidecar in service.sidecars :
+        sidecar_name != service_name &&
+        can(regex("^[A-Za-z0-9_-]{1,255}$", sidecar_name)) &&
+        can(regex("@sha256:[0-9a-f]{64}$", sidecar.image))
+      ]
+    ]))
+
+    error_message = "Sidecar names msut be valid ECS container names, must differ from the primary container name, and images must be pinned to SHA-256 digests."
   }
 }
 

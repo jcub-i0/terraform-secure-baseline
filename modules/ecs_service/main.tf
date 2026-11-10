@@ -68,36 +68,66 @@ resource "aws_ecs_task_definition" "task_definitions" {
     cpu_architecture        = each.value.cpu_architecture
   }
 
-  container_definitions = jsonencode([
-    merge(
-      {
-        name      = each.key
-        image     = each.value.image
+  container_definitions = jsonencode(concat(
+    [
+      merge(
+        {
+          name      = each.key
+          image     = each.value.image
+          essential = true
+
+          portMappings = [
+            {
+              containerPort = each.value.container_port
+              hostPort      = each.value.container_port
+              protocol      = "tcp"
+            }
+          ]
+
+          environment = [
+            for name, value in each.value.environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
+
+          secrets = [
+            for name, value_from in each.value.secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.service_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+
+              mode = "non-blocking"
+            }
+          }
+        },
+        each.value.health_check == null ? {} : {
+          healthCheck = {
+            command     = each.value.health_check.command
+            interval    = each.value.health_check.interval
+            timeout     = each.value.health_check.timeout
+            retries     = each.value.health_check.retries
+            startPeriod = each.value.health_check.start_period
+          }
+        }
+      )
+    ],
+    [
+      for sidecar_name in sort(keys(each.value.sidecars)) : {
+        name      = sidecar_name
+        image     = each.value.sidecars[sidecar_name].image
         essential = true
 
-        portMappings = [
-          {
-            containerPort = each.value.container_port
-            hostPort      = each.value.container_port
-            protocol      = "tcp"
-          }
-        ]
-
-        environment = [
-          for name, value in each.value.environment_variables : {
-            name  = name
-            value = value
-          }
-        ]
-
-        secrets = [
-          for name, value_from in each.value.secrets : {
-            name      = name
-            valueFrom = value_from
-          }
-        ]
-
-        logConfiguration = {
+        logconfiguration = {
           logDriver = "awslogs"
 
           options = {
@@ -108,18 +138,9 @@ resource "aws_ecs_task_definition" "task_definitions" {
             mode = "non-blocking"
           }
         }
-      },
-      each.value.health_check == null ? {} : {
-        healthCheck = {
-          command     = each.value.health_check.command
-          interval    = each.value.health_check.interval
-          timeout     = each.value.health_check.timeout
-          retries     = each.value.health_check.retries
-          startPeriod = each.value.health_check.start_period
-        }
       }
-    )
-  ])
+    ]
+  ))
 
   tags = {
     Name        = "${var.name_prefix}-${each.key}"
