@@ -94,7 +94,7 @@ variable "services" {
       essential = optional(bool, true)
 
       environment_variables = optional(map(string), {})
-      secrets = optional(map(string), {})
+      secrets               = optional(map(string), {})
     })), {})
   }))
 
