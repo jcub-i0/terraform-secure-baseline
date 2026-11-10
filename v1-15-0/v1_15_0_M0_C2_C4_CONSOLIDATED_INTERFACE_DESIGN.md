@@ -147,6 +147,62 @@ Do not use unconditional module-level dependencies that introduce ALB ↔ SG ↔
 
 **Release work remains:** M1 implements multi-container services; M2 implements jobs/schedules; M3 implements data/network/security interfaces; M4 implements migration-aware promotion; M5 live-qualifies ReconoSense with synthetic data. This document authorizes none of those operations.
 
+### C3-D3 — RDS Module Separation and State Ownership
+
+**Status:** Owner-approved architectural direction (2026-11-09).
+Implementation not authorized.
+
+**Decision:**
+
+RDS infrastructure should eventually be extracted from
+`modules/storage` into a dedicated, reusable `modules/database`
+module.
+
+The refactor must not change Terraform state ownership.
+
+The existing baseline foundation state will continue to own:
+
+- RDS instance configuration and deletion
+- Database subnet group and security groups
+- RDS master credentials and Secrets Manager resources
+- RDS logging and enhanced monitoring
+- Database backup and recovery integration
+
+The application state will continue to own only application
+resources, database provisioning/migrations, and the previously
+approved staging-only RDS run-state controller.
+
+**Implementation constraints:**
+
+1. Preserve existing AWS resources without replacement.
+2. Preserve existing baseline defaults and externally
+   consumed outputs.
+3. Use Terraform `moved` blocks to migrate resource addresses
+   within the existing foundation state where appropriate.
+4. Require reviewed Terraform plans demonstrating no
+   unintended destruction or replacement.
+5. Do not transfer RDS into the application Terraform state.
+6. Evaluate this refactor during M3; defer it if a safe,
+   backward-compatible migration cannot be demonstrated.
+
+**Rationale:**
+
+Database infrastructure has an independent responsibility
+and lifecycle from centralized S3 logging storage.
+
+Separating these capabilities improves module cohesion and
+reusability without weakening the foundation/application
+security and ownership boundaries.
+
+**Future consideration:**
+
+A different adopter may eventually use the reusable database
+module within an application-owned state, provided it does
+not also manage a foundation-owned database.
+
+Such an ownership model requires a separate architectural
+decision and is not authorized by this decision.
+
 ## 8. Independent cross-repository review: deferred items
 
 Local Codex examined the exact PR source and all 17 ReconoSense infrastructure contracts at reviewed head `2f70900` (base `127ecae`; ReconoSense `9ac7139`). Verdict: **ACCEPT WITH DEFERRED ITEMS**; **0 BLOCKING**, six **NONBLOCKING** findings. No Terraform execution, AWS mutation, credential/state inspection or live qualification was performed. Implementation remains prohibited by this documentation approval.
