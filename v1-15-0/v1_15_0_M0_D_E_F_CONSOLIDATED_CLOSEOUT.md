@@ -201,7 +201,7 @@ The repository root [`LICENSE`](../LICENSE) identifies **“Jacob Molland, doing
 
 These findings are **not** accepted security mechanisms or successful deployment tests. The owner may accept/merge the *documentation-only design record* while leaving IAM, SG, coordinator, log retention, spending authorization and legal license **BLOCKING BEFORE FIRST INTEGRATED DEPLOYMENT**. The review does not authorize M1 technical implementation or mark overall M0 operational gates complete. No extra M0 architecture checkpoint is required.
 
-### 5.1 One-package owner decision requests
+### 5.2 One-package owner decision requests
 
 Decide together, without another series of nested M0 PRs:
 
@@ -210,7 +210,7 @@ Decide together, without another series of nested M0 PRs:
 3. **Licensing — DRAFTING DIRECTION APPROVED:** The owner reports Nano Nexus Holdings LLC owns the code and both founders have agreed to ReconoSense use. Draft the no-fee, nonexclusive hosted-SaaS license with long-term continuity, reconcile copyright/registered entities, then obtain authorized signatures. **Founder consensus and an M0 doc merge are not the signed license.**
 4. **Architecture — OWNER APPROVED:** Treat M0-D/E/F as the final planning package and proceed to M1 **planning**, with executable implementation evidence in M1–M5. The owner explicitly prohibited interpreting this PR merge as authorization for Terraform, workflow, IAM, state, application or AWS modifications. Separate technical approval is mandatory.
 
-### 5.2 Conditions for handoff to M1
+### 5.3 Conditions for handoff to M1
 
 - Independent local cross-repository review at `58f7886` returned **ACCEPT WITH DEFERRED ITEMS / no design-merge blockers**. New documentation corrections retain the remaining security, cost, evidence and legal gates; no high-risk mechanism may be mistaken as approved because this PR is merged.
 - The owner approved the overall M0 design direction and **M1 planning handoff** on 2026-11-09. **Actual M1 implementation** still requires a separately owner-approved technical scope/PR. This documentation PR alone is not that authorization.
