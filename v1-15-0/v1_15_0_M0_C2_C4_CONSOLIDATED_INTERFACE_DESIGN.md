@@ -119,7 +119,7 @@ Preserve ALB access logging, TLS policy, delete protection, app log encryption, 
 6. Application release within the protected lease makes jobs available, executes migration to zero exit and only then promotes the app-owned ECS service through its authoritative Terraform state. Unsafe partial/failed releases stay blocked for reconciliation.
 7. App teardown disables schedules, drains jobs/services, handles run-state controller and app-owned data under retention policy. Foundation retirement occurs separately, after approved dependency cleanup.
 
-Do not use unconditional module-level dependencies that introduce ALB ↔ SG ↔ ECS cycles. In C5 verify **actual** Terraform graphs for representative empty, legacy single-container, and new multi-container/job compositions. Include an explicit ECS **listener/forwarding-route readiness** edge (not only target-group ARN, IAM and SG readiness) and avoid introducing an ALB-to-task module-level dependency cycle.
+Do not use unconditional module-level dependencies that introduce ALB ↔ SG ↔ ECS cycles. [C5](./v1_15_0_M0_C5_DEPENDENCY_AND_COMPATIBILITY_REVIEW.md) performs the **source-based dependency/compatibility review** and defines representative empty, legacy single-container and new multi-container/job **future test fixtures**. Execute real Terraform graphs and plans **only after the M1–M3 implementation exists**; include an ECS **listener/forwarding-route readiness** edge (not only target-group ARN, IAM and SG readiness), without introducing an ALB-to-task module-level dependency cycle.
 
 ## 7. Consolidated design decisions and acceptance
 
