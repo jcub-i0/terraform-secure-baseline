@@ -217,6 +217,18 @@ resource "aws_ecs_task_definition" "task_definitions" {
           stopTimeout = each.value.sidecars[sidecar_name].stop_timeout_seconds
         },
 
+        each.value.sidecars[sidecar_name].cpu_units == null ? {} : {
+          cpu = each.value.sidecars[sidecar_name].cpu_units
+        },
+
+        each.value.sidecars[sidecar_name].memory_limit_mib == null ? {} : {
+          memory = each.value.sidecars[sidecar_name].memory_limit_mib
+        },
+
+        each.value.sidecars[sidecar_name].memory_reservation_mib == null ? {} : {
+          memoryReservation = each.value.sidecars[sidecar_name].memory_reservation_mib
+        },
+
         length(each.value.sidecars[sidecar_name].depends_on) == 0 ? {} : {
           dependsOn = [
             for dependency in each.value.sidecars[sidecar_name].depends_on : {

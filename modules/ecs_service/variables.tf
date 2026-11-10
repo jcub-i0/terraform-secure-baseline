@@ -109,6 +109,10 @@ variable "services" {
     sidecars = optional(map(object({
       image = string
 
+      cpu_units              = optional(number)
+      memory_limit_mib       = optional(number)
+      memory_reservation_mib = optional(number)
+
       essential = optional(bool, true)
 
       environment_variables = optional(map(string), {})
@@ -551,6 +555,61 @@ variable "services" {
     ])
 
     error_message = "Fargate ephemeral_storage_gib must be a whole number between 21 and 200 GiB when explicitly configured."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+
+        (sidecar.cpu_units == null ? true : (
+          sidecar.cpu_units >= 1 &&
+          sidecar.cpu_units < service.cpu &&
+          sidecar.cpu_units == floor(sidecar.cpu_units)
+        )) &&
+
+        (sidecar.memory_limit_mib == null ? true : (
+          sidecar.memory_limit_mib >= 6 &&
+          sidecar.memory_limit_mib <= service.memory &&
+          sidecar.memory_limit_mib == floor(sidecar.memory_limit_mib)
+        )) &&
+
+        (sidecar.memory_reservation_mib == null ? true : (
+          sidecar.memory_reservation_mib >= 6 &&
+          sidecar.memory_reservation_mib < service.memory &&
+          sidecar.memory_reservation_mib == floor(sidecar.memory_reservation_mib)
+        )) &&
+
+        (
+          sidecar.memory_limit_mib == null ||
+          sidecar.memory_reservation_mib == null
+          ? true
+          : sidecar.memory_limit_mib > sidecar.memory_reservation_mib
+        )
+      ]
+    ]))
+
+    error_message = "Sidecar CPU and memory settings must be valid whole numbers within the task limits. A memory hard limit must exceed its soft reservation."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.services) :
+
+      sum([
+        for sidecar in values(service.sidecars) :
+        coalesce(sidecar.cpu_units, 0)
+      ]) < service.cpu &&
+
+      sum([
+        for sidecar in values(service.sidecars) :
+        sidecar.memory_reservation_mib != null
+        ? sidecar.memory_reservation_mib
+        : coalesce(sidecar.memory_limit_mib, 0)
+      ]) < service.memory
+    ])
+
+    error_message = "Combined sidecar CPU shares and memory reservations must remain below the task-level CPU and memory allocations."
   }
 }
 
