@@ -273,7 +273,7 @@ variable "services" {
       ]
     ]))
 
-    error_message = "Sidecar names msut be valid ECS container names, must differ from the primary container name, and images must be pinned to SHA-256 digests."
+    error_message = "Sidecar names must be valid ECS container names, must differ from the primary container name, and images must be pinned to SHA-256 digests."
   }
 
   validation {
@@ -287,7 +287,7 @@ variable "services" {
       ]
     ]))
 
-    error_message = "A sidecar cannot define the same environment variable name in both environment_variable and secrets."
+    error_message = "A sidecar cannot define the same environment variable name in both environment_variables and secrets."
   }
 
   validation {
