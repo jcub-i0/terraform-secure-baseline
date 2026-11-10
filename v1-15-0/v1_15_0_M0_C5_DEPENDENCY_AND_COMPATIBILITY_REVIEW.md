@@ -1,10 +1,10 @@
 # v1.15.0 — M0-C5: Dependency Graph and Backward-Compatibility Review
 
-**Status:** Proposed source-based architecture/verification handoff; independent review and owner acceptance pending
+**Status:** Independent local cross-repository review **ACCEPT WITH DEFERRED ITEMS** (0 blockers; three documentation clarifications addressed); C5 design owner acceptance pending
 **Baseline examined:** `main` after PR #962, merge `21ad01122a4d88b5370ca7cd19441b843b833f18`
 **Scope:** One consolidated, **documentation-only** C5 checkpoint; no implementation, state/AWS operations, or executed Terraform graph
 **References:** [M0-B two-state ownership](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md), [accepted C1 contract](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md), [accepted C2–C4 interfaces](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md)
-**Independent reference:** Private ReconoSense contract at `~/recon-engine/infra/terraform/BASELINE_INTEGRATION.md` (local source review must be separately performed)
+**Independent reference:** Local Codex reviewed the private ReconoSense contract at `~/recon-engine/infra/terraform/BASELINE_INTEGRATION.md` (ReconoSense HEAD `9ac7139`); no changes to that repository
 
 ## 1. Decision and evidence boundary
 
@@ -26,7 +26,7 @@ A read-only reviewer can assess the DAG and document required edges now. **Execu
 | [`baseline/main.tf`](../baseline/main.tf), lines 381–470 | Foundation presently instantiates ECR, one ECS cluster and the `ecs_service` module; the shared ALB module is conditional on ingress-enabled deployable services. | The new app root must consume the foundation cluster/ECR and own its **own** ALB/services; do not invoke both foundation and application roots to own identical resource instances. |
 | [`modules/ecs_service/main.tf`](../modules/ecs_service/main.tf), lines 1–36, 53–129 | Existing task definitions render exactly one essential named container per service; fixed-count and autoscaled services are selected into distinct `for_each` maps. | When new container inputs are absent, retain the current one-container JSON semantics and resource keys/addresses; no implicit migration or service replacement. |
 | Same file, lines 162–207 and 219–270 | Fixed services use `aws_ecs_service.services`; autoscaled use `aws_ecs_service.autoscaled_services` with `ignore_changes = [desired_count]`. Both use private networking with `assign_public_ip = false`, task SG, task definition and `terraform_data` launch-readiness inputs. | An autoscaled service cannot be parked merely by changing desired count in Terraform; preserve existing fixed/autoscaled addresses and require an explicit scale/pause control. |
-| [`modules/application_load_balancer/main.tf`](../modules/application_load_balancer/main.tf), lines 61–119 | HTTPS listener and forwarding listener rules reference target groups; a target group ARN can be known without proving its forwarding listener/rule is ready. | ECS service creation must be ordered after **listener/forwarding-route readiness**, not only target-group existence; preserve an acyclic resource-level relationship. |
+| [`modules/application_load_balancer/main.tf`](../modules/application_load_balancer/main.tf), lines 61–119 | The HTTPS listener has a **fixed-response default**; the **forwarding listener rules** depend on both the HTTPS listener and target groups. A target-group ARN can be known before forwarding-rule readiness. | ECS service creation must be ordered after **listener/forwarding-route readiness**, not only target-group existence; preserve an acyclic resource-level relationship. |
 | [`modules/networking/security_policy/main.tf`](../modules/networking/security_policy/main.tf), lines 130–245 | Module owns ECS-to-endpoint/S3/DB and ALB ingress/egress rules, including ingress on foundation DB/endpoint SGs; platform-wide rules exist elsewhere in this same module. | Do not call this full module in application state or duplicate foundation rule addresses. Each app-facing connection must have exactly one owner and separately approved admission authority. |
 | [`modules/storage/main.tf`](../modules/storage/main.tf), lines 1–170 | `aws_db_instance.main` uses PostgreSQL `17.10`, foundation subnet/DB SG, master secret and RDS monitoring. Module also owns separate centralized S3 logs. | Preserve DB configuration and deletion in foundation. C3-D3's optional future `modules/database` extraction requires same-state `moved` mappings and a non-destructive plan; do not perform it during M0. |
 
@@ -98,7 +98,8 @@ The arrows between **foundation and application** represent published values and
 | New PostgreSQL 16 instance vs existing 17.10 | 17.10 remains default. PostgreSQL 16 only on newly approved instance; never silently change engine version or replace an existing DB. | M3 independent plans, database startup/migration acceptance |
 | Optional future database-module extraction | Same **foundation** state, complete `moved` address map and no destruction/replacement (DB, subnet, SG, credentials, logs, monitoring). Defer if any unsafe migration. | M3 owner-approved plan; not mandated for release |
 | ALB + SG + IAM launch readiness | Graph acyclic and service creation gated by listener/route, relevant IAM attachments, KMS grants and SG rules; no apparent target-group/SG/service cycle. | M1/M3 actual graph + apply sequence |
-| Foundation publication/coordination | Changed values, changed epoch, prior saved-plan, failed/partial Apply, expired/labeled SSM history, coordinator crash or lock expiry must all fail closed. | C1 protocol implementation M0-D/M4; negative tests M4/M5 |
+| Foundation publication/coordination | Changed values, changed epoch, prior saved-plan, failed/partial Apply, expired/labeled SSM history, coordinator crash or lock expiry must all fail closed. | C5 specifies failure cases; M0-D implements authoritative controls; M4/M5 run negative tests |
+| SSM publication serialization and approval | Hash **exact retrieved UTF-8 `Value` bytes** (no JSON reserialization, normalization or added newline). Test multibyte payloads below/at/above **4,096 UTF-8 bytes** for Standard tier, rejecting oversized values; include labeled-oldest-version update rejection and parameter deletion/recreation **invalidating earlier approval/epoch**. | C5 specifies fixtures; M0-D controls publisher and epoch; M4/M5 implement and run boundary/history/recreation tests |
 | Dedicated synthetic staging B-5 run-state | No app RDS configuration ownership; correct instance scope, drain-before-stop, resume-before-migrate, no unrelated tasks affected, no assumed permanent stop. | M3/M4/M5 protected lifecycle tests |
 | Protected application teardown | No foundation resource, baseline S3 state, RDS master secret or retained evidence deleted; inspect residual resources and approved retirement sequence. | M5 security/destroy tests |
 
@@ -117,13 +118,23 @@ The local cross-repository review of PR #962 returned **ACCEPT WITH DEFERRED ITE
 | **N5** — Shared-cluster alerts and CMK gaps | Scope alert identities by application task family; validate container attribution and encryption-compatible publisher/decrypt policies. | M2/M3/M5 |
 | **N6** — Listener/route readiness not in existing ECS module | Specify app ingress readiness edge before service creation; test graph and startup order without module cycles. | C5 design; M1–M3 executable tests |
 
+## 5A. Targeted C5 independent-review dispositions
+
+Codex's read-only local review at `250bc3f` found **zero BLOCKING** issues, and three **NONBLOCKING** documentation gaps, corrected in this PR:
+
+- **N-C5-01:** Correct the source description: the HTTPS listener has a fixed-response default; **the forwarding rules**, not the listener itself, reference target groups. Preserve the explicit listener/route readiness requirement.
+- **N-C5-02:** Reconcile previously accepted C1/C2–C4 wording with the real evidence boundary: **C5 inspects source and specifies graph/failure test requirements; M1–M5 and M0-D execute them when implementation exists**. No graph or plan pass is claimed now.
+- **N-C5-03:** Add exact UTF-8 raw-value hashing, multibyte 4,096-byte Standard-tier boundary checks, labeled-oldest-version update rejection and SSM parameter recreation/approval invalidation to the future validation matrix.
+
+These do not warrant another architecture checkpoint, a Terraform implementation, or reopening accepted M0-B/C1/C2–C4 decisions.
+
 ## 6. C5 acceptance and handoff
 
 - [x] Inspect authoritative baseline source and identify existing task, ALB, network, database, ECR and fixed/autoscaled dependencies. **Source inspection does not equal a `terraform graph` pass.**
 - [x] Define required application resource-level edges, no-reverse-dependency invariant and explicit future graph/plan scenarios.
 - [x] Preserve original single-container resource addresses/defaults, RDS foundation ownership and C3-D3 optional same-state module extraction.
 - [x] Carry N1–N6 into M0-D and M1–M5 without inventing extra architecture checkpoints.
-- [ ] Independent focused source/cross-repository review of **this C5 design and coverage**, including representative ReconoSense implementation constraints; report real architectural blockers.
+- [x] Local Codex independently reviewed C5 at original head `250bc3f` versus base `21ad011`, with ReconoSense HEAD `9ac7139`: **ACCEPT WITH DEFERRED ITEMS**, no architectural blockers. Three nonblocking documentation clarifications are recorded in this revised PR. No live Terraform/AWS qualification is inferred.
 - [ ] Owner accepts C5 **as a design/verification handoff**, recognizing actual new-module Terraform graphs/plans and AWS security tests remain outstanding until implementation exists.
 - [ ] Docs Validation and Static Analysis green on final C5 PR head; no Terraform or AWS operation claimed.
 
