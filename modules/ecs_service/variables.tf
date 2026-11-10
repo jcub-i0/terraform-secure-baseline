@@ -90,7 +90,7 @@ variable "services" {
 
     task_volumes = optional(set(string), [])
 
-    ephemeral_storage = optional(number)
+    ephemeral_storage_gib = optional(number)
 
     mount_points = optional(list(object({
       source_volume  = string
