@@ -98,6 +98,14 @@ variable "services" {
       read_only      = optional(bool, false)
     })), [])
 
+    start_timeout_seconds = optional(number)
+    stop_timeout_seconds  = optional(number)
+
+    depends_on = optional(list(object({
+      container_name = string
+      condition      = string
+    })), [])
+
     sidecars = optional(map(object({
       image = string
 
@@ -130,14 +138,6 @@ variable "services" {
         read_only      = optional(bool, false)
       })), [])
     })), {})
-
-    start_timeout_seconds = optional(number)
-    stop_timeout_seconds  = optional(number)
-
-    depends_on = optional(list(object({
-      container_name = string
-      condition      = string
-    })), [])
   }))
 
   default = {}
