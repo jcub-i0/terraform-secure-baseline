@@ -20,7 +20,7 @@ Extend `terraform-secure-baseline` into a **modular, application-agnostic founda
 
 | Milestone | Completion status | Brief description | Requirements / acceptance criteria |
 |---|---|---|---|
-| **M0 — Architecture & Ownership** | **In progress** | C1 and consolidated C2–C4 interface designs accepted; [C5 dependency/compatibility review](./v1_15_0_M0_C5_DEPENDENCY_AND_COMPATIBILITY_REVIEW.md) in progress, then one D/E/F security-cost-license closeout. Design approval does not authorize Terraform/AWS changes. | Classify all **17 ReconoSense integration contracts** as existing capability, baseline enhancement, or application-owned; assign Terraform state/IAM/CI ownership; specify reusable interfaces and compatibility decisions; assess lifecycle feasibility, costs, and licensing. Approve the architecture before coding. |
+| **M0 — Architecture & Ownership** | **In progress** | M0-A/B/C design work merged through PR #964; [one combined D/E/F closeout](./v1_15_0_M0_D_E_F_CONSOLIDATED_CLOSEOUT.md) is proposed for IAM/security governance, priced operating scenarios, licensing and final owner decisions. No Terraform/AWS implementation is approved. | Classify all **17 ReconoSense integration contracts** as existing capability, baseline enhancement, or application-owned; assign Terraform state/IAM/CI ownership; specify reusable interfaces and compatibility decisions; assess lifecycle feasibility, costs, and licensing. Approve the architecture before coding. |
 | **M1 — Multi-Container ECS** | Not started | Extend ECS services for generic sidecars and dependencies. | Configurable container images (digest-pinned), health checks, `HEALTHY` dependencies, ports, secrets, environment, and logging. Prove sidecar readiness and backward compatibility with existing single-container services. |
 | **M2 — Background Tasks & Scheduling** | Not started | Add reusable, independently configured Fargate jobs. | Standalone task definitions; bounded on-demand `RunTask`; per-job task/execution roles and IAM; optional schedules **disabled by default**; encrypted scheduler DLQs; alerts for failed starts and nonzero exits. Verify allowed and denied job permissions. |
 | **M3 — Data, Storage & Identity Interfaces** | Not started | Close application-integration gaps without absorbing application logic. Evaluate extracting RDS infrastructure from modules/storage into a dedicated modules/database module while preserving foundation-state ownership. Execute only with an explicitly reviewed, non-destructive Terraform migration plan; otherwise defer the refactor. | Configurable PostgreSQL version (qualify **16**, retain existing default); separate runtime/owner credentials without plaintext secrets in state; application-owned document buckets and identity provider; secure HTTPS, networking, and approved egress. Validate storage retention/teardown choices and tenant-access boundaries. |
@@ -32,7 +32,8 @@ Extend `terraform-secure-baseline` into a **modular, application-agnostic founda
 - [M0-A/B inventory and owner-approved state model](./v1_15_0_M0_ARCHITECTURE_OWNERSHIP.md)
 - [M0-C1 accepted foundation publication design](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md)
 - [M0-C2–C4 owner-approved interface design (documentation only)](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md)
-- [M0-C5 source-based dependency and compatibility review (design/verification handoff; pending acceptance)](./v1_15_0_M0_C5_DEPENDENCY_AND_COMPATIBILITY_REVIEW.md)
+- [M0-C5 accepted source-based dependency and compatibility handoff (PR #964)](./v1_15_0_M0_C5_DEPENDENCY_AND_COMPATIBILITY_REVIEW.md)
+- [M0-D/E/F combined closeout — pending decisions and acceptance](./v1_15_0_M0_D_E_F_CONSOLIDATED_CLOSEOUT.md)
 
 ## Release gates
 
