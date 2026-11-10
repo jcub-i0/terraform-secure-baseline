@@ -1,6 +1,6 @@
 # v1.15.0 — M0 Architecture & Ownership
 
-**Status:** M0 in progress — M0-A/B/C1 and consolidated C2–C4 design owner-approved; C5 and final security/cost/licensing acceptance open
+**Status:** M0-A/B/C design records merged; combined M0-D/E/F security, economics, licensing and final owner acceptance **OPEN**
 
 **Scope:** Architecture and documentation only; no AWS deployments, state changes, or Terraform implementation
 
@@ -82,9 +82,9 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 
 - [x] **M0-A — Inventory:** Inspect both repositories, record 17 contracts, classify preliminary baseline gaps and application-owned resources.
 - [x] **M0-B — Ownership (architecture accepted):** [Terraform composition and state ownership record](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP.md) documents the approved two-state model, staging integration, limited RDS run-state delegation, independent review findings and M0-C/D handoff. D1/D2/B-3/B-5 are owner-approved; no AWS permissions or infrastructure were changed.
-- [ ] **M0-C — Interfaces (C1/C2–C4 accepted; C5 under review):** [Accepted C1 publication design](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md) and [owner-approved consolidated C2–C4 interfaces](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md) are merged. The [single C5 dependency/compatibility review](./v1_15_0_M0_C5_DEPENDENCY_AND_COMPATIBILITY_REVIEW.md) records baseline source relationships and future graph/plan tests; independent design review and owner acceptance remain open. **No `.tf`, CI, IAM, SSM, state or AWS changes are authorized.**
-- [ ] **M0-D/E/F — Consolidated final architecture closeout:** In one final work package, resolve protected IAM/OIDC/CI coordination and SG security authority, realistic cost scenarios, licensing authorization and independent acceptance; keep any actual deployment/testing in M1–M5. M0-D/E/F remain distinct requirements, not three separate review cycles.
-**M0 acceptance:** Every one of the 17 requirements has an implementation owner and specific validation target; one Terraform state owns each AWS resource; no unapproved destructive migration or cross-state overlap is proposed; modular interfaces and backwards compatibility are recorded; deployment order, realistic operating costs and authorization/licensing are resolved.
+- [x] **M0-C — Interface designs and verification handoff accepted:** [C1 publication design](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md), [C2–C4 interface design](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md) and [C5 source-based dependency/compatibility review](./v1_15_0_M0_C5_DEPENDENCY_AND_COMPATIBILITY_REVIEW.md) are all merged (through PR #964, merge `30f916b`). Executable Terraform graphs/plans and AWS negative tests remain implementation gates in M1–M5. **No `.tf`, workflow, IAM, SSM, state or AWS changes were authorized.**
+- [ ] **M0-D/E/F — Consolidated final architecture closeout:** [One decision and acceptance register](./v1_15_0_M0_D_E_F_CONSOLIDATED_CLOSEOUT.md) covers protected IAM/OIDC/CI, SG admission, full-release coordination, priced staging/production scenarios, proprietary IP authorization and final owner acceptance. **Open:** independent security/design review, SG/coordinator security decision, official cost-budget approval, and executed written Nano Nexus–ReconoSense license. No implementation or deployment is authorized.
+**M0 acceptance gate:** Every one of the 17 requirements has an implementation owner and validation target; one Terraform state owns each AWS resource; no destructive migration or state overlap is proposed; modular interfaces and compatibility are recorded. **Do not claim overall M0 acceptance yet:** security mechanism signoff, official spend limit and written licensing authorization are separate open decisions, as recorded in the consolidated closeout. M1–M5 implementation and tests require separate approval.
 
 ## References and technical notes
 
