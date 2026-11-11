@@ -234,3 +234,178 @@ run "reject_undeclared_volume" {
 
   expect_failures = [var.services]
 }
+
+run "reject_primary_container_name_collision" {
+  command = plan
+
+  variables {
+    services = {
+      api = {
+        image          = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        container_port = 8080
+        cpu            = 512
+        memory         = 1024
+
+        execution_role_arn = "arn:aws:iam::123456789012:role/test-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/test-task"
+
+        sidecars = {
+          api = {
+            image = "scanner@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.services]
+}
+
+run "reject_equal_rank_dependency" {
+  command = plan
+
+  variables {
+    services = {
+      api = {
+        image          = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        container_port = 8080
+        cpu            = 512
+        memory         = 1024
+
+        execution_role_arn = "arn:aws:iam::123456789012:role/test-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/test-task"
+
+        sidecars = {
+          bootstrap = {
+            image           = "bootstrap@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            dependency_rank = 0
+          }
+
+          scanner = {
+            image           = "scanner@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            dependency_rank = 0
+
+            depends_on = [
+              {
+                container_name = "bootstrap"
+                condition      = "START"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.services]
+}
+
+run "reject_duplicate_container_port" {
+  command = plan
+
+  variables {
+    services = {
+      api = {
+        image          = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        container_port = 8080
+        cpu            = 512
+        memory         = 1024
+
+        execution_role_arn = "arn:aws:iam::123456789012:role/test-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/test-task"
+
+        sidecars = {
+          scanner = {
+            image = "scanner@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+            port_mappings = [
+              {
+                container_port = 8080
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.services]
+}
+
+run "reject_invalid_ephemeral_storage" {
+  command = plan
+
+  variables {
+    services = {
+      api = {
+        image          = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        container_port = 8080
+        cpu            = 512
+        memory         = 1024
+
+        execution_role_arn = "arn:aws:iam::123456789012:role/test-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/test-task"
+
+        ephemeral_storage_gib = 20
+      }
+    }
+  }
+
+  expect_failures = [var.services]
+}
+
+run "reject_invalid_memory_reservation" {
+  command = plan
+
+  variables {
+    services = {
+      api = {
+        image          = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        container_port = 8080
+        cpu            = 512
+        memory         = 1024
+
+        execution_role_arn = "arn:aws:iam::123456789012:role/test-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/test-task"
+
+        sidecars = {
+          scanner = {
+            image = "scanner@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+            memory_limit_mib       = 128
+            memory_reservation_mib = 128
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.services]
+}
+
+run "reject_invalid_start_timeout" {
+  command = plan
+
+  variables {
+    services = {
+      api = {
+        image          = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        container_port = 8080
+        cpu            = 512
+        memory         = 1024
+
+        execution_role_arn = "arn:aws:iam::123456789012:role/test-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/test-task"
+
+        sidecars = {
+          scanner = {
+            image                 = "scanner@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            start_timeout_seconds = 121
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.services]
+}
