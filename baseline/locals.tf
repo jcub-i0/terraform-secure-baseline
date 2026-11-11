@@ -267,7 +267,10 @@ locals {
       ])
 
       execution_secret_arns = toset(concat(
-        values(service.secrets_manager_secrets),
+        [
+          for value_from in values(service.secrets_manager_secrets) :
+          join(":", slice(split(":", value_from), 0, 7))
+        ],
         flatten([
           for sidecar in values(service.sidecars) : [
             for value_from in values(sidecar.secrets_manager_secrets) :
