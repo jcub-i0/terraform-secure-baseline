@@ -378,5 +378,50 @@ class ExecutionPolicyTests(unittest.TestCase):
         ]
         self.check(incorrect, False)
 
+    def test_selector_variants_share_underlying_secret_arn(self):
+        selectors = [
+            SECRET + ":password::",
+            SECRET + "::AWSPREVIOUS:",
+            SECRET + ":::version123",
+            SECRET + ":password:AWSPREVIOUS:",
+            SECRET + ":password::version123",
+        ]
+
+        for selector in selectors:
+            with self.subTest(selector=selector):
+                data = fixture(guardduty=False)
+                outputs, task, policy = data
+
+                containers = task["taskDefinition"]["containerDefinitions"]
+
+                containers[0]["secrets"] = [
+                    {"name": "PRIMARY_SECRET", "valueFrom": selector}
+                ]
+
+                containers.append({
+                    "name": "scanner",
+                    "image": URL + "@sha256:" + "b" * 64,
+                    "secrets": [
+                        {"name": "SIDECAR_SECRET", "valueFrom": selector}
+                    ],
+                })
+
+                policy["Statement"].append(
+                    grant(
+                        ["secretsmanager:GetSecretValue"],
+                        [SECRET],
+                    )
+                )
+
+                # Both containers should share one underlying IAM ARN.
+                self.check(data, True)
+
+                # An IAM policy using the ECS selector rather than
+                # the base secret ARN must be rejected.
+                incorrect = copy.deepcopy(data)
+                incorrect[2]["Statement"][-1]["Resource"] = [selector]
+
+                self.check(incorrect, False)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
