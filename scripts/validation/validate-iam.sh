@@ -764,12 +764,48 @@ else
       fail "Cannot resolve the primary ECS container for IAM scope validation: ${service_name}"
     fi
 
-    image_reference="$(echo "$primary_container_json" | jq -r '.image // empty')"
-    image_repository_url="${image_reference%@sha256:*}"
-    expected_ecr_arns_json="$(echo "$ECR_REPOSITORIES_JSON" | jq -c --arg url "$image_repository_url" '[to_entries[] | select(.value.repository_url == $url) | .value.arn] | sort | unique')"
-   
-    if [[ "$(echo "$expected_ecr_arns_json" | jq 'length')" -ne 1 ]]; then
-      fail "Cannot resolve exactly one ECR repository ARN for the ECS execution policy: ${service_name}"
+    # Validate every container image, not only the primary container.
+    all_containers_json="$(
+      echo "$task_definition_json" |
+        jq -c '.taskDefinition.containerDefinitions // null'
+    )"
+
+    if ! jq -e '
+      type == "array" and
+      length > 0 and
+      all(.[];
+        type == "object" and
+        (.name | type == "string" and length > 0) and
+        (.image | type == "string" and test("^.+@sha256:[0-9a-f]{64}$"))
+      ) and
+      ([.[].name] | unique | length) == length
+    ' <<< "$all_containers_json" >/dev/null; then
+      fail "ECS task contains invalid, unpinned, or duplicate container definitions: ${service_name}"
+    fi
+
+    if ! expected_ecr_arns_json="$(
+      jq -c \
+        --argjson repos "$ECR_REPOSITORIES_JSON" '
+          [
+            .[] |
+            (.image | sub("@sha256:[0-9a-f]{64}$"; "")) as $url |
+
+            ([
+              $repos |
+              to_entries[] |
+              select(.value.repository_url == $url) |
+              .value.arn
+            ]) as $matches |
+
+            if ($matches | length) == 1 then
+              $matches[0]
+            else
+              error("Image does not resolve to exactly one managed ECR repository")
+            end
+          ] | sort | unique
+        ' <<< "$all_containers_json"
+    )"; then
+      fail "Cannot resolve exact ECR repositories for every ECS container: ${service_name}"
     fi
 
     expected_guardduty_ecr_arns_json="$(
