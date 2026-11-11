@@ -953,9 +953,73 @@ else
       fail "ECS execution policy log permissions are not scoped to the service log group: ${service_name}"
     fi
 
-    expected_secret_arns_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select(test("^arn:[^:]+:secretsmanager:"))] | sort | unique')"
-    expected_ssm_arns_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select(test("^arn:[^:]+:ssm:"))] | sort | unique')"
-    ambiguous_secret_references_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select((test("^arn:[^:]+:(secretsmanager|ssm):") | not))] | sort | unique')"
+    # Derive startup-secret permissions from every container in the task.
+    # Secrets Manager ECS selectors are removed for IAM resource matching.
+    if ! expected_secret_scopes_json="$(
+      jq -cer '
+        def valid_sm:
+          test("^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:[^:*?]*:[^:*?]*)?$");
+
+        def valid_ssm:
+          test("^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$");
+
+        [
+          .[] |
+          (.secrets // []) as $entries |
+
+          if ($entries | type) != "array" then
+            error("Container secrets must be an array")
+          else
+            $entries[] |
+
+            if (
+              type == "object" and
+              (.name | type) == "string" and
+              (.name | length) > 0 and
+              (.valueFrom | type) == "string"
+            ) then
+              .valueFrom |
+
+              if valid_sm then
+                {
+                  kind: "secretsmanager",
+                  arn: (split(":")[:7] | join(":"))
+                }
+              elif valid_ssm then
+                {
+                  kind: "ssm",
+                  arn: .
+                }
+              else
+                error("Unsupported or malformed ECS secret reference")
+              end
+            else
+              error("Invalid ECS secret entry")
+            end
+          end
+        ] |
+        {
+          secrets: (
+            [.[] | select(.kind == "secretsmanager") | .arn] |
+            unique
+          ),
+          ssm: (
+            [.[] | select(.kind == "ssm") | .arn] |
+            unique
+          )
+        }
+      ' <<< "$all_containers_json"
+    )"; then
+      fail "Cannot derive exact ECS startup-secret permissions for every container: ${service_name}"
+    fi
+
+    expected_secret_arns_json="$(
+      jq -c '.secrets' <<< "$expected_secret_scopes_json"
+    )"
+
+    expected_ssm_arns_json="$(
+      jq -c '.ssm' <<< "$expected_secret_scopes_json"
+    )"
 
     if [[ "$(echo "$expected_secret_arns_json" | jq 'length')" -gt 0 ]] &&
       ! policy_statement_allows_exact_resources "$execution_policy_json" '["secretsmanager:GetSecretValue"]' "$expected_secret_arns_json"; then
@@ -965,10 +1029,6 @@ else
     if [[ "$(echo "$expected_ssm_arns_json" | jq 'length')" -gt 0 ]] &&
       ! policy_statement_allows_exact_resources "$execution_policy_json" '["ssm:GetParameters"]' "$expected_ssm_arns_json"; then
       fail "ECS execution policy SSM permissions do not match task-definition references: ${service_name}"
-    fi
-
-    if [[ "$(echo "$ambiguous_secret_references_json" | jq 'length')" -gt 0 ]]; then
-      fail "Cannot establish exact execution-policy scope for secret references without service-identifying ARNs: ${service_name}"
     fi
 
     expected_kms_key_arns_json="$(
