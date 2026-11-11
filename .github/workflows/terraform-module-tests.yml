@@ -49,7 +49,10 @@ jobs:
           for root in \
             modules/ecs_service \
             modules/iam \
-            baseline
+            baseline \
+            environments/dev \
+            environments/staging \
+            environments/prod
           do
             label="${root//\//-}"
             log="test-evidence/${label}.log"
