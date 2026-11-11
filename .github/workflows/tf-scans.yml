@@ -283,7 +283,11 @@ jobs:
 
           if ! jq -e '
             type == "array"
-            and ([.[].check_type] | sort == ["dockerfile", "github_actions", "terraform"])
+            and (
+              ([.[].check_type] | sort) as $frameworks |
+              ($frameworks == ["dockerfile", "github_actions", "terraform"] or
+              $frameworks == ["dockerfile", "github_actions", "secrets", "terraform"])
+            )
             and all(.[];
               (.summary.passed | type == "number")
               and (.summary.failed | type == "number")
@@ -293,7 +297,13 @@ jobs:
               and (.results.parsing_errors | type == "array" and length == 0)
               and (.summary.passed == (.results.passed_checks | length))
               and (.summary.failed == (.results.failed_checks | length))
-              and (.summary.passed + .summary.failed > 0)
+              and (
+                if .check_type == "secrets" then
+                  .summary.failed == 0
+                else
+                  (.summary.passed + .summary.failed > 0)
+                end
+              )
             )
           ' "$json" >/dev/null; then
             echo "::error::Checkov report is incomplete, invalid, or contains parsing errors."
@@ -303,6 +313,13 @@ jobs:
               .check_type as $framework |
               .results.parsing_errors[]? |
               "::error::\($framework): \(.)"
+            ' "$json" || true
+
+            jq -r '
+              .[] |
+              select(.check_type == "secrets") |
+              .results.failed_checks[]? |
+              "::error file=\(.file_path | ltrimstr("/")),line=\(.file_line_range[0])::Checkov \(.check_id): \(.check_name)"
             ' "$json" || true
 
             exit 1
