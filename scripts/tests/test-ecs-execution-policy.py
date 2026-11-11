@@ -25,6 +25,8 @@ BLOCK = SOURCE.split('section "Validating per-service ECS IAM roles and policies
 
 ACCOUNT = "123456789012"
 REPO = f"arn:aws:ecr:us-east-1:{ACCOUNT}:repository/test"
+SIDECAR_REPO = f"arn:aws:ecr:us-east-1:{ACCOUNT}:repository/scanner"
+SIDECAR_URL = f"{ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/scanner"
 GUARDDUTY = "arn:aws:ecr:us-east-1:593207742271:repository/aws-guardduty-agent-fargate"
 URL = f"{ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/test"
 LOG = f"arn:aws:logs:us-east-1:{ACCOUNT}:log-group:test"
@@ -213,6 +215,60 @@ class ExecutionPolicyTests(unittest.TestCase):
         data[2]["Statement"][4]["Resource"][0] = SECRET + "*"
         self.check(data, False)
 
+    def test_multi_container_ecr_permissions(self):
+        data = fixture(guardduty=False)
+        outputs, task, policy = data
+
+        outputs["ecr_repositories"]["value"]["scanner"] = {
+            "arn": SIDECAR_REPO,
+            "repository_url": SIDECAR_URL,
+        }
+
+        task["taskDefinition"]["containerDefinitions"].append({
+            "name": "scanner",
+            "image": SIDECAR_URL + "@sha256:" + "b" * 64,
+            "secrets": [],
+        })
+
+        policy["Statement"][1]["Resource"] = [REPO, SIDECAR_REPO]
+
+        # Both declared repositories are authorized.
+        self.check(data, True)
+
+        # Missing sidecar repository permission is rejected.
+        missing = copy.deepcopy(data)
+        missing[2]["Statement"][1]["Resource"] = [REPO]
+        self.check(missing, False)
+
+        # An additional undeclared repository is rejected.
+        excessive = copy.deepcopy(data)
+        excessive[2]["Statement"][1]["Resource"].append(
+            f"arn:aws:ecr:us-east-1:{ACCOUNT}:repository/other"
+        )
+        self.check(excessive, False)
+
+        # Multiple containers may share the primary repository.
+        shared = copy.deepcopy(data)
+        shared[1]["taskDefinition"]["containerDefinitions"][1]["image"] = (
+            URL + "@sha256:" + "b" * 64
+        )
+        shared[2]["Statement"][1]["Resource"] = [REPO]
+        self.check(shared, True)
+
+        # A mutable sidecar image must be rejected.
+        unpinned = copy.deepcopy(shared)
+        unpinned[1]["taskDefinition"]["containerDefinitions"][1]["image"] = (
+            URL + ":latest"
+        )
+        self.check(unpinned, False)
+
+        # An image outside the managed repository inventory is rejected.
+        unknown = copy.deepcopy(shared)
+        unknown[1]["taskDefinition"]["containerDefinitions"][1]["image"] = (
+            "999999999999.dkr.ecr.us-east-1.amazonaws.com/other@sha256:"
+            + "b" * 64
+        )
+        self.check(unknown, False)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
