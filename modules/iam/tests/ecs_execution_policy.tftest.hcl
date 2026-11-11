@@ -180,3 +180,174 @@ run "empty_services_generate_no_ecs_iam" {
     error_message = "An empty ECS service map must generate no ECS IAM roles, execution policies, or task-role policy attachments."
   }
 }
+
+run "multi_service_iam_isolation" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = {
+        ecr_repository_arns = [
+          "arn:aws:ecr:us-east-1:123456789012:repository/api",
+          "arn:aws:ecr:us-east-1:123456789012:repository/scanner"
+        ]
+
+        log_group_arns = [
+          "arn:aws:logs:us-east-1:123456789012:log-group:/aws/ecs/unit-test-dev/api"
+        ]
+
+        execution_secret_arns = [
+          "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-AbCdEf"
+        ]
+
+        execution_ssm_parameter_arns = [
+          "arn:aws:ssm:us-east-1:123456789012:parameter/api/config"
+        ]
+
+        task_execution_kms_key_arns = [
+          "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
+        ]
+
+        task_role_managed_policy_arns = [
+          "arn:aws:iam::123456789012:policy/api-read"
+        ]
+      }
+
+      worker = {
+        ecr_repository_arns = [
+          "arn:aws:ecr:us-east-1:123456789012:repository/worker"
+        ]
+
+        log_group_arns = [
+          "arn:aws:logs:us-east-1:123456789012:log-group:/aws/ecs/unit-test-dev/worker"
+        ]
+
+        execution_secret_arns = [
+          "arn:aws:secretsmanager:us-east-1:123456789012:secret:worker-GhIjKl"
+        ]
+      }
+    }
+  }
+
+  # Exactly two independent ECS IAM resource sets.
+  assert {
+    condition = (
+      toset(keys(aws_iam_role.ecs_task_execution_roles)) == toset(["api", "worker"]) &&
+      toset(keys(aws_iam_role.ecs_task_roles)) == toset(["api", "worker"]) &&
+      toset(keys(aws_iam_role_policy.ecs_task_execution_policies)) == toset(["api", "worker"])
+    )
+
+    error_message = "Each ECS service must have its own execution role, task role, and execution policy."
+  }
+
+  # Each service can pull only from its own declared repositories.
+  assert {
+    condition = alltrue([
+      for service_name, service in var.ecs_iam_services :
+      length([
+        for statement in jsondecode(
+          aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
+        ).Statement : statement
+        if statement.Sid == "AllowECRImagePulls" &&
+        toset(flatten([statement.Resource])) == service.ecr_repository_arns
+      ]) == 1
+    ])
+
+    error_message = "ECR pull permissions must remain isolated to each service's declared repository inventory."
+  }
+
+  # CloudWatch log-write permissions must also remain isolated.
+  assert {
+    condition = alltrue([
+      for service_name, service in var.ecs_iam_services :
+      length([
+        for statement in jsondecode(
+          aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
+        ).Statement : statement
+        if statement.Sid == "AllowCloudWatchLogWrites" &&
+        toset(flatten([statement.Resource])) == toset([
+          for arn in service.log_group_arns : "${arn}:*"
+        ])
+      ]) == 1
+    ])
+
+    error_message = "CloudWatch log-write permissions must match each service's own log groups."
+  }
+
+  # No service should inherit another service's Secrets Manager permissions.
+  assert {
+    condition = alltrue([
+      for service_name, service in var.ecs_iam_services :
+      length([
+        for statement in jsondecode(
+          aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
+        ).Statement : statement
+        if statement.Sid == "AllowSecretsManagerRead" &&
+        toset(flatten([statement.Resource])) == service.execution_secret_arns
+      ]) == 1
+    ])
+
+    error_message = "Secrets Manager read permissions must remain isolated between ECS services."
+  }
+
+  # Verify exact optional-statement inventory and API-only SSM/KMS scopes.
+  assert {
+    condition = (
+      alltrue([
+        for service_name, service in var.ecs_iam_services :
+        toset([
+          for statement in jsondecode(
+            aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
+          ).Statement : statement.Sid
+          ]) == toset(concat(
+          [
+            "AllowECRAuthorization",
+            "AllowECRImagePulls",
+            "AllowCloudWatchLogWrites"
+          ],
+          length(service.execution_secret_arns) > 0 ? ["AllowSecretsManagerRead"] : [],
+          length(service.execution_ssm_parameter_arns) > 0 ? ["AllowSSMParameterRead"] : [],
+          length(service.task_execution_kms_key_arns) > 0 ? ["AllowExecutionKMSDecrypt"] : [],
+          length(service.guardduty_agent_ecr_repository_arns) > 0 ? ["AllowGuardDutyAgentImagePulls"] : []
+        ))
+      ]) &&
+      length([
+        for statement in jsondecode(
+          aws_iam_role_policy.ecs_task_execution_policies["api"].policy
+        ).Statement : statement
+        if statement.Sid == "AllowSSMParameterRead" &&
+        toset(flatten([statement.Resource])) == toset([
+          "arn:aws:ssm:us-east-1:123456789012:parameter/api/config"
+        ])
+      ]) == 1 &&
+      length([
+        for statement in jsondecode(
+          aws_iam_role_policy.ecs_task_execution_policies["api"].policy
+        ).Statement : statement
+        if statement.Sid == "AllowExecutionKMSDecrypt" &&
+        toset(flatten([statement.Resource])) == toset([
+          "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
+        ])
+      ]) == 1
+    )
+
+    error_message = "Optional IAM statements must be present only when declared and must retain exact resource scopes."
+  }
+
+  # Managed application policies attach only to the intended task role.
+  assert {
+    condition = (
+      toset(keys(aws_iam_role_policy_attachment.ecs_task_managed_policies)) == toset([
+        "api|arn:aws:iam::123456789012:policy/api-read"
+      ]) &&
+      aws_iam_role_policy_attachment.ecs_task_managed_policies[
+        "api|arn:aws:iam::123456789012:policy/api-read"
+      ].role == aws_iam_role.ecs_task_roles["api"].name &&
+      aws_iam_role_policy_attachment.ecs_task_managed_policies[
+        "api|arn:aws:iam::123456789012:policy/api-read"
+      ].policy_arn == "arn:aws:iam::123456789012:policy/api-read"
+    )
+
+    error_message = "Application managed policies must attach exclusively to their intended ECS task roles."
+  }
+}
