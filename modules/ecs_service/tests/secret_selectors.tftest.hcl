@@ -12,7 +12,7 @@ variables {
   compute_private_subnet_ids = ["subnet-0123456789abcdef0"]
 
   cloudwatch_retention_days = 14
-  logs_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
+  logs_cmk_arn              = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
 
   force_delete = false
 
