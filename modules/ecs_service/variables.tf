@@ -41,6 +41,40 @@ variable "platform_version" {
   description = "AWS Fargate platform version. Defaults to the latest available platform."
   type        = string
   default     = "LATEST"
+
+  validation {
+    condition = (
+      contains(["LATEST", "1.3.0", "1.4.0"], var.platform_version) ||
+      alltrue([
+        for service in values(var.services) :
+        length(service.depends_on) == 0 &&
+        service.start_timeout_seconds == null &&
+        service.stop_timeout_seconds == null &&
+        alltrue([
+          for sidecar in values(service.sidecars) :
+          length(sidecar.depends_on) == 0 &&
+          sidecar.start_timeout_seconds == null &&
+          sidecar.stop_timeout_seconds == null
+        ])
+      ])
+    )
+
+    error_message = "ECS container dependencies and start/stop timeouts require Fargate Linux platform 1.3.0 or later."
+  }
+
+  validation {
+    condition = (
+      contains(["LATEST", "1.4.0"], var.platform_version) ||
+      alltrue([
+        for service in values(var.services) :
+        service.ephemeral_storage_gib == null &&
+        service.cpu_architecture != "ARM64" &&
+        service.cpu < 8192
+      ])
+    )
+
+    error_message = "Expanded ephemeral storage, ARM64 workloads, and tasks with 8 or more vCPUs require Fargate Linux platform 1.4.0 or later."
+  }
 }
 
 variable "services" {
