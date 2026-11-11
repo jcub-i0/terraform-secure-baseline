@@ -1190,7 +1190,7 @@ variable "ecs_services" {
         alltrue([
           for value_from in values(sidecar.secrets_manager_secrets) :
           can(regex(
-            "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:[^:*?]*:[^:*?]*)?$",
+            "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:([^:*?]+:|:[^:*?]+|:))?$",
             value_from
           ))
         ])
