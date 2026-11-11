@@ -1188,23 +1188,6 @@ variable "ecs_services" {
       for service in values(var.ecs_services) : [
         for sidecar in values(service.sidecars) :
         alltrue([
-          for value_from in values(sidecar.secrets_manager_secrets) :
-          can(regex(
-            "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:([^:*?]+:|:[^:*?]+|:))?$",
-            value_from
-          ))
-        ])
-      ]
-    ]))
-
-    error_message = "Sidecar Secrets Manager references must use full secret ARNs, optionally with ECS JSON-key/version selectors, and cannot contain IAM wildcards."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.ecs_services) : [
-        for sidecar in values(service.sidecars) :
-        alltrue([
           for value_from in values(sidecar.ssm_parameters) :
           can(regex(
             "^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$",
