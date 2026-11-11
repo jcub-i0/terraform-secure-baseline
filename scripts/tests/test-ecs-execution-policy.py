@@ -32,6 +32,8 @@ URL = f"{ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/test"
 LOG = f"arn:aws:logs:us-east-1:{ACCOUNT}:log-group:test"
 SECRET = f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:app-AbCdEf"
 PARAMETER = f"arn:aws:ssm:us-east-1:{ACCOUNT}:parameter/app/host"
+SCANNER_SECRET = (f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:scanner-GhIjKl")
+SCANNER_PARAMETER = (f"arn:aws:ssm:us-east-1:{ACCOUNT}:parameter/scanner/token")
 KEY = f"arn:aws:kms:us-east-1:{ACCOUNT}:key/00000000-0000-0000-0000-000000000000"
 PULL = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"]
 
@@ -269,6 +271,65 @@ class ExecutionPolicyTests(unittest.TestCase):
             + "b" * 64
         )
         self.check(unknown, False)
+
+    def test_multi_container_secret_permissions(self):
+        data = fixture(guardduty=False)
+        outputs, task, policy = data
+
+        task["taskDefinition"]["containerDefinitions"].append({
+            "name": "scanner",
+            "image": URL + "@sha256:" + "b" * 64,
+            "secrets": [
+                {
+                    "name": "SCANNER_TOKEN",
+                    "valueFrom": SCANNER_SECRET + ":token::",
+                },
+                {
+                    "name": "SCANNER_PARAMETER",
+                    "valueFrom": SCANNER_PARAMETER,
+                },
+            ],
+        })
+
+        policy["Statement"].extend([
+            grant(["secretsmanager:GetSecretValue"], [SCANNER_SECRET]),
+            grant(["ssm:GetParameters"], [SCANNER_PARAMETER]),
+        ])
+
+        # Exact, declared permissions must succeed.
+        self.check(data, True)
+
+        # Missing Secrets Manager permission must fail.
+        missing_secret = copy.deepcopy(data)
+        missing_secret[2]["Statement"] = [
+            statement
+            for statement in missing_secret[2]["Statement"]
+            if "secretsmanager:GetSecretValue" not in statement["Action"]
+        ]
+        self.check(missing_secret, False)
+
+        # Missing SSM permission must fail.
+        missing_ssm = copy.deepcopy(data)
+        missing_ssm[2]["Statement"] = [
+            statement
+            for statement in missing_ssm[2]["Statement"]
+            if "ssm:GetParameters" not in statement["Action"]
+        ]
+        self.check(missing_ssm, False)
+
+        # Additional undeclared secret permissions must fail.
+        excessive = copy.deepcopy(data)
+        excessive[2]["Statement"][3]["Resource"].append(
+            f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:other-XyZaBc"
+        )
+        self.check(excessive, False)
+
+        # Malformed sidecar references must fail closed.
+        malformed = copy.deepcopy(data)
+        malformed[1]["taskDefinition"]["containerDefinitions"][1]["secrets"][0]["valueFrom"] = (
+            "not-a-valid-secret-arn"
+        )
+        self.check(malformed, False)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
