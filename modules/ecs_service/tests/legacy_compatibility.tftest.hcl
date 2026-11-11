@@ -79,7 +79,7 @@ run "legacy_fixed_service" {
     condition = aws_ecs_task_definition.task_definitions["api"].container_definitions == jsonencode([
       {
         name      = "api"
-        image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/api@sha256:${strrep("a", 64)}"
+        image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         essential = true
 
         portMappings = [
