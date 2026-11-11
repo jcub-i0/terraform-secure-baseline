@@ -75,6 +75,50 @@ variable "platform_version" {
 
     error_message = "Expanded ephemeral storage, ARM64 workloads, and tasks with 8 or more vCPUs require Fargate Linux platform 1.4.0 or later."
   }
+
+  validation {
+    condition = (
+      contains(["LATEST", "1.3.0", "1.4.0"], var.platform_version) ||
+      alltrue([
+        for service in values(var.services) :
+        length(service.secrets) == 0 &&
+        alltrue([
+          for sidecar in values(service.sidecars) :
+          length(sidecar.secrets) == 0
+        ])
+      ])
+    )
+
+    error_message = "ECS secret injection requires Fargate Linux platform 1.3.0 or later."
+  }
+
+  validation {
+    condition = (
+      contains(["LATEST", "1.4.0"], var.platform_version) ||
+      alltrue(flatten([
+        for service in values(var.services) : [
+          for value_from in concat(
+            values(service.secrets),
+            flatten([
+              for sidecar in values(service.sidecars) :
+              values(sidecar.secrets)
+            ])
+          ) :
+          !can(regex(
+            "^arn:[^:]+:secretsmanager(:|$)",
+            value_from
+          )) ||
+          (
+            try(split(":", value_from)[7], "") == "" &&
+            try(split(":", value_from)[8], "") == "" &&
+            try(split(":", value_from)[9], "") == ""
+          )
+        ]
+      ]))
+    )
+
+    error_message = "ECS Secrets Manager JSON-key and version selectors require Fargate Linux platform 1.4.0 or later."
+  }
 }
 
 variable "services" {
@@ -720,6 +764,30 @@ variable "services" {
     ])
 
     error_message = "The primary container and sidecars must not declare duplicate container ports within the same ECS task."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for value_from in concat(
+          values(service.secrets),
+          flatten([
+            for sidecar in values(service.sidecars) :
+            values(sidecar.secrets)
+          ])
+        ) :
+        !can(regex(
+          "^arn:[^:]+:secretsmanager(:|$)",
+          value_from
+        )) ||
+        can(regex(
+          "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:([^:*?]+:|:[^:*?]+|:))?$",
+          value_from
+        ))
+      ]
+    ]))
+
+    error_message = "ECS Secrets Manager references must use valid full ARNs and cannot specify both version-stage and version-id."
   }
 }
 

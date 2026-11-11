@@ -1216,6 +1216,26 @@ variable "ecs_services" {
 
     error_message = "Sidecar SSM references must use full parameter ARNs without wildcard characters."
   }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_services) : [
+        for value_from in concat(
+          values(service.secrets_manager_secrets),
+          flatten([
+            for sidecar in values(service.sidecars) :
+            values(sidecar.secrets_manager_secrets)
+          ])
+        ) :
+        can(regex(
+          "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:([^:*?]+:|:[^:*?]+|:))?$",
+          value_from
+        ))
+      ]
+    ]))
+
+    error_message = "Primary and sidecar Secrets Manager references must use full ARNs with valid ECS selectors. A version stage and version ID cannot both be specified."
+  }
 }
 
 variable "fargate_platform_version" {
