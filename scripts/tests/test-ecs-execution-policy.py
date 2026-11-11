@@ -31,6 +31,7 @@ GUARDDUTY = "arn:aws:ecr:us-east-1:593207742271:repository/aws-guardduty-agent-f
 URL = f"{ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/test"
 LOG = f"arn:aws:logs:us-east-1:{ACCOUNT}:log-group:test"
 SECRET = f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:app-AbCdEf"
+SECOND_SECRET = (f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:app-secondary-ZyXwVu")
 PARAMETER = f"arn:aws:ssm:us-east-1:{ACCOUNT}:parameter/app/host"
 SCANNER_SECRET = (f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:scanner-GhIjKl")
 SCANNER_PARAMETER = (f"arn:aws:ssm:us-east-1:{ACCOUNT}:parameter/scanner/token")
@@ -98,7 +99,7 @@ def fixture(optional=False, guardduty=True):
     task = {"taskDefinition": {"containerDefinitions": [{
         "name": "test", "image": URL + "@sha256:" + "a" * 64,
         "secrets": ([{"name": "password", "valueFrom": SECRET},
-                     {"name": "token", "valueFrom": SECRET + "2"},
+                     {"name": "token", "valueFrom": SECOND_SECRET},
                      {"name": "host", "valueFrom": PARAMETER}] if optional else []),
     }]}}
     statements = [
@@ -110,7 +111,7 @@ def fixture(optional=False, guardduty=True):
         statements.append(grant(PULL, [GUARDDUTY]))
     if optional:
         statements.extend([
-            grant(["secretsmanager:GetSecretValue"], [SECRET, SECRET + "2"]),
+            grant(["secretsmanager:GetSecretValue"], [SECRET, SECOND_SECRET]),
             grant(["ssm:GetParameters"], [PARAMETER]),
             grant(["kms:Decrypt"], [KEY, KEY + "1"]),
         ])
