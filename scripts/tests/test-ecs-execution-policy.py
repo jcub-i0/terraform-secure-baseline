@@ -354,5 +354,29 @@ class ExecutionPolicyTests(unittest.TestCase):
         # No duplicate IAM resource entries should be required.
         self.check(data, True)
 
+    def test_primary_secret_selector_uses_underlying_arn(self):
+        data = fixture(guardduty=False)
+
+        data[1]["taskDefinition"]["containerDefinitions"][0]["secrets"] = [
+            {
+                "name": "PASSWORD",
+                "valueFrom": SECRET + ":password::",
+            }
+        ]
+
+        data[2]["Statement"].append(
+            grant(["secretsmanager:GetSecretValue"], [SECRET])
+        )
+
+        # IAM authorizes the underlying secret.
+        self.check(data, True)
+
+        # Authorizing the selector string instead is incorrect.
+        incorrect = copy.deepcopy(data)
+        incorrect[2]["Statement"][-1]["Resource"] = [
+            SECRET + ":password::"
+        ]
+        self.check(incorrect, False)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
