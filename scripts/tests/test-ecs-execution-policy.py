@@ -331,5 +331,27 @@ class ExecutionPolicyTests(unittest.TestCase):
         )
         self.check(malformed, False)
 
+    def test_primary_and_sidecar_shared_secrets(self):
+        data = fixture(optional=True, guardduty=False)
+
+        data[1]["taskDefinition"]["containerDefinitions"].append({
+            "name": "scanner",
+            "image": URL + "@sha256:" + "b" * 64,
+            "secrets": [
+                {
+                    "name": "SHARED_TOKEN",
+                    "valueFrom": SECRET + ":token::",
+                },
+                {
+                    "name": "SHARED_PARAMETER",
+                    "valueFrom": PARAMETER,
+                },
+            ],
+        })
+
+        # Existing primary-container permissions also cover the sidecar.
+        # No duplicate IAM resource entries should be required.
+        self.check(data, True)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
