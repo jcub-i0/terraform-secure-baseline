@@ -60,7 +60,7 @@ variables {
   primary_region     = "us-east-1"
   account_id         = "123456789012"
   random_id          = "1234abcd"
-  abuseipdb_api_key  = "test-only-placeholder"
+  abuseipdb_api_key  = "dummy"
 
   bucket_admin_principals = [
     "arn:aws:iam::123456789012:role/test-admin"
