@@ -28,6 +28,14 @@ mock_provider "aws" {
       random_password = "TestOnlyMockPassword123!"
     }
   }
+
+  # Test-only policy JSON for unrelated baseline resources.
+  # Actual IAM policy generation is tested separately in modules/iam.
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Principal\":{\"AWS\":\"arn:aws:iam::123456789012:root\"},\"Resource\":\"*\"}]}"
+    }
+  }
 }
 
 # Supply deterministic ECR outputs without testing ECR itself.
