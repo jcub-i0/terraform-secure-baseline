@@ -29,7 +29,7 @@ Deliver an approved, application-agnostic design that can satisfy all 17 ReconoS
 - `modules/ecs_service` currently generates one essential container per service, with digest-pinned image, per-service role ARNs, optional health checks, scaling and ALB target groups. No generic multi-container specification or standalone job interface exists.
 - `modules/storage` hardcodes PostgreSQL `17.10`; it already uses ephemeral/write-only credentials. `modules/application_load_balancer` supports HTTPS and configurable target health paths, but the `baseline/` root creates an ALB only when registered ECS services require it.
 - The top-level `baseline/` composition currently owns both shared infrastructure and ECS/ALB resources. Its graph must be checked for application-module dependency cycles before deciding whether adopters should call it directly.
-- Baseline staging pins Terraform `1.15.8` and AWS provider `6.66.0`; re-evaluate constraints when integrating modules used by ReconoSense.
+- Baseline staging pins Terraform `1.17.1` and AWS provider `6.72.0`; re-evaluate constraints when integrating modules used by ReconoSense.
 
 **ReconoSense, as currently documented:**
 

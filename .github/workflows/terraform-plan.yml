@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 env:
-  TERRAFORM_VERSION: "1.15.8"
+  TERRAFORM_VERSION: "1.17.1"
 
 jobs:
   terraform-plan:

@@ -198,8 +198,8 @@ Initial bootstrap needs an authorized AWS credential chain with sufficient admin
 
 Install and configure:
 
-- Terraform **1.15.8**, matching root constraints and workflow tooling
-- The committed root-specific provider lockfiles; AWS is pinned to **6.66.0** in the inspected roots
+- Terraform **1.17.1**, matching root constraints and workflow tooling
+- The committed root-specific provider lockfiles; AWS is pinned to **6.72.0** in the inspected roots
 - Git CLI
 - `jq`
 - A GitHub account with the following environments, if using `GitHub OIDC`:

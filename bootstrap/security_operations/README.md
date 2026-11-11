@@ -127,7 +127,7 @@ Do not destroy the state bucket while it contains the active state used to manag
 
 State-resource provisioning uses `state_region`. The `account` and `security_services` providers use `primary_region`; their Region data sources enforce agreement with the configured provider. Each S3 backend independently declares its Region/bucket/key. The account key is `security-operations/account.tfstate`; state and security-services use distinct objects. Do not change an IAM ARN input and assume the backend migrated.
 
-All three roots pin Terraform 1.15.8 and AWS provider 6.66.0. Retain their lockfiles. The [state reference](state/README.md) owns the migration/verification procedure; a tracked backend template is not evidence of completed migration.
+All three roots pin Terraform 1.17.1 and AWS provider 6.72.0. Retain their lockfiles. The [state reference](state/README.md) owns the migration/verification procedure; a tracked backend template is not evidence of completed migration.
 
 ---
 

@@ -109,7 +109,7 @@ The security-operations account is configured separately through `identity_cente
 
 ## Provider, Region, and Backend
 
-[providers.tf](providers.tf) pins Terraform `1.15.8` and AWS provider `6.66.0`, but does not declare an explicit AWS provider configuration. Use the control-plane administrative credentials and the Region of the existing Identity Center organization instance. The module discovers that instance; it does not create it or let this root select an instance ARN.
+[providers.tf](providers.tf) pins Terraform `1.17.1` and AWS provider `6.72.0`, but does not declare an explicit AWS provider configuration. Use the control-plane administrative credentials and the Region of the existing Identity Center organization instance. The module discovers that instance; it does not create it or let this root select an instance ARN.
 
 The root has two required input objects: `identity_center_workloads` and `identity_center_secops`. `cloud_name` is optional and defaults to `tf-secure-baseline`. There is no top-level `primary_region`, `state_region`, or `account_id`. Each workload entry's `primary_region` is an input to its Operator policy ARN, not a per-workload provider Region. Match `cloud_name` to the values used by the workload roots.
 

@@ -202,7 +202,7 @@ The feature flags default to `false` so the organization can be adopted and the 
 
 ## Provider, Backend, and Administrative Lifecycle
 
-[providers.tf](providers.tf) pins Terraform `1.15.8` and AWS provider `6.66.0`, but declares no explicit `provider "aws"` configuration. This root has no `primary_region`, `state_region`, `account_id`, or `cloud_name` input. Select the management-account credentials and service Region through the provider's execution context; a `TF_VAR_primary_region` alone is not a Region selector for this root.
+[providers.tf](providers.tf) pins Terraform `1.17.1` and AWS provider `6.72.0`, but declares no explicit `provider "aws"` configuration. This root has no `primary_region`, `state_region`, `account_id`, or `cloud_name` input. Select the management-account credentials and service Region through the provider's execution context; a `TF_VAR_primary_region` alone is not a Region selector for this root.
 
 The checked-in backend coordinates are:
 
