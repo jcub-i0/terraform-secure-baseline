@@ -111,7 +111,7 @@ run "multi_container_task" {
             }
 
             secrets = {
-              API_TOKEN = "arn:aws:ssm:us-east-1:123456789012:parameter/app/token"
+              TELEMETRY_CONFIG_PARAMETER = "arn:aws:ssm:us-east-1:123456789012:parameter/app/config"
             }
 
             mount_points = [
