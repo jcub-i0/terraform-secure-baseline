@@ -22,6 +22,12 @@ mock_provider "aws" {
       ]
     }
   }
+
+  mock_ephemeral "aws_secretsmanager_random_password" {
+    defaults = {
+      random_password = "TestOnlyMockPassword123!"
+    }
+  }
 }
 
 # Supply deterministic ECR outputs without testing ECR itself.
