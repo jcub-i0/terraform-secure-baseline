@@ -142,3 +142,5 @@ bootstrap/*/state/backend.tf
 # AI-based agent definitions
 ##################################################################
 AGENTS.md
+.codex/
+.claude/
