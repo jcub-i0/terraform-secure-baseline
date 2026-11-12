@@ -25,7 +25,7 @@ validate_guardduty_service_tasks() {
   local app_container_json
   local guardduty_container_json
   local app_health_status
-  local unexpected_container_names_json
+  local expected_container_names_json
 
   expected_service_json="$(
     echo "$ECS_SERVICES_JSON" |
@@ -201,36 +201,19 @@ validate_guardduty_service_tasks() {
       fail "GuardDuty guardduty agent sidecar is not RUNNING: ${task_arn}"
     fi
 
-    # The baseline task definition is application-only. On a protected running
-    # task, the only additional container expected is GuardDuty's injected agent.
-    unexpected_container_names_json="$(
-    echo "$task_json" |
-        jq -c \
-        --arg service "$service_name" \
-        --arg agent_exact "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME" \
-        --arg agent_prefix "$GUARDDUTY_FARGATE_AGENT_CONTAINER_NAME_PREFIX" '
-            [
-            .containers[]?.name
-            | select(
-                . != $service
-                and . != $agent_exact
-                and (
-                    (
-                    startswith($agent_prefix)
-                    and (length > ($agent_prefix | length))
-                    )
-                    | not
-                )
-                )
-            ]
-            | sort
-            | unique
-        '
+    # Terraform owns primary + generic sidecars. Only the one agent identified
+    # above is injected. Preserve duplicates so missing/duplicate sidecars fail.
+    # Nonessential completion containers may legitimately be STOPPED.
+    expected_container_names_json="$(
+      jq -c --arg service "$service_name" '.[$service].containers | keys' <<< "$ECS_SERVICE_CONFIGURATION_JSON"
     )"
-
-    if [[ "$(echo "$unexpected_container_names_json" | jq 'length')" -ne 0 ]]; then
-      echo "$unexpected_container_names_json" | jq .
-      fail "Protected Fargate task contains unexpected live containers outside the application and GuardDuty agent contract: ${task_arn}"
+    
+    if ! jq -e --argjson expected "$expected_container_names_json" \
+      --arg agent "$(jq -r '.name' <<< "$guardduty_container_json")" '
+        ([.containers[].name] | sort) == (($expected + [$agent]) | sort)
+        and ($expected | index($agent)) == null
+      ' <<< "$task_json" >/dev/null; then
+      fail "Protected Fargate task container inventory differs from Terraform plus one injected GuardDuty agent: ${task_arn}"
     fi
 
     GUARDDUTY_RUNNING_TASKS_CHECKED=$((GUARDDUTY_RUNNING_TASKS_CHECKED + 1))

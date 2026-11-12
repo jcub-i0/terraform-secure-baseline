@@ -309,6 +309,93 @@ output "ecs_service_configuration" {
 
         ingress_enabled = service.ingress != null
 
+        # Additive runtime contract. Container names are map keys, independent
+        # of registration order. Secret references are metadata only; ordinary
+        # environment values are hashed so this output never copies their text.
+        containers = {
+          for container_name, container in merge(
+            {
+              (service_name) = merge(local.ecs_runtime_services[service_name], {
+                essential                 = true
+                cpu_units                 = null
+                memory_limit_mib          = null
+                memory_reservation_mib    = null
+                command                   = null
+                entry_point               = null
+                read_only_root_filesystem = null
+                port_mappings = [{
+                  container_port = service.container_port
+                  protocol       = "tcp"
+                }]
+              })
+            },
+            local.ecs_runtime_services[service_name].sidecars
+            ) : container_name => {
+            name                   = container_name
+            image                  = container.image
+            essential              = container.essential
+            cpu                    = container.cpu_units
+            memory                 = container.memory_limit_mib
+            memoryReservation      = container.memory_reservation_mib
+            command                = container.command
+            entryPoint             = container.entry_point
+            readonlyRootFilesystem = container.read_only_root_filesystem
+            startTimeout           = container.start_timeout_seconds
+            stopTimeout            = container.stop_timeout_seconds
+
+            healthCheck = container.health_check == null ? null : {
+              command     = container.health_check.command
+              interval    = container.health_check.interval
+              timeout     = container.health_check.timeout
+              retries     = container.health_check.retries
+              startPeriod = container.health_check.start_period
+            }
+
+            dependsOn = [for dependency in container.depends_on : {
+              containerName = dependency.container_name
+              condition     = dependency.condition
+            }]
+
+            mountPoints = [for mount in container.mount_points : {
+              sourceVolume  = mount.source_volume
+              containerPath = mount.container_path
+              readOnly      = mount.read_only
+            }]
+
+            portMappings = [for port in container.port_mappings : {
+              containerPort = port.container_port
+              hostPort      = port.container_port
+              protocol      = port.protocol
+            }]
+
+            logConfiguration = {
+              logDriver = "awslogs"
+              options = {
+                awslogs-group         = module.ecs_service.log_groups[service_name].name
+                awslogs-region        = var.primary_region
+                awslogs-stream-prefix = "ecs"
+                mode                  = "non-blocking"
+              }
+            }
+
+            environment_hashes = [for name, value in container.environment_variables : {
+              name         = name
+              value_sha256 = sha256(value)
+            }]
+
+            secrets = [for name, value_from in container.secrets : {
+              name      = name
+              valueFrom = value_from
+            }]
+          }
+        }
+
+        task_cpu              = tostring(service.cpu)
+        task_memory           = tostring(service.memory)
+        cpu_architecture      = service.cpu_architecture
+        task_volumes          = [for name in sort(tolist(service.task_volumes)) : { name = name }]
+        ephemeral_storage_gib = service.ephemeral_storage_gib
+
         database_access             = service.database_access
         task_execution_kms_key_arns = sort(tolist(service.task_execution_kms_key_arns))
 

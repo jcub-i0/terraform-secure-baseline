@@ -50,6 +50,7 @@ section "Checking required local commands"
 require_command aws
 require_command terraform
 require_command jq
+require_command sha256sum
 require_command git
 
 success "Required commands are available"

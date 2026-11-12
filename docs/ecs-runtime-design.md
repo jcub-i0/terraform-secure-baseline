@@ -407,7 +407,7 @@ The runtime validator verifies:
 - exact live ECS service inventory;
 - service steady state and completed primary rollout;
 - compatible Fargate platform version;
-- canonical task definition remaining application-only;
+- canonical task definition matching the Terraform primary and generic sidecar inventory;
 - exact optional ECS-native health-check configuration and running application-container health (independent of GuardDuty and ALB checks);
 - digest-pinned application images, configured logging, exact compute-private task networking, exact ALB `ingress_public` placement, and conditional database/ALB relationships;
 - injected GuardDuty agent state on protected running tasks;
@@ -416,6 +416,71 @@ The runtime validator verifies:
 - Terraform-owned ECS operational alarms.
 
 For protected running tasks, the validator accepts the GuardDuty-injected container as either the exact `aws-gd-agent` name or an AWS-generated name beginning with `aws-guardduty-agent-`. It still requires exactly one GuardDuty agent container, requires that agent to be `RUNNING`, requires the canonical application container to remain valid, and rejects unexpected additional live containers.
+
+### M1 container inventory compatibility
+
+`ecs_service_configuration` retains its existing fields and adds `containers`, a
+deterministic map keyed by container name, plus `task_cpu`, `task_memory`,
+`cpu_architecture`, `task_volumes`, and `ephemeral_storage_gib`. The primary key
+is the service key; registration order is irrelevant. Container metadata uses
+ECS API field names for image, essential status, health checks, dependencies,
+logging, ports, mounts, resources, commands, entry point, root filesystem mode,
+and timeouts. Secret entries contain only `valueFrom` references. Environment
+values are represented by individual SHA-256 hashes in `environment_hashes`;
+the validator compares hashes without printing the values. Credentials belong
+in Secrets Manager/SSM references, not commands, health checks, or environment
+literals. Hashes are comparison metadata, not a secret-storage mechanism.
+
+The task-definition validator compares the entire named inventory, exact image
+digests and managed-ECR repository URLs, and all exposed container attributes.
+It rejects additional container fields as well as missing, extra, and duplicate
+containers. Mismatch diagnostics identify field names without dumping commands
+or environment data. CloudWatch ARN, KMS key, and retention are still validated
+once per service because all its containers use that same log group.
+
+Normalization is deliberately limited:
+
+- Absent optional arrays for environment, secrets, ports, dependencies, mounts,
+  `volumesFrom`, `systemControls`, and logging `secretOptions` equal empty arrays.
+  Nonempty unsupported capabilities still fail. AWS documents these as optional
+  arrays in [ContainerDefinition](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html)
+  and [LogConfiguration](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html),
+  and its [CLI response example](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_AWSCLI_EC2.html)
+  includes empty mounts and `volumesFrom`.
+- An absent container CPU reservation equals API `cpu: 0`; an absent root
+  filesystem flag equals `false`. Other resource settings and configured
+  timeouts are compared exactly. See the optional CPU semantics in
+  [ContainerDefinition](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html).
+- An omitted health-check `startPeriod` equals zero; all other configured health
+  fields remain exact, including command order. AWS defines the default start
+  period as off in [HealthCheck](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html).
+- A name-only task volume may include `host: {}` or `configuredAtLaunch: false`.
+  The pinned provider's [volume expansion](https://github.com/hashicorp/terraform-provider-aws/blob/v6.72.0/internal/service/ecs/task_definition.go#L911-L947)
+  can explicitly send the latter boolean. `true` is never normalized away.
+  A host path, EFS configuration,
+  or any other storage capability is rejected. AWS describes the empty host
+  volume default in [Volume](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_Volume.html).
+- Container names, dependencies, mounts, ports, environment names, secret names,
+  and volume names are compared without ordering; duplicates are preserved and
+  therefore rejected. Command and entry-point ordering remain significant.
+
+Explicit ephemeral storage must match exactly in `DescribeTaskDefinition`.
+An unset value must remain absent/null there; the default storage reported for
+a running task by `DescribeTasks` is a separate API representation and is not
+used for this comparison.
+
+Protected running tasks must contain exactly the configured inventory plus one
+injected GuardDuty agent. A completed nonessential init container may remain
+`STOPPED`; this compatibility check does not impose new sidecar lifecycle or
+health polling. Existing primary health, ALB, platform, IAM, and GuardDuty
+coverage checks remain in place. Single-container configurations use the same
+contract with one entry. Old saved outputs without the inventory fail closed
+and need to be updated through the owner's normal Terraform workflow.
+
+`scripts/tests/test-ecs-runtime-containers.sh` exercises production validation
+functions with mocked AWS responses and verifies each negative mutation's
+rejection reason. It runs in `tf-scans.yml`; baseline Terraform tests cover the
+output mapping. No live deployment is required by either test suite.
 
 GuardDuty coverage validation uses the workload detector only to call the GuardDuty coverage API. For enabled `production`/`development` clusters it requires exactly one matching ECS coverage record with:
 

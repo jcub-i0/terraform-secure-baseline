@@ -93,6 +93,11 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-ecs-native-health.sh
 
+      - name: Test ECS runtime container inventory
+        run: |
+          set -euo pipefail
+          bash scripts/tests/test-ecs-runtime-containers.sh
+
       - name: Test ECS release acceptance
         run: |
           set -euo pipefail
