@@ -360,8 +360,12 @@ run "reject_sidecar_environment_secret_collision" {
       api = merge(var.services.api, {
         sidecars = {
           scanner = merge(var.services.api.sidecars.scanner, {
-            environment_variables = { TOKEN = "must-not-shadow-a-secret" }
-            secrets               = { TOKEN = "arn:aws:ssm:us-east-1:123456789012:parameter/token" }
+            environment_variables = {
+              CONFIG = "dummy"
+            }
+            secrets = {
+              CONFIG = "arn:aws:ssm:us-east-1:123456789012:parameter/config"
+            }
           })
         }
       })
