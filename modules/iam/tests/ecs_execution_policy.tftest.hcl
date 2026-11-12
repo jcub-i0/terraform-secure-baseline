@@ -680,3 +680,52 @@ run "n5ca_accept_exact_ssm_and_kms_partition_arns" {
     error_message = "All three AWS partitions must retain exact SSM and KMS key scopes, including multi-Region keys."
   }
 }
+
+
+# M1-N5C-A1: Reject unsafe Secrets Manager IAM resource scopes.
+
+run "reject_secret_wildcard_resource" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_secret_arns = ["*"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "reject_secret_wildcard_suffix" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_secret_arns = [
+          "arn:aws:secretsmanager:us-east-1:123456789012:secret:app-*"
+        ]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "reject_secret_selector_in_iam" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_secret_arns = [
+          "arn:aws:secretsmanager:us-east-1:123456789012:secret:app-AbCdEf:password::"
+        ]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
