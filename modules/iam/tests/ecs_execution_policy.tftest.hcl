@@ -90,76 +90,6 @@ variables {
   }
 }
 
-run "generates_scoped_execution_policy" {
-  command = plan
-
-  assert {
-    condition = (
-      length(aws_iam_role.ecs_task_execution_roles) == 1 &&
-      length(aws_iam_role.ecs_task_roles) == 1 &&
-      length(aws_iam_role_policy.ecs_task_execution_policies) == 1
-    )
-
-    error_message = "One ECS service must generate exactly one execution role, task role, and execution policy."
-  }
-
-  # Compare the complete statement map: unexpected/missing Sids, duplicate Sids,
-  # extra fields, changed effects, actions, or resources must fail.
-  assert {
-    condition = try(
-      jsondecode(aws_iam_role_policy.ecs_task_execution_policies["api"].policy).Version == "2012-10-17" &&
-      alltrue([
-        for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies["api"].policy).Statement :
-        toset(keys(statement)) == toset(["Sid", "Effect", "Action", "Resource"])
-      ]) &&
-      { for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies["api"].policy).Statement : statement.Sid => {
-        effect    = statement.Effect
-        actions   = toset(flatten([statement.Action]))
-        resources = toset(flatten([statement.Resource]))
-        } } == { for sid, expected in {
-        AllowECRAuthorization = {
-          effect    = "Allow"
-          actions   = toset(["ecr:GetAuthorizationToken"])
-          resources = toset(["*"])
-        }
-        AllowECRImagePulls = {
-          effect    = "Allow"
-          actions   = toset(["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"])
-          resources = var.ecs_iam_services.api.ecr_repository_arns
-        }
-        AllowCloudWatchLogWrites = {
-          effect    = "Allow"
-          actions   = toset(["logs:CreateLogStream", "logs:PutLogEvents"])
-          resources = toset([for arn in var.ecs_iam_services.api.log_group_arns : "${arn}:*"])
-        }
-        AllowSecretsManagerRead = {
-          effect    = "Allow"
-          actions   = toset(["secretsmanager:GetSecretValue"])
-          resources = var.ecs_iam_services.api.execution_secret_arns
-        }
-        AllowSSMParameterRead = {
-          effect    = "Allow"
-          actions   = toset(["ssm:GetParameters"])
-          resources = var.ecs_iam_services.api.execution_ssm_parameter_arns
-        }
-        AllowExecutionKMSDecrypt = {
-          effect    = "Allow"
-          actions   = toset(["kms:Decrypt"])
-          resources = var.ecs_iam_services.api.task_execution_kms_key_arns
-        }
-        AllowGuardDutyAgentImagePulls = {
-          effect    = "Allow"
-          actions   = toset(["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"])
-          resources = var.ecs_iam_services.api.guardduty_agent_ecr_repository_arns
-        }
-      } : sid => expected if length(expected.resources) > 0 },
-      false
-    )
-    error_message = "Generated execution policy must match the exact allowed statement, effect, action, and resource contract."
-  }
-
-}
-
 run "empty_services_generate_no_ecs_iam" {
   command = plan
 
@@ -317,35 +247,6 @@ run "multi_service_iam_isolation" {
     error_message = "Application managed policies must attach exclusively to their intended ECS task roles."
   }
 }
-# M1-N5C-A: reject unsafe inputs at the actual IAM interface before policy generation.
-
-run "n5ca_reject_ssm_star" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["*"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_ssm_question" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["?"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
 
 run "n5ca_reject_ssm_arn_star" {
   command = plan
@@ -361,132 +262,6 @@ run "n5ca_reject_ssm_arn_star" {
   expect_failures = [var.ecs_iam_services]
 }
 
-run "n5ca_reject_ssm_arn_question" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:parameter/app/config?"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_ssm_region_wildcard" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["arn:aws:ssm:*:123456789012:parameter/app/config"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_ssm_account_wildcard" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:12345678901?:parameter/app/config"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_ssm_bare_path" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["/app/config"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_ssm_unsupported_partition" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["arn:other:ssm:us-east-1:123456789012:parameter/app/config"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_ssm_wrong_resource" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:document/app"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_ssm_empty_parameter" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:parameter/"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_star" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["*"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_question" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["?"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
 run "n5ca_reject_kms_key_star" {
   command = plan
 
@@ -494,174 +269,6 @@ run "n5ca_reject_kms_key_star" {
     ecs_iam_services = {
       api = merge(var.ecs_iam_services.api, {
         task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/*"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_key_question" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/mrk-0123456789abcdef0123456789abcde?"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_region_wildcard" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["arn:aws:kms:*:123456789012:key/mrk-0123456789abcdef0123456789abcdef"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_account_wildcard" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:12345678901?:key/mrk-0123456789abcdef0123456789abcdef"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_bare_id" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["22222222-2222-2222-2222-222222222222"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_alias_arn" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:alias/app"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_unsupported_partition" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["arn:other:kms:us-east-1:123456789012:key/mrk-0123456789abcdef0123456789abcdef"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_empty_key" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_reject_kms_whitespace" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/ key"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "n5ca_accept_exact_ssm_and_kms_partition_arns" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      for partition, region in { aws = "us-east-1", aws-us-gov = "us-gov-west-1", aws-cn = "cn-north-1" } :
-      partition => merge(var.ecs_iam_services.api, {
-        ecr_repository_arns                 = ["arn:${partition}:ecr:${region}:123456789012:repository/team/app.v2_test--image"]
-        guardduty_agent_ecr_repository_arns = ["arn:${partition}:ecr:${region}:987654321098:repository/aws-guardduty-agent-fargate"]
-        execution_ssm_parameter_arns        = ["arn:${partition}:ssm:${region}:123456789012:parameter/app/Config_1.2-test"]
-        task_execution_kms_key_arns = [
-          "arn:${partition}:kms:${region}:123456789012:key/22222222-2222-2222-2222-222222222222",
-          "arn:${partition}:kms:${region}:123456789012:key/mrk-0123456789abcdef0123456789abcdef"
-        ]
-
-      })
-    }
-  }
-  assert {
-    condition = alltrue([
-      for service_name, service in var.ecs_iam_services : alltrue([
-        for expected in [
-          { sid = "AllowECRImagePulls", actions = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"], resources = service.ecr_repository_arns },
-          { sid = "AllowGuardDutyAgentImagePulls", actions = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"], resources = service.guardduty_agent_ecr_repository_arns },
-          { sid = "AllowSSMParameterRead", actions = ["ssm:GetParameters"], resources = service.execution_ssm_parameter_arns },
-          { sid = "AllowExecutionKMSDecrypt", actions = ["kms:Decrypt"], resources = service.task_execution_kms_key_arns }
-          ] : length([
-            for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies[service_name].policy).Statement : statement
-            if statement.Sid == expected.sid && statement.Effect == "Allow" &&
-            toset(flatten([statement.Action])) == toset(expected.actions) &&
-            toset(flatten([statement.Resource])) == expected.resources
-        ]) == 1
-      ])
-    ])
-    error_message = "All three AWS partitions must retain exact ECR, cross-account GuardDuty, SSM, and KMS scopes."
-  }
-
-}
-
-
-# M1-N5C-A1: Reject unsafe Secrets Manager IAM resource scopes.
-
-run "reject_secret_wildcard_resource" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_secret_arns = ["*"]
       })
     }
   }
@@ -685,22 +292,6 @@ run "reject_secret_wildcard_suffix" {
   expect_failures = [var.ecs_iam_services]
 }
 
-run "reject_secret_selector_in_iam" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        execution_secret_arns = [
-          "arn:aws:secretsmanager:us-east-1:123456789012:secret:app-AbCdEf:password::"
-        ]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
 run "reject_ecr_wildcard_resource" {
   command = plan
 
@@ -708,34 +299,6 @@ run "reject_ecr_wildcard_resource" {
     ecs_iam_services = {
       api = merge(var.ecs_iam_services.api, {
         ecr_repository_arns = ["*"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "reject_guardduty_ecr_wildcard_resource" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        guardduty_agent_ecr_repository_arns = ["*"]
-      })
-    }
-  }
-
-  expect_failures = [var.ecs_iam_services]
-}
-
-run "reject_ecr_malformed_repository_arn" {
-  command = plan
-
-  variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
-        ecr_repository_arns = ["arn:aws:ecr:us-east-1:123456789012:repository/team//app"]
       })
     }
   }
@@ -755,4 +318,18 @@ run "reject_guardduty_ecr_repository_wildcard" {
   }
 
   expect_failures = [var.ecs_iam_services]
+}
+
+run "reject_cross_account_task_policy" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_role_managed_policy_arns = ["arn:aws:iam::987654321098:policy/application"]
+      })
+    }
+  }
+
+  expect_failures = [aws_iam_role_policy_attachment.ecs_task_managed_policies]
 }

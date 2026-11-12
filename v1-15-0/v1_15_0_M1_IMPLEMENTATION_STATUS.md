@@ -1,8 +1,8 @@
 # v1.15.0 M1 — Implementation and Acceptance Status
 
-**Status: In progress — implementation complete, acceptance pending.** N1/N2, N3, N4, N5A, N5B, N5C-A, and N5C-A1 are implemented. The complete PR received independent review at `afdbda0edf314c135d0c24a82750756ed560a0a7` with disposition **ACCEPT WITH DEFERRED ITEMS** and no code blockers. N5D targeted corrections are recorded below; correction review, live AWS qualification, owner acceptance, and merge remain outstanding. M1 is not fully accepted.
+**Status: In progress — implementation complete, acceptance pending.** N1/N2, N3, N4, N5A, N5B, N5C-A, and N5C-A1 are implemented. The complete PR received independent review at `afdbda0edf314c135d0c24a82750756ed560a0a7` with disposition **ACCEPT WITH DEFERRED ITEMS** and no code blockers. N5D corrections were committed at `26d180d6`. The subsequent validation/testing simplification in section G is locally validated in an isolated worktree and pending owner review; live AWS qualification, owner acceptance, and merge remain outstanding. M1 is not fully accepted.
 
-**Implementation:** [PR #967](https://github.com/jcub-i0/terraform-secure-baseline/pull/967), branch `feat/v1.15.0-m1-sidecars`, N5C-B implementation evidence at `89436e6b4f455fad5dd71a5190e52f41dd77837b`; full review and N5D starting HEAD `afdbda0edf314c135d0c24a82750756ed560a0a7`. The PR remains open and draft. Section B retains historical evidence; section F describes uncommitted N5D changes, not a future acceptance commit.
+**Implementation:** [PR #967](https://github.com/jcub-i0/terraform-secure-baseline/pull/967), branch `feat/v1.15.0-m1-sidecars`, N5C-B implementation evidence at `89436e6b4f455fad5dd71a5190e52f41dd77837b`; full review and N5D starting HEAD `afdbda0edf314c135d0c24a82750756ed560a0a7`. The PR remains open and draft. Sections B and F retain historical evidence for committed implementation. Section G records the separate uncommitted simplification; it does not incorporate the owner checkout's R02 length-check follow-up.
 
 ## A. Scope delivered
 
@@ -37,7 +37,7 @@ Local evidence location: `/tmp/m1-n5ca-evidence/validation-summary.json`, SHA-25
 
 Repository-verifiable coverage includes:
 
-- [ECS native suites](../modules/ecs_service/tests/): multi-container behavior, invalid configurations, legacy compatibility, platform compatibility, and secret selectors.
+- [ECS native suites](../modules/ecs_service/tests/): generated multi-container behavior and secret propagation, legacy compatibility, and representative architectural/security rejection cases.
 - [IAM execution-policy suite](../modules/iam/tests/ecs_execution_policy.tftest.hcl), [baseline IAM derivation](../baseline/tests/ecs_iam_derivation.tftest.hcl), and [runtime inventory](../baseline/tests/ecs_runtime_inventory.tftest.hcl).
 - Environment input propagation in [dev](../environments/dev/tests/ecs_input_propagation.tftest.hcl), [staging](../environments/staging/tests/ecs_input_propagation.tftest.hcl), and [prod](../environments/prod/tests/ecs_input_propagation.tftest.hcl).
 - Offline [runtime container checks](../scripts/tests/test-ecs-runtime-containers.sh), [execution-policy checks](../scripts/tests/test-ecs-execution-policy.py), [native health checks](../scripts/tests/test-ecs-native-health.sh), and [release-acceptance checks](../scripts/tests/test-ecs-release-acceptance.sh). These fixtures establish validator behavior, not live deployments.
@@ -75,7 +75,7 @@ The static-analysis workflow uses Checkov `--soft-fail` and validates report int
 
 All gates below remain outstanding:
 
-1. Review N5D corrections and any subsequent changes at the intended acceptance commit, including disposition of deferred findings; the complete PR review at `afdbda0` does not certify later changes.
+1. Review the validation/testing simplification and any subsequent changes at the intended acceptance commit; historical reviews do not certify this uncommitted cleanup.
 2. Explicitly approved synthetic AWS deployment testing with bounded scope and cost.
 3. Positive sidecar-readiness evidence, including observed `HEALTHY` dependency behavior before primary startup.
 4. Negative sidecar health/dependency behavior demonstrating the expected failure or blocked startup.
@@ -86,9 +86,9 @@ All gates below remain outstanding:
 
 The original [M1 roadmap acceptance criteria](./ROADMAP_v1_15_0.md#milestones) remain unchanged. Documentation closeout does not authorize deployment, acceptance, or merge.
 
-## F. N5D — Targeted review corrections
+## F. N5D — Historical targeted review corrections
 
-These changes follow the independent review at `afdbda0edf314c135d0c24a82750756ed560a0a7`. They were locally validated before commit; commit-level CI, focused independent recheck, and final owner acceptance remain separate gates.
+These corrections followed the independent review at `afdbda0edf314c135d0c24a82750756ed560a0a7` and were committed at `26d180d6ca7c572742fcab7654c79733f899cf4b`. The table and precommit evidence below describe that checkpoint. Section G supersedes the custom AWS capability checks and repetitive testing approach; this history does not prescribe retaining them.
 
 | Finding | Disposition |
 |---|---|
@@ -96,10 +96,10 @@ These changes follow the independent review at `afdbda0edf314c135d0c24a82750756e
 | R02 — direct IAM ECR scope | Implemented: both application and GuardDuty pull inputs require exact repository ARNs in `aws`, `aws-us-gov`, or `aws-cn`; cross-account repositories remain valid. ECR authorization is unchanged. |
 | R03 — generated policy assertions | Implemented: existing policy tests compare complete statement identities, effects, action sets, and resource sets, including optional GuardDuty grants. |
 | R04 — integration fixtures | Implemented: existing root fixtures preserve nonempty nested dependencies, nondefault ranks and health timings; the existing rendering fixture checks positive `COMPLETE`/`SUCCESS` prerequisites alongside `START`/`HEALTHY`. |
-| R05 — optional simplification | Deferred. No current correctness defect was established that requires a broad validation refactor or test consolidation. |
+| R05 — optional simplification | Deferred at the N5D checkpoint; the owner subsequently authorized the isolated cleanup recorded in section G. |
 | R06 — diff whitespace | Corrected the two added trailing-whitespace lines; runtime behavior is unchanged. |
 
-Local validation passed on the uncommitted N5D patch: **185 native runs** (ECS 103, IAM 32, baseline 41, dev/staging/prod 3 each) and **19 offline IAM unittest methods**. Terraform formatting, Markdown lint, local links/fragments, the new AWS sizing link, shell syntax, and the effective cumulative diff from PR merge base to working tree passed. The committed-only `origin/main...HEAD` diff still contains R06's whitespace until these fixes are committed.
+Historical local validation passed before N5D was committed: **185 native runs** (ECS 103, IAM 32, baseline 41, dev/staging/prod 3 each) and **19 offline IAM unittest methods**. Terraform formatting, Markdown lint, local links/fragments, the new AWS sizing link, shell syntax, and the effective cumulative diff from PR merge base to working tree passed. The fixes are included in `26d180d6`; its cumulative committed PR diff is whitespace-clean.
 
 Isolated before/after checks established defect detection:
 
@@ -108,4 +108,24 @@ Isolated before/after checks established defect detection:
 - Adding `ecr:DeleteRepository` to a temporary policy generator passed all 28 old IAM runs but failed three strengthened assertions in the updated suite.
 - Temporarily dropping the root's optional sidecar health timeout passed the old propagation fixture and failed the updated fixture. Replacing sidecar completion conditions with `START` passed the old rendering fixture and failed the updated fixture. Removing a required nested dependency attribute is rejected by both versions, preserving existing N5A protection.
 
-Evidence is in the temporary local directory `/tmp/m1-n5d-ofii8387/` (`validation-summary.json`, native JUnit/logs, and before/after probe logs). Mutated copies were restored; production resource definitions were never edited. Retain required evidence with acceptance. GitHub CI at the starting HEAD does not cover this uncommitted patch; acceptance still requires section E's gates.
+Evidence is in the temporary local directory `/tmp/m1-n5d-ofii8387/` (`validation-summary.json`, native JUnit/logs, and before/after probe logs). Mutated copies were restored; production resource definitions were never edited. Retain required evidence with acceptance. The final N5D recheck confirmed module, static-analysis, and documentation CI passed for `26d180d6`; Terraform Plan was skipped for the draft PR. That evidence does not cover the later cleanup; section E remains outstanding.
+
+## G. Validation and testing simplification — pending owner review
+
+This owner-authorized cleanup starts from committed `26d180d6` on temporary branch `cleanup/v1.15.0-m1-validation`, in `/tmp/terraform-secure-baseline-m1-simplify`. The original checkout and its four uncommitted R02/documentation files are preserved. The stricter repository-name length follow-up was not incorporated: AWS name limits are not a least-privilege control. The IAM module still rejects wildcard ECR, secret, parameter, and KMS resources.
+
+The governing standard is [validation ownership](../docs/ecs-runtime-design.md#validation-ownership): Terraform enforces security and composition; providers/AWS own routine parameter validation. The cleanup deletes CPU/memory and platform matrices, routine numeric/name/health checks, repeated baseline IAM checks, and redundant primary/sidecar checks. Secret normalization, production/retirement policies, renderers, interfaces, provider locks, CI, and runtime validators are unchanged.
+
+| Metric | Committed M1 | Cleanup |
+|---|---:|---:|
+| Native test files | 11 | 9 |
+| Native test lines | 4,984 | 2,501 |
+| Native runs | 185 | 42 |
+| ECS `services` lines / validation blocks | 709 / 27 | 306 / 8 |
+| Baseline `ecs_services` lines / validation blocks | 472 / 23 | 228 / 7 |
+
+The suite retains legacy fixed/autoscaled rendering, multi-container health and all dependency conditions, exact secret propagation and normalization, per-service IAM isolation and full policy statement comparisons, runtime-inventory output, and all three typed environment-root fixtures. Equivalent malformed-input permutations and AWS capability/boundary tests were removed. Four focused tests cover existing collision and managed-policy restrictions at the boundaries retained by this refactor; no new validation policy was introduced.
+
+Local validation passed: ECS 19, IAM 8, baseline 6, and dev/staging/prod 3 native runs each; 19 offline IAM tests; 115 runtime-inventory, 18 native-health, 17 release-acceptance, and 13 task-role scenarios. Backend-disabled initialization and Terraform validation passed for all six roots using existing lockfiles. Twelve before/after positive fixtures produced identical planned address inventories, seven task definitions (complete direct-module values and baseline rendering fields), and two execution policies. Input types/defaults and all resource definitions remain unchanged.
+
+Evidence is retained temporarily in `/tmp/m1-simplify-evidence-c7ecrg7h/`. This is local evidence, not a live-drift or AWS-readiness claim. No remote workflow, authenticated AWS plan, deployment, state operation, or commit was performed. The isolated patch awaits owner review and subsequent commit-level CI; final Terraform Plan and live qualification remain outstanding.

@@ -199,15 +199,15 @@ Each task definition uses separate per-service task execution and application ta
 
 Sidecars have digest-pinned images, optional resource settings, health checks, command/entry-point overrides, port mappings, root-filesystem mode, mounts, and start/stop timeouts. Primary command/entry-point and per-container resource overrides are not exposed. Task CPU/memory cover all containers; configured sidecar CPU and memory reservations must leave capacity within those task limits. Containers share task networking and the service's encrypted CloudWatch log group, with `awslogs` configured for each container. ALB integration continues to target only the primary.
 
-Primary-container dependencies may target sidecars. Sidecars may target only other sidecars with strictly lower `dependency_rank`; they cannot target the primary. `START`, `HEALTHY`, `COMPLETE`, and `SUCCESS` are supported, with `HEALTHY` requiring a prerequisite health check and `COMPLETE`/`SUCCESS` requiring a nonessential prerequisite. Rank validation prevents cycles and does not itself order containers without a `depends_on` edge. Shared name-only task volumes and canonical absolute mount paths are supported; EFS and host-path configuration are not. Optional task ephemeral storage and timeouts are bounded and platform-gated. The [module reference](../modules/ecs_service/README.md#multi-container-configuration) lists the exact fields, defaults, and limits.
+Primary-container dependencies may target sidecars. Sidecars may target only other sidecars with strictly lower `dependency_rank`; they cannot target the primary. `START`, `HEALTHY`, `COMPLETE`, and `SUCCESS` are supported, with `HEALTHY` requiring a prerequisite health check and `COMPLETE`/`SUCCESS` requiring a nonessential prerequisite. Rank validation prevents cycles and does not itself order containers without a `depends_on` edge. Shared name-only task volumes and canonical absolute mount paths are supported; EFS and host-path configuration are not. The provider and ECS own storage/timeout bounds and platform compatibility. The [module reference](../modules/ecs_service/README.md#multi-container-configuration) lists the exact fields, defaults, and limits.
 
 The optional `ecs_services.<service>.health_check` renders a primary-container `healthCheck` only when configured. Omitting it leaves that field absent and adds no live primary-health polling. When enabled, `validate-ecs-runtime.sh` checks the exact task-definition fields and verifies that running primary containers report `HEALTHY`, independently of GuardDuty and ALB ingress. `UNHEALTHY` fails immediately and `UNKNOWN` receives bounded startup rechecks (13 attempts, five seconds apart by default; configurable through `ECS_NATIVE_HEALTH_MAX_ATTEMPTS` and `ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS`). A configured check on a service intentionally at zero desired capacity is reported as **skipped**, not proven healthy. Sidecars accept the same optional health-check object; the validator verifies their definitions but does not independently poll sidecar health or lifecycle. ALB target health remains separate, and neither signal proves database queries or business behavior.
 
 The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
 
-Health command validation requires `CMD` plus an executable (and optional
-arguments), or `CMD-SHELL` plus exactly one shell command, with no empty/null
-elements. The image must contain the command and any required shell. Whole-number
+ECS health checks use `CMD` plus an executable (and optional arguments), or
+`CMD-SHELL` plus a shell command. ECS owns command syntax and timing validation;
+the image must contain the command and any required shell. Whole-number
 limits/defaults are interval 5–300/30 seconds, timeout 2–60/5 seconds, retries
 1–10/3 and start period 0–300/0 seconds. Native-health polling accepts 1–60 attempts
 and 0–60 seconds between observations. It runs before strict service rollout
@@ -217,6 +217,26 @@ The shared task-describe helper batches requests for both native-health and
 GuardDuty checks. The [module reference](../modules/ecs_service/README.md) details
 rendering and validation; the [quickstart](quickstart.md#v1120-opt-in-configuration-and-upgrade)
 provides adoption examples.
+
+## Validation ownership
+
+Terraform defines secure infrastructure and enforces architectural policies; it does not reproduce AWS API validation. New exceptions need a concrete security or composition benefit.
+
+| Responsibility | Owner |
+|---|---|
+| Required attributes and types | Typed Terraform module and environment schemas |
+| AWS ranges, naming, formats, CPU/memory sizes and platform features | Provider and AWS APIs |
+| Immutable images, dependency integrity, mount safety and IAM scope | Terraform modules |
+| Production availability, rollout capacity and retirement | Canonical baseline |
+| Generated task definitions, IAM policies and input propagation | Focused native Terraform regressions |
+| Live configuration and security | Existing runtime validators |
+| Actual readiness and executable behavior | Explicit AWS qualification |
+
+The ECS module retains digest pinning for every container, distinct primary/sidecar identities, sidecar environment/secret collision prevention, ALB scaling prerequisites, and unique task ports. Dependency checks retain existing distinct targets, valid conditions, strictly descending sidecar ranks, health checks for `HEALTHY`, and nonessential prerequisites for `COMPLETE`/`SUCCESS`. Declared volumes and unique canonical non-root mount paths prevent accidental root overlays and ambiguous destinations. Readiness maps still connect services to their IAM and networking dependencies.
+
+The baseline retains scaling/retirement capacity bounds, target-metric presence, ALB ingress coupling, rollout maximum capacity, production minimum capacity, sidecar digest readiness, and collision checks before secret maps are merged. It delegates immutable reference enforcement to ECS and exact execution-policy resource validation to IAM. The IAM module retains exact non-wildcard ECR, Secrets Manager, SSM and KMS scopes and same-account/AWS-managed task-policy restrictions. Existing ECR repository naming validation remains at the ECR module boundary.
+
+Routine scalar and capability checks no longer have parallel HCL validators: [AWS rejects incompatible task CPU/memory](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html), the locked [provider validates task storage and architecture](https://github.com/hashicorp/terraform-provider-aws/blob/v6.72.0/internal/service/ecs/task_definition.go), and ECS specifies [container](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html) and [health-check](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html) limits. Some errors therefore occur during provider/API operations rather than custom variable validation. Mocked offline plans do not establish API acceptance. Empty command arguments are passed through, and ranks need only be numeric with strictly decreasing dependency edges; neither relaxation changes rendering or executable readiness guarantees.
 
 ## Deployment health
 

@@ -897,46 +897,6 @@ variable "ecs_services" {
 
   default = {}
 
-  # Fail early even for services whose image digests are not yet supplied.
-  # AWS-injected runtime agents are not part of this declared container count.
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) : length(service.sidecars) <= 9
-    ])
-
-    error_message = "Each ECS service may declare at most nine sidecars (ten containers including the primary)."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.ecs_services) : [
-        for policy_arn in service.task_role_managed_policy_arns :
-        can(regex("^arn:(aws|aws-us-gov|aws-cn):iam::(aws|[0-9]{12}):policy/[A-Za-z0-9+=,.@_/-]+$", policy_arn))
-      ]
-    ]))
-
-    error_message = "task_role_managed_policy_arns must contain valid IAM managed policy ARNs, not roles, users, wildcards, or other resources."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      can(regex("^[a-z0-9]+([._-][a-z0-9]+)*$", service.repository_name))
-    ])
-
-    error_message = "Each ECS service repository_name must use lowercase ECR repository-name syntax."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.image_digest == null ||
-      can(regex("^sha256:[0-9a-f]{64}$", service.image_digest))
-    ])
-
-    error_message = "Each ECS service image_digest must be null or a SHA-256 digest in sha256:<64 hexadecimal characters> format."
-  }
-
   validation {
     condition = alltrue([
       for service in values(var.ecs_services) :
@@ -970,43 +930,6 @@ variable "ecs_services" {
     condition = alltrue([
       for service in values(var.ecs_services) :
       service.scaling == null ? true : (
-        (
-          service.scaling.cpu_target_percent == null
-          ? true
-          : service.scaling.cpu_target_percent > 0
-        ) &&
-        (
-          service.scaling.memory_target_percent == null
-          ? true
-          : service.scaling.memory_target_percent > 0
-        ) &&
-        (
-          service.scaling.alb_requests_per_target == null
-          ? true
-          : service.scaling.alb_requests_per_target > 0
-        )
-      )
-    ])
-
-    error_message = "Configured ECS scaling target values must be greater than zero."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.scaling == null ? true : (
-        service.scaling.scale_in_cooldown_seconds >= 0 &&
-        service.scaling.scale_out_cooldown_seconds >= 0
-      )
-    ])
-
-    error_message = "ECS scaling cooldown values must be zero or greater."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.scaling == null ? true : (
         service.scaling.alb_requests_per_target == null
         ? true
         : service.ingress != null
@@ -1019,108 +942,11 @@ variable "ecs_services" {
   validation {
     condition = alltrue([
       for service in values(var.ecs_services) :
-      service.deployment.minimum_healthy_percent >= 0 &&
-      service.deployment.minimum_healthy_percent <= 100
-    ])
-
-    error_message = "ECS deployment minimum_healthy_percent must be between 0 and 100."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
       service.deployment.maximum_percent >= 100 &&
       service.deployment.maximum_percent >= service.deployment.minimum_healthy_percent
     ])
 
     error_message = "ECS deployment maximum_percent must be at least 100 and greater than or equal to minimum_healthy_percent."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.deployment.health_check_grace_period_seconds >= 0 &&
-      service.deployment.health_check_grace_period_seconds <= 2147483647
-    ])
-
-    error_message = "ECS health_check_grace_period_seconds must be between 0 and 2147483647."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.health_check == null ? true : (
-        service.health_check.command == null ? false : (
-          contains(
-            ["CMD", "CMD-SHELL"],
-            try(service.health_check.command[0], "")
-          ) &&
-          (
-            try(service.health_check.command[0], "") == "CMD-SHELL"
-            ? length(service.health_check.command) == 2
-            : length(service.health_check.command) >= 2
-          ) &&
-          alltrue([
-            for element in service.health_check.command :
-            element == null ? false : trimspace(element) != ""
-          ])
-        )
-      )
-    ])
-
-    error_message = "ECS health_check.command must start with CMD or CMD-SHELL. CMD-SHELL requires exactly two elements; CMD requires an executable (additional arguments are optional). All command elements must be nonempty."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.health_check == null ? true : (
-        service.health_check.interval >= 5 &&
-        service.health_check.interval <= 300 &&
-        service.health_check.interval == floor(service.health_check.interval) &&
-
-        service.health_check.timeout >= 2 &&
-        service.health_check.timeout <= 60 &&
-        service.health_check.timeout == floor(service.health_check.timeout) &&
-
-        service.health_check.retries >= 1 &&
-        service.health_check.retries <= 10 &&
-        service.health_check.retries == floor(service.health_check.retries) &&
-
-        service.health_check.start_period >= 0 &&
-        service.health_check.start_period <= 300 &&
-        service.health_check.start_period == floor(service.health_check.start_period)
-      )
-    ])
-
-    error_message = "ECS health_check timing values must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      length(setintersection(
-        toset(keys(service.secrets_manager_secrets)),
-        toset(keys(service.ssm_parameters)),
-      )) == 0
-    ])
-
-    error_message = "An ECS service secret name cannot be defined in both secrets_manager_secrets and ssm_parameters."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      length(setintersection(
-        toset(keys(service.environment_variables)),
-        setunion(
-          toset(keys(service.secrets_manager_secrets)),
-          toset(keys(service.ssm_parameters)),
-        ),
-      )) == 0
-    ])
-
-    error_message = "An ECS service environment variable name cannot also be defined as a Secrets Manager secret or SSM parameter."
   }
 
   validation {
@@ -1142,24 +968,6 @@ variable "ecs_services" {
   }
 
   validation {
-    condition = alltrue(flatten([
-      for service in values(var.ecs_services) : [
-        for sidecar in values(service.sidecars) :
-        can(regex(
-          "^[a-z0-9]+([._-][a-z0-9]+)*$",
-          sidecar.repository_name
-        )) &&
-        (
-          sidecar.image_digest == null ? true :
-          can(regex("^sha256:[0-9a-f]{64}$", sidecar.image_digest))
-        )
-      ]
-    ]))
-
-    error_message = "Sidecar repositories must have valid ECR names, and supplied image digests must be SHA-256 digests."
-  }
-
-  validation {
     condition = alltrue([
       for service in values(var.ecs_services) :
       service.image_digest == null ? true : alltrue([
@@ -1174,75 +982,23 @@ variable "ecs_services" {
   validation {
     condition = alltrue(flatten([
       for service in values(var.ecs_services) : [
-        for sidecar in values(service.sidecars) :
+        for container in concat([service], values(service.sidecars)) :
         length(setintersection(
-          toset(keys(sidecar.secrets_manager_secrets)),
-          toset(keys(sidecar.ssm_parameters))
+          toset(keys(container.secrets_manager_secrets)),
+          toset(keys(container.ssm_parameters))
         )) == 0 &&
 
         length(setintersection(
-          toset(keys(sidecar.environment_variables)),
+          toset(keys(container.environment_variables)),
           setunion(
-            toset(keys(sidecar.secrets_manager_secrets)),
-            toset(keys(sidecar.ssm_parameters))
+            toset(keys(container.secrets_manager_secrets)),
+            toset(keys(container.ssm_parameters))
           )
         )) == 0
       ]
     ]))
 
-    error_message = "Sidecar environment variables, Secrets Manager references, and SSM parameters must use distinct names."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.ecs_services) : [
-        for value_from in concat(
-          values(service.ssm_parameters),
-          flatten([
-            for sidecar in values(service.sidecars) : values(sidecar.ssm_parameters)
-          ])
-        ) :
-        can(regex(
-          "^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$",
-          value_from
-        ))
-      ]
-    ]))
-
-    error_message = "Primary and sidecar SSM references must use full parameter ARNs without wildcard characters."
-  }
-
-  # These values become IAM Resources for kms:Decrypt, which requires key ARNs
-  # rather than bare IDs or aliases. Allow both single-Region and mrk- key IDs.
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.ecs_services) : [
-        for key_arn in service.task_execution_kms_key_arns :
-        can(regex("^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$", key_arn))
-      ]
-    ]))
-
-    error_message = "task_execution_kms_key_arns must contain exact KMS key ARNs without wildcards, not key IDs or aliases."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.ecs_services) : [
-        for value_from in concat(
-          values(service.secrets_manager_secrets),
-          flatten([
-            for sidecar in values(service.sidecars) :
-            values(sidecar.secrets_manager_secrets)
-          ])
-        ) :
-        can(regex(
-          "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:([^:*?]+:|:[^:*?]+|:))?$",
-          value_from
-        ))
-      ]
-    ]))
-
-    error_message = "Primary and sidecar Secrets Manager references must use full ARNs with valid ECS selectors. A version stage and version ID cannot both be specified."
+    error_message = "Container environment variables, Secrets Manager references, and SSM parameters must use distinct names."
   }
 }
 

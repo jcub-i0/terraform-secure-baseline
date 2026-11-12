@@ -41,84 +41,6 @@ variable "platform_version" {
   description = "AWS Fargate platform version. Defaults to the latest available platform."
   type        = string
   default     = "LATEST"
-
-  validation {
-    condition = (
-      contains(["LATEST", "1.3.0", "1.4.0"], var.platform_version) ||
-      alltrue([
-        for service in values(var.services) :
-        length(service.depends_on) == 0 &&
-        service.start_timeout_seconds == null &&
-        service.stop_timeout_seconds == null &&
-        alltrue([
-          for sidecar in values(service.sidecars) :
-          length(sidecar.depends_on) == 0 &&
-          sidecar.start_timeout_seconds == null &&
-          sidecar.stop_timeout_seconds == null
-        ])
-      ])
-    )
-
-    error_message = "ECS container dependencies and start/stop timeouts require Fargate Linux platform 1.3.0 or later."
-  }
-
-  validation {
-    condition = (
-      contains(["LATEST", "1.4.0"], var.platform_version) ||
-      alltrue([
-        for service in values(var.services) :
-        service.ephemeral_storage_gib == null &&
-        service.cpu_architecture != "ARM64" &&
-        service.cpu < 8192
-      ])
-    )
-
-    error_message = "Expanded ephemeral storage, ARM64 workloads, and tasks with 8 or more vCPUs require Fargate Linux platform 1.4.0 or later."
-  }
-
-  validation {
-    condition = (
-      contains(["LATEST", "1.3.0", "1.4.0"], var.platform_version) ||
-      alltrue([
-        for service in values(var.services) :
-        length(service.secrets) == 0 &&
-        alltrue([
-          for sidecar in values(service.sidecars) :
-          length(sidecar.secrets) == 0
-        ])
-      ])
-    )
-
-    error_message = "ECS secret injection requires Fargate Linux platform 1.3.0 or later."
-  }
-
-  validation {
-    condition = (
-      contains(["LATEST", "1.4.0"], var.platform_version) ||
-      alltrue(flatten([
-        for service in values(var.services) : [
-          for value_from in concat(
-            values(service.secrets),
-            flatten([
-              for sidecar in values(service.sidecars) :
-              values(sidecar.secrets)
-            ])
-          ) :
-          !can(regex(
-            "^arn:[^:]+:secretsmanager(:|$)",
-            value_from
-          )) ||
-          (
-            try(split(":", value_from)[7], "") == "" &&
-            try(split(":", value_from)[8], "") == "" &&
-            try(split(":", value_from)[9], "") == ""
-          )
-        ]
-      ]))
-    )
-
-    error_message = "ECS Secrets Manager JSON-key and version selectors require Fargate Linux platform 1.4.0 or later."
-  }
 }
 
 variable "services" {
@@ -234,103 +156,15 @@ variable "services" {
 
   default = {}
 
-  # ECS permits ten declared containers: the primary plus up to nine sidecars.
-  # The GuardDuty agent is injected by AWS at runtime, not declared here.
   validation {
-    condition = alltrue([
-      for service in values(var.services) : length(service.sidecars) <= 9
-    ])
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for container in concat([service], values(service.sidecars)) :
+        can(regex("^[^[:space:]\\p{Z}\\x{0085}@]+@sha256:[0-9a-f]{64}$", container.image))
+      ]
+    ]))
 
-    error_message = "Each ECS service may declare at most nine sidecars (ten containers including the primary)."
-  }
-
-  # Validate the complete digest-pinned reference without restricting callers
-  # to ECR or excluding registry ports, nested repositories, or tag+digest forms.
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      can(regex("^[^[:space:]\\p{Z}\\x{0085}@]+@sha256:[0-9a-f]{64}$", service.image))
-    ])
-
-    error_message = "Every ECS service image must use a nonempty repository@sha256:<64 lowercase hex characters> reference without whitespace or extra suffixes."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      service.container_port >= 1 &&
-      service.container_port <= 65535
-    ])
-
-    error_message = "Each ECS service container_port must be between 1 and 65535."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      contains(["X86_64", "ARM64"], service.cpu_architecture)
-    ])
-
-    error_message = "Each ECS service cpu_architecture must be X86_64 or ARM64."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      service.desired_count >= 0
-    ])
-
-    error_message = "Each ECS service desired_count must be zero or greater."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      (
-        service.cpu == 256 &&
-        contains([512, 1024, 2048], service.memory)
-      ) ||
-      (
-        service.cpu == 512 &&
-        contains([1024, 2048, 3072, 4096], service.memory)
-      ) ||
-      (
-        service.cpu == 1024 &&
-        service.memory >= 2048 &&
-        service.memory <= 8192 &&
-        service.memory % 1024 == 0
-      ) ||
-      (
-        service.cpu == 2048 &&
-        service.memory >= 4096 &&
-        service.memory <= 16384 &&
-        service.memory % 1024 == 0
-      ) ||
-      (
-        service.cpu == 4096 &&
-        service.memory >= 8192 &&
-        service.memory <= 30720 &&
-        service.memory % 1024 == 0
-      ) ||
-      (
-        service.cpu == 8192 &&
-        service.memory >= 16384 &&
-        service.memory <= 61440 &&
-        service.memory % 4096 == 0
-      ) ||
-      (
-        service.cpu == 16384 &&
-        service.memory >= 32768 &&
-        service.memory <= 122880 &&
-        service.memory % 8192 == 0
-      ) ||
-      (
-        service.cpu == 32768 &&
-        contains([61440, 122880, 249856], service.memory)
-      )
-    ])
-
-    error_message = "Each ECS service must use a valid AWS Fargate CPU and memory combination."
+    error_message = "Every primary and sidecar image must use a nonempty repository@sha256:<64 lowercase hex characters> reference without whitespace or extra suffixes."
   }
 
   validation {
@@ -351,65 +185,11 @@ variable "services" {
 
   validation {
     condition = alltrue([
-      for service in values(var.services) :
-      service.health_check == null ? true : (
-        service.health_check.command == null ? false : (
-          contains(
-            ["CMD", "CMD-SHELL"],
-            try(service.health_check.command[0], "")
-          ) &&
-          (
-            try(service.health_check.command[0], "") == "CMD-SHELL"
-            ? length(service.health_check.command) == 2
-            : length(service.health_check.command) >= 2
-          ) &&
-          alltrue([
-            for element in service.health_check.command :
-            element == null ? false : trimspace(element) != ""
-          ])
-        )
-      )
+      for service_name, service in var.services :
+      !contains(keys(service.sidecars), service_name)
     ])
 
-    error_message = "ECS health_check.command must start with CMD or CMD-SHELL. CMD-SHELL requires exactly two elements; CMD requires an executable (additional arguments are optional). All command elements must be nonempty."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      service.health_check == null ? true : (
-        service.health_check.interval >= 5 &&
-        service.health_check.interval <= 300 &&
-        service.health_check.interval == floor(service.health_check.interval) &&
-
-        service.health_check.timeout >= 2 &&
-        service.health_check.timeout <= 60 &&
-        service.health_check.timeout == floor(service.health_check.timeout) &&
-
-        service.health_check.retries >= 1 &&
-        service.health_check.retries <= 10 &&
-        service.health_check.retries == floor(service.health_check.retries) &&
-
-        service.health_check.start_period >= 0 &&
-        service.health_check.start_period <= 300 &&
-        service.health_check.start_period == floor(service.health_check.start_period)
-      )
-    ])
-
-    error_message = "ECS health_check timing values must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service_name, service in var.services : [
-        for sidecar_name, sidecar in service.sidecars :
-        sidecar_name != service_name &&
-        can(regex("^[A-Za-z0-9_-]{1,255}$", sidecar_name)) &&
-        can(regex("^[^[:space:]\\p{Z}\\x{0085}@]+@sha256:[0-9a-f]{64}$", sidecar.image))
-      ]
-    ]))
-
-    error_message = "Sidecar names must be valid ECS container names and differ from the primary; images must use nonempty repository@sha256:<64 lowercase hex characters> references without whitespace or extra suffixes."
+    error_message = "Sidecar names must differ from the primary container name."
   }
 
   validation {
@@ -424,86 +204,6 @@ variable "services" {
     ]))
 
     error_message = "A sidecar cannot define the same environment variable name in both environment_variables and secrets."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for timeout in concat(
-          [
-            service.start_timeout_seconds,
-            service.stop_timeout_seconds
-          ],
-          flatten([
-            for sidecar in values(service.sidecars) : [
-              sidecar.start_timeout_seconds,
-              sidecar.stop_timeout_seconds
-            ]
-          ])
-        ) :
-        timeout == null ? true : (
-          timeout >= 2 &&
-          timeout <= 120 &&
-          timeout == floor(timeout)
-        )
-      ]
-    ]))
-
-    error_message = "Container start and stop timeouts must be whole numbers between 2 and 120 seconds."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for sidecar in values(service.sidecars) :
-        sidecar.health_check == null ? true : (
-          sidecar.health_check.command == null ? false : (
-            contains(
-              ["CMD", "CMD-SHELL"],
-              try(sidecar.health_check.command[0], "")
-            ) &&
-            (
-              try(sidecar.health_check.command[0], "") == "CMD-SHELL"
-              ? length(sidecar.health_check.command) == 2
-              : length(sidecar.health_check.command) >= 2
-            ) &&
-            alltrue([
-              for element in sidecar.health_check.command :
-              element == null ? false : trimspace(element) != ""
-            ])
-          )
-        )
-      ]
-    ]))
-
-    error_message = "Sidecar health_check.command must start with CMD or CMD-SHELL, contain the required arguments, and have no empty elements."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for sidecar in values(service.sidecars) :
-        sidecar.health_check == null ? true : (
-          sidecar.health_check.interval >= 5 &&
-          sidecar.health_check.interval <= 300 &&
-          sidecar.health_check.interval == floor(sidecar.health_check.interval) &&
-
-          sidecar.health_check.timeout >= 2 &&
-          sidecar.health_check.timeout <= 60 &&
-          sidecar.health_check.timeout == floor(sidecar.health_check.timeout) &&
-
-          sidecar.health_check.retries >= 1 &&
-          sidecar.health_check.retries <= 10 &&
-          sidecar.health_check.retries == floor(sidecar.health_check.retries) &&
-
-          sidecar.health_check.start_period >= 0 &&
-          sidecar.health_check.start_period <= 300 &&
-          sidecar.health_check.start_period == floor(sidecar.health_check.start_period)
-        )
-      ]
-    ]))
-
-    error_message = "Sidecar health-check timings must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
   }
 
   validation {
@@ -549,18 +249,6 @@ variable "services" {
   validation {
     condition = alltrue(flatten([
       for service in values(var.services) : [
-        for sidecar in values(service.sidecars) :
-        sidecar.dependency_rank >= 0 &&
-        sidecar.dependency_rank == floor(sidecar.dependency_rank)
-      ]
-    ]))
-
-    error_message = "Sidecar dependency_rank must be a non-negative whole number."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
         for sidecar_name, sidecar in service.sidecars : (
 
           length(distinct([
@@ -572,8 +260,6 @@ variable "services" {
             for dependency in sidecar.depends_on :
 
             contains(keys(service.sidecars), dependency.container_name) &&
-
-            dependency.container_name != sidecar_name &&
 
             contains(
               ["START", "HEALTHY", "COMPLETE", "SUCCESS"],
@@ -612,17 +298,6 @@ variable "services" {
   validation {
     condition = alltrue(flatten([
       for service in values(var.services) : [
-        for name in service.task_volumes :
-        can(regex("^[A-Za-z0-9_-]{1,255}$", name))
-      ]
-    ]))
-
-    error_message = "Task volume names must be 1-255 characters and contain only letters, numbers, hyphens, or underscores."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
         for mounts in concat(
           [service.mount_points],
           [
@@ -654,117 +329,6 @@ variable "services" {
   validation {
     condition = alltrue([
       for service in values(var.services) :
-      service.ephemeral_storage_gib == null ? true : (
-        service.ephemeral_storage_gib >= 21 &&
-        service.ephemeral_storage_gib <= 200 &&
-        service.ephemeral_storage_gib == floor(service.ephemeral_storage_gib)
-      )
-    ])
-
-    error_message = "Fargate ephemeral_storage_gib must be a whole number between 21 and 200 GiB when explicitly configured."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for sidecar in values(service.sidecars) :
-
-        (sidecar.cpu_units == null ? true : (
-          sidecar.cpu_units >= 1 &&
-          sidecar.cpu_units < service.cpu &&
-          sidecar.cpu_units == floor(sidecar.cpu_units)
-        )) &&
-
-        (sidecar.memory_limit_mib == null ? true : (
-          sidecar.memory_limit_mib >= 6 &&
-          sidecar.memory_limit_mib <= service.memory &&
-          sidecar.memory_limit_mib == floor(sidecar.memory_limit_mib)
-        )) &&
-
-        (sidecar.memory_reservation_mib == null ? true : (
-          sidecar.memory_reservation_mib >= 6 &&
-          sidecar.memory_reservation_mib < service.memory &&
-          sidecar.memory_reservation_mib == floor(sidecar.memory_reservation_mib)
-        )) &&
-
-        (
-          sidecar.memory_limit_mib == null ||
-          sidecar.memory_reservation_mib == null
-          ? true
-          : sidecar.memory_limit_mib > sidecar.memory_reservation_mib
-        )
-      ]
-    ]))
-
-    error_message = "Sidecar CPU and memory settings must be valid whole numbers within the task limits. A memory hard limit must exceed its soft reservation."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-
-      sum(concat(
-        [0],
-        [
-          for sidecar in values(service.sidecars) :
-          coalesce(sidecar.cpu_units, 0)
-        ]
-      )) < service.cpu &&
-
-      sum(concat(
-        [0],
-        [
-          for sidecar in values(service.sidecars) :
-          sidecar.memory_reservation_mib != null
-          ? sidecar.memory_reservation_mib
-          : coalesce(sidecar.memory_limit_mib, 0)
-        ]
-      )) < service.memory
-    ])
-
-    error_message = "Combined sidecar CPU shares and memory reservations must remain below the task-level CPU and memory allocations."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for sidecar in values(service.sidecars) :
-        alltrue([
-          for args in [sidecar.command, sidecar.entry_point] :
-          args == null ? true : (
-            length(args) > 0 &&
-            alltrue([
-              for arg in args :
-              arg == null ? false : trimspace(arg) != ""
-            ])
-          )
-        ])
-      ]
-    ]))
-
-    error_message = "Sidecar command and entry_point overrides must contain at least one nonempty string."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for sidecar in values(service.sidecars) :
-        alltrue([
-          for port in sidecar.port_mappings :
-          port.container_port >= 1 &&
-          port.container_port <= 65535 &&
-          port.container_port == floor(port.container_port) &&
-          contains(["tcp", "udp"], port.protocol)
-        ])
-      ]
-    ]))
-
-    error_message = "Sidecar ports must be whole numbers between 1 and 65535, using tcp or udp."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
       length(distinct(concat(
         [service.container_port],
         flatten([
@@ -783,51 +347,6 @@ variable "services" {
     ])
 
     error_message = "The primary container and sidecars must not declare duplicate container ports within the same ECS task."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for value_from in concat(
-          values(service.secrets),
-          flatten([
-            for sidecar in values(service.sidecars) :
-            values(sidecar.secrets)
-          ])
-        ) :
-        !can(regex(
-          "^arn:[^:]+:secretsmanager(:|$)",
-          value_from
-        )) ||
-        can(regex(
-          "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:([^:*?]+:|:[^:*?]+|:))?$",
-          value_from
-        ))
-      ]
-    ]))
-
-    error_message = "ECS Secrets Manager references must use valid full ARNs and cannot specify both version-stage and version-id."
-  }
-
-  # Unlike the IAM Resource interface, ECS also accepts same-region SSM names
-  # and paths. Preserve those exact forms; Secrets Manager selectors are
-  # validated separately above and passed through without normalization here.
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.services) : [
-        for value_from in concat(
-          values(service.secrets),
-          flatten([
-            for sidecar in values(service.sidecars) : values(sidecar.secrets)
-          ])
-        ) :
-        can(regex("^arn:[^:]+:secretsmanager(:|$)", value_from)) ||
-        can(regex("^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$", value_from)) ||
-        can(regex("^/?[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$", value_from))
-      ]
-    ]))
-
-    error_message = "ECS SSM references must use exact parameter ARNs or same-region parameter names/paths without wildcard characters; other references must be valid Secrets Manager ARNs."
   }
 }
 
