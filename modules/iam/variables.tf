@@ -95,4 +95,29 @@ variable "ecs_iam_services" {
   }))
 
   default = {}
+
+  # These inputs are used verbatim as IAM Resources, so ECS parameter names
+  # and paths must already have been resolved to full, exact parameter ARNs.
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_iam_services) : [
+        for parameter_arn in service.execution_ssm_parameter_arns :
+        can(regex("^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$", parameter_arn))
+      ]
+    ]))
+
+    error_message = "execution_ssm_parameter_arns must contain full SSM parameter ARNs without wildcard characters."
+  }
+
+  # kms:Decrypt Resources require key ARNs, including mrk- keys, not aliases.
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_iam_services) : [
+        for key_arn in service.task_execution_kms_key_arns :
+        can(regex("^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$", key_arn))
+      ]
+    ]))
+
+    error_message = "task_execution_kms_key_arns must contain exact KMS key ARNs without wildcards, not key IDs or aliases."
+  }
 }

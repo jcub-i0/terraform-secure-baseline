@@ -218,6 +218,73 @@ class ExecutionPolicyTests(unittest.TestCase):
         data[2]["Statement"][4]["Resource"][0] = SECRET + "*"
         self.check(data, False)
 
+    def test_wildcard_ssm_in_container_and_policy_is_rejected(self):
+        for container_index in (0, 1):
+            for wildcard in ("*", "?"):
+                with self.subTest(container=container_index, wildcard=wildcard):
+                    data = fixture(guardduty=False)
+                    containers = data[1]["taskDefinition"]["containerDefinitions"]
+                    if container_index == 1:
+                        containers.append({
+                            "name": "scanner",
+                            "image": URL + "@sha256:" + "b" * 64,
+                        })
+                    reference = PARAMETER + wildcard
+                    containers[container_index]["secrets"] = [
+                        {"name": "CONFIG", "valueFrom": reference}
+                    ]
+                    data[2]["Statement"].append(
+                        grant(["ssm:GetParameters"], [reference])
+                    )
+                    self.check(
+                        data, False,
+                        "Cannot derive exact ECS startup-secret permissions",
+                    )
+
+    def test_wildcard_kms_in_contract_and_policy_is_rejected(self):
+        for wildcard in ("*", "?"):
+            with self.subTest(wildcard=wildcard):
+                data = fixture(guardduty=False)
+                reference = KEY + wildcard
+                data[0]["ecs_service_configuration"]["value"]["test"][
+                    "task_execution_kms_key_arns"
+                ] = [reference]
+                data[2]["Statement"].append(
+                    grant(["kms:Decrypt"], [reference])
+                )
+                self.check(
+                    data, False,
+                    "ECS execution inline policy does not exactly match",
+                )
+
+    def test_exact_ssm_and_multiregion_kms_scopes_in_all_partitions(self):
+        for partition, region in (
+            ("aws", "us-east-1"),
+            ("aws-us-gov", "us-gov-west-1"),
+            ("aws-cn", "cn-north-1"),
+        ):
+            with self.subTest(partition=partition):
+                data = fixture(guardduty=False)
+                parameter = (
+                    f"arn:{partition}:ssm:{region}:{ACCOUNT}:"
+                    "parameter/app/Config_1.2-test"
+                )
+                key = (
+                    f"arn:{partition}:kms:{region}:{ACCOUNT}:"
+                    "key/mrk-0123456789abcdef0123456789abcdef"
+                )
+                data[1]["taskDefinition"]["containerDefinitions"][0]["secrets"] = [
+                    {"name": "CONFIG", "valueFrom": parameter}
+                ]
+                data[0]["ecs_service_configuration"]["value"]["test"][
+                    "task_execution_kms_key_arns"
+                ] = [key]
+                data[2]["Statement"].extend([
+                    grant(["ssm:GetParameters"], [parameter]),
+                    grant(["kms:Decrypt"], [key]),
+                ])
+                self.check(data, True)
+
     def test_multi_container_ecr_permissions(self):
         data = fixture(guardduty=False)
         outputs, task, policy = data

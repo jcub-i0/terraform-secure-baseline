@@ -234,13 +234,25 @@ variable "services" {
 
   default = {}
 
+  # ECS permits ten declared containers: the primary plus up to nine sidecars.
+  # The GuardDuty agent is injected by AWS at runtime, not declared here.
+  validation {
+    condition = alltrue([
+      for service in values(var.services) : length(service.sidecars) <= 9
+    ])
+
+    error_message = "Each ECS service may declare at most nine sidecars (ten containers including the primary)."
+  }
+
+  # Validate the complete digest-pinned reference without restricting callers
+  # to ECR or excluding registry ports, nested repositories, or tag+digest forms.
   validation {
     condition = alltrue([
       for service in values(var.services) :
-      can(regex("@sha256:[0-9a-f]{64}$", service.image))
+      can(regex("^[^[:space:]\\p{Z}\\x{0085}@]+@sha256:[0-9a-f]{64}$", service.image))
     ])
 
-    error_message = "Every ECS service image must be pinned to a SHA-256 digest using repository@sha256:<64 hex characters>."
+    error_message = "Every ECS service image must use a nonempty repository@sha256:<64 lowercase hex characters> reference without whitespace or extra suffixes."
   }
 
   validation {
@@ -389,11 +401,11 @@ variable "services" {
         for sidecar_name, sidecar in service.sidecars :
         sidecar_name != service_name &&
         can(regex("^[A-Za-z0-9_-]{1,255}$", sidecar_name)) &&
-        can(regex("@sha256:[0-9a-f]{64}$", sidecar.image))
+        can(regex("^[^[:space:]\\p{Z}\\x{0085}@]+@sha256:[0-9a-f]{64}$", sidecar.image))
       ]
     ]))
 
-    error_message = "Sidecar names must be valid ECS container names, must differ from the primary container name, and images must be pinned to SHA-256 digests."
+    error_message = "Sidecar names must be valid ECS container names and differ from the primary; images must use nonempty repository@sha256:<64 lowercase hex characters> references without whitespace or extra suffixes."
   }
 
   validation {
@@ -622,14 +634,17 @@ variable "services" {
             for mount in mounts :
             contains(service.task_volumes, mount.source_volume) &&
             startswith(mount.container_path, "/") &&
-            mount.container_path != "/" &&
-            trimspace(mount.container_path) == mount.container_path
+            trimspace(mount.container_path) == mount.container_path &&
+            alltrue([
+              for component in split("/", trimprefix(mount.container_path, "/")) :
+              !contains(["", ".", ".."], component)
+            ])
           ])
         )
       ]
     ]))
 
-    error_message = "Container mount points must reference declared task volumes, use absolute non-root paths without surrounding whitespace, and have unique destination paths per container."
+    error_message = "Container mount points must reference declared task volumes and use unique, canonical absolute non-root paths per container: no empty, '.' or '..' components, repeated/trailing separators, or surrounding whitespace."
   }
 
   validation {
@@ -788,6 +803,27 @@ variable "services" {
     ]))
 
     error_message = "ECS Secrets Manager references must use valid full ARNs and cannot specify both version-stage and version-id."
+  }
+
+  # Unlike the IAM Resource interface, ECS also accepts same-region SSM names
+  # and paths. Preserve those exact forms; Secrets Manager selectors are
+  # validated separately above and passed through without normalization here.
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for value_from in concat(
+          values(service.secrets),
+          flatten([
+            for sidecar in values(service.sidecars) : values(sidecar.secrets)
+          ])
+        ) :
+        can(regex("^arn:[^:]+:secretsmanager(:|$)", value_from)) ||
+        can(regex("^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$", value_from)) ||
+        can(regex("^/?[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$", value_from))
+      ]
+    ]))
+
+    error_message = "ECS SSM references must use exact parameter ARNs or same-region parameter names/paths without wildcard characters; other references must be valid Secrets Manager ARNs."
   }
 }
 

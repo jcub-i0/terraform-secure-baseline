@@ -351,3 +351,332 @@ run "multi_service_iam_isolation" {
     error_message = "Application managed policies must attach exclusively to their intended ECS task roles."
   }
 }
+# M1-N5C-A: reject unsafe inputs at the actual IAM interface before policy generation.
+
+run "n5ca_reject_ssm_star" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["*"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_question" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["?"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_arn_star" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:parameter/app/*"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_arn_question" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:parameter/app/config?"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_region_wildcard" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:aws:ssm:*:123456789012:parameter/app/config"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_account_wildcard" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:12345678901?:parameter/app/config"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_bare_path" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["/app/config"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_unsupported_partition" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:other:ssm:us-east-1:123456789012:parameter/app/config"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_wrong_resource" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:document/app"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_ssm_empty_parameter" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:parameter/"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_star" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["*"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_question" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["?"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_key_star" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/*"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_key_question" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/mrk-0123456789abcdef0123456789abcde?"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_region_wildcard" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:aws:kms:*:123456789012:key/mrk-0123456789abcdef0123456789abcdef"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_account_wildcard" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:12345678901?:key/mrk-0123456789abcdef0123456789abcdef"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_bare_id" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["22222222-2222-2222-2222-222222222222"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_alias_arn" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:alias/app"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_unsupported_partition" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:other:kms:us-east-1:123456789012:key/mrk-0123456789abcdef0123456789abcdef"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_empty_key" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_reject_kms_whitespace" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/ key"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "n5ca_accept_exact_ssm_and_kms_partition_arns" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      for partition, region in { aws = "us-east-1", aws-us-gov = "us-gov-west-1", aws-cn = "cn-north-1" } :
+      partition => merge(var.ecs_iam_services.api, {
+        execution_ssm_parameter_arns = ["arn:${partition}:ssm:${region}:123456789012:parameter/app/Config_1.2-test"]
+        task_execution_kms_key_arns = [
+          "arn:${partition}:kms:${region}:123456789012:key/22222222-2222-2222-2222-222222222222",
+          "arn:${partition}:kms:${region}:123456789012:key/mrk-0123456789abcdef0123456789abcdef"
+        ]
+
+      })
+    }
+  }
+  assert {
+    condition = alltrue([
+      for service_name, service in var.ecs_iam_services : alltrue([
+        for expected in [
+          { sid = "AllowSSMParameterRead", action = "ssm:GetParameters", resources = service.execution_ssm_parameter_arns },
+          { sid = "AllowExecutionKMSDecrypt", action = "kms:Decrypt", resources = service.task_execution_kms_key_arns }
+          ] : length([
+            for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies[service_name].policy).Statement : statement
+            if statement.Sid == expected.sid &&
+            toset(flatten([statement.Action])) == toset([expected.action]) &&
+            toset(flatten([statement.Resource])) == expected.resources
+        ]) == 1
+      ])
+    ])
+    error_message = "All three AWS partitions must retain exact SSM and KMS key scopes, including multi-Region keys."
+  }
+}

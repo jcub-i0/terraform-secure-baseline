@@ -897,6 +897,16 @@ variable "ecs_services" {
 
   default = {}
 
+  # Fail early even for services whose image digests are not yet supplied.
+  # AWS-injected runtime agents are not part of this declared container count.
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) : length(service.sidecars) <= 9
+    ])
+
+    error_message = "Each ECS service may declare at most nine sidecars (ten containers including the primary)."
+  }
+
   validation {
     condition = alltrue(flatten([
       for service in values(var.ecs_services) : [
@@ -1186,18 +1196,33 @@ variable "ecs_services" {
   validation {
     condition = alltrue(flatten([
       for service in values(var.ecs_services) : [
-        for sidecar in values(service.sidecars) :
-        alltrue([
-          for value_from in values(sidecar.ssm_parameters) :
-          can(regex(
-            "^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$",
-            value_from
-          ))
-        ])
+        for value_from in concat(
+          values(service.ssm_parameters),
+          flatten([
+            for sidecar in values(service.sidecars) : values(sidecar.ssm_parameters)
+          ])
+        ) :
+        can(regex(
+          "^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$",
+          value_from
+        ))
       ]
     ]))
 
-    error_message = "Sidecar SSM references must use full parameter ARNs without wildcard characters."
+    error_message = "Primary and sidecar SSM references must use full parameter ARNs without wildcard characters."
+  }
+
+  # These values become IAM Resources for kms:Decrypt, which requires key ARNs
+  # rather than bare IDs or aliases. Allow both single-Region and mrk- key IDs.
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_services) : [
+        for key_arn in service.task_execution_kms_key_arns :
+        can(regex("^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$", key_arn))
+      ]
+    ]))
+
+    error_message = "task_execution_kms_key_arns must contain exact KMS key ARNs without wildcards, not key IDs or aliases."
   }
 
   validation {

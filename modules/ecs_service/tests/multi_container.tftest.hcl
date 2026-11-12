@@ -19,6 +19,21 @@ variables {
   logs_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
 
   force_delete = false
+
+  services = {
+    api = {
+      image              = "repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      container_port     = 8080
+      cpu                = 512
+      memory             = 1024
+      execution_role_arn = "arn:aws:iam::123456789012:role/test-execution"
+      task_role_arn      = "arn:aws:iam::123456789012:role/test-task"
+      task_volumes       = ["shared"]
+      sidecars = {
+        scanner = { image = "scanner@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }
+      }
+    }
+  }
 }
 
 run "multi_container_task" {
@@ -219,5 +234,147 @@ run "multi_container_task" {
     )
 
     error_message = "The ALB must continue targeting the primary API container."
+  }
+}
+
+run "n5ca_accept_0_sidecars_per_service" {
+  command = plan
+  variables {
+    services = {
+      for name in ["api", "worker"] : name => merge(var.services.api, {
+        sidecars = { for i in range(0) : "helper_${i}" => { image = var.services.api.image } }
+      })
+    }
+    execution_policy_ids     = { for name in ["api", "worker"] : name => "test-execution-policy" }
+    security_policy_rule_ids = { for name in ["api", "worker"] : name => ["sgr-0123456789abcdef0"] }
+  }
+  assert {
+    condition = alltrue([
+      for task in values(aws_ecs_task_definition.task_definitions) :
+      length(jsondecode(task.container_definitions)) == 1
+    ])
+    error_message = "Each task must contain exactly its primary and declared sidecars; runtime-injected agents are not counted."
+  }
+}
+
+run "n5ca_accept_9_sidecars_per_service" {
+  command = plan
+  variables {
+    services = {
+      for name in ["api", "worker"] : name => merge(var.services.api, {
+        sidecars = { for i in range(9) : "helper_${i}" => { image = var.services.api.image } }
+      })
+    }
+    execution_policy_ids     = { for name in ["api", "worker"] : name => "test-execution-policy" }
+    security_policy_rule_ids = { for name in ["api", "worker"] : name => ["sgr-0123456789abcdef0"] }
+  }
+  assert {
+    condition = alltrue([
+      for task in values(aws_ecs_task_definition.task_definitions) :
+      length(jsondecode(task.container_definitions)) == 10
+    ])
+    error_message = "Each task must contain exactly its primary and declared sidecars; runtime-injected agents are not counted."
+  }
+}
+
+run "n5ca_accept_direct_image_reference_forms" {
+  command = plan
+  variables {
+    services = {
+      api = merge(var.services.api, {
+        image = "nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        sidecars = {
+          for i, repository in [
+            "docker.io/library/busybox",
+            "registry.example.com:5000/team/nested/image",
+            "localhost:5000/team/image:Release_1.2",
+            "public.ecr.aws/example/image",
+            "123456789012.dkr.ecr.cn-north-1.amazonaws.com.cn/team/image",
+            "123456789012.dkr.ecr.us-gov-west-1.amazonaws.com/team/image"
+          ] : "helper_${i}" => { image = "${repository}@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" }
+        }
+      })
+    }
+    execution_policy_ids     = { api = "test-execution-policy" }
+    security_policy_rule_ids = { api = ["sgr-0123456789abcdef0"] }
+  }
+  assert {
+    condition = toset([
+      for container in jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions) : container.image
+    ]) == toset(concat([var.services.api.image], [for sidecar in values(var.services.api.sidecars) : sidecar.image]))
+    error_message = "Valid direct-module image references must be preserved exactly."
+  }
+}
+
+run "n5ca_accept_canonical_shared_mounts" {
+  command = plan
+  variables {
+    services = {
+      api = merge(var.services.api, {
+        mount_points = [
+          { source_volume = "shared", container_path = "/app/.config" },
+          { source_volume = "shared", container_path = "/app/data..v2" }
+        ]
+        sidecars = {
+          scanner = merge(var.services.api.sidecars.scanner, {
+            mount_points = [
+              { source_volume = "shared", container_path = "/scanner/data", read_only = true },
+              { source_volume = "shared", container_path = "/app/.config" }
+            ]
+          })
+        }
+      })
+    }
+    execution_policy_ids     = { api = "test-execution-policy" }
+    security_policy_rule_ids = { api = ["sgr-0123456789abcdef0"] }
+  }
+  assert {
+    condition = (
+      length(aws_ecs_task_definition.task_definitions["api"].volume) == 1 &&
+      alltrue([
+        for container in jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions) :
+        length(container.mountPoints) == 2 && alltrue([for mount in container.mountPoints : mount.sourceVolume == "shared"])
+      ])
+    )
+    error_message = "Canonical paths, including dotted names and shared destinations across containers, must remain valid."
+  }
+}
+
+run "n5ca_accept_exact_ssm_names_paths_and_partitions" {
+  command = plan
+  variables {
+    services = {
+      api = merge(var.services.api, {
+        secrets = {
+          NAME          = "App_Config.v2-1"
+          PATH          = "/app/config.v2-1"
+          RELATIVE_PATH = "app/config"
+          COMMERCIAL    = "arn:aws:ssm:us-east-1:123456789012:parameter/app/Config.v2-1"
+          GOV           = "arn:aws-us-gov:ssm:us-gov-west-1:123456789012:parameter/app/config"
+          CHINA         = "arn:aws-cn:ssm:cn-north-1:123456789012:parameter/app/config"
+        }
+        sidecars = {
+          scanner = merge(var.services.api.sidecars.scanner, {
+            secrets = {
+              NAME          = "App_Config.v2-1"
+              PATH          = "/app/config.v2-1"
+              RELATIVE_PATH = "app/config"
+              COMMERCIAL    = "arn:aws:ssm:us-east-1:123456789012:parameter/app/Config.v2-1"
+              GOV           = "arn:aws-us-gov:ssm:us-gov-west-1:123456789012:parameter/app/config"
+              CHINA         = "arn:aws-cn:ssm:cn-north-1:123456789012:parameter/app/config"
+            }
+          })
+        }
+      })
+    }
+    execution_policy_ids     = { api = "test-execution-policy" }
+    security_policy_rule_ids = { api = ["sgr-0123456789abcdef0"] }
+  }
+  assert {
+    condition = alltrue([
+      for container in jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions) :
+      toset([for secret in container.secrets : secret.valueFrom]) == toset(values(var.services.api.secrets))
+    ])
+    error_message = "Exact SSM names, paths, and partition ARNs must pass through both container types unchanged."
   }
 }
