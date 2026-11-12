@@ -96,6 +96,22 @@ variable "ecs_iam_services" {
 
   default = {}
 
+  # Both pull inventories are IAM Resources. GuardDuty repositories may belong
+  # to another account; require exact repository ARNs without restricting owner.
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_iam_services) : [
+        for repository_arn in setunion(service.ecr_repository_arns, service.guardduty_agent_ecr_repository_arns) :
+        can(regex(
+          "^arn:(aws|aws-us-gov|aws-cn):ecr:[a-z0-9-]+:[0-9]{12}:repository/[a-z0-9]+((\\.|_|__|-+)[a-z0-9]+)*(/[a-z0-9]+((\\.|_|__|-+)[a-z0-9]+)*)*$",
+          repository_arn
+        ))
+      ]
+    ]))
+
+    error_message = "ecr_repository_arns and guardduty_agent_ecr_repository_arns must contain exact ECR repository ARNs in supported AWS partitions, without wildcard resources."
+  }
+
   # These inputs are used verbatim as IAM Resources, so ECS parameter names
   # and paths must already have been resolved to full, exact parameter ARNs.
   validation {

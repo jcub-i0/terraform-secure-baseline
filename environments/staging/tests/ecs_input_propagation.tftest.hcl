@@ -90,18 +90,39 @@ variables {
           read_only_root_filesystem = true
 
           health_check = {
-            command = ["CMD-SHELL", "exit 0"]
+            command      = ["CMD-SHELL", "exit 0"]
+            interval     = 17
+            timeout      = 7
+            retries      = 4
+            start_period = 23
           }
 
           start_timeout_seconds = 30
           stop_timeout_seconds  = 15
-          dependency_rank       = 0
+          dependency_rank       = 2
+
+          depends_on = [
+            { container_name = "setup_complete", condition = "COMPLETE" },
+            { container_name = "setup_success", condition = "SUCCESS" }
+          ]
 
           mount_points = [{
             source_volume  = "shared"
             container_path = "/mnt/shared"
             read_only      = true
           }]
+        }
+        setup_complete = {
+          repository_name = "setup"
+          image_digest    = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          essential       = false
+          dependency_rank = 1
+        }
+        setup_success = {
+          repository_name = "setup"
+          image_digest    = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          essential       = false
+          dependency_rank = 1
         }
       }
     }
@@ -149,7 +170,7 @@ run "preserves_nested_sidecar_attributes" {
 
   assert {
     condition = (
-      length(var.ecs_services.api.sidecars) == 1 &&
+      length(var.ecs_services.api.sidecars) == 3 &&
       var.ecs_services.api.sidecars.scanner.repository_name == "scanner" &&
       var.ecs_services.api.sidecars.scanner.image_digest == "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" &&
       var.ecs_services.api.sidecars.scanner.essential == true &&
@@ -179,11 +200,21 @@ run "preserves_nested_sidecar_attributes" {
     condition = (
       var.ecs_services.api.sidecars.scanner.read_only_root_filesystem == true &&
       var.ecs_services.api.sidecars.scanner.health_check.command[0] == "CMD-SHELL" &&
-      var.ecs_services.api.sidecars.scanner.health_check.interval == 30 &&
+      var.ecs_services.api.sidecars.scanner.health_check.interval == 17 &&
+      var.ecs_services.api.sidecars.scanner.health_check.timeout == 7 &&
+      var.ecs_services.api.sidecars.scanner.health_check.retries == 4 &&
+      var.ecs_services.api.sidecars.scanner.health_check.start_period == 23 &&
       var.ecs_services.api.sidecars.scanner.start_timeout_seconds == 30 &&
       var.ecs_services.api.sidecars.scanner.stop_timeout_seconds == 15 &&
-      var.ecs_services.api.sidecars.scanner.dependency_rank == 0 &&
-      length(var.ecs_services.api.sidecars.scanner.depends_on) == 0 &&
+      var.ecs_services.api.sidecars.scanner.dependency_rank == 2 &&
+      { for dependency in var.ecs_services.api.sidecars.scanner.depends_on :
+        dependency.container_name => dependency.condition
+      } == { setup_complete = "COMPLETE", setup_success = "SUCCESS" } &&
+      alltrue([
+        for name in ["setup_complete", "setup_success"] :
+        var.ecs_services.api.sidecars[name].essential == false &&
+        var.ecs_services.api.sidecars[name].dependency_rank == 1
+      ]) &&
       var.ecs_services.api.sidecars.scanner.mount_points[0].read_only == true
     )
 

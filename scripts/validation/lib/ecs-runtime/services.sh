@@ -612,7 +612,7 @@ validate_task_container_inventory() {
 
     expected_normalized="$(jq -Sc -f "$validator_dir/container-contract.jq" <<< "$expected_container_json")" ||
       fail "Invalid expected container configuration: ${service_name}/${container_name}"
-      
+
     if [[ "$actual_normalized" != "$expected_normalized" ]]; then
       # Only field names are diagnostic; commands and health checks can also
       # contain application data and must not be dumped on mismatch.

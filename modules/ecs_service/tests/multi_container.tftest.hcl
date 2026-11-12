@@ -84,6 +84,14 @@ run "multi_container_task" {
               {
                 container_name = "telemetry"
                 condition      = "START"
+              },
+              {
+                container_name = "setup_complete"
+                condition      = "COMPLETE"
+              },
+              {
+                container_name = "setup_success"
+                condition      = "SUCCESS"
               }
             ]
 
@@ -92,6 +100,10 @@ run "multi_container_task" {
                 "CMD-SHELL",
                 "test -f /scanner/shared/ready"
               ]
+              interval     = 17
+              timeout      = 7
+              retries      = 4
+              start_period = 23
             }
 
             port_mappings = [
@@ -111,6 +123,20 @@ run "multi_container_task" {
                 read_only      = false
               }
             ]
+          }
+
+          setup_complete = {
+            image           = "busybox@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            essential       = false
+            dependency_rank = 0
+            command         = ["sh", "-c", "exit 0"]
+          }
+
+          setup_success = {
+            image           = "busybox@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            essential       = false
+            dependency_rank = 0
+            command         = ["sh", "-c", "exit 0"]
           }
 
           telemetry = {
@@ -166,7 +192,7 @@ run "multi_container_task" {
       for container in jsondecode(
         aws_ecs_task_definition.task_definitions["api"].container_definitions
       ) : container.name
-    ] == ["api", "scanner", "telemetry"]
+    ] == ["api", "scanner", "setup_complete", "setup_success", "telemetry"]
 
     error_message = "Expected the primary container followed by deterministically sorted sidecars."
   }
@@ -175,18 +201,33 @@ run "multi_container_task" {
     condition = (
       jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[0].dependsOn[0].containerName == "scanner" &&
       jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[0].dependsOn[0].condition == "HEALTHY" &&
-
-      jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].dependsOn[0].containerName == "telemetry" &&
-      jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].dependsOn[0].condition == "START"
+      { for dependency in jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].dependsOn :
+        dependency.containerName => dependency.condition
+      } == { telemetry = "START", setup_complete = "COMPLETE", setup_success = "SUCCESS" } &&
+      alltrue([
+        for container in jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions) :
+        container.essential == false if contains(["setup_complete", "setup_success"], container.name)
+      ])
     )
 
-    error_message = "Primary and sidecar startup dependencies were not serialized correctly."
+    error_message = "Render HEALTHY/START and COMPLETE/SUCCESS dependencies on their nonessential initialization prerequisites."
+  }
+
+  assert {
+    condition = jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].healthCheck == {
+      command     = ["CMD-SHELL", "test -f /scanner/shared/ready"]
+      interval    = 17
+      timeout     = 7
+      retries     = 4
+      startPeriod = 23
+    }
+    error_message = "Explicit sidecar health-check timings must survive task-definition rendering."
   }
 
   assert {
     condition = (
       jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].essential == true &&
-      jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[2].essential == false &&
+      jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[4].essential == false &&
 
       jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].cpu == 64 &&
       jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].memory == 256 &&
@@ -202,7 +243,7 @@ run "multi_container_task" {
     condition = (
       jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[0].mountPoints[0].sourceVolume == "shared-data" &&
       jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[1].mountPoints[0].containerPath == "/scanner/shared" &&
-      jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[2].mountPoints[0].readOnly == true
+      jsondecode(aws_ecs_task_definition.task_definitions["api"].container_definitions)[4].mountPoints[0].readOnly == true
     )
 
     error_message = "Shared-volume mount points were not serialized correctly."

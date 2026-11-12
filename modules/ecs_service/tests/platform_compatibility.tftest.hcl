@@ -131,3 +131,73 @@ run "accept_expanded_storage_on_1_4" {
     error_message = "Platform 1.4.0 must support expanded ephemeral storage."
   }
 }
+
+run "accept_32_vcpu_61440_mib" {
+  command = plan
+
+  variables {
+    platform_version = "1.4.0"
+    services = {
+      api = merge(var.services.api, { cpu = 32768, memory = 61440 })
+    }
+  }
+
+  assert {
+    condition = (
+      aws_ecs_task_definition.task_definitions["api"].cpu == "32768" &&
+      aws_ecs_task_definition.task_definitions["api"].memory == "61440"
+    )
+    error_message = "The supported 32-vCPU task size must be rendered exactly."
+  }
+}
+
+run "accept_32_vcpu_122880_mib" {
+  command = plan
+
+  variables {
+    platform_version = "1.4.0"
+    services = {
+      api = merge(var.services.api, { cpu = 32768, memory = 122880 })
+    }
+  }
+
+  assert {
+    condition = (
+      aws_ecs_task_definition.task_definitions["api"].cpu == "32768" &&
+      aws_ecs_task_definition.task_definitions["api"].memory == "122880"
+    )
+    error_message = "The supported 32-vCPU task size must be rendered exactly."
+  }
+}
+
+run "accept_32_vcpu_249856_mib" {
+  command = plan
+
+  variables {
+    platform_version = "1.4.0"
+    services = {
+      api = merge(var.services.api, { cpu = 32768, memory = 249856 })
+    }
+  }
+
+  assert {
+    condition = (
+      aws_ecs_task_definition.task_definitions["api"].cpu == "32768" &&
+      aws_ecs_task_definition.task_definitions["api"].memory == "249856"
+    )
+    error_message = "The supported 32-vCPU task size must be rendered exactly."
+  }
+}
+
+run "reject_unsupported_32_vcpu_memory" {
+  command = plan
+
+  variables {
+    platform_version = "1.4.0"
+    services = {
+      api = merge(var.services.api, { cpu = 32768, memory = 65536 })
+    }
+  }
+
+  expect_failures = [var.services]
+}

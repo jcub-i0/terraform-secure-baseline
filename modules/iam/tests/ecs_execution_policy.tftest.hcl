@@ -103,63 +103,61 @@ run "generates_scoped_execution_policy" {
     error_message = "One ECS service must generate exactly one execution role, task role, and execution policy."
   }
 
+  # Compare the complete statement map: unexpected/missing Sids, duplicate Sids,
+  # extra fields, changed effects, actions, or resources must fail.
   assert {
-    condition = length([
-      for statement in jsondecode(
-        aws_iam_role_policy.ecs_task_execution_policies["api"].policy
-      ).Statement : statement
-      if statement.Sid == "AllowECRImagePulls" &&
-      toset(flatten([statement.Resource])) == toset([
-        "arn:aws:ecr:us-east-1:123456789012:repository/api",
-        "arn:aws:ecr:us-east-1:123456789012:repository/scanner"
-      ])
-    ]) == 1
-
-    error_message = "ECR image-pull permissions must cover exactly the declared primary and sidecar repositories."
+    condition = try(
+      jsondecode(aws_iam_role_policy.ecs_task_execution_policies["api"].policy).Version == "2012-10-17" &&
+      alltrue([
+        for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies["api"].policy).Statement :
+        toset(keys(statement)) == toset(["Sid", "Effect", "Action", "Resource"])
+      ]) &&
+      { for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies["api"].policy).Statement : statement.Sid => {
+        effect    = statement.Effect
+        actions   = toset(flatten([statement.Action]))
+        resources = toset(flatten([statement.Resource]))
+        } } == { for sid, expected in {
+        AllowECRAuthorization = {
+          effect    = "Allow"
+          actions   = toset(["ecr:GetAuthorizationToken"])
+          resources = toset(["*"])
+        }
+        AllowECRImagePulls = {
+          effect    = "Allow"
+          actions   = toset(["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"])
+          resources = var.ecs_iam_services.api.ecr_repository_arns
+        }
+        AllowCloudWatchLogWrites = {
+          effect    = "Allow"
+          actions   = toset(["logs:CreateLogStream", "logs:PutLogEvents"])
+          resources = toset([for arn in var.ecs_iam_services.api.log_group_arns : "${arn}:*"])
+        }
+        AllowSecretsManagerRead = {
+          effect    = "Allow"
+          actions   = toset(["secretsmanager:GetSecretValue"])
+          resources = var.ecs_iam_services.api.execution_secret_arns
+        }
+        AllowSSMParameterRead = {
+          effect    = "Allow"
+          actions   = toset(["ssm:GetParameters"])
+          resources = var.ecs_iam_services.api.execution_ssm_parameter_arns
+        }
+        AllowExecutionKMSDecrypt = {
+          effect    = "Allow"
+          actions   = toset(["kms:Decrypt"])
+          resources = var.ecs_iam_services.api.task_execution_kms_key_arns
+        }
+        AllowGuardDutyAgentImagePulls = {
+          effect    = "Allow"
+          actions   = toset(["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"])
+          resources = var.ecs_iam_services.api.guardduty_agent_ecr_repository_arns
+        }
+      } : sid => expected if length(expected.resources) > 0 },
+      false
+    )
+    error_message = "Generated execution policy must match the exact allowed statement, effect, action, and resource contract."
   }
 
-  assert {
-    condition = length([
-      for statement in jsondecode(
-        aws_iam_role_policy.ecs_task_execution_policies["api"].policy
-      ).Statement : statement
-      if statement.Sid == "AllowSecretsManagerRead" &&
-      toset(flatten([statement.Resource])) == toset([
-        "arn:aws:secretsmanager:us-east-1:123456789012:secret:app-AbCdEf",
-        "arn:aws:secretsmanager:us-east-1:123456789012:secret:scanner-GhIjKl"
-      ])
-    ]) == 1
-
-    error_message = "Secrets Manager permissions must cover exactly the declared underlying secret ARNs."
-  }
-
-  assert {
-    condition = length([
-      for statement in jsondecode(
-        aws_iam_role_policy.ecs_task_execution_policies["api"].policy
-      ).Statement : statement
-      if statement.Sid == "AllowSSMParameterRead" &&
-      toset(flatten([statement.Resource])) == toset([
-        "arn:aws:ssm:us-east-1:123456789012:parameter/app/config"
-      ])
-    ]) == 1
-
-    error_message = "SSM permissions must be restricted to declared parameter ARNs."
-  }
-
-  assert {
-    condition = length([
-      for statement in jsondecode(
-        aws_iam_role_policy.ecs_task_execution_policies["api"].policy
-      ).Statement : statement
-      if statement.Sid == "AllowExecutionKMSDecrypt" &&
-      toset(flatten([statement.Resource])) == toset([
-        "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
-      ])
-    ]) == 1
-
-    error_message = "KMS decrypt permissions must be restricted to declared execution keys."
-  }
 }
 
 run "empty_services_generate_no_ecs_iam" {
@@ -190,6 +188,10 @@ run "multi_service_iam_isolation" {
         ecr_repository_arns = [
           "arn:aws:ecr:us-east-1:123456789012:repository/api",
           "arn:aws:ecr:us-east-1:123456789012:repository/scanner"
+        ]
+
+        guardduty_agent_ecr_repository_arns = [
+          "arn:aws:ecr:us-east-1:987654321098:repository/aws-guardduty-agent-fargate"
         ]
 
         log_group_arns = [
@@ -240,98 +242,62 @@ run "multi_service_iam_isolation" {
     error_message = "Each ECS service must have its own execution role, task role, and execution policy."
   }
 
-  # Each service can pull only from its own declared repositories.
+  # Compare every service independently, including present and absent optional
+  # grants. The GuardDuty repository intentionally belongs to another account.
   assert {
     condition = alltrue([
       for service_name, service in var.ecs_iam_services :
-      length([
-        for statement in jsondecode(
-          aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
-        ).Statement : statement
-        if statement.Sid == "AllowECRImagePulls" &&
-        toset(flatten([statement.Resource])) == service.ecr_repository_arns
-      ]) == 1
+      try(
+        jsondecode(aws_iam_role_policy.ecs_task_execution_policies[service_name].policy).Version == "2012-10-17" &&
+        alltrue([
+          for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies[service_name].policy).Statement :
+          toset(keys(statement)) == toset(["Sid", "Effect", "Action", "Resource"])
+        ]) &&
+        { for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies[service_name].policy).Statement : statement.Sid => {
+          effect    = statement.Effect
+          actions   = toset(flatten([statement.Action]))
+          resources = toset(flatten([statement.Resource]))
+          } } == { for sid, expected in {
+          AllowECRAuthorization = {
+            effect    = "Allow"
+            actions   = toset(["ecr:GetAuthorizationToken"])
+            resources = toset(["*"])
+          }
+          AllowECRImagePulls = {
+            effect    = "Allow"
+            actions   = toset(["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"])
+            resources = service.ecr_repository_arns
+          }
+          AllowCloudWatchLogWrites = {
+            effect    = "Allow"
+            actions   = toset(["logs:CreateLogStream", "logs:PutLogEvents"])
+            resources = toset([for arn in service.log_group_arns : "${arn}:*"])
+          }
+          AllowSecretsManagerRead = {
+            effect    = "Allow"
+            actions   = toset(["secretsmanager:GetSecretValue"])
+            resources = service.execution_secret_arns
+          }
+          AllowSSMParameterRead = {
+            effect    = "Allow"
+            actions   = toset(["ssm:GetParameters"])
+            resources = service.execution_ssm_parameter_arns
+          }
+          AllowExecutionKMSDecrypt = {
+            effect    = "Allow"
+            actions   = toset(["kms:Decrypt"])
+            resources = service.task_execution_kms_key_arns
+          }
+          AllowGuardDutyAgentImagePulls = {
+            effect    = "Allow"
+            actions   = toset(["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"])
+            resources = service.guardduty_agent_ecr_repository_arns
+          }
+        } : sid => expected if length(expected.resources) > 0 },
+        false
+      )
     ])
-
-    error_message = "ECR pull permissions must remain isolated to each service's declared repository inventory."
-  }
-
-  # CloudWatch log-write permissions must also remain isolated.
-  assert {
-    condition = alltrue([
-      for service_name, service in var.ecs_iam_services :
-      length([
-        for statement in jsondecode(
-          aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
-        ).Statement : statement
-        if statement.Sid == "AllowCloudWatchLogWrites" &&
-        toset(flatten([statement.Resource])) == toset([
-          for arn in service.log_group_arns : "${arn}:*"
-        ])
-      ]) == 1
-    ])
-
-    error_message = "CloudWatch log-write permissions must match each service's own log groups."
-  }
-
-  # No service should inherit another service's Secrets Manager permissions.
-  assert {
-    condition = alltrue([
-      for service_name, service in var.ecs_iam_services :
-      length([
-        for statement in jsondecode(
-          aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
-        ).Statement : statement
-        if statement.Sid == "AllowSecretsManagerRead" &&
-        toset(flatten([statement.Resource])) == service.execution_secret_arns
-      ]) == 1
-    ])
-
-    error_message = "Secrets Manager read permissions must remain isolated between ECS services."
-  }
-
-  # Verify exact optional-statement inventory and API-only SSM/KMS scopes.
-  assert {
-    condition = (
-      alltrue([
-        for service_name, service in var.ecs_iam_services :
-        toset([
-          for statement in jsondecode(
-            aws_iam_role_policy.ecs_task_execution_policies[service_name].policy
-          ).Statement : statement.Sid
-          ]) == toset(concat(
-          [
-            "AllowECRAuthorization",
-            "AllowECRImagePulls",
-            "AllowCloudWatchLogWrites"
-          ],
-          length(service.execution_secret_arns) > 0 ? ["AllowSecretsManagerRead"] : [],
-          length(service.execution_ssm_parameter_arns) > 0 ? ["AllowSSMParameterRead"] : [],
-          length(service.task_execution_kms_key_arns) > 0 ? ["AllowExecutionKMSDecrypt"] : [],
-          length(service.guardduty_agent_ecr_repository_arns) > 0 ? ["AllowGuardDutyAgentImagePulls"] : []
-        ))
-      ]) &&
-      length([
-        for statement in jsondecode(
-          aws_iam_role_policy.ecs_task_execution_policies["api"].policy
-        ).Statement : statement
-        if statement.Sid == "AllowSSMParameterRead" &&
-        toset(flatten([statement.Resource])) == toset([
-          "arn:aws:ssm:us-east-1:123456789012:parameter/api/config"
-        ])
-      ]) == 1 &&
-      length([
-        for statement in jsondecode(
-          aws_iam_role_policy.ecs_task_execution_policies["api"].policy
-        ).Statement : statement
-        if statement.Sid == "AllowExecutionKMSDecrypt" &&
-        toset(flatten([statement.Resource])) == toset([
-          "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
-        ])
-      ]) == 1
-    )
-
-    error_message = "Optional IAM statements must be present only when declared and must retain exact resource scopes."
+    error_message = "Each generated execution policy must contain exactly its allowed statements, effects, actions, and resources, including optional GuardDuty pulls."
   }
 
   # Managed application policies attach only to the intended task role.
@@ -654,7 +620,9 @@ run "n5ca_accept_exact_ssm_and_kms_partition_arns" {
     ecs_iam_services = {
       for partition, region in { aws = "us-east-1", aws-us-gov = "us-gov-west-1", aws-cn = "cn-north-1" } :
       partition => merge(var.ecs_iam_services.api, {
-        execution_ssm_parameter_arns = ["arn:${partition}:ssm:${region}:123456789012:parameter/app/Config_1.2-test"]
+        ecr_repository_arns                 = ["arn:${partition}:ecr:${region}:123456789012:repository/team/app.v2_test--image"]
+        guardduty_agent_ecr_repository_arns = ["arn:${partition}:ecr:${region}:987654321098:repository/aws-guardduty-agent-fargate"]
+        execution_ssm_parameter_arns        = ["arn:${partition}:ssm:${region}:123456789012:parameter/app/Config_1.2-test"]
         task_execution_kms_key_arns = [
           "arn:${partition}:kms:${region}:123456789012:key/22222222-2222-2222-2222-222222222222",
           "arn:${partition}:kms:${region}:123456789012:key/mrk-0123456789abcdef0123456789abcdef"
@@ -667,18 +635,21 @@ run "n5ca_accept_exact_ssm_and_kms_partition_arns" {
     condition = alltrue([
       for service_name, service in var.ecs_iam_services : alltrue([
         for expected in [
-          { sid = "AllowSSMParameterRead", action = "ssm:GetParameters", resources = service.execution_ssm_parameter_arns },
-          { sid = "AllowExecutionKMSDecrypt", action = "kms:Decrypt", resources = service.task_execution_kms_key_arns }
+          { sid = "AllowECRImagePulls", actions = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"], resources = service.ecr_repository_arns },
+          { sid = "AllowGuardDutyAgentImagePulls", actions = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"], resources = service.guardduty_agent_ecr_repository_arns },
+          { sid = "AllowSSMParameterRead", actions = ["ssm:GetParameters"], resources = service.execution_ssm_parameter_arns },
+          { sid = "AllowExecutionKMSDecrypt", actions = ["kms:Decrypt"], resources = service.task_execution_kms_key_arns }
           ] : length([
             for statement in jsondecode(aws_iam_role_policy.ecs_task_execution_policies[service_name].policy).Statement : statement
-            if statement.Sid == expected.sid &&
-            toset(flatten([statement.Action])) == toset([expected.action]) &&
+            if statement.Sid == expected.sid && statement.Effect == "Allow" &&
+            toset(flatten([statement.Action])) == toset(expected.actions) &&
             toset(flatten([statement.Resource])) == expected.resources
         ]) == 1
       ])
     ])
-    error_message = "All three AWS partitions must retain exact SSM and KMS key scopes, including multi-Region keys."
+    error_message = "All three AWS partitions must retain exact ECR, cross-account GuardDuty, SSM, and KMS scopes."
   }
+
 }
 
 
@@ -723,6 +694,62 @@ run "reject_secret_selector_in_iam" {
         execution_secret_arns = [
           "arn:aws:secretsmanager:us-east-1:123456789012:secret:app-AbCdEf:password::"
         ]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "reject_ecr_wildcard_resource" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        ecr_repository_arns = ["*"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "reject_guardduty_ecr_wildcard_resource" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        guardduty_agent_ecr_repository_arns = ["*"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "reject_ecr_malformed_repository_arn" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        ecr_repository_arns = ["arn:aws:ecr:us-east-1:123456789012:repository/team//app"]
+      })
+    }
+  }
+
+  expect_failures = [var.ecs_iam_services]
+}
+
+run "reject_guardduty_ecr_repository_wildcard" {
+  command = plan
+
+  variables {
+    ecs_iam_services = {
+      api = merge(var.ecs_iam_services.api, {
+        guardduty_agent_ecr_repository_arns = ["arn:aws:ecr:us-east-1:987654321098:repository/aws-guardduty-agent*"]
       })
     }
   }

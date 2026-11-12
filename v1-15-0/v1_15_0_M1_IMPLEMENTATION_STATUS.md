@@ -1,14 +1,14 @@
 # v1.15.0 M1 — Implementation and Acceptance Status
 
-**Status: In progress — implementation complete, acceptance pending.** N1/N2, N3, N4, N5A, N5B, N5C-A, and N5C-A1 are implemented. This N5C-B record closes documentation discrepancies only. Final independent review, live AWS qualification, owner acceptance, and merge remain outstanding; M1 is not fully accepted.
+**Status: In progress — implementation complete, acceptance pending.** N1/N2, N3, N4, N5A, N5B, N5C-A, and N5C-A1 are implemented. The complete PR received independent review at `afdbda0edf314c135d0c24a82750756ed560a0a7` with disposition **ACCEPT WITH DEFERRED ITEMS** and no code blockers. N5D targeted corrections are recorded below; correction review, live AWS qualification, owner acceptance, and merge remain outstanding. M1 is not fully accepted.
 
-**Implementation:** [PR #967](https://github.com/jcub-i0/terraform-secure-baseline/pull/967), branch `feat/v1.15.0-m1-sidecars`, verified HEAD `89436e6b4f455fad5dd71a5190e52f41dd77837b`. The PR remains open and draft. Evidence below applies to that implementation, not a future acceptance commit.
+**Implementation:** [PR #967](https://github.com/jcub-i0/terraform-secure-baseline/pull/967), branch `feat/v1.15.0-m1-sidecars`, N5C-B implementation evidence at `89436e6b4f455fad5dd71a5190e52f41dd77837b`; full review and N5D starting HEAD `afdbda0edf314c135d0c24a82750756ed560a0a7`. The PR remains open and draft. Section B retains historical evidence; section F describes uncommitted N5D changes, not a future acceptance commit.
 
 ## A. Scope delivered
 
 - One essential primary application container plus up to nine optional Terraform-configured sidecars, with digest-pinned images, optional native health checks, validated startup dependencies, environment variables, Secrets Manager/SSM references, and per-container CloudWatch logging.
 - Sidecar resource settings, command/entry-point overrides, ports, and root-filesystem mode; shared task-local volumes and container mount points; optional task ephemeral storage and container startup/shutdown timeouts. Primary and sidecar interfaces are intentionally different; consult the [module usage and limits](../modules/ecs_service/README.md#container-and-validation-limits).
-- Per-service execution IAM derived from all configured containers, deduplicated repository/secret/parameter resources, Secrets Manager selector normalization, explicit KMS key grants, and direct IAM-input wildcard-resource rejection. Application task-role permissions remain separate from execution permissions.
+- Per-service execution IAM derived from all configured containers, deduplicated repository/secret/parameter resources, Secrets Manager selector normalization, explicit KMS key grants, and exact direct-IAM resource validation for Secrets Manager, SSM, KMS keys, and (in N5D) application/GuardDuty ECR repositories. ECR authorization intentionally retains `Resource = "*"`; CloudWatch log-stream grants retain their scoped suffix wildcard. Application task-role permissions remain separate from execution permissions.
 - Canonical environment-root propagation, complete expected task-definition inventory and runtime comparison, Terraform native positive/negative regressions, offline validator regressions, and CI enforcement. Empty sidecar configuration retains the existing single-container service and resource-address model.
 
 The [runtime design](../docs/ecs-runtime-design.md) and [Terraform variable contract](../modules/ecs_service/variables.tf) define the interfaces and validation boundaries; this record does not expand them.
@@ -69,13 +69,13 @@ These are implemented scope boundaries, not a declaration of final M1 acceptance
 
 The earlier independent review reported **31 nonblocking Checkov Terraform findings in unchanged infrastructure files**. The available historical local artifact `/tmp/pr967-independent-8mn973kr/checkov.json` corroborates 31 Terraform failures (SHA-256 `67eaec3177cf65a68d9817135023ec645709114103be518db51877214e4853ed`). Its 11 affected file paths are unchanged between PR base `573f5da090bf65b1534b68641ea3ab3904c7a9c3` and implementation HEAD `89436e6b`; this source comparison does **not** establish that the current finding count or disposition is unchanged. The historical artifact is not a durable repository acceptance record.
 
-The static-analysis workflow uses Checkov `--soft-fail` and validates report integrity; a green workflow does not mean zero Checkov findings. This checkpoint neither rescans nor suppresses/remediates them. Final review must assess the acceptance-commit evidence and retain any unresolved M1-relevant findings. No additional implementation defect was established by this focused documentation review; it does not replace the full independent review.
+The static-analysis workflow uses Checkov `--soft-fail` and validates report integrity; a green workflow does not mean zero Checkov findings. Neither N5C-B nor N5D rescans, suppresses, or remediates those historical findings. Acceptance must assess the current evidence and retain any unresolved M1-relevant findings. The later full-review dispositions are recorded in section F.
 
 ## E. Outstanding acceptance gates
 
 All gates below remain outstanding:
 
-1. Final independent Codex review against the complete PR at the intended acceptance commit, including disposition of unresolved findings.
+1. Review N5D corrections and any subsequent changes at the intended acceptance commit, including disposition of deferred findings; the complete PR review at `afdbda0` does not certify later changes.
 2. Explicitly approved synthetic AWS deployment testing with bounded scope and cost.
 3. Positive sidecar-readiness evidence, including observed `HEALTHY` dependency behavior before primary startup.
 4. Negative sidecar health/dependency behavior demonstrating the expected failure or blocked startup.
@@ -85,3 +85,27 @@ All gates below remain outstanding:
 8. Evidence review and retention, cleanup/rollback documentation, final owner approval, and PR merge.
 
 The original [M1 roadmap acceptance criteria](./ROADMAP_v1_15_0.md#milestones) remain unchanged. Documentation closeout does not authorize deployment, acceptance, or merge.
+
+## F. N5D — Targeted review corrections
+
+These changes follow the independent review at `afdbda0edf314c135d0c24a82750756ed560a0a7`. They were locally validated before commit; commit-level CI, focused independent recheck, and final owner acceptance remain separate gates.
+
+| Finding | Disposition |
+|---|---|
+| R01 — Fargate sizing | Implemented: the existing matrix now also accepts 32 vCPUs with exactly 61440, 122880, or 249856 MiB. The previous 16-vCPU ceiling is superseded; existing combinations and platform restrictions are preserved. |
+| R02 — direct IAM ECR scope | Implemented: both application and GuardDuty pull inputs require exact repository ARNs in `aws`, `aws-us-gov`, or `aws-cn`; cross-account repositories remain valid. ECR authorization is unchanged. |
+| R03 — generated policy assertions | Implemented: existing policy tests compare complete statement identities, effects, action sets, and resource sets, including optional GuardDuty grants. |
+| R04 — integration fixtures | Implemented: existing root fixtures preserve nonempty nested dependencies, nondefault ranks and health timings; the existing rendering fixture checks positive `COMPLETE`/`SUCCESS` prerequisites alongside `START`/`HEALTHY`. |
+| R05 — optional simplification | Deferred. No current correctness defect was established that requires a broad validation refactor or test consolidation. |
+| R06 — diff whitespace | Corrected the two added trailing-whitespace lines; runtime behavior is unchanged. |
+
+Local validation passed on the uncommitted N5D patch: **185 native runs** (ECS 103, IAM 32, baseline 41, dev/staging/prod 3 each) and **19 offline IAM unittest methods**. Terraform formatting, Markdown lint, local links/fragments, the new AWS sizing link, shell syntax, and the effective cumulative diff from PR merge base to working tree passed. The committed-only `origin/main...HEAD` diff still contains R06's whitespace until these fixes are committed.
+
+Isolated before/after checks established defect detection:
+
+- The three supported 32-vCPU sizes failed the old matrix and pass the correction; an unsupported size is rejected, and a temporary 1.3.0 platform probe confirms the existing platform guard.
+- All four invalid ECR cases passed the old IAM boundary and fail the new ECR validation specifically. Positive fixtures preserve exact repository scopes across all three supported partitions, including cross-account GuardDuty repositories.
+- Adding `ecr:DeleteRepository` to a temporary policy generator passed all 28 old IAM runs but failed three strengthened assertions in the updated suite.
+- Temporarily dropping the root's optional sidecar health timeout passed the old propagation fixture and failed the updated fixture. Replacing sidecar completion conditions with `START` passed the old rendering fixture and failed the updated fixture. Removing a required nested dependency attribute is rejected by both versions, preserving existing N5A protection.
+
+Evidence is in the temporary local directory `/tmp/m1-n5d-ofii8387/` (`validation-summary.json`, native JUnit/logs, and before/after probe logs). Mutated copies were restored; production resource definitions were never edited. Retain required evidence with acceptance. GitHub CI at the starting HEAD does not cover this uncommitted patch; acceptance still requires section E's gates.

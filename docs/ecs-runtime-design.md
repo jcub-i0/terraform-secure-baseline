@@ -4,7 +4,7 @@
 
 This document describes the implemented ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
-M1 multi-container implementation is complete with acceptance pending. Final independent review, live AWS sidecar-readiness qualification, owner acceptance, and PR merge remain outstanding; historical runtime qualification below does not establish M1 acceptance. See the [M1 implementation and acceptance record](../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md).
+M1 multi-container implementation is complete with acceptance pending. The complete PR was independently reviewed at `afdbda0`; review of the N5D corrections, live AWS sidecar-readiness qualification, owner acceptance, and PR merge remain outstanding; historical runtime qualification below does not establish M1 acceptance. See the [M1 implementation and acceptance record](../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md).
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 

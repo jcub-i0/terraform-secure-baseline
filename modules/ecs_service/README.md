@@ -315,7 +315,11 @@ ARM64
 
 through `cpu_architecture`.
 
-The module validates supported Fargate CPU and memory combinations before deployment.
+The module validates Linux Fargate task sizes from 0.25 through 32 vCPUs. For
+`cpu = 32768` (32 vCPUs), `memory` must be exactly `61440`, `122880`, or `249856`
+MiB (60, 120, or 244 GiB). Existing smaller task-size combinations remain
+supported. As with all tasks of at least 8 vCPUs, 32-vCPU tasks require platform
+`1.4.0` or `LATEST`. See [AWS Fargate task sizes](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size).
 
 The Fargate platform version defaults to `LATEST`, but it can be explicitly set to a specific version.
 
@@ -855,7 +859,7 @@ The module supports one essential primary application container and up to nine o
 
 The module does not implement standalone bounded/one-off jobs, scheduled Fargate tasks, migration-aware releases, or application-level recovery tests. A nonessential prerequisite within a service task is not a generic job orchestration interface. The ALB health-check path belongs to the optional target group; it must not be confused with a task-definition container health check.
 
-The existing workload suite remains 16 validators. `validate-ecs-runtime.sh` compares the complete configured container inventory and sidecar health-check definitions, while live native-health polling remains primary-only; `validate-iam.sh` checks the relevant role/policy contract. Neither an input check nor a normal steady-state pass replaces live failure-injection evidence or the retirement gates. M1 implementation is complete with acceptance pending; final independent review, live AWS sidecar-readiness qualification, and owner acceptance remain outstanding. See the [M1 implementation status](../../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md) and [runtime validation design](../../docs/ecs-runtime-design.md#m1-container-inventory-compatibility).
+The existing workload suite remains 16 validators. `validate-ecs-runtime.sh` compares the complete configured container inventory and sidecar health-check definitions, while live native-health polling remains primary-only; `validate-iam.sh` checks the relevant role/policy contract. Neither an input check nor a normal steady-state pass replaces live failure-injection evidence or the retirement gates. M1 implementation is complete with acceptance pending; review of the N5D corrections, live AWS sidecar-readiness qualification, and owner acceptance remain outstanding. See the [M1 implementation status](../../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md) and [runtime validation design](../../docs/ecs-runtime-design.md#m1-container-inventory-compatibility).
 
 ## Implementation Sources
 

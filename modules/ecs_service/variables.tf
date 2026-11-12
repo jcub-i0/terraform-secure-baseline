@@ -323,6 +323,10 @@ variable "services" {
         service.memory >= 32768 &&
         service.memory <= 122880 &&
         service.memory % 8192 == 0
+      ) ||
+      (
+        service.cpu == 32768 &&
+        contains([61440, 122880, 249856], service.memory)
       )
     ])
 

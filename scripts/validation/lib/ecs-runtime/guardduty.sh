@@ -207,7 +207,7 @@ validate_guardduty_service_tasks() {
     expected_container_names_json="$(
       jq -c --arg service "$service_name" '.[$service].containers | keys' <<< "$ECS_SERVICE_CONFIGURATION_JSON"
     )"
-    
+
     if ! jq -e --argjson expected "$expected_container_names_json" \
       --arg agent "$(jq -r '.name' <<< "$guardduty_container_json")" '
         ([.containers[].name] | sort) == (($expected + [$agent]) | sort)
