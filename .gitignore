@@ -137,3 +137,5 @@ bootstrap/*/state/backend.tf
 # Non-sensitive container workload configuration
 ##################################################################
 !environments/*/container-workloads.auto.tfvars.json
+
+AGENTS.md
