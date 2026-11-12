@@ -120,4 +120,18 @@ variable "ecs_iam_services" {
 
     error_message = "task_execution_kms_key_arns must contain exact KMS key ARNs without wildcards, not key IDs or aliases."
   }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_iam_services) : [
+        for secret_arn in service.execution_secret_arns :
+        can(regex(
+          "^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}$",
+          secret_arn
+        ))
+      ]
+    ]))
+
+    error_message = "execution_secret_arns must contain exact full Secrets Manager secret ARNs, including the six-character suffix, without wildcard resources or ECS selectors."
+  }
 }
