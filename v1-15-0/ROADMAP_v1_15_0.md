@@ -1,6 +1,6 @@
 # v1.15.0 Roadmap — Secure SaaS Application Integration
 
-**Release status:** M0 architectural direction owner-approved and independently reviewed (**ACCEPT WITH DEFERRED ITEMS** at PR #965 head `58f7886`). SG/lease enforcement, retained evidence, financial and licensing authorization remain open. M1 implementation is merged and scoped live qualification is complete: positive multi-container operation, negative `SUCCESS` prerequisite behavior, and a final 16/16 baseline-validator pass. Staging workload Destroy completed successfully. Final owner acceptance and evidence retention/sanitization decisions remain open. See the [M1 implementation and acceptance record](./v1_15_0_M1_IMPLEMENTATION_STATUS.md).
+**Release status:** M0 architectural direction owner-approved and independently reviewed (**ACCEPT WITH DEFERRED ITEMS** at PR #965 head `58f7886`). SG/lease enforcement, retained evidence, financial and licensing authorization remain open. M1 implementation is merged and scoped live qualification is complete: positive multi-container operation, negative `SUCCESS` prerequisite behavior, and a final 16/16 baseline-validator pass. Staging workload Destroy completed successfully. M1 was owner-accepted on November 13, 2026, for the documented qualification scope; evidence retention/sanitization remains a nonblocking follow-up. See the [M1 implementation and acceptance record](./v1_15_0_M1_IMPLEMENTATION_STATUS.md).
 **Starting point:** `v1.14.1`
 **Reference application:** ReconoSense
 
