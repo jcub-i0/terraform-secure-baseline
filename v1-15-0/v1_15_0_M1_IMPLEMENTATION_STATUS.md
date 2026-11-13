@@ -1,8 +1,8 @@
 # v1.15.0 M1 — Implementation and Acceptance Status
 
-**Status: In progress — implementation complete, acceptance pending.** N1/N2, N3, N4, N5A, N5B, N5C-A, and N5C-A1 are implemented. The complete PR received independent review at `afdbda0edf314c135d0c24a82750756ed560a0a7` with disposition **ACCEPT WITH DEFERRED ITEMS** and no code blockers. N5D corrections were committed at `26d180d6`. The subsequent validation/testing simplification in section G is locally validated in an isolated worktree and pending owner review; live AWS qualification, owner acceptance, and merge remain outstanding. M1 is not fully accepted.
+**Status: Complete — owner accepted November 13, 2026, for the documented M1 scope.** N1/N2 through N5D and the validation/testing simplification are merged. Positive multi-container operation and a negative `SUCCESS` prerequisite were qualified in staging; the final baseline export passed **16/16 validators with zero failures**. Staging workload destruction completed successfully. Owner acceptance covers the scoped results and limitations in section E; untested optional interfaces and public-evidence retention/sanitization remain explicit follow-ups.
 
-**Implementation:** [PR #967](https://github.com/jcub-i0/terraform-secure-baseline/pull/967), branch `feat/v1.15.0-m1-sidecars`, N5C-B implementation evidence at `89436e6b4f455fad5dd71a5190e52f41dd77837b`; full review and N5D starting HEAD `afdbda0edf314c135d0c24a82750756ed560a0a7`. The PR remains open and draft. Sections B and F retain historical evidence for committed implementation. Section G records the separate uncommitted simplification; it does not incorporate the owner checkout's R02 length-check follow-up.
+**Implementation:** [PR #967](https://github.com/jcub-i0/terraform-secure-baseline/pull/967) merged at `9c6de5646efc190bfb7124026f1ae63b7f1cfec7`, including cleanup `05a4c69e` and fixture correction `2dc329e3`. [PR #968](https://github.com/jcub-i0/terraform-secure-baseline/pull/968) merged the initial image release; [PR #969](https://github.com/jcub-i0/terraform-secure-baseline/pull/969) merged the staging qualification configuration. [PR #970](https://github.com/jcub-i0/terraform-secure-baseline/pull/970), branch `chore/m1-closeout`, records this owner-approved documentation closeout pending merge. Sections B, F, and G retain historical engineering evidence, including the independent **ACCEPT WITH DEFERRED ITEMS** review at `afdbda0edf314c135d0c24a82750756ed560a0a7`; the separate final owner acceptance is recorded in section E.
 
 ## A. Scope delivered
 
@@ -13,7 +13,7 @@
 
 The [runtime design](../docs/ecs-runtime-design.md) and [Terraform variable contract](../modules/ecs_service/variables.tf) define the interfaces and validation boundaries; this record does not expand them.
 
-## B. Verification evidence
+## B. Historical implementation verification
 
 ### Implementation history
 
@@ -31,7 +31,7 @@ Representative commits in PR #967 (not an exhaustive changelog):
 
 ### Local reports and repository coverage
 
-Implementation checkpoints were reported locally validated in the owner handoff. The available N5C-A local `validation-summary.json` and logs corroborate passing native suites for ECS, IAM, baseline, and dev/staging/prod propagation, plus offline IAM, runtime inventory, native health, and release-acceptance regressions. The summary records a pre-commit working tree based on `ead8dce6`; all eight recorded changed-file hashes match committed `76ed2105`. It does not independently certify the later N5C-A1 changes. These local reports are separate from GitHub CI and were inspected, not rerun, for this documentation checkpoint.
+Implementation checkpoints were reported locally validated in the owner handoff. The available N5C-A local `validation-summary.json` and logs corroborate passing native suites for ECS, IAM, baseline, and dev/staging/prod propagation, plus offline IAM, runtime inventory, native health, and release-acceptance regressions. The summary records a pre-commit working tree based on `ead8dce6`; all eight recorded changed-file hashes match committed `76ed2105`. It does not independently certify the later N5C-A1 changes. These local reports are separate from GitHub CI and were inspected, not rerun, at the historical N5C-B documentation checkpoint.
 
 Local evidence location: `/tmp/m1-n5ca-evidence/validation-summary.json`, SHA-256 `b33d3ed537a33d4ab49fe3525cd86a4d97faccb991b9e8356e509928df829d27`. This temporary report is not a durable repository artifact; retain any required historical evidence with final acceptance.
 
@@ -53,7 +53,7 @@ GitHub reported these completed PR runs for implementation HEAD `89436e6b4f455fa
 | [Docs Validation](../.github/workflows/docs-validation.yml) | Passed for the implementation HEAD, before these documentation edits | [Run 43153174764](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43153174764) |
 | [Terraform Plan](../.github/workflows/terraform-plan.yml) | Skipped; the workflow excludes draft PRs | [Run 43153174800](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43153174800) |
 
-Passing offline tests and CI do not prove zero live drift, sidecar readiness in AWS, or owner acceptance. No deployment or final acceptance is claimed here.
+Passing offline tests and CI do not prove zero live drift, sidecar readiness in AWS, or owner acceptance. These historical checkpoints precede the live evidence in section E.
 
 ## C. Accepted design limitations
 
@@ -71,20 +71,41 @@ The earlier independent review reported **31 nonblocking Checkov Terraform findi
 
 The static-analysis workflow uses Checkov `--soft-fail` and validates report integrity; a green workflow does not mean zero Checkov findings. Neither N5C-B nor N5D rescans, suppresses, or remediates those historical findings. Acceptance must assess the current evidence and retain any unresolved M1-relevant findings. The later full-review dispositions are recorded in section F.
 
-## E. Outstanding acceptance gates
+## E. Live qualification and closeout
 
-All gates below remain outstanding:
+### Provenance and final evidence
 
-1. Review the validation/testing simplification and any subsequent changes at the intended acceptance commit; historical reviews do not certify this uncommitted cleanup.
-2. Explicitly approved synthetic AWS deployment testing with bounded scope and cost.
-3. Positive sidecar-readiness evidence, including observed `HEALTHY` dependency behavior before primary startup.
-4. Negative sidecar health/dependency behavior demonstrating the expected failure or blocked startup.
-5. Continued single-container compatibility evidence in the live qualification, alongside existing offline regressions.
-6. Live runtime-validator, IAM, secret retrieval, and logging verification for the configured containers.
-7. Final Terraform Plan and all required CI checks at the acceptance commit.
-8. Evidence review and retention, cleanup/rollback documentation, final owner approval, and PR merge.
+Qualification used the `staging` environment with effective `deployment_profile = production`, Linux/X86_64 Fargate platform `1.4.0`, three fixed-count service tasks, and the shared image digest selected by PR #968. All three configured containers used that same repository and digest; see the [captured task definition](./evidence/m1-live/task-definition.json).
 
-The original [M1 roadmap acceptance criteria](./ROADMAP_v1_15_0.md#milestones) remain unchanged. Documentation closeout does not authorize deployment, acceptance, or merge.
+The [source marker](./evidence/m1-live/validation-commit.txt) records `a6ee164caacd56398b3be5a9aef1175a644beb3e`, PR #969's feature commit. The deployed `main` merge commit was **`5cbf78e8d64eb64150af3b9d49d0bda13fb3a79f`**. The final validation workflow also checked out that merge commit; `a6ee164c` is neither its workflow SHA nor the deployed commit. The source and merge commits have identical staging qualification configuration. Evidence was subsequently committed on the closeout branch at `3b4cedb9`; that is not a deployment or validation SHA.
+
+| Operation (attempt 1) | Verified result | Evidence |
+|---|---|---|
+| Multi-container Plan / Apply | Successful saved plan, Apply, and ECS release acceptance at `5cbf78e8` | [Run 43499646691](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43499646691) |
+| Final baseline export | Successful; **16/16 PASS, 0 failures**, including ECS runtime and IAM | [Run 43512991768](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43512991768), [summary](./evidence/m1-live/validation/2026-11-13T214233/summary.md), [JSON](./evidence/m1-live/validation/2026-11-13T214233/summary.json) |
+| Staging retirement Plan / Apply | Successful, including retirement Stage 1 plan validation and durable-data inventory | [Run 43514377171](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43514377171) |
+| Staging workload Destroy | **Success:** all four jobs passed; Terraform reported 0 added, 0 changed, **341 destroyed** at `5cbf78e8` | [Run 43515303509](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43515303509) |
+
+Both committed summaries are byte-identical to the final run's [artifact 14079886315](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43512991768), `baseline-validation-staging-43512991768-1`. The downloaded ZIP matches GitHub's SHA-256 `f88617498ee4ef6da01eec03795d83a838c3d3d55f969ed2c2607a73611873bf`. The report time is `2026-11-13T21:42:33+00:00`; validation used GitHub OIDC credentials. The repository contains only the two summaries, not the 16 per-validator logs listed by the generated report; those logs are in the artifact. Its recorded expiry is **2026-12-13**, so it is not durable retention by itself.
+
+### Qualification results and limits
+
+- **Positive:** the owner's live observation recorded three running Fargate service tasks, all `HEALTHY`; primary `test` and essential `readiness` were running and healthy, and nonessential `init` had stopped with exit code `0`. The task definition declares `readiness` → `init` with `SUCCESS` and `test` → `readiness` with `HEALTHY`. The final artifact's `validate-ecs-runtime.log` independently confirms three healthy primary containers, exact task-definition inventory and health-check configuration, steady-state service health, and three running GuardDuty agents. The positive `DescribeTasks` snapshot is not among the five committed evidence files; the detailed sidecar observations are owner-supplied, not reconstructed from the summary.
+- **Negative:** the [standalone task capture](./evidence/m1-live/negative-task.json) uses the same task-definition revision with `init` overridden to `exit 1`. It records `init` stopped with exit code `1`, dependent `readiness` and `test` stopped without reported exit codes, and `TaskFailedToStart` / `Task failed to start`. This supports a successful negative **`SUCCESS` prerequisite** test; it is not a negative `HEALTHY` prerequisite test or qualification of an M2 standalone-task abstraction.
+- **Security and logging:** ECS runtime and IAM validators passed; task-definition `awslogs` configuration and log-group settings were validated. The earlier owner-reported GuardDuty coverage issue had recovered: the final runtime log records `HEALTHY`, `AUTO_MANAGED`, zero unresolved issues, and coverage updated at `2026-11-13T21:40:46+00:00`. This does not establish continuous coverage throughout the earlier interval or independently verify every container's emitted log messages.
+- **Not live-tested in this multi-container qualification:** separate per-container ECR repositories, Secrets Manager/SSM retrieval and optional startup-secret KMS grants, shared volumes/mounts, explicit expanded ephemeral storage, custom start/stop timeouts, alternate architectures, and the full range of optional ports/environment/entry-point settings. `START`/`COMPLETE` behavior and legacy single-container compatibility retain offline regression evidence; this run does not establish a separate live single-container regression. Startup timestamps did not independently prove container ordering. Passing checks do not prove zero live drift or qualify every optional interface.
+
+### Teardown, evidence hygiene, and owner acceptance
+
+Staging workload foundation destruction completed successfully, as expected for closeout. After the owner reported completion, GitHub run `43515303509` was verified as `completed` / `success`, with all four jobs passing. The [final Apply job](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/43515303509/job/132197854602) logged `Apply complete! Resources: 0 added, 0 changed, 341 destroyed.` at `2026-11-13T22:38:52Z`. The completed evidence was retrieved once without polling. This verifies the workflow outcome, not zero residual AWS resources: no independent post-destroy residual-resource inspection was performed. The separately managed bootstrap and state stacks are outside this workload Destroy; their destruction is not claimed. The completed pre-retirement qualification remains valid.
+
+The five evidence files in PR #970 were reviewed without alteration. `negative-task.json` exposes private IP addresses, internal DNS, a MAC address, subnet/ENI IDs, task/container/runtime/attachment identifiers, and infrastructure ARNs. `task-definition.json` exposes account, ECR, task-definition, IAM-role, log-group, and registering-session identifiers; both summaries expose account IDs and the infrastructure name prefix. No plaintext credentials or secret values were identified in these five files. These identifiers are unnecessary for a public behavioral record.
+
+**Recommendation: replace the public raw AWS metadata with explicitly labeled sanitized evidence after privately retaining the originals.** No evidence files were changed during this closeout. Retain byte-for-byte originals and the full export in an access-controlled durable location, with SHA-256 hashes and run/commit provenance; then replace the two raw JSON captures and both summaries with sanitized derivatives using consistent placeholders for account/resource/network identities. The source-commit marker can remain unchanged. Keep full validator logs private unless separately sanitized; locally present ignored logs are not part of the five committed files. Preserve container names, image digests, dependency/health settings, statuses, exit codes (including absent values), timestamps, and workflow/commit links. Keep any identity mapping private. Removing values from a later commit does not remove them from existing public Git history; any history cleanup requires a separate owner decision.
+
+**Owner acceptance — November 13, 2026:** The owner explicitly approved closing M1 on the basis of the scoped implementation, positive and negative qualification, passing baseline evidence, and successful staging teardown, with the limitations above accepted as limitations rather than additional live-tested claims. Acceptance does not imply a negative `HEALTHY` test, full optional-interface qualification, independent zero-residual AWS verification, or compliance certification.
+
+**Nonblocking follow-ups:** Privately retain the original evidence and full validator logs with hashes and provenance, preserve the positive task observation if available, and decide on sanitized public derivatives and any needed treatment of previously published Git history. PR #970 still requires its final CI and merge. The original [M1 criteria](./ROADMAP_v1_15_0.md#milestones) remain unchanged; unexercised interfaces are not silently marked qualified. This record does not authorize deployment, new qualification, or AWS changes.
 
 ## F. N5D — Historical targeted review corrections
 
@@ -108,15 +129,15 @@ Isolated before/after checks established defect detection:
 - Adding `ecr:DeleteRepository` to a temporary policy generator passed all 28 old IAM runs but failed three strengthened assertions in the updated suite.
 - Temporarily dropping the root's optional sidecar health timeout passed the old propagation fixture and failed the updated fixture. Replacing sidecar completion conditions with `START` passed the old rendering fixture and failed the updated fixture. Removing a required nested dependency attribute is rejected by both versions, preserving existing N5A protection.
 
-Evidence is in the temporary local directory `/tmp/m1-n5d-ofii8387/` (`validation-summary.json`, native JUnit/logs, and before/after probe logs). Mutated copies were restored; production resource definitions were never edited. Retain required evidence with acceptance. The final N5D recheck confirmed module, static-analysis, and documentation CI passed for `26d180d6`; Terraform Plan was skipped for the draft PR. That evidence does not cover the later cleanup; section E remains outstanding.
+Evidence is in the temporary local directory `/tmp/m1-n5d-ofii8387/` (`validation-summary.json`, native JUnit/logs, and before/after probe logs). Mutated copies were restored; production resource definitions were never edited. Retain required evidence with acceptance. The final N5D recheck confirmed module, static-analysis, and documentation CI passed for `26d180d6`; Terraform Plan was skipped for the draft PR. That historical evidence does not cover the later cleanup; section E records the subsequent live qualification and remaining closeout work.
 
-## G. Validation and testing simplification — pending owner review
+## G. Historical validation and testing simplification — merged
 
-This owner-authorized cleanup starts from committed `26d180d6` on temporary branch `cleanup/v1.15.0-m1-validation`, in `/tmp/terraform-secure-baseline-m1-simplify`. The original checkout and its four uncommitted R02/documentation files are preserved. The stricter repository-name length follow-up was not incorporated: AWS name limits are not a least-privilege control. The IAM module still rejects wildcard ECR, secret, parameter, and KMS resources.
+This owner-authorized cleanup started from committed `26d180d6` on temporary branch `cleanup/v1.15.0-m1-validation`, in `/tmp/terraform-secure-baseline-m1-simplify`. At that checkpoint, the original checkout and its four uncommitted R02/documentation files were preserved. The cleanup was subsequently committed at [05a4c69e](https://github.com/jcub-i0/terraform-secure-baseline/commit/05a4c69e84584d8dc92ef70150c3f21104105fa3), followed by the fixture correction at `2dc329e3`; both are included in merged PR #967. The stricter repository-name length follow-up was not incorporated: AWS name limits are not a least-privilege control. The IAM module still rejects wildcard ECR, secret, parameter, and KMS resources.
 
 The governing standard is [validation ownership](../docs/ecs-runtime-design.md#validation-ownership): Terraform enforces security and composition; providers/AWS own routine parameter validation. The cleanup deletes CPU/memory and platform matrices, routine numeric/name/health checks, repeated baseline IAM checks, and redundant primary/sidecar checks. Secret normalization, production/retirement policies, renderers, interfaces, provider locks, CI, and runtime validators are unchanged.
 
-| Metric | Committed M1 | Cleanup |
+| Metric | Before cleanup | Cleanup checkpoint |
 |---|---:|---:|
 | Native test files | 11 | 9 |
 | Native test lines | 4,984 | 2,501 |
@@ -128,4 +149,4 @@ The suite retains legacy fixed/autoscaled rendering, multi-container health and 
 
 Local validation passed: ECS 19, IAM 8, baseline 6, and dev/staging/prod 3 native runs each; 19 offline IAM tests; 115 runtime-inventory, 18 native-health, 17 release-acceptance, and 13 task-role scenarios. Backend-disabled initialization and Terraform validation passed for all six roots using existing lockfiles. Twelve before/after positive fixtures produced identical planned address inventories, seven task definitions (complete direct-module values and baseline rendering fields), and two execution policies. Input types/defaults and all resource definitions remain unchanged.
 
-Evidence is retained temporarily in `/tmp/m1-simplify-evidence-c7ecrg7h/`. This is local evidence, not a live-drift or AWS-readiness claim. No remote workflow, authenticated AWS plan, deployment, state operation, or commit was performed. The isolated patch awaits owner review and subsequent commit-level CI; final Terraform Plan and live qualification remain outstanding.
+Historical evidence was retained temporarily in `/tmp/m1-simplify-evidence-c7ecrg7h/`. These results describe the isolated local checkpoint, during which no remote workflow, authenticated AWS plan, deployment, state operation, or commit was performed. They do not independently certify subsequent changes. The cleanup is now merged, and section E supersedes the former outstanding live-qualification status.

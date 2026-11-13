@@ -1,0 +1,190 @@
+{
+    "taskDefinition": {
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:027326805885:task-definition/tf-secure-baseline-staging-test:10",
+        "containerDefinitions": [
+            {
+                "name": "test",
+                "image": "027326805885.dkr.ecr.us-east-1.amazonaws.com/tf-secure-baseline-staging-test@sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                "cpu": 0,
+                "portMappings": [
+                    {
+                        "containerPort": 8080,
+                        "hostPort": 8080,
+                        "protocol": "tcp"
+                    }
+                ],
+                "essential": true,
+                "environment": [],
+                "mountPoints": [],
+                "volumesFrom": [],
+                "secrets": [],
+                "dependsOn": [
+                    {
+                        "containerName": "readiness",
+                        "condition": "HEALTHY"
+                    }
+                ],
+                "logConfiguration": {
+                    "logDriver": "awslogs",
+                    "options": {
+                        "awslogs-group": "/aws/ecs/tf-secure-baseline-staging/test",
+                        "mode": "non-blocking",
+                        "awslogs-region": "us-east-1",
+                        "awslogs-stream-prefix": "ecs"
+                    }
+                },
+                "healthCheck": {
+                    "command": [
+                        "CMD-SHELL",
+                        "busybox wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1"
+                    ],
+                    "interval": 10,
+                    "timeout": 5,
+                    "retries": 3,
+                    "startPeriod": 15
+                },
+                "systemControls": []
+            },
+            {
+                "name": "init",
+                "image": "027326805885.dkr.ecr.us-east-1.amazonaws.com/tf-secure-baseline-staging-test@sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                "cpu": 0,
+                "portMappings": [],
+                "essential": false,
+                "command": [
+                    "sh",
+                    "-c",
+                    "echo m1-init-complete; exit 0"
+                ],
+                "environment": [],
+                "mountPoints": [],
+                "volumesFrom": [],
+                "secrets": [],
+                "readonlyRootFilesystem": true,
+                "logConfiguration": {
+                    "logDriver": "awslogs",
+                    "options": {
+                        "awslogs-group": "/aws/ecs/tf-secure-baseline-staging/test",
+                        "mode": "non-blocking",
+                        "awslogs-region": "us-east-1",
+                        "awslogs-stream-prefix": "ecs"
+                    }
+                },
+                "systemControls": []
+            },
+            {
+                "name": "readiness",
+                "image": "027326805885.dkr.ecr.us-east-1.amazonaws.com/tf-secure-baseline-staging-test@sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                "cpu": 64,
+                "memory": 256,
+                "memoryReservation": 128,
+                "portMappings": [],
+                "essential": true,
+                "command": [
+                    "sh",
+                    "-c",
+                    "sleep 20; touch /tmp/m1-ready; echo m1-sidecar-ready; while :; do sleep 3600; done"
+                ],
+                "environment": [],
+                "mountPoints": [],
+                "volumesFrom": [],
+                "secrets": [],
+                "dependsOn": [
+                    {
+                        "containerName": "init",
+                        "condition": "SUCCESS"
+                    }
+                ],
+                "logConfiguration": {
+                    "logDriver": "awslogs",
+                    "options": {
+                        "awslogs-group": "/aws/ecs/tf-secure-baseline-staging/test",
+                        "mode": "non-blocking",
+                        "awslogs-region": "us-east-1",
+                        "awslogs-stream-prefix": "ecs"
+                    }
+                },
+                "healthCheck": {
+                    "command": [
+                        "CMD-SHELL",
+                        "test -f /tmp/m1-ready"
+                    ],
+                    "interval": 5,
+                    "timeout": 3,
+                    "retries": 3,
+                    "startPeriod": 30
+                },
+                "systemControls": []
+            }
+        ],
+        "family": "tf-secure-baseline-staging-test",
+        "taskRoleArn": "arn:aws:iam::027326805885:role/tf-secure-baseline-staging-test-ecs-task",
+        "executionRoleArn": "arn:aws:iam::027326805885:role/tf-secure-baseline-staging-test-ecs-execution",
+        "networkMode": "awsvpc",
+        "revision": 10,
+        "volumes": [],
+        "status": "ACTIVE",
+        "requiresAttributes": [
+            {
+                "name": "ecs.capability.execution-role-awslogs"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.ecr-auth"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.28"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.17"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.task-iam-role"
+            },
+            {
+                "name": "ecs.capability.container-health-check"
+            },
+            {
+                "name": "ecs.capability.execution-role-ecr-pull"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+            },
+            {
+                "name": "ecs.capability.task-eni"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+            },
+            {
+                "name": "ecs.capability.container-ordering"
+            }
+        ],
+        "placementConstraints": [],
+        "compatibilities": [
+            "EC2",
+            "MANAGED_INSTANCES",
+            "FARGATE"
+        ],
+        "runtimePlatform": {
+            "cpuArchitecture": "X86_64",
+            "operatingSystemFamily": "LINUX"
+        },
+        "requiresCompatibilities": [
+            "FARGATE"
+        ],
+        "cpu": "512",
+        "memory": "1024",
+        "registeredAt": "2026-11-13T15:19:32.769000-05:00",
+        "registeredBy": "arn:aws:sts::027326805885:assumed-role/tf-secure-baseline-staging-github-apply-role/tf-apply-43499646691"
+    },
+    "tags": []
+}

@@ -1,0 +1,198 @@
+{
+    "tasks": [
+        {
+            "attachments": [
+                {
+                    "id": "6721d92e-cc42-4189-b2dc-0d43e5a95d8f",
+                    "type": "ElasticNetworkInterface",
+                    "status": "DELETED",
+                    "details": [
+                        {
+                            "name": "subnetId",
+                            "value": "subnet-0c49b7a7cb22d4c71"
+                        },
+                        {
+                            "name": "networkInterfaceId",
+                            "value": "eni-0500921ed692da3d7"
+                        },
+                        {
+                            "name": "macAddress",
+                            "value": "0a:ff:cc:9e:01:95"
+                        },
+                        {
+                            "name": "privateDnsName",
+                            "value": "ip-10-0-18-21.ec2.internal"
+                        },
+                        {
+                            "name": "privateIPv4Address",
+                            "value": "10.0.18.21"
+                        }
+                    ]
+                }
+            ],
+            "attributes": [
+                {
+                    "name": "ecs.cpu-architecture",
+                    "value": "x86_64"
+                }
+            ],
+            "availabilityZone": "us-east-1c",
+            "clusterArn": "arn:aws:ecs:us-east-1:027326805885:cluster/tf-secure-baseline-staging-ecs",
+            "connectivity": "CONNECTED",
+            "connectivityAt": "2026-11-13T16:20:05.242000-05:00",
+            "containers": [
+                {
+                    "containerArn": "arn:aws:ecs:us-east-1:027326805885:container/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde/53a654ab-42c7-4091-8902-5590e511fd38",
+                    "taskArn": "arn:aws:ecs:us-east-1:027326805885:task/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde",
+                    "name": "aws-guardduty-agent-yweOG",
+                    "imageDigest": "sha256:ae4fb5eeadbbf7acb5c8334afceae94af172c1780a1ff34483adc8894098c7b5",
+                    "runtimeId": "772166b6ef5d458484af009bf8802bde-1008235010",
+                    "lastStatus": "STOPPED",
+                    "exitCode": 0,
+                    "networkBindings": [],
+                    "networkInterfaces": [
+                        {
+                            "attachmentId": "6721d92e-cc42-4189-b2dc-0d43e5a95d8f",
+                            "privateIpv4Address": "10.0.18.21"
+                        }
+                    ],
+                    "healthStatus": "UNKNOWN"
+                },
+                {
+                    "containerArn": "arn:aws:ecs:us-east-1:027326805885:container/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde/ec153d47-9864-4449-8634-e3e6a1d29383",
+                    "taskArn": "arn:aws:ecs:us-east-1:027326805885:task/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde",
+                    "name": "init",
+                    "image": "027326805885.dkr.ecr.us-east-1.amazonaws.com/tf-secure-baseline-staging-test@sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                    "imageDigest": "sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                    "runtimeId": "772166b6ef5d458484af009bf8802bde-0380752755",
+                    "lastStatus": "STOPPED",
+                    "exitCode": 1,
+                    "networkBindings": [],
+                    "networkInterfaces": [
+                        {
+                            "attachmentId": "6721d92e-cc42-4189-b2dc-0d43e5a95d8f",
+                            "privateIpv4Address": "10.0.18.21"
+                        }
+                    ],
+                    "healthStatus": "UNKNOWN",
+                    "cpu": "0"
+                },
+                {
+                    "containerArn": "arn:aws:ecs:us-east-1:027326805885:container/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde/f0c751a0-2756-483d-b04d-2b8072a74efa",
+                    "taskArn": "arn:aws:ecs:us-east-1:027326805885:task/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde",
+                    "name": "readiness",
+                    "image": "027326805885.dkr.ecr.us-east-1.amazonaws.com/tf-secure-baseline-staging-test@sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                    "imageDigest": "sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                    "runtimeId": "772166b6ef5d458484af009bf8802bde-2998732031",
+                    "lastStatus": "STOPPED",
+                    "networkInterfaces": [
+                        {
+                            "attachmentId": "6721d92e-cc42-4189-b2dc-0d43e5a95d8f",
+                            "privateIpv4Address": "10.0.18.21"
+                        }
+                    ],
+                    "healthStatus": "UNKNOWN",
+                    "cpu": "64",
+                    "memory": "256",
+                    "memoryReservation": "128"
+                },
+                {
+                    "containerArn": "arn:aws:ecs:us-east-1:027326805885:container/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde/f5109a97-c63a-491d-9e55-345a94afefda",
+                    "taskArn": "arn:aws:ecs:us-east-1:027326805885:task/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde",
+                    "name": "test",
+                    "image": "027326805885.dkr.ecr.us-east-1.amazonaws.com/tf-secure-baseline-staging-test@sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                    "imageDigest": "sha256:392dc3646e85bc618995acf56dbff44b8e5127421574858897cd5c2e0559f45e",
+                    "runtimeId": "772166b6ef5d458484af009bf8802bde-2949673445",
+                    "lastStatus": "STOPPED",
+                    "networkInterfaces": [
+                        {
+                            "attachmentId": "6721d92e-cc42-4189-b2dc-0d43e5a95d8f",
+                            "privateIpv4Address": "10.0.18.21"
+                        }
+                    ],
+                    "healthStatus": "UNKNOWN",
+                    "cpu": "0"
+                }
+            ],
+            "cpu": "512",
+            "createdAt": "2026-11-13T16:19:56.619000-05:00",
+            "desiredStatus": "STOPPED",
+            "enableExecuteCommand": false,
+            "executionStoppedAt": "2026-11-13T16:20:18.736000-05:00",
+            "group": "family:tf-secure-baseline-staging-test",
+            "healthStatus": "UNKNOWN",
+            "lastStatus": "STOPPED",
+            "launchType": "FARGATE",
+            "memory": "1024",
+            "overrides": {
+                "containerOverrides": [
+                    {
+                        "name": "init",
+                        "command": [
+                            "sh",
+                            "-c",
+                            "exit 1"
+                        ]
+                    },
+                    {
+                        "name": "test"
+                    },
+                    {
+                        "name": "readiness"
+                    },
+                    {
+                        "name": "aws-guardduty-agent-yweOG",
+                        "environment": [
+                            {
+                                "name": "CLUSTER_NAME",
+                                "value": "tf-secure-baseline-staging-ecs"
+                            },
+                            {
+                                "name": "REGION",
+                                "value": "us-east-1"
+                            },
+                            {
+                                "name": "HOST_PROC",
+                                "value": "/host_proc"
+                            },
+                            {
+                                "name": "AGENT_RUNTIME_ENVIRONMENT",
+                                "value": "ecsfargate"
+                            },
+                            {
+                                "name": "STAGE",
+                                "value": "prod"
+                            },
+                            {
+                                "name": "MALLOC_ARENA_MAX",
+                                "value": "2"
+                            }
+                        ],
+                        "memory": 128
+                    }
+                ],
+                "inferenceAcceleratorOverrides": []
+            },
+            "platformVersion": "1.4.0",
+            "platformFamily": "Linux",
+            "pullStartedAt": "2026-11-13T16:20:15.951000-05:00",
+            "pullStoppedAt": "2026-11-13T16:20:18.090000-05:00",
+            "startedBy": "m1-negative-prerequisite",
+            "stopCode": "TaskFailedToStart",
+            "stoppedAt": "2026-11-13T16:20:55.423000-05:00",
+            "stoppedReason": "Task failed to start",
+            "stoppingAt": "2026-11-13T16:20:41.423000-05:00",
+            "tags": [],
+            "taskArn": "arn:aws:ecs:us-east-1:027326805885:task/tf-secure-baseline-staging-ecs/772166b6ef5d458484af009bf8802bde",
+            "taskDefinitionArn": "arn:aws:ecs:us-east-1:027326805885:task-definition/tf-secure-baseline-staging-test:10",
+            "version": 4,
+            "ephemeralStorage": {
+                "sizeInGiB": 20
+            },
+            "fargateEphemeralStorage": {
+                "sizeInGiB": 20
+            }
+        }
+    ],
+    "failures": []
+}
