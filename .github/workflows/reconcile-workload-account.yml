@@ -47,7 +47,7 @@ env:
   AWS_PAGER: ""
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
-  TERRAFORM_VERSION: "1.15.8"
+  TERRAFORM_VERSION: "1.17.1"
   PLAN_ARTIFACT_NAME: workload-account-reconciliation-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
   PLAN_ARTIFACT_DIR: reconciliation-plan-artifact
   PLAN_FILE_NAME: account-reconciliation.tfplan

@@ -715,7 +715,7 @@ Use resource-backed outputs and exact live checks where implemented, but retain 
 
 Record the source commit, effective inputs, selected image digests, target account/Region, caller identity, and each run's artifacts. Keep historical behavioral qualification distinct from later configuration regressions. A tag does not retroactively move evidence to its commit. The [evidence guide](assurance/validation-evidence-guide.md) and [report template](assurance/validation-report-template.md) provide the recording boundary.
 
-The repository pins Terraform `1.15.8`, the AWS provider `6.66.0`, and per-root provider lockfiles. These improve repeatability without freezing every dependency or proving a run used the pinned configuration. Retain the actual version and lockfile evidence with the run.
+The repository pins Terraform `1.17.1`, the AWS provider `6.72.0`, and per-root provider lockfiles. These improve repeatability without freezing every dependency or proving a run used the pinned configuration. Retain the actual version and lockfile evidence with the run.
 
 ## Threat Model Assumptions
 

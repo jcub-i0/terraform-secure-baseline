@@ -764,12 +764,48 @@ else
       fail "Cannot resolve the primary ECS container for IAM scope validation: ${service_name}"
     fi
 
-    image_reference="$(echo "$primary_container_json" | jq -r '.image // empty')"
-    image_repository_url="${image_reference%@sha256:*}"
-    expected_ecr_arns_json="$(echo "$ECR_REPOSITORIES_JSON" | jq -c --arg url "$image_repository_url" '[to_entries[] | select(.value.repository_url == $url) | .value.arn] | sort | unique')"
-   
-    if [[ "$(echo "$expected_ecr_arns_json" | jq 'length')" -ne 1 ]]; then
-      fail "Cannot resolve exactly one ECR repository ARN for the ECS execution policy: ${service_name}"
+    # Validate every container image, not only the primary container.
+    all_containers_json="$(
+      echo "$task_definition_json" |
+        jq -c '.taskDefinition.containerDefinitions // null'
+    )"
+
+    if ! jq -e '
+      type == "array" and
+      length > 0 and
+      all(.[];
+        type == "object" and
+        (.name | type == "string" and length > 0) and
+        (.image | type == "string" and test("^.+@sha256:[0-9a-f]{64}$"))
+      ) and
+      ([.[].name] | unique | length) == length
+    ' <<< "$all_containers_json" >/dev/null; then
+      fail "ECS task contains invalid, unpinned, or duplicate container definitions: ${service_name}"
+    fi
+
+    if ! expected_ecr_arns_json="$(
+      jq -c \
+        --argjson repos "$ECR_REPOSITORIES_JSON" '
+          [
+            .[] |
+            (.image | sub("@sha256:[0-9a-f]{64}$"; "")) as $url |
+
+            ([
+              $repos |
+              to_entries[] |
+              select(.value.repository_url == $url) |
+              .value.arn
+            ]) as $matches |
+
+            if ($matches | length) == 1 then
+              $matches[0]
+            else
+              error("Image does not resolve to exactly one managed ECR repository")
+            end
+          ] | sort | unique
+        ' <<< "$all_containers_json"
+    )"; then
+      fail "Cannot resolve exact ECR repositories for every ECS container: ${service_name}"
     fi
 
     expected_guardduty_ecr_arns_json="$(
@@ -917,9 +953,73 @@ else
       fail "ECS execution policy log permissions are not scoped to the service log group: ${service_name}"
     fi
 
-    expected_secret_arns_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select(test("^arn:[^:]+:secretsmanager:"))] | sort | unique')"
-    expected_ssm_arns_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select(test("^arn:[^:]+:ssm:"))] | sort | unique')"
-    ambiguous_secret_references_json="$(echo "$primary_container_json" | jq -c '[.secrets[]?.valueFrom | select((test("^arn:[^:]+:(secretsmanager|ssm):") | not))] | sort | unique')"
+    # Derive startup-secret permissions from every container in the task.
+    # Secrets Manager ECS selectors are removed for IAM resource matching.
+    if ! expected_secret_scopes_json="$(
+      jq -cer '
+        def valid_sm:
+          test("^arn:(aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}(:[^:*?]*:([^:*?]+:|:[^:*?]+|:))?$");
+
+        def valid_ssm:
+          test("^arn:(aws|aws-us-gov|aws-cn):ssm:[a-z0-9-]+:[0-9]{12}:parameter/[A-Za-z0-9_./-]+$");
+
+        [
+          .[] |
+          (.secrets // []) as $entries |
+
+          if ($entries | type) != "array" then
+            error("Container secrets must be an array")
+          else
+            $entries[] |
+
+            if (
+              type == "object" and
+              (.name | type) == "string" and
+              (.name | length) > 0 and
+              (.valueFrom | type) == "string"
+            ) then
+              .valueFrom |
+
+              if valid_sm then
+                {
+                  kind: "secretsmanager",
+                  arn: (split(":")[:7] | join(":"))
+                }
+              elif valid_ssm then
+                {
+                  kind: "ssm",
+                  arn: .
+                }
+              else
+                error("Unsupported or malformed ECS secret reference")
+              end
+            else
+              error("Invalid ECS secret entry")
+            end
+          end
+        ] |
+        {
+          secrets: (
+            [.[] | select(.kind == "secretsmanager") | .arn] |
+            unique
+          ),
+          ssm: (
+            [.[] | select(.kind == "ssm") | .arn] |
+            unique
+          )
+        }
+      ' <<< "$all_containers_json"
+    )"; then
+      fail "Cannot derive exact ECS startup-secret permissions for every container: ${service_name}"
+    fi
+
+    expected_secret_arns_json="$(
+      jq -c '.secrets' <<< "$expected_secret_scopes_json"
+    )"
+
+    expected_ssm_arns_json="$(
+      jq -c '.ssm' <<< "$expected_secret_scopes_json"
+    )"
 
     if [[ "$(echo "$expected_secret_arns_json" | jq 'length')" -gt 0 ]] &&
       ! policy_statement_allows_exact_resources "$execution_policy_json" '["secretsmanager:GetSecretValue"]' "$expected_secret_arns_json"; then
@@ -929,10 +1029,6 @@ else
     if [[ "$(echo "$expected_ssm_arns_json" | jq 'length')" -gt 0 ]] &&
       ! policy_statement_allows_exact_resources "$execution_policy_json" '["ssm:GetParameters"]' "$expected_ssm_arns_json"; then
       fail "ECS execution policy SSM permissions do not match task-definition references: ${service_name}"
-    fi
-
-    if [[ "$(echo "$ambiguous_secret_references_json" | jq 'length')" -gt 0 ]]; then
-      fail "Cannot establish exact execution-policy scope for secret references without service-identifying ARNs: ${service_name}"
     fi
 
     expected_kms_key_arns_json="$(

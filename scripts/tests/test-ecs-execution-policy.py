@@ -25,11 +25,16 @@ BLOCK = SOURCE.split('section "Validating per-service ECS IAM roles and policies
 
 ACCOUNT = "123456789012"
 REPO = f"arn:aws:ecr:us-east-1:{ACCOUNT}:repository/test"
+SIDECAR_REPO = f"arn:aws:ecr:us-east-1:{ACCOUNT}:repository/scanner"
+SIDECAR_URL = f"{ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/scanner"
 GUARDDUTY = "arn:aws:ecr:us-east-1:593207742271:repository/aws-guardduty-agent-fargate"
 URL = f"{ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/test"
 LOG = f"arn:aws:logs:us-east-1:{ACCOUNT}:log-group:test"
 SECRET = f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:app-AbCdEf"
+SECOND_SECRET = (f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:app-secondary-ZyXwVu")
 PARAMETER = f"arn:aws:ssm:us-east-1:{ACCOUNT}:parameter/app/host"
+SCANNER_SECRET = (f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:scanner-GhIjKl")
+SCANNER_PARAMETER = (f"arn:aws:ssm:us-east-1:{ACCOUNT}:parameter/scanner/token")
 KEY = f"arn:aws:kms:us-east-1:{ACCOUNT}:key/00000000-0000-0000-0000-000000000000"
 PULL = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"]
 
@@ -94,7 +99,7 @@ def fixture(optional=False, guardduty=True):
     task = {"taskDefinition": {"containerDefinitions": [{
         "name": "test", "image": URL + "@sha256:" + "a" * 64,
         "secrets": ([{"name": "password", "valueFrom": SECRET},
-                     {"name": "token", "valueFrom": SECRET + "2"},
+                     {"name": "token", "valueFrom": SECOND_SECRET},
                      {"name": "host", "valueFrom": PARAMETER}] if optional else []),
     }]}}
     statements = [
@@ -106,7 +111,7 @@ def fixture(optional=False, guardduty=True):
         statements.append(grant(PULL, [GUARDDUTY]))
     if optional:
         statements.extend([
-            grant(["secretsmanager:GetSecretValue"], [SECRET, SECRET + "2"]),
+            grant(["secretsmanager:GetSecretValue"], [SECRET, SECOND_SECRET]),
             grant(["ssm:GetParameters"], [PARAMETER]),
             grant(["kms:Decrypt"], [KEY, KEY + "1"]),
         ])
@@ -213,6 +218,277 @@ class ExecutionPolicyTests(unittest.TestCase):
         data[2]["Statement"][4]["Resource"][0] = SECRET + "*"
         self.check(data, False)
 
+    def test_wildcard_ssm_in_container_and_policy_is_rejected(self):
+        for container_index in (0, 1):
+            for wildcard in ("*", "?"):
+                with self.subTest(container=container_index, wildcard=wildcard):
+                    data = fixture(guardduty=False)
+                    containers = data[1]["taskDefinition"]["containerDefinitions"]
+                    if container_index == 1:
+                        containers.append({
+                            "name": "scanner",
+                            "image": URL + "@sha256:" + "b" * 64,
+                        })
+                    reference = PARAMETER + wildcard
+                    containers[container_index]["secrets"] = [
+                        {"name": "CONFIG", "valueFrom": reference}
+                    ]
+                    data[2]["Statement"].append(
+                        grant(["ssm:GetParameters"], [reference])
+                    )
+                    self.check(
+                        data, False,
+                        "Cannot derive exact ECS startup-secret permissions",
+                    )
+
+    def test_wildcard_kms_in_contract_and_policy_is_rejected(self):
+        for wildcard in ("*", "?"):
+            with self.subTest(wildcard=wildcard):
+                data = fixture(guardduty=False)
+                reference = KEY + wildcard
+                data[0]["ecs_service_configuration"]["value"]["test"][
+                    "task_execution_kms_key_arns"
+                ] = [reference]
+                data[2]["Statement"].append(
+                    grant(["kms:Decrypt"], [reference])
+                )
+                self.check(
+                    data, False,
+                    "ECS execution inline policy does not exactly match",
+                )
+
+    def test_exact_ssm_and_multiregion_kms_scopes_in_all_partitions(self):
+        for partition, region in (
+            ("aws", "us-east-1"),
+            ("aws-us-gov", "us-gov-west-1"),
+            ("aws-cn", "cn-north-1"),
+        ):
+            with self.subTest(partition=partition):
+                data = fixture(guardduty=False)
+                parameter = (
+                    f"arn:{partition}:ssm:{region}:{ACCOUNT}:"
+                    "parameter/app/Config_1.2-test"
+                )
+                key = (
+                    f"arn:{partition}:kms:{region}:{ACCOUNT}:"
+                    "key/mrk-0123456789abcdef0123456789abcdef"
+                )
+                data[1]["taskDefinition"]["containerDefinitions"][0]["secrets"] = [
+                    {"name": "CONFIG", "valueFrom": parameter}
+                ]
+                data[0]["ecs_service_configuration"]["value"]["test"][
+                    "task_execution_kms_key_arns"
+                ] = [key]
+                data[2]["Statement"].extend([
+                    grant(["ssm:GetParameters"], [parameter]),
+                    grant(["kms:Decrypt"], [key]),
+                ])
+                self.check(data, True)
+
+    def test_multi_container_ecr_permissions(self):
+        data = fixture(guardduty=False)
+        outputs, task, policy = data
+
+        outputs["ecr_repositories"]["value"]["scanner"] = {
+            "arn": SIDECAR_REPO,
+            "repository_url": SIDECAR_URL,
+        }
+
+        task["taskDefinition"]["containerDefinitions"].append({
+            "name": "scanner",
+            "image": SIDECAR_URL + "@sha256:" + "b" * 64,
+            "secrets": [],
+        })
+
+        policy["Statement"][1]["Resource"] = [REPO, SIDECAR_REPO]
+
+        # Both declared repositories are authorized.
+        self.check(data, True)
+
+        # Missing sidecar repository permission is rejected.
+        missing = copy.deepcopy(data)
+        missing[2]["Statement"][1]["Resource"] = [REPO]
+        self.check(missing, False)
+
+        # An additional undeclared repository is rejected.
+        excessive = copy.deepcopy(data)
+        excessive[2]["Statement"][1]["Resource"].append(
+            f"arn:aws:ecr:us-east-1:{ACCOUNT}:repository/other"
+        )
+        self.check(excessive, False)
+
+        # Multiple containers may share the primary repository.
+        shared = copy.deepcopy(data)
+        shared[1]["taskDefinition"]["containerDefinitions"][1]["image"] = (
+            URL + "@sha256:" + "b" * 64
+        )
+        shared[2]["Statement"][1]["Resource"] = [REPO]
+        self.check(shared, True)
+
+        # A mutable sidecar image must be rejected.
+        unpinned = copy.deepcopy(shared)
+        unpinned[1]["taskDefinition"]["containerDefinitions"][1]["image"] = (
+            URL + ":latest"
+        )
+        self.check(unpinned, False)
+
+        # An image outside the managed repository inventory is rejected.
+        unknown = copy.deepcopy(shared)
+        unknown[1]["taskDefinition"]["containerDefinitions"][1]["image"] = (
+            "999999999999.dkr.ecr.us-east-1.amazonaws.com/other@sha256:"
+            + "b" * 64
+        )
+        self.check(unknown, False)
+
+    def test_multi_container_secret_permissions(self):
+        data = fixture(guardduty=False)
+        outputs, task, policy = data
+
+        task["taskDefinition"]["containerDefinitions"].append({
+            "name": "scanner",
+            "image": URL + "@sha256:" + "b" * 64,
+            "secrets": [
+                {
+                    "name": "SCANNER_TOKEN",
+                    "valueFrom": SCANNER_SECRET + ":token::",
+                },
+                {
+                    "name": "SCANNER_PARAMETER",
+                    "valueFrom": SCANNER_PARAMETER,
+                },
+            ],
+        })
+
+        policy["Statement"].extend([
+            grant(["secretsmanager:GetSecretValue"], [SCANNER_SECRET]),
+            grant(["ssm:GetParameters"], [SCANNER_PARAMETER]),
+        ])
+
+        # Exact, declared permissions must succeed.
+        self.check(data, True)
+
+        # Missing Secrets Manager permission must fail.
+        missing_secret = copy.deepcopy(data)
+        missing_secret[2]["Statement"] = [
+            statement
+            for statement in missing_secret[2]["Statement"]
+            if "secretsmanager:GetSecretValue" not in statement["Action"]
+        ]
+        self.check(missing_secret, False)
+
+        # Missing SSM permission must fail.
+        missing_ssm = copy.deepcopy(data)
+        missing_ssm[2]["Statement"] = [
+            statement
+            for statement in missing_ssm[2]["Statement"]
+            if "ssm:GetParameters" not in statement["Action"]
+        ]
+        self.check(missing_ssm, False)
+
+        # Additional undeclared secret permissions must fail.
+        excessive = copy.deepcopy(data)
+        excessive[2]["Statement"][3]["Resource"].append(
+            f"arn:aws:secretsmanager:us-east-1:{ACCOUNT}:secret:other-XyZaBc"
+        )
+        self.check(excessive, False)
+
+        # Malformed sidecar references must fail closed.
+        malformed = copy.deepcopy(data)
+        malformed[1]["taskDefinition"]["containerDefinitions"][1]["secrets"][0]["valueFrom"] = (
+            "not-a-valid-secret-arn"
+        )
+        self.check(malformed, False)
+
+    def test_primary_and_sidecar_shared_secrets(self):
+        data = fixture(optional=True, guardduty=False)
+
+        data[1]["taskDefinition"]["containerDefinitions"].append({
+            "name": "scanner",
+            "image": URL + "@sha256:" + "b" * 64,
+            "secrets": [
+                {
+                    "name": "SHARED_TOKEN",
+                    "valueFrom": SECRET + ":token::",
+                },
+                {
+                    "name": "SHARED_PARAMETER",
+                    "valueFrom": PARAMETER,
+                },
+            ],
+        })
+
+        # Existing primary-container permissions also cover the sidecar.
+        # No duplicate IAM resource entries should be required.
+        self.check(data, True)
+
+    def test_primary_secret_selector_uses_underlying_arn(self):
+        data = fixture(guardduty=False)
+
+        data[1]["taskDefinition"]["containerDefinitions"][0]["secrets"] = [
+            {
+                "name": "PASSWORD",
+                "valueFrom": SECRET + ":password::",
+            }
+        ]
+
+        data[2]["Statement"].append(
+            grant(["secretsmanager:GetSecretValue"], [SECRET])
+        )
+
+        # IAM authorizes the underlying secret.
+        self.check(data, True)
+
+        # Authorizing the selector string instead is incorrect.
+        incorrect = copy.deepcopy(data)
+        incorrect[2]["Statement"][-1]["Resource"] = [
+            SECRET + ":password::"
+        ]
+        self.check(incorrect, False)
+
+    def test_selector_variants_share_underlying_secret_arn(self):
+        selectors = [
+            SECRET + ":password::",
+            SECRET + "::AWSPREVIOUS:",
+            SECRET + ":::version123",
+            SECRET + ":password:AWSPREVIOUS:",
+            SECRET + ":password::version123",
+        ]
+
+        for selector in selectors:
+            with self.subTest(selector=selector):
+                data = fixture(guardduty=False)
+                outputs, task, policy = data
+
+                containers = task["taskDefinition"]["containerDefinitions"]
+
+                containers[0]["secrets"] = [
+                    {"name": "PRIMARY_SECRET", "valueFrom": selector}
+                ]
+
+                containers.append({
+                    "name": "scanner",
+                    "image": URL + "@sha256:" + "b" * 64,
+                    "secrets": [
+                        {"name": "SIDECAR_SECRET", "valueFrom": selector}
+                    ],
+                })
+
+                policy["Statement"].append(
+                    grant(
+                        ["secretsmanager:GetSecretValue"],
+                        [SECRET],
+                    )
+                )
+
+                # Both containers should share one underlying IAM ARN.
+                self.check(data, True)
+
+                # An IAM policy using the ECS selector rather than
+                # the base secret ARN must be rejected.
+                incorrect = copy.deepcopy(data)
+                incorrect[2]["Statement"][-1]["Resource"] = [selector]
+
+                self.check(incorrect, False)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -37,7 +37,7 @@ env:
     AWS_PAGER: ""
     TF_IN_AUTOMATION: "true"
     TF_INPUT: "false"
-    TERRAFORM_VERSION: "1.15.8"
+    TERRAFORM_VERSION: "1.17.1"
 
     PLAN_ARTIFACT_NAME: terraform-baseline-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
     PLAN_ARTIFACT_DIR: terraform-plan-artifact

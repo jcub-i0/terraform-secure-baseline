@@ -117,7 +117,7 @@ Review any `bucket_admin_principals` changes in the separate state root; that in
 
 Run from the repository root with an authorized **local named profile**. Review the existing [backend.tf](backend.tf), complete [state bootstrap/migration](../state/README.md), and populate `bootstrap/control_plane/account/terraform.tfvars` from its example without overwriting an existing configuration. Confirm `environment = "control-plane"`, the intended `primary_region`, repository, enablement flags, and real state-bucket/CMK ARNs. Example account IDs and key IDs are not deployment values.
 
-The account root pins Terraform **1.15.8** and AWS provider **6.66.0**. Retain its tracked lockfile; do not use an upgrade initialization as part of routine release documentation validation.
+The account root pins Terraform **1.17.1** and AWS provider **6.72.0**. Retain its tracked lockfile; do not use an upgrade initialization as part of routine release documentation validation.
 
 ```bash
 export AWS_PROFILE="control-plane"

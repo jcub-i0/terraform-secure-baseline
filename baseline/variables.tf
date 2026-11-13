@@ -826,39 +826,76 @@ variable "ecs_services" {
       path_patterns     = optional(set(string), [])
       health_check_path = optional(string, "/health")
     }), null)
+
+    task_volumes = optional(set(string), [])
+
+    ephemeral_storage_gib = optional(number)
+
+    mount_points = optional(list(object({
+      source_volume  = string
+      container_path = string
+      read_only      = optional(bool, false)
+    })), [])
+
+    depends_on = optional(list(object({
+      container_name = string
+      condition      = string
+    })), [])
+
+    start_timeout_seconds = optional(number)
+    stop_timeout_seconds  = optional(number)
+
+    sidecars = optional(map(object({
+      repository_name = string
+      image_digest    = optional(string)
+
+      essential = optional(bool, true)
+
+      cpu_units              = optional(number)
+      memory_limit_mib       = optional(number)
+      memory_reservation_mib = optional(number)
+
+      environment_variables   = optional(map(string), {})
+      secrets_manager_secrets = optional(map(string), {})
+      ssm_parameters          = optional(map(string), {})
+
+      command     = optional(list(string))
+      entry_point = optional(list(string))
+
+      port_mappings = optional(list(object({
+        container_port = number
+        protocol       = optional(string, "tcp")
+      })), [])
+
+      read_only_root_filesystem = optional(bool)
+
+      health_check = optional(object({
+        command      = list(string)
+        interval     = optional(number, 30)
+        timeout      = optional(number, 5)
+        retries      = optional(number, 3)
+        start_period = optional(number, 0)
+      }), null)
+
+      start_timeout_seconds = optional(number)
+      stop_timeout_seconds  = optional(number)
+
+      dependency_rank = optional(number, 0)
+
+      depends_on = optional(list(object({
+        container_name = string
+        condition      = string
+      })), [])
+
+      mount_points = optional(list(object({
+        source_volume  = string
+        container_path = string
+        read_only      = optional(bool, false)
+      })), [])
+    })), {})
   }))
 
   default = {}
-
-  validation {
-    condition = alltrue(flatten([
-      for service in values(var.ecs_services) : [
-        for policy_arn in service.task_role_managed_policy_arns :
-        can(regex("^arn:(aws|aws-us-gov|aws-cn):iam::(aws|[0-9]{12}):policy/[A-Za-z0-9+=,.@_/-]+$", policy_arn))
-      ]
-    ]))
-
-    error_message = "task_role_managed_policy_arns must contain valid IAM managed policy ARNs, not roles, users, wildcards, or other resources."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      can(regex("^[a-z0-9]+([._-][a-z0-9]+)*$", service.repository_name))
-    ])
-
-    error_message = "Each ECS service repository_name must use lowercase ECR repository-name syntax."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.image_digest == null ||
-      can(regex("^sha256:[0-9a-f]{64}$", service.image_digest))
-    ])
-
-    error_message = "Each ECS service image_digest must be null or a SHA-256 digest in sha256:<64 hexadecimal characters> format."
-  }
 
   validation {
     condition = alltrue([
@@ -893,43 +930,6 @@ variable "ecs_services" {
     condition = alltrue([
       for service in values(var.ecs_services) :
       service.scaling == null ? true : (
-        (
-          service.scaling.cpu_target_percent == null
-          ? true
-          : service.scaling.cpu_target_percent > 0
-        ) &&
-        (
-          service.scaling.memory_target_percent == null
-          ? true
-          : service.scaling.memory_target_percent > 0
-        ) &&
-        (
-          service.scaling.alb_requests_per_target == null
-          ? true
-          : service.scaling.alb_requests_per_target > 0
-        )
-      )
-    ])
-
-    error_message = "Configured ECS scaling target values must be greater than zero."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.scaling == null ? true : (
-        service.scaling.scale_in_cooldown_seconds >= 0 &&
-        service.scaling.scale_out_cooldown_seconds >= 0
-      )
-    ])
-
-    error_message = "ECS scaling cooldown values must be zero or greater."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.scaling == null ? true : (
         service.scaling.alb_requests_per_target == null
         ? true
         : service.ingress != null
@@ -942,108 +942,11 @@ variable "ecs_services" {
   validation {
     condition = alltrue([
       for service in values(var.ecs_services) :
-      service.deployment.minimum_healthy_percent >= 0 &&
-      service.deployment.minimum_healthy_percent <= 100
-    ])
-
-    error_message = "ECS deployment minimum_healthy_percent must be between 0 and 100."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
       service.deployment.maximum_percent >= 100 &&
       service.deployment.maximum_percent >= service.deployment.minimum_healthy_percent
     ])
 
     error_message = "ECS deployment maximum_percent must be at least 100 and greater than or equal to minimum_healthy_percent."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.deployment.health_check_grace_period_seconds >= 0 &&
-      service.deployment.health_check_grace_period_seconds <= 2147483647
-    ])
-
-    error_message = "ECS health_check_grace_period_seconds must be between 0 and 2147483647."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.health_check == null ? true : (
-        service.health_check.command == null ? false : (
-          contains(
-            ["CMD", "CMD-SHELL"],
-            try(service.health_check.command[0], "")
-          ) &&
-          (
-            try(service.health_check.command[0], "") == "CMD-SHELL"
-            ? length(service.health_check.command) == 2
-            : length(service.health_check.command) >= 2
-          ) &&
-          alltrue([
-            for element in service.health_check.command :
-            element == null ? false : trimspace(element) != ""
-          ])
-        )
-      )
-    ])
-
-    error_message = "ECS health_check.command must start with CMD or CMD-SHELL. CMD-SHELL requires exactly two elements; CMD requires an executable (additional arguments are optional). All command elements must be nonempty."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      service.health_check == null ? true : (
-        service.health_check.interval >= 5 &&
-        service.health_check.interval <= 300 &&
-        service.health_check.interval == floor(service.health_check.interval) &&
-
-        service.health_check.timeout >= 2 &&
-        service.health_check.timeout <= 60 &&
-        service.health_check.timeout == floor(service.health_check.timeout) &&
-
-        service.health_check.retries >= 1 &&
-        service.health_check.retries <= 10 &&
-        service.health_check.retries == floor(service.health_check.retries) &&
-
-        service.health_check.start_period >= 0 &&
-        service.health_check.start_period <= 300 &&
-        service.health_check.start_period == floor(service.health_check.start_period)
-      )
-    ])
-
-    error_message = "ECS health_check timing values must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      length(setintersection(
-        toset(keys(service.secrets_manager_secrets)),
-        toset(keys(service.ssm_parameters)),
-      )) == 0
-    ])
-
-    error_message = "An ECS service secret name cannot be defined in both secrets_manager_secrets and ssm_parameters."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.ecs_services) :
-      length(setintersection(
-        toset(keys(service.environment_variables)),
-        setunion(
-          toset(keys(service.secrets_manager_secrets)),
-          toset(keys(service.ssm_parameters)),
-        ),
-      )) == 0
-    ])
-
-    error_message = "An ECS service environment variable name cannot also be defined as a Secrets Manager secret or SSM parameter."
   }
 
   validation {
@@ -1062,6 +965,40 @@ variable "ecs_services" {
     )
 
     error_message = "Deployable production ECS services require desired_count >= 2 for fixed-count services or min_capacity >= 2 for autoscaled services unless production_retirement_mode is enabled."
+  }
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) :
+      service.image_digest == null ? true : alltrue([
+        for sidecar in values(service.sidecars) :
+        sidecar.image_digest != null
+      ])
+    ])
+
+    error_message = "Every sidecar must have an image digest before its parent ECS service can be deployed."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.ecs_services) : [
+        for container in concat([service], values(service.sidecars)) :
+        length(setintersection(
+          toset(keys(container.secrets_manager_secrets)),
+          toset(keys(container.ssm_parameters))
+        )) == 0 &&
+
+        length(setintersection(
+          toset(keys(container.environment_variables)),
+          setunion(
+            toset(keys(container.secrets_manager_secrets)),
+            toset(keys(container.ssm_parameters))
+          )
+        )) == 0
+      ]
+    ]))
+
+    error_message = "Container environment variables, Secrets Manager references, and SSM parameters must use distinct names."
   }
 }
 

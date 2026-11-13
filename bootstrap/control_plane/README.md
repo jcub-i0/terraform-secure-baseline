@@ -96,7 +96,7 @@ The `organizations` Terraform root creates and manages the OU hierarchy, but it 
 
 ## Region, backend, and toolchain context
 
-All four control-plane roots pin Terraform **1.15.8** and AWS provider **6.66.0**. Their provider configuration is not uniform:
+All four control-plane roots pin Terraform **1.17.1** and AWS provider **6.72.0**. Their provider configuration is not uniform:
 
 | Root | Region authority |
 |---|---|

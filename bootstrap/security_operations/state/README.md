@@ -83,7 +83,7 @@ Changing `state_region` or `primary_region` does not migrate existing state. A b
 | `backend.tf.migrated.example` | Tracked template for this root's migrated backend |
 | `backend.tf` | Local active backend file created by migration; ignored by Git |
 
-The frozen provider requirements are Terraform `1.15.8` and AWS provider `6.66.0`. Retain the lockfile. Do not run an incidental `init -upgrade` as part of documentation reconciliation or routine deployment.
+The frozen provider requirements are Terraform `1.17.1` and AWS provider `6.72.0`. Retain the lockfile. Do not run an incidental `init -upgrade` as part of documentation reconciliation or routine deployment.
 
 ## Deployment and Integration with Other Stacks
 

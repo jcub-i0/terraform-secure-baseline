@@ -787,7 +787,7 @@ The workload/account providers use `primary_region`; the baseline/account postco
 
 Workload validators resolve the deployed `primary_region` output and reject a supplied `AWS_REGION` mismatch. Bootstrap/control-plane/security-operations entry points require explicit service `AWS_REGION`; backend-specific checks use the separately resolved state Region. Region authority is not evidence of cross-Region replication, failover, or broad regional qualification.
 
-The repository pins Terraform `1.15.8` and the AWS provider `6.66.0`; committed per-root `.terraform.lock.hcl` files retain provider selections and checksums. Use the selected root's provider declarations and lockfile rather than a generic latest-version install. These pins do not freeze every runner package, action tag, base image, or external service. See the [quickstart](quickstart.md) and [state-module reference](../modules/state/README.md).
+The repository pins Terraform `1.17.1` and the AWS provider `6.72.0`; committed per-root `.terraform.lock.hcl` files retain provider selections and checksums. Use the selected root's provider declarations and lockfile rather than a generic latest-version install. These pins do not freeze every runner package, action tag, base image, or external service. See the [quickstart](quickstart.md) and [state-module reference](../modules/state/README.md).
 
 ## Centralized Logging
 

@@ -515,6 +515,117 @@ validate_container_health_check_configuration() {
   success "ECS-native container healthCheck exactly matches Terraform: $service_name"
 }
 
+# Hash individual UTF-8 values without shell command-substitution trimming their
+# trailing newlines. Neither output metadata nor diagnostics print plaintext.
+ecs_runtime_hash_environment() {
+  local container_json="$1"
+  local entry digest
+  if ! jq -e '
+    (.environment // []) | type == "array" and all(.[];
+      keys == ["name", "value"] and (.name | type) == "string"
+      and (.value | type) == "string")
+  ' <<< "$container_json" >/dev/null; then
+    fail "Invalid container environment representation"
+  fi
+
+  while IFS= read -r entry; do
+    digest="$(jq -rj '.value' <<< "$entry" | sha256sum)"
+    jq -nc --argjson entry "$entry" --arg digest "${digest%% *}" \
+      '{name: $entry.name, value_sha256: $digest}'
+  done < <(jq -c '.environment[]?' <<< "$container_json")
+}
+
+validate_task_container_inventory() {
+  local service_name="$1"
+  local task_definition_json="$2"
+  local expected_configuration_json expected_containers_json
+  local container_name container_json expected_container_json environment_hashes_json
+  local actual_normalized expected_normalized image_reference image_repository_url
+  local validator_dir
+  validator_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  expected_configuration_json="$(jq -c --arg service "$service_name" '.[$service]' <<< "$ECS_SERVICE_CONFIGURATION_JSON")"
+  expected_containers_json="$(jq -c '.containers' <<< "$expected_configuration_json")"
+
+  # Fail closed on stale outputs rather than guessing an expected inventory.
+  if ! jq -ne --argjson expected "$expected_containers_json" --arg service "$service_name" '
+    ($expected | type) == "object" and ($expected | length) > 0
+    and $expected[$service].essential == true
+    and all($expected | to_entries[]; .key == .value.name)
+  ' >/dev/null; then
+    fail "Missing or invalid Terraform container inventory: ${service_name}; refresh ecs_service_configuration outputs"
+  fi
+
+  # Sorting preserves duplicates; never use unique or INDEX to hide them.
+  if ! jq -e --argjson expected "$expected_containers_json" '
+    (.containerDefinitions | type) == "array"
+    and ([.containerDefinitions[].name] | sort) == ($expected | keys)
+  ' <<< "$task_definition_json" >/dev/null; then
+    fail "Task definition container inventory does not match Terraform (missing, unexpected, or duplicate container): ${service_name}"
+  fi
+
+  if ! jq -e --argjson expected "$expected_configuration_json" '
+    # M1 volumes are name-only bind mounts. ECS may return an empty host
+    # object; the provider may also send configuredAtLaunch=false. Only those
+    # no-op representations are normalized (sources in ecs-runtime-design.md).
+    def volumes: (. // []) | map(
+      (if .host == {} then del(.host) else . end)
+      | if .configuredAtLaunch == false then del(.configuredAtLaunch) else . end
+    ) | sort_by(.name);
+    .cpu == $expected.task_cpu
+    and .memory == $expected.task_memory
+    and .runtimePlatform.cpuArchitecture == $expected.cpu_architecture
+    and (.volumes | volumes) == ($expected.task_volumes | volumes)
+    and .ephemeralStorage == (
+      if $expected.ephemeral_storage_gib == null then null
+      else {sizeInGiB: $expected.ephemeral_storage_gib} end
+    )
+  ' <<< "$task_definition_json" >/dev/null; then
+    fail "Task definition resources, architecture, volumes, or ephemeral storage do not match Terraform: ${service_name}"
+  fi
+
+  while IFS= read -r container_name; do
+    container_json="$(jq -c --arg name "$container_name" '.containerDefinitions[] | select(.name == $name)' <<< "$task_definition_json")"
+    expected_container_json="$(jq -c --arg name "$container_name" '.[$name]' <<< "$expected_containers_json")"
+    image_reference="$(jq -r '.image // empty' <<< "$container_json")"
+    if ! [[ "$image_reference" =~ ^.+@sha256:[0-9a-f]{64}$ ]]; then
+      fail "Task definition image is not digest pinned: ${service_name}/${container_name}"
+    fi
+    image_repository_url="${image_reference%@sha256:*}"
+    if ! jq -e --arg url "$image_repository_url" '
+      [to_entries[] | select(.value.repository_url == $url)] | length == 1
+    ' <<< "$ECR_REPOSITORIES_JSON" >/dev/null; then
+      fail "Task image repository URL does not match exactly one ecr_repositories output: ${service_name}/${container_name}"
+    fi
+
+    # Reject an injected metadata key rather than replacing it unnoticed.
+    if jq -e 'has("environment_hashes")' <<< "$container_json" >/dev/null; then
+      fail "Unexpected container environment_hashes field: ${service_name}/${container_name}"
+    fi
+
+    environment_hashes_json="$(ecs_runtime_hash_environment "$container_json" | jq -sc '.')" ||
+      fail "Unable to hash container environment: ${service_name}/${container_name}"
+
+    actual_normalized="$(
+      jq -c --argjson hashes "$environment_hashes_json" 'del(.environment) | .environment_hashes = $hashes' <<< "$container_json" |
+        jq -Sc -f "$validator_dir/container-contract.jq"
+    )" || fail "Invalid live container configuration: ${service_name}/${container_name}"
+
+    expected_normalized="$(jq -Sc -f "$validator_dir/container-contract.jq" <<< "$expected_container_json")" ||
+      fail "Invalid expected container configuration: ${service_name}/${container_name}"
+
+    if [[ "$actual_normalized" != "$expected_normalized" ]]; then
+      # Only field names are diagnostic; commands and health checks can also
+      # contain application data and must not be dumped on mismatch.
+      jq -n --argjson expected "$expected_normalized" --argjson actual "$actual_normalized" '
+        {mismatched_fields: ((($expected + $actual) | keys) | map(select($expected[.] != $actual[.])))}
+      '
+      fail "Container configuration does not match Terraform: ${service_name}/${container_name}"
+    fi
+  done < <(jq -r 'keys[]' <<< "$expected_containers_json")
+
+  success "Canonical task definition exactly matches the Terraform container inventory; GuardDuty injection is runtime-only: ${service_name}"
+}
+
 validate_task_definition() {
   local service_name="$1"
   local expected_task_definition_arn="$2"
@@ -524,9 +635,6 @@ validate_task_definition() {
   local expected_log_group_arn="$6"
   local task_definition_response_json
   local primary_container_json
-  local image_reference
-  local image_repository_url
-  local repository_match_count
   local port_mappings_json
   local container_port
 
@@ -562,45 +670,17 @@ validate_task_definition() {
     fail "Task definition platform or IAM role contract is invalid: ${service_name}"
   fi
 
-  if ! echo "$task_definition_response_json" |
-    jq -e \
-      --arg service "$service_name" '
-        (.taskDefinition.containerDefinitions | length) == 1
-        and .taskDefinition.containerDefinitions[0].name == $service
-        and .taskDefinition.containerDefinitions[0].essential == true
-      ' >/dev/null; then
-    echo "$task_definition_response_json" |
-      jq '.taskDefinition.containerDefinitions'
-
-    fail "Task definition must contain exactly one essential container named ${service_name}"
-  fi
-
-  success "Canonical task definition remains application-only; GuardDuty agent injection is not Terraform-defined: ${service_name}"
+  validate_task_container_inventory "$service_name" \
+    "$(jq -c '.taskDefinition' <<< "$task_definition_response_json")"
 
   primary_container_json="$(
     echo "$task_definition_response_json" |
-      jq -c '.taskDefinition.containerDefinitions[0]'
+      jq -c --arg name "$service_name" '.taskDefinition.containerDefinitions[] | select(.name == $name)'
   )"
 
   validate_container_health_check_configuration \
     "$service_name" \
     "$primary_container_json"
-
-  image_reference="$(echo "$primary_container_json" | jq -r '.image // empty')"
-
-  if ! [[ "$image_reference" =~ ^.+@sha256:[0-9a-f]{64}$ ]]; then
-    fail "Task definition image is not digest pinned: ${service_name} image=${image_reference:-<missing>}"
-  fi
-
-  image_repository_url="${image_reference%@sha256:*}"
-  repository_match_count="$(
-    echo "$ECR_REPOSITORIES_JSON" |
-      jq --arg url "$image_repository_url" '[to_entries[] | select(.value.repository_url == $url)] | length'
-  )"
-
-  if [[ "$repository_match_count" -ne 1 ]]; then
-    fail "Task image repository URL does not match exactly one ecr_repositories output: ${service_name}"
-  fi
 
   port_mappings_json="$(echo "$primary_container_json" | jq -c '.portMappings // []')"
 

@@ -404,6 +404,73 @@ variable "ecs_services" {
       path_patterns     = optional(set(string), [])
       health_check_path = optional(string, "/health")
     }), null)
+
+    task_volumes = optional(set(string), [])
+
+    ephemeral_storage_gib = optional(number)
+
+    mount_points = optional(list(object({
+      source_volume  = string
+      container_path = string
+      read_only      = optional(bool, false)
+    })), [])
+
+    depends_on = optional(list(object({
+      container_name = string
+      condition      = string
+    })), [])
+
+    start_timeout_seconds = optional(number)
+    stop_timeout_seconds  = optional(number)
+
+    sidecars = optional(map(object({
+      repository_name = string
+      image_digest    = optional(string)
+
+      essential = optional(bool, true)
+
+      cpu_units              = optional(number)
+      memory_limit_mib       = optional(number)
+      memory_reservation_mib = optional(number)
+
+      environment_variables   = optional(map(string), {})
+      secrets_manager_secrets = optional(map(string), {})
+      ssm_parameters          = optional(map(string), {})
+
+      command     = optional(list(string))
+      entry_point = optional(list(string))
+
+      port_mappings = optional(list(object({
+        container_port = number
+        protocol       = optional(string, "tcp")
+      })), [])
+
+      read_only_root_filesystem = optional(bool)
+
+      health_check = optional(object({
+        command      = list(string)
+        interval     = optional(number, 30)
+        timeout      = optional(number, 5)
+        retries      = optional(number, 3)
+        start_period = optional(number, 0)
+      }), null)
+
+      start_timeout_seconds = optional(number)
+      stop_timeout_seconds  = optional(number)
+
+      dependency_rank = optional(number, 0)
+
+      depends_on = optional(list(object({
+        container_name = string
+        condition      = string
+      })), [])
+
+      mount_points = optional(list(object({
+        source_volume  = string
+        container_path = string
+        read_only      = optional(bool, false)
+      })), [])
+    })), {})
   }))
 
   default = {}

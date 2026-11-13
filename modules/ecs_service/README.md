@@ -11,7 +11,7 @@ Each configured service receives its own:
 - ECS task definition
 - ECS service
 
-The module is designed for long-running Fargate services using private `compute_private` subnets, digest-pinned container images, per-service IAM roles, KMS-encrypted CloudWatch log groups, optional Application Load Balancer target-group integration, configurable deployment-health settings, optional ECS-native container health checks, and optional ECS Service Auto Scaling.
+The module is designed for long-running Fargate services with one primary application container and optional generic sidecars, using private `compute_private` subnets, digest-pinned container images, per-service IAM roles, KMS-encrypted CloudWatch log groups, optional Application Load Balancer target-group integration, configurable deployment-health settings, optional ECS-native container health checks, and optional ECS Service Auto Scaling.
 
 Services are keyed by stable service name through the `services` map.
 
@@ -120,7 +120,7 @@ services = {
     }
 
     secrets = {
-      DATABASE_PASSWORD = "arn:aws:secretsmanager:us-east-1:123456789012:secret:example"
+      DATABASE_PASSWORD = "arn:aws:secretsmanager:us-east-1:123456789012:secret:example-AbCdEf"
     }
   }
 }
@@ -145,6 +145,47 @@ Each service entry supports:
 | `cpu_architecture` | `string` | No | `"X86_64"` | Task CPU architecture. Supported values are `X86_64` and `ARM64`. |
 | `environment_variables` | `map(string)` | No | `{}` | Plaintext environment variables supplied to the container. |
 | `secrets` | `map(string)` | No | `{}` | Container secret names mapped to Secrets Manager or SSM Parameter Store references. |
+| `sidecars` | `map(object(...))` | No | `{}` | Up to nine additional containers keyed by container name; see multi-container configuration below. |
+| `depends_on` | `list(object(...))` | No | `[]` | Primary-container prerequisites, each with `container_name` and `condition`. |
+| `task_volumes` | `set(string)` | No | `[]` | Named task-local volumes available to primary and sidecar mount points. |
+| `mount_points` | `list(object(...))` | No | `[]` | Primary mounts with `source_volume`, `container_path`, and optional `read_only` (default `false`). |
+| `ephemeral_storage_gib` | `number` | No | `null` | Optional task storage override: whole GiB, 21–200; null emits no override. |
+| `start_timeout_seconds` / `stop_timeout_seconds` | `number` | No | `null` | Optional primary-container start/stop timeouts: whole seconds, 2–120. |
+
+### Multi-container configuration
+
+M1 preserves the primary container's service-key name, `essential = true`, and single TCP `container_port`. An omitted/empty `sidecars` map preserves the single-container definition. Sidecar names must differ from the primary and contain 1–255 letters, numbers, underscores, or hyphens. AWS enforces a maximum of ten declared containers including the primary. GuardDuty-managed injection is separate from this declared inventory.
+
+Each `sidecars.<name>` object supports:
+
+| Field | Default | Usage and limits |
+|---|---|---|
+| `image` | Required | Complete digest-pinned image reference; the same integrity rules apply to the primary and sidecars. |
+| `essential` | `true` | Set `false` for a prerequisite used with `COMPLETE` or `SUCCESS`. |
+| `cpu_units` | `null` | Optional container CPU shares; ECS task allocation rules apply. |
+| `memory_limit_mib` | `null` | Optional container memory hard limit in MiB; ECS task allocation rules apply. |
+| `memory_reservation_mib` | `null` | Optional container memory soft reservation in MiB; ECS checks its relationship to the hard limit and task memory. |
+| `environment_variables` / `secrets` | `{}` / `{}` | Per-container plaintext values and external secret references; a sidecar cannot use the same name in both maps. |
+| `command` / `entry_point` | `null` / `null` | Ordered overrides passed to the container runtime. Null leaves the image default in effect; executable behavior requires qualification. |
+| `port_mappings` | `[]` | Objects with whole `container_port` (1–65535) and `protocol` (`tcp` by default, or `udp`); host port equals container port. |
+| `read_only_root_filesystem` | `null` | Optional boolean rendered as `readonlyRootFilesystem`; null omits the field. |
+| `health_check` | `null` | Same command/timing object as the primary health check described below; ECS owns parameter validation. |
+| `start_timeout_seconds` / `stop_timeout_seconds` | `null` / `null` | Optional whole-second timeouts, 2–120. |
+| `dependency_rank` | `0` | Numeric rank used only for strict dependency ordering; it is not an ECS container field. |
+| `depends_on` | `[]` | Prerequisites with `container_name` and `condition`, restricted as described below. |
+| `mount_points` | `[]` | Objects with `source_volume`, `container_path`, and optional `read_only` (default `false`). |
+
+The service's `cpu` and `memory` fields size the **whole task**. This module exposes per-container CPU/memory settings, command/entry-point overrides, and root-filesystem mode only for sidecars. ECS owns CPU/memory compatibility and container reservation limits. Omitted values are not automatic per-container budgets; size the task for the complete workload and any injected runtime agent.
+
+Dependencies use `START`, `HEALTHY`, `COMPLETE`, or `SUCCESS`. Primary-container `depends_on` may reference existing sidecars. A sidecar may depend only on another sidecar with a **strictly lower** `dependency_rank`; it cannot depend on itself or the primary. Duplicate prerequisite names are rejected. `HEALTHY` requires a configured health check on the prerequisite; `COMPLETE` and `SUCCESS` require that prerequisite to be nonessential. Ranks constrain the graph to prevent cycles; rank alone does not create a dependency.
+
+All declared port numbers must be unique across the task, even across different protocols. Optional ALB attachment still targets only the primary container; sidecar port mappings do not create ALB routes or security-group rules. All containers share task networking and task-level IAM roles.
+
+`task_volumes` declares name-only, task-local volumes; volume names follow the same character/length rule as sidecar names. Mounts must reference a declared volume and use unique canonical absolute non-root destinations within each container: no `.`/`..` or empty path components, repeated/trailing separators, or surrounding whitespace. This interface does not configure EFS, host paths, or persistent storage.
+
+AWS owns platform-feature compatibility. The module passes `platform_version` through without maintaining a parallel version allowlist. Select a platform supporting the configured dependencies, secrets, storage and CPU architecture.
+
+These are low-level `services` inputs. The canonical baseline `ecs_services` interface uses `repository_name` and `image_digest` for each container and separate `secrets_manager_secrets` / `ssm_parameters` maps; baseline resolves these to `image` and `secrets`. See the [runtime design](../../docs/ecs-runtime-design.md#ecs-services-and-task-definitions) for composition and the [native multi-container fixture](tests/multi_container.tftest.hcl) for a complete low-level configuration example.
 
 ### Scaling configuration
 
@@ -182,12 +223,12 @@ The optional `deployment` object supports:
 | `maximum_percent` | `number` | No | `200` | Maximum task percentage ECS may run during deployment. |
 | `health_check_grace_period_seconds` | `number` | No | `0` | Time after task startup during which ECS ignores unhealthy load-balancer, VPC Lattice, and container health checks. |
 
-The canonical baseline validates the deployment percentages and grace-period range before passing deployable services to this module.
+The canonical baseline retains the rollout-capacity safeguard (`maximum_percent >= 100` and at least `minimum_healthy_percent`). The provider/ECS validate general percentage and grace-period ranges.
 
 ### Native container health configuration
 
-v1.12.0 supports the same optional `health_check` object at the canonical
-`ecs_services` interface and this module's `services` interface:
+The primary and each sidecar support the same optional `health_check` object at
+the canonical `ecs_services` interface and this module's `services` interface:
 
 ```hcl
 health_check = {
@@ -199,11 +240,11 @@ health_check = {
 }
 ```
 
-This belongs inside an existing service entry. Supply an actual image executable
+This belongs inside an existing service or sidecar entry. Supply an actual image executable
 that returns 0 for the intended healthy condition; the module supplies no probe
 binary. `CMD` requires an executable and optional arguments. `CMD-SHELL` requires
 exactly two elements: the marker and one shell command; the image must support it.
-All command elements must be non-null and nonempty after trimming whitespace.
+ECS validates the health-check syntax and timing limits; Terraform preserves the configured command.
 
 | Field | Default | Accepted values |
 |---|---:|---|
@@ -222,18 +263,18 @@ when enabled. The baseline still filters `image_digest = null` registrations out
 of this low-level deployable map.
 
 Runtime validation compares exact health configuration, normalizing an omitted
-live `startPeriod` to zero. It polls application-container health before strict
+live `startPeriod` to zero. It polls primary-container health before strict
 service rollout convergence: 13 observations five seconds apart by default.
 `ECS_NATIVE_HEALTH_MAX_ATTEMPTS` accepts 1–60 and
 `ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS` accepts 0–60. Observed `UNHEALTHY` fails;
 unresolved/missing health fails at the polling bound. Zero desired/running/pending
 capacity is skipped; disabled checks add no native-health task queries.
-ALB and GuardDuty validation still apply independently. See the
+Sidecar health-check definitions are compared as part of the complete task-definition inventory; the validator does not add independent sidecar health/lifecycle polling. ALB and GuardDuty validation still apply independently. See the
 [validation reference](../../scripts/validation/README.md) for evidence boundaries.
 
 ## Image Integrity
 
-Every service image must be digest-pinned using:
+Every primary and sidecar image must be digest-pinned using:
 
 ```text
 repository@sha256:<64 lowercase hexadecimal characters>
@@ -246,7 +287,7 @@ repository:latest
 repository:v1.2.3
 ```
 
-are rejected by input validation.
+are rejected by input validation. The repository portion must be nonempty, with no whitespace or extra `@`; the digest must be exactly 64 lowercase hexadecimal characters with no suffix. Registry ports, nested repository paths, and a tag before the digest are allowed by the low-level interface. Baseline composition uses its managed ECR repository URLs.
 
 This ensures that Terraform-managed deployments reference an immutable container image digest rather than a mutable tag.
 
@@ -274,7 +315,11 @@ ARM64
 
 through `cpu_architecture`.
 
-The module validates supported Fargate CPU and memory combinations before deployment.
+AWS validates Linux Fargate task sizes; the module does not duplicate the CPU/memory matrix. For
+`cpu = 32768` (32 vCPUs), `memory` must be exactly `61440`, `122880`, or `249856`
+MiB (60, 120, or 244 GiB). Existing smaller task-size combinations remain
+supported. As with all tasks of at least 8 vCPUs, 32-vCPU tasks require platform
+`1.4.0` or `LATEST`. See [AWS Fargate task sizes](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size).
 
 The Fargate platform version defaults to `LATEST`, but it can be explicitly set to a specific version.
 
@@ -337,7 +382,7 @@ The log-driver mode is explicitly set to:
 non-blocking
 ```
 
-The module does not enable `awslogs-create-group`; Terraform owns creation of the log groups.
+The primary and every configured sidecar receive this logging configuration, sharing the service log group and `ecs` stream prefix with container-specific streams. There is no per-sidecar log-driver or log-group override. The module does not enable `awslogs-create-group`; Terraform owns creation of the log groups.
 
 ## Container Environment and Secrets
 
@@ -355,11 +400,11 @@ Instead, `secrets` maps container environment-variable names to external secret 
 
 ```hcl
 secrets = {
-  DATABASE_PASSWORD = "arn:aws:secretsmanager:..."
+  DATABASE_PASSWORD = "arn:aws:secretsmanager:us-east-1:123456789012:secret:example-AbCdEf"
 }
 ```
 
-The task definition passes those references through the ECS `secrets` container-definition field.
+The primary and each sidecar use their own maps. The task definition passes references through the ECS `secrets` container-definition field. Secrets Manager requires a full secret ARN (including its six-character suffix); optional JSON-key/version selector syntax is preserved, and version stage and version ID cannot both be selected. SSM accepts exact parameter ARNs or same-region names/paths at this low-level interface. ECS owns secret-reference syntax and selector compatibility. The IAM module rejects wildcard resource scopes; the canonical baseline therefore requires SSM ARNs for IAM derivation.
 
 IAM permissions required for ECS to retrieve those values remain owned by `modules/iam`.
 
@@ -374,7 +419,7 @@ Each service consumes:
 
 The execution role is used by the ECS/Fargate runtime for platform-level actions such as image pulls, logging, and explicitly configured task-definition secret retrieval.
 
-The task role represents application-runtime AWS permissions.
+The task role represents application-runtime AWS permissions. The primary and all sidecars share the same task role and execution role; there is no per-container IAM isolation. Baseline derives execution-role ECR and secret/parameter scope from all configured containers, while startup-secret KMS keys remain explicitly supplied at service level. Secrets Manager selectors stay in the task definition but are stripped to the base secret ARN for IAM resource scope.
 
 Both roles remain owned by `modules/iam` in baseline composition. The canonical `task_role_managed_policy_arns` set is attached there, only to the application role; this module consumes the role ARN and optional attachment readiness IDs. It does not author IAM policies or attach execution-role managed policies. Application permissions remain empty by default; policy content/effective authorization is an application-owner responsibility.
 
@@ -561,7 +606,7 @@ The baseline selects three standard AZs by default and supplies all effective co
 
 The production minimum is **two**, not three: canonical input validation requires at least two fixed tasks or an autoscaling minimum of two for digest-selected services outside retirement. The shipped production sample chooses three tasks. Neither the number of configured subnets nor rebalancing intent proves one live task per AZ; use live task placement evidence when that distribution is required.
 
-The normal production runtime validator additionally requires `minimum_healthy_percent = 100`, `maximum_percent >= 200`, and AZ rebalancing `ENABLED`, alongside the capacity minimum. The canonical Terraform input validation checks the general percentage ranges; do not describe all of the validator's stricter production checks as low-level module input constraints.
+The normal production runtime validator additionally requires `minimum_healthy_percent = 100`, `maximum_percent >= 200`, and AZ rebalancing `ENABLED`, alongside the capacity minimum. The canonical Terraform input validation retains rollout-capacity and production-availability safeguards; do not describe all of the validator's stricter production checks as low-level module input constraints.
 
 ## Development/Test Destruction Posture
 
@@ -802,7 +847,7 @@ The current baseline supplies:
 - Profile-derived service AZ rebalancing and force-deletion policy
 - Retirement-derived zero capacity without modifying canonical application settings
 
-The canonical baseline validates scaling bounds, target metrics, cooldowns, ALB-request/ingress coupling, and deployment-health ranges before deriving this module's deployable service map.
+The canonical baseline validates scaling/retirement capacity, target-metric presence, ALB-request/ingress coupling, rollout capacity, and production availability before deriving this module's deployable service map. Routine AWS parameter ranges belong to the provider and AWS.
 
 Runtime validation is handled by `scripts/validation/validate-ecs-runtime.sh` inside the existing workload baseline validation layer. The validator compares the Terraform output contract with live ECS, Application Auto Scaling, ALB, logging, networking, deployment configuration, and Terraform-owned operational alarm state.
 
@@ -810,11 +855,13 @@ The validator treats fixed-count desired count as exact. For autoscaled services
 
 ## Container and Validation Limits
 
-The module renders one essential application container per task definition. It does not expose generic sidecars, container dependency graphs, command overrides, or container `healthCheck` configuration. GuardDuty-managed agent injection is a separate AWS-managed runtime mechanism, not generic multi-container configuration support.
+Terraform enforces architectural and security policies; it does not reproduce the AWS API validation system. See [validation ownership](../../docs/ecs-runtime-design.md#validation-ownership) for the retained controls and enforcement boundaries.
 
-The module also does not implement bounded/one-off jobs, scheduled Fargate tasks, application database migrations, or application-level recovery tests. The ALB health-check path belongs to the optional target group; it must not be confused with a task-definition container health check.
+AWS currently limits task definitions to ten declared containers (one primary plus up to nine sidecars). The module delegates that service limit to ECS and supports one essential primary application container with optional generic sidecars, with digest-pinned images, optional native health checks, constrained dependencies, shared task volumes, and the settings documented above. Omitting M1 inputs preserves the legacy single-container definition and existing service resource addresses. GuardDuty-managed agent injection remains an AWS-managed runtime mechanism outside the Terraform-configured sidecar map.
 
-The existing workload suite remains 16 validators. `validate-ecs-runtime.sh` checks normal runtime contracts and GuardDuty coverage; `validate-iam.sh` checks the relevant role/policy contract. Neither an input check nor a normal steady-state pass replaces live failure-injection evidence or the retirement gates.
+The module does not implement standalone bounded/one-off jobs, scheduled Fargate tasks, migration-aware releases, or application-level recovery tests. A nonessential prerequisite within a service task is not a generic job orchestration interface. The ALB health-check path belongs to the optional target group; it must not be confused with a task-definition container health check.
+
+The existing workload suite remains 16 validators. `validate-ecs-runtime.sh` compares the complete configured container inventory and sidecar health-check definitions, while live native-health polling remains primary-only; `validate-iam.sh` checks the relevant role/policy contract. Neither an input check nor a normal steady-state pass replaces live failure-injection evidence or the retirement gates. M1 implementation is complete with acceptance pending; review of the validation simplification, live AWS sidecar-readiness qualification, and owner acceptance remain outstanding. See the [M1 implementation status](../../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md) and [runtime validation design](../../docs/ecs-runtime-design.md#m1-container-inventory-compatibility).
 
 ## Implementation Sources
 

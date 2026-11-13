@@ -4,6 +4,8 @@
 
 This document describes the implemented ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
+M1 multi-container implementation is complete with acceptance pending. The complete PR was independently reviewed at `afdbda0`; review of the N5D corrections, live AWS sidecar-readiness qualification, owner acceptance, and PR merge remain outstanding; historical runtime qualification below does not establish M1 acceptance. See the [M1 implementation and acceptance record](../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md).
+
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
 ## Implemented module boundaries
@@ -51,7 +53,7 @@ used a temporary task with the compute SG, not the canonical task SG.
 
 Operators maintain exactly one `ecs_services` map. Baseline derives the narrower ECR, IAM, ALB, security-policy, and ECS-runtime maps from it.
 
-The current interface is conceptually:
+The following excerpt shows the service-wide and primary-container settings. M1 also exposes `sidecars`, `depends_on`, `task_volumes`, `mount_points`, `ephemeral_storage_gib`, and container start/stop timeouts. See the [canonical declarations](../baseline/variables.tf) for the complete type and the [module usage reference](../modules/ecs_service/README.md#multi-container-configuration) for these additions.
 
 ```hcl
 variable "ecs_services" {
@@ -113,6 +115,8 @@ variable "ecs_services" {
 
 A non-null digest must match `sha256:` plus 64 lowercase hexadecimal characters. Plain environment-variable names cannot overlap ECS-native secret names, and a secret name cannot be declared in both the Secrets Manager and SSM maps.
 
+Each canonical sidecar selects its own `repository_name` and `image_digest`, with the same separate plaintext, Secrets Manager, and SSM maps. Selecting the primary digest requires every configured sidecar to have a digest. Baseline resolves primary and sidecar images to managed ECR URLs and merges their secret maps for the low-level ECS module.
+
 Outside retirement, a configured `scaling` object requires `min_capacity >= 1`, `max_capacity >= min_capacity`, and bootstrap `desired_count` within that range. A deployable production service additionally requires fixed `desired_count >= 2` or scaling `min_capacity >= 2`. The production floor does not apply to a registered null-digest entry. Retirement has separate derived zero-capacity behavior described below. At least one target-tracking metric must be configured, target values must be positive, cooldowns non-negative, and `alb_requests_per_target` requires `ingress`.
 
 Deployment-health inputs preserve ECS defaults when omitted: `minimum_healthy_percent = 100`, `maximum_percent = 200`, and `health_check_grace_period_seconds = 0`.
@@ -123,7 +127,7 @@ Deployment-health inputs preserve ECS defaults when omitted: `minimum_healthy_pe
 
 Baseline derives `deployable_ecs_services` by filtering the canonical map to entries whose `image_digest` is non-null. ECR repository requirements intentionally derive from **all registered services**, while per-service ECS runtime, runtime IAM, task security groups, application log groups, and ALB routing derive only from **deployable services**.
 
-Therefore a registered-but-unreleased service preserves/creates its required ECR repository without creating a task definition or ECS service. Selecting a valid digest later materializes the runtime from the same service entry. Registered-but-unreleased services also create no Application Auto Scaling targets or policies and no ECS operational alarms.
+Therefore a registered-but-unreleased service preserves/creates its primary and configured sidecar ECR repositories without creating a task definition or ECS service. Selecting valid digests later materializes the runtime from the same service entry. Registered-but-unreleased services also create no Application Auto Scaling targets or policies and no ECS operational alarms.
 
 All three tracked `test` registrations use `image_digest=null`. The shared ECS cluster and enabled Container Insights performance log group still exist. Earlier live qualification used a selected digest; a fresh baseline apply with those null digests does not reproduce those running tasks or an ALB.
 
@@ -191,15 +195,19 @@ so validation can compare Terraform intent, live cluster tags, and deployment-pr
 
 Task definitions use Fargate, `awsvpc`, Linux, and either `X86_64` or `ARM64`. The module validates supported Fargate CPU/memory combinations. The platform version is explicit, defaults to `LATEST`, and is exposed from the resource as `ecs_services[service].platform_version` for exact validation.
 
-Each task definition uses separate per-service task execution and application task roles. The current abstraction contains exactly one essential container named for the stable service key, one TCP port mapping, plaintext environment values, approved ECS-native secret references, and the `awslogs` driver.
+Each task definition uses separate per-service task execution and application task roles, shared by every configured container. It contains one essential primary container named for the stable service key, with one TCP port mapping, plaintext environment values, approved ECS-native secret references, and the `awslogs` driver. M1 adds up to nine Terraform-configured generic sidecars. Omitting the new inputs preserves the legacy single-container definition and service resource addresses.
 
-The optional `ecs_services.<service>.health_check` renders a container-native `healthCheck` only when configured. Without it, the task definition remains unchanged and no additional live application-health queries are required. When enabled, `validate-ecs-runtime.sh` checks the exact task-definition fields and verifies that running application containers report `HEALTHY`, independently of GuardDuty and ALB ingress. `UNHEALTHY` fails immediately and `UNKNOWN` receives bounded startup rechecks (13 attempts, five seconds apart by default; configurable through `ECS_NATIVE_HEALTH_MAX_ATTEMPTS` and `ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS`). A configured check on a service intentionally at zero desired capacity is reported as **skipped**, not proven healthy. ALB target health remains separate, and neither signal proves database queries or business behavior.
+Sidecars have digest-pinned images, optional resource settings, health checks, command/entry-point overrides, port mappings, root-filesystem mode, mounts, and start/stop timeouts. Primary command/entry-point and per-container resource overrides are not exposed. Task CPU/memory cover all containers; configured sidecar CPU and memory reservations must leave capacity within those task limits. Containers share task networking and the service's encrypted CloudWatch log group, with `awslogs` configured for each container. ALB integration continues to target only the primary.
+
+Primary-container dependencies may target sidecars. Sidecars may target only other sidecars with strictly lower `dependency_rank`; they cannot target the primary. `START`, `HEALTHY`, `COMPLETE`, and `SUCCESS` are supported, with `HEALTHY` requiring a prerequisite health check and `COMPLETE`/`SUCCESS` requiring a nonessential prerequisite. Rank validation prevents cycles and does not itself order containers without a `depends_on` edge. Shared name-only task volumes and canonical absolute mount paths are supported; EFS and host-path configuration are not. The provider and ECS own storage/timeout bounds and platform compatibility. The [module reference](../modules/ecs_service/README.md#multi-container-configuration) lists the exact fields, defaults, and limits.
+
+The optional `ecs_services.<service>.health_check` renders a primary-container `healthCheck` only when configured. Omitting it leaves that field absent and adds no live primary-health polling. When enabled, `validate-ecs-runtime.sh` checks the exact task-definition fields and verifies that running primary containers report `HEALTHY`, independently of GuardDuty and ALB ingress. `UNHEALTHY` fails immediately and `UNKNOWN` receives bounded startup rechecks (13 attempts, five seconds apart by default; configurable through `ECS_NATIVE_HEALTH_MAX_ATTEMPTS` and `ECS_NATIVE_HEALTH_POLL_INTERVAL_SECONDS`). A configured check on a service intentionally at zero desired capacity is reported as **skipped**, not proven healthy. Sidecars accept the same optional health-check object; the validator verifies their definitions but does not independently poll sidecar health or lifecycle. ALB target health remains separate, and neither signal proves database queries or business behavior.
 
 The ECS service runs in compute-private subnets, uses only its task security group, disables public IP assignment, and enables deployment circuit breaking with automatic rollback. Load-balancer attachment exists only for deployable services with ingress configuration.
 
-Health command validation requires `CMD` plus an executable (and optional
-arguments), or `CMD-SHELL` plus exactly one shell command, with no empty/null
-elements. The image must contain the command and any required shell. Whole-number
+ECS health checks use `CMD` plus an executable (and optional arguments), or
+`CMD-SHELL` plus a shell command. ECS owns command syntax and timing validation;
+the image must contain the command and any required shell. Whole-number
 limits/defaults are interval 5–300/30 seconds, timeout 2–60/5 seconds, retries
 1–10/3 and start period 0–300/0 seconds. Native-health polling accepts 1–60 attempts
 and 0–60 seconds between observations. It runs before strict service rollout
@@ -209,6 +217,26 @@ The shared task-describe helper batches requests for both native-health and
 GuardDuty checks. The [module reference](../modules/ecs_service/README.md) details
 rendering and validation; the [quickstart](quickstart.md#v1120-opt-in-configuration-and-upgrade)
 provides adoption examples.
+
+## Validation ownership
+
+Terraform defines secure infrastructure and enforces architectural policies; it does not reproduce AWS API validation. New exceptions need a concrete security or composition benefit.
+
+| Responsibility | Owner |
+|---|---|
+| Required attributes and types | Typed Terraform module and environment schemas |
+| AWS ranges, naming, formats, CPU/memory sizes and platform features | Provider and AWS APIs |
+| Immutable images, dependency integrity, mount safety and IAM scope | Terraform modules |
+| Production availability, rollout capacity and retirement | Canonical baseline |
+| Generated task definitions, IAM policies and input propagation | Focused native Terraform regressions |
+| Live configuration and security | Existing runtime validators |
+| Actual readiness and executable behavior | Explicit AWS qualification |
+
+The ECS module retains digest pinning for every container, distinct primary/sidecar identities, sidecar environment/secret collision prevention, ALB scaling prerequisites, and unique task ports. Dependency checks retain existing distinct targets, valid conditions, strictly descending sidecar ranks, health checks for `HEALTHY`, and nonessential prerequisites for `COMPLETE`/`SUCCESS`. Declared volumes and unique canonical non-root mount paths prevent accidental root overlays and ambiguous destinations. Readiness maps still connect services to their IAM and networking dependencies.
+
+The baseline retains scaling/retirement capacity bounds, target-metric presence, ALB ingress coupling, rollout maximum capacity, production minimum capacity, sidecar digest readiness, and collision checks before secret maps are merged. It delegates immutable reference enforcement to ECS and exact execution-policy resource validation to IAM. The IAM module retains exact non-wildcard ECR, Secrets Manager, SSM and KMS scopes and same-account/AWS-managed task-policy restrictions. Existing ECR repository naming validation remains at the ECR module boundary.
+
+Routine scalar and capability checks no longer have parallel HCL validators: [AWS rejects incompatible task CPU/memory](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html), the locked [provider validates task storage and architecture](https://github.com/hashicorp/terraform-provider-aws/blob/v6.72.0/internal/service/ecs/task_definition.go), and ECS specifies [container](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html) and [health-check](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html) limits. Some errors therefore occur during provider/API operations rather than custom variable validation. Mocked offline plans do not establish API acceptance. Empty command arguments are passed through, and ranks need only be numeric with strictly decreasing dependency edges; neither relaxation changes rendering or executable readiness guarantees.
 
 ## Deployment health
 
@@ -274,7 +302,7 @@ The cluster-owned Container Insights performance log group uses `/aws/ecs/contai
 
 `modules/iam` creates separate task execution and application task roles for deployable services only.
 
-The task execution role is used by ECS/Fargate during startup. Its custom policy scopes application ECR pulls, CloudWatch Logs writes, declared Secrets Manager/SSM references, and optional KMS decrypt authority required to retrieve startup configuration. The application task role is used by application code after startup and has no policies by default. Optional `task_role_managed_policy_arns` attaches selected AWS-managed or same-account customer-managed IAM policies only to that task role. The baseline creates **the role and attachments**, not the application-specific managed policies: application owners provision and review their policies separately, then provide plan-known ARNs. No policy ARN is needed on first bootstrap. A registered null-digest service creates no task role or attachments, and ECS service launch waits for configured attachments when the digest is selected.
+The task execution role is used by ECS/Fargate for platform operations. Its custom policy scopes primary and sidecar ECR pulls, CloudWatch Logs writes, declared Secrets Manager/SSM references, and optional KMS decrypt authority required to retrieve startup configuration. Baseline unions the configured containers' repository and secret/parameter resources; Secrets Manager selectors remain in `valueFrom` but are removed from IAM resource ARNs. Explicit startup-secret KMS authorization remains service-wide. The application task role is used by primary and sidecar code for runtime AWS API calls and has no policies by default; M1 does not provide per-container IAM isolation. Optional `task_role_managed_policy_arns` attaches selected AWS-managed or same-account customer-managed IAM policies only to that task role. The baseline creates **the role and attachments**, not the application-specific managed policies: application owners provision and review their policies separately, then provide plan-known ARNs. No policy ARN is needed on first bootstrap. A registered null-digest service creates no task role or attachments, and ECS service launch waits for configured attachments when the digest is selected.
 
 The canonical `task_execution_kms_key_arns` field is an optional **ECS startup-secret decryption** control, not an inventory of baseline-created KMS keys. It defaults to `[]`: no `kms:Decrypt` execution-role statement is emitted when empty. Supply only the customer-managed KMS key ARNs actually needed to retrieve declared ECS-native Secrets Manager or SSM SecureString references. These can include a baseline-managed Secrets Manager CMK *if* the task injects a secret encrypted with it; its existence alone does not justify granting decrypt authority. Resolve the key from the referenced secret/parameter metadata. Direct application SDK operations require application task-role authorization instead. Key policies and other KMS authorization constraints still apply.
 
@@ -407,15 +435,80 @@ The runtime validator verifies:
 - exact live ECS service inventory;
 - service steady state and completed primary rollout;
 - compatible Fargate platform version;
-- canonical task definition remaining application-only;
-- exact optional ECS-native health-check configuration and running application-container health (independent of GuardDuty and ALB checks);
+- canonical task definition matching the Terraform primary and generic sidecar inventory;
+- exact optional ECS-native health-check configuration for primary and sidecars, plus running primary-container health (independent of GuardDuty and ALB checks);
 - digest-pinned application images, configured logging, exact compute-private task networking, exact ALB `ingress_public` placement, and conditional database/ALB relationships;
 - injected GuardDuty agent state on protected running tasks;
 - GuardDuty ECS coverage state;
 - Application Auto Scaling targets/policies; and
 - Terraform-owned ECS operational alarms.
 
-For protected running tasks, the validator accepts the GuardDuty-injected container as either the exact `aws-gd-agent` name or an AWS-generated name beginning with `aws-guardduty-agent-`. It still requires exactly one GuardDuty agent container, requires that agent to be `RUNNING`, requires the canonical application container to remain valid, and rejects unexpected additional live containers.
+For protected running tasks, the validator accepts the GuardDuty-injected container as either the exact `aws-gd-agent` name or an AWS-generated name beginning with `aws-guardduty-agent-`. It still requires exactly one GuardDuty agent container, requires that agent to be `RUNNING`, requires the configured primary/sidecar inventory to remain valid, and rejects unexpected additional live containers.
+
+### M1 container inventory compatibility
+
+`ecs_service_configuration` retains its existing fields and adds `containers`, a
+deterministic map keyed by container name, plus `task_cpu`, `task_memory`,
+`cpu_architecture`, `task_volumes`, and `ephemeral_storage_gib`. The primary key
+is the service key; registration order is irrelevant. Container metadata uses
+ECS API field names for image, essential status, health checks, dependencies,
+logging, ports, mounts, resources, commands, entry point, root filesystem mode,
+and timeouts. Secret entries contain only `valueFrom` references. Environment
+values are represented by individual SHA-256 hashes in `environment_hashes`;
+the validator compares hashes without printing the values. Credentials belong
+in Secrets Manager/SSM references, not commands, health checks, or environment
+literals. Hashes are comparison metadata, not a secret-storage mechanism.
+
+The task-definition validator compares the entire named inventory, exact image
+digests and managed-ECR repository URLs, and all exposed container attributes.
+It rejects additional container fields as well as missing, extra, and duplicate
+containers. Mismatch diagnostics identify field names without dumping commands
+or environment data. CloudWatch ARN, KMS key, and retention are still validated
+once per service because all its containers use that same log group.
+
+Normalization is deliberately limited:
+
+- Absent optional arrays for environment, secrets, ports, dependencies, mounts,
+  `volumesFrom`, `systemControls`, and logging `secretOptions` equal empty arrays.
+  Nonempty unsupported capabilities still fail. AWS documents these as optional
+  arrays in [ContainerDefinition](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html)
+  and [LogConfiguration](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html),
+  and its [CLI response example](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ECS_AWSCLI_EC2.html)
+  includes empty mounts and `volumesFrom`.
+- An absent container CPU reservation equals API `cpu: 0`; an absent root
+  filesystem flag equals `false`. Other resource settings and configured
+  timeouts are compared exactly. See the optional CPU semantics in
+  [ContainerDefinition](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerDefinition.html).
+- An omitted health-check `startPeriod` equals zero; all other configured health
+  fields remain exact, including command order. AWS defines the default start
+  period as off in [HealthCheck](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html).
+- A name-only task volume may include `host: {}` or `configuredAtLaunch: false`.
+  The pinned provider's [volume expansion](https://github.com/hashicorp/terraform-provider-aws/blob/v6.72.0/internal/service/ecs/task_definition.go#L911-L947)
+  can explicitly send the latter boolean. `true` is never normalized away.
+  A host path, EFS configuration,
+  or any other storage capability is rejected. AWS describes the empty host
+  volume default in [Volume](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_Volume.html).
+- Container names, dependencies, mounts, ports, environment names, secret names,
+  and volume names are compared without ordering; duplicates are preserved and
+  therefore rejected. Command and entry-point ordering remain significant.
+
+Explicit ephemeral storage must match exactly in `DescribeTaskDefinition`.
+An unset value must remain absent/null there; the default storage reported for
+a running task by `DescribeTasks` is a separate API representation and is not
+used for this comparison.
+
+Protected running tasks must contain exactly the configured inventory plus one
+injected GuardDuty agent. A completed nonessential init container may remain
+`STOPPED`; this compatibility check does not impose new sidecar lifecycle or
+health polling. Existing primary health, ALB, platform, IAM, and GuardDuty
+coverage checks remain in place. Single-container configurations use the same
+contract with one entry. Old saved outputs without the inventory fail closed
+and need to be updated through the owner's normal Terraform workflow.
+
+`scripts/tests/test-ecs-runtime-containers.sh` exercises production validation
+functions with mocked AWS responses and verifies each negative mutation's
+rejection reason. It runs in `tf-scans.yml`; baseline Terraform tests cover the
+output mapping. No live deployment is required by either test suite.
 
 GuardDuty coverage validation uses the workload detector only to call the GuardDuty coverage API. For enabled `production`/`development` clusters it requires exactly one matching ECS coverage record with:
 
@@ -631,7 +724,9 @@ Broad ECR administrative authority and repository wildcards are not part of the 
 ### Agent injection and rollout
 
 GuardDuty owns injection and lifecycle of the `aws-gd-agent` sidecar. Terraform
-does not add that container to the canonical ECS task definition.
+does not add that container to the canonical ECS task definition. It is separate
+from the optional generic `sidecars` map and its nine-sidecar limit; callers do
+not configure the managed agent as a sidecar or dependency target.
 
 New protected tasks must expose exactly one injected GuardDuty agent container and report it as `RUNNING`. Live ECS responses may use the exact `aws-gd-agent` name or an AWS-generated `aws-guardduty-agent-<suffix>` name; validation accepts both forms while preserving the one-agent requirement. Existing running Fargate tasks are not silently retrofitted, so brownfield adoption requires one deliberate new service deployment after central configuration, IAM, networking, and cluster intent converge.
 
@@ -711,7 +806,7 @@ The following capabilities remain unimplemented:
 - fail-closed ECS task containment/remediation
 - application-specific reference deployment
 
-Other potential extensions include scheduled/run-to-completion task abstractions, first-class Route53/ACM ownership, general-purpose WAF policy authoring, audited ECS Exec, multi-container services, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention.
+Other potential extensions include scheduled/run-to-completion task abstractions, migration-aware releases, first-class Route53/ACM ownership, general-purpose WAF policy authoring, audited ECS Exec, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention. Generic multi-container service support is implemented in M1, with acceptance still pending.
 
 No `modules/ecs_task` module is part of the current architecture.
 

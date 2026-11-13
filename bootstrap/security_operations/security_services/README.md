@@ -292,7 +292,7 @@ region: us-east-1
 
 Native S3 state locking is enabled with `use_lockfile = true`. The singular `security-operation/` spelling above is the actual frozen key. Do not “correct” it to `security-operations/` in an existing deployment without a deliberate state migration.
 
-[providers.tf](providers.tf) pins Terraform `1.15.8` and AWS provider `6.66.0` and explicitly selects `var.primary_region`. Keep service `AWS_REGION`, `AWS_DEFAULT_REGION`, and the Terraform input aligned. `state_region` belongs to the sibling state root; neither it nor `primary_region` rewrites this backend's literal Region/key. Use the [state procedures](../state/README.md) when bootstrapping or intentionally migrating.
+[providers.tf](providers.tf) pins Terraform `1.17.1` and AWS provider `6.72.0` and explicitly selects `var.primary_region`. Keep service `AWS_REGION`, `AWS_DEFAULT_REGION`, and the Terraform input aligned. `state_region` belongs to the sibling state root; neither it nor `primary_region` rewrites this backend's literal Region/key. Use the [state procedures](../state/README.md) when bootstrapping or intentionally migrating.
 
 ## Deployment
 

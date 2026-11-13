@@ -41,7 +41,7 @@ env:
     AWS_PAGER: ""
     TF_IN_AUTOMATION: "true"
     TF_INPUT: "false"
-    TERRAFORM_VERSION: "1.15.8"
+    TERRAFORM_VERSION: "1.17.1"
 
     DESTROY_ARTIFACT_NAME: terraform-destroy-plan-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
     DESTROY_ARTIFACT_DIR: terraform-destroy-plan-artifact

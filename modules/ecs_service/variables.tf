@@ -87,91 +87,84 @@ variable "services" {
 
     environment_variables = optional(map(string), {})
     secrets               = optional(map(string), {})
+
+    task_volumes = optional(set(string), [])
+
+    ephemeral_storage_gib = optional(number)
+
+    mount_points = optional(list(object({
+      source_volume  = string
+      container_path = string
+      read_only      = optional(bool, false)
+    })), [])
+
+    start_timeout_seconds = optional(number)
+    stop_timeout_seconds  = optional(number)
+
+    depends_on = optional(list(object({
+      container_name = string
+      condition      = string
+    })), [])
+
+    sidecars = optional(map(object({
+      image = string
+
+      cpu_units              = optional(number)
+      memory_limit_mib       = optional(number)
+      memory_reservation_mib = optional(number)
+
+      essential = optional(bool, true)
+
+      environment_variables = optional(map(string), {})
+      secrets               = optional(map(string), {})
+
+      command     = optional(list(string))
+      entry_point = optional(list(string))
+
+      port_mappings = optional(list(object({
+        container_port = number
+        protocol       = optional(string, "tcp")
+      })), [])
+
+      read_only_root_filesystem = optional(bool)
+
+      health_check = optional(object({
+        command      = list(string)
+        interval     = optional(number, 30)
+        timeout      = optional(number, 5)
+        retries      = optional(number, 3)
+        start_period = optional(number, 0)
+      }), null)
+
+      start_timeout_seconds = optional(number)
+      stop_timeout_seconds  = optional(number)
+
+      dependency_rank = optional(number, 0)
+
+      depends_on = optional(list(object({
+        container_name = string
+        condition      = string
+      })), [])
+
+      mount_points = optional(list(object({
+        source_volume  = string
+        container_path = string
+        read_only      = optional(bool, false)
+      })), [])
+    })), {})
   }))
 
   default = {}
 
   validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      can(regex("@sha256:[0-9a-f]{64}$", service.image))
-    ])
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for container in concat([service], values(service.sidecars)) :
+        can(regex("^[^[:space:]\\p{Z}\\x{0085}@]+@sha256:[0-9a-f]{64}$", container.image))
+      ]
+    ]))
 
-    error_message = "Every ECS service image must be pinned to a SHA-256 digest using repository@sha256:<64 hex characters>."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      service.container_port >= 1 &&
-      service.container_port <= 65535
-    ])
-
-    error_message = "Each ECS service container_port must be between 1 and 65535."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      contains(["X86_64", "ARM64"], service.cpu_architecture)
-    ])
-
-    error_message = "Each ECS service cpu_architecture must be X86_64 or ARM64."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      service.desired_count >= 0
-    ])
-
-    error_message = "Each ECS service desired_count must be zero or greater."
-  }
-
-  validation {
-    condition = alltrue([
-      for service in values(var.services) :
-      (
-        service.cpu == 256 &&
-        contains([512, 1024, 2048], service.memory)
-      ) ||
-      (
-        service.cpu == 512 &&
-        contains([1024, 2048, 3072, 4096], service.memory)
-      ) ||
-      (
-        service.cpu == 1024 &&
-        service.memory >= 2048 &&
-        service.memory <= 8192 &&
-        service.memory % 1024 == 0
-      ) ||
-      (
-        service.cpu == 2048 &&
-        service.memory >= 4096 &&
-        service.memory <= 16384 &&
-        service.memory % 1024 == 0
-      ) ||
-      (
-        service.cpu == 4096 &&
-        service.memory >= 8192 &&
-        service.memory <= 30720 &&
-        service.memory % 1024 == 0
-      ) ||
-      (
-        service.cpu == 8192 &&
-        service.memory >= 16384 &&
-        service.memory <= 61440 &&
-        service.memory % 4096 == 0
-      ) ||
-      (
-        service.cpu == 16384 &&
-        service.memory >= 32768 &&
-        service.memory <= 122880 &&
-        service.memory % 8192 == 0
-      )
-    ])
-
-    error_message = "Each ECS service must use a valid AWS Fargate CPU and memory combination."
+    error_message = "Every primary and sidecar image must use a nonempty repository@sha256:<64 lowercase hex characters> reference without whitespace or extra suffixes."
   }
 
   validation {
@@ -192,52 +185,168 @@ variable "services" {
 
   validation {
     condition = alltrue([
-      for service in values(var.services) :
-      service.health_check == null ? true : (
-        service.health_check.command == null ? false : (
-          contains(
-            ["CMD", "CMD-SHELL"],
-            try(service.health_check.command[0], "")
-          ) &&
-          (
-            try(service.health_check.command[0], "") == "CMD-SHELL"
-            ? length(service.health_check.command) == 2
-            : length(service.health_check.command) >= 2
-          ) &&
-          alltrue([
-            for element in service.health_check.command :
-            element == null ? false : trimspace(element) != ""
-          ])
-        )
-      )
+      for service_name, service in var.services :
+      !contains(keys(service.sidecars), service_name)
     ])
 
-    error_message = "ECS health_check.command must start with CMD or CMD-SHELL. CMD-SHELL requires exactly two elements; CMD requires an executable (additional arguments are optional). All command elements must be nonempty."
+    error_message = "Sidecar names must differ from the primary container name."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar in values(service.sidecars) :
+        length(setintersection(
+          toset(keys(sidecar.environment_variables)),
+          toset(keys(sidecar.secrets))
+        )) == 0
+      ]
+    ]))
+
+    error_message = "A sidecar cannot define the same environment variable name in both environment_variables and secrets."
+  }
+
+  validation {
+    condition = alltrue([
+      for service_name, service in var.services :
+
+      length(distinct([
+        for dependency in service.depends_on :
+        dependency.container_name
+      ])) == length(service.depends_on) &&
+
+      alltrue([
+        for dependency in service.depends_on :
+
+        contains(keys(service.sidecars), dependency.container_name) &&
+
+        contains(
+          ["START", "HEALTHY", "COMPLETE", "SUCCESS"],
+          dependency.condition
+        ) &&
+
+        (
+          dependency.condition != "HEALTHY" ||
+          try(
+            service.sidecars[dependency.container_name].health_check != null,
+            false
+          )
+        ) &&
+
+        (
+          !contains(["COMPLETE", "SUCCESS"], dependency.condition) ||
+          try(
+            service.sidecars[dependency.container_name].essential == false,
+            false
+          )
+        )
+      ])
+    ])
+
+    error_message = "Primary container dependencies must reference distinct, existing sidecars with valid ECS conditions. HEALTHY requires a health check; COMPLETE and SUCCESS require a nonessential sidecar."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for sidecar_name, sidecar in service.sidecars : (
+
+          length(distinct([
+            for dependency in sidecar.depends_on :
+            dependency.container_name
+          ])) == length(sidecar.depends_on) &&
+
+          alltrue([
+            for dependency in sidecar.depends_on :
+
+            contains(keys(service.sidecars), dependency.container_name) &&
+
+            contains(
+              ["START", "HEALTHY", "COMPLETE", "SUCCESS"],
+              dependency.condition
+            ) &&
+
+            (
+              dependency.condition != "HEALTHY" ||
+              try(
+                service.sidecars[dependency.container_name].health_check != null,
+                false
+              )
+            ) &&
+
+            (
+              !contains(["COMPLETE", "SUCCESS"], dependency.condition) ||
+              try(
+                service.sidecars[dependency.container_name].essential == false,
+                false
+              )
+            ) &&
+
+            try(
+              service.sidecars[dependency.container_name].dependency_rank <
+              sidecar.dependency_rank,
+              false
+            )
+          ])
+        )
+      ]
+    ]))
+
+    error_message = "Sidecar dependencies must reference distinct, existing sidecars with lower dependency ranks and valid ECS conditions. HEALTHY requires a health check; COMPLETE and SUCCESS require nonessential prerequisites."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for service in values(var.services) : [
+        for mounts in concat(
+          [service.mount_points],
+          [
+            for sidecar in values(service.sidecars) :
+            sidecar.mount_points
+          ]
+          ) : (
+          length(distinct([
+            for mount in mounts : mount.container_path
+          ])) == length(mounts) &&
+
+          alltrue([
+            for mount in mounts :
+            contains(service.task_volumes, mount.source_volume) &&
+            startswith(mount.container_path, "/") &&
+            trimspace(mount.container_path) == mount.container_path &&
+            alltrue([
+              for component in split("/", trimprefix(mount.container_path, "/")) :
+              !contains(["", ".", ".."], component)
+            ])
+          ])
+        )
+      ]
+    ]))
+
+    error_message = "Container mount points must reference declared task volumes and use unique, canonical absolute non-root paths per container: no empty, '.' or '..' components, repeated/trailing separators, or surrounding whitespace."
   }
 
   validation {
     condition = alltrue([
       for service in values(var.services) :
-      service.health_check == null ? true : (
-        service.health_check.interval >= 5 &&
-        service.health_check.interval <= 300 &&
-        service.health_check.interval == floor(service.health_check.interval) &&
-
-        service.health_check.timeout >= 2 &&
-        service.health_check.timeout <= 60 &&
-        service.health_check.timeout == floor(service.health_check.timeout) &&
-
-        service.health_check.retries >= 1 &&
-        service.health_check.retries <= 10 &&
-        service.health_check.retries == floor(service.health_check.retries) &&
-
-        service.health_check.start_period >= 0 &&
-        service.health_check.start_period <= 300 &&
-        service.health_check.start_period == floor(service.health_check.start_period)
-      )
+      length(distinct(concat(
+        [service.container_port],
+        flatten([
+          for sidecar in values(service.sidecars) : [
+            for port in sidecar.port_mappings :
+            port.container_port
+          ]
+        ])
+        ))) == 1 + sum(concat(
+        [0],
+        [
+          for sidecar in values(service.sidecars) :
+          length(sidecar.port_mappings)
+        ]
+      ))
     ])
 
-    error_message = "ECS health_check timing values must be whole numbers within AWS limits: interval 5-300, timeout 2-60, retries 1-10, and start_period 0-300."
+    error_message = "The primary container and sidecars must not declare duplicate container ports within the same ECS task."
   }
 }
 

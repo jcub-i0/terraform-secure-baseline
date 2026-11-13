@@ -68,58 +68,210 @@ resource "aws_ecs_task_definition" "task_definitions" {
     cpu_architecture        = each.value.cpu_architecture
   }
 
-  container_definitions = jsonencode([
-    merge(
-      {
-        name      = each.key
-        image     = each.value.image
-        essential = true
+  dynamic "volume" {
+    for_each = each.value.task_volumes
 
-        portMappings = [
-          {
-            containerPort = each.value.container_port
-            hostPort      = each.value.container_port
-            protocol      = "tcp"
+    content {
+      name = volume.value
+    }
+  }
+
+  dynamic "ephemeral_storage" {
+    for_each = each.value.ephemeral_storage_gib == null ? [] : [each.value.ephemeral_storage_gib]
+
+    content {
+      size_in_gib = ephemeral_storage.value
+    }
+  }
+
+  container_definitions = jsonencode(concat(
+    [
+      merge(
+        {
+          name      = each.key
+          image     = each.value.image
+          essential = true
+
+          portMappings = [
+            {
+              containerPort = each.value.container_port
+              hostPort      = each.value.container_port
+              protocol      = "tcp"
+            }
+          ]
+
+          environment = [
+            for name, value in each.value.environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
+
+          secrets = [
+            for name, value_from in each.value.secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.service_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+
+              mode = "non-blocking"
+            }
           }
-        ]
+        },
 
-        environment = [
-          for name, value in each.value.environment_variables : {
-            name  = name
-            value = value
+        each.value.health_check == null ? {} : {
+          healthCheck = {
+            command     = each.value.health_check.command
+            interval    = each.value.health_check.interval
+            timeout     = each.value.health_check.timeout
+            retries     = each.value.health_check.retries
+            startPeriod = each.value.health_check.start_period
           }
-        ]
+        },
 
-        secrets = [
-          for name, value_from in each.value.secrets : {
-            name      = name
-            valueFrom = value_from
-          }
-        ]
+        each.value.start_timeout_seconds == null ? {} : {
+          startTimeout = each.value.start_timeout_seconds
+        },
 
-        logConfiguration = {
-          logDriver = "awslogs"
+        each.value.stop_timeout_seconds == null ? {} : {
+          stopTimeout = each.value.stop_timeout_seconds
+        },
 
-          options = {
-            awslogs-group         = aws_cloudwatch_log_group.service_logs[each.key].name
-            awslogs-region        = var.primary_region
-            awslogs-stream-prefix = "ecs"
+        length(each.value.depends_on) == 0 ? {} : {
+          dependsOn = [
+            for dependency in each.value.depends_on : {
+              containerName = dependency.container_name
+              condition     = dependency.condition
+            }
+          ]
+        },
 
-            mode = "non-blocking"
-          }
+        length(each.value.mount_points) == 0 ? {} : {
+          mountPoints = [
+            for mount in each.value.mount_points : {
+              sourceVolume  = mount.source_volume
+              containerPath = mount.container_path
+              readOnly      = mount.read_only
+            }
+          ]
         }
-      },
-      each.value.health_check == null ? {} : {
-        healthCheck = {
-          command     = each.value.health_check.command
-          interval    = each.value.health_check.interval
-          timeout     = each.value.health_check.timeout
-          retries     = each.value.health_check.retries
-          startPeriod = each.value.health_check.start_period
+      )
+    ],
+    [
+      for sidecar_name in sort(keys(each.value.sidecars)) : merge(
+        {
+          name      = sidecar_name
+          image     = each.value.sidecars[sidecar_name].image
+          essential = each.value.sidecars[sidecar_name].essential
+
+          environment = [
+            for name, value in each.value.sidecars[sidecar_name].environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
+
+          secrets = [
+            for name, value_from in each.value.sidecars[sidecar_name].secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.service_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+
+              mode = "non-blocking"
+            }
+          }
+        },
+
+        each.value.sidecars[sidecar_name].health_check == null ? {} : {
+          healthCheck = {
+            command     = each.value.sidecars[sidecar_name].health_check.command
+            interval    = each.value.sidecars[sidecar_name].health_check.interval
+            timeout     = each.value.sidecars[sidecar_name].health_check.timeout
+            retries     = each.value.sidecars[sidecar_name].health_check.retries
+            startPeriod = each.value.sidecars[sidecar_name].health_check.start_period
+          }
+        },
+
+        each.value.sidecars[sidecar_name].start_timeout_seconds == null ? {} : {
+          startTimeout = each.value.sidecars[sidecar_name].start_timeout_seconds
+        },
+
+        each.value.sidecars[sidecar_name].stop_timeout_seconds == null ? {} : {
+          stopTimeout = each.value.sidecars[sidecar_name].stop_timeout_seconds
+        },
+
+        each.value.sidecars[sidecar_name].cpu_units == null ? {} : {
+          cpu = each.value.sidecars[sidecar_name].cpu_units
+        },
+
+        each.value.sidecars[sidecar_name].memory_limit_mib == null ? {} : {
+          memory = each.value.sidecars[sidecar_name].memory_limit_mib
+        },
+
+        each.value.sidecars[sidecar_name].memory_reservation_mib == null ? {} : {
+          memoryReservation = each.value.sidecars[sidecar_name].memory_reservation_mib
+        },
+
+        each.value.sidecars[sidecar_name].command == null ? {} : {
+          command = each.value.sidecars[sidecar_name].command
+        },
+
+        each.value.sidecars[sidecar_name].entry_point == null ? {} : {
+          entryPoint = each.value.sidecars[sidecar_name].entry_point
+        },
+
+        length(each.value.sidecars[sidecar_name].port_mappings) == 0 ? {} : {
+          portMappings = [
+            for port in each.value.sidecars[sidecar_name].port_mappings : {
+              containerPort = port.container_port
+              hostPort      = port.container_port
+              protocol      = port.protocol
+            }
+          ]
+        },
+
+        each.value.sidecars[sidecar_name].read_only_root_filesystem == null ? {} : {
+          readonlyRootFilesystem = each.value.sidecars[sidecar_name].read_only_root_filesystem
+        },
+
+        length(each.value.sidecars[sidecar_name].depends_on) == 0 ? {} : {
+          dependsOn = [
+            for dependency in each.value.sidecars[sidecar_name].depends_on : {
+              containerName = dependency.container_name
+              condition     = dependency.condition
+            }
+          ]
+        },
+
+        length(each.value.sidecars[sidecar_name].mount_points) == 0 ? {} : {
+          mountPoints = [
+            for mount in each.value.sidecars[sidecar_name].mount_points : {
+              sourceVolume  = mount.source_volume
+              containerPath = mount.container_path
+              readOnly      = mount.read_only
+            }
+          ]
         }
-      }
-    )
-  ])
+      )
+    ]
+  ))
 
   tags = {
     Name        = "${var.name_prefix}-${each.key}"
