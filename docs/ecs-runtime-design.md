@@ -4,7 +4,7 @@
 
 This document describes the implemented ECS/Fargate runtime, including production availability, retirement, GuardDuty Fargate Runtime Monitoring, ownership boundaries, scaling, deployment health, release lifecycle, and validation. The qualification section below records historical results; this document is not proof that those tests were repeated. Qualification claims depend on the tested commit, effective configuration, and retained evidence.
 
-M1 multi-container implementation is complete with acceptance pending. The complete PR was independently reviewed at `afdbda0`; review of the N5D corrections, live AWS sidecar-readiness qualification, owner acceptance, and PR merge remain outstanding; historical runtime qualification below does not establish M1 acceptance. See the [M1 implementation and acceptance record](../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md).
+M1 multi-container implementation is merged, with scoped live staging qualification complete: positive readiness, a negative `SUCCESS` prerequisite, and a final 16/16 baseline-validator pass. Staging workload Destroy completed successfully; final owner acceptance remains pending. The [M1 implementation and acceptance record](../v1-15-0/v1_15_0_M1_IMPLEMENTATION_STATUS.md#e-live-qualification-and-closeout) distinguishes the tested commits, evidence provenance, untested optional interfaces, and remaining closeout work from the historical Runtime Monitoring qualification below.
 
 ECS/Fargate is the preferred modern SaaS/application runtime. EC2 remains a supported host-based workload pattern.
 
@@ -806,7 +806,7 @@ The following capabilities remain unimplemented:
 - fail-closed ECS task containment/remediation
 - application-specific reference deployment
 
-Other potential extensions include scheduled/run-to-completion task abstractions, migration-aware releases, first-class Route53/ACM ownership, general-purpose WAF policy authoring, audited ECS Exec, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention. Generic multi-container service support is implemented in M1, with acceptance still pending.
+Other potential extensions include scheduled/run-to-completion task abstractions, migration-aware releases, first-class Route53/ACM ownership, general-purpose WAF policy authoring, audited ECS Exec, application database-user lifecycle, Windows Fargate, and more sophisticated historical ECR retention. Generic multi-container service support is merged and has scoped live qualification in M1; final owner acceptance remains pending.
 
 No `modules/ecs_task` module is part of the current architecture.
 
