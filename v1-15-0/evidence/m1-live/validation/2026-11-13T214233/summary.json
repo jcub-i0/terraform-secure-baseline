@@ -1,0 +1,150 @@
+{
+  "project": "tf-secure-baseline",
+  "environment": "staging",
+  "aws_profile": "",
+  "aws_credential_source": "GitHub OIDC environment credentials",
+  "aws_region": "us-east-1",
+  "aws_account_id": "027326805885",
+  "expected_account_id": "027326805885",
+  "name_prefix": "tf-secure-baseline-staging",
+  "validation_time": "2026-11-13T21:42:33+00:00",
+  "overall_result": "PASS",
+  "scripts_passed": 16,
+  "scripts_failed": 0,
+  "results": [
+    {
+      "area": "Environment",
+      "script": "validate-env.sh",
+      "result": "PASS",
+      "log_file": "validate-env.log"
+    },
+    {
+      "area": "Networking",
+      "script": "validate-networking.sh",
+      "result": "PASS",
+      "log_file": "validate-networking.log"
+    },
+    {
+      "area": "VPC Endpoints",
+      "script": "validate-vpc-endpoints.sh",
+      "result": "PASS",
+      "log_file": "validate-vpc-endpoints.log"
+    },
+    {
+      "area": "ECR",
+      "script": "validate-ecr.sh",
+      "result": "PASS",
+      "log_file": "validate-ecr.log"
+    },
+    {
+      "area": "Logging",
+      "script": "validate-logging.sh",
+      "result": "PASS",
+      "log_file": "validate-logging.log"
+    },
+    {
+      "area": "Workload Security",
+      "script": "validate-security-workload.sh",
+      "result": "PASS",
+      "log_file": "validate-security-workload.log"
+    },
+    {
+      "area": "KMS",
+      "script": "validate-kms.sh",
+      "result": "PASS",
+      "log_file": "validate-kms.log"
+    },
+    {
+      "area": "Backup",
+      "script": "validate-backup.sh",
+      "result": "PASS",
+      "log_file": "validate-backup.log"
+    },
+    {
+      "area": "SNS",
+      "script": "validate-sns.sh",
+      "result": "PASS",
+      "log_file": "validate-sns.log"
+    },
+    {
+      "area": "SQS",
+      "script": "validate-sqs.sh",
+      "result": "PASS",
+      "log_file": "validate-sqs.log"
+    },
+    {
+      "area": "EventBridge",
+      "script": "validate-eventbridge.sh",
+      "result": "PASS",
+      "log_file": "validate-eventbridge.log"
+    },
+    {
+      "area": "Lambda",
+      "script": "validate-lambda.sh",
+      "result": "PASS",
+      "log_file": "validate-lambda.log"
+    },
+    {
+      "area": "SSM",
+      "script": "validate-ssm.sh",
+      "result": "PASS",
+      "log_file": "validate-ssm.log"
+    },
+    {
+      "area": "Compute",
+      "script": "validate-compute.sh",
+      "result": "PASS",
+      "log_file": "validate-compute.log"
+    },
+    {
+      "area": "ECS Runtime",
+      "script": "validate-ecs-runtime.sh",
+      "result": "PASS",
+      "log_file": "validate-ecs-runtime.log"
+    },
+    {
+      "area": "IAM",
+      "script": "validate-iam.sh",
+      "result": "PASS",
+      "log_file": "validate-iam.log"
+    }
+  ],
+  "manual_validation_remaining": [
+    {
+      "validation": "control_plane_and_organizations_topology_validation",
+      "workflow": "Export Control Plane Evidence"
+    },
+    {
+      "validation": "workload_bootstrap_validation",
+      "workflow": "Export Bootstrap Evidence"
+    },
+    {
+      "validation": "end_user_sso_login_validation",
+      "workflow": null
+    },
+    {
+      "validation": "live_ec2_isolation",
+      "workflow": null
+    },
+    {
+      "validation": "live_ec2_rollback",
+      "workflow": null
+    },
+    {
+      "validation": "live_ip_enrichment",
+      "workflow": null
+    },
+    {
+      "validation": "tamper_detection",
+      "workflow": null
+    },
+    {
+      "validation": "break_glass_role_assumption",
+      "workflow": null
+    },
+    {
+      "validation": "destroy_safety_review",
+      "workflow": null
+    }
+  ]
+}
