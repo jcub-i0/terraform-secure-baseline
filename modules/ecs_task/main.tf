@@ -31,6 +31,25 @@ resource "aws_ecs_task_definition" "jobs" {
     cpu_architecture        = each.value.cpu_architecture
   }
 
+  dynamic "volume" {
+    for_each = each.value.task_volumes
+
+    content {
+      name = volume.value
+    }
+  }
+
+  dynamic "ephemeral_storage" {
+    for_each = each.value.ephemeral_storage_gib == null ? [] : [
+      each.value.ephemeral_storage_gib
+    ]
+
+    content {
+      size_in_gib = ephemeral_storage.value
+    }
+  }
+
+
   container_definitions = jsonencode([
     merge(
       {
@@ -65,6 +84,16 @@ resource "aws_ecs_task_definition" "jobs" {
 
       each.value.command == null ? {} : {
         command = each.value.command
+      },
+
+      length(each.value.mount_points) == 0 ? {} : {
+        mountPoints = [
+          for mount in each.value.mount_points : {
+          sourceVolume  = mount.source_volume
+          containerPath = mount.container_path
+          readOnly      = mount.read_only
+          }
+        ]
       }
     )
   ])

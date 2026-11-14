@@ -38,6 +38,16 @@ variable "tasks" {
     command               = optional(list(string))
     environment_variables = optional(map(string), {})
     secrets               = optional(map(string), {})
+
+    task_volumes = optional(set(string), [])
+
+    ephemeral_storage_gib = optional(number)
+
+    mount_points = optional(list(object({
+      source_volume  = string
+      container_path = string
+      read_only      = optional(bool, false)
+    })), [])
   }))
 
   default = {}
@@ -52,5 +62,17 @@ variable "tasks" {
     ])
 
     error_message = "Every job image must use an immutable repository@sha256:<64 lowercase hexadecimal characters> reference."
+  }
+
+  validation {
+    condition = alltrue([
+      for task in values(var.tasks) :
+      alltrue([
+        for mount in task.mount_points :
+        contains(task.task_volumes, mount.source_volume)
+      ])
+    ])
+
+    error_message = "Every mount point must reference a volume declared for its job."
   }
 }
