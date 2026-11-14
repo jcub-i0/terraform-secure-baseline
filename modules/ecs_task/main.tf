@@ -1,7 +1,7 @@
 resource "aws_cloudwatch_log_group" "job_logs" {
   for_each = var.tasks
 
-  name              = "/aws/ecs${var.name_prefix}/jobs/${each.key}"
+  name              = "/aws/ecs/${var.name_prefix}/jobs/${each.key}"
   retention_in_days = var.cloudwatch_retention_days
   kms_key_id        = var.logs_cmk_arn
 
