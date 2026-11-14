@@ -41,4 +41,16 @@ variable "tasks" {
   }))
 
   default = {}
+
+  validation {
+    condition = alltrue([
+      for task in values(var.tasks) :
+      can(regex(
+        "^[^[:space:]@]+@sha256:[0-9a-f]{64}$",
+        task.image
+      ))
+    ])
+
+    error_message = "Every job image must use an immutable repository@sha256:<64 lowercase hexadecimal characters> reference."
+  }
 }
