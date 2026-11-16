@@ -89,9 +89,9 @@ resource "aws_ecs_task_definition" "jobs" {
       length(each.value.mount_points) == 0 ? {} : {
         mountPoints = [
           for mount in each.value.mount_points : {
-          sourceVolume  = mount.source_volume
-          containerPath = mount.container_path
-          readOnly      = mount.read_only
+            sourceVolume  = mount.source_volume
+            containerPath = mount.container_path
+            readOnly      = mount.read_only
           }
         ]
       }
