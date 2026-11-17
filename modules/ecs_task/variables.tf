@@ -55,7 +55,7 @@ variable "tasks" {
       command               = optional(list(string))
       environment_variables = optional(map(string), {})
       secrets               = optional(map(string), {})
-    })))
+    })), {})
   }))
 
   default = {}
