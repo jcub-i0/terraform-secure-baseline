@@ -48,6 +48,7 @@ jobs:
 
           for root in \
             modules/ecs_service \
+            modules/ecs_task \
             modules/iam \
             baseline \
             environments/dev \

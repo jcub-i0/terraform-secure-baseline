@@ -1,0 +1,154 @@
+resource "aws_cloudwatch_log_group" "job_logs" {
+  for_each = var.tasks
+
+  name              = "/aws/ecs/${var.name_prefix}/jobs/${each.key}"
+  retention_in_days = var.cloudwatch_retention_days
+  kms_key_id        = var.logs_cmk_arn
+
+  tags = {
+    Name        = "/aws/ecs/${var.name_prefix}/jobs/${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
+
+
+resource "aws_ecs_task_definition" "jobs" {
+  for_each = var.tasks
+
+  family                   = "${var.name_prefix}-job-${each.key}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+
+  cpu    = each.value.cpu
+  memory = each.value.memory
+
+  execution_role_arn = each.value.execution_role_arn
+  task_role_arn      = each.value.task_role_arn
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = each.value.cpu_architecture
+  }
+
+  dynamic "volume" {
+    for_each = each.value.task_volumes
+
+    content {
+      name = volume.value
+    }
+  }
+
+  dynamic "ephemeral_storage" {
+    for_each = each.value.ephemeral_storage_gib == null ? [] : [
+      each.value.ephemeral_storage_gib
+    ]
+
+    content {
+      size_in_gib = ephemeral_storage.value
+    }
+  }
+
+
+  container_definitions = jsonencode(concat(
+    [
+      merge(
+        {
+          name      = each.key
+          image     = each.value.image
+          essential = true
+
+          environment = [
+            for name, value in each.value.environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
+
+          secrets = [
+            for name, value_from in each.value.secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.job_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+            }
+          }
+        },
+
+        each.value.command == null ? {} : {
+          command = each.value.command
+        },
+
+        length(each.value.depends_on) == 0 ? {} : {
+          dependsOn = [
+            for dependency in each.value.depends_on : {
+              containerName = dependency.container_name
+              condition     = dependency.condition
+            }
+          ]
+        },
+
+        length(each.value.mount_points) == 0 ? {} : {
+          mountPoints = [
+            for mount in each.value.mount_points : {
+              sourceVolume  = mount.source_volume
+              containerPath = mount.container_path
+              readOnly      = mount.read_only
+            }
+          ]
+        }
+      )
+    ],
+    [
+      for sidecar_name, sidecar in each.value.sidecars : merge(
+        {
+          name      = sidecar_name
+          image     = sidecar.image
+          essential = sidecar.essential
+
+          environment = [
+            for name, value in sidecar.environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
+
+          secrets = [
+            for name, value_from in sidecar.secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.job_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+            }
+          }
+        },
+
+        sidecar.command == null ? {} : {
+          command = sidecar.command
+        }
+      )
+    ]
+  ))
+
+  tags = {
+    Name        = "${var.name_prefix}-job-${each.key}"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
