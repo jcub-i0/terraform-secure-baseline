@@ -48,20 +48,33 @@ variable "tasks" {
       container_path = string
       read_only      = optional(bool, false)
     })), [])
+
+    sidecars = optional(map(object({
+      image                 = string
+      essential             = optional(bool, false)
+      command               = optional(list(string))
+      environment_variables = optional(map(string), {})
+      secrets               = optional(map(string), {})
+    })))
   }))
 
   default = {}
 
   validation {
-    condition = alltrue([
-      for task in values(var.tasks) :
-      can(regex(
-        "^[^[:space:]@]+@sha256:[0-9a-f]{64}$",
-        task.image
-      ))
-    ])
+    condition = alltrue(flatten([
+      for task in values(var.tasks) : [
+        for image in concat(
+          [task.image],
+          [for sidecar in values(task.sidecars) : sidecar.image]
+        ) :
+        can(regex(
+          "^[^[:space:]@]+@sha256:[0-9a-f]{64}$",
+          image
+        ))
+      ]
+    ]))
 
-    error_message = "Every job image must use an immutable repository@sha256:<64 lowercase hexadecimal characters> reference."
+    error_message = "Every job container image must use an immutable repository@sha256:<64 lowercase hexadecimal characters> reference."
   }
 
   validation {
@@ -74,5 +87,14 @@ variable "tasks" {
     ])
 
     error_message = "Every mount point must reference a volume declared for its job."
+  }
+
+  validation {
+    condition = alltrue([
+      for task_name, task in var.tasks :
+      !contains(keys(task.sidecars), task_name)
+    ])
+
+    error_message = "Sidecar names must differ from the primary job container name."
   }
 }
