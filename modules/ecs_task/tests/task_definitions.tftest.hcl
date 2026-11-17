@@ -204,6 +204,13 @@ run "job_with_sidecar" {
             command = ["sh", "-c", "exit 0"]
           }
         }
+
+        depends_on = [
+          {
+            container_name = "init"
+            condition      = "SUCCESS"
+          }
+        ]
       }
     }
   }
@@ -242,6 +249,21 @@ run "job_with_sidecar" {
     )
 
     error_message = "Sidecar identity, essential flag, or command is incorrect."
+  }
+
+  assert {
+    condition = (
+      jsondecode(
+        aws_ecs_task_definition.jobs["worker"].container_definitions
+      )[0].dependsOn == [
+        {
+          containerName = "init"
+          condition     = "SUCCESS"
+        }
+      ]
+    )
+
+    error_message = "The primary worker must wait for successful initialization."
   }
 }
 

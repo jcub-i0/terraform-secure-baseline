@@ -56,6 +56,11 @@ variable "tasks" {
       environment_variables = optional(map(string), {})
       secrets               = optional(map(string), {})
     })), {})
+
+    depends_on = optional(list(object({
+      container_name = string
+      condition      = string
+    })), [])
   }))
 
   default = {}
@@ -96,5 +101,21 @@ variable "tasks" {
     ])
 
     error_message = "Sidecar names must differ from the primary job container name."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for task in values(var.tasks) : [
+        for dependency in task.depends_on :
+        contains(keys(task.sidecars), dependency.container_name) &&
+        contains(["START", "COMPLETE", "SUCCESS"], dependency.condition) &&
+        (
+          !contains(["COMPLETE", "SUCCESS"], dependency.condition) ||
+          try(task.sidecars[dependency.container_name].essential == false, false)
+        )
+      ]
+    ]))
+
+    error_message = "Primary container dependencies must reference existing sidecars. COMPLETE and SUCCESS require nonessential sidecars. HEALTHY is not yet supported."
   }
 }

@@ -87,6 +87,15 @@ resource "aws_ecs_task_definition" "jobs" {
           command = each.value.command
         },
 
+        length(each.value.depends_on) == 0 ? {} : {
+          dependsOn = [
+            for dependency in each.value.depends_on : {
+              containerName = dependency.container_name
+              condition     = dependency.condition
+            }
+          ]
+        },
+
         length(each.value.mount_points) == 0 ? {} : {
           mountPoints = [
             for mount in each.value.mount_points : {
