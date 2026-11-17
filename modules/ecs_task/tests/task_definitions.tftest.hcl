@@ -255,7 +255,7 @@ run "job_with_sidecar" {
     condition = (
       jsondecode(
         aws_ecs_task_definition.jobs["worker"].container_definitions
-      )[0].dependsOn == [
+        )[0].dependsOn == [
         {
           containerName = "init"
           condition     = "SUCCESS"
