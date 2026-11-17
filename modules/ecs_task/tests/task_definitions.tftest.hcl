@@ -290,3 +290,28 @@ run "reject_mutable_sidecar_image" {
 
   expect_failures = [var.tasks]
 }
+
+run "reject_missing_dependency" {
+  command = plan
+
+  variables {
+    tasks = {
+      worker = {
+        image              = "worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        cpu                = 256
+        memory             = 512
+        execution_role_arn = "arn:aws:iam::123456789012:role/worker-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/worker-task"
+
+        depends_on = [
+          {
+            container_name = "nonexistent"
+            condition      = "SUCCESS"
+          }
+        ]
+      }
+    }
+  }
+
+  expect_failures = [var.tasks]
+}
