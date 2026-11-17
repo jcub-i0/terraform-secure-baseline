@@ -103,3 +103,85 @@ run "reject_mutable_image" {
 
   expect_failures = [var.tasks]
 }
+
+run "job_storage" {
+  command = plan
+
+  variables {
+    tasks = {
+      archive = {
+        image              = "worker-archive@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        cpu                = 256
+        memory             = 512
+        execution_role_arn = "arn:aws:iam::123456789012:role/archive-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/archive-task"
+
+        task_volumes          = ["scratch"]
+        ephemeral_storage_gib = 40
+
+        mount_points = [
+          {
+            source_volume  = "scratch"
+            container_path = "/work"
+          }
+        ]
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      length(aws_ecs_task_definition.jobs["archive"].volume) == 1 &&
+      alltrue([
+        for volume in aws_ecs_task_definition.jobs["archive"].volume :
+        volume.name == "scratch"
+      ]) &&
+      aws_ecs_task_definition.jobs["archive"].ephemeral_storage[0].size_in_gib == 40
+    )
+
+    error_message = "Task volume or ephemeral storage configuration is incorrect."
+  }
+
+  assert {
+    condition = (
+      jsondecode(
+        aws_ecs_task_definition.jobs["archive"].container_definitions
+      )[0].mountPoints[0].sourceVolume == "scratch"
+      &&
+      jsondecode(
+        aws_ecs_task_definition.jobs["archive"].container_definitions
+      )[0].mountPoints[0].containerPath == "/work"
+      &&
+      jsondecode(
+        aws_ecs_task_definition.jobs["archive"].container_definitions
+      )[0].mountPoints[0].readOnly == false
+    )
+
+    error_message = "Container mount point configuration is incorrect."
+  }
+}
+
+run "reject_undeclared_volume" {
+  command = plan
+
+  variables {
+    tasks = {
+      archive = {
+        image              = "worker-archive@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        cpu                = 256
+        memory             = 512
+        execution_role_arn = "arn:aws:iam::123456789012:role/archive-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/archive-task"
+
+        mount_points = [
+          {
+            source_volume  = "nonexistent"
+            container_path = "/work"
+          }
+        ]
+      }
+    }
+  }
+
+  expect_failures = [var.tasks]
+}
