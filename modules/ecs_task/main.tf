@@ -50,53 +50,92 @@ resource "aws_ecs_task_definition" "jobs" {
   }
 
 
-  container_definitions = jsonencode([
-    merge(
-      {
-        name      = each.key
-        image     = each.value.image
-        essential = true
+  container_definitions = jsonencode(concat(
+    [
+      merge(
+        {
+          name      = each.key
+          image     = each.value.image
+          essential = true
 
-        environment = [
-          for name, value in each.value.environment_variables : {
-            name  = name
-            value = value
+          environment = [
+            for name, value in each.value.environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
+
+          secrets = [
+            for name, value_from in each.value.secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.job_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+            }
           }
-        ]
+        },
 
-        secrets = [
-          for name, value_from in each.value.secrets : {
-            name      = name
-            valueFrom = value_from
-          }
-        ]
+        each.value.command == null ? {} : {
+          command = each.value.command
+        },
 
-        logConfiguration = {
-          logDriver = "awslogs"
-
-          options = {
-            awslogs-group         = aws_cloudwatch_log_group.job_logs[each.key].name
-            awslogs-region        = var.primary_region
-            awslogs-stream-prefix = "ecs"
-          }
+        length(each.value.mount_points) == 0 ? {} : {
+          mountPoints = [
+            for mount in each.value.mount_points : {
+              sourceVolume  = mount.source_volume
+              containerPath = mount.container_path
+              readOnly      = mount.read_only
+            }
+          ]
         }
-      },
+      )
+    ],
+    [
+      for sidecar_name, sidecar in each.value.sidecars : merge(
+        {
+          name      = sidecar_name
+          image     = sidecar.image
+          essential = sidecar.essential
 
-      each.value.command == null ? {} : {
-        command = each.value.command
-      },
+          environment = [
+            for name, value in sidecar.environment_variables : {
+              name  = name
+              value = value
+            }
+          ]
 
-      length(each.value.mount_points) == 0 ? {} : {
-        mountPoints = [
-          for mount in each.value.mount_points : {
-            sourceVolume  = mount.source_volume
-            containerPath = mount.container_path
-            readOnly      = mount.read_only
+          secrets = [
+            for name, value_from in sidecar.secrets : {
+              name      = name
+              valueFrom = value_from
+            }
+          ]
+
+          logConfiguration = {
+            logDriver = "awslogs"
+
+            options = {
+              awslogs-group         = aws_cloudwatch_log_group.job_logs[each.key].name
+              awslogs-region        = var.primary_region
+              awslogs-stream-prefix = "ecs"
+            }
           }
-        ]
-      }
-    )
-  ])
+        },
+
+        sidecar.command == null ? {} : {
+          command = sidecar.command
+        }
+      )
+    ]
+  ))
 
   tags = {
     Name        = "${var.name_prefix}-job-${each.key}"
