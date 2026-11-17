@@ -185,3 +185,86 @@ run "reject_undeclared_volume" {
 
   expect_failures = [var.tasks]
 }
+
+run "job_with_sidecar" {
+  command = plan
+
+  variables {
+    tasks = {
+      worker = {
+        image              = "worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        cpu                = 512
+        memory             = 1024
+        execution_role_arn = "arn:aws:iam::123456789012:role/worker-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/worker-task"
+
+        sidecars = {
+          init = {
+            image   = "init@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            command = ["sh", "-c", "exit 0"]
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      length(jsondecode(
+        aws_ecs_task_definition.jobs["worker"].container_definitions
+      )) == 2
+      &&
+      jsondecode(
+        aws_ecs_task_definition.jobs["worker"].container_definitions
+      )[0].name == "worker"
+      &&
+      jsondecode(
+        aws_ecs_task_definition.jobs["worker"].container_definitions
+      )[0].essential == true
+    )
+
+    error_message = "The primary worker must remain essential and have one companion container."
+  }
+
+  assert {
+    condition = (
+      jsondecode(
+        aws_ecs_task_definition.jobs["worker"].container_definitions
+      )[1].name == "init"
+      &&
+      jsondecode(
+        aws_ecs_task_definition.jobs["worker"].container_definitions
+      )[1].essential == false
+      &&
+      jsondecode(
+        aws_ecs_task_definition.jobs["worker"].container_definitions
+      )[1].command == ["sh", "-c", "exit 0"]
+    )
+
+    error_message = "Sidecar identity, essential flag, or command is incorrect."
+  }
+}
+
+run "reject_mutable_sidecar_image" {
+  command = plan
+
+  variables {
+    tasks = {
+      worker = {
+        image              = "worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        cpu                = 256
+        memory             = 512
+        execution_role_arn = "arn:aws:iam::123456789012:role/worker-execution"
+        task_role_arn      = "arn:aws:iam::123456789012:role/worker-task"
+
+        sidecars = {
+          init = {
+            image = "init:latest"
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.tasks]
+}
