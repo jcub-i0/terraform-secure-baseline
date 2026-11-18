@@ -26,18 +26,6 @@ variable "account_id" {
   type = string
 }
 
-variable "lambda_ip_enrichment_role_arn" {
-  type = string
-}
-
-variable "lambda_ec2_isolation_role_arn" {
-  type = string
-}
-
-variable "lambda_ec2_rollback_role_arn" {
-  type = string
-}
-
 variable "break_glass_admin_role_arn" {
   type = string
 }

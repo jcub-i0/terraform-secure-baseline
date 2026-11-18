@@ -13,7 +13,7 @@ resource "aws_lambda_function" "ec2_isolation" {
 
   function_name                  = "${var.name_prefix}-ec2-isolation"
   description                    = "Automatically isolate opted-in EC2 instances for eligible GuardDuty findings imported through Security Hub"
-  role                           = var.lambda_ec2_isolation_role_arn
+  role                           = aws_iam_role.lambda_ec2_isolation.arn
   handler                        = "ec2_isolation.lambda_handler"
   runtime                        = "python3.12"
   filename                       = data.archive_file.lambda_ec2_isolation.output_path
@@ -204,7 +204,7 @@ data "aws_iam_policy_document" "ec2_isolation_dlq_policy" {
     principals {
       type = "AWS"
       identifiers = [
-        var.lambda_ec2_isolation_role_arn
+        aws_iam_role.lambda_ec2_isolation.arn
       ]
     }
 
@@ -265,7 +265,7 @@ resource "aws_lambda_function" "ec2_rollback" {
 
   function_name                  = "${var.name_prefix}-ec2-rollback"
   description                    = "Restore EC2 resources in the Quarantine SG back to their original SG(s)"
-  role                           = var.lambda_ec2_rollback_role_arn
+  role                           = aws_iam_role.lambda_ec2_rollback.arn
   handler                        = "ec2_rollback.lambda_handler"
   runtime                        = "python3.12"
   filename                       = data.archive_file.lambda_ec2_rollback.output_path
@@ -543,7 +543,7 @@ data "aws_iam_policy_document" "ec2_rollback_dlq_policy" {
     principals {
       type = "AWS"
       identifiers = [
-        var.lambda_ec2_rollback_role_arn
+        aws_iam_role.lambda_ec2_rollback.arn
       ]
     }
 
@@ -603,7 +603,7 @@ resource "aws_lambda_function" "ip_enrichment" {
 
   function_name                  = "${var.name_prefix}-ip-enrichment"
   description                    = "Enrich IP address information by querying a Threat Intel platform and include that data in an SNS notification"
-  role                           = var.lambda_ip_enrichment_role_arn
+  role                           = aws_iam_role.lambda_ip_enrichment.arn
   handler                        = "ip_enrichment.lambda_handler"
   runtime                        = "python3.12"
   filename                       = data.archive_file.lambda_ip_enrichment.output_path
@@ -788,7 +788,7 @@ data "aws_iam_policy_document" "ip_enrichment_dlq_policy" {
     principals {
       type = "AWS"
       identifiers = [
-        var.lambda_ip_enrichment_role_arn
+        aws_iam_role.lambda_ip_enrichment.arn
       ]
     }
 

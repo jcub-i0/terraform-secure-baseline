@@ -178,20 +178,10 @@ module "iam" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  secops_topic_arn        = module.monitoring.secops_topic_arn
-  logs_cmk_arn            = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
+  logs_cmk_arn = module.security.logs_cmk_arn
 
-  centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
-  secops_event_bus_arn        = module.automation.secops_event_bus_arn
-
-  threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
-  lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
+  centralized_logs_bucket_arn        = module.storage.centralized_logs_bucket_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
-
-  lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
-  lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
-  lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
 
   alb_access_logs_bucket_arn = (
     length(local.ecs_alb_services) > 0
@@ -270,10 +260,7 @@ module "monitoring" {
   securityhub_high_critical_rule_arn  = module.automation.securityhub_high_critical_rule_arn
   securityhub_high_critical_rule_name = module.automation.securityhub_high_critical_rule_name
 
-  lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
-  lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
-  break_glass_admin_role_arn    = module.iam.break_glass_admin_role_arn
+  break_glass_admin_role_arn = module.iam.break_glass_admin_role_arn
 
   secops_emails = var.secops_emails
 
@@ -295,11 +282,7 @@ module "automation" {
   interface_endpoints_sg_id     = module.vpc_endpoints.interface_endpoints_sg_id
   quarantine_sg_id              = module.compute.quarantine_sg_id
 
-  lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
-  ec2_auto_isolation_severities            = var.ec2_auto_isolation_severities
-  lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
-  eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
+  ec2_auto_isolation_severities = var.ec2_auto_isolation_severities
 
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 

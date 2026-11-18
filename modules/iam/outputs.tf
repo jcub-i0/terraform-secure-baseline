@@ -8,24 +8,8 @@ output "config_role_arn" {
   value       = local.config_service_linked_role_arn
 }
 
-output "lambda_ec2_isolation_role_arn" {
-  value = aws_iam_role.lambda_ec2_isolation.arn
-}
-
-output "lambda_ec2_rollback_role_arn" {
-  value = aws_iam_role.lambda_ec2_rollback.arn
-}
-
-output "lambda_ip_enrichment_role_arn" {
-  value = aws_iam_role.lambda_ip_enrichment.arn
-}
-
 output "config_remediation_role_arn" {
   value = aws_iam_role.config_remediation.arn
-}
-
-output "eventbridge_putevents_to_secops_role_arn" {
-  value = aws_iam_role.eventbridge_putevents_to_secops.arn
 }
 
 output "patch_maintenance_window_role_arn" {

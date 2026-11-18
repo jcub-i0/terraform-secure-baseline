@@ -156,7 +156,7 @@ data "aws_iam_policy_document" "lambda_ec2_isolation" {
     ]
 
     resources = [
-      var.lambda_ec2_isolation_dlq_arn
+      aws_sqs_queue.ec2_isolation_dlq.arn
     ]
   }
 }
@@ -260,7 +260,7 @@ data "aws_iam_policy_document" "lambda_ec2_rollback" {
     ]
 
     resources = [
-      var.lambda_ec2_rollback_dlq_arn
+      aws_sqs_queue.ec2_rollback_dlq.arn
     ]
   }
 }
@@ -316,7 +316,7 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
       "secretsmanager:DescribeSecret"
     ]
 
-    resources = [var.threat_intel_api_keys_arn]
+    resources = [aws_secretsmanager_secret.threat_intel_api_keys.arn]
   }
 
   statement {
@@ -368,7 +368,7 @@ data "aws_iam_policy_document" "lambda_ip_enrichment" {
     ]
 
     resources = [
-      var.lambda_ip_enrichment_dlq_arn
+      aws_sqs_queue.ip_enrichment_dlq.arn
     ]
   }
 }
@@ -395,4 +395,40 @@ resource "aws_iam_role_policy_attachment" "ip_enrichment_logs_attach" {
 resource "aws_iam_role_policy_attachment" "ip_enrichment_xray_attach" {
   role       = aws_iam_role.lambda_ip_enrichment.name
   policy_arn = data.aws_iam_policy.lambda_xray.arn
+}
+
+## EVENTBRIDGE TRUST POLICY
+data "aws_iam_policy_document" "eventbridge_putevents_to_secops_assume_role" {
+  statement {
+    sid     = "AllowEventBridgeAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+  }
+}
+
+# EVENTBRIDGE ROLE
+resource "aws_iam_role" "eventbridge_putevents_to_secops" {
+  name               = "${var.name_prefix}-EventBridgePutEventsToSecopsBus"
+  assume_role_policy = data.aws_iam_policy_document.eventbridge_putevents_to_secops_assume_role.json
+}
+
+# ALLOW EVENTBRIDGE TO PUT EVENTS TO SECOPS BUS
+data "aws_iam_policy_document" "eventbridge_putevents_to_secops" {
+  statement {
+    sid     = "AllowEventBridgePutEventsToSecopsBus"
+    effect  = "Allow"
+    actions = ["events:PutEvents"]
+
+    resources = [aws_cloudwatch_event_bus.secops.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "eventbridge_putevents_to_secops" {
+  role   = aws_iam_role.eventbridge_putevents_to_secops.id
+  policy = data.aws_iam_policy_document.eventbridge_putevents_to_secops.json
 }

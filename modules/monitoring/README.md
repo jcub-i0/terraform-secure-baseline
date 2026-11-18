@@ -536,19 +536,15 @@ are not an independent fallback channel when that path is unavailable.
 | `secops_emails` | List of email addresses subscribed to SecOps notifications | Yes |
 | `tamper_detection_rule_arn` | ARN of the tamper detection EventBridge rule | Yes |
 | `account_id` | AWS account ID used in SNS topic policy conditions | Yes |
-| `lambda_ip_enrichment_role_arn` | IAM role ARN for the IP Enrichment Lambda | Yes |
-| `lambda_ec2_isolation_role_arn` | IAM role ARN for the EC2 Isolation Lambda | Yes |
-| `lambda_ec2_rollback_role_arn` | IAM role ARN for the EC2 Rollback Lambda | Yes |
 | `break_glass_admin_role_arn` | IAM role ARN for the break-glass admin role | Yes |
 | `securityhub_high_critical_rule_name` | Name of the EventBridge rule for high/critical Security Hub findings | Yes |
 | `securityhub_high_critical_rule_arn` | ARN of the EventBridge rule for high/critical Security Hub findings | Yes |
 | `ecs_task_deficit_services` | ECS services monitored for desired-versus-running task deficits; map values contain `cluster_name` and `service_name` | No; defaults to `{}` |
 | `ecs_ingress_services` | Ingress-enabled ECS services monitored for unhealthy ALB targets; map values contain load-balancer and target-group ARN suffixes | No; defaults to `{}` |
 
-There are 15 inputs in [variables.tf](variables.tf): 12 required strings,
+There are 12 inputs in [variables.tf](variables.tf): 9 required strings,
 required `secops_emails` of type `list(string)`, and the two optional maps below.
-The three Lambda-role ARN inputs remain required but are not referenced in this
-module's `main.tf`; passing them does not add role-specific topic grants.
+The unused Lambda-role ARN inputs were removed in R1-B; topic policies are unchanged.
 
 ```hcl
 ecs_task_deficit_services = {
@@ -597,9 +593,6 @@ module "monitoring" {
   securityhub_high_critical_rule_arn  = module.automation.securityhub_high_critical_rule_arn
   securityhub_high_critical_rule_name = module.automation.securityhub_high_critical_rule_name
 
-  lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
-  lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
   break_glass_admin_role_arn    = module.iam.break_glass_admin_role_arn
 
   secops_emails = var.secops_emails

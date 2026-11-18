@@ -1273,5 +1273,5 @@ Record which of the following were actually observed, with unexecuted cases mark
 
 Implementation references: [handler](../../modules/automation/lambda/ec2_isolation.py),
 [event rules and destinations](../../modules/automation/main.tf),
-[execution-role grants](../../modules/iam/lambda.tf), and
+[execution-role grants](../../modules/automation/iam.tf), and
 [automation behavior](../../modules/automation/README.md).

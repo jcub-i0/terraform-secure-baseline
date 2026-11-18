@@ -2,17 +2,15 @@
 
 ## Overview
 
-The `iam` module provisions IAM roles, instance profiles, and policies required by the baseline’s AWS services and automation workflows.
+The `iam` module provisions IAM roles, instance profiles, and policies required by the baseline’s remaining foundation and governance capabilities.
 
 This module includes IAM resources for:
 
 - EC2 instance management
-- Lambda security automation
 - AWS Config service and remediation
 - AWS Backup
 - SSM Patch Manager
 - Access Analyzer
-- EventBridge integration with the SecOps event bus
 - Shared read-only log access policies
 - Emergency break-glass administration
 
@@ -29,11 +27,10 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 | File | Purpose |
 |---|---|
 | `ec2.tf` | EC2 instance role and instance profile |
-| `lambda.tf` | Lambda execution roles and policies |
 | `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
 | `backup.tf` | AWS Backup service role |
 | `patch_management.tf` | SSM Patch Manager maintenance window role |
-| `security_integrations.tf` | Access Analyzer and EventBridge/SecOps integration role |
+| `security_integrations.tf` | Account-level Access Analyzer |
 | `shared_policies.tf` | Shared log read-only and KMS decrypt policies |
 | `break_glass.tf` | Emergency break-glass administrator role |
 | `variables.tf` | Input variables consumed by the IAM module |
@@ -75,69 +72,12 @@ Per-workload ECS task execution roles, application task roles, execution policie
 
 ---
 
-## `lambda.tf`
+## Automation IAM
 
-The `lambda.tf` file creates execution roles and permissions for security automation Lambda functions.
-
-Lambda roles include:
-
-| Role | Purpose |
-|---|---|
-| EC2 Isolation Lambda role | Supplies EC2 mutation authority used after the handler's GuardDuty eligibility checks |
-| EC2 Rollback Lambda role | Supplies EC2 mutation authority for rollback; the IAM policy does not verify an approval |
-| IP Enrichment Lambda role | Allows enrichment of findings using threat intelligence data |
-
-AWS-managed policy attachments are function-specific:
-
-| Policy | Isolation | Rollback | IP Enrichment |
-|---|---|---|---|
-| `AWSLambdaVPCAccessExecutionRole` | Attached | Attached | Not attached |
-| `AWSLambdaBasicExecutionRole` | Attached | Attached | Attached |
-| `AWSXRayDaemonWriteAccess` | Attached | Attached | Attached |
-
-All three roles use the same Lambda service-principal trust document with no source-account/source-ARN conditions. The custom statements below supplement the managed attachments; they are not a ceiling on their permissions. See [lambda.tf](lambda.tf).
-
-### EC2 Isolation Lambda Permissions
-
-The custom policy retains `ec2:DescribeInstances` on `Resource = "*"`, scopes instance modification and tagging to the workload account/Region, and limits instance tag keys to incident-response metadata. Snapshot creation authorizes source volumes in that account/Region and new snapshot ARNs; snapshot tagging is restricted to `CreateSnapshot` and the declared tag keys. The handler's `IsolationAllowed`, product, severity, and state checks are application logic, not IAM-enforced restrictions on this role.
-
-The policy supports:
-
-- Describe instances
-- Modify instance attributes
-- Create tags
-- Create snapshots
-- Publish alerts to the SecOps SNS topic
-- Use the logs CMK for SNS-related encryption operations
-
-### EC2 Rollback Lambda Permissions
-
-The custom policy grants `ec2:DescribeInstances` and `ec2:DescribeSecurityGroups` on `Resource = "*"`. It scopes `ec2:ModifyInstanceAttribute` and `ec2:CreateTags` to instance ARNs in the workload account/Region. It contains no caller-approval, ticket, environment-tag, or quarantined-instance condition.
-
-The policy supports:
-
-- Describe instances
-- Modify instance attributes
-- Describe security groups
-- Create tags
-- Publish alerts to the SecOps SNS topic
-- Use the logs CMK for SNS-related encryption operations
-
-### IP Enrichment Lambda Permissions
-
-The IP Enrichment Lambda policy allows:
-
-- Read access to the threat intelligence API keys secret
-- Publish enriched alerts to the SecOps SNS topic
-- Use the logs CMK for SNS-related encryption operations
-- Update Security Hub findings with enrichment notes
-- Use the Secrets Manager CMK to decrypt the threat intelligence secret
-
-Each custom Lambda policy also grants `sqs:SendMessage` to that workflow's supplied DLQ ARN. The three DLQ ARN inputs are required.
-
-IP Enrichment receives `secretsmanager:GetSecretValue` and `DescribeSecret` for the supplied secret and `kms:Decrypt`/`DescribeKey` for the supplied Secrets Manager key. Its `securityhub:BatchUpdateFindings` grant is scoped to `arn:<partition>:securityhub:<primary_region>:<account_id>:hub/default` and is present regardless of the runtime `WRITE_TO_SECURITYHUB` setting. Disabling writeback changes handler behavior, not this role policy.
-
-All three custom policies grant `sns:Publish` on the supplied topic and logs-key `kms:GenerateDataKey*`, `Decrypt`, and `DescribeKey`. Review key and resource policies separately. The Lambda role ARNs are consumed by automation and monitoring resources; role existence alone does not prove policy propagation, event authorization, or successful execution.
+Lambda execution roles, their policies and attachments, and the EventBridge
+SecOps role are owned by [automation/iam.tf](../automation/iam.tf). See the
+[automation IAM contract](../automation/README.md#execution-iam) for permissions
+and the preserved attachment-order limitations. Access Analyzer remains here.
 
 ---
 
@@ -251,7 +191,6 @@ The `security_integrations.tf` file creates security integration resources used 
 Resources include:
 
 - IAM Access Analyzer account analyzer
-- EventBridge role for forwarding events to the SecOps event bus
 
 ### Access Analyzer
 
@@ -269,29 +208,8 @@ ACCOUNT
 
 This is a configured `ACCOUNT` analyzer, not an organization-wide analyzer, a zero-finding assertion, or a complete effective-access review. Review its live status and findings independently.
 
-### EventBridge to SecOps Bus Role
-
-Creates a role trusted by:
-
-```text
-events.amazonaws.com
-```
-
-The role allows EventBridge to call:
-
-```text
-events:PutEvents
-```
-
-against the SecOps event bus ARN provided by:
-
-```text
-var.secops_event_bus_arn
-```
-
-The role is for the EventBridge service, not a human Operator identity. Its trust has no source-ARN/source-account condition; its permission is scoped to the supplied bus. Creating the role or passing its ARN to another module does not create a forwarding target. In the automation implementation, the declared `eventbridge_putevents_to_secops_role_arn` input is not consumed by a target resource.
-
-The Identity Center Operator identity policy and the workload EventBridge bus resource policy are distinct authorization surfaces. The control-plane caller uses the matching prefixed bus ARN; the bus policy restricts `custom.rollback` publishing by Operator role ARN and explicitly denies others. Group membership, effective access, and approval require separate review; see [automation](../automation/README.md) and the [Identity Center caller](../../bootstrap/control_plane/identity_center/README.md).
+The EventBridge SecOps role and policy are owned by
+[automation](../automation/README.md#eventbridge-to-secops-bus-role).
 
 ---
 
@@ -453,21 +371,13 @@ Expected output:
 | `cloud_name` | `string` | Cloud or project name used by the broader baseline | Yes |
 | `name_prefix` | `string` | Prefix used for resource naming | Yes |
 | `environment` | `string` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
-| `secops_topic_arn` | `string` | ARN of the SecOps SNS topic | Yes |
 | `logs_cmk_arn` | `string` | ARN of the logs KMS CMK | Yes |
-| `secrets_manager_cmk_arn` | `string` | ARN of the Secrets Manager KMS CMK | Yes |
 | `account_id` | `string` | AWS account ID | Yes |
 | `primary_region` | `string` | Primary AWS region | Yes |
 | `centralized_logs_bucket_arn` | `string` | ARN of the centralized logs S3 bucket | Yes |
-| `secops_event_bus_arn` | `string` | ARN of the SecOps EventBridge event bus | Yes |
-| `threat_intel_api_keys_arn` | `string` | ARN of the Secrets Manager secret containing threat intelligence API keys | Yes |
-| `lambda_ip_enrichment_log_group_arn` | `string` | ARN of the IP Enrichment Lambda CloudWatch Log Group | Yes |
 | `break_glass_trusted_principal_arns` | `list(string)` | List of trusted IAM principal ARNs allowed to assume the break-glass role with MFA | Yes |
-| `lambda_ec2_isolation_dlq_arn` | `string` | Isolation asynchronous-failure destination ARN | Yes |
-| `lambda_ec2_rollback_dlq_arn` | `string` | Rollback asynchronous-failure destination ARN | Yes |
-| `lambda_ip_enrichment_dlq_arn` | `string` | IP Enrichment asynchronous-failure destination ARN | Yes |
 
-None of the listed inputs has a declared default. In particular, an empty runtime does not remove the three required Lambda DLQ inputs. `cloud_name` and `lambda_ip_enrichment_log_group_arn` are declared context inputs but are not referenced by the current IAM resource expressions. They do not create additional permissions.
+None of the listed inputs has a declared default. `cloud_name` remains a required but unused context input; it does not create additional permissions.
 
 ---
 
@@ -477,11 +387,7 @@ None of the listed inputs has a declared default. In particular, an empty runtim
 |---|---|
 | `instance_profile_name` | Name of the EC2 IAM instance profile |
 | `config_role_arn` | Constructed AWS-managed Config service-linked-role ARN; not proof of role creation |
-| `lambda_ec2_isolation_role_arn` | ARN of the EC2 Isolation Lambda execution role |
-| `lambda_ec2_rollback_role_arn` | ARN of the EC2 Rollback Lambda execution role |
-| `lambda_ip_enrichment_role_arn` | ARN of the IP Enrichment Lambda execution role |
 | `config_remediation_role_arn` | ARN of the AWS Config remediation role |
-| `eventbridge_putevents_to_secops_role_arn` | ARN of the EventBridge role allowed to put events to the SecOps event bus |
 | `patch_maintenance_window_role_arn` | ARN of the SSM Patch Manager maintenance window role |
 | `backup_service_role_arn` | ARN of the AWS Backup service role |
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
@@ -492,7 +398,7 @@ None of the listed inputs has a declared default. In particular, an empty runtim
 
 ## Example Module Call
 
-The shipped workload roots call `baseline`, which calls this child module. The integration below receives naming/account context and resource references from monitoring, storage, automation, and security. It is not a standalone root or a reason to apply the IAM directory separately.
+The shipped workload roots call `baseline`, which calls this child module. The integration below receives naming/account context and resource references from storage and security. It is not a standalone root or a reason to apply the IAM directory separately.
 
 ```hcl
 module "iam" {
@@ -504,24 +410,16 @@ module "iam" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  secops_topic_arn         = module.monitoring.secops_topic_arn
   logs_cmk_arn             = module.security.logs_cmk_arn
 
   centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
-  secops_event_bus_arn                  = module.automation.secops_event_bus_arn
 
-  threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
-  lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
-  secrets_manager_cmk_arn            = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
 
-  lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
-  lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
-  lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
 }
 ```
 
-This module call wires IAM roles and policies to the rest of the baseline, including shared log access, Security Operations notifications, EventBridge automation, Secrets Manager access, and break-glass access controls.
+This module call wires IAM roles and policies to the rest of the baseline, including shared log access and break-glass access controls.
 
 ---
 
@@ -1006,8 +904,7 @@ Check:
 
 - EC2 instances use IAM instance profiles instead of static credentials.
 - ECS workload roles and policies are provisioned by [ecs_workload_iam](../ecs_workload_iam/README.md); see its security notes.
-- Lambda automation roles are separated by function.
-- Lambda roles use function-specific managed attachments and custom grants; isolation/rollback EC2 actions and IP Enrichment finding updates include wildcard resource scope.
+- Lambda automation roles and EventBridge SecOps IAM are owned by [automation](../automation/README.md#execution-iam).
 - Logging delivery roles and policies are owned by [logging](../logging/README.md#delivery-iam).
 - Firehose delivery is scoped to the centralized logs bucket and logs CMK.
 - Config remediation uses a dedicated remediation role.
