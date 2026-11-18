@@ -910,14 +910,20 @@ that the archival path has been exercised.
 
 ### IAM Role Dependencies
 
-This module relies on IAM roles passed in through variables.
+The `logging` module owns its delivery IAM roles and inline policies, defined
+locally in [iam.tf](iam.tf).
 
-Required roles include:
+Locally managed roles include:
 
 - CloudTrail to CloudWatch Logs role
 - VPC Flow Logs to CloudWatch Logs role
 - Firehose to S3 role
 - CloudWatch Logs to Firehose role
+
+Each delivery resource explicitly depends on its corresponding inline policy.
+The subscription filter also depends on the Firehose destination stream. These
+dependencies order Terraform operations; they do not guarantee IAM propagation
+or live delivery.
 
 If delivery fails, IAM role trust policies and permissions should be checked first.
 

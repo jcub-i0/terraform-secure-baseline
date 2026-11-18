@@ -280,16 +280,19 @@ Expected output:
 
 | Name | Type | Description | Required |
 |---|---|---|---:|
-| `cloud_name` | `string` | Cloud or project name used by the broader baseline | Yes |
+| `cloud_name` | `string` | Cloud or project name; retained but currently unused in this module | Yes |
 | `name_prefix` | `string` | Prefix used for resource naming | Yes |
 | `environment` | `string` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
 | `logs_cmk_arn` | `string` | ARN of the logs KMS CMK | Yes |
-| `account_id` | `string` | AWS account ID | Yes |
-| `primary_region` | `string` | Primary AWS region | Yes |
+| `account_id` | `string` | AWS account ID; retained but currently unused in this module | Yes |
+| `primary_region` | `string` | Primary AWS region; retained but currently unused in this module | Yes |
 | `centralized_logs_bucket_arn` | `string` | ARN of the centralized logs S3 bucket | Yes |
+| `alb_access_logs_bucket_arn` | `string` | Optional ALB access-log bucket ARN for the shared read-only logs policy; defaults to `null` | No |
 | `break_glass_trusted_principal_arns` | `list(string)` | List of trusted IAM principal ARNs allowed to assume the break-glass role with MFA | Yes |
 
-None of the listed inputs has a declared default. `cloud_name` remains a required but unused context input; it does not create additional permissions.
+The required inputs have no declared defaults. `cloud_name`, `account_id`, and
+`primary_region` remain required context inputs but are not referenced by this
+module's current resource or policy expressions.
 
 ---
 
@@ -832,10 +835,11 @@ Check:
 ## Notes
 
 - Compose IAM and consumer modules through resource references in the baseline; do not separately deploy this child module or add cyclic whole-module dependencies.
+- The `iam` module retains shared and governance IAM: break-glass administration, account Access Analyzer, and shared log-read and logs-key decryption policies.
 - The `compute` module owns its EC2 role, managed-policy attachments and instance profile.
-- The `logging` module consumes CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs role ARNs.
+- The `logging` module owns its CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs delivery roles and inline policies.
 - The `security/config_baseline` module owns Config remediation IAM and calculates the recorder's service-linked-role ARN.
-- The `automation` module consumes Lambda execution role ARNs.
+- The `automation` module owns its Lambda execution roles, policies and attachments, plus the EventBridge-to-SecOps role and inline policy.
 - The `backup` module owns its AWS Backup role and both managed-policy attachments.
 - The `patch_management` module owns its maintenance-window role and policy attachment.
 - Shared policy names may be passed to IAM Identity Center for customer-managed policy attachment.
