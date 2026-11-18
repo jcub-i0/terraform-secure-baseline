@@ -225,7 +225,7 @@ Local Codex examined the exact PR source and all 17 ReconoSense infrastructure c
 - [M0-C1 accepted publication design](./v1_15_0_M0_C_REUSABLE_MODULE_INTERFACES.md)
 - [ECS service variables](../modules/ecs_service/variables.tf)
 - [ECS service implementation](../modules/ecs_service/main.tf)
-- [ECS IAM roles and policies](../modules/iam/ecs.tf)
+- [ECS IAM roles and policies](../modules/ecs_workload_iam/main.tf)
 - [Networking security rules](../modules/networking/security_policy/main.tf)
 - [Application ALB module](../modules/application_load_balancer/main.tf)
 - [WAF implementation](../modules/application_load_balancer/waf.tf)
