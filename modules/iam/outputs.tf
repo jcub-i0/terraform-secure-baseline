@@ -1,8 +1,3 @@
-output "instance_profile_name" {
-  description = "The 'name' attribute of the EC2 IAM Instance Profile"
-  value       = aws_iam_instance_profile.ec2_profile.name
-}
-
 output "config_role_arn" {
   description = "ARN of the AWS-managed Config service-linked role"
   value       = local.config_service_linked_role_arn

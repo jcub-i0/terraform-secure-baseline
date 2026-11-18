@@ -2,11 +2,10 @@
 
 ## Overview
 
-The `iam` module provisions IAM roles, instance profiles, and policies required by the baseline’s remaining foundation and governance capabilities.
+The `iam` module provisions IAM roles and policies required by the baseline’s remaining foundation and governance capabilities.
 
 This module includes IAM resources for:
 
-- EC2 instance management
 - AWS Config service and remediation
 - Access Analyzer
 - Shared read-only log access policies
@@ -24,41 +23,22 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 
 | File | Purpose |
 |---|---|
-| `ec2.tf` | EC2 instance role and instance profile |
 | `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
 | `security_integrations.tf` | Account-level Access Analyzer |
 | `shared_policies.tf` | Shared log read-only and KMS decrypt policies |
 | `break_glass.tf` | Emergency break-glass administrator role |
 | `variables.tf` | Input variables consumed by the IAM module |
-| `outputs.tf` | IAM role, policy, and instance profile outputs consumed by other modules |
+| `outputs.tf` | IAM role and policy outputs consumed by other modules |
 
 ---
 
-## `ec2.tf`
+## Compute IAM
 
-The `ec2.tf` file creates the IAM resources required by EC2 compute instances.
-
-Resources include:
-
-- EC2 IAM role
-- EC2 instance profile
-- AWS-managed SSM policy attachment
-- AWS-managed CloudWatch Agent policy attachment
-
-The EC2 role is trusted by:
-
-```text
-ec2.amazonaws.com
-```
-
-Attached AWS-managed policies:
-
-| Policy | Purpose |
-|---|---|
-| `AmazonSSMManagedInstanceCore` | Allows EC2 instances to register with and be managed by Systems Manager |
-| `CloudWatchAgentServerPolicy` | Allows the CloudWatch Agent to publish logs and metrics |
-
-The instance profile output is consumed by the `compute` module so EC2 instances can inherit the role. The trust document contains the EC2 service principal without additional source-account/source-ARN conditions. These two managed-policy attachments are not a database login or a general application AWS-access policy.
+The EC2 role, instance profile and both AWS-managed policy attachments are owned
+by [compute/iam.tf](../compute/iam.tf). They remain unconditional even when the
+Compute subnet map is empty. See the
+[Compute IAM contract](../compute/README.md#ec2-iam-and-instance-profile) for
+trust, permissions, names and the preserved attachment-readiness limitation.
 
 ---
 
@@ -350,7 +330,6 @@ None of the listed inputs has a declared default. `cloud_name` remains a require
 
 | Name | Description |
 |---|---|
-| `instance_profile_name` | Name of the EC2 IAM instance profile |
 | `config_role_arn` | Constructed AWS-managed Config service-linked-role ARN; not proof of role creation |
 | `config_remediation_role_arn` | ARN of the AWS Config remediation role |
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
@@ -455,6 +434,8 @@ Expected:
 ---
 
 ### Confirm EC2 Instance Profile
+
+The instance profile is owned by [compute](../compute/README.md#ec2-iam-and-instance-profile).
 
 ```bash
 aws iam get-instance-profile \
@@ -883,7 +864,7 @@ Check:
 ## Notes
 
 - Compose IAM and consumer modules through resource references in the baseline; do not separately deploy this child module or add cyclic whole-module dependencies.
-- The `compute` module consumes the EC2 instance profile name.
+- The `compute` module owns its EC2 role, managed-policy attachments and instance profile.
 - The `logging` module consumes CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs role ARNs.
 - The `security` module consumes Config role and remediation role ARNs.
 - The `automation` module consumes Lambda execution role ARNs.

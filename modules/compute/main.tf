@@ -59,7 +59,7 @@ resource "aws_instance" "ec2" {
   vpc_security_group_ids = [aws_security_group.compute.id]
   monitoring             = true
   ebs_optimized          = true
-  iam_instance_profile   = var.instance_profile_name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   user_data                   = file("${path.module}/user_data/bootstrap.sh")
   user_data_replace_on_change = true

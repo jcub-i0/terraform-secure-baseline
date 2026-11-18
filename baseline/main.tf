@@ -121,7 +121,6 @@ module "compute" {
 
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   compute_sg_rule_ids            = module.security_policy.compute_sg_rule_ids
-  instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
   isolation_allowed              = var.isolation_allowed
   backup_enabled                 = local.effective_backup_enabled
