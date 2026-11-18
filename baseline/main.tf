@@ -218,9 +218,7 @@ module "security" {
   inspector_enabled               = local.effective_inspector_enabled
   inspector_resource_types        = local.effective_inspector_resource_types
 
-  enable_config               = local.effective_enable_config
-  config_role_arn             = module.iam.config_role_arn
-  config_remediation_role_arn = module.iam.config_remediation_role_arn
+  enable_config = local.effective_enable_config
 
   compliance_topic_arn           = module.monitoring.compliance_topic_arn
   secops_topic_arn               = module.monitoring.secops_topic_arn

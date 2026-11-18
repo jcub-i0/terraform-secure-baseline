@@ -1,12 +1,3 @@
-output "config_role_arn" {
-  description = "ARN of the AWS-managed Config service-linked role"
-  value       = local.config_service_linked_role_arn
-}
-
-output "config_remediation_role_arn" {
-  value = aws_iam_role.config_remediation.arn
-}
-
 output "logs_s3_readonly_policy_name" {
   value = aws_iam_policy.logs_s3_readonly.name
 }

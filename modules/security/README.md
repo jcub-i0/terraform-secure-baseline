@@ -517,18 +517,22 @@ module "config_baseline"
 It receives:
 
 - Environment naming values
+- AWS account ID
 - Config enablement flag
-- Config IAM role ARN
 - Compliance SNS topic ARN
-- Config remediation role ARN
 - Centralized logs bucket name
 - Logs CMK ARN
 - Enabled rule toggles
 
 The child is always instantiated. `enable_config=false` disables recorder
 status and omits managed rules/remediation; it does not remove the recorder,
-delivery channel, or the fixed-delay resource. Rule-family toggles do not alter
+delivery channel, fixed-delay resource, remediation IAM role or inline policy. Rule-family toggles do not alter
 the recorder's all-supported resource scope, including global IAM where supported.
+
+The child calculates the recorder's AWS Config service-linked-role ARN and owns
+the remediation IAM in [config_baseline/iam.tf](config_baseline/iam.tf). It does
+not create or manage the AWS service-linked role. Trust and permission conditions
+use the account ID already supplied to this parent.
 
 The S3 automatic-remediation rule is independent of `enable_rules.s3_baseline`:
 it follows `enable_config` alone. See the [Config reference](config_baseline/README.md)
@@ -569,12 +573,10 @@ a notification is not proof that a control was successfully disabled.
 | `name_prefix` | Prefix used for resource naming | Yes |
 | `environment` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
 | `primary_region` | Primary AWS region for regional security services | Yes |
-| `config_role_arn` | IAM role ARN used by AWS Config | Yes |
 | `centralized_logs_bucket_name` | Name of the centralized logs bucket used by AWS Config | Yes |
 | `account_id` | AWS account ID | Yes |
 | `compliance_topic_arn` | SNS topic ARN used for compliance notifications | Yes |
 | `guardduty_features` | List of GuardDuty detector features to enable | Yes |
-| `config_remediation_role_arn` | IAM role ARN used by AWS Config remediation actions | Yes |
 | `secops_event_bus_name` | Retained compatibility input; not consumed by this module's `main.tf` | Yes |
 | `secops_topic_arn` | SNS topic ARN used for SecOps alerts | Yes |
 | `enable_config` | Enables recorder status and Config rules/remediation; does not omit recorder/channel resources | Yes |
@@ -586,7 +588,7 @@ a notification is not proof that a control was successfully disabled.
 | `manage_securityhub_v2_locally` | Whether this module enables Security Hub V2 directly in the workload account. Defaults to `true`; centrally governed workload roots set it to `false` | No |
 | `manage_guardduty_locally` | Whether this module owns the GuardDuty detector and detector features. Defaults to `true`; centrally governed workload roots set it to `false` | No |
 
-[variables.tf](variables.tf) declares 20 inputs. The 12 required scalar
+[variables.tf](variables.tf) declares 18 inputs. The 10 required scalar
 identifier/naming fields above are `string`; `guardduty_features` is a required
 `list(string)`, and `enable_config` / `inspector_enabled` are required `bool`.
 `enable_rules` is the eight-boolean object below. Optional ownership flags are
@@ -677,9 +679,7 @@ module "security" {
   inspector_enabled               = local.effective_inspector_enabled
   inspector_resource_types        = local.effective_inspector_resource_types
 
-  enable_config               = local.effective_enable_config
-  config_role_arn             = module.iam.config_role_arn
-  config_remediation_role_arn = module.iam.config_remediation_role_arn
+  enable_config = local.effective_enable_config
 
   compliance_topic_arn           = module.monitoring.compliance_topic_arn
   secops_topic_arn               = module.monitoring.secops_topic_arn
@@ -715,8 +715,6 @@ This module expects some resources to already exist or be passed in:
 
 | Input | Source |
 |---|---|
-| `config_role_arn` | IAM module |
-| `config_remediation_role_arn` | IAM module |
 | `centralized_logs_bucket_name` | Storage module |
 | `compliance_topic_arn` | Monitoring module |
 | `secops_topic_arn` | Monitoring module |

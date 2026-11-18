@@ -2,6 +2,11 @@ variable "name_prefix" {
   type = string
 }
 
+variable "account_id" {
+  description = "AWS account ID used for Config IAM trust, permissions and the service-linked-role ARN"
+  type        = string
+}
+
 variable "environment" {
   type = string
 }
@@ -44,19 +49,11 @@ variable "tags" {
   }
 }
 
-variable "config_role_arn" {
-  type = string
-}
-
 variable "centralized_logs_bucket_name" {
   type = string
 }
 
 variable "compliance_topic_arn" {
-  type = string
-}
-
-variable "config_remediation_role_arn" {
   type = string
 }
 

@@ -6,7 +6,6 @@ The `iam` module provisions IAM roles and policies required by the baseline’s 
 
 This module includes IAM resources for:
 
-- AWS Config service and remediation
 - Access Analyzer
 - Shared read-only log access policies
 - Emergency break-glass administration
@@ -23,7 +22,6 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 
 | File | Purpose |
 |---|---|
-| `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
 | `security_integrations.tf` | Account-level Access Analyzer |
 | `shared_policies.tf` | Shared log read-only and KMS decrypt policies |
 | `break_glass.tf` | Emergency break-glass administrator role |
@@ -66,45 +64,14 @@ Shared S3 log-reader and logs-key decrypt policies remain in this IAM module.
 
 ---
 
-## `config.tf`
+## Config IAM
 
-The `config.tf` file creates IAM resources for AWS Config and remediation workflows.
-
-The file defines:
-
-- A locally constructed AWS Config service-linked-role ARN
-- AWS Config remediation role
-- SSM Automation managed policy attachment
-- S3 public access block remediation policy
-
-### AWS Config Service-Linked Role
-
-`config.tf` constructs the expected ARN:
-
-```text
-arn:<partition>:iam::<account_id>:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig
-```
-
-It exports that string as `config_role_arn`. It does **not** declare an
-`aws_iam_service_linked_role` resource or look up that role's existence here.
-The AWS-managed role must exist when the consuming Config resources need it;
-an ARN string or successful IAM-module evaluation is not proof of existence.
-
-### Config Remediation Role
-
-Creates a remediation role trusted by:
-
-```text
-ssm.amazonaws.com
-```
-
-The role includes a source account condition using:
-
-```hcl
-"aws:SourceAccount" = var.account_id
-```
-
-The inline policy grants only `s3:GetBucketPublicAccessBlock` and `s3:PutBucketPublicAccessBlock` on `arn:<partition>:s3:::*`, constrained by `s3:ResourceAccount` to the workload account. This can affect account-owned buckets beyond the baseline, but does not grant bucket-policy editing. The broad `AmazonSSMAutomationRole` attachment has been removed.
+The Config remediation role, inline policy and calculated service-linked-role
+ARN are owned by [security/config_baseline/iam.tf](../security/config_baseline/iam.tf).
+The role and policy remain unconditional when Config is disabled. The
+AWS-managed Config service-linked role remains an ARN calculation, not a managed
+Terraform IAM resource. See the [Config IAM contract](../security/config_baseline/README.md#config-iam)
+for trust, account restrictions, permissions and initialization behavior.
 
 ---
 
@@ -330,8 +297,6 @@ None of the listed inputs has a declared default. `cloud_name` remains a require
 
 | Name | Description |
 |---|---|
-| `config_role_arn` | Constructed AWS-managed Config service-linked-role ARN; not proof of role creation |
-| `config_remediation_role_arn` | ARN of the AWS Config remediation role |
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
 | `logs_cmk_decrypt_policy_name` | Name of the logs CMK decrypt policy |
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
@@ -581,6 +546,9 @@ firehose.amazonaws.com
 ---
 
 ### Confirm AWS Config Service-Linked Role
+
+Its ARN is calculated by [config_baseline](../security/config_baseline/README.md#config-iam);
+Terraform does not manage the service-linked role.
 
 Confirm the AWS Config service-linked role exists:
 
@@ -866,7 +834,7 @@ Check:
 - Compose IAM and consumer modules through resource references in the baseline; do not separately deploy this child module or add cyclic whole-module dependencies.
 - The `compute` module owns its EC2 role, managed-policy attachments and instance profile.
 - The `logging` module consumes CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs role ARNs.
-- The `security` module consumes Config role and remediation role ARNs.
+- The `security/config_baseline` module owns Config remediation IAM and calculates the recorder's service-linked-role ARN.
 - The `automation` module consumes Lambda execution role ARNs.
 - The `backup` module owns its AWS Backup role and both managed-policy attachments.
 - The `patch_management` module owns its maintenance-window role and policy attachment.

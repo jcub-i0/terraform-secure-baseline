@@ -37,7 +37,7 @@ resource "aws_config_remediation_configuration" "s3_public_access_block" {
 
   parameter {
     name         = "AutomationAssumeRole"
-    static_value = var.config_remediation_role_arn
+    static_value = aws_iam_role.config_remediation.arn
   }
 
   parameter {

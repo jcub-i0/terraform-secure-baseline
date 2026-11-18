@@ -5,7 +5,7 @@
 ## CONFIGURATION RECORDER
 resource "aws_config_configuration_recorder" "config" {
   name     = var.name_prefix
-  role_arn = var.config_role_arn
+  role_arn = local.config_service_linked_role_arn
 
   recording_group {
     # Include current and future supported resource types, including KMS keys.
