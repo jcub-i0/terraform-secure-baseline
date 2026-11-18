@@ -97,6 +97,15 @@ jobs:
 
           exit "$failed"
 
+      - name: Test logging IAM policy readiness
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-evidence
+          bash scripts/tests/test-logging-iam-readiness.sh \
+            2>&1 | tee test-evidence/logging-iam-readiness.log
+
       - name: Test IAM validator regressions
         if: ${{ !cancelled() }}
         shell: bash

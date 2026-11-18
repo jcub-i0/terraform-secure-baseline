@@ -10,10 +10,6 @@ variable "environment" {
   type = string
 }
 
-variable "cloudtrail_log_group_arn" {
-  type = string
-}
-
 variable "secops_topic_arn" {
   type = string
 }
@@ -35,14 +31,6 @@ variable "primary_region" {
 }
 
 variable "centralized_logs_bucket_arn" {
-  type = string
-}
-
-variable "flowlogs_firehose_delivery_stream_arn" {
-  type = string
-}
-
-variable "flowlogs_log_group_arn" {
   type = string
 }
 

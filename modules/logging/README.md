@@ -15,6 +15,7 @@ This includes:
 - VPC Flow Logs
 - Kinesis Data Firehose delivery stream for VPC Flow Logs archival to S3
 - CloudWatch Logs subscription filter from VPC Flow Logs to Firehose
+- Dedicated IAM roles and inline policies for all four delivery services
 
 This module provides the baseline’s primary audit logging and network visibility foundation.
 
@@ -44,8 +45,9 @@ The [baseline composition](../../baseline/main.tf) supplies its resolved
 `local.effective_cloudwatch_retention_days`; the workload exposes
 `effective_cloudwatch_retention_days` for comparison with live resources.
 
-The S3 bucket, lifecycle policy, KMS key, and IAM roles are owned by other
-modules. “Centralized” here describes the supplied workload log destination,
+The S3 bucket, lifecycle policy, and KMS key are owned by other modules.
+Dedicated logging delivery IAM is owned here in [iam.tf](iam.tf).
+“Centralized” here describes the supplied workload log destination,
 not an organization trail or an independently protected cross-account archive.
 See the [storage reference](../storage/README.md) for deletion and retention
 limits. This logging module provides no Object Lock or immutable-retention
@@ -352,6 +354,80 @@ Firehose archives the logs to S3 for longer-term retention and lower-cost storag
 
 ---
 
+## Delivery IAM
+
+[iam.tf](iam.tf) owns the four logging delivery roles and their inline policies alongside the services that use them.
+
+Resources include:
+
+| Role | Trusted Service | Purpose |
+|---|---|---|
+| CloudTrail CloudWatch role | `cloudtrail.amazonaws.com` | Allows CloudTrail to write to CloudWatch Logs |
+| VPC Flow Logs role | `vpc-flow-logs.amazonaws.com` | Allows VPC Flow Logs to write to CloudWatch Logs |
+| CloudWatch Logs to Firehose role | `logs.amazonaws.com` | Allows CloudWatch Logs subscription filters to send records to Firehose |
+| Firehose Flow Logs role | `firehose.amazonaws.com` | Allows Firehose to deliver VPC Flow Logs to S3 |
+
+### CloudTrail Role
+
+Allows CloudTrail to write events to the CloudTrail CloudWatch Log Group.
+
+Primary actions:
+
+- `logs:CreateLogStream`
+- `logs:PutLogEvents`
+
+### VPC Flow Logs Role
+
+Allows VPC Flow Logs to publish to the Flow Logs CloudWatch Log Group.
+
+Primary actions include:
+
+- `logs:CreateLogStream`
+- `logs:PutLogEvents`
+- `logs:DescribeLogGroups`
+- `logs:DescribeLogStreams`
+
+### CloudWatch Logs to Firehose Role
+
+Allows CloudWatch Logs subscription filters to send VPC Flow Log events into the Firehose delivery stream.
+
+Primary actions:
+
+- `firehose:PutRecord`
+- `firehose:PutRecordBatch`
+- `kms:GenerateDataKey` and `kms:Decrypt` on the logs CMK, constrained by `kms:ViaService` to the regional Firehose endpoint
+
+### Firehose Flow Logs Role
+
+Allows Firehose to deliver archived VPC Flow Logs to the centralized logs bucket.
+
+Primary permissions include:
+
+- S3 write/list/location access to the centralized logs bucket
+- KMS encrypt/decrypt/data key permissions on the logs CMK
+
+The CloudWatch-to-Firehose trust constrains `aws:SourceArn` to Logs resources in
+the configured account and Region, not one log group. The CloudTrail, VPC Flow
+Logs, and Firehose trust documents contain their service principal without an
+additional source-account/source-ARN condition. Permissions remain separately
+scoped by the supplied destination ARNs.
+
+Role names remain `<name_prefix>-cloudtrail-cloudwatch-role`,
+`<name_prefix>-VpcFlowLogsRole`, `<name_prefix>-CloudWatchLogsToFirehose`, and
+`<name_prefix>-FirehoseFlowLogsRole`. Only the Flow Logs inline policy has an
+explicit name (`<name_prefix>-VpcFlowLogsPolicy`); the other three retain
+provider-generated names. Only the Flow Logs role declares tags, with
+`Role = "VPCFlowLogs"`.
+
+R1-B relocates these four `aws_iam_role` and four `aws_iam_role_policy` resources
+from `module.baseline.module.iam` to `module.baseline.module.logging`, retaining
+the labels `cloudtrail`, `flowlogs`, `cw_to_firehose`, and `firehose_flow_logs`.
+Trust, permissions, names, and resource attributes are preserved. No state
+migration is declared; these address changes are for the undeployed workload
+infrastructure and must be accounted for in candidate plan comparison.
+
+---
+
 ## Inputs
 
 | Name | Description | Required |
@@ -363,17 +439,14 @@ Firehose archives the logs to S3 for longer-term retention and lower-cost storag
 | `centralized_logs_bucket_id` | Name or ID of the centralized logs S3 bucket used by CloudTrail | Yes |
 | `logs_cmk_arn` | KMS CMK ARN used by log groups, CloudTrail, and the Firehose S3 destination | Yes |
 | `cloudwatch_retention_days` | Required retention value applied to both CloudWatch log groups; caller resolves profile defaults | Yes |
-| `cloudtrail_role_arn` | IAM role ARN used by CloudTrail to write to CloudWatch Logs | Yes |
-| `flowlogs_role_arn` | IAM role ARN used by VPC Flow Logs to write to CloudWatch Logs | Yes |
-| `account_id` | AWS account ID | Yes |
-| `firehose_flow_logs_role_arn` | IAM role ARN used by Firehose to deliver VPC Flow Logs to S3 | Yes |
+| `account_id` | AWS account ID used by the CloudWatch Logs trust condition | Yes |
+| `primary_region` | Region used by the CloudWatch Logs trust and Firehose KMS condition | Yes |
 | `centralized_logs_bucket_arn` | ARN of the centralized logs S3 bucket used by Firehose | Yes |
-| `cw_to_firehose_role_arn` | IAM role ARN used by CloudWatch Logs to send log events to Firehose | Yes |
 
-All 13 inputs are declared as `string` and have no defaults in
-[variables.tf](variables.tf). `cloud_name` and `account_id` remain required
-interface fields but are not referenced by this module's `main.tf`; supplying
-an account ID does not independently verify the active provider identity.
+All 10 inputs are declared as `string` and have no defaults in
+[variables.tf](variables.tf). `cloud_name` remains a required but unused context
+field. `account_id` and `primary_region` scope the IAM policy conditions; they
+do not independently verify the active provider identity or Region.
 
 ---
 
@@ -407,16 +480,12 @@ module "logging" {
 
   vpc_id                      = module.networking.vpc_id
   account_id                  = var.account_id
+  primary_region              = var.primary_region
 
   centralized_logs_bucket_id  = module.storage.centralized_logs_bucket_id
   centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
   logs_cmk_arn                = module.security.logs_cmk_arn
   cloudwatch_retention_days   = local.effective_cloudwatch_retention_days
-
-  cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
-  flowlogs_role_arn           = module.iam.flowlogs_role_arn
-  firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
-  cw_to_firehose_role_arn     = module.iam.cw_to_firehose_role_arn
 }
 ```
 
@@ -424,29 +493,38 @@ module "logging" {
 
 ## Dependencies
 
-This module should be deployed after the following resources exist:
+The caller supplies VPC, centralized log-bucket, and logs-key references. The
+module creates its own delivery IAM. Resource references provide ordering;
+there is no separate module-apply sequence or blanket module `depends_on`.
 
-- VPC
-- Centralized logs S3 bucket
-- Logs KMS CMK
-- CloudTrail IAM role
-- VPC Flow Logs IAM role
-- Firehose delivery IAM role
-- CloudWatch Logs to Firehose IAM role
+Each delivery service explicitly waits for its own inline IAM policy:
 
-The composition uses resource references for ordering, not a required sequence
-of separately applying each child module. The IAM module's four logging-role
-outputs carry inline-policy dependencies. Avoid adding broad module-level
-`depends_on` relationships that would conflict with the existing bidirectional
-log-group/role wiring. These dependencies do not poll live delivery readiness.
+| Delivery resource | Required inline policy |
+|---|---|
+| `aws_cloudtrail.cloudtrail` | `aws_iam_role_policy.cloudtrail` |
+| `aws_flow_log.flowlogs` | `aws_iam_role_policy.flowlogs` |
+| `aws_kinesis_firehose_delivery_stream.flowlogs` | `aws_iam_role_policy.firehose_flow_logs` |
+| `aws_cloudwatch_log_subscription_filter.flowlogs` | `aws_iam_role_policy.cw_to_firehose` |
 
-The module depends heavily on IAM roles created outside this module.
-
-If any of the logging delivery roles are missing or under-permissioned, log delivery may fail.
+The publisher policy references the Firehose stream ARN, and the subscription
+filter waits for both that policy and the destination stream. The stream waits
+only for its own S3-delivery policy; making it wait for the publisher policy
+would create a cycle. Log-group references remain implicit dependencies.
+These relationships preserve the former IAM output policy barriers. They order
+Terraform operations, but do not guarantee IAM propagation or live delivery.
 
 ---
 
 ## Validation
+
+The focused offline readiness regression builds the initialized baseline's
+configuration graph and checks all four delivery-policy dependencies. It
+rejects graph cycles without planning, refreshing state, or calling AWS:
+
+```bash
+terraform -chdir=baseline init -backend=false -lockfile=readonly
+bash scripts/tests/test-logging-iam-readiness.sh
+```
 
 Use [validate-logging.sh](../../scripts/validation/validate-logging.sh) for its
 implemented checks, then review the additional reads below. The validator

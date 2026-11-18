@@ -178,15 +178,12 @@ module "iam" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
-  secops_topic_arn         = module.monitoring.secops_topic_arn
-  logs_cmk_arn             = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn  = module.security.secrets_manager_cmk_arn
+  secops_topic_arn        = module.monitoring.secops_topic_arn
+  logs_cmk_arn            = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn = module.security.secrets_manager_cmk_arn
 
-  centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
-  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
-  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
-  secops_event_bus_arn                  = module.automation.secops_event_bus_arn
+  centralized_logs_bucket_arn = module.storage.centralized_logs_bucket_arn
+  secops_event_bus_arn        = module.automation.secops_event_bus_arn
 
   threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
   lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
@@ -245,9 +242,10 @@ module "security" {
 module "logging" {
   source = "../modules/logging"
 
-  cloud_name  = var.cloud_name
-  environment = var.environment
-  name_prefix = local.name_prefix
+  cloud_name     = var.cloud_name
+  environment    = var.environment
+  name_prefix    = local.name_prefix
+  primary_region = var.primary_region
 
   vpc_id     = module.networking.vpc_id
   account_id = var.account_id
@@ -257,11 +255,6 @@ module "logging" {
   logs_cmk_arn                = module.security.logs_cmk_arn
 
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
-
-  cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
-  flowlogs_role_arn           = module.iam.flowlogs_role_arn
-  firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
-  cw_to_firehose_role_arn     = module.iam.cw_to_firehose_role_arn
 }
 
 module "monitoring" {

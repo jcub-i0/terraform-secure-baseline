@@ -1,3 +1,5 @@
+data "aws_partition" "current" {}
+
 # CLOUDTRAIL
 
 ## CLOUDTRAIL TRUST POLICY
@@ -30,7 +32,7 @@ data "aws_iam_policy_document" "cloudtrail" {
       "logs:PutLogEvents"
     ]
 
-    resources = ["${var.cloudtrail_log_group_arn}:*"]
+    resources = ["${aws_cloudwatch_log_group.cloudtrail.arn}:*"]
   }
 }
 
@@ -77,7 +79,7 @@ data "aws_iam_policy_document" "flowlogs" {
       "logs:DescribeLogStreams"
     ]
 
-    resources = ["${var.flowlogs_log_group_arn}:*"]
+    resources = ["${aws_cloudwatch_log_group.flowlogs.arn}:*"]
   }
 }
 
@@ -124,7 +126,7 @@ data "aws_iam_policy_document" "cw_to_firehose" {
       "firehose:PutRecordBatch"
     ]
 
-    resources = [var.flowlogs_firehose_delivery_stream_arn]
+    resources = [aws_kinesis_firehose_delivery_stream.flowlogs.arn]
   }
 
   statement {

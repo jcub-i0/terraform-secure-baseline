@@ -26,26 +26,14 @@ variable "cloudwatch_retention_days" {
   type = string
 }
 
-variable "cloudtrail_role_arn" {
-  type = string
-}
-
-variable "flowlogs_role_arn" {
-  type = string
-}
-
 variable "account_id" {
   type = string
 }
 
-variable "firehose_flow_logs_role_arn" {
+variable "primary_region" {
   type = string
 }
 
 variable "centralized_logs_bucket_arn" {
-  type = string
-}
-
-variable "cw_to_firehose_role_arn" {
   type = string
 }

@@ -8,10 +8,6 @@ This module includes IAM resources for:
 
 - EC2 instance management
 - Lambda security automation
-- CloudTrail delivery to CloudWatch Logs
-- VPC Flow Logs delivery to CloudWatch Logs
-- CloudWatch Logs forwarding to Firehose
-- Firehose delivery to S3
 - AWS Config service and remediation
 - AWS Backup
 - SSM Patch Manager
@@ -34,7 +30,6 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 |---|---|
 | `ec2.tf` | EC2 instance role and instance profile |
 | `lambda.tf` | Lambda execution roles and policies |
-| `logging.tf` | CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs delivery roles |
 | `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
 | `backup.tf` | AWS Backup service role |
 | `patch_management.tf` | SSM Patch Manager maintenance window role |
@@ -146,69 +141,12 @@ All three custom policies grant `sns:Publish` on the supplied topic and logs-key
 
 ---
 
-## `logging.tf`
+## Logging Delivery IAM
 
-The `logging.tf` file creates IAM roles and policies required for log delivery and forwarding.
-
-Resources include:
-
-| Role | Trusted Service | Purpose |
-|---|---|---|
-| CloudTrail CloudWatch role | `cloudtrail.amazonaws.com` | Allows CloudTrail to write to CloudWatch Logs |
-| VPC Flow Logs role | `vpc-flow-logs.amazonaws.com` | Allows VPC Flow Logs to write to CloudWatch Logs |
-| CloudWatch Logs to Firehose role | `logs.amazonaws.com` | Allows CloudWatch Logs subscription filters to send records to Firehose |
-| Firehose Flow Logs role | `firehose.amazonaws.com` | Allows Firehose to deliver VPC Flow Logs to S3 |
-
-### CloudTrail Role
-
-Allows CloudTrail to write events to the CloudTrail CloudWatch Log Group.
-
-Primary actions:
-
-- `logs:CreateLogStream`
-- `logs:PutLogEvents`
-
-### VPC Flow Logs Role
-
-Allows VPC Flow Logs to publish to the Flow Logs CloudWatch Log Group.
-
-Primary actions include:
-
-- `logs:CreateLogStream`
-- `logs:PutLogEvents`
-- `logs:DescribeLogGroups`
-- `logs:DescribeLogStreams`
-
-### CloudWatch Logs to Firehose Role
-
-Allows CloudWatch Logs subscription filters to send VPC Flow Log events into the Firehose delivery stream.
-
-Primary actions:
-
-- `firehose:PutRecord`
-- `firehose:PutRecordBatch`
-- `kms:GenerateDataKey` and `kms:Decrypt` on the logs CMK, constrained by `kms:ViaService` to the regional Firehose endpoint
-
-### Firehose Flow Logs Role
-
-Allows Firehose to deliver archived VPC Flow Logs to the centralized logs bucket.
-
-Primary permissions include:
-
-- S3 write/list/location access to the centralized logs bucket
-- KMS encrypt/decrypt/data key permissions on the logs CMK
-
-The CloudWatch-to-Firehose trust constrains `aws:SourceArn` to Logs resources in
-the configured account and Region, not one log group. The CloudTrail, VPC Flow
-Logs, and Firehose trust documents contain their service principal without an
-additional source-account/source-ARN condition. Permissions remain separately
-scoped by the supplied destination ARNs.
-
-The four logging role outputs include `depends_on` for their inline delivery
-policies. That is a Terraform dependency boundary, not a live delivery test or
-a guarantee of IAM propagation. Lambda, Backup, instance-profile, and other role
-outputs do not all provide the same explicit policy-attachment barrier; inspect
-[outputs.tf](outputs.tf) instead of generalizing from the logging pattern.
+The four logging delivery roles and their inline policies belong to
+[logging/iam.tf](../logging/iam.tf). The [logging module](../logging/README.md#delivery-iam)
+owns their trust, permissions, and delivery-service policy-readiness dependencies.
+Shared S3 log-reader and logs-key decrypt policies remain in this IAM module.
 
 ---
 
@@ -515,15 +453,12 @@ Expected output:
 | `cloud_name` | `string` | Cloud or project name used by the broader baseline | Yes |
 | `name_prefix` | `string` | Prefix used for resource naming | Yes |
 | `environment` | `string` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
-| `cloudtrail_log_group_arn` | `string` | ARN of the CloudTrail CloudWatch Log Group | Yes |
 | `secops_topic_arn` | `string` | ARN of the SecOps SNS topic | Yes |
 | `logs_cmk_arn` | `string` | ARN of the logs KMS CMK | Yes |
 | `secrets_manager_cmk_arn` | `string` | ARN of the Secrets Manager KMS CMK | Yes |
 | `account_id` | `string` | AWS account ID | Yes |
 | `primary_region` | `string` | Primary AWS region | Yes |
 | `centralized_logs_bucket_arn` | `string` | ARN of the centralized logs S3 bucket | Yes |
-| `flowlogs_firehose_delivery_stream_arn` | `string` | ARN of the VPC Flow Logs Firehose delivery stream | Yes |
-| `flowlogs_log_group_arn` | `string` | ARN of the VPC Flow Logs CloudWatch Log Group | Yes |
 | `secops_event_bus_arn` | `string` | ARN of the SecOps EventBridge event bus | Yes |
 | `threat_intel_api_keys_arn` | `string` | ARN of the Secrets Manager secret containing threat intelligence API keys | Yes |
 | `lambda_ip_enrichment_log_group_arn` | `string` | ARN of the IP Enrichment Lambda CloudWatch Log Group | Yes |
@@ -541,15 +476,11 @@ None of the listed inputs has a declared default. In particular, an empty runtim
 | Name | Description |
 |---|---|
 | `instance_profile_name` | Name of the EC2 IAM instance profile |
-| `cloudtrail_role_arn` | ARN of the CloudTrail CloudWatch Logs delivery role |
-| `flowlogs_role_arn` | ARN of the VPC Flow Logs delivery role |
 | `config_role_arn` | Constructed AWS-managed Config service-linked-role ARN; not proof of role creation |
 | `lambda_ec2_isolation_role_arn` | ARN of the EC2 Isolation Lambda execution role |
 | `lambda_ec2_rollback_role_arn` | ARN of the EC2 Rollback Lambda execution role |
 | `lambda_ip_enrichment_role_arn` | ARN of the IP Enrichment Lambda execution role |
 | `config_remediation_role_arn` | ARN of the AWS Config remediation role |
-| `firehose_flow_logs_role_arn` | ARN of the Firehose Flow Logs delivery role |
-| `cw_to_firehose_role_arn` | ARN of the CloudWatch Logs to Firehose role |
 | `eventbridge_putevents_to_secops_role_arn` | ARN of the EventBridge role allowed to put events to the SecOps event bus |
 | `patch_maintenance_window_role_arn` | ARN of the SSM Patch Manager maintenance window role |
 | `backup_service_role_arn` | ARN of the AWS Backup service role |
@@ -561,7 +492,7 @@ None of the listed inputs has a declared default. In particular, an empty runtim
 
 ## Example Module Call
 
-The shipped workload roots call `baseline`, which calls this child module. The integration below receives naming/account context and resource references from logging, monitoring, storage, automation, and security. It is not a standalone root or a reason to apply the IAM directory separately.
+The shipped workload roots call `baseline`, which calls this child module. The integration below receives naming/account context and resource references from monitoring, storage, automation, and security. It is not a standalone root or a reason to apply the IAM directory separately.
 
 ```hcl
 module "iam" {
@@ -573,13 +504,10 @@ module "iam" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
   secops_topic_arn         = module.monitoring.secops_topic_arn
   logs_cmk_arn             = module.security.logs_cmk_arn
 
   centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
-  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
-  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
   secops_event_bus_arn                  = module.automation.secops_event_bus_arn
 
   threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
@@ -593,7 +521,7 @@ module "iam" {
 }
 ```
 
-This module call wires IAM roles and policies to the rest of the baseline, including CloudTrail logging, VPC Flow Logs delivery, Security Operations notifications, EventBridge automation, Secrets Manager access, and break-glass access controls.
+This module call wires IAM roles and policies to the rest of the baseline, including shared log access, Security Operations notifications, EventBridge automation, Secrets Manager access, and break-glass access controls.
 
 ---
 
@@ -1023,7 +951,7 @@ Check:
 - CloudTrail role trust policy allows `cloudtrail.amazonaws.com`
 - Inline policy allows `logs:CreateLogStream` and `logs:PutLogEvents`
 - CloudTrail is configured with the correct role ARN
-- CloudTrail log group ARN matches `cloudtrail_log_group_arn`
+- CloudTrail log group ARN matches the logging module's `cloudtrail_log_group_arn` output
 
 ---
 
@@ -1080,7 +1008,7 @@ Check:
 - ECS workload roles and policies are provisioned by [ecs_workload_iam](../ecs_workload_iam/README.md); see its security notes.
 - Lambda automation roles are separated by function.
 - Lambda roles use function-specific managed attachments and custom grants; isolation/rollback EC2 actions and IP Enrichment finding updates include wildcard resource scope.
-- Logging delivery roles are service-specific.
+- Logging delivery roles and policies are owned by [logging](../logging/README.md#delivery-iam).
 - Firehose delivery is scoped to the centralized logs bucket and logs CMK.
 - Config remediation uses a dedicated remediation role.
 - Backup and patch management use dedicated service roles.
