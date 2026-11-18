@@ -92,7 +92,7 @@ module "security_policy" {
 
   egress_mode                = local.effective_egress_mode
   compute_sg_id              = module.compute.compute_sg_id
-  data_sg_id                 = module.storage.data_sg_id
+  data_sg_id                 = module.database.data_sg_id
   lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
   lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
   interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id
@@ -103,7 +103,7 @@ module "security_policy" {
   ecs_security_policy_services = local.ecs_security_policy_services
 
   restore_validation_enabled = var.restore_validation_enabled
-  restore_test_db_sg_id      = module.storage.restore_test_db_sg_id
+  restore_test_db_sg_id      = module.database.restore_test_db_sg_id
 
   restore_validation_worker_sg_id = (
     var.restore_validation_enabled
@@ -127,45 +127,45 @@ module "compute" {
 
   interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
   interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
-  data_sg_id                = module.storage.data_sg_id
+  data_sg_id                = module.database.data_sg_id
   db_port                   = var.db_port
   patch_tag_value           = var.patch_tag_value
+}
+
+module "database" {
+  source = "../modules/database"
+
+  name_prefix                      = local.name_prefix
+  environment                      = var.environment
+  vpc_id                           = module.networking.vpc_id
+  rds_multi_az                     = local.effective_rds_multi_az
+  rds_deletion_protection          = local.effective_rds_deletion_protection
+  rds_skip_final_snapshot          = local.effective_rds_skip_final_snapshot
+  rds_delete_automated_backups     = local.effective_rds_delete_automated_backups
+  rds_final_snapshot_identifier    = local.effective_rds_final_snapshot_identifier
+  rds_instance_class               = var.rds_instance_class
+  db_username                      = var.db_username
+  data_private_subnet_ids_list     = module.networking.data_private_subnet_ids_list
+  backup_enabled                   = local.effective_backup_enabled
+  restore_testing_enabled          = local.effective_restore_testing_enabled
+  cloudwatch_retention_days        = local.effective_cloudwatch_retention_days
+  logs_cmk_arn                     = module.security.logs_cmk_arn
+  secrets_manager_cmk_arn          = module.security.secrets_manager_cmk_arn
+  rds_performance_insights_cmk_arn = module.security.rds_performance_insights_cmk_arn
 }
 
 module "storage" {
   source = "../modules/storage"
 
-  cloud_name     = var.cloud_name
-  name_prefix    = local.name_prefix
-  environment    = var.environment
-  primary_region = var.primary_region
-  vpc_id         = module.networking.vpc_id
-  account_id     = var.account_id
-  random_id      = var.random_id
-
-  rds_multi_az                  = local.effective_rds_multi_az
-  rds_deletion_protection       = local.effective_rds_deletion_protection
-  rds_skip_final_snapshot       = local.effective_rds_skip_final_snapshot
-  rds_delete_automated_backups  = local.effective_rds_delete_automated_backups
-  rds_final_snapshot_identifier = local.effective_rds_final_snapshot_identifier
-  rds_instance_class            = var.rds_instance_class
-
-  db_port     = var.db_port
-  db_username = var.db_username
-
-  compute_sg_id                = module.compute.compute_sg_id
-  data_private_subnet_ids_list = module.networking.data_private_subnet_ids_list
-
-  backup_enabled            = local.effective_backup_enabled
-  restore_testing_enabled   = local.effective_restore_testing_enabled
-  cloudwatch_retention_days = local.effective_cloudwatch_retention_days
-
-  logs_cmk_arn                     = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn          = module.security.secrets_manager_cmk_arn
-  cloudtrail_arn                   = module.logging.cloudtrail_arn
-  bucket_admin_principals          = var.bucket_admin_principals
-  centralized_logs_force_destroy   = local.effective_centralized_logs_force_destroy
-  rds_performance_insights_cmk_arn = module.security.rds_performance_insights_cmk_arn
+  cloud_name                     = var.cloud_name
+  name_prefix                    = local.name_prefix
+  environment                    = var.environment
+  primary_region                 = var.primary_region
+  account_id                     = var.account_id
+  random_id                      = var.random_id
+  logs_cmk_arn                   = module.security.logs_cmk_arn
+  bucket_admin_principals        = var.bucket_admin_principals
+  centralized_logs_force_destroy = local.effective_centralized_logs_force_destroy
 }
 
 module "iam" {
@@ -469,12 +469,12 @@ module "backup" {
   restore_testing_start_window_hours      = local.effective_restore_testing_start_window_hours
   restore_testing_selection_window_days   = local.effective_restore_testing_selection_window_days
   restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
-  restore_testing_rds_arn                 = module.storage.rds_configuration.arn
-  restore_testing_db_subnet_group_name    = module.storage.rds_configuration.db_subnet_group_name
+  restore_testing_rds_arn                 = module.database.rds_configuration.arn
+  restore_testing_db_subnet_group_name    = module.database.rds_configuration.db_subnet_group_name
 
   restore_testing_vpc_security_group_ids = (
     local.effective_restore_testing_enabled
-    ? [module.storage.restore_test_db_sg_id]
+    ? [module.database.restore_test_db_sg_id]
     : []
   )
 }
@@ -491,10 +491,10 @@ module "restore_validation" {
   vpc_id            = module.networking.vpc_id
   worker_subnet_ids = module.networking.serverless_private_subnet_ids_list
 
-  restore_test_db_sg_id = module.storage.restore_test_db_sg_id
+  restore_test_db_sg_id = module.database.restore_test_db_sg_id
 
   restore_testing_plan_arn = module.backup.restore_testing_plan.arn
-  source_rds_arn           = module.storage.rds_configuration.arn
+  source_rds_arn           = module.database.rds_configuration.arn
 
   restore_validation_secret_arn = var.restore_validation_secret_arn
   secrets_manager_cmk_arn       = module.security.secrets_manager_cmk_arn
@@ -503,7 +503,7 @@ module "restore_validation" {
   logs_cmk_arn              = module.security.logs_cmk_arn
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
-  db_name = module.storage.rds_database_name
+  db_name = module.database.rds_database_name
   db_port = tonumber(var.db_port)
 
   secops_topic_arn = module.monitoring.secops_topic_arn

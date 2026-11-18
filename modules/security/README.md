@@ -275,7 +275,7 @@ the workload profile or retirement mode. Source comments are not protection.
 
 The Terraform state CMK is owned by the separate state stack, not this module.
 Do not conflate the logs or Secrets Manager key with RDS storage encryption;
-inspect the [storage resource](../storage/main.tf) for that separate boundary.
+inspect the [database resource](../database/main.tf) for that separate boundary.
 Key rotation and aliases do not preserve a key scheduled for deletion or make
 its encrypted data immutable.
 
@@ -700,11 +700,11 @@ Outputs from this module are used by:
 
 | Output | Typical Consumer |
 |---|---|
-| `logs_cmk_arn` | Logging, storage, monitoring, Config, CloudWatch Logs, SNS/SQS |
-| `rds_performance_insights_cmk_arn` | Storage module: dedicated RDS Performance/Database Insights encryption |
+| `logs_cmk_arn` | Logging, database, storage, monitoring, Config, CloudWatch Logs, SNS/SQS |
+| `rds_performance_insights_cmk_arn` | Database module: dedicated RDS Performance/Database Insights encryption |
 | `ebs_cmk_arn` | Compute and EC2 storage resources |
 | `lambda_cmk_arn` | Automation Lambda functions |
-| `secrets_manager_cmk_arn` | Storage and automation secrets |
+| `secrets_manager_cmk_arn` | Database and automation secrets |
 | `backup_vault_cmk_arn` | Backup module |
 | `ecr_cmk_arn` | ECR module |
 | `tamper_detection_rule_arn` | Monitoring module SNS topic policy |

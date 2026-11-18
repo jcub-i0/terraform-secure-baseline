@@ -81,9 +81,8 @@ egress_mode = "vpc_endpoints_only"
 Allows the database or data security group to receive traffic from the compute
 security group on `var.db_port`, and from each ECS task group whose
 `database_access` flag is true. These are TCP rules, not SQL-user provisioning
-or a database-authentication test. In the integrated storage module, `db_port`
-is not wired to the RDS resource's `port` argument; changing this rule input
-alone does not change the database listener. See the [storage reference](../../storage/README.md).
+or a database-authentication test. The database module omits the RDS resource's `port` argument; changing this rule input
+alone does not change the database listener. See the [database reference](../../database/README.md).
 
 ### Lambda Automation Rules
 
@@ -319,7 +318,7 @@ module "security_policy" {
   egress_mode = local.effective_egress_mode
 
   compute_sg_id              = module.compute.compute_sg_id
-  data_sg_id                 = module.storage.data_sg_id
+  data_sg_id                 = module.database.data_sg_id
   lambda_ec2_isolation_sg_id = module.automation.lambda_ec2_isolation_sg_id
   lambda_ec2_rollback_sg_id  = module.automation.lambda_ec2_rollback_sg_id
   interface_endpoints_sg_id  = module.vpc_endpoints.interface_endpoints_sg_id

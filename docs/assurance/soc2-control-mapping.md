@@ -1049,7 +1049,7 @@ The baseline uses KMS-backed encryption for resources such as:
 ### Narrative
 
 Review actual keys, grants, resource/identity policies, and retained-data
-requirements. The [storage resource](../../modules/storage/main.tf) encrypts
+requirements. The [database resource](../../modules/database/main.tf) encrypts
 RDS storage without an explicit database key input; do not identify it as the
 logs or secret CMK. The [ALB](../../modules/application_load_balancer/main.tf)
 terminates HTTPS but uses HTTP to task target groups. Application/database TLS,
@@ -1063,7 +1063,7 @@ authorized data movement, and tenant access are separate controls.
 
 Secrets Manager holds threat-intelligence credentials and RDS master credentials
 with KMS encryption. RDS generation uses ephemeral/write-only inputs in
-[storage](../../modules/storage/main.tf); the AbuseIPDB secret uses an ordinary
+[database](../../modules/database/secrets.tf); the AbuseIPDB secret uses an ordinary
 secret-version value in [automation](../../modules/automation/main.tf).
 These have different Terraform state/plan exposure characteristics.
 

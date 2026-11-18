@@ -1090,7 +1090,7 @@ Normal production enables deletion protection, requires a final snapshot, and re
 
 RDS storage encryption has no explicit database `kms_key_id` in this resource; do not identify it as the logs or Secrets Manager CMK. The declared `db_port` input is not wired to the database resource's `port` argument, so changing that input alone is not a supported listener-port migration. Ephemeral/write-only password handling avoids intentionally persisting the generated password in Terraform state, but is not an automatic credential-rotation service.
 
-`validate-backup.sh` checks the live RDS identity/resilience subset and Terraform deletion-time intent. It does not perform SQL recovery verification or compare every engine, class, storage, or parameter setting. See [storage](../modules/storage/README.md) and [backup](../modules/backup/README.md).
+`validate-backup.sh` checks the live RDS identity/resilience subset and Terraform deletion-time intent. It does not perform SQL recovery verification or compare every engine, class, storage, or parameter setting. See [database](../modules/database/README.md) and [backup](../modules/backup/README.md).
 
 ## Backup and Patch Management
 
@@ -1212,4 +1212,4 @@ The architecture is designed to provide a secure starting point for SaaS compani
 
 ## Implementation references
 
-The implementation at the commit being reviewed, not a profile name or a historical qualification result, defines these boundaries: [baseline inputs](../baseline/variables.tf), [derivation](../baseline/locals.tf), [module composition](../baseline/main.tf), [RDS/log storage](../modules/storage/main.tf), [Backup/Restore Testing](../modules/backup/main.tf), [Apply workflow](../.github/workflows/terraform-apply.yml), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). Read these files at that same commit; use the actual implementation and validator commits recorded for a test when assessing its evidence.
+The implementation at the commit being reviewed, not a profile name or a historical qualification result, defines these boundaries: [baseline inputs](../baseline/variables.tf), [derivation](../baseline/locals.tf), [module composition](../baseline/main.tf), [database](../modules/database/main.tf), [log storage](../modules/storage/main.tf), [Backup/Restore Testing](../modules/backup/main.tf), [Apply workflow](../.github/workflows/terraform-apply.yml), and [Destroy workflow](../.github/workflows/terraform-destroy.yml). Read these files at that same commit; use the actual implementation and validator commits recorded for a test when assessing its evidence.
