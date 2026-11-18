@@ -3,7 +3,7 @@
 
 Execute its source block and helpers with AWS responses supplied by a shell
 function. No AWS CLI, credentials, Terraform backend, or third-party packages.
-The policies below independently represent modules/iam/ecs.tf, not the checker.
+The policies below independently represent modules/ecs_workload_iam/main.tf, not the checker.
 """
 
 import copy

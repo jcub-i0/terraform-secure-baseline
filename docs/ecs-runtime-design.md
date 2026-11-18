@@ -19,7 +19,7 @@ modules/application_load_balancer
 modules/ecs_service
 ```
 
-`baseline` composes these modules with `modules/iam`, `modules/networking/security_policy`, `modules/vpc_endpoints`, `modules/security`, and existing workload infrastructure. ECR repositories are N-per-environment, the ECS cluster is one-per-environment, the shared ALB is zero-or-one-per-environment, and ECS services are N-per-environment.
+`baseline` composes these modules with `modules/ecs_workload_iam`, `modules/networking/security_policy`, `modules/vpc_endpoints`, `modules/security`, and existing workload infrastructure. ECR repositories are N-per-environment, the ECS cluster is one-per-environment, the shared ALB is zero-or-one-per-environment, and ECS services are N-per-environment.
 
 Do not move ECR into bootstrap, introduce a second service map, or split foundation/runtime Terraform state merely to reduce applies.
 
@@ -300,7 +300,7 @@ The cluster-owned Container Insights performance log group uses `/aws/ecs/contai
 
 ## IAM ownership
 
-`modules/iam` creates separate task execution and application task roles for deployable services only.
+[`modules/ecs_workload_iam`](../modules/ecs_workload_iam/README.md) creates separate task execution and application task roles for deployable services only. Baseline passes its derived `ecs_iam_services` map as the module's `workloads` input.
 
 The task execution role is used by ECS/Fargate for platform operations. Its custom policy scopes primary and sidecar ECR pulls, CloudWatch Logs writes, declared Secrets Manager/SSM references, and optional KMS decrypt authority required to retrieve startup configuration. Baseline unions the configured containers' repository and secret/parameter resources; Secrets Manager selectors remain in `valueFrom` but are removed from IAM resource ARNs. Explicit startup-secret KMS authorization remains service-wide. The application task role is used by primary and sidecar code for runtime AWS API calls and has no policies by default; M1 does not provide per-container IAM isolation. Optional `task_role_managed_policy_arns` attaches selected AWS-managed or same-account customer-managed IAM policies only to that task role. The baseline creates **the role and attachments**, not the application-specific managed policies: application owners provision and review their policies separately, then provide plan-known ARNs. No policy ARN is needed on first bootstrap. A registered null-digest service creates no task role or attachments, and ECS service launch waits for configured attachments when the digest is selected.
 

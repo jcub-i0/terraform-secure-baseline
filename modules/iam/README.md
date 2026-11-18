@@ -7,7 +7,6 @@ The `iam` module provisions IAM roles, instance profiles, and policies required 
 This module includes IAM resources for:
 
 - EC2 instance management
-- Per-service ECS task execution and application task role scaffolding
 - Lambda security automation
 - CloudTrail delivery to CloudWatch Logs
 - VPC Flow Logs delivery to CloudWatch Logs
@@ -21,9 +20,11 @@ This module includes IAM resources for:
 - Shared read-only log access policies
 - Emergency break-glass administration
 
+ECS task execution and application task roles are not part of this module. Since v1.15.0 they belong to the reusable [ecs_workload_iam](../ecs_workload_iam/README.md) module, which the baseline calls separately and application-owned states can call directly.
+
 This module does **not** manage GitHub OIDC identities or IAM Identity Center personas. GitHub roles belong to the separate account stacks through [github_oidc](../github_oidc/README.md); Identity Center groups, permission sets, and assignments belong to the [control-plane Identity Center root](../../bootstrap/control_plane/identity_center/README.md). Users and group membership are not created by either this module or that root.
 
-The caller composes these resources through [baseline/main.tf](../../baseline/main.tf). Except for the per-service ECS collections, the roles and policies here are not gated by a deployment profile, backup schedule, or Config enablement flag. A retained service role does not prove its associated service is enabled. This module does not configure permissions boundaries or author application policy documents. v1.12.0 provides the typed `task_role_managed_policy_arns` attachment interface for existing managed policies.
+The caller composes these resources through [baseline/main.tf](../../baseline/main.tf). The roles and policies here are not gated by a deployment profile, backup schedule, or Config enablement flag. A retained service role does not prove its associated service is enabled. This module does not configure permissions boundaries or author application policy documents.
 
 ---
 
@@ -32,7 +33,6 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 | File | Purpose |
 |---|---|
 | `ec2.tf` | EC2 instance role and instance profile |
-| `ecs.tf` | Per-service ECS task execution roles, task roles, and execution policies |
 | `lambda.tf` | Lambda execution roles and policies |
 | `logging.tf` | CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs delivery roles |
 | `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
@@ -74,67 +74,9 @@ The instance profile output is consumed by the `compute` module so EC2 instances
 
 ---
 
-## `ecs.tf`
+## ECS Workload IAM
 
-The `ecs.tf` file creates separate ECS task execution and application task roles for every key in `var.ecs_iam_services`:
-
-- `aws_iam_role.ecs_task_execution_roles`
-- `aws_iam_role.ecs_task_roles`
-- `data.aws_iam_policy_document.ecs_task_execution_policies`
-- An inline `aws_iam_role_policy` attaching each custom execution policy
-- Optional `aws_iam_role_policy_attachment.ecs_task_managed_policies` entries for application task-role permissions
-
-Both role types trust `ecs-tasks.amazonaws.com`. The shared trust document also requires the configured account through `aws:SourceAccount` and restricts `aws:SourceArn` to ECS resources in the configured Region and account.
-
-Role pairs are keyed by the ECS service key. Their AWS names are:
-
-```text
-<name_prefix>-<service-key>-ecs-execution
-<name_prefix>-<service-key>-ecs-task
-```
-
-The custom execution policy permits:
-
-- `ecr:GetAuthorizationToken` against `*`, as required by that ECR API
-- `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, and `ecr:BatchGetImage` against only the service's declared application repository ARNs
-- the same three pull actions against exactly the supplied GuardDuty agent repository ARN set when Runtime Monitoring is enabled
-- `logs:CreateLogStream` and `logs:PutLogEvents` against stream ARNs beneath only the service's declared log-group ARNs
-
-The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. Its generated grants contain no `iam:PassRole`, and it does not automatically add the ECR encryption CMK to execution-role permissions. Explicitly supplied `task_execution_kms_key_arns` still determine any added decrypt grant.
-
-Application task roles have no policies by default. Optional `task_role_managed_policy_arns` attaches AWS-managed or same-account customer-managed policies **only to the application task role** for a deployable service; the execution role is unchanged. The baseline creates task roles and the selected attachments, **not** application-specific managed policies. Application owners provision and approve their customer-managed policies separately and pass known ARNs through the canonical `ecs_services` map. A first baseline apply with `image_digest = null` needs no task-role policy ARNs and creates no task role or attachments. Policy ARNs must be known during planning and the policies must exist by attachment time; ECS service launch waits for any configured attachments.
-
-The live IAM validator verifies exact attached policy ARNs and rejects unexpected attachments and inline task policies. It does not analyze the contents or effective permissions of externally managed policies. The application owner must review policy grants, versions, permission boundaries, and resource-based access before approval.
-
-For example, inside an existing canonical `ecs_services.api` object:
-
-```hcl
-task_role_managed_policy_arns = [
-  "arn:aws:iam::123456789012:policy/application/ApprovedAccess"
-]
-```
-
-Replace the illustrative ARN with a reviewed existing policy in the workload
-account/partition. The canonical baseline validates policy-ARN shape, and attachment
-preconditions restrict identity to the current partition and either the workload
-account or AWS-managed policies. This does not prove a policy exists or is least
-privilege. An omitted/empty set adds no attachments or attachment readiness
-instances; removal of an ARN plans detachment. `ecs_service_configuration` emits
-the sorted ARN list only for nonempty sets on deployable services.
-
-The common trust condition covers ECS resources throughout the configured account and Region (`...:ecs:<region>:<account>:*`), not a single service ARN or task definition. Separate role names do not themselves narrow that trust pattern.
-
-The optional execution secret, SSM parameter, and KMS ARN sets are consumed by dynamic resource-scoped statements. When non-empty they grant, respectively, `secretsmanager:GetSecretValue`, `ssm:GetParameters`, or `kms:Decrypt` against only the declared ARNs. `task_execution_kms_key_arns` defaults to `[]` and is needed only when ECS startup secret injection requires execution-role decryption with a customer-managed KMS key; it is **not** a list of all baseline-managed CMKs. Obtain the key identity from the referenced secret/parameter, not from the set of keys created by the baseline. An empty set creates no `kms:Decrypt` statement; a populated set grants exactly the declared keys, subject to the key policy. Application-initiated AWS SDK and KMS calls use the separate task role. The SSM field is `execution_ssm_parameter_arns`, and the inline policy resource is `aws_iam_role_policy.ecs_task_execution_policies`.
-
-The GuardDuty Fargate agent scope is intentionally separate from application image scope. Baseline supplies `guardduty_agent_ecr_repository_arns` only for protected `production` and `development` services. The resolved ARN has the exact regional shape:
-
-```text
-arn:<partition>:ecr:<region>:<guardduty-agent-account-id>:repository/aws-guardduty-agent-fargate
-```
-
-For `minimal`, the set is empty and the `AllowGuardDutyAgentImagePulls` statement is omitted. The generated GuardDuty statement contains pull actions, not push or repository-administration actions. The integrated baseline supplies the exact agent repository; this reusable module consumes caller-supplied ARN sets without independently validating their format, rejecting wildcards, or discovering the GuardDuty account. Do not treat its string/set input types as an ARN-scope security check.
-
-`ecs_iam_services` defaults to `{}`. Baseline derives and passes one entry per deployable canonical service. A registered service with `image_digest = null` does not receive a role pair until an exact digest is selected.
+Per-workload ECS task execution roles, application task roles, execution policies, and task-role managed-policy attachments moved to [ecs_workload_iam](../ecs_workload_iam/README.md) in v1.15.0 (R1-A). That README documents the trust conditions, execution-policy scope, inputs, outputs, and the baseline resource-address mapping.
 
 ---
 
@@ -589,25 +531,8 @@ Expected output:
 | `lambda_ec2_isolation_dlq_arn` | `string` | Isolation asynchronous-failure destination ARN | Yes |
 | `lambda_ec2_rollback_dlq_arn` | `string` | Rollback asynchronous-failure destination ARN | Yes |
 | `lambda_ip_enrichment_dlq_arn` | `string` | IP Enrichment asynchronous-failure destination ARN | Yes |
-| `ecs_iam_services` | `map(object(...))` | ECS execution-role inputs keyed by service; defaults to `{}` | No |
 
-All inputs except `ecs_iam_services` have no declared defaults. In particular, an empty runtime does not remove the three required Lambda DLQ inputs. `cloud_name` and `lambda_ip_enrichment_log_group_arn` are declared context inputs but are not referenced by the current IAM resource expressions. They do not create additional permissions.
-
-The intended service object is:
-
-```hcl
-map(object({
-  ecr_repository_arns                 = set(string)
-  guardduty_agent_ecr_repository_arns = optional(set(string), [])
-  log_group_arns                      = set(string)
-  execution_secret_arns               = optional(set(string), [])
-  execution_ssm_parameter_arns        = optional(set(string), [])
-  task_execution_kms_key_arns         = optional(set(string), [])
-  task_role_managed_policy_arns       = optional(set(string), [])
-}))
-```
-
-Application ECR and log-group permissions are always present in the generated **execution-role** policy. GuardDuty-agent ECR, secret, SSM parameter, and KMS statements are emitted only when their corresponding execution sets are non-empty. `task_role_managed_policy_arns` does **not** feed that policy: it creates separate managed-policy attachments on the **application task role** only.
+None of the listed inputs has a declared default. In particular, an empty runtime does not remove the three required Lambda DLQ inputs. `cloud_name` and `lambda_ip_enrichment_log_group_arn` are declared context inputs but are not referenced by the current IAM resource expressions. They do not create additional permissions.
 
 ---
 
@@ -631,10 +556,6 @@ Application ECR and log-group permissions are always present in the generated **
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
 | `logs_cmk_decrypt_policy_name` | Name of the logs CMK decrypt policy |
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
-| `ecs_task_execution_roles` | Map of ECS task execution role ARN and name objects keyed by service |
-| `ecs_task_execution_policy_ids` | Map of inline execution-policy IDs keyed by service for resource-granular launch readiness |
-| `ecs_task_role_policy_attachment_ids` | Map of optional application task-role managed-policy attachment IDs keyed by service, used for ECS launch readiness |
-| `ecs_task_roles` | Map of ECS application task role ARN and name objects keyed by service |
 
 ---
 
@@ -669,8 +590,6 @@ module "iam" {
   lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
   lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
   lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
-
-  ecs_iam_services = local.ecs_iam_services
 }
 ```
 
@@ -680,7 +599,7 @@ This module call wires IAM roles and policies to the rest of the baseline, inclu
 
 ## Validation
 
-The workload baseline derives `ecs_iam_services` from the canonical service map and passes it to this module. `validate-iam.sh` validates each configured execution/task role pair, ECS trust restrictions, custom execution policy scope, optional ARN-identifiable secret/parameter permissions, absence of execution-role managed-policy attachments and generated `iam:PassRole`, exact configured application task-role managed-policy attachments, and absence of task-role inline policies. It compares the live `kms:Decrypt` resource set exactly with `ecs_service_configuration[*].task_execution_kms_key_arns` and rejects decrypt permission when that set is empty. It also derives the Runtime Monitoring expectation from `deployment_profile`, requires exactly the Terraform-declared GuardDuty agent repository pull scope when enabled, requires no GuardDuty repository scope when disabled, and rejects broad or unexpected ECR authority. Runtime identity relationships are also checked through resource-backed workload outputs by `validate-ecs-runtime.sh`.
+The workload baseline derives `ecs_iam_services` from the canonical service map and passes it to [ecs_workload_iam](../ecs_workload_iam/README.md) as `workloads`. `validate-iam.sh` validates each configured execution/task role pair, ECS trust restrictions, custom execution policy scope, optional ARN-identifiable secret/parameter permissions, absence of execution-role managed-policy attachments and generated `iam:PassRole`, exact configured application task-role managed-policy attachments, and absence of task-role inline policies. It compares the live `kms:Decrypt` resource set exactly with `ecs_service_configuration[*].task_execution_kms_key_arns` and rejects decrypt permission when that set is empty. It also derives the Runtime Monitoring expectation from `deployment_profile`, requires exactly the Terraform-declared GuardDuty agent repository pull scope when enabled, requires no GuardDuty repository scope when disabled, and rejects broad or unexpected ECR authority. Runtime identity relationships are also checked through resource-backed workload outputs by `validate-ecs-runtime.sh`.
 
 The following manual listings are spot checks. They do not compare every
 attached/inline policy, simulate all authorization paths, or reject all extra
@@ -1158,10 +1077,7 @@ Check:
 ## Security Notes
 
 - EC2 instances use IAM instance profiles instead of static credentials.
-- ECS task execution and application task roles are separate and keyed per service.
-- ECS application task roles initially carry no broad application permissions.
-- ECS execution policies are custom and resource-scoped for application repository pulls and log writes; the AWS-managed ECS execution policy is not attached.
-- GuardDuty Fargate Runtime Monitoring adds only the exact regional `aws-guardduty-agent-fargate` repository pull scope for protected profiles and adds no GuardDuty-specific ECR scope for `minimal`.
+- ECS workload roles and policies are provisioned by [ecs_workload_iam](../ecs_workload_iam/README.md); see its security notes.
 - Lambda automation roles are separated by function.
 - Lambda roles use function-specific managed attachments and custom grants; isolation/rollback EC2 actions and IP Enrichment finding updates include wildcard resource scope.
 - Logging delivery roles are service-specific.
