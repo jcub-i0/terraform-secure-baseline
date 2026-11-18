@@ -16,7 +16,7 @@ This separation allows the baseline to disable scheduled backups for cost-sensit
 
 **Cost/safety:** Enabling Restore Testing creates a scheduled plan, not a single on-demand test. AWS Backup will periodically restore temporary RDS instances and charges can accrue. Non-production qualification requires explicit `backup_enabled = true` together with `restore_testing_enabled = true`; do not apply these settings until the validation workflow and its cleanup checks are ready. The dedicated restore-test security group stays isolated unless the separate, opt-in [Restore Validation](../restore_validation/README.md) worker security group is explicitly allowed to reach PostgreSQL.
 
-This module's scheduled AWS Backup policy is distinct from the RDS instance's native automated-backup retention in `modules/storage`. Disabling scheduled AWS Backup is not a statement that RDS native automated backups are disabled.
+This module's scheduled AWS Backup policy is distinct from the RDS instance's native automated-backup retention in `modules/database`. Disabling scheduled AWS Backup is not a statement that RDS native automated backups are disabled.
 
 ---
 
@@ -188,12 +188,12 @@ module "backup" {
   restore_testing_start_window_hours      = local.effective_restore_testing_start_window_hours
   restore_testing_selection_window_days   = local.effective_restore_testing_selection_window_days
   restore_testing_validation_window_hours = local.effective_restore_testing_validation_window_hours
-  restore_testing_rds_arn                 = module.storage.rds_configuration.arn
-  restore_testing_db_subnet_group_name    = module.storage.rds_configuration.db_subnet_group_name
+  restore_testing_rds_arn                 = module.database.rds_configuration.arn
+  restore_testing_db_subnet_group_name    = module.database.rds_configuration.db_subnet_group_name
 
   restore_testing_vpc_security_group_ids = (
     local.effective_restore_testing_enabled
-    ? [module.storage.restore_test_db_sg_id]
+    ? [module.database.restore_test_db_sg_id]
     : []
   )
 }
@@ -460,5 +460,5 @@ Production adds protected vault lifecycle and Terraform-owned RDS Restore Testin
 - [Backup service IAM](iam.tf)
 - [Baseline module call](../../baseline/main.tf) and [effective settings](../../baseline/locals.tf)
 - [Backup and RDS validator](../../scripts/validation/validate-backup.sh)
-- [RDS resource implementation](../storage/main.tf)
+- [RDS resource implementation](../database/main.tf)
 - [Production retirement](../../docs/production-retirement.md)

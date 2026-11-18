@@ -672,7 +672,7 @@ When Restore Testing is disabled, the validator returns without requiring live R
 | Temporary-resource deletion `FAILED` | Warning | Cleanup has not been proven successful |
 | Unknown/in-progress validation or cleanup status | Informational message or warning | Retain the exact status and follow up; do not infer completion |
 
-A `validate-backup.sh` PASS may therefore coexist with an unexecuted restore, failed application validation, or unresolved cleanup. Keep the raw log and record the reviewer's recovery/cleanup acceptance separately. See the [Backup module](../../modules/backup/README.md), [storage reference](../../modules/storage/README.md), and [evidence guide](../../docs/assurance/validation-evidence-guide.md).
+A `validate-backup.sh` PASS may therefore coexist with an unexecuted restore, failed application validation, or unresolved cleanup. Keep the raw log and record the reviewer's recovery/cleanup acceptance separately. See the [Backup module](../../modules/backup/README.md), [database reference](../../modules/database/README.md), and [evidence guide](../../docs/assurance/validation-evidence-guide.md).
 
 ### Production retirement is a separate validation posture
 

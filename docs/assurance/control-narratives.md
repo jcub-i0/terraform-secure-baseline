@@ -961,7 +961,7 @@ do not identify that key as the logs or secrets key. The workload key policies
 include differing service/account/context conditions, not one uniform
 least-privilege policy.
 
-[Storage](../../modules/storage/main.tf) uses an ephemeral generated RDS password
+[Database](../../modules/database/secrets.tf) uses an ephemeral generated RDS password
 with write-only arguments, whereas [automation](../../modules/automation/main.tf)
 stores the AbuseIPDB key through a normal secret-version value. Do not claim
 all secret values are absent from Terraform state and plan artifacts.

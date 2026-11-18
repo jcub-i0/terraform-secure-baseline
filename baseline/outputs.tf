@@ -20,42 +20,42 @@ output "centralized_logs_bucket_name" {
 
 output "rds_address" {
   description = "DNS address of the RDS instance"
-  value       = module.storage.rds_address
+  value       = module.database.rds_address
 }
 
 output "rds_endpoint" {
   description = "Connection endpoint of the RDS instance in address:port form"
-  value       = module.storage.rds_endpoint
+  value       = module.database.rds_endpoint
 }
 
 output "rds_port" {
   description = "Port on which the RDS instance accepts connections"
-  value       = module.storage.rds_port
+  value       = module.database.rds_port
 }
 
 output "rds_database_name" {
   description = "Initial database name configured on the RDS instance"
-  value       = module.storage.rds_database_name
+  value       = module.database.rds_database_name
 }
 
 output "rds_master_username" {
   description = "Master username configured on the RDS instance"
-  value       = module.storage.rds_master_username
+  value       = module.database.rds_master_username
 }
 
 output "rds_master_secret_arn" {
   description = "ARN of the Secrets Manager secret containing the RDS master password"
-  value       = module.storage.rds_master_secret_arn
+  value       = module.database.rds_master_secret_arn
 }
 
 output "rds_configuration" {
   description = "Validator-relevant Terraform-managed RDS configuration."
-  value       = module.storage.rds_configuration
+  value       = module.database.rds_configuration
 }
 
 output "data_sg_id" {
   description = "ID of the RDS/data security group"
-  value       = module.storage.data_sg_id
+  value       = module.database.data_sg_id
 }
 
 output "lambda_cmk_arn" {
@@ -492,7 +492,7 @@ output "restore_testing" {
 
   value = {
     enabled               = local.effective_restore_testing_enabled
-    restore_test_db_sg_id = module.storage.restore_test_db_sg_id
+    restore_test_db_sg_id = module.database.restore_test_db_sg_id
 
     schedule = (
       local.effective_restore_testing_schedule

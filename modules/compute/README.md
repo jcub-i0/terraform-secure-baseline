@@ -656,7 +656,7 @@ module "compute" {
 
   interface_endpoint_ids    = module.vpc_endpoints.interface_endpoint_ids
   interface_endpoints_sg_id = module.vpc_endpoints.interface_endpoints_sg_id
-  data_sg_id                = module.storage.data_sg_id
+  data_sg_id                = module.database.data_sg_id
   db_port                   = var.db_port
   patch_tag_value           = var.patch_tag_value
 }

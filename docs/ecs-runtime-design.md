@@ -333,7 +333,7 @@ Security-group ownership remains split by resource owner:
 |---|---|
 | ALB SG object | `modules/application_load_balancer` |
 | ECS task SG objects | `modules/ecs_service` |
-| RDS/data SG object | `modules/storage` |
+| RDS/data SG object | `modules/database` |
 | Interface Endpoint SG object | `modules/vpc_endpoints` |
 | Cross-component SG rules | `modules/networking/security_policy` |
 
@@ -374,9 +374,9 @@ account     = the workload account
 The rule has exactly one target: the existing workload SecOps SNS topic. Delivery uses the shared security-notification EventBridge DLQ with three retry attempts and a maximum event age of 3600 seconds.
 
 The input transformer preserves the workload account, Region, ECS cluster name, current and previous coverage status, GuardDuty issue text, GuardDuty update time, and EventBridge event time. This is a coverage-health notification path only; it does not implement automatic ECS/Fargate containment.
-## Storage outputs and secret handling
+## Database outputs and secret handling
 
-Workload storage outputs expose non-secret RDS consumer metadata such as address, endpoint, port, database name, master username, master secret ARN, and data security-group ID. Secret values and credential-bearing DSNs are not emitted.
+Database outputs expose non-secret RDS consumer metadata such as address, endpoint, port, database name, master username, master secret ARN, and data security-group ID. Secret values and credential-bearing DSNs are not emitted.
 
 ECS services may reference explicitly approved Secrets Manager and SSM ARNs. The generic runtime does not create application database users, rotate application credentials, run schema migrations, or grant broad application AWS permissions.
 
