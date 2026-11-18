@@ -121,7 +121,6 @@ module "compute" {
 
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   compute_sg_rule_ids            = module.security_policy.compute_sg_rule_ids
-  instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
   isolation_allowed              = var.isolation_allowed
   backup_enabled                 = local.effective_backup_enabled
@@ -178,31 +177,27 @@ module "iam" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
-  secops_topic_arn         = module.monitoring.secops_topic_arn
-  logs_cmk_arn             = module.security.logs_cmk_arn
-  secrets_manager_cmk_arn  = module.security.secrets_manager_cmk_arn
+  logs_cmk_arn = module.security.logs_cmk_arn
 
-  centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
-  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
-  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
-  secops_event_bus_arn                  = module.automation.secops_event_bus_arn
-
-  threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
-  lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
+  centralized_logs_bucket_arn        = module.storage.centralized_logs_bucket_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
-
-  lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
-  lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
-  lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
 
   alb_access_logs_bucket_arn = (
     length(local.ecs_alb_services) > 0
     ? module.application_load_balancer[0].access_logs.bucket_arn
     : null
   )
+}
 
-  ecs_iam_services = local.ecs_iam_services
+module "ecs_workload_iam" {
+  source = "../modules/ecs_workload_iam"
+
+  name_prefix    = local.name_prefix
+  environment    = var.environment
+  account_id     = var.account_id
+  primary_region = var.primary_region
+
+  workloads = local.ecs_iam_services
 }
 
 module "security" {
@@ -223,9 +218,7 @@ module "security" {
   inspector_enabled               = local.effective_inspector_enabled
   inspector_resource_types        = local.effective_inspector_resource_types
 
-  enable_config               = local.effective_enable_config
-  config_role_arn             = module.iam.config_role_arn
-  config_remediation_role_arn = module.iam.config_remediation_role_arn
+  enable_config = local.effective_enable_config
 
   compliance_topic_arn           = module.monitoring.compliance_topic_arn
   secops_topic_arn               = module.monitoring.secops_topic_arn
@@ -236,9 +229,10 @@ module "security" {
 module "logging" {
   source = "../modules/logging"
 
-  cloud_name  = var.cloud_name
-  environment = var.environment
-  name_prefix = local.name_prefix
+  cloud_name     = var.cloud_name
+  environment    = var.environment
+  name_prefix    = local.name_prefix
+  primary_region = var.primary_region
 
   vpc_id     = module.networking.vpc_id
   account_id = var.account_id
@@ -248,11 +242,6 @@ module "logging" {
   logs_cmk_arn                = module.security.logs_cmk_arn
 
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
-
-  cloudtrail_role_arn         = module.iam.cloudtrail_role_arn
-  flowlogs_role_arn           = module.iam.flowlogs_role_arn
-  firehose_flow_logs_role_arn = module.iam.firehose_flow_logs_role_arn
-  cw_to_firehose_role_arn     = module.iam.cw_to_firehose_role_arn
 }
 
 module "monitoring" {
@@ -268,10 +257,7 @@ module "monitoring" {
   securityhub_high_critical_rule_arn  = module.automation.securityhub_high_critical_rule_arn
   securityhub_high_critical_rule_name = module.automation.securityhub_high_critical_rule_name
 
-  lambda_ip_enrichment_role_arn = module.iam.lambda_ip_enrichment_role_arn
-  lambda_ec2_isolation_role_arn = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn  = module.iam.lambda_ec2_rollback_role_arn
-  break_glass_admin_role_arn    = module.iam.break_glass_admin_role_arn
+  break_glass_admin_role_arn = module.iam.break_glass_admin_role_arn
 
   secops_emails = var.secops_emails
 
@@ -293,11 +279,7 @@ module "automation" {
   interface_endpoints_sg_id     = module.vpc_endpoints.interface_endpoints_sg_id
   quarantine_sg_id              = module.compute.quarantine_sg_id
 
-  lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
-  ec2_auto_isolation_severities            = var.ec2_auto_isolation_severities
-  lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
-  eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
+  ec2_auto_isolation_severities = var.ec2_auto_isolation_severities
 
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
@@ -362,10 +344,9 @@ module "firewall" {
 module "patch_management" {
   source = "../modules/patch_management"
 
-  name_prefix                       = local.name_prefix
-  environment                       = var.environment
-  patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
-  patch_tag_value                   = var.patch_tag_value
+  name_prefix     = local.name_prefix
+  environment     = var.environment
+  patch_tag_value = var.patch_tag_value
 }
 
 module "security_dashboard" {
@@ -431,8 +412,8 @@ module "ecs_service" {
   services     = local.ecs_runtime_services
   force_delete = local.effective_ecs_service_force_delete
 
-  execution_policy_ids            = module.iam.ecs_task_execution_policy_ids
-  task_role_policy_attachment_ids = module.iam.ecs_task_role_policy_attachment_ids
+  execution_policy_ids            = module.ecs_workload_iam.execution_policy_ids
+  task_role_policy_attachment_ids = module.ecs_workload_iam.task_role_policy_attachment_ids
   security_policy_rule_ids        = local.ecs_security_policy_rule_ids
 }
 
@@ -480,7 +461,6 @@ module "backup" {
   backup_schedule           = local.effective_backup_schedule
   backup_vault_cmk_arn      = module.security.backup_vault_cmk_arn
   delete_backups_after_days = local.effective_delete_backups_after_days
-  backup_service_role_arn   = module.iam.backup_service_role_arn
 
   force_destroy = local.effective_backup_vault_force_destroy
 

@@ -13,6 +13,7 @@ It creates:
 
 - A compute security group
 - A quarantine security group for incident-response isolation
+- A dedicated EC2 IAM role, its two managed-policy attachments and instance profile
 - One Ubuntu EC2 instance per configured private compute subnet
 - Dependency-readiness checkpoints that prevent EC2 instances from launching
   before required security group rules and Terraform-managed Interface VPC Endpoints exist
@@ -21,7 +22,7 @@ It creates:
 - First-boot operating system patching and package installation
 - Tags used by patching, backup, and isolation automation
 
-The module creates the compute security groups and EC2 instances. Security group
+The module creates the compute security groups, EC2 instances and their IAM. Security group
 rules for normal workload traffic remain owned by the networking
 `security_policy` layer.
 
@@ -63,6 +64,34 @@ The endpoint dependency is especially important for GuardDuty Runtime Monitoring
 ---
 
 ## Resources Created
+
+### EC2 IAM and Instance Profile
+
+[iam.tf](iam.tf) owns:
+
+- `aws_iam_role.ec2_role`
+- `aws_iam_role_policy_attachment.ssm`
+- `aws_iam_role_policy_attachment.cloudwatch`
+- `aws_iam_instance_profile.ec2_profile`
+
+The role name remains `${var.name_prefix}-ec2_compute_role`. It trusts
+`ec2.amazonaws.com` for `sts:AssumeRole`, with no additional trust conditions.
+Its AWS-managed attachments are `AmazonSSMManagedInstanceCore` and
+`CloudWatchAgentServerPolicy`, using ARNs constructed from the active partition.
+The role and profile retain their existing attribute omissions, including no
+explicit tags or role permissions boundary.
+
+The profile `${var.name_prefix}-ec2_compute_instance_profile` contains that role.
+All four IAM resources are unconditional, including when
+`compute_private_subnet_ids_map` is empty. EC2 instances reference the local
+profile by name, preserving the role-to-profile-to-instance dependency chain.
+The existing absence of an explicit instance dependency on both policy
+attachments is preserved; this extraction does not repair that readiness gap.
+The security-policy and Interface Endpoint readiness dependencies below remain
+unchanged. No state migration is introduced.
+
+These managed policies provide Systems Manager and CloudWatch Agent permissions;
+they are not database credentials or a general application access policy.
 
 ### Compute Security Group
 
@@ -265,7 +294,7 @@ Current instance configuration:
 | Security group | `aws_security_group.compute` |
 | Detailed monitoring | Enabled |
 | EBS optimized | `true` |
-| IAM instance profile | `var.instance_profile_name` |
+| IAM instance profile | `aws_iam_instance_profile.ec2_profile.name` |
 | User data | `user_data/bootstrap.sh` |
 | Replace on user-data change | Enabled |
 | Public IP | Not explicitly associated |
@@ -533,7 +562,6 @@ successful backup or a recoverable snapshot.
 | `vpc_id` | `string` | n/a | VPC where the compute security groups are created |
 | `environment` | `string` | n/a | Environment name |
 | `compute_private_subnet_ids_map` | `map(string)` | n/a | Compute private subnet IDs keyed by AZ or logical subnet name |
-| `instance_profile_name` | `string` | n/a | IAM instance profile attached to EC2 instances |
 | `ebs_cmk_arn` | `string` | n/a | KMS key ARN used for root-volume encryption |
 | `interface_endpoints_sg_id` | `string` | n/a | Interface endpoint security group ID |
 | `data_sg_id` | `string` | n/a | Data-tier security group ID |
@@ -622,7 +650,6 @@ module "compute" {
 
   compute_private_subnet_ids_map = module.networking.compute_private_subnet_ids_map
   compute_sg_rule_ids            = module.security_policy.compute_sg_rule_ids
-  instance_profile_name          = module.iam.instance_profile_name
   ebs_cmk_arn                    = module.security.ebs_cmk_arn
   isolation_allowed              = var.isolation_allowed
   backup_enabled                 = local.effective_backup_enabled
@@ -1019,6 +1046,6 @@ Then inspect the plan for instance replacement after modifying
 - The networking security-policy output and compute input must use matching `compute_sg_rule_ids` object attributes.
 - `interface_endpoint_ids` should come directly from the VPC Endpoints module so endpoint creation remains part of the EC2 dependency graph.
 
-Implementation references: [resources](main.tf), [inputs](variables.tf),
+Implementation references: [resources](main.tf), [service IAM](iam.tf), [inputs](variables.tf),
 [outputs](outputs.tf), [bootstrap script](user_data/bootstrap.sh), and
 [baseline composition](../../baseline/main.tf).

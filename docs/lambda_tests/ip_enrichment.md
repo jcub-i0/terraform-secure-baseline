@@ -1203,5 +1203,5 @@ Record which of the following were observed; do not report unexecuted cases as p
 
 Implementation references: [handler](../../modules/automation/lambda/ip_enrichment.py),
 [event rule, environment, and destinations](../../modules/automation/main.tf),
-[execution role](../../modules/iam/lambda.tf), and
+[execution role](../../modules/automation/iam.tf), and
 [automation reference](../../modules/automation/README.md).

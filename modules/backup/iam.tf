@@ -31,3 +31,5 @@ resource "aws_iam_role_policy_attachment" "backup_restore" {
   role       = aws_iam_role.backup.name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
 }
+
+data "aws_partition" "current" {}

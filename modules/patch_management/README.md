@@ -16,13 +16,15 @@ the AWS-managed `AWS-RunPatchBaseline` document with the `Install` operation.
 - Installs baseline-approved patches
 - Reboots instances when required
 - Supports configurable schedules and time zones
-- Uses an externally managed maintenance-window IAM role
+- Creates the dedicated maintenance-window IAM role and policy attachment
 
 ## Resources Created
 
 - `aws_ssm_maintenance_window.patching`
 - `aws_ssm_maintenance_window_target.patching`
 - `aws_ssm_maintenance_window_task.patching`
+- `aws_iam_role.patch_maintenance_window`
+- `aws_iam_role_policy_attachment.patch_maintenance_window`
 
 ## How It Works
 
@@ -55,7 +57,7 @@ The task uses:
 | Maximum concurrency | `1` |
 | Maximum errors | `1` |
 | Run Command delivery timeout | 3,600 seconds |
-| Service role | `var.patch_maintenance_window_role_arn` |
+| Service role | `aws_iam_role.patch_maintenance_window.arn` |
 
 The window cutoff stops scheduling new tasks one hour before the three-hour
 window ends; it is not a guarantee that every update or reboot finishes in that
@@ -63,6 +65,26 @@ window. `timeout_seconds` is the Run Command delivery/start timeout, not an
 explicit patch-document execution timeout. The module supplies neither a
 specific document revision/hash nor an `executionTimeout` parameter. See the
 [AWS Run Command parameter semantics](https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_MaintenanceWindowRunCommandParameters.html).
+
+## Service IAM
+
+[iam.tf](iam.tf) owns the `${var.name_prefix}-patch-mw-role` role and its
+`service-role/AmazonSSMMaintenanceWindowRole` AWS-managed policy attachment.
+The policy ARN uses the active AWS partition. The role trusts `ssm.amazonaws.com`
+for `sts:AssumeRole`, with no additional trust conditions.
+
+The role preserves these tags:
+
+| Tag | Value |
+|---|---|
+| `Name` | `${var.name_prefix}-PatchMaintenanceWindowRole` |
+| `Terraform` | `"true"` |
+| `Environment` | `var.environment` |
+
+Both IAM resources are unconditional, including when `patching_enabled = false`.
+The task depends on the local role through its ARN. The existing absence of an
+explicit policy-attachment readiness barrier is preserved; this extraction does
+not correct that ordering gap or introduce state migration.
 
 ## Patch Baseline Behavior
 
@@ -95,7 +117,6 @@ The following must already exist:
 - SSM Agent installed and running
 - An EC2 instance profile with Systems Manager permissions
 - The configured patch target tag
-- A maintenance-window service role
 - Network access to Systems Manager
 - Network access to required Ubuntu repositories
 - An applicable Patch Manager baseline
@@ -107,8 +128,8 @@ package mirror.
 ## Usage
 
 The following is a direct child-module example from a caller beside
-`modules/`. In the integrated baseline, only naming, the maintenance-window
-role, and `patch_tag_value` are passed to this module. The other settings use
+`modules/`. In the integrated baseline, only naming context and
+`patch_tag_value` are passed to this module. The other settings use
 the defaults below. In particular, the deployment profile does not disable
 this schedule, and declaring a new `TF_VAR_patching_enabled` on a root that
 has no such input does not wire an override into this module. Change the
@@ -120,8 +141,6 @@ module "patch_management" {
 
   name_prefix = local.name_prefix
   environment = var.environment
-
-  patch_maintenance_window_role_arn = module.iam.patch_maintenance_window_role_arn
 
   patch_tag_key   = "PatchGroup"
   patch_tag_value = var.patch_tag_value
@@ -151,7 +170,6 @@ tags = {
 | `patch_schedule` | `string` | `"cron(0 3 ? * SUN *)"` | No | AWS cron schedule |
 | `schedule_timezone` | `string` | `"America/New_York"` | No | IANA time zone for the schedule |
 | `patching_enabled` | `bool` | `true` | No | Enables or disables the maintenance window |
-| `patch_maintenance_window_role_arn` | `string` | n/a | Yes | IAM role used by the maintenance-window task |
 
 The default schedule runs every Sunday at 3:00 AM Eastern Time.
 
@@ -352,7 +370,7 @@ treating remaining packages as a failure.
 - The task sets `max_errors = "1"`; inspect AWS per-target status and error-threshold behavior rather than assuming every target ran.
 - `RebootIfNeeded` may restart instances during the maintenance window.
 - Setting `patching_enabled = false` disables scheduled execution but does not
-  remove the maintenance-window resources.
+  remove the maintenance-window resources, IAM role or policy attachment.
 - Larger fleets may require a reviewed window/concurrency change. The module
   does not drain load balancers, test application health between nodes, or
   coordinate an AZ-aware rolling update.
@@ -369,5 +387,5 @@ treating remaining packages as a failure.
 - [VPC endpoints](../vpc_endpoints/README.md)
 - [firewall](../firewall/README.md)
 
-Implementation references: [resources](main.tf), [inputs](variables.tf), and
+Implementation references: [resources](main.tf), [service IAM](iam.tf), [inputs](variables.tf), and
 [baseline composition](../../baseline/main.tf).

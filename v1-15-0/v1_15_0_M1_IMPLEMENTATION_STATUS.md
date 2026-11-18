@@ -38,7 +38,7 @@ Local evidence location: `/tmp/m1-n5ca-evidence/validation-summary.json`, SHA-25
 Repository-verifiable coverage includes:
 
 - [ECS native suites](../modules/ecs_service/tests/): generated multi-container behavior and secret propagation, legacy compatibility, and representative architectural/security rejection cases.
-- [IAM execution-policy suite](../modules/iam/tests/ecs_execution_policy.tftest.hcl), [baseline IAM derivation](../baseline/tests/ecs_iam_derivation.tftest.hcl), and [runtime inventory](../baseline/tests/ecs_runtime_inventory.tftest.hcl).
+- [IAM execution-policy suite](../modules/ecs_workload_iam/tests/ecs_execution_policy.tftest.hcl), [baseline IAM derivation](../baseline/tests/ecs_iam_derivation.tftest.hcl), and [runtime inventory](../baseline/tests/ecs_runtime_inventory.tftest.hcl).
 - Environment input propagation in [dev](../environments/dev/tests/ecs_input_propagation.tftest.hcl), [staging](../environments/staging/tests/ecs_input_propagation.tftest.hcl), and [prod](../environments/prod/tests/ecs_input_propagation.tftest.hcl).
 - Offline [runtime container checks](../scripts/tests/test-ecs-runtime-containers.sh), [execution-policy checks](../scripts/tests/test-ecs-execution-policy.py), [native health checks](../scripts/tests/test-ecs-native-health.sh), and [release-acceptance checks](../scripts/tests/test-ecs-release-acceptance.sh). These fixtures establish validator behavior, not live deployments.
 

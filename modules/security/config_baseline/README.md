@@ -16,11 +16,14 @@ its recorder/channel exists:
 | `enable_config = false` | Retained | Disabled | Absent | Absent |
 | `enable_config = true` | Retained | Enabled | Selected by family flags | Created independently of family flags |
 
+The remediation IAM role and inline policy are also always retained, independent
+of `enable_config` and the rule-family flags.
+
 Turning off `s3_baseline` alone does **not** disable S3 automatic remediation.
 Applying that remediation can affect intentionally public buckets; this module
 does not guarantee that workloads will remain unaffected.
 
-Implementation: [main.tf](main.tf), [rules.tf](rules.tf),
+Implementation: [main.tf](main.tf), [iam.tf](iam.tf), [rules.tf](rules.tf),
 [remediations.tf](remediations.tf), and [variables.tf](variables.tf).
 
 ---
@@ -53,7 +56,39 @@ recorded or evaluated.
 The delivery channel uses the supplied S3 bucket, `Config` prefix, logs CMK, and
 compliance SNS topic. The module waits a fixed 20 seconds after channel creation
 before setting recorder status. This is not a retrying delivery-health poll.
-It does not create the bucket, key, role, topic, or a Config aggregator.
+It does not create the bucket, key, AWS Config service-linked role, topic, or a Config aggregator.
+
+---
+
+### Config IAM
+
+[iam.tf](iam.tf) calculates `local.config_service_linked_role_arn` for the recorder:
+
+```text
+arn:<partition>:iam::<account_id>:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig
+```
+
+This is an ARN calculation, not an `aws_iam_service_linked_role` resource or a
+lookup proving the role exists. The AWS-managed service-linked role must exist
+when Config needs it; this module does not take ownership of it.
+
+The module owns the unconditional `aws_iam_role.config_remediation` and
+`aws_iam_role_policy.s3_public_remediation` resources. Their physical names remain
+`${var.name_prefix}-ConfigRemediationRole` and
+`${var.name_prefix}-S3PublicAccessBlockRemediation`.
+
+The role trusts `ssm.amazonaws.com` for `sts:AssumeRole`, with `StringEquals`
+requiring `aws:SourceAccount = var.account_id`. The inline policy allows only
+`s3:GetBucketPublicAccessBlock` and `s3:PutBucketPublicAccessBlock` on
+`arn:<partition>:s3:::*`, with `StringEquals` requiring
+`s3:ResourceAccount = var.account_id`. The active AWS partition is read locally.
+The scope includes account-owned buckets beyond the baseline, without granting
+bucket-policy editing or cross-account access.
+
+Existing attributes and omissions are preserved, including no explicit role
+tags or permissions boundary. The remediation references the local role ARN;
+its pre-existing lack of an explicit inline-policy readiness dependency is
+preserved. No state migration or new service-linked-role resource is introduced.
 
 ---
 
@@ -70,7 +105,7 @@ When Config is enabled, a separate rule named
 | Target type | `SSM_DOCUMENT` |
 | Automatic attempts | `3` |
 | Retry interval | `60` seconds |
-| `AutomationAssumeRole` parameter | `var.config_remediation_role_arn` |
+| `AutomationAssumeRole` parameter | `aws_iam_role.config_remediation.arn` |
 | `BucketName` parameter | Evaluated `RESOURCE_ID` |
 
 Only those two document parameters are explicitly supplied. The resource does
@@ -259,14 +294,13 @@ workload profile defaults before calling this module.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `name_prefix` | `string` | Required | Recorder/rule naming prefix, not evaluated-resource scope |
+| `account_id` | `string` | Required | Account for the service-linked-role ARN and IAM trust/permission conditions |
 | `environment` | `string` | Required | Tags on the separate remediation rule |
 | `enable_config` | `bool` | `false` | Recorder status and catalog/remediation creation |
 | `enable_rules` | Eight-boolean object | Above | Catalog selection; independent of recorder resource types and separate remediation |
 | `tags` | `map(string)` | `{ Terraform = "true" }` | Catalog rule tags, not remediation-rule or recorder scope |
-| `config_role_arn` | `string` | Required | Existing recorder IAM role |
 | `centralized_logs_bucket_name` | `string` | Required | Existing destination bucket |
 | `compliance_topic_arn` | `string` | Required | Existing Config notification topic |
-| `config_remediation_role_arn` | `string` | Required | SSM automation role |
 | `logs_cmk_arn` | `string` | Required | Delivery-channel encryption key |
 
 There is no `config_rule_name_prefix` input. Reusable calls must still supply
@@ -279,12 +313,12 @@ Complete caller example for `modules/security/`, not a standalone root:
 module "config_baseline" {
   source = "./config_baseline"
 
+  account_id = var.account_id
+
   name_prefix                  = var.name_prefix
   environment                  = var.environment
   enable_config                = var.enable_config
-  config_role_arn              = var.config_role_arn
   compliance_topic_arn         = var.compliance_topic_arn
-  config_remediation_role_arn  = var.config_remediation_role_arn
   centralized_logs_bucket_name = var.centralized_logs_bucket_name
   logs_cmk_arn                 = aws_kms_key.logs.arn
   enable_rules                 = var.enable_rules

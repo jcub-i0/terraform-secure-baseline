@@ -635,12 +635,12 @@ data "aws_iam_policy_document" "ecr_kms" {
 module "config_baseline" {
   source = "./config_baseline"
 
+  account_id = var.account_id
+
   name_prefix                  = var.name_prefix
   environment                  = var.environment
   enable_config                = var.enable_config
-  config_role_arn              = var.config_role_arn
   compliance_topic_arn         = var.compliance_topic_arn
-  config_remediation_role_arn  = var.config_remediation_role_arn
   centralized_logs_bucket_name = var.centralized_logs_bucket_name
   logs_cmk_arn                 = aws_kms_key.logs.arn
   enable_rules                 = var.enable_rules

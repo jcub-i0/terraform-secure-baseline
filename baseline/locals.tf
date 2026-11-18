@@ -314,8 +314,8 @@ locals {
       start_timeout_seconds = service.start_timeout_seconds
       stop_timeout_seconds  = service.stop_timeout_seconds
 
-      execution_role_arn = module.iam.ecs_task_execution_roles[service_name].arn
-      task_role_arn      = module.iam.ecs_task_roles[service_name].arn
+      execution_role_arn = module.ecs_workload_iam.execution_roles[service_name].arn
+      task_role_arn      = module.ecs_workload_iam.task_roles[service_name].arn
 
       desired_count = (
         local.effective_production_retirement_mode

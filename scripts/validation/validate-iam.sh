@@ -1074,7 +1074,7 @@ else
     # The checks above require individual grants and preserve exact ECR scope.
     # Also compare the entire inline policy: finding an expected statement does
     # not rule out additional grants (for example iam:* or undeclared secrets).
-    # This is the existing modules/iam/ecs.tf contract, not effective IAM evaluation.
+    # This is the existing modules/ecs_workload_iam/main.tf contract, not effective IAM evaluation.
     if ! jq -e \
       --argjson ecr "$expected_ecr_policy_statements_json" \
       --argjson logs "$expected_log_resources_json" \

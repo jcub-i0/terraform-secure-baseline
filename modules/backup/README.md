@@ -7,6 +7,7 @@ The `backup` module provides AWS Backup vaulting, scheduling, retention, tag-bas
 Scheduled backup ownership remains separate from vault ownership:
 
 - A dedicated backup vault is retained for the environment.
+- The Backup service role and both managed-policy attachments are always created.
 - The backup plan and backup selection are created only when `backup_enabled = true`.
 
 When backups are enabled, supported resources tagged with `Backup = "true"` are selected by AWS Backup. When backups are disabled, the plan and selection are absent and workload resources are expected to use `Backup = "false"`.
@@ -77,7 +78,7 @@ When `backup_enabled = false`, the backup vault remains present, but no backup p
   - The vault is encrypted with the customer-managed KMS key supplied through `backup_vault_cmk_arn`.
 
 - **IAM Role Integration**
-  - The scheduled backup selection and RDS Restore Testing selection use the supplied AWS Backup service role.
+  - The scheduled backup selection and RDS Restore Testing selection use this module's AWS Backup service role.
 
 - **RDS Restore Testing**
   - A conditional plan selects recent snapshot recovery points from the Terraform-owned vault.
@@ -95,6 +96,9 @@ When `backup_enabled = false`, the backup vault remains present, but no backup p
 ### Always created
 
 - `aws_backup_vault.main`
+- `aws_iam_role.backup`
+- `aws_iam_role_policy_attachment.backup`
+- `aws_iam_role_policy_attachment.backup_restore`
 
 ### Created only when `backup_enabled = true`
 
@@ -112,26 +116,36 @@ The module's two enablement inputs control separate resource sets. The baseline 
 
 ---
 
+## Service IAM
+
+[iam.tf](iam.tf) owns the `${var.name_prefix}-backup-role` role and its two
+AWS-managed policy attachments:
+
+- `service-role/AWSBackupServiceRolePolicyForBackup`
+- `service-role/AWSBackupServiceRolePolicyForRestores`
+
+Both policy ARNs use the active AWS partition. The trust policy allows
+`backup.amazonaws.com` to call `sts:AssumeRole`, with no additional conditions.
+The role retains its existing attribute omissions, including no explicit tags or
+permissions boundary.
+
+The role and attachments are unconditional, independent of `backup_enabled` and
+`restore_testing_enabled`. Both selections reference `aws_iam_role.backup.arn`.
+They retain the existing role-existence dependency without an explicit
+policy-attachment readiness barrier; this extraction does not correct that
+pre-existing ordering gap. No state migration is introduced.
+
+These service policies do not configure vault/key policies or application-level
+restore validation. Their attachment is not evidence of a successful restore.
+
+---
+
 ## Requirements
 
 - AWS Backup must be available in the target AWS account and Region.
 
 - A customer-managed KMS key ARN must be supplied through:
   - `backup_vault_cmk_arn`
-
-- A valid AWS Backup service role must be supplied through:
-  - `backup_service_role_arn`
-
-  The role should trust:
-
-  ```text
-  backup.amazonaws.com
-  ```
-
-  and include the permissions required for backup and restore operations, such as the AWS-managed policies:
-
-  - `AWSBackupServiceRolePolicyForBackup`
-  - `AWSBackupServiceRolePolicyForRestores`
 
 - Resources intended for backup must use the configured backup tag key with the value:
 
@@ -166,7 +180,6 @@ module "backup" {
   backup_schedule           = local.effective_backup_schedule
   backup_vault_cmk_arn      = module.security.backup_vault_cmk_arn
   delete_backups_after_days = local.effective_delete_backups_after_days
-  backup_service_role_arn   = module.iam.backup_service_role_arn
 
   force_destroy = local.effective_backup_vault_force_destroy
 
@@ -238,7 +251,7 @@ The plan name replaces hyphens in `name_prefix` with underscores and appends `_r
 | Recovery-point type | `SNAPSHOT` |
 | Protected resource type | `RDS` |
 | Protected resource | Exact `restore_testing_rds_arn` |
-| IAM role | `backup_service_role_arn`, also used by scheduled backup selection |
+| IAM role | Module-local `aws_iam_role.backup.arn`, also used by scheduled backup selection |
 | DB subnet group override | `restore_testing_db_subnet_group_name` |
 | VPC security groups override | JSON-encoded `restore_testing_vpc_security_group_ids` |
 | Public-access override | String `"false"` |
@@ -303,7 +316,6 @@ All inputs except `backup_tag_key` have no default and must be supplied in a mod
 | `backup_schedule` | `string` | Required | Scheduled backup expression; baseline passes `null` when disabled |
 | `delete_backups_after_days` | `number` | Required | Recovery-point retention; baseline passes `null` when disabled |
 | `backup_vault_cmk_arn` | `string` | Required | Vault encryption key ARN |
-| `backup_service_role_arn` | `string` | Required | Role for backup and Restore Testing selections |
 | `backup_tag_key` | `string` | `"Backup"` | Selection tag key; selected value is always `"true"` |
 | `force_destroy` | `bool` | Required | Permit provider-driven recovery-point deletion during vault destruction |
 | `restore_testing_enabled` | `bool` | Required | Create the RDS Restore Testing resources |
@@ -445,6 +457,7 @@ Production adds protected vault lifecycle and Terraform-owned RDS Restore Testin
 ## Implementation References
 
 - [Resources](main.tf), [inputs](variables.tf), and [outputs](outputs.tf)
+- [Backup service IAM](iam.tf)
 - [Baseline module call](../../baseline/main.tf) and [effective settings](../../baseline/locals.tf)
 - [Backup and RDS validator](../../scripts/validation/validate-backup.sh)
 - [RDS resource implementation](../storage/main.tf)

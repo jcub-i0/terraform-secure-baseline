@@ -366,6 +366,7 @@ detection and coverage visibility, not a task-level quarantine mechanism.
 | Application transport and identity | ALB frontend traffic is HTTPS; task targets use HTTP. VPC endpoint connectivity does not replace IAM. Application task permissions, database users, TLS, tenant isolation, and transactions need application-specific design. |
 
 See the [adoption guide](docs/adoption-guide.md), [IAM reference](modules/iam/README.md),
+[ECS workload IAM reference](modules/ecs_workload_iam/README.md),
 [automation reference](modules/automation/README.md), and
 [control narratives](docs/assurance/control-narratives.md) for the supporting scope.
 These boundaries are not marked resolved by a successful documentation or baseline

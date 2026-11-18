@@ -14,18 +14,6 @@ variable "environment" {
   type = string
 }
 
-variable "lambda_ec2_isolation_role_arn" {
-  type = string
-}
-
-variable "lambda_ec2_rollback_role_arn" {
-  type = string
-}
-
-variable "lambda_ip_enrichment_role_arn" {
-  type = string
-}
-
 variable "serverless_private_subnet_ids" {
   type = list(string)
 }
@@ -43,10 +31,6 @@ variable "account_id" {
 }
 
 variable "primary_region" {
-  type = string
-}
-
-variable "eventbridge_putevents_to_secops_role_arn" {
   type = string
 }
 

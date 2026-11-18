@@ -120,7 +120,7 @@ module "jobs" {
 ## Security and Ownership
 
 - **Images:** Custom validation requires digest pinning for every primary and sidecar image. It does not establish image provenance, availability, or safety.
-- **IAM:** Roles, policies, trust, permissions boundaries, and `iam:PassRole` authorization are owned outside this module. Role ARNs are passed through; the module does not enforce distinct roles or prove least privilege. Use separate execution/application roles and appropriate per-job scopes. Secret references are passed through without creating secrets or granting access.
+- **IAM:** Roles, policies, trust, permissions boundaries, and `iam:PassRole` authorization are owned outside this module. [`ecs_workload_iam`](../ecs_workload_iam/README.md) provides reusable per-job execution and task roles; build its log-group ARNs from this module's `/aws/ecs/<name_prefix>/jobs/<job>` naming instead of consuming `log_groups`, which would create a dependency cycle. Role ARNs are passed through; the module does not enforce distinct roles or prove least privilege. Use separate execution/application roles and appropriate per-job scopes. Secret references are passed through without creating secrets or granting access.
 - **Logs:** The module associates each log group with `logs_cmk_arn`. The caller must supply a usable key and compatible key policy; the association alone does not prove successful log delivery. Keep secret values out of plaintext environment variables and Terraform configuration.
 - **State:** Under the approved architecture, instantiate this module in application-owned Terraform state. The calling root determines the backend; this module does not configure or enforce state separation. Foundation cluster, network, and key ownership remain external.
 
@@ -140,7 +140,7 @@ Initialization may download providers; use a prepopulated provider mirror/cache 
 
 ## Limitations and Deferred Work
 
-M2-A implements task-definition and log-group registration only. IAM provisioning, authorized/bounded `RunTask` execution, scheduling, failure alerting, and live AWS qualification remain deferred to M2-B/C work and subsequent qualification. Retries, execution deadlines, exit-status handling, and migration release gates belong to external orchestration.
+M2-A implements task-definition and log-group registration only. Per-job IAM roles come from `ecs_workload_iam` (v1.15.0 R1-A). Launch authorization (`iam:PassRole`), authorized/bounded `RunTask` execution, scheduling, failure alerting, and live AWS qualification remain deferred to M2-B/C work and subsequent qualification. Retries, execution deadlines, exit-status handling, and migration release gates belong to external orchestration.
 
 There are no cluster, subnet, security-group, public-IP, or platform-version inputs here. A future launcher must enforce approved private networking and select a compatible platform. CPU/memory combinations and routine AWS parameter limits remain provider/AWS responsibilities.
 

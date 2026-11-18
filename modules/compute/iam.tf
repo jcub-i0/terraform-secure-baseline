@@ -37,3 +37,5 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.name_prefix}-ec2_compute_instance_profile"
   role = aws_iam_role.ec2_role.name
 }
+
+data "aws_partition" "current" {}

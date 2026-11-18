@@ -406,7 +406,7 @@ secrets = {
 
 The primary and each sidecar use their own maps. The task definition passes references through the ECS `secrets` container-definition field. Secrets Manager requires a full secret ARN (including its six-character suffix); optional JSON-key/version selector syntax is preserved, and version stage and version ID cannot both be selected. SSM accepts exact parameter ARNs or same-region names/paths at this low-level interface. ECS owns secret-reference syntax and selector compatibility. The IAM module rejects wildcard resource scopes; the canonical baseline therefore requires SSM ARNs for IAM derivation.
 
-IAM permissions required for ECS to retrieve those values remain owned by `modules/iam`.
+IAM permissions required for ECS to retrieve those values remain owned by [`modules/ecs_workload_iam`](../ecs_workload_iam/README.md).
 
 ## IAM Ownership
 
@@ -421,7 +421,7 @@ The execution role is used by the ECS/Fargate runtime for platform-level actions
 
 The task role represents application-runtime AWS permissions. The primary and all sidecars share the same task role and execution role; there is no per-container IAM isolation. Baseline derives execution-role ECR and secret/parameter scope from all configured containers, while startup-secret KMS keys remain explicitly supplied at service level. Secrets Manager selectors stay in the task definition but are stripped to the base secret ARN for IAM resource scope.
 
-Both roles remain owned by `modules/iam` in baseline composition. The canonical `task_role_managed_policy_arns` set is attached there, only to the application role; this module consumes the role ARN and optional attachment readiness IDs. It does not author IAM policies or attach execution-role managed policies. Application permissions remain empty by default; policy content/effective authorization is an application-owner responsibility.
+Both roles are owned by [`modules/ecs_workload_iam`](../ecs_workload_iam/README.md) in baseline composition. The canonical `task_role_managed_policy_arns` set is attached there, only to the application role; this module consumes the role ARN and optional attachment readiness IDs. It does not author IAM policies or attach execution-role managed policies. Application permissions remain empty by default; policy content/effective authorization is an application-owner responsibility.
 
 ## Launch Readiness
 

@@ -15,10 +15,6 @@ variable "compute_private_subnet_ids_map" {
   type        = map(string)
 }
 
-variable "instance_profile_name" {
-  type = string
-}
-
 variable "ebs_cmk_arn" {
   type = string
 }

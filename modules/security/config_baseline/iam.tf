@@ -63,3 +63,5 @@ resource "aws_iam_role_policy" "s3_public_remediation" {
 
   policy = data.aws_iam_policy_document.s3_public_remediation.json
 }
+
+data "aws_partition" "current" {}

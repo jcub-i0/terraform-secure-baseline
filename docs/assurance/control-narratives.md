@@ -798,7 +798,7 @@ requests snapshots without waiting for completion and replaces security groups
 before writing recovery tags. Partial failure can leave quarantine applied without
 usable rollback metadata. Its caught exceptions normally return an error count,
 not an invocation failure that necessarily reaches a DLQ. Its
-[IAM EC2 permissions](../../modules/iam/lambda.tf) use `Resource="*"` without the
+[IAM EC2 permissions](../../modules/automation/iam.tf) use `Resource="*"` without the
 Python eligibility conditions.
 
 The reusable compute default is `isolation_allowed=false`, but the supplied

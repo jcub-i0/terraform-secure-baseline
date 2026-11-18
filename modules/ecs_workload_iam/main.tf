@@ -1,3 +1,5 @@
+data "aws_partition" "current" {}
+
 data "aws_iam_policy_document" "ecs_tasks_assume_role" {
   statement {
     sid     = "AllowECSTasksAssumeRole"
@@ -26,7 +28,7 @@ data "aws_iam_policy_document" "ecs_tasks_assume_role" {
 }
 
 resource "aws_iam_role" "ecs_task_execution_roles" {
-  for_each = var.ecs_iam_services
+  for_each = var.workloads
 
   name               = "${var.name_prefix}-${each.key}-ecs-execution"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
@@ -39,7 +41,7 @@ resource "aws_iam_role" "ecs_task_execution_roles" {
 }
 
 resource "aws_iam_role" "ecs_task_roles" {
-  for_each = var.ecs_iam_services
+  for_each = var.workloads
 
   name               = "${var.name_prefix}-${each.key}-ecs-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume_role.json
@@ -52,11 +54,11 @@ resource "aws_iam_role" "ecs_task_roles" {
 }
 
 # Configured managed policies are attached only to application task roles.
-# The service and its policy ARNs must be known during Terraform planning.
+# The workload and its policy ARNs must be known during Terraform planning.
 locals {
   ecs_task_managed_policy_attachments = {
     for attachment in flatten([
-      for service_name, service in var.ecs_iam_services : [
+      for service_name, service in var.workloads : [
         for policy_arn in service.task_role_managed_policy_arns : {
           key          = "${service_name}|${policy_arn}"
           service_name = service_name
@@ -85,7 +87,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_managed_policies" {
 }
 
 data "aws_iam_policy_document" "ecs_task_execution_policies" {
-  for_each = var.ecs_iam_services
+  for_each = var.workloads
 
   statement {
     sid       = "AllowECRAuthorization"
@@ -185,7 +187,7 @@ data "aws_iam_policy_document" "ecs_task_execution_policies" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_policies" {
-  for_each = var.ecs_iam_services
+  for_each = var.workloads
 
   name   = "${var.name_prefix}-${each.key}-ecs-execution"
   role   = aws_iam_role.ecs_task_execution_roles[each.key].id

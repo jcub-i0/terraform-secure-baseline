@@ -37,7 +37,7 @@ resource "aws_cloudtrail" "cloudtrail" {
   include_global_service_events = true
 
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
-  cloud_watch_logs_role_arn  = var.cloudtrail_role_arn
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail.arn
 
   event_selector {
     read_write_type           = "All"
@@ -52,7 +52,10 @@ resource "aws_cloudtrail" "cloudtrail" {
     insight_type = "ApiErrorRateInsight"
   }
 
-  depends_on = [aws_cloudwatch_log_group.cloudtrail]
+  depends_on = [
+    aws_cloudwatch_log_group.cloudtrail,
+    aws_iam_role_policy.cloudtrail,
+  ]
 
   tags = {
     Name        = "${var.name_prefix}-CloudTrail"
@@ -65,10 +68,12 @@ resource "aws_cloudtrail" "cloudtrail" {
 resource "aws_flow_log" "flowlogs" {
   vpc_id = var.vpc_id
 
-  iam_role_arn         = var.flowlogs_role_arn
+  iam_role_arn         = aws_iam_role.flowlogs.arn
   log_destination_type = "cloud-watch-logs"
   log_destination      = aws_cloudwatch_log_group.flowlogs.arn
   traffic_type         = "ALL"
+
+  depends_on = [aws_iam_role_policy.flowlogs]
 
   tags = {
     Name        = "${var.name_prefix}-FlowLogs"
@@ -90,7 +95,7 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
   }
 
   extended_s3_configuration {
-    role_arn   = var.firehose_flow_logs_role_arn
+    role_arn   = aws_iam_role.firehose_flow_logs.arn
     bucket_arn = var.centralized_logs_bucket_arn
 
     kms_key_arn = var.logs_cmk_arn
@@ -104,6 +109,8 @@ resource "aws_kinesis_firehose_delivery_stream" "flowlogs" {
     compression_format = "GZIP"
   }
 
+  depends_on = [aws_iam_role_policy.firehose_flow_logs]
+
   tags = {
     Name        = "${var.name_prefix}-flowlogs-to-s3"
     Environment = var.environment
@@ -116,8 +123,11 @@ resource "aws_cloudwatch_log_subscription_filter" "flowlogs" {
   name            = "${var.name_prefix}-flowlogs-to-firehose"
   log_group_name  = aws_cloudwatch_log_group.flowlogs.name
   destination_arn = aws_kinesis_firehose_delivery_stream.flowlogs.arn
-  role_arn        = var.cw_to_firehose_role_arn
+  role_arn        = aws_iam_role.cw_to_firehose.arn
   filter_pattern  = ""
 
-  depends_on = [aws_kinesis_firehose_delivery_stream.flowlogs]
+  depends_on = [
+    aws_kinesis_firehose_delivery_stream.flowlogs,
+    aws_iam_role_policy.cw_to_firehose,
+  ]
 }

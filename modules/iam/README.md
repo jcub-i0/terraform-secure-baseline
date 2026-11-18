@@ -2,28 +2,19 @@
 
 ## Overview
 
-The `iam` module provisions IAM roles, instance profiles, and policies required by the baseline’s AWS services and automation workflows.
+The `iam` module provisions IAM roles and policies required by the baseline’s remaining foundation and governance capabilities.
 
 This module includes IAM resources for:
 
-- EC2 instance management
-- Per-service ECS task execution and application task role scaffolding
-- Lambda security automation
-- CloudTrail delivery to CloudWatch Logs
-- VPC Flow Logs delivery to CloudWatch Logs
-- CloudWatch Logs forwarding to Firehose
-- Firehose delivery to S3
-- AWS Config service and remediation
-- AWS Backup
-- SSM Patch Manager
 - Access Analyzer
-- EventBridge integration with the SecOps event bus
 - Shared read-only log access policies
 - Emergency break-glass administration
 
+ECS task execution and application task roles are not part of this module. Since v1.15.0 they belong to the reusable [ecs_workload_iam](../ecs_workload_iam/README.md) module, which the baseline calls separately and application-owned states can call directly.
+
 This module does **not** manage GitHub OIDC identities or IAM Identity Center personas. GitHub roles belong to the separate account stacks through [github_oidc](../github_oidc/README.md); Identity Center groups, permission sets, and assignments belong to the [control-plane Identity Center root](../../bootstrap/control_plane/identity_center/README.md). Users and group membership are not created by either this module or that root.
 
-The caller composes these resources through [baseline/main.tf](../../baseline/main.tf). Except for the per-service ECS collections, the roles and policies here are not gated by a deployment profile, backup schedule, or Config enablement flag. A retained service role does not prove its associated service is enabled. This module does not configure permissions boundaries or author application policy documents. v1.12.0 provides the typed `task_role_managed_policy_arns` attachment interface for existing managed policies.
+The caller composes these resources through [baseline/main.tf](../../baseline/main.tf). The roles and policies here are not gated by a deployment profile, backup schedule, or Config enablement flag. A retained service role does not prove its associated service is enabled. This module does not configure permissions boundaries or author application policy documents.
 
 ---
 
@@ -31,336 +22,77 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 
 | File | Purpose |
 |---|---|
-| `ec2.tf` | EC2 instance role and instance profile |
-| `ecs.tf` | Per-service ECS task execution roles, task roles, and execution policies |
-| `lambda.tf` | Lambda execution roles and policies |
-| `logging.tf` | CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs delivery roles |
-| `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
-| `backup.tf` | AWS Backup service role |
-| `patch_management.tf` | SSM Patch Manager maintenance window role |
-| `security_integrations.tf` | Access Analyzer and EventBridge/SecOps integration role |
+| `security_integrations.tf` | Account-level Access Analyzer |
 | `shared_policies.tf` | Shared log read-only and KMS decrypt policies |
 | `break_glass.tf` | Emergency break-glass administrator role |
 | `variables.tf` | Input variables consumed by the IAM module |
-| `outputs.tf` | IAM role, policy, and instance profile outputs consumed by other modules |
+| `outputs.tf` | IAM role and policy outputs consumed by other modules |
 
 ---
 
-## `ec2.tf`
+## Compute IAM
 
-The `ec2.tf` file creates the IAM resources required by EC2 compute instances.
-
-Resources include:
-
-- EC2 IAM role
-- EC2 instance profile
-- AWS-managed SSM policy attachment
-- AWS-managed CloudWatch Agent policy attachment
-
-The EC2 role is trusted by:
-
-```text
-ec2.amazonaws.com
-```
-
-Attached AWS-managed policies:
-
-| Policy | Purpose |
-|---|---|
-| `AmazonSSMManagedInstanceCore` | Allows EC2 instances to register with and be managed by Systems Manager |
-| `CloudWatchAgentServerPolicy` | Allows the CloudWatch Agent to publish logs and metrics |
-
-The instance profile output is consumed by the `compute` module so EC2 instances can inherit the role. The trust document contains the EC2 service principal without additional source-account/source-ARN conditions. These two managed-policy attachments are not a database login or a general application AWS-access policy.
+The EC2 role, instance profile and both AWS-managed policy attachments are owned
+by [compute/iam.tf](../compute/iam.tf). They remain unconditional even when the
+Compute subnet map is empty. See the
+[Compute IAM contract](../compute/README.md#ec2-iam-and-instance-profile) for
+trust, permissions, names and the preserved attachment-readiness limitation.
 
 ---
 
-## `ecs.tf`
+## ECS Workload IAM
 
-The `ecs.tf` file creates separate ECS task execution and application task roles for every key in `var.ecs_iam_services`:
-
-- `aws_iam_role.ecs_task_execution_roles`
-- `aws_iam_role.ecs_task_roles`
-- `data.aws_iam_policy_document.ecs_task_execution_policies`
-- An inline `aws_iam_role_policy` attaching each custom execution policy
-- Optional `aws_iam_role_policy_attachment.ecs_task_managed_policies` entries for application task-role permissions
-
-Both role types trust `ecs-tasks.amazonaws.com`. The shared trust document also requires the configured account through `aws:SourceAccount` and restricts `aws:SourceArn` to ECS resources in the configured Region and account.
-
-Role pairs are keyed by the ECS service key. Their AWS names are:
-
-```text
-<name_prefix>-<service-key>-ecs-execution
-<name_prefix>-<service-key>-ecs-task
-```
-
-The custom execution policy permits:
-
-- `ecr:GetAuthorizationToken` against `*`, as required by that ECR API
-- `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, and `ecr:BatchGetImage` against only the service's declared application repository ARNs
-- the same three pull actions against exactly the supplied GuardDuty agent repository ARN set when Runtime Monitoring is enabled
-- `logs:CreateLogStream` and `logs:PutLogEvents` against stream ARNs beneath only the service's declared log-group ARNs
-
-The module does not attach the AWS-managed `AmazonECSTaskExecutionRolePolicy`. Its generated grants contain no `iam:PassRole`, and it does not automatically add the ECR encryption CMK to execution-role permissions. Explicitly supplied `task_execution_kms_key_arns` still determine any added decrypt grant.
-
-Application task roles have no policies by default. Optional `task_role_managed_policy_arns` attaches AWS-managed or same-account customer-managed policies **only to the application task role** for a deployable service; the execution role is unchanged. The baseline creates task roles and the selected attachments, **not** application-specific managed policies. Application owners provision and approve their customer-managed policies separately and pass known ARNs through the canonical `ecs_services` map. A first baseline apply with `image_digest = null` needs no task-role policy ARNs and creates no task role or attachments. Policy ARNs must be known during planning and the policies must exist by attachment time; ECS service launch waits for any configured attachments.
-
-The live IAM validator verifies exact attached policy ARNs and rejects unexpected attachments and inline task policies. It does not analyze the contents or effective permissions of externally managed policies. The application owner must review policy grants, versions, permission boundaries, and resource-based access before approval.
-
-For example, inside an existing canonical `ecs_services.api` object:
-
-```hcl
-task_role_managed_policy_arns = [
-  "arn:aws:iam::123456789012:policy/application/ApprovedAccess"
-]
-```
-
-Replace the illustrative ARN with a reviewed existing policy in the workload
-account/partition. The canonical baseline validates policy-ARN shape, and attachment
-preconditions restrict identity to the current partition and either the workload
-account or AWS-managed policies. This does not prove a policy exists or is least
-privilege. An omitted/empty set adds no attachments or attachment readiness
-instances; removal of an ARN plans detachment. `ecs_service_configuration` emits
-the sorted ARN list only for nonempty sets on deployable services.
-
-The common trust condition covers ECS resources throughout the configured account and Region (`...:ecs:<region>:<account>:*`), not a single service ARN or task definition. Separate role names do not themselves narrow that trust pattern.
-
-The optional execution secret, SSM parameter, and KMS ARN sets are consumed by dynamic resource-scoped statements. When non-empty they grant, respectively, `secretsmanager:GetSecretValue`, `ssm:GetParameters`, or `kms:Decrypt` against only the declared ARNs. `task_execution_kms_key_arns` defaults to `[]` and is needed only when ECS startup secret injection requires execution-role decryption with a customer-managed KMS key; it is **not** a list of all baseline-managed CMKs. Obtain the key identity from the referenced secret/parameter, not from the set of keys created by the baseline. An empty set creates no `kms:Decrypt` statement; a populated set grants exactly the declared keys, subject to the key policy. Application-initiated AWS SDK and KMS calls use the separate task role. The SSM field is `execution_ssm_parameter_arns`, and the inline policy resource is `aws_iam_role_policy.ecs_task_execution_policies`.
-
-The GuardDuty Fargate agent scope is intentionally separate from application image scope. Baseline supplies `guardduty_agent_ecr_repository_arns` only for protected `production` and `development` services. The resolved ARN has the exact regional shape:
-
-```text
-arn:<partition>:ecr:<region>:<guardduty-agent-account-id>:repository/aws-guardduty-agent-fargate
-```
-
-For `minimal`, the set is empty and the `AllowGuardDutyAgentImagePulls` statement is omitted. The generated GuardDuty statement contains pull actions, not push or repository-administration actions. The integrated baseline supplies the exact agent repository; this reusable module consumes caller-supplied ARN sets without independently validating their format, rejecting wildcards, or discovering the GuardDuty account. Do not treat its string/set input types as an ARN-scope security check.
-
-`ecs_iam_services` defaults to `{}`. Baseline derives and passes one entry per deployable canonical service. A registered service with `image_digest = null` does not receive a role pair until an exact digest is selected.
+Per-workload ECS task execution roles, application task roles, execution policies, and task-role managed-policy attachments moved to [ecs_workload_iam](../ecs_workload_iam/README.md) in v1.15.0 (R1-A). That README documents the trust conditions, execution-policy scope, inputs, outputs, and the baseline resource-address mapping.
 
 ---
 
-## `lambda.tf`
+## Automation IAM
 
-The `lambda.tf` file creates execution roles and permissions for security automation Lambda functions.
-
-Lambda roles include:
-
-| Role | Purpose |
-|---|---|
-| EC2 Isolation Lambda role | Supplies EC2 mutation authority used after the handler's GuardDuty eligibility checks |
-| EC2 Rollback Lambda role | Supplies EC2 mutation authority for rollback; the IAM policy does not verify an approval |
-| IP Enrichment Lambda role | Allows enrichment of findings using threat intelligence data |
-
-AWS-managed policy attachments are function-specific:
-
-| Policy | Isolation | Rollback | IP Enrichment |
-|---|---|---|---|
-| `AWSLambdaVPCAccessExecutionRole` | Attached | Attached | Not attached |
-| `AWSLambdaBasicExecutionRole` | Attached | Attached | Attached |
-| `AWSXRayDaemonWriteAccess` | Attached | Attached | Attached |
-
-All three roles use the same Lambda service-principal trust document with no source-account/source-ARN conditions. The custom statements below supplement the managed attachments; they are not a ceiling on their permissions. See [lambda.tf](lambda.tf).
-
-### EC2 Isolation Lambda Permissions
-
-The custom policy retains `ec2:DescribeInstances` on `Resource = "*"`, scopes instance modification and tagging to the workload account/Region, and limits instance tag keys to incident-response metadata. Snapshot creation authorizes source volumes in that account/Region and new snapshot ARNs; snapshot tagging is restricted to `CreateSnapshot` and the declared tag keys. The handler's `IsolationAllowed`, product, severity, and state checks are application logic, not IAM-enforced restrictions on this role.
-
-The policy supports:
-
-- Describe instances
-- Modify instance attributes
-- Create tags
-- Create snapshots
-- Publish alerts to the SecOps SNS topic
-- Use the logs CMK for SNS-related encryption operations
-
-### EC2 Rollback Lambda Permissions
-
-The custom policy grants `ec2:DescribeInstances` and `ec2:DescribeSecurityGroups` on `Resource = "*"`. It scopes `ec2:ModifyInstanceAttribute` and `ec2:CreateTags` to instance ARNs in the workload account/Region. It contains no caller-approval, ticket, environment-tag, or quarantined-instance condition.
-
-The policy supports:
-
-- Describe instances
-- Modify instance attributes
-- Describe security groups
-- Create tags
-- Publish alerts to the SecOps SNS topic
-- Use the logs CMK for SNS-related encryption operations
-
-### IP Enrichment Lambda Permissions
-
-The IP Enrichment Lambda policy allows:
-
-- Read access to the threat intelligence API keys secret
-- Publish enriched alerts to the SecOps SNS topic
-- Use the logs CMK for SNS-related encryption operations
-- Update Security Hub findings with enrichment notes
-- Use the Secrets Manager CMK to decrypt the threat intelligence secret
-
-Each custom Lambda policy also grants `sqs:SendMessage` to that workflow's supplied DLQ ARN. The three DLQ ARN inputs are required.
-
-IP Enrichment receives `secretsmanager:GetSecretValue` and `DescribeSecret` for the supplied secret and `kms:Decrypt`/`DescribeKey` for the supplied Secrets Manager key. Its `securityhub:BatchUpdateFindings` grant is scoped to `arn:<partition>:securityhub:<primary_region>:<account_id>:hub/default` and is present regardless of the runtime `WRITE_TO_SECURITYHUB` setting. Disabling writeback changes handler behavior, not this role policy.
-
-All three custom policies grant `sns:Publish` on the supplied topic and logs-key `kms:GenerateDataKey*`, `Decrypt`, and `DescribeKey`. Review key and resource policies separately. The Lambda role ARNs are consumed by automation and monitoring resources; role existence alone does not prove policy propagation, event authorization, or successful execution.
+Lambda execution roles, their policies and attachments, and the EventBridge
+SecOps role are owned by [automation/iam.tf](../automation/iam.tf). See the
+[automation IAM contract](../automation/README.md#execution-iam) for permissions
+and the preserved attachment-order limitations. Access Analyzer remains here.
 
 ---
 
-## `logging.tf`
+## Logging Delivery IAM
 
-The `logging.tf` file creates IAM roles and policies required for log delivery and forwarding.
-
-Resources include:
-
-| Role | Trusted Service | Purpose |
-|---|---|---|
-| CloudTrail CloudWatch role | `cloudtrail.amazonaws.com` | Allows CloudTrail to write to CloudWatch Logs |
-| VPC Flow Logs role | `vpc-flow-logs.amazonaws.com` | Allows VPC Flow Logs to write to CloudWatch Logs |
-| CloudWatch Logs to Firehose role | `logs.amazonaws.com` | Allows CloudWatch Logs subscription filters to send records to Firehose |
-| Firehose Flow Logs role | `firehose.amazonaws.com` | Allows Firehose to deliver VPC Flow Logs to S3 |
-
-### CloudTrail Role
-
-Allows CloudTrail to write events to the CloudTrail CloudWatch Log Group.
-
-Primary actions:
-
-- `logs:CreateLogStream`
-- `logs:PutLogEvents`
-
-### VPC Flow Logs Role
-
-Allows VPC Flow Logs to publish to the Flow Logs CloudWatch Log Group.
-
-Primary actions include:
-
-- `logs:CreateLogStream`
-- `logs:PutLogEvents`
-- `logs:DescribeLogGroups`
-- `logs:DescribeLogStreams`
-
-### CloudWatch Logs to Firehose Role
-
-Allows CloudWatch Logs subscription filters to send VPC Flow Log events into the Firehose delivery stream.
-
-Primary actions:
-
-- `firehose:PutRecord`
-- `firehose:PutRecordBatch`
-- `kms:GenerateDataKey` and `kms:Decrypt` on the logs CMK, constrained by `kms:ViaService` to the regional Firehose endpoint
-
-### Firehose Flow Logs Role
-
-Allows Firehose to deliver archived VPC Flow Logs to the centralized logs bucket.
-
-Primary permissions include:
-
-- S3 write/list/location access to the centralized logs bucket
-- KMS encrypt/decrypt/data key permissions on the logs CMK
-
-The CloudWatch-to-Firehose trust constrains `aws:SourceArn` to Logs resources in
-the configured account and Region, not one log group. The CloudTrail, VPC Flow
-Logs, and Firehose trust documents contain their service principal without an
-additional source-account/source-ARN condition. Permissions remain separately
-scoped by the supplied destination ARNs.
-
-The four logging role outputs include `depends_on` for their inline delivery
-policies. That is a Terraform dependency boundary, not a live delivery test or
-a guarantee of IAM propagation. Lambda, Backup, instance-profile, and other role
-outputs do not all provide the same explicit policy-attachment barrier; inspect
-[outputs.tf](outputs.tf) instead of generalizing from the logging pattern.
+The four logging delivery roles and their inline policies belong to
+[logging/iam.tf](../logging/iam.tf). The [logging module](../logging/README.md#delivery-iam)
+owns their trust, permissions, and delivery-service policy-readiness dependencies.
+Shared S3 log-reader and logs-key decrypt policies remain in this IAM module.
 
 ---
 
-## `config.tf`
+## Config IAM
 
-The `config.tf` file creates IAM resources for AWS Config and remediation workflows.
-
-The file defines:
-
-- A locally constructed AWS Config service-linked-role ARN
-- AWS Config remediation role
-- SSM Automation managed policy attachment
-- S3 public access block remediation policy
-
-### AWS Config Service-Linked Role
-
-`config.tf` constructs the expected ARN:
-
-```text
-arn:<partition>:iam::<account_id>:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig
-```
-
-It exports that string as `config_role_arn`. It does **not** declare an
-`aws_iam_service_linked_role` resource or look up that role's existence here.
-The AWS-managed role must exist when the consuming Config resources need it;
-an ARN string or successful IAM-module evaluation is not proof of existence.
-
-### Config Remediation Role
-
-Creates a remediation role trusted by:
-
-```text
-ssm.amazonaws.com
-```
-
-The role includes a source account condition using:
-
-```hcl
-"aws:SourceAccount" = var.account_id
-```
-
-The inline policy grants only `s3:GetBucketPublicAccessBlock` and `s3:PutBucketPublicAccessBlock` on `arn:<partition>:s3:::*`, constrained by `s3:ResourceAccount` to the workload account. This can affect account-owned buckets beyond the baseline, but does not grant bucket-policy editing. The broad `AmazonSSMAutomationRole` attachment has been removed.
+The Config remediation role, inline policy and calculated service-linked-role
+ARN are owned by [security/config_baseline/iam.tf](../security/config_baseline/iam.tf).
+The role and policy remain unconditional when Config is disabled. The
+AWS-managed Config service-linked role remains an ARN calculation, not a managed
+Terraform IAM resource. See the [Config IAM contract](../security/config_baseline/README.md#config-iam)
+for trust, account restrictions, permissions and initialization behavior.
 
 ---
 
-## `backup.tf`
+## Backup IAM
 
-The `backup.tf` file creates the IAM role used by AWS Backup.
-
-Resources include:
-
-- AWS Backup service role
-- AWS-managed backup policy attachment
-- AWS-managed restore policy attachment
-
-The backup role is trusted by:
-
-```text
-backup.amazonaws.com
-```
-
-Attached AWS-managed policies:
-
-| Policy | Purpose |
-|---|---|
-| `AWSBackupServiceRolePolicyForBackup` | Allows AWS Backup to create and manage backups |
-| `AWSBackupServiceRolePolicyForRestores` | Allows AWS Backup to perform restores |
-
-The role ARN is consumed by the backup module for scheduled selections and, when enabled, Restore Testing. The role and both managed attachments are created even when scheduled backup is disabled. This file does not add a source-ARN/source-account trust condition, a custom vault/key policy, or an application-level restore-validation policy. An attached restore policy is not proof that a restore job or application test completed.
+The AWS Backup service role and both AWS-managed policy attachments are owned by
+[backup/iam.tf](../backup/iam.tf). They remain unconditional when scheduled Backup
+or Restore Testing is disabled. See the [Backup IAM contract](../backup/README.md#service-iam)
+for trust, permissions and the preserved attachment-readiness limitation.
 
 ---
 
-## `patch_management.tf`
+## Patch Management IAM
 
-The `patch_management.tf` file creates the IAM role used by SSM Patch Manager maintenance windows.
-
-Resources include:
-
-- Patch maintenance window IAM role
-- AWS-managed maintenance window policy attachment
-
-The role is trusted by:
-
-```text
-ssm.amazonaws.com
-```
-
-Attached AWS-managed policy:
-
-```text
-AmazonSSMMaintenanceWindowRole
-```
-
-The role ARN is consumed by the patch management module. The trust is the SSM service principal without a source-account/source-ARN condition. Creating this role does not prove patch scan, installation, reboot, or maintenance-window execution.
+The maintenance-window role and AWS-managed policy attachment are owned by
+[patch_management/iam.tf](../patch_management/iam.tf). They remain unconditional
+when the maintenance window is disabled. See the
+[Patch Management IAM contract](../patch_management/README.md#service-iam) for
+trust, permissions, tags and the preserved attachment-readiness limitation.
+Creating this role does not prove patch scan, installation, reboot, or
+maintenance-window execution.
 
 ---
 
@@ -371,7 +103,6 @@ The `security_integrations.tf` file creates security integration resources used 
 Resources include:
 
 - IAM Access Analyzer account analyzer
-- EventBridge role for forwarding events to the SecOps event bus
 
 ### Access Analyzer
 
@@ -389,29 +120,8 @@ ACCOUNT
 
 This is a configured `ACCOUNT` analyzer, not an organization-wide analyzer, a zero-finding assertion, or a complete effective-access review. Review its live status and findings independently.
 
-### EventBridge to SecOps Bus Role
-
-Creates a role trusted by:
-
-```text
-events.amazonaws.com
-```
-
-The role allows EventBridge to call:
-
-```text
-events:PutEvents
-```
-
-against the SecOps event bus ARN provided by:
-
-```text
-var.secops_event_bus_arn
-```
-
-The role is for the EventBridge service, not a human Operator identity. Its trust has no source-ARN/source-account condition; its permission is scoped to the supplied bus. Creating the role or passing its ARN to another module does not create a forwarding target. In the automation implementation, the declared `eventbridge_putevents_to_secops_role_arn` input is not consumed by a target resource.
-
-The Identity Center Operator identity policy and the workload EventBridge bus resource policy are distinct authorization surfaces. The control-plane caller uses the matching prefixed bus ARN; the bus policy restricts `custom.rollback` publishing by Operator role ARN and explicitly denies others. Group membership, effective access, and approval require separate review; see [automation](../automation/README.md) and the [Identity Center caller](../../bootstrap/control_plane/identity_center/README.md).
+The EventBridge SecOps role and policy are owned by
+[automation](../automation/README.md#eventbridge-to-secops-bus-role).
 
 ---
 
@@ -570,44 +280,19 @@ Expected output:
 
 | Name | Type | Description | Required |
 |---|---|---|---:|
-| `cloud_name` | `string` | Cloud or project name used by the broader baseline | Yes |
+| `cloud_name` | `string` | Cloud or project name; retained but currently unused in this module | Yes |
 | `name_prefix` | `string` | Prefix used for resource naming | Yes |
 | `environment` | `string` | Environment name, such as `dev`, `staging`, or `prod` | Yes |
-| `cloudtrail_log_group_arn` | `string` | ARN of the CloudTrail CloudWatch Log Group | Yes |
-| `secops_topic_arn` | `string` | ARN of the SecOps SNS topic | Yes |
 | `logs_cmk_arn` | `string` | ARN of the logs KMS CMK | Yes |
-| `secrets_manager_cmk_arn` | `string` | ARN of the Secrets Manager KMS CMK | Yes |
-| `account_id` | `string` | AWS account ID | Yes |
-| `primary_region` | `string` | Primary AWS region | Yes |
+| `account_id` | `string` | AWS account ID; retained but currently unused in this module | Yes |
+| `primary_region` | `string` | Primary AWS region; retained but currently unused in this module | Yes |
 | `centralized_logs_bucket_arn` | `string` | ARN of the centralized logs S3 bucket | Yes |
-| `flowlogs_firehose_delivery_stream_arn` | `string` | ARN of the VPC Flow Logs Firehose delivery stream | Yes |
-| `flowlogs_log_group_arn` | `string` | ARN of the VPC Flow Logs CloudWatch Log Group | Yes |
-| `secops_event_bus_arn` | `string` | ARN of the SecOps EventBridge event bus | Yes |
-| `threat_intel_api_keys_arn` | `string` | ARN of the Secrets Manager secret containing threat intelligence API keys | Yes |
-| `lambda_ip_enrichment_log_group_arn` | `string` | ARN of the IP Enrichment Lambda CloudWatch Log Group | Yes |
+| `alb_access_logs_bucket_arn` | `string` | Optional ALB access-log bucket ARN for the shared read-only logs policy; defaults to `null` | No |
 | `break_glass_trusted_principal_arns` | `list(string)` | List of trusted IAM principal ARNs allowed to assume the break-glass role with MFA | Yes |
-| `lambda_ec2_isolation_dlq_arn` | `string` | Isolation asynchronous-failure destination ARN | Yes |
-| `lambda_ec2_rollback_dlq_arn` | `string` | Rollback asynchronous-failure destination ARN | Yes |
-| `lambda_ip_enrichment_dlq_arn` | `string` | IP Enrichment asynchronous-failure destination ARN | Yes |
-| `ecs_iam_services` | `map(object(...))` | ECS execution-role inputs keyed by service; defaults to `{}` | No |
 
-All inputs except `ecs_iam_services` have no declared defaults. In particular, an empty runtime does not remove the three required Lambda DLQ inputs. `cloud_name` and `lambda_ip_enrichment_log_group_arn` are declared context inputs but are not referenced by the current IAM resource expressions. They do not create additional permissions.
-
-The intended service object is:
-
-```hcl
-map(object({
-  ecr_repository_arns                 = set(string)
-  guardduty_agent_ecr_repository_arns = optional(set(string), [])
-  log_group_arns                      = set(string)
-  execution_secret_arns               = optional(set(string), [])
-  execution_ssm_parameter_arns        = optional(set(string), [])
-  task_execution_kms_key_arns         = optional(set(string), [])
-  task_role_managed_policy_arns       = optional(set(string), [])
-}))
-```
-
-Application ECR and log-group permissions are always present in the generated **execution-role** policy. GuardDuty-agent ECR, secret, SSM parameter, and KMS statements are emitted only when their corresponding execution sets are non-empty. `task_role_managed_policy_arns` does **not** feed that policy: it creates separate managed-policy attachments on the **application task role** only.
+The required inputs have no declared defaults. `cloud_name`, `account_id`, and
+`primary_region` remain required context inputs but are not referenced by this
+module's current resource or policy expressions.
 
 ---
 
@@ -615,32 +300,15 @@ Application ECR and log-group permissions are always present in the generated **
 
 | Name | Description |
 |---|---|
-| `instance_profile_name` | Name of the EC2 IAM instance profile |
-| `cloudtrail_role_arn` | ARN of the CloudTrail CloudWatch Logs delivery role |
-| `flowlogs_role_arn` | ARN of the VPC Flow Logs delivery role |
-| `config_role_arn` | Constructed AWS-managed Config service-linked-role ARN; not proof of role creation |
-| `lambda_ec2_isolation_role_arn` | ARN of the EC2 Isolation Lambda execution role |
-| `lambda_ec2_rollback_role_arn` | ARN of the EC2 Rollback Lambda execution role |
-| `lambda_ip_enrichment_role_arn` | ARN of the IP Enrichment Lambda execution role |
-| `config_remediation_role_arn` | ARN of the AWS Config remediation role |
-| `firehose_flow_logs_role_arn` | ARN of the Firehose Flow Logs delivery role |
-| `cw_to_firehose_role_arn` | ARN of the CloudWatch Logs to Firehose role |
-| `eventbridge_putevents_to_secops_role_arn` | ARN of the EventBridge role allowed to put events to the SecOps event bus |
-| `patch_maintenance_window_role_arn` | ARN of the SSM Patch Manager maintenance window role |
-| `backup_service_role_arn` | ARN of the AWS Backup service role |
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
 | `logs_cmk_decrypt_policy_name` | Name of the logs CMK decrypt policy |
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
-| `ecs_task_execution_roles` | Map of ECS task execution role ARN and name objects keyed by service |
-| `ecs_task_execution_policy_ids` | Map of inline execution-policy IDs keyed by service for resource-granular launch readiness |
-| `ecs_task_role_policy_attachment_ids` | Map of optional application task-role managed-policy attachment IDs keyed by service, used for ECS launch readiness |
-| `ecs_task_roles` | Map of ECS application task role ARN and name objects keyed by service |
 
 ---
 
 ## Example Module Call
 
-The shipped workload roots call `baseline`, which calls this child module. The integration below receives naming/account context and resource references from logging, monitoring, storage, automation, and security. It is not a standalone root or a reason to apply the IAM directory separately.
+The shipped workload roots call `baseline`, which calls this child module. The integration below receives naming/account context and resource references from storage and security. It is not a standalone root or a reason to apply the IAM directory separately.
 
 ```hcl
 module "iam" {
@@ -652,35 +320,22 @@ module "iam" {
   account_id     = var.account_id
   primary_region = var.primary_region
 
-  cloudtrail_log_group_arn = module.logging.cloudtrail_log_group_arn
-  secops_topic_arn         = module.monitoring.secops_topic_arn
   logs_cmk_arn             = module.security.logs_cmk_arn
 
   centralized_logs_bucket_arn           = module.storage.centralized_logs_bucket_arn
-  flowlogs_firehose_delivery_stream_arn = module.logging.flowlogs_firehose_delivery_stream_arn
-  flowlogs_log_group_arn                = module.logging.flowlogs_log_group_arn
-  secops_event_bus_arn                  = module.automation.secops_event_bus_arn
 
-  threat_intel_api_keys_arn          = module.automation.threat_intel_api_keys_arn
-  lambda_ip_enrichment_log_group_arn = module.automation.lambda_ip_enrichment_log_group_arn
-  secrets_manager_cmk_arn            = module.security.secrets_manager_cmk_arn
   break_glass_trusted_principal_arns = var.break_glass_trusted_principal_arns
 
-  lambda_ec2_isolation_dlq_arn = module.automation.lambda_ec2_isolation_dlq_arn
-  lambda_ec2_rollback_dlq_arn  = module.automation.lambda_ec2_rollback_dlq_arn
-  lambda_ip_enrichment_dlq_arn = module.automation.lambda_ip_enrichment_dlq_arn
-
-  ecs_iam_services = local.ecs_iam_services
 }
 ```
 
-This module call wires IAM roles and policies to the rest of the baseline, including CloudTrail logging, VPC Flow Logs delivery, Security Operations notifications, EventBridge automation, Secrets Manager access, and break-glass access controls.
+This module call wires IAM roles and policies to the rest of the baseline, including shared log access and break-glass access controls.
 
 ---
 
 ## Validation
 
-The workload baseline derives `ecs_iam_services` from the canonical service map and passes it to this module. `validate-iam.sh` validates each configured execution/task role pair, ECS trust restrictions, custom execution policy scope, optional ARN-identifiable secret/parameter permissions, absence of execution-role managed-policy attachments and generated `iam:PassRole`, exact configured application task-role managed-policy attachments, and absence of task-role inline policies. It compares the live `kms:Decrypt` resource set exactly with `ecs_service_configuration[*].task_execution_kms_key_arns` and rejects decrypt permission when that set is empty. It also derives the Runtime Monitoring expectation from `deployment_profile`, requires exactly the Terraform-declared GuardDuty agent repository pull scope when enabled, requires no GuardDuty repository scope when disabled, and rejects broad or unexpected ECR authority. Runtime identity relationships are also checked through resource-backed workload outputs by `validate-ecs-runtime.sh`.
+The workload baseline derives `ecs_iam_services` from the canonical service map and passes it to [ecs_workload_iam](../ecs_workload_iam/README.md) as `workloads`. `validate-iam.sh` validates each configured execution/task role pair, ECS trust restrictions, custom execution policy scope, optional ARN-identifiable secret/parameter permissions, absence of execution-role managed-policy attachments and generated `iam:PassRole`, exact configured application task-role managed-policy attachments, and absence of task-role inline policies. It compares the live `kms:Decrypt` resource set exactly with `ecs_service_configuration[*].task_execution_kms_key_arns` and rejects decrypt permission when that set is empty. It also derives the Runtime Monitoring expectation from `deployment_profile`, requires exactly the Terraform-declared GuardDuty agent repository pull scope when enabled, requires no GuardDuty repository scope when disabled, and rejects broad or unexpected ECR authority. Runtime identity relationships are also checked through resource-backed workload outputs by `validate-ecs-runtime.sh`.
 
 The following manual listings are spot checks. They do not compare every
 attached/inline policy, simulate all authorization paths, or reject all extra
@@ -747,6 +402,8 @@ Expected:
 ---
 
 ### Confirm EC2 Instance Profile
+
+The instance profile is owned by [compute](../compute/README.md#ec2-iam-and-instance-profile).
 
 ```bash
 aws iam get-instance-profile \
@@ -893,6 +550,9 @@ firehose.amazonaws.com
 
 ### Confirm AWS Config Service-Linked Role
 
+Its ARN is calculated by [config_baseline](../security/config_baseline/README.md#config-iam);
+Terraform does not manage the service-linked role.
+
 Confirm the AWS Config service-linked role exists:
 
 ```bash
@@ -929,7 +589,7 @@ config.amazonaws.com
 
 ### Confirm Backup Role
 
-Confirm the AWS Backup role exists:
+Confirm the AWS Backup role, owned by [backup](../backup/README.md#service-iam), exists:
 
 ```bash
 aws iam get-role \
@@ -965,7 +625,7 @@ backup.amazonaws.com
 
 ### Confirm Patch Maintenance Window Role
 
-Confirm the Patch Maintenance Window role exists:
+Confirm the Patch Maintenance Window role, owned by [patch_management](../patch_management/README.md#service-iam), exists:
 
 ```bash
 aws iam get-role \
@@ -1104,7 +764,7 @@ Check:
 - CloudTrail role trust policy allows `cloudtrail.amazonaws.com`
 - Inline policy allows `logs:CreateLogStream` and `logs:PutLogEvents`
 - CloudTrail is configured with the correct role ARN
-- CloudTrail log group ARN matches `cloudtrail_log_group_arn`
+- CloudTrail log group ARN matches the logging module's `cloudtrail_log_group_arn` output
 
 ---
 
@@ -1158,13 +818,9 @@ Check:
 ## Security Notes
 
 - EC2 instances use IAM instance profiles instead of static credentials.
-- ECS task execution and application task roles are separate and keyed per service.
-- ECS application task roles initially carry no broad application permissions.
-- ECS execution policies are custom and resource-scoped for application repository pulls and log writes; the AWS-managed ECS execution policy is not attached.
-- GuardDuty Fargate Runtime Monitoring adds only the exact regional `aws-guardduty-agent-fargate` repository pull scope for protected profiles and adds no GuardDuty-specific ECR scope for `minimal`.
-- Lambda automation roles are separated by function.
-- Lambda roles use function-specific managed attachments and custom grants; isolation/rollback EC2 actions and IP Enrichment finding updates include wildcard resource scope.
-- Logging delivery roles are service-specific.
+- ECS workload roles and policies are provisioned by [ecs_workload_iam](../ecs_workload_iam/README.md); see its security notes.
+- Lambda automation roles and EventBridge SecOps IAM are owned by [automation](../automation/README.md#execution-iam).
+- Logging delivery roles and policies are owned by [logging](../logging/README.md#delivery-iam).
 - Firehose delivery is scoped to the centralized logs bucket and logs CMK.
 - Config remediation uses a dedicated remediation role.
 - Backup and patch management use dedicated service roles.
@@ -1179,11 +835,12 @@ Check:
 ## Notes
 
 - Compose IAM and consumer modules through resource references in the baseline; do not separately deploy this child module or add cyclic whole-module dependencies.
-- The `compute` module consumes the EC2 instance profile name.
-- The `logging` module consumes CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs role ARNs.
-- The `security` module consumes Config role and remediation role ARNs.
-- The `automation` module consumes Lambda execution role ARNs.
-- The `backup` module consumes the AWS Backup role ARN.
-- The `patch_management` module consumes the maintenance window role ARN.
+- The `iam` module retains shared and governance IAM: break-glass administration, account Access Analyzer, and shared log-read and logs-key decryption policies.
+- The `compute` module owns its EC2 role, managed-policy attachments and instance profile.
+- The `logging` module owns its CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs delivery roles and inline policies.
+- The `security/config_baseline` module owns Config remediation IAM and calculates the recorder's service-linked-role ARN.
+- The `automation` module owns its Lambda execution roles, policies and attachments, plus the EventBridge-to-SecOps role and inline policy.
+- The `backup` module owns its AWS Backup role and both managed-policy attachments.
+- The `patch_management` module owns its maintenance-window role and policy attachment.
 - Shared policy names may be passed to IAM Identity Center for customer-managed policy attachment.
 - Review [variables.tf](variables.tf), [outputs.tf](outputs.tf), and each policy file when changing interfaces or permissions; role names and prose are not an effective-authorization test.

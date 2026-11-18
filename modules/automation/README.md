@@ -6,7 +6,7 @@ The `automation` module deploys event-driven security automation for the AWS sec
 
 It creates the Lambda functions, EventBridge rules, EventBridge targets, Lambda permissions, CloudWatch log groups, SQS DLQs, DLQ alarms, supporting Lambda security groups, a custom SecOps EventBridge bus, and a Secrets Manager secret used by the threat intelligence workflow.
 
-This module owns the response resources and Python handlers described below. IAM roles are supplied by [IAM](../iam/README.md); security-group rules are supplied by [security policy](../networking/security_policy/README.md). Deployment does not by itself prove successful containment, recovery, notification delivery, or effective authorization.
+This module owns the response resources and Python handlers described below. Dedicated Lambda and EventBridge IAM is owned here in [iam.tf](iam.tf); security-group rules are supplied by [security policy](../networking/security_policy/README.md). Deployment does not by itself prove successful containment, recovery, notification delivery, or effective authorization.
 
 ---
 
@@ -419,12 +419,118 @@ A visible DLQ message should be treated as an operational signal that the automa
 
 ---
 
+## Execution IAM
+
+[iam.tf](iam.tf) owns the Lambda execution roles, customer-managed policies, and their AWS-managed and custom-policy attachments.
+
+Lambda roles include:
+
+| Role | Purpose |
+|---|---|
+| EC2 Isolation Lambda role | Supplies EC2 mutation authority used after the handler's GuardDuty eligibility checks |
+| EC2 Rollback Lambda role | Supplies EC2 mutation authority for rollback; the IAM policy does not verify an approval |
+| IP Enrichment Lambda role | Allows enrichment of findings using threat intelligence data |
+
+AWS-managed policy attachments are function-specific:
+
+| Policy | Isolation | Rollback | IP Enrichment |
+|---|---|---|---|
+| `AWSLambdaVPCAccessExecutionRole` | Attached | Attached | Not attached |
+| `AWSLambdaBasicExecutionRole` | Attached | Attached | Attached |
+| `AWSXRayDaemonWriteAccess` | Attached | Attached | Attached |
+
+All three roles use the same Lambda service-principal trust document with no source-account/source-ARN conditions. The custom statements below supplement the managed attachments; they are not a ceiling on their permissions. See [iam.tf](iam.tf).
+
+### EC2 Isolation Lambda Permissions
+
+The custom policy retains `ec2:DescribeInstances` on `Resource = "*"`, scopes instance modification and tagging to the workload account/Region, and limits instance tag keys to incident-response metadata. Snapshot creation authorizes source volumes in that account/Region and new snapshot ARNs; snapshot tagging is restricted to `CreateSnapshot` and the declared tag keys. The handler's `IsolationAllowed`, product, severity, and state checks are application logic, not IAM-enforced restrictions on this role.
+
+The policy supports:
+
+- Describe instances
+- Modify instance attributes
+- Create tags
+- Create snapshots
+- Publish alerts to the SecOps SNS topic
+- Use the logs CMK for SNS-related encryption operations
+
+### EC2 Rollback Lambda Permissions
+
+The custom policy grants `ec2:DescribeInstances` and `ec2:DescribeSecurityGroups` on `Resource = "*"`. It scopes `ec2:ModifyInstanceAttribute` and `ec2:CreateTags` to instance ARNs in the workload account/Region. It contains no caller-approval, ticket, environment-tag, or quarantined-instance condition.
+
+The policy supports:
+
+- Describe instances
+- Modify instance attributes
+- Describe security groups
+- Create tags
+- Publish alerts to the SecOps SNS topic
+- Use the logs CMK for SNS-related encryption operations
+
+### IP Enrichment Lambda Permissions
+
+The IP Enrichment Lambda policy allows:
+
+- Read access to the threat intelligence API keys secret
+- Publish enriched alerts to the SecOps SNS topic
+- Use the logs CMK for SNS-related encryption operations
+- Update Security Hub findings with enrichment notes
+- Use the Secrets Manager CMK to decrypt the threat intelligence secret
+
+Each custom Lambda policy also grants `sqs:SendMessage` to its module-local workflow DLQ. The threat-intelligence secret is also referenced locally; the SecOps SNS topic and KMS keys remain caller-supplied inputs.
+
+IP Enrichment receives `secretsmanager:GetSecretValue` and `DescribeSecret` for the module-owned threat-intelligence secret and `kms:Decrypt`/`DescribeKey` for the supplied Secrets Manager key. Its `securityhub:BatchUpdateFindings` grant is scoped to `arn:<partition>:securityhub:<primary_region>:<account_id>:hub/default` and is present regardless of the runtime `WRITE_TO_SECURITYHUB` setting. Disabling writeback changes handler behavior, not this role policy.
+
+All three custom policies grant `sns:Publish` on the supplied topic and logs-key `kms:GenerateDataKey*`, `Decrypt`, and `DescribeKey`. Review key and resource policies separately. The Lambda role ARNs are consumed by this module's functions and DLQ policies; role existence alone does not prove policy propagation, event authorization, or successful execution.
+
+---
+
+### EventBridge to SecOps Bus Role
+
+Creates a role trusted by:
+
+```text
+events.amazonaws.com
+```
+
+The role allows EventBridge to call:
+
+```text
+events:PutEvents
+```
+
+against the module-local SecOps event bus:
+
+```text
+aws_cloudwatch_event_bus.secops.arn
+```
+
+The role is for the EventBridge service, not a human Operator identity. Its trust has no source-ARN/source-account condition; its permission is scoped to the local bus. The role remains without a functional consumer: no target references it. R1-B preserves the role and policy unchanged rather than removing them or adding a forwarding target.
+
+The Identity Center Operator identity policy and the workload EventBridge bus resource policy are distinct authorization surfaces. The control-plane caller uses the matching prefixed bus ARN; the bus policy restricts `custom.rollback` publishing by Operator role ARN and explicitly denies others. Group membership, effective access, and approval require separate review; see the rollback workflow above and the [Identity Center caller](../../bootstrap/control_plane/identity_center/README.md).
+
+### Ownership and Ordering
+
+R1-B moves 19 IAM declarations from `module.baseline.module.iam` to
+`module.baseline.module.automation`, preserving resource types, labels,
+physical names, policies, tags, and attribute omissions. No state migration is
+introduced; candidate plan comparisons must normalize only those address changes.
+
+Lambda functions reference their local execution roles and keep the existing
+log-group dependencies. Function creation and asynchronous destination setup
+still have no explicit policy-attachment readiness barrier. That pre-existing
+ordering gap is preserved in this extraction, not resolved. The IAM policies
+reference queues and the secret without making the execution roles depend on
+those policies. No blanket module dependency is added.
+
+---
+
 ## Security Design
 
 The implemented security controls and their boundaries are:
 
 - Lambda deployment packages are generated during planning by archive data sources and carried with the checksummed saved-plan artifact to the protected Apply runner.
-- Lambda functions use dedicated IAM roles passed into the module.
+- Lambda functions use dedicated IAM roles created in this module.
 - `kms_key_arn` supplies the customer key for Lambda environment-variable encryption; it does not configure customer-key encryption of the source ZIP. No `source_kms_key_arn` is configured. See [AWS source ZIP encryption](https://docs.aws.amazon.com/lambda/latest/dg/encrypt-zip-package.html).
 - Lambda CloudWatch log groups are encrypted with the logs CMK.
 - Workflow DLQs are encrypted with the logs CMK.
@@ -461,11 +567,7 @@ module "automation" {
   interface_endpoints_sg_id                = module.vpc_endpoints.interface_endpoints_sg_id
   quarantine_sg_id                         = module.compute.quarantine_sg_id
 
-  lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
   ec2_auto_isolation_severities            = var.ec2_auto_isolation_severities
-  lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
-  eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
 
   secops_topic_arn                         = module.monitoring.secops_topic_arn
   lambda_cmk_arn                           = module.security.lambda_cmk_arn
@@ -497,15 +599,11 @@ here for positivity or conversion to integers.
 | `name_prefix` | `string` | Prefix used for resource identities |
 | `cloud_name` | `string` | Cloud name forwarded to IP Enrichment metadata |
 | `environment` | `string` | Environment tag value; not an isolation authorization decision |
-| `lambda_ec2_isolation_role_arn` | `string` | Isolation execution role supplied by IAM |
-| `lambda_ec2_rollback_role_arn` | `string` | Rollback execution role supplied by IAM |
-| `lambda_ip_enrichment_role_arn` | `string` | IP Enrichment execution role supplied by IAM |
 | `serverless_private_subnet_ids` | `list(string)` | Subnets for the two VPC-attached functions |
 | `quarantine_sg_id` | `string` | Quarantine group passed to the isolation handler |
 | `secops_topic_arn` | `string` | SNS destination for handler notifications and DLQ alarms |
 | `account_id` | `string` | Account context used in policies |
-| `primary_region` | `string` | Service Region used in the isolation rule ProductArn |
-| `eventbridge_putevents_to_secops_role_arn` | `string` | Declared integration input; not consumed by the module resource expressions |
+| `primary_region` | `string` | Service Region used in the isolation rule and IAM resource scopes |
 | `lambda_cmk_arn` | `string` | Lambda environment-variable encryption key via `kms_key_arn`; not a source ZIP encryption setting |
 | `secrets_manager_cmk_arn` | `string` | Threat-intelligence secret encryption key |
 | `interface_endpoints_sg_id` | `string` | Declared integration input; rules are attached by the separate security-policy module |
@@ -518,10 +616,10 @@ here for positivity or conversion to integers.
 | `ip_enrich_max_ips_extracted` | `string` | Value parsed by Python as the post-finding extraction threshold |
 | `ec2_auto_isolation_severities` | `set(string)` | Severity labels joined into AUTO_ISOLATION_SEVERITIES |
 
-`interface_endpoints_sg_id` and `eventbridge_putevents_to_secops_role_arn` are
-retained interface inputs but are not used by this module's resource expressions.
-Passing them does not create endpoint rules or an additional forwarding target.
-The baseline composes the required security-group rules separately.
+`interface_endpoints_sg_id` remains a declared input but is not used by this
+module's resource expressions. The baseline composes the required security-group
+rules separately. The EventBridge SecOps role is now module-local and still has
+no functional target consumer.
 
 ---
 
@@ -560,11 +658,7 @@ module "automation" {
   interface_endpoints_sg_id     = module.vpc_endpoints.interface_endpoints_sg_id
   quarantine_sg_id              = module.compute.quarantine_sg_id
 
-  lambda_ec2_isolation_role_arn            = module.iam.lambda_ec2_isolation_role_arn
-  lambda_ec2_rollback_role_arn             = module.iam.lambda_ec2_rollback_role_arn
   ec2_auto_isolation_severities            = var.ec2_auto_isolation_severities
-  lambda_ip_enrichment_role_arn            = module.iam.lambda_ip_enrichment_role_arn
-  eventbridge_putevents_to_secops_role_arn = module.iam.eventbridge_putevents_to_secops_role_arn
 
   cloudwatch_retention_days = local.effective_cloudwatch_retention_days
 
@@ -809,7 +903,7 @@ Check:
 - EC2 Rollback is triggered through the custom SecOps event bus using the `custom.rollback` source.
 - IP Enrichment is triggered by new HIGH or CRITICAL Security Hub findings.
 - IP Enrichment is intentionally not placed in a VPC.
-- Lambda IAM roles are created outside this module and passed in as inputs.
+- Lambda execution roles and their policies are owned by this module; existing attachment-order gaps are described above.
 - CloudWatch log groups are created explicitly so retention and KMS encryption can be controlled.
 - Workflow DLQs are encrypted with the logs CMK and retain messages for 14 days.
 - DLQ messages are not automatically replayed, and caught/normal-return handler errors are not necessarily captured by a failure destination.

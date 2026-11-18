@@ -1,5 +1,5 @@
 ########################################
-# IAM Role for Maintenance Window task 
+# IAM Role for Maintenance Window task
 ########################################
 
 data "aws_iam_policy_document" "patch_maintenance_window_assume_role" {
@@ -31,3 +31,5 @@ resource "aws_iam_role_policy_attachment" "patch_maintenance_window" {
   role       = aws_iam_role.patch_maintenance_window.name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole"
 }
+
+data "aws_partition" "current" {}

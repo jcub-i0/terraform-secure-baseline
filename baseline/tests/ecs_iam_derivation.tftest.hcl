@@ -30,7 +30,7 @@ mock_provider "aws" {
   }
 
   # Test-only policy JSON for unrelated baseline resources.
-  # Actual IAM policy generation is tested separately in modules/iam.
+  # Actual ECS IAM policy generation is tested separately in modules/ecs_workload_iam.
   mock_data "aws_iam_policy_document" {
     defaults = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Principal\":{\"AWS\":\"arn:aws:iam::123456789012:root\"},\"Resource\":\"*\"}]}"
@@ -138,7 +138,7 @@ run "baseline_ecs_iam_derivation" {
 
   # Narrow the first test to the IAM dependency graph.
   plan_options {
-    target = [module.iam]
+    target = [module.ecs_workload_iam]
   }
 
   assert {
@@ -212,7 +212,7 @@ run "empty_services_have_empty_iam_contract" {
   }
 
   plan_options {
-    target = [module.iam]
+    target = [module.ecs_workload_iam]
   }
 
   assert {
@@ -227,7 +227,7 @@ run "empty_services_have_empty_iam_contract" {
 
 run "reject_primary_environment_secret_collision" {
   command = plan
-  plan_options { target = [module.iam] }
+  plan_options { target = [module.ecs_workload_iam] }
 
   variables {
     ecs_services = {
@@ -242,7 +242,7 @@ run "reject_primary_environment_secret_collision" {
 
 run "reject_sidecar_secret_source_collision" {
   command = plan
-  plan_options { target = [module.iam] }
+  plan_options { target = [module.ecs_workload_iam] }
 
   variables {
     ecs_services = {

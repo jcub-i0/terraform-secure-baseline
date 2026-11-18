@@ -7,63 +7,13 @@ provider "aws" {
   skip_requesting_account_id  = true
 }
 
-# Offline substitutes for AWS-managed policies used by Lambda roles.
-# These are unrelated to the ECS IAM policies under test.
-
-override_data {
-  target = data.aws_iam_policy.lambda_vpc
-
-  values = {
-    arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-  }
-}
-
-override_data {
-  target = data.aws_iam_policy.lambda_logs
-
-  values = {
-    arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  }
-}
-
-override_data {
-  target = data.aws_iam_policy.lambda_xray
-
-  values = {
-    arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
-  }
-}
-
 variables {
-  cloud_name     = "unit-test"
   name_prefix    = "unit-test-dev"
   environment    = "dev"
   account_id     = "123456789012"
   primary_region = "us-east-1"
 
-  cloudtrail_log_group_arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/cloudtrail/test"
-  secops_topic_arn         = "arn:aws:sns:us-east-1:123456789012:secops"
-
-  logs_cmk_arn            = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
-  secrets_manager_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
-
-  centralized_logs_bucket_arn           = "arn:aws:s3:::unit-test-logs"
-  flowlogs_firehose_delivery_stream_arn = "arn:aws:firehose:us-east-1:123456789012:deliverystream/test"
-  flowlogs_log_group_arn                = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/vpc/flowlogs"
-
-  secops_event_bus_arn               = "arn:aws:events:us-east-1:123456789012:event-bus/secops"
-  threat_intel_api_keys_arn          = "arn:aws:secretsmanager:us-east-1:123456789012:secret:api-AbCdEf"
-  lambda_ip_enrichment_log_group_arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/enrichment"
-
-  break_glass_trusted_principal_arns = [
-    "arn:aws:iam::123456789012:role/test-admin"
-  ]
-
-  lambda_ec2_isolation_dlq_arn = "arn:aws:sqs:us-east-1:123456789012:isolation-dlq"
-  lambda_ec2_rollback_dlq_arn  = "arn:aws:sqs:us-east-1:123456789012:rollback-dlq"
-  lambda_ip_enrichment_dlq_arn = "arn:aws:sqs:us-east-1:123456789012:enrichment-dlq"
-
-  ecs_iam_services = {
+  workloads = {
     api = {
       ecr_repository_arns = [
         "arn:aws:ecr:us-east-1:123456789012:repository/api",
@@ -94,7 +44,7 @@ run "empty_services_generate_no_ecs_iam" {
   command = plan
 
   variables {
-    ecs_iam_services = {}
+    workloads = {}
   }
 
   assert {
@@ -107,13 +57,24 @@ run "empty_services_generate_no_ecs_iam" {
 
     error_message = "An empty ECS service map must generate no ECS IAM roles, execution policies, or task-role policy attachments."
   }
+
+  assert {
+    condition = (
+      length(output.execution_roles) == 0 &&
+      length(output.task_roles) == 0 &&
+      length(output.execution_policy_ids) == 0 &&
+      length(output.task_role_policy_attachment_ids) == 0
+    )
+
+    error_message = "An empty workload map must produce four empty IAM output contracts."
+  }
 }
 
 run "multi_service_iam_isolation" {
   command = plan
 
   variables {
-    ecs_iam_services = {
+    workloads = {
       api = {
         ecr_repository_arns = [
           "arn:aws:ecr:us-east-1:123456789012:repository/api",
@@ -176,7 +137,7 @@ run "multi_service_iam_isolation" {
   # grants. The GuardDuty repository intentionally belongs to another account.
   assert {
     condition = alltrue([
-      for service_name, service in var.ecs_iam_services :
+      for service_name, service in var.workloads :
       try(
         jsondecode(aws_iam_role_policy.ecs_task_execution_policies[service_name].policy).Version == "2012-10-17" &&
         alltrue([
@@ -246,42 +207,59 @@ run "multi_service_iam_isolation" {
 
     error_message = "Application managed policies must attach exclusively to their intended ECS task roles."
   }
+
+  # Four independent output contracts. Attachment readiness omits workloads
+  # without task-role managed policies; IDs are unknown until apply.
+  assert {
+    condition = (
+      output.execution_roles["api"].name == "unit-test-dev-api-ecs-execution" &&
+      output.execution_roles["worker"].name == "unit-test-dev-worker-ecs-execution" &&
+      output.task_roles["api"].name == "unit-test-dev-api-ecs-task" &&
+      output.task_roles["worker"].name == "unit-test-dev-worker-ecs-task" &&
+      toset(keys(output.execution_roles["api"])) == toset(["arn", "name"]) &&
+      toset(keys(output.task_roles["api"])) == toset(["arn", "name"]) &&
+      toset(keys(output.execution_policy_ids)) == toset(["api", "worker"]) &&
+      toset(keys(output.task_role_policy_attachment_ids)) == toset(["api"])
+    )
+
+    error_message = "Role, execution-policy readiness, and opted-in task-role attachment readiness outputs must keep their keys and shapes."
+  }
 }
 
 run "n5ca_reject_ssm_arn_star" {
   command = plan
 
   variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
+    workloads = {
+      api = merge(var.workloads.api, {
         execution_ssm_parameter_arns = ["arn:aws:ssm:us-east-1:123456789012:parameter/app/*"]
       })
     }
   }
 
-  expect_failures = [var.ecs_iam_services]
+  expect_failures = [var.workloads]
 }
 
 run "n5ca_reject_kms_key_star" {
   command = plan
 
   variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
+    workloads = {
+      api = merge(var.workloads.api, {
         task_execution_kms_key_arns = ["arn:aws:kms:us-east-1:123456789012:key/*"]
       })
     }
   }
 
-  expect_failures = [var.ecs_iam_services]
+  expect_failures = [var.workloads]
 }
 
 run "reject_secret_wildcard_suffix" {
   command = plan
 
   variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
+    workloads = {
+      api = merge(var.workloads.api, {
         execution_secret_arns = [
           "arn:aws:secretsmanager:us-east-1:123456789012:secret:app-*"
         ]
@@ -289,47 +267,77 @@ run "reject_secret_wildcard_suffix" {
     }
   }
 
-  expect_failures = [var.ecs_iam_services]
+  expect_failures = [var.workloads]
 }
 
 run "reject_ecr_wildcard_resource" {
   command = plan
 
   variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
+    workloads = {
+      api = merge(var.workloads.api, {
         ecr_repository_arns = ["*"]
       })
     }
   }
 
-  expect_failures = [var.ecs_iam_services]
+  expect_failures = [var.workloads]
 }
 
 run "reject_guardduty_ecr_repository_wildcard" {
   command = plan
 
   variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
+    workloads = {
+      api = merge(var.workloads.api, {
         guardduty_agent_ecr_repository_arns = ["arn:aws:ecr:us-east-1:987654321098:repository/aws-guardduty-agent*"]
       })
     }
   }
 
-  expect_failures = [var.ecs_iam_services]
+  expect_failures = [var.workloads]
 }
 
 run "reject_cross_account_task_policy" {
   command = plan
 
   variables {
-    ecs_iam_services = {
-      api = merge(var.ecs_iam_services.api, {
+    workloads = {
+      api = merge(var.workloads.api, {
         task_role_managed_policy_arns = ["arn:aws:iam::987654321098:policy/application"]
       })
     }
   }
 
   expect_failures = [aws_iam_role_policy_attachment.ecs_task_managed_policies]
+}
+
+# One direct consumer: standalone ECS jobs composed with shared workload IAM.
+# A completed plan proves the composition has no dependency cycle.
+run "ecs_task_composition_without_cycle" {
+  command = plan
+
+  module {
+    source = "./tests/fixtures/ecs_task_composition"
+  }
+
+  assert {
+    condition = alltrue([
+      for job_name, log_group in output.job_log_groups :
+      output.iam_log_group_arns[job_name] == toset([
+        "arn:aws:logs:us-east-1:123456789012:log-group:${log_group.name}"
+      ])
+    ]) && toset(keys(output.job_log_groups)) == toset(["report"])
+
+    error_message = "Deterministic IAM log-group ARNs must match the log groups created by ecs_task."
+  }
+
+  assert {
+    condition = (
+      toset(keys(output.execution_policy_ids)) == toset(["report"]) &&
+      length(output.task_role_policy_attachment_ids) == 0
+    )
+
+    error_message = "Job IAM must expose execution-policy readiness and omit attachment readiness without managed policies."
+  }
 }
