@@ -36,7 +36,7 @@ resource "aws_ssm_maintenance_window_task" "patching" {
   description      = "Run AWS-RunPatchBaseline Install on tagged instances"
   task_type        = "RUN_COMMAND"
   task_arn         = "AWS-RunPatchBaseline"
-  service_role_arn = var.patch_maintenance_window_role_arn
+  service_role_arn = aws_iam_role.patch_maintenance_window.arn
   priority         = 1
   max_concurrency  = "1"
   max_errors       = "1"

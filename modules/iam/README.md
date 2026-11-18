@@ -8,7 +8,6 @@ This module includes IAM resources for:
 
 - EC2 instance management
 - AWS Config service and remediation
-- SSM Patch Manager
 - Access Analyzer
 - Shared read-only log access policies
 - Emergency break-glass administration
@@ -27,7 +26,6 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 |---|---|
 | `ec2.tf` | EC2 instance role and instance profile |
 | `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
-| `patch_management.tf` | SSM Patch Manager maintenance window role |
 | `security_integrations.tf` | Account-level Access Analyzer |
 | `shared_policies.tf` | Shared log read-only and KMS decrypt policies |
 | `break_glass.tf` | Emergency break-glass administrator role |
@@ -139,28 +137,15 @@ for trust, permissions and the preserved attachment-readiness limitation.
 
 ---
 
-## `patch_management.tf`
+## Patch Management IAM
 
-The `patch_management.tf` file creates the IAM role used by SSM Patch Manager maintenance windows.
-
-Resources include:
-
-- Patch maintenance window IAM role
-- AWS-managed maintenance window policy attachment
-
-The role is trusted by:
-
-```text
-ssm.amazonaws.com
-```
-
-Attached AWS-managed policy:
-
-```text
-AmazonSSMMaintenanceWindowRole
-```
-
-The role ARN is consumed by the patch management module. The trust is the SSM service principal without a source-account/source-ARN condition. Creating this role does not prove patch scan, installation, reboot, or maintenance-window execution.
+The maintenance-window role and AWS-managed policy attachment are owned by
+[patch_management/iam.tf](../patch_management/iam.tf). They remain unconditional
+when the maintenance window is disabled. See the
+[Patch Management IAM contract](../patch_management/README.md#service-iam) for
+trust, permissions, tags and the preserved attachment-readiness limitation.
+Creating this role does not prove patch scan, installation, reboot, or
+maintenance-window execution.
 
 ---
 
@@ -368,7 +353,6 @@ None of the listed inputs has a declared default. `cloud_name` remains a require
 | `instance_profile_name` | Name of the EC2 IAM instance profile |
 | `config_role_arn` | Constructed AWS-managed Config service-linked-role ARN; not proof of role creation |
 | `config_remediation_role_arn` | ARN of the AWS Config remediation role |
-| `patch_maintenance_window_role_arn` | ARN of the SSM Patch Manager maintenance window role |
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
 | `logs_cmk_decrypt_policy_name` | Name of the logs CMK decrypt policy |
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
@@ -689,7 +673,7 @@ backup.amazonaws.com
 
 ### Confirm Patch Maintenance Window Role
 
-Confirm the Patch Maintenance Window role exists:
+Confirm the Patch Maintenance Window role, owned by [patch_management](../patch_management/README.md#service-iam), exists:
 
 ```bash
 aws iam get-role \
@@ -904,6 +888,6 @@ Check:
 - The `security` module consumes Config role and remediation role ARNs.
 - The `automation` module consumes Lambda execution role ARNs.
 - The `backup` module owns its AWS Backup role and both managed-policy attachments.
-- The `patch_management` module consumes the maintenance window role ARN.
+- The `patch_management` module owns its maintenance-window role and policy attachment.
 - Shared policy names may be passed to IAM Identity Center for customer-managed policy attachment.
 - Review [variables.tf](variables.tf), [outputs.tf](outputs.tf), and each policy file when changing interfaces or permissions; role names and prose are not an effective-authorization test.
