@@ -8,7 +8,6 @@ This module includes IAM resources for:
 
 - EC2 instance management
 - AWS Config service and remediation
-- AWS Backup
 - SSM Patch Manager
 - Access Analyzer
 - Shared read-only log access policies
@@ -28,7 +27,6 @@ The caller composes these resources through [baseline/main.tf](../../baseline/ma
 |---|---|
 | `ec2.tf` | EC2 instance role and instance profile |
 | `config.tf` | Expected Config service-linked-role ARN and the managed remediation role |
-| `backup.tf` | AWS Backup service role |
 | `patch_management.tf` | SSM Patch Manager maintenance window role |
 | `security_integrations.tf` | Account-level Access Analyzer |
 | `shared_policies.tf` | Shared log read-only and KMS decrypt policies |
@@ -132,30 +130,12 @@ The inline policy grants only `s3:GetBucketPublicAccessBlock` and `s3:PutBucketP
 
 ---
 
-## `backup.tf`
+## Backup IAM
 
-The `backup.tf` file creates the IAM role used by AWS Backup.
-
-Resources include:
-
-- AWS Backup service role
-- AWS-managed backup policy attachment
-- AWS-managed restore policy attachment
-
-The backup role is trusted by:
-
-```text
-backup.amazonaws.com
-```
-
-Attached AWS-managed policies:
-
-| Policy | Purpose |
-|---|---|
-| `AWSBackupServiceRolePolicyForBackup` | Allows AWS Backup to create and manage backups |
-| `AWSBackupServiceRolePolicyForRestores` | Allows AWS Backup to perform restores |
-
-The role ARN is consumed by the backup module for scheduled selections and, when enabled, Restore Testing. The role and both managed attachments are created even when scheduled backup is disabled. This file does not add a source-ARN/source-account trust condition, a custom vault/key policy, or an application-level restore-validation policy. An attached restore policy is not proof that a restore job or application test completed.
+The AWS Backup service role and both AWS-managed policy attachments are owned by
+[backup/iam.tf](../backup/iam.tf). They remain unconditional when scheduled Backup
+or Restore Testing is disabled. See the [Backup IAM contract](../backup/README.md#service-iam)
+for trust, permissions and the preserved attachment-readiness limitation.
 
 ---
 
@@ -389,7 +369,6 @@ None of the listed inputs has a declared default. `cloud_name` remains a require
 | `config_role_arn` | Constructed AWS-managed Config service-linked-role ARN; not proof of role creation |
 | `config_remediation_role_arn` | ARN of the AWS Config remediation role |
 | `patch_maintenance_window_role_arn` | ARN of the SSM Patch Manager maintenance window role |
-| `backup_service_role_arn` | ARN of the AWS Backup service role |
 | `logs_s3_readonly_policy_name` | Name of the centralized logs S3 read-only policy |
 | `logs_cmk_decrypt_policy_name` | Name of the logs CMK decrypt policy |
 | `break_glass_admin_role_arn` | ARN of the break-glass administrator role |
@@ -674,7 +653,7 @@ config.amazonaws.com
 
 ### Confirm Backup Role
 
-Confirm the AWS Backup role exists:
+Confirm the AWS Backup role, owned by [backup](../backup/README.md#service-iam), exists:
 
 ```bash
 aws iam get-role \
@@ -924,7 +903,7 @@ Check:
 - The `logging` module consumes CloudTrail, VPC Flow Logs, Firehose, and CloudWatch Logs role ARNs.
 - The `security` module consumes Config role and remediation role ARNs.
 - The `automation` module consumes Lambda execution role ARNs.
-- The `backup` module consumes the AWS Backup role ARN.
+- The `backup` module owns its AWS Backup role and both managed-policy attachments.
 - The `patch_management` module consumes the maintenance window role ARN.
 - Shared policy names may be passed to IAM Identity Center for customer-managed policy attachment.
 - Review [variables.tf](variables.tf), [outputs.tf](outputs.tf), and each policy file when changing interfaces or permissions; role names and prose are not an effective-authorization test.

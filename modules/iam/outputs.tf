@@ -16,10 +16,6 @@ output "patch_maintenance_window_role_arn" {
   value = aws_iam_role.patch_maintenance_window.arn
 }
 
-output "backup_service_role_arn" {
-  value = aws_iam_role.backup.arn
-}
-
 output "logs_s3_readonly_policy_name" {
   value = aws_iam_policy.logs_s3_readonly.name
 }

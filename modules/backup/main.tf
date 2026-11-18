@@ -49,7 +49,7 @@ resource "aws_backup_selection" "main" {
 
   name         = "${var.name_prefix}-backup-selection"
   plan_id      = aws_backup_plan.main[0].id
-  iam_role_arn = var.backup_service_role_arn
+  iam_role_arn = aws_iam_role.backup.arn
 
   selection_tag {
     type  = "STRINGEQUALS"
@@ -108,7 +108,7 @@ resource "aws_backup_restore_testing_selection" "rds" {
     var.restore_testing_rds_arn
   ]
 
-  iam_role_arn = var.backup_service_role_arn
+  iam_role_arn = aws_iam_role.backup.arn
 
   restore_metadata_overrides = {
     dbSubnetGroupName = (

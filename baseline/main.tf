@@ -465,7 +465,6 @@ module "backup" {
   backup_schedule           = local.effective_backup_schedule
   backup_vault_cmk_arn      = module.security.backup_vault_cmk_arn
   delete_backups_after_days = local.effective_delete_backups_after_days
-  backup_service_role_arn   = module.iam.backup_service_role_arn
 
   force_destroy = local.effective_backup_vault_force_destroy
 
