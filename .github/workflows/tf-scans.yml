@@ -75,6 +75,9 @@ jobs:
           set -euo pipefail
           bash scripts/tests/test-log-bucket-destroy-principal.sh
 
+      - name: Test Organizations Plan input guard
+        run: python3 scripts/tests/test-organizations-plan-inputs.py
+
       - name: Test IAM policy contracts
         run: |
           set -euo pipefail

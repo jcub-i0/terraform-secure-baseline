@@ -104,6 +104,40 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         uses: actions/checkout@v6
 
+      - name: Validate Organizations Plan inputs
+        if: >-
+          (github.event_name != 'workflow_dispatch' ||
+          matrix.environment == inputs.target_environment) &&
+          matrix.environment == 'control-plane-organizations'
+        env:
+          ENABLE_SECURITYHUB_DELEGATED_ADMINISTRATOR: ${{ vars.ENABLE_SECURITYHUB_DELEGATED_ADMINISTRATOR }}
+          ENABLE_GUARDDUTY_DELEGATED_ADMINISTRATOR: ${{ vars.ENABLE_GUARDDUTY_DELEGATED_ADMINISTRATOR }}
+          ENABLE_SECURITYHUB_V2_ORGANIZATION_MANAGEMENT: ${{ vars.ENABLE_SECURITYHUB_V2_ORGANIZATION_MANAGEMENT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # These management-account prerequisites are distinct from the
+          # security-operations account's organization configuration/policy flags.
+          required_inputs=(
+            ENABLE_SECURITYHUB_DELEGATED_ADMINISTRATOR
+            ENABLE_GUARDDUTY_DELEGATED_ADMINISTRATOR
+            ENABLE_SECURITYHUB_V2_ORGANIZATION_MANAGEMENT
+          )
+
+          for name in "${required_inputs[@]}"; do
+            value="${!name:-}"
+            if [[ "$value" != true && "$value" != false ]]; then
+              echo "::error::${name} must be explicitly configured as true or false in the control-plane-plan GitHub environment."
+              exit 1
+            fi
+          done
+
+          # Export only after every required input has passed validation.
+          for name in "${required_inputs[@]}"; do
+            printf 'TF_VAR_%s=%s\n' "${name,,}" "${!name}" >> "$GITHUB_ENV"
+          done
+
       - name: Configure AWS credentials from GitHub OIDC
         if: github.event_name != 'workflow_dispatch' || matrix.environment == inputs.target_environment
         uses: aws-actions/configure-aws-credentials@v6

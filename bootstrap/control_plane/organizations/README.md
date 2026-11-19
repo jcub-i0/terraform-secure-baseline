@@ -183,6 +183,41 @@ The `check "security_operations_account"` assertion tests uniqueness only when `
 
 The feature flags default to `false` so the organization can be adopted and the delegated administrator account prepared before centralized security governance is enabled.
 
+### GitHub Actions Plan inputs
+
+The [Plan workflow](../../../.github/workflows/terraform-plan.yml) runs this root
+in the management account using the `control-plane-plan` GitHub environment.
+Configure these environment variables explicitly for the established central
+security deployment:
+
+| GitHub environment variable | Terraform input | Established value |
+|---|---|---|
+| `ENABLE_SECURITYHUB_DELEGATED_ADMINISTRATOR` | `enable_securityhub_delegated_administrator` | `true` |
+| `ENABLE_GUARDDUTY_DELEGATED_ADMINISTRATOR` | `enable_guardduty_delegated_administrator` | `true` |
+| `ENABLE_SECURITYHUB_V2_ORGANIZATION_MANAGEMENT` | `enable_securityhub_v2_organization_management` | `true` |
+
+The Organizations-only preflight requires each value to be exactly `true` or
+`false`, then exports the corresponding `TF_VAR_*` inputs. Missing, empty, or
+malformed values stop the job before AWS credentials, Terraform initialization,
+or planning. An explicit `false` remains available for deliberate bootstrap or
+separately approved lifecycle work; it is not a safe fallback for this existing
+deployment. CI does not override the root's defaults for local callers.
+
+The approved R0 capture used all three flags as `true`, resolved
+`security_operations_account_name` to its default `security-operations`, and
+reported no managed-resource changes for this root. A successful workflow status
+alone does not establish a safe plan: omitting these inputs can propose removing
+delegated administrators, trusted access, and Security Hub V2 prerequisites.
+
+Do not substitute `ENABLE_SECURITYHUB_ORGANIZATION_CONFIGURATION`,
+`ENABLE_GUARDDUTY_ORGANIZATION_CONFIGURATION`, or
+`ENABLE_SECURITYHUB_V2_ORGANIZATION_POLICY`. Those belong to the separate
+`security-operations-plan` environment and
+[security-services root](../../security_operations/security_services/README.md),
+which configures member services and policies after management-account delegation.
+Adding the workflow mappings does not create the required GitHub environment
+variables; they must be configured separately before this Plan job can proceed.
+
 ---
 
 ## Outputs
