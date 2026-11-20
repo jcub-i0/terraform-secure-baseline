@@ -1,6 +1,6 @@
 # v1.15.0 — R3 Architecture Refactor Validation and Closeout
 
-**Status:** Proposed for owner technical acceptance
+**Status:** Owner acceptance: Pending explicit approval and recording.
 **Scope:** R0–R3 IAM/database module-boundary refactor
 **Release status:** This acceptance does not complete or authorize tagging v1.15.0.
 
