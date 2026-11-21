@@ -112,3 +112,50 @@ resource "aws_iam_role_policy" "scheduler_delivery" {
   role   = aws_iam_role.scheduler_execution[each.key].id
   policy = data.aws_iam_policy_document.scheduler_delivery[each.key].json
 }
+
+resource "aws_scheduler_schedule" "jobs" {
+  for_each = var.schedules
+
+  name        = "${var.name_prefix}-${each.key}"
+  description = "Application job schedule for ${each.value.job_key}"
+
+  group_name                   = aws_scheduler_schedule_group.jobs[0].name
+  schedule_expression          = each.value.schedule_expression
+  schedule_expression_timezone = each.value.timezone
+
+  state = each.value.enabled ? "ENABLED" : "DISABLED"
+
+  action_after_completion = "NONE"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = var.broker_request_queue_arn
+    role_arn = aws_iam_role.scheduler_execution[each.key].arn
+
+    input = jsonencode({
+      schema_version = 1
+      job_key        = each.value.job_key
+      schedule_key   = each.key
+      schedule_arn   = "<aws.scheduler.schedule-arn>"
+      scheduled_time = "<aws.scheduler.scheduled-time>"
+
+      request_key = "<aws.scheduler.schedule-arn>|<aws.scheduler.scheduled-time>"
+    })
+
+    dead_letter_config {
+      arn = aws_sqs_queue.scheduler_dlq[each.key].arn
+    }
+
+    retry_policy {
+      maximum_retry_attempts       = each.value.maximum_retry_attempts
+      maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy.scheduler_delivery
+  ]
+}
