@@ -225,7 +225,7 @@ run "scheduler_iam_policy_contract" {
         {
           for c in s.condition :
           "${c.test}|${c.variable}" => toset(c.values)
-        } == {
+          } == {
           "StringEquals|aws:SourceAccount" = toset(["123456789012"])
           "ArnEquals|aws:SourceArn" = toset([
             "arn:aws:scheduler:us-east-1:123456789012:schedule-group/unit-test-dev-job-schedules"
@@ -247,7 +247,7 @@ run "scheduler_iam_policy_contract" {
           actions   = toset(s.actions)
           resources = toset(s.resources)
         }
-      } == {
+        } == {
         SendBrokerRequest = {
           effect    = "Allow"
           actions   = toset(["sqs:SendMessage"])
