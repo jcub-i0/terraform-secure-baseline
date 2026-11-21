@@ -95,3 +95,21 @@ variable "broker_request_queue_kms_key_arn" {
     error_message = "Broker queue KMS key must be an exact customer-managed key ARN."
   }
 }
+
+variable "alarm_topic_arn" {
+  description = "Existing approved SNS topic for Scheduler delivery-failure alarms"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      length(var.schedules) == 0 ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:[0-9]{12}:[A-Za-z0-9_-]+$",
+        var.alarm_topic_arn
+      ))
+    )
+
+    error_message = "Configured schedules require an exact SNS alarm topic ARN."
+  }
+}
