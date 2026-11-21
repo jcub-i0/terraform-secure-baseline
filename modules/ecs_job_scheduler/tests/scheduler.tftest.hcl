@@ -179,3 +179,100 @@ run "reject_invalid_schedule_configuration" {
 
   expect_failures = [var.schedules]
 }
+
+run "scheduler_iam_policy_contract" {
+  command = plan
+
+  variables {
+    schedules = {
+      archive = {
+        job_key             = "archive"
+        schedule_expression = "rate(1 day)"
+      }
+    }
+  }
+
+  # Supply deterministic ARNs so IAM policy JSON is known at plan time.
+  override_resource {
+    target          = aws_scheduler_schedule_group.jobs[0]
+    override_during = plan
+
+    values = {
+      arn = "arn:aws:scheduler:us-east-1:123456789012:schedule-group/unit-test-dev-job-schedules"
+    }
+  }
+
+  override_resource {
+    target          = aws_sqs_queue.scheduler_dlq["archive"]
+    override_during = plan
+
+    values = {
+      arn = "arn:aws:sqs:us-east-1:123456789012:unit-test-dev-archive-scheduler-dlq"
+    }
+  }
+
+  assert {
+    condition = (
+      length(data.aws_iam_policy_document.scheduler_assume_role["archive"].statement) == 1 &&
+      alltrue([
+        for s in data.aws_iam_policy_document.scheduler_assume_role["archive"].statement :
+        s.effect == "Allow" &&
+        toset(s.actions) == toset(["sts:AssumeRole"]) &&
+        length(s.principals) == 1 &&
+        one(s.principals).type == "Service" &&
+        toset(one(s.principals).identifiers) == toset(["scheduler.amazonaws.com"]) &&
+        length(s.condition) == 2 &&
+        {
+          for c in s.condition :
+          "${c.test}|${c.variable}" => toset(c.values)
+        } == {
+          "StringEquals|aws:SourceAccount" = toset(["123456789012"])
+          "ArnEquals|aws:SourceArn" = toset([
+            "arn:aws:scheduler:us-east-1:123456789012:schedule-group/unit-test-dev-job-schedules"
+          ])
+        }
+      ])
+    )
+
+    error_message = "Scheduler trust must be restricted to its service, account, and schedule group."
+  }
+
+  assert {
+    condition = (
+      length(data.aws_iam_policy_document.scheduler_delivery["archive"].statement) == 3 &&
+      {
+        for s in data.aws_iam_policy_document.scheduler_delivery["archive"].statement :
+        s.sid => {
+          effect    = s.effect
+          actions   = toset(s.actions)
+          resources = toset(s.resources)
+        }
+      } == {
+        SendBrokerRequest = {
+          effect    = "Allow"
+          actions   = toset(["sqs:SendMessage"])
+          resources = toset([var.broker_request_queue_arn])
+        }
+
+        SendFailureToDLQ = {
+          effect  = "Allow"
+          actions = toset(["sqs:SendMessage"])
+          resources = toset([
+            "arn:aws:sqs:us-east-1:123456789012:unit-test-dev-archive-scheduler-dlq"
+          ])
+        }
+
+        UseEncryptedSQSQueues = {
+          effect = "Allow"
+          actions = toset([
+            "kms:GenerateDataKey",
+            "kms:Decrypt"
+          ])
+          resources = toset([var.dlq_kms_key_arn])
+        }
+      }
+    )
+
+    error_message = "Scheduler delivery statements must contain only the approved SQS and KMS grants."
+  }
+}
