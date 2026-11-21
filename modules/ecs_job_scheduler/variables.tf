@@ -47,3 +47,21 @@ variable "schedules" {
     error_message = "Schedules require a job key, valid expression shape, timezone, and supported retry bounds."
   }
 }
+
+variable "dlq_kms_key_arn" {
+  description = "Existing customer-managed KMS key ARN for Scheduler DLQ encryption."
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      length(var.schedules) == 0 ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
+        var.dlq_kms_key_arn
+      ))
+    )
+
+    error_message = "Nonempty schedules require an exact customer-managed KMS key ARN for DLQ encryption."
+  }
+}
