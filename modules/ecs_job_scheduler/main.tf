@@ -71,3 +71,49 @@ resource "aws_iam_role" "scheduler_execution" {
     Terraform   = "true"
   }
 }
+
+data "aws_iam_policy_document" "scheduler_delivery" {
+  for_each = var.schedules
+
+  statement {
+    sid       = "SendBrokerRequest"
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [var.broker_request_queue_arn]
+  }
+
+  statement {
+    sid       = "SendFailureToDLQ"
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.scheduler_dlq[each.key].arn]
+  }
+
+  dynamic "statement" {
+    for_each = (
+      var.broker_request_queue_kms_key_arn == null
+      ? []
+      : [var.broker_request_queue_kms_key_arn]
+    )
+
+    content {
+      sid    = "UseBrokerQueueKMSKey"
+      effect = "Allow"
+
+      actions = [
+        "kms:GenerateDataKey",
+        "kms:Decrypt"
+      ]
+
+      resources = [statement.value]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "scheduler_delivery" {
+  for_each = var.schedules
+
+  name   = "${var.name_prefix}-${each.key}-scheduler-delivery"
+  role   = aws_iam_role.scheduler_execution[each.key].id
+  policy = data.aws_iam_policy_document.scheduler_delivery[each.key].json
+}
