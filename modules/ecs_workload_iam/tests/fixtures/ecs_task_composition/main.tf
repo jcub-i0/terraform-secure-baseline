@@ -10,11 +10,18 @@ locals {
   primary_region = "us-east-1"
 
   jobs = {
+    archive = {
+      repository = "archive"
+      image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/archive@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+
     report = {
       repository = "report"
       image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/report@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
     }
   }
+
+  approved_cluster_arn = "arn:aws:ecs:us-east-1:123456789012:cluster/unit-test-dev"
 }
 
 module "ecs_workload_iam" {
@@ -59,6 +66,77 @@ module "ecs_task" {
   }
 }
 
+# Synthetic launcher trust for test-only composition.
+# Production caller identity and permission boundaries
+# require separate M0 admission approval.
+data "aws_iam_policy_document" "launcher_trust" {
+  for_each = local.jobs
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${local.account_id}:role/unit-test-dev-${each.key}-caller"
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "launcher" {
+  for_each = local.jobs
+
+  name               = "${local.name_prefix}-${each.key}-launcher"
+  assume_role_policy = data.aws_iam_policy_document.launcher_trust[each.key].json
+}
+
+data "aws_iam_policy_document" "job_launch" {
+  for_each = local.jobs
+
+  statement {
+    sid     = "RunApprovedTaskRevision"
+    effect  = "Allow"
+    actions = ["ecs:RunTask"]
+
+    resources = [
+      module.ecs_task.task_definitions[each.key].arn
+    ]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [local.approved_cluster_arn]
+    }
+  }
+
+  statement {
+    sid     = "PassOnlyApprovedJobRoles"
+    effect  = "Allow"
+    actions = ["iam:PassRole"]
+
+    resources = [
+      module.ecs_workload_iam.execution_roles[each.key].arn,
+      module.ecs_workload_iam.task_roles[each.key].arn
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "job_launch" {
+  for_each = local.jobs
+
+  name   = "${local.name_prefix}-${each.key}-job-launch"
+  role   = aws_iam_role.launcher[each.key].name
+  policy = data.aws_iam_policy_document.job_launch[each.key].json
+}
+
 output "iam_log_group_arns" {
   value = {
     for job_name, job in local.jobs : job_name => toset([
@@ -77,4 +155,31 @@ output "execution_policy_ids" {
 
 output "task_role_policy_attachment_ids" {
   value = module.ecs_workload_iam.task_role_policy_attachment_ids
+}
+
+output "launcher_policy_roles" {
+  value = {
+    for job_name, policy in aws_iam_role_policy.job_launch :
+    job_name => policy.role
+  }
+}
+
+output "launcher_policy_boundaries" {
+  description = "Test-only launcher IAM actions and conditions."
+
+  value = {
+    for job_name, policy in data.aws_iam_policy_document.job_launch :
+    job_name => {
+      for statement in policy.statement :
+      statement.sid => {
+        effect  = statement.effect
+        actions = toset(statement.actions)
+
+        conditions = {
+          for condition in statement.condition :
+          "${condition.test}|${condition.variable}" => toset(condition.values)
+        }
+      }
+    }
+  }
 }
