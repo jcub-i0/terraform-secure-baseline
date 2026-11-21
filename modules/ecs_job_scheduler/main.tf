@@ -89,24 +89,19 @@ data "aws_iam_policy_document" "scheduler_delivery" {
     resources = [aws_sqs_queue.scheduler_dlq[each.key].arn]
   }
 
-  dynamic "statement" {
-    for_each = (
-      var.broker_request_queue_kms_key_arn == null
-      ? []
-      : [var.broker_request_queue_kms_key_arn]
-    )
+  statement {
+    sid    = "UseEncryptedSQSQueues"
+    effect = "Allow"
 
-    content {
-      sid    = "UseBrokerQueueKMSKey"
-      effect = "Allow"
+    actions = [
+      "kms:GenerateDataKey",
+      "kms:Decrypt"
+    ]
 
-      actions = [
-        "kms:GenerateDataKey",
-        "kms:Decrypt"
-      ]
-
-      resources = [statement.value]
-    }
+    resources = distinct(compact([
+      var.dlq_kms_key_arn,
+      var.broker_request_queue_kms_key_arn
+    ]))
   }
 }
 
