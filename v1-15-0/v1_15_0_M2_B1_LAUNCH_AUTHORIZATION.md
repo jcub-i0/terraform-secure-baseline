@@ -110,9 +110,14 @@ These runtime admission protections remain M2-B2 and M0 security requirements. T
 
 ## M2-B2 — Protected Runtime Admission Contract
 
-**Status:** Architecture approved for implementation planning.
-Concrete enforcement, trusted execution identity, and live
-qualification remain pending M0 security approval.
+**Status:** Protected runtime admission contract accepted.
+The owner approved AWS Lambda + Amazon SQS + DynamoDB
+as the M2-B2 implementation direction on November 21, 2026.
+
+Concrete IAM trust, protected deployment authority,
+producer authentication, lifecycle fencing, and runtime
+qualification remain outstanding. This decision does not
+authorize Terraform Apply or AWS deployment.
 
 ### Caller interface
 
@@ -187,6 +192,107 @@ M2-B2 is not qualified until authorized launches and denied bypass
 attempts are demonstrated against the actual protected identity.
 
 No deployment or AWS mutation is authorized by this contract.
+
+### M2-B2-D1 — Approved Broker Platform Direction
+
+**Decision date:** 2026-11-21  
+**Status:** Owner-approved architecture direction; implementation pending.
+
+#### Selected architecture
+
+The protected job-launch broker uses:
+
+- Amazon SQS as the encrypted application-owned request transport.
+- AWS Lambda as the independently protected request processor.
+- Amazon DynamoDB for durable request deduplication, atomic
+  admission reservations, concurrency tracking, and execution state.
+- Dedicated per-job launcher IAM roles for narrowly authorized
+  ECS RunTask and iam:PassRole operations.
+
+EventBridge Scheduler and authorized on-demand producers submit
+requests through the same broker-request queue. Scheduler does
+not directly invoke ECS.
+
+The application Terraform state owns the broker's application
+resources. Foundation state retains ownership of the ECS cluster,
+shared networking, and foundation-managed security infrastructure.
+Platform/bootstrap authority independently governs mandatory IAM
+ceilings and protected coordination.
+
+No third workload Terraform state is introduced.
+
+#### Authorization and trust boundaries
+
+The broker resolves an approved job key to protected configuration:
+exact task-definition revision, cluster, task/execution roles,
+private subnets, security groups, Fargate configuration, and
+execution limits.
+
+Caller-provided ECS configuration and role/network overrides
+are prohibited. Initial RunTask count is one.
+
+SQS message-body fields, including schedule identifiers and
+caller claims, are not authentication evidence. The mechanism
+for verified producer attribution and job-level authorization
+must be finalized and qualified before implementation.
+
+The broker's runtime identity may assume only the approved
+job-launch identities. It must not receive unrestricted
+RunTask, PassRole, or application administrative permissions.
+
+Ordinary application CI must not be able to bypass protected
+admission by modifying broker code, approved configuration,
+IAM trust, permission ceilings, or protected eligibility state.
+
+These controls require independently enforced deployment and
+mutation authority; repository review alone is insufficient.
+
+#### Idempotency, concurrency, and lifecycle
+
+The initial policy permits one active execution per job.
+
+DynamoDB must atomically enforce durable request uniqueness,
+job concurrency reservations, and the required protected
+admission conditions.
+
+Repeated SQS deliveries must not create additional launches.
+ECS client-token idempotency supplements, but does not replace,
+the durable execution ledger.
+
+Ambiguous RunTask results remain subject to protected
+reconciliation. Expired leases, execution timeouts, and
+record expiration must not independently authorize retries
+or release potentially active execution slots.
+
+The protected lifecycle coordinator must block new admission
+before maintenance, database parking, or teardown.
+
+Previously admitted but unfinished launches must be reconciled
+before lifecycle operations proceed. Checking eligibility during
+reservation does not by itself prevent a previously authorized
+RunTask call from occurring afterward.
+
+Actual ECS task completion and failure reporting require
+separate runtime state monitoring.
+
+#### Outstanding implementation decisions
+
+The selected platform does not settle:
+
+- Exact broker execution-role trust and protected deployment identity.
+- Producer authentication and queue authorization policies.
+- Approved job-catalog representation and modification authority.
+- DynamoDB item schema, transitions, retention, and reconciliation.
+- Coordinator eligibility, fencing, and in-flight launch handling.
+- Network admission across direct and service-managed ECS launch paths.
+- Runtime observability, encrypted failure delivery, and live
+  positive/negative security qualification.
+
+These decisions require focused implementation design and
+appropriate owner approval before their controls are deployed.
+
+This checkpoint records platform selection only. It does not
+constitute completed M2-B2 implementation or live qualification.
 
 ## Qualification boundary
 
