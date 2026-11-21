@@ -20,6 +20,16 @@ variables {
   alarm_topic_arn = "arn:aws:sns:us-east-1:123456789012:application-alerts"
 }
 
+# Prevent AWS STS calls across all test runs.
+override_data {
+  target          = data.aws_caller_identity.current
+  override_during = plan
+
+  values = {
+    account_id = "123456789012"
+  }
+}
+
 run "empty_schedules" {
   command = plan
 
@@ -41,15 +51,6 @@ run "empty_schedules" {
 
 run "independent_disabled_schedules" {
   command = plan
-
-  override_data {
-    target          = data.aws_caller_identity.current[0]
-    override_during = plan
-
-    values = {
-      account_id = "123456789012"
-    }
-  }
 
   variables {
     schedules = {
