@@ -195,7 +195,7 @@ No deployment or AWS mutation is authorized by this contract.
 
 ### M2-B2-D1 — Approved Broker Platform Direction
 
-**Decision date:** 2026-11-21  
+**Decision date:** 2026-11-21
 **Status:** Owner-approved architecture direction; implementation pending.
 
 #### Selected architecture
