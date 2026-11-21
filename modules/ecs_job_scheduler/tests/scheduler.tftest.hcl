@@ -103,3 +103,53 @@ run "independent_disabled_schedules" {
     error_message = "Each DLQ must use the configured CMK and have its own alarm."
   }
 }
+
+run "reject_missing_broker_queue" {
+  command = plan
+
+  variables {
+    broker_request_queue_arn = null
+
+    schedules = {
+      archive = {
+        job_key             = "archive"
+        schedule_expression = "rate(1 day)"
+      }
+    }
+  }
+
+  expect_failures = [var.broker_request_queue_arn]
+}
+
+run "reject_missing_dlq_cmk" {
+  command = plan
+
+  variables {
+    dlq_kms_key_arn = null
+
+    schedules = {
+      archive = {
+        job_key             = "archive"
+        schedule_expression = "rate(1 day)"
+      }
+    }
+  }
+
+  expect_failures = [var.dlq_kms_key_arn]
+}
+
+run "reject_invalid_schedule_configuration" {
+  command = plan
+
+  variables {
+    schedules = {
+      archive = {
+        job_key                = "archive"
+        schedule_expression    = "invalid-expression"
+        maximum_retry_attempts = 186
+      }
+    }
+  }
+
+  expect_failures = [var.schedules]
+}
