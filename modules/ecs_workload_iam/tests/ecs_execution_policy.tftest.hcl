@@ -353,4 +353,37 @@ run "ecs_task_composition_without_cycle" {
 
     error_message = "Each synthetic job must have its own launcher role and policy."
   }
+
+  assert {
+    condition = (
+      toset(keys(output.launcher_policy_boundaries)) ==
+      toset(["archive", "report"]) &&
+      alltrue([
+        for job_name, statements in output.launcher_policy_boundaries :
+        statements == {
+          RunApprovedTaskRevision = {
+            effect  = "Allow"
+            actions = toset(["ecs:RunTask"])
+            conditions = {
+              "ArnEquals|ecs:cluster" = toset([
+                "arn:aws:ecs:us-east-1:123456789012:cluster/unit-test-dev"
+              ])
+            }
+          }
+
+          PassOnlyApprovedJobRoles = {
+            effect  = "Allow"
+            actions = toset(["iam:PassRole"])
+            conditions = {
+              "StringEquals|iam:PassedToService" = toset([
+                "ecs-tasks.amazonaws.com"
+              ])
+            }
+          }
+        }
+      ])
+    )
+
+    error_message = "Launcher policies must retain exact ECS launch actions and authorization conditions."
+  }
 }
