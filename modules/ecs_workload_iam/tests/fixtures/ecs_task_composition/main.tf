@@ -163,3 +163,23 @@ output "launcher_policy_roles" {
     job_name => policy.role
   }
 }
+
+output "launcher_policy_boundaries" {
+  description = "Test-only launcher IAM actions and conditions."
+
+  value = {
+    for job_name, policy in data.aws_iam_policy_document.job_launch :
+    job_name => {
+      for statement in policy.statement :
+      statement.sid => {
+        effect  = statement.effect
+        actions = toset(statement.actions)
+
+        conditions = {
+          for condition in statement.condition :
+          "${condition.test}|${condition.variable}" => toset(condition.values)
+        }
+      }
+    }
+  }
+}
