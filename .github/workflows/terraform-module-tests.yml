@@ -49,6 +49,7 @@ jobs:
           for root in \
             modules/ecs_service \
             modules/ecs_task \
+            modules/ecs_job_scheduler \
             modules/ecs_workload_iam \
             modules/iam \
             baseline \
