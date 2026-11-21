@@ -159,3 +159,35 @@ resource "aws_scheduler_schedule" "jobs" {
     aws_iam_role_policy.scheduler_delivery
   ]
 }
+
+resource "aws_cloudwatch_metric_alarm" "scheduler_dlq_visible" {
+  for_each = var.schedules
+
+  alarm_name = "${var.name_prefix}-${each.key}-scheduler-dlq-messages"
+
+  alarm_description = (
+    "Scheduler delivery failures for application job ${each.value.job_key}."
+  )
+
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+
+  treat_missing_data = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.scheduler_dlq[each.key].name
+  }
+
+  alarm_actions = [var.alarm_topic_arn]
+
+  tags = {
+    Name        = "${var.name_prefix}-${each.key}-scheduler-dlq-messages"
+    Environment = var.environment
+    Terraform   = "true"
+  }
+}
