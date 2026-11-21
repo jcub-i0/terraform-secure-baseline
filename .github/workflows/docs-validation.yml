@@ -53,6 +53,7 @@ jobs:
             --accept 200,206,301,302,303,307,308,429
             --retry-wait-time 5
             --max-retries 3
+            --max-concurrency 16
             --timeout 20
             --include-fragments
             --exclude-path .terraform
