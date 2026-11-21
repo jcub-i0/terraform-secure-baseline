@@ -103,6 +103,31 @@ run "independent_disabled_schedules" {
 
     error_message = "Each DLQ must use the configured CMK and have its own alarm."
   }
+
+  assert {
+    condition = alltrue([
+      for name, schedule in aws_scheduler_schedule.jobs :
+      strcontains(
+        schedule.target[0].input,
+        "<aws.scheduler.schedule-arn>"
+      ) &&
+      strcontains(
+        schedule.target[0].input,
+        "<aws.scheduler.scheduled-time>"
+      ) &&
+      try(
+        jsondecode(schedule.target[0].input).schedule_arn ==
+        "<aws.scheduler.schedule-arn>" &&
+        jsondecode(schedule.target[0].input).scheduled_time ==
+        "<aws.scheduler.scheduled-time>" &&
+        jsondecode(schedule.target[0].input).request_key ==
+        "<aws.scheduler.schedule-arn>|<aws.scheduler.scheduled-time>",
+        false
+      )
+    ])
+
+    error_message = "Scheduler input must retain literal context tokens and valid JSON request fields."
+  }
 }
 
 run "reject_missing_broker_queue" {
