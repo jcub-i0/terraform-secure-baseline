@@ -327,17 +327,30 @@ run "ecs_task_composition_without_cycle" {
       output.iam_log_group_arns[job_name] == toset([
         "arn:aws:logs:us-east-1:123456789012:log-group:${log_group.name}"
       ])
-    ]) && toset(keys(output.job_log_groups)) == toset(["report"])
+    ]) && toset(keys(output.job_log_groups)) == toset(["archive", "report"])
 
     error_message = "Deterministic IAM log-group ARNs must match the log groups created by ecs_task."
   }
 
   assert {
     condition = (
-      toset(keys(output.execution_policy_ids)) == toset(["report"]) &&
+      toset(keys(output.execution_policy_ids)) == toset(["archive", "report"]) &&
       length(output.task_role_policy_attachment_ids) == 0
     )
 
     error_message = "Job IAM must expose execution-policy readiness and omit attachment readiness without managed policies."
+  }
+
+  assert {
+    condition = (
+      toset(keys(output.launcher_policy_roles)) ==
+      toset(["archive", "report"]) &&
+      output.launcher_policy_roles["archive"] ==
+      "unit-test-dev-archive-launcher" &&
+      output.launcher_policy_roles["report"] ==
+      "unit-test-dev-report-launcher"
+    )
+
+    error_message = "Each synthetic job must have its own launcher role and policy."
   }
 }
