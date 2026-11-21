@@ -88,6 +88,24 @@ Both schedules remain disabled unless explicitly configured otherwise.
 
 Schedule expressions are validated for supported syntax shape. AWS performs authoritative validation of scheduling expressions and timezones.
 
+## Resource Naming
+
+Resource names derive from `name_prefix` and the schedule map key.
+
+The current IAM execution-role naming convention requires:
+
+`length(name_prefix) + length(schedule_key) <= 43`
+
+This ensures the generated IAM role name remains within AWS's
+64-character limit.
+
+Use alphanumeric characters, hyphens, and underscores for naming components to maintain compatibility with generated
+SQS queue names.
+
+IAM role names are unique within an AWS account, regardless of Region. Independent deployments in the same account must use distinct naming prefixes to prevent collisions.
+
+The module does not silently truncate generated resource names.
+
 ## Scheduler Behavior
 
 ### Default-disabled execution
@@ -158,6 +176,18 @@ The application infrastructure must provide compatible KMS key policies and IAM 
 The module configures SQS DLQ encryption using `dlq_kms_key_arn`. It does not configure a customer-managed KMS key for EventBridge Scheduler's own stored target-payload encryption.
 
 KMS key availability, permissions, and resource-policy compatibility are deployment requirements.
+
+### External authorization requirements
+
+The Scheduler execution role requires permission to send messages to the broker-request queue and use its customer-managed KMS key when SSE-KMS is configured.
+
+Encrypted Scheduler DLQ delivery has a separate authorization requirement: the DLQ's customer-managed KMS key policy must authorize the `scheduler.amazonaws.com` service principal for `kms:GenerateDataKey` and `kms:Decrypt`.
+
+Granting these actions to the Scheduler execution role alone does not satisfy the service-principal requirement for DLQ delivery.
+
+Where the broker-request queue is in another AWS account, its SQS resource policy and applicable KMS key policy must also authorize the intended producer identity.
+
+All external grants should be restricted to approved resources and identities. Their effective behavior must be qualified before schedules are activated.
 
 ## Dead-Letter Queues and Monitoring
 
