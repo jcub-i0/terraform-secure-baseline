@@ -23,8 +23,8 @@ variable "schedules" {
     timezone            = optional(string, "UTC")
     enabled             = optional(bool, false)
 
-    maximum_retry_attempts        = optional(number, 3)
-    maximum_event_age_in_seconds  = optional(number, 3600)
+    maximum_retry_attempts       = optional(number, 3)
+    maximum_event_age_in_seconds = optional(number, 3600)
   }))
 
   default = {}
