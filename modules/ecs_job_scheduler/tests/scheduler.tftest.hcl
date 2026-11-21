@@ -192,7 +192,7 @@ run "scheduler_iam_policy_contract" {
     }
   }
 
-  # Supply deterministic ARNs so IAM policy JSON is known at plan time.
+  # Supply deterministic ARNs for plan-time policy statement assertions.
   override_resource {
     target          = aws_scheduler_schedule_group.jobs[0]
     override_during = plan
