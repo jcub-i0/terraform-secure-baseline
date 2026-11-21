@@ -108,6 +108,86 @@ The AWS authorization for `ecs:RunTask` does not guarantee private networking. C
 
 These runtime admission protections remain M2-B2 and M0 security requirements. They are not implemented by this example.
 
+## M2-B2 — Protected Runtime Admission Contract
+
+**Status:** Architecture approved for implementation planning.
+Concrete enforcement, trusted execution identity, and live
+qualification remain pending M0 security approval.
+
+### Caller interface
+
+Authorized callers request a job using:
+
+- An approved job key.
+- An idempotency identifier.
+- An authenticated caller identity.
+
+Callers must not supply arbitrary ECS task definitions, IAM roles,
+subnets, security groups, commands, environment variables, or
+resource overrides.
+
+### Protected launch broker
+
+An independently protected launcher resolves each job key to
+approved configuration containing:
+
+- Exact task-definition revision ARN.
+- Approved ECS cluster ARN.
+- Expected task and execution roles.
+- Private subnet IDs and approved security-group IDs.
+- Fargate platform configuration.
+- Execution, concurrency, and retry limits.
+
+The broker constructs the ECS RunTask request with:
+
+- Count = 1.
+- Approved task definition and cluster.
+- Explicit private networking.
+- assignPublicIp = DISABLED.
+- No caller-controlled role or container overrides.
+
+The initial concurrency policy permits one active execution per
+job. Concurrency and idempotency decisions must be enforced
+atomically using durable, protected state.
+
+### Identity and bypass prevention
+
+The broker uses a dedicated runtime identity with narrowly scoped
+RunTask and PassRole permissions.
+
+Ordinary application callers, image-publishing identities, and
+Scheduler execution roles must not be able to bypass protected
+admission by directly assuming the broker identity or invoking ECS
+with unrestricted permissions.
+
+Platform-controlled IAM ceilings, trust policies, and security-group
+mutation authority remain independent of ordinary application CI.
+
+### Lifecycle coordination
+
+New launches and retries must be blocked by the protected lifecycle
+fence before workload draining, database parking, or teardown.
+
+Scheduler-triggered and on-demand requests follow the same
+admission rules.
+
+An expired lease or interrupted executor must not automatically
+restore launch authority without reconciliation.
+
+### Results and qualification
+
+The broker records the caller, job, approved revision, request
+identity, AWS request ID, returned task ARN, and launch outcome.
+
+RunTask acceptance is not equivalent to successful task completion.
+Runtime completion and failure reporting require separate ECS task
+state monitoring.
+
+M2-B2 is not qualified until authorized launches and denied bypass
+attempts are demonstrated against the actual protected identity.
+
+No deployment or AWS mutation is authorized by this contract.
+
 ## Qualification boundary
 
 M2-B1a establishes a reusable Terraform policy contract only.
