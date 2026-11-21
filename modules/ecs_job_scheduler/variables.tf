@@ -1,10 +1,10 @@
 variable "name_prefix" {
-  description = "Baseline naming prefix used to construct the ECS cluster name"
+  description = "Application naming prefix for Scheduler-owned resources."
   type        = string
 }
 
 variable "environment" {
-  description = "Workload environment identity used for ECS cluster tagging"
+  description = "Application environment used for resource tagging."
   type        = string
 }
 
