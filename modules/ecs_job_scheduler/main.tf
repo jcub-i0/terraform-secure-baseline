@@ -135,15 +135,17 @@ resource "aws_scheduler_schedule" "jobs" {
     arn      = var.broker_request_queue_arn
     role_arn = aws_iam_role.scheduler_execution[each.key].arn
 
-    input = jsonencode({
-      schema_version = 1
-      job_key        = each.value.job_key
-      schedule_key   = each.key
-      schedule_arn   = "<aws.scheduler.schedule-arn>"
-      scheduled_time = "<aws.scheduler.scheduled-time>"
-
-      request_key = "<aws.scheduler.schedule-arn>|<aws.scheduler.scheduled-time>"
-    })
+    # Preserve literal Scheduler context tokens while JSON-encoding application-supplied values.
+    input = <<-JSON
+      {
+        "schema_version": 1,
+        "job_key": ${jsonencode(each.value.job_key)},
+        "schedule_key": ${jsonencode(each.key)},
+        "schedule_arn": "<aws.scheduler.schedule-arn>",
+        "scheduled_time": "<aws.scheduler.scheduled-time>",
+        "request_key": "<aws.scheduler.schedule-arn>|<aws.scheduler.scheduled-time>"
+      }
+    JSON
 
     dead_letter_config {
       arn = aws_sqs_queue.scheduler_dlq[each.key].arn
