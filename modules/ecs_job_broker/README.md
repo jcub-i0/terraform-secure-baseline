@@ -1,13 +1,12 @@
-
 # ECS Job Broker Module
 
 ## Overview
 
-The `ecs_job_broker` module provides application-owned IAM resources for protected, standalone ECS Fargate job execution.
+The `ecs_job_broker` module provides application-owned IAM and an encrypted SQS request queue for protected, standalone ECS Fargate job execution.
 
 The module separates broker execution permissions from job-specific ECS launch permissions.
 
-**Current scope:** IAM roles, trust policies, and permissions only. The broker Lambda function, SQS request queue, DynamoDB execution ledger, runtime admission logic, and monitoring are not yet implemented by this module.
+**Current scope:** IAM roles, trust policies, job-launch permissions, and an application-owned encrypted SQS request queue with a TLS-enforcing resource policy. The Lambda processor, DynamoDB execution ledger, runtime admission logic, processing dead-letter queue, and monitoring are not yet implemented.
 
 ## IAM Architecture
 
@@ -33,6 +32,19 @@ Each launcher is restricted to:
 
 Launcher authorization does not independently enforce task network configuration, concurrency, idempotency, or lifecycle fencing. These require protected runtime admission controls.
 
+## Broker Request Queue
+
+When `jobs` is nonempty, the module creates one standard SQS queue named `${name_prefix}-job-broker-requests`:
+
+- **Encryption at rest:** SSE-KMS with the externally supplied application-owned customer-managed KMS key (`broker_request_queue_cmk_arn`). The module does not create the key or grant KMS permissions.
+- **Encryption in transit:** The queue resource policy denies `sqs:*` requests when `aws:SecureTransport` is `false`. This policy does not itself grant producers or consumers queue access.
+- **Visibility timeout:** 180 seconds, a provisional setting to reconcile with the Lambda function timeout and batching configuration when the consumer is implemented.
+- **Message retention:** Four days (345,600 seconds).
+
+The queue ARN can be passed to `ecs_job_scheduler` as `broker_request_queue_arn`, alongside the same CMK ARN as `broker_request_queue_cmk_arn`. Producer/consumer IAM permissions and effective KMS key-policy authorization must be established through their respective ownership boundaries.
+
+The queue does not authenticate request-body claims, enforce job admission, provide durable deduplication, or process messages. These are future protected-broker responsibilities.
+
 ## Inputs
 
 | Input | Description | Default |
@@ -42,6 +54,7 @@ Launcher authorization does not independently enforce task network configuration
 | `approved_cluster_arn` | Exact approved ECS cluster ARN | Required |
 | `permissions_boundary_arn` | Platform-governed IAM permissions boundary ARN | Required, non-null |
 | `jobs` | Map of approved standalone jobs | `{}` |
+| `broker_request_queue_cmk_arn` | Application-owned CMK ARN for SSE-KMS encryption of the broker request queue | Required when `jobs` is nonempty; otherwise `null` |
 
 Each `jobs` entry requires:
 
@@ -49,13 +62,14 @@ Each `jobs` entry requires:
 - `execution_role_arn`: Job execution role ARN.
 - `task_role_arn`: Job application task role ARN.
 
-An empty `jobs` map creates no managed IAM resources.
+An empty `jobs` map creates no managed IAM or SQS resources.
 
 ## Outputs
 
 - `broker_execution_role`: Broker role ARN and name, or `null` when no jobs are configured.
 - `launcher_roles`: Map of launcher role ARNs and names.
 - `launcher_policy_ids`: Map of per-job inline-policy IDs.
+- `broker_request_queue`: SQS queue ARN, URL, and name, or `null` when no jobs are configured.
 
 ## Security Responsibilities
 
@@ -65,7 +79,7 @@ The boundary itself must be independently governed by the platform. Application 
 
 Effective permissions also depend on the approved IAM boundary policy, trust relationships, deployment identities, and any applicable organization-level restrictions.
 
-The module does not create or authorize those external controls.
+The module does not create or authorize those external controls. The queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy.
 
 Runtime enforcement of private networking, approved security groups, request authentication, durable idempotency, concurrency, lifecycle fencing, and execution outcomes remains outstanding.
 
@@ -82,6 +96,6 @@ terraform -chdir=modules/ecs_job_broker test \
   -filter=tests/broker_iam.tftest.hcl
 ```
 
-The tests cover empty configuration and a two-job IAM authorization contract.
+The tests cover empty configuration, a two-job IAM authorization contract, encrypted-queue and TLS-deny settings, and rejection of a missing queue CMK when jobs are configured.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.

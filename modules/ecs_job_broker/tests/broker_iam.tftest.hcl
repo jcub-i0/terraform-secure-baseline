@@ -14,7 +14,8 @@ variables {
 
   approved_cluster_arn = "arn:aws:ecs:us-east-1:123456789012:cluster/unit-test-dev"
 
-  permissions_boundary_arn = "arn:aws:iam::123456789012:policy/approved-workload-boundary"
+  permissions_boundary_arn     = "arn:aws:iam::123456789012:policy/approved-workload-boundary"
+  broker_request_queue_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
 
   jobs = {
     archive = {
@@ -40,6 +41,9 @@ run "empty_jobs" {
 
   assert {
     condition = (
+      length(aws_sqs_queue.broker_requests) == 0 &&
+      length(aws_sqs_queue_policy.broker_requests) == 0 &&
+      output.broker_request_queue == null &&
       length(aws_iam_role.broker_execution) == 0 &&
       length(aws_iam_role.launcher) == 0 &&
       length(aws_iam_role_policy.broker_assume_launchers) == 0 &&
@@ -127,4 +131,47 @@ run "two_job_iam_contract" {
 
     error_message = "Each job must retain exact revision, cluster, and PassRole authorization."
   }
+
+  assert {
+    condition = (
+      length(aws_sqs_queue.broker_requests) == 1 &&
+      aws_sqs_queue.broker_requests[0].fifo_queue == false &&
+      aws_sqs_queue.broker_requests[0].kms_master_key_id ==
+      var.broker_request_queue_cmk_arn &&
+      aws_sqs_queue.broker_requests[0].visibility_timeout_seconds == 180 &&
+      aws_sqs_queue.broker_requests[0].message_retention_seconds == 345600 &&
+      length(aws_sqs_queue_policy.broker_requests) == 1
+    )
+
+    error_message = "Configured jobs must create one encrypted standard broker request queue with its transport policy."
+  }
+
+  assert {
+    condition = (
+      length(data.aws_iam_policy_document.broker_queue_transport[0].statement) == 1 &&
+      data.aws_iam_policy_document.broker_queue_transport[0].statement[0].effect == "Deny" &&
+      toset(data.aws_iam_policy_document.broker_queue_transport[0].statement[0].actions) ==
+      toset(["sqs:*"]) &&
+      alltrue([
+        for condition in data.aws_iam_policy_document.broker_queue_transport[0].statement[0].condition :
+        condition.test == "Bool" &&
+        condition.variable == "aws:SecureTransport" &&
+        toset(condition.values) == toset(["false"])
+      ])
+    )
+
+    error_message = "Broker request queue must deny insecure transport."
+  }
+}
+
+run "reject_missing_broker_queue_cmk" {
+  command = plan
+
+  variables {
+    broker_request_queue_cmk_arn = null
+  }
+
+  expect_failures = [
+    var.broker_request_queue_cmk_arn
+  ]
 }

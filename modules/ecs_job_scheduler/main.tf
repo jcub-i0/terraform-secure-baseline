@@ -100,7 +100,7 @@ data "aws_iam_policy_document" "scheduler_delivery" {
 
     resources = distinct(compact([
       var.dlq_kms_key_arn,
-      var.broker_request_queue_kms_key_arn
+      var.broker_request_queue_cmk_arn
     ]))
   }
 }
