@@ -163,3 +163,15 @@ run "two_job_iam_contract" {
     error_message = "Broker request queue must deny insecure transport."
   }
 }
+
+run "reject_missing_broker_queue_cmk" {
+  command = plan
+
+  variables {
+    broker_request_queue_cmk_arn = null
+  }
+
+  expect_failures = [
+    var.broker_request_queue_cmk_arn
+  ]
+}
