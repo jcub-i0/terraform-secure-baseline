@@ -34,6 +34,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Identify changed Markdown files
+        id: changed_docs
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git diff --name-only --diff-filter=ACMR \
+              "$PR_BASE"...HEAD -- '*.md' > changed-docs.txt
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            git diff --name-only --diff-filter=ACMR \
+              "$PUSH_BEFORE" HEAD -- '*.md' > changed-docs.txt
+          else
+            git ls-files '*.md' > changed-docs.txt
+          fi
+
+          if [[ -s changed-docs.txt ]]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20
@@ -44,6 +72,7 @@ jobs:
             !**/node_modules/**
 
       - name: Check Links in Markdown
+        if: steps.changed_docs.outputs.found == 'true'
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
@@ -56,9 +85,7 @@ jobs:
             --max-concurrency 16
             --timeout 20
             --include-fragments
-            --exclude-path .terraform
-            --exclude-path node_modules
-            './**/*.md'
+            --files-from changed-docs.txt
           fail: true
 
       - name: Check for Trailing Whitespace in Markdown
