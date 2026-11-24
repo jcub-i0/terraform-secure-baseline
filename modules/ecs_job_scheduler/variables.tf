@@ -78,17 +78,17 @@ variable "dlq_kms_key_arn" {
   }
 }
 
-variable "broker_request_queue_kms_key_arn" {
+variable "broker_request_queue_cmk_arn" {
   description = "Optional customer-managed KMS key ARN encrypting the existing broker request queue."
   type        = string
   default     = null
 
   validation {
     condition = (
-      var.broker_request_queue_kms_key_arn == null ||
+      var.broker_request_queue_cmk_arn == null ||
       can(regex(
         "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
-        var.broker_request_queue_kms_key_arn
+        var.broker_request_queue_cmk_arn
       ))
     )
 

@@ -15,7 +15,7 @@ variables {
 
   dlq_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
 
-  broker_request_queue_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
+  broker_request_queue_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
 
   alarm_topic_arn = "arn:aws:sns:us-east-1:123456789012:application-alerts"
 }

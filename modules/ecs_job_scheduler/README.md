@@ -47,7 +47,7 @@ An empty `schedules` map produces no managed resources.
 | `schedules` | Map of configured job schedules | `{}` |
 | `broker_request_queue_arn` | Existing SQS broker-request queue ARN | `null` |
 | `dlq_kms_key_arn` | Customer-managed KMS key ARN for Scheduler DLQs | `null` |
-| `broker_request_queue_kms_key_arn` | KMS key ARN for an SSE-KMS-encrypted broker queue | `null` |
+| `broker_request_queue_cmk_arn` | KMS key ARN for an SSE-KMS-encrypted broker queue | `null` |
 | `alarm_topic_arn` | Existing SNS topic for delivery-failure alarms | `null` |
 
 The broker-request queue ARN, DLQ CMK ARN, and alarm topic ARN are required when the schedule map is nonempty.
