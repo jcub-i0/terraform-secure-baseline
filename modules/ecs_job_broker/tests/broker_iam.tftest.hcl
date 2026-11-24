@@ -237,3 +237,15 @@ run "reject_missing_broker_log_cmk" {
     var.broker_log_cmk_arn
   ]
 }
+
+run "reject_missing_cloudwatch_retention_days" {
+  command = plan
+
+  variables {
+    cloudwatch_retention_days = null
+  }
+
+  expect_failures = [
+    var.cloudwatch_retention_days
+  ]
+}
