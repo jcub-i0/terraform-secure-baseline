@@ -27,7 +27,7 @@ data "aws_iam_policy_document" "broker_runtime" {
     condition {
       test     = "StringEquals"
       variable = "kms:ViaService"
-      values   = ["sqs.${data.aws_region.current.name}.amazonaws.com"]
+      values   = ["sqs.${data.aws_region.current.region}.amazonaws.com"]
     }
   }
 
@@ -63,7 +63,7 @@ data "aws_iam_policy_document" "broker_runtime" {
     condition {
       test     = "StringEquals"
       variable = "kms:ViaService"
-      values   = ["dynamodb.${data.aws_region.current.name}.amazonaws.com"]
+      values   = ["dynamodb.${data.aws_region.current.region}.amazonaws.com"]
     }
   }
 
