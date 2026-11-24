@@ -55,3 +55,12 @@ output "broker_log_group" {
     name = aws_cloudwatch_log_group.broker[0].name
   } : null
 }
+
+output "broker_lambda" {
+  description = "Broker Lambda function metadata; null when no approved package is configured."
+
+  value = length(aws_lambda_function.broker) > 0 ? {
+    arn  = aws_lambda_function.broker[0].arn
+    name = aws_lambda_function.broker[0].function_name
+  } : null
+}

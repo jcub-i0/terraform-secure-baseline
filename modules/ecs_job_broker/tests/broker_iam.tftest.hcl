@@ -44,6 +44,8 @@ run "empty_jobs" {
 
   assert {
     condition = (
+      length(aws_lambda_function.broker) == 0 &&
+      output.broker_lambda == null &&
       length(aws_cloudwatch_log_group.broker) == 0 &&
       length(aws_iam_role_policy.broker_runtime) == 0 &&
       output.broker_log_group == null &&
@@ -200,6 +202,15 @@ run "two_job_iam_contract" {
 
     error_message = "Broker runtime must have encrypted logging and no direct ECS launch permissions."
   }
+
+  assert {
+    condition = (
+      length(aws_lambda_function.broker) == 0 &&
+      output.broker_lambda == null
+    )
+
+    error_message = "The broker Lambda must remain absent without an approved deployment package."
+  }
 }
 
 run "reject_missing_broker_queue_cmk" {
@@ -248,4 +259,34 @@ run "reject_missing_cloudwatch_retention_days" {
   expect_failures = [
     var.cloudwatch_retention_days
   ]
+}
+
+run "versioned_broker_lambda" {
+  command = plan
+
+  variables {
+    broker_lambda_package = {
+      bucket     = "unit-test-approved-artifacts"
+      key        = "broker/release-1/broker.zip"
+      version_id = "test-version-001"
+    }
+
+    broker_lambda_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/33333333-3333-3333-3333-333333333333"
+  }
+
+  assert {
+    condition = (
+      length(aws_lambda_function.broker) == 1 &&
+      aws_lambda_function.broker[0].reserved_concurrent_executions == 0 &&
+      aws_lambda_function.broker[0].runtime == "python3.12" &&
+      aws_lambda_function.broker[0].handler == "broker.lambda_handler" &&
+      aws_lambda_function.broker[0].timeout == 30 &&
+      aws_lambda_function.broker[0].s3_bucket == var.broker_lambda_package.bucket &&
+      aws_lambda_function.broker[0].s3_key == var.broker_lambda_package.key &&
+      aws_lambda_function.broker[0].s3_object_version == var.broker_lambda_package.version_id &&
+      aws_lambda_function.broker[0].kms_key_arn == var.broker_lambda_cmk_arn
+    )
+
+    error_message = "Broker Lambda must use an exact S3 artifact version and remain disabled."
+  }
 }
