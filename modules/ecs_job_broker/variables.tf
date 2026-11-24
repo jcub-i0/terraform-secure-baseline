@@ -77,3 +77,36 @@ variable "execution_ledger_cmk_arn" {
     error_message = "Configured jobs require an exact customer-managed KMS key ARN for the execution ledger."
   }
 }
+
+variable "broker_log_cmk_arn" {
+  description = "Application-owned CMK ARN for broker Lambda logs."
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      length(var.jobs) == 0 ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
+        var.broker_log_cmk_arn
+      ))
+    )
+
+    error_message = "Configured jobs require an exact CMK ARN for broker Lambda logs."
+  }
+}
+
+variable "cloudwatch_retention_days" {
+  description = "CloudWatch Logs retention period supplied by the application composition."
+  type        = number
+  default     = null
+
+  validation {
+    condition = (
+      length(var.jobs) == 0 ||
+      var.cloudwatch_retention_days != null
+    )
+
+    error_message = "Configured jobs require an explicit CloudWatch Logs retention period."
+  }
+}
