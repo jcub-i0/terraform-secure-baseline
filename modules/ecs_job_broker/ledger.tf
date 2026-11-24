@@ -1,7 +1,7 @@
 resource "aws_dynamodb_table" "execution_ledger" {
   count = length(var.jobs) > 0 ? 1 : 0
 
-  name         = "${var.name_prefix}- job-execution-ledger"
+  name         = "${var.name_prefix}-job-execution-ledger"
   billing_mode = "PAY_PER_REQUEST"
 
   hash_key = "pk"
