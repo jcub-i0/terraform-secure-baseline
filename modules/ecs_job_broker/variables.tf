@@ -59,3 +59,21 @@ variable "broker_request_queue_cmk_arn" {
     error_message = "Configured jobs require an exact CMK ARN for the broker request queue."
   }
 }
+
+variable "execution_ledger_cmk_arn" {
+  description = "Application-owned customer-managed KMS key ARN for execution ledger encryption"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      length(var.jobs) == 0 ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
+        var.execution_ledger_cmk_arn
+      ))
+    )
+
+    error_message = "Configured jobs require an exact customer-managed KMS key ARN for the execution ledger."
+  }
+}

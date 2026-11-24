@@ -16,6 +16,7 @@ variables {
 
   permissions_boundary_arn     = "arn:aws:iam::123456789012:policy/approved-workload-boundary"
   broker_request_queue_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
+  execution_ledger_cmk_arn     = "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
 
   jobs = {
     archive = {
@@ -41,6 +42,8 @@ run "empty_jobs" {
 
   assert {
     condition = (
+      length(aws_dynamodb_table.execution_ledger) == 0 &&
+      output.execution_ledger == null &&
       length(aws_sqs_queue.broker_requests) == 0 &&
       length(aws_sqs_queue_policy.broker_requests) == 0 &&
       output.broker_request_queue == null &&
@@ -162,6 +165,18 @@ run "two_job_iam_contract" {
 
     error_message = "Broker request queue must deny insecure transport."
   }
+
+  assert {
+    condition = (
+      length(aws_dynamodb_table.execution_ledger) == 1 &&
+      aws_dynamodb_table.execution_ledger[0].billing_mode == "PAY_PER_REQUEST" &&
+      aws_dynamodb_table.execution_ledger[0].hash_key == "pk" &&
+      aws_dynamodb_table.execution_ledger[0].deletion_protection_enabled == true &&
+      length(aws_dynamodb_table.execution_ledger[0].point_in_time_recovery) == 1
+    )
+
+    error_message = "Configured jobs must create an on-demand execution ledger with recovery and deletion protection."
+  }
 }
 
 run "reject_missing_broker_queue_cmk" {
@@ -173,5 +188,17 @@ run "reject_missing_broker_queue_cmk" {
 
   expect_failures = [
     var.broker_request_queue_cmk_arn
+  ]
+}
+
+run "reject_missing_execution_ledger_cmk" {
+  command = plan
+
+  variables {
+    execution_ledger_cmk_arn = null
+  }
+
+  expect_failures = [
+    var.execution_ledger_cmk_arn
   ]
 }
