@@ -46,3 +46,12 @@ output "execution_ledger" {
     name = aws_dynamodb_table.execution_ledger[0].name
   } : null
 }
+
+output "broker_log_group" {
+  description = "Broker Lambda log group metadata; null when no jobs are configured."
+
+  value = length(aws_cloudwatch_log_group.broker) > 0 ? {
+    arn  = aws_cloudwatch_log_group.broker[0].arn
+    name = aws_cloudwatch_log_group.broker[0].name
+  } : null
+}

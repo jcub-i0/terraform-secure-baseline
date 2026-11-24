@@ -2,11 +2,11 @@
 
 ## Overview
 
-The `ecs_job_broker` module provides application-owned IAM, an encrypted SQS request queue, and a DynamoDB execution ledger for protected, standalone ECS Fargate job execution.
+The `ecs_job_broker` module provides application-owned IAM, an encrypted SQS request queue, a DynamoDB execution ledger, and CloudWatch Logs infrastructure for protected, standalone ECS Fargate job execution.
 
 The module separates broker execution permissions from job-specific ECS launch permissions.
 
-**Current scope:** IAM roles, trust policies, job-launch permissions, an encrypted SQS request queue with a TLS-enforcing resource policy, and an encrypted DynamoDB execution ledger table. The Lambda processor, atomic admission protocol, processing dead-letter queue, and monitoring are not yet implemented.
+**Current scope:** IAM roles, trust policies, job-launch permissions, a scoped broker runtime IAM policy, an encrypted SQS request queue with a TLS-enforcing resource policy, an encrypted DynamoDB execution ledger table, and a CMK-encrypted CloudWatch log group. The Lambda function, SQS event-source mapping, atomic admission protocol, processing dead-letter queue, and runtime monitoring are not yet implemented.
 
 ## IAM Architecture
 
@@ -16,6 +16,7 @@ The module creates:
 - One dedicated launcher role per approved job.
 - A broker policy granting `sts:AssumeRole` on the configured launcher roles only.
 - Per-job policies granting `ecs:RunTask` and `iam:PassRole` under explicit resource restrictions.
+- A broker runtime policy scoped to its request queue, execution ledger, associated CMKs, and dedicated log group.
 
 The broker execution role trusts `lambda.amazonaws.com` and does not receive direct ECS launch permissions.
 
@@ -56,7 +57,28 @@ When `jobs` is nonempty, the module creates one DynamoDB table named `${name_pre
 - **Deletion protection:** Enabled to guard against accidental table deletion; deliberate destruction requires a separately authorized protection change.
 - **Retention:** No DynamoDB TTL configured. Expiration must not automatically remove an unresolved execution reservation.
 
-The table provides storage only. A future protected Lambda broker must implement conditional, atomic DynamoDB transactions for request uniqueness and at-most-one-active-execution-per-job reservations. Potential logical keys include `REQUEST#<request_hash>` and `SLOT#<job_key>`, but this PR does not create records or enforce that protocol. Runtime reconciliation, safe slot release, and coordination with the independently protected lifecycle fence remain outstanding. Point-in-time restores also require protected reconciliation before admission resumes.
+The table provides storage only. A future protected Lambda broker must implement conditional, atomic DynamoDB transactions for request uniqueness and at-most-one-active-execution-per-job reservations. Potential logical keys include `REQUEST#<request_hash>` and `SLOT#<job_key>`, but the module does not create records or enforce that protocol. Runtime reconciliation, safe slot release, and coordination with the independently protected lifecycle fence remain outstanding. Point-in-time restores also require protected reconciliation before admission resumes.
+
+## Broker Runtime IAM and Logging
+
+When `jobs` is nonempty, the module creates a dedicated CloudWatch log group at `/aws/lambda/${name_prefix}-job-broker`, with the following configuration:
+
+- **Retention:** `cloudwatch_retention_days` supplied explicitly by the application composition; no hardcoded module retention period. The application must obtain an approved value through the foundation-to-application contract or another independently approved configuration.
+- **Encryption:** The log group is encrypted with the externally supplied CMK (`broker_log_cmk_arn`). The regional CloudWatch Logs service requires appropriate authorization in the CMK key policy; the module does not create or modify that policy.
+
+The broker execution role receives an inline runtime policy with these permissions:
+
+| Resource | Allowed operations |
+|---|---|
+| Broker request queue | `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:GetQueueAttributes` on the exact queue ARN |
+| Request queue CMK | `kms:Decrypt`, limited by `kms:ViaService` to regional SQS |
+| Execution ledger | `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:ConditionCheckItem` on the exact table ARN |
+| Ledger CMK | `kms:Encrypt`, `kms:Decrypt`, `kms:GenerateDataKey`, `kms:DescribeKey`, limited by `kms:ViaService` to regional DynamoDB |
+| Broker log group | `logs:CreateLogStream`, `logs:PutLogEvents` for its log streams |
+
+The runtime policy does not grant `ecs:RunTask` or `iam:PassRole`. Those operations remain restricted to dedicated per-job launcher roles, which the broker may assume through its separately scoped `sts:AssumeRole` policy. The log group is created by Terraform; the broker runtime policy does not grant `logs:CreateLogGroup`.
+
+These IAM permissions enable future runtime integrations but do not implement request authentication, atomic admission, correct job-state transitions, or protected lifecycle coordination. No Lambda function or active SQS consumer is created in this checkpoint.
 
 ## Inputs
 
@@ -69,6 +91,8 @@ The table provides storage only. A future protected Lambda broker must implement
 | `jobs` | Map of approved standalone jobs | `{}` |
 | `broker_request_queue_cmk_arn` | Application-owned CMK ARN for SSE-KMS encryption of the broker request queue | Required when `jobs` is nonempty; otherwise `null` |
 | `execution_ledger_cmk_arn` | Application-owned CMK ARN for DynamoDB ledger encryption | Required when `jobs` is nonempty; otherwise `null` |
+| `broker_log_cmk_arn` | Externally supplied CMK ARN for CloudWatch broker logs | Required when `jobs` is nonempty; otherwise `null` |
+| `cloudwatch_retention_days` | Approved CloudWatch log retention period supplied by the application composition | Required when `jobs` is nonempty; otherwise `null` |
 
 Each `jobs` entry requires:
 
@@ -76,7 +100,7 @@ Each `jobs` entry requires:
 - `execution_role_arn`: Job execution role ARN.
 - `task_role_arn`: Job application task role ARN.
 
-An empty `jobs` map creates no managed IAM, SQS, or DynamoDB resources.
+An empty `jobs` map creates no managed IAM, SQS, DynamoDB, or CloudWatch log-group resources.
 
 ## Outputs
 
@@ -85,6 +109,7 @@ An empty `jobs` map creates no managed IAM, SQS, or DynamoDB resources.
 - `launcher_policy_ids`: Map of per-job inline-policy IDs.
 - `broker_request_queue`: SQS queue ARN, URL, and name, or `null` when no jobs are configured.
 - `execution_ledger`: DynamoDB table ARN and name, or `null` when no jobs are configured.
+- `broker_log_group`: CloudWatch log group ARN and name, or `null` when no jobs are configured.
 
 ## Security Responsibilities
 
@@ -94,7 +119,7 @@ The boundary itself must be independently governed by the platform. Application 
 
 Effective permissions also depend on the approved IAM boundary policy, trust relationships, deployment identities, and any applicable organization-level restrictions.
 
-The module does not create or authorize those external controls. The queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The ledger likewise grants no runtime DynamoDB access; effective table access and CMK permissions must be governed separately.
+The module does not create or authorize those external controls. The queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
 
 Runtime enforcement of private networking, approved security groups, request authentication, durable idempotency, concurrency, lifecycle fencing, and execution outcomes remains outstanding.
 
@@ -111,6 +136,6 @@ terraform -chdir=modules/ecs_job_broker test \
   -filter=tests/broker_iam.tftest.hcl
 ```
 
-The tests cover empty configuration, a two-job IAM authorization contract, encrypted-queue and TLS-deny settings, ledger table configuration and deletion protection, and rejection of missing queue or ledger CMK inputs when jobs are configured.
+The tests cover empty configuration, a two-job IAM authorization contract, encrypted-queue and TLS-deny settings, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, and rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.

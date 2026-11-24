@@ -17,6 +17,8 @@ variables {
   permissions_boundary_arn     = "arn:aws:iam::123456789012:policy/approved-workload-boundary"
   broker_request_queue_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
   execution_ledger_cmk_arn     = "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
+  broker_log_cmk_arn           = "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
+  cloudwatch_retention_days    = 30
 
   jobs = {
     archive = {
@@ -42,6 +44,9 @@ run "empty_jobs" {
 
   assert {
     condition = (
+      length(aws_cloudwatch_log_group.broker) == 0 &&
+      length(aws_iam_role_policy.broker_runtime) == 0 &&
+      output.broker_log_group == null &&
       length(aws_dynamodb_table.execution_ledger) == 0 &&
       output.execution_ledger == null &&
       length(aws_sqs_queue.broker_requests) == 0 &&
@@ -177,6 +182,24 @@ run "two_job_iam_contract" {
 
     error_message = "Configured jobs must create an on-demand execution ledger with recovery and deletion protection."
   }
+
+  assert {
+    condition = (
+      length(aws_cloudwatch_log_group.broker) == 1 &&
+      aws_cloudwatch_log_group.broker[0].retention_in_days ==
+      var.cloudwatch_retention_days &&
+      aws_cloudwatch_log_group.broker[0].kms_key_id ==
+      var.broker_log_cmk_arn &&
+      length(aws_iam_role_policy.broker_runtime) == 1 &&
+      alltrue([
+        for statement in data.aws_iam_policy_document.broker_runtime[0].statement :
+        !contains(statement.actions, "ecs:RunTask") &&
+        !contains(statement.actions, "iam:PassRole")
+      ])
+    )
+
+    error_message = "Broker runtime must have encrypted logging and no direct ECS launch permissions."
+  }
 }
 
 run "reject_missing_broker_queue_cmk" {
@@ -200,5 +223,29 @@ run "reject_missing_execution_ledger_cmk" {
 
   expect_failures = [
     var.execution_ledger_cmk_arn
+  ]
+}
+
+run "reject_missing_broker_log_cmk" {
+  command = plan
+
+  variables {
+    broker_log_cmk_arn = null
+  }
+
+  expect_failures = [
+    var.broker_log_cmk_arn
+  ]
+}
+
+run "reject_missing_cloudwatch_retention_days" {
+  command = plan
+
+  variables {
+    cloudwatch_retention_days = null
+  }
+
+  expect_failures = [
+    var.cloudwatch_retention_days
   ]
 }
