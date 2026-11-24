@@ -22,7 +22,7 @@ variable "permissions_boundary_arn" {
 variable "jobs" {
   description = "Approved standalone jobs, keyed by job name"
   type = map(object({
-    task_definitions_arn = string
+    task_definition_arn = string
     execution_role_arn   = string
     task_role_arn        = string
   }))
@@ -34,7 +34,7 @@ variable "jobs" {
       for job in values(var.jobs) :
       can(regex(
         "^arn:(aws|aws-us-gov|aws-cn):ecs:[a-z0-9-]+:[0-9]{12}:task-definition/[A-Za-z0-9_-]+:[1-9][0-9]*$",
-        job.task_definitions_arn
+        job.task_definition_arn
       ))
     ])
 

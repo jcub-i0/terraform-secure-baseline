@@ -87,7 +87,7 @@ data "aws_iam_policy_document" "job_launch" {
     sid       = "RunApprovedTaskRevision"
     effect    = "Allow"
     actions   = ["ecs:RunTask"]
-    resources = [each.value.task_definitions_arn]
+    resources = [each.value.task_definition_arn]
 
     condition {
       test     = "ArnEquals"
