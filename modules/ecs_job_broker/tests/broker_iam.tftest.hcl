@@ -44,6 +44,12 @@ run "empty_jobs" {
 
   assert {
     condition = (
+      length(aws_sqs_queue.broker_processing_dlq) == 0 &&
+      length(aws_sqs_queue_redrive_allow_policy.broker_processing_dlq) == 0 &&
+      length(aws_sqs_queue_policy.broker_processing_dlq) == 0 &&
+      length(aws_lambda_event_source_mapping.broker_requests) == 0 &&
+      output.broker_processing_dlq == null &&
+      output.broker_event_source_mapping_uuid == null &&
       length(aws_lambda_function.broker) == 0 &&
       output.broker_lambda == null &&
       length(aws_cloudwatch_log_group.broker) == 0 &&
@@ -211,6 +217,20 @@ run "two_job_iam_contract" {
 
     error_message = "The broker Lambda must remain absent without an approved deployment package."
   }
+
+  assert {
+    condition = (
+      length(aws_sqs_queue.broker_processing_dlq) == 1 &&
+      aws_sqs_queue.broker_processing_dlq[0].kms_master_key_id ==
+      var.broker_request_queue_cmk_arn &&
+      aws_sqs_queue.broker_processing_dlq[0].message_retention_seconds == 1209600 &&
+      length(aws_sqs_queue_redrive_allow_policy.broker_processing_dlq) == 1 &&
+      length(aws_sqs_queue_policy.broker_processing_dlq) == 1 &&
+      length(aws_lambda_event_source_mapping.broker_requests) == 0
+    )
+
+    error_message = "Configured jobs must have an encrypted processing DLQ; no event-source mapping may exist without a Lambda package."
+  }
 }
 
 run "reject_missing_broker_queue_cmk" {
@@ -288,5 +308,16 @@ run "versioned_broker_lambda" {
     )
 
     error_message = "Broker Lambda must use an exact S3 artifact version and remain disabled."
+  }
+
+  assert {
+    condition = (
+      length(aws_lambda_event_source_mapping.broker_requests) == 1 &&
+      aws_lambda_event_source_mapping.broker_requests[0].enabled == false &&
+      aws_lambda_event_source_mapping.broker_requests[0].batch_size == 1 &&
+      aws_lambda_event_source_mapping.broker_requests[0].maximum_batching_window_in_seconds == 0
+    )
+
+    error_message = "Broker Lambda event-source mapping must remain disabled and use one-message batches."
   }
 }
