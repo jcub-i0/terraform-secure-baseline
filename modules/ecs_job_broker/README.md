@@ -6,7 +6,7 @@ The `ecs_job_broker` module provides application-owned IAM, an encrypted SQS req
 
 The module separates broker execution permissions from job-specific ECS launch permissions.
 
-**Current scope:** IAM roles, trust policies, job-launch permissions, a scoped broker runtime IAM policy, an encrypted SQS request queue with a TLS-enforcing resource policy, an encrypted DynamoDB execution ledger table, and a CMK-encrypted CloudWatch log group. The Lambda function, SQS event-source mapping, atomic admission protocol, processing dead-letter queue, and runtime monitoring are not yet implemented.
+**Current scope:** IAM roles, trust policies, job-launch permissions, a scoped broker runtime IAM policy, an encrypted SQS request queue with a TLS-enforcing resource policy, an encrypted DynamoDB execution ledger table, a CMK-encrypted CloudWatch log group, and an optional, invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact. The SQS event-source mapping, atomic admission protocol, processing dead-letter queue, and runtime monitoring are not yet implemented.
 
 ## IAM Architecture
 
@@ -78,7 +78,22 @@ The broker execution role receives an inline runtime policy with these permissio
 
 The runtime policy does not grant `ecs:RunTask` or `iam:PassRole`. Those operations remain restricted to dedicated per-job launcher roles, which the broker may assume through its separately scoped `sts:AssumeRole` policy. The log group is created by Terraform; the broker runtime policy does not grant `logs:CreateLogGroup`.
 
-These IAM permissions enable future runtime integrations but do not implement request authentication, atomic admission, correct job-state transitions, or protected lifecycle coordination. No Lambda function or active SQS consumer is created in this checkpoint.
+These IAM permissions enable future runtime integrations but do not implement request authentication, atomic admission, correct job-state transitions, or protected lifecycle coordination. No active SQS consumer is created in this checkpoint.
+
+## Broker Lambda Infrastructure
+
+The module optionally creates `aws_lambda_function.broker` when `jobs` is nonempty and `broker_lambda_package` is supplied. When the package is `null`, **no Lambda function is created**, even if jobs are configured. The configured function:
+
+- Uses the name `${name_prefix}-job-broker`, Python 3.12, the `broker.lambda_handler` entry point, an `x86_64` architecture, 256 MiB memory, and a 30-second timeout.
+- Loads its ZIP from the supplied S3 bucket and object key, pinned to the exact `version_id`. The module does not build, upload, verify, or approve deployment artifacts.
+- Encrypts its environment configuration using the externally supplied customer-managed key `broker_lambda_cmk_arn`. Appropriate KMS key-policy and deployment permissions must be established separately.
+- Receives `BROKER_QUEUE_URL` and `EXECUTION_LEDGER_NAME` through environment variables derived from the module-managed SQS queue and DynamoDB table.
+- Uses the existing broker execution role and depends on the log group and broker IAM policies being provisioned first.
+- Sets `reserved_concurrent_executions = 0` to throttle all function invocations until runtime admission and lifecycle safeguards are independently approved.
+
+The S3 object version pins the referenced package but **does not prove integrity, provenance, or release authorization**. Artifact approval and control of who can update the function, its IAM role, or reserved concurrency are external deployment-security responsibilities.
+
+No SQS event-source mapping, message handler implementation, or active broker invocation path is provided by this checkpoint. The Terraform resource describes infrastructure and cannot establish the correctness of whatever code is contained in a supplied ZIP.
 
 ## Inputs
 
@@ -93,6 +108,8 @@ These IAM permissions enable future runtime integrations but do not implement re
 | `execution_ledger_cmk_arn` | Application-owned CMK ARN for DynamoDB ledger encryption | Required when `jobs` is nonempty; otherwise `null` |
 | `broker_log_cmk_arn` | Externally supplied CMK ARN for CloudWatch broker logs | Required when `jobs` is nonempty; otherwise `null` |
 | `cloudwatch_retention_days` | Approved CloudWatch log retention period supplied by the application composition | Required when `jobs` is nonempty; otherwise `null` |
+| `broker_lambda_package` | S3 ZIP artifact coordinates (`bucket`, `key`, `version_id`) for optional Lambda creation | `null` (no Lambda) |
+| `broker_lambda_cmk_arn` | Customer-managed KMS key ARN for Lambda environment encryption | Required when `broker_lambda_package` is set; otherwise `null` |
 
 Each `jobs` entry requires:
 
@@ -100,7 +117,7 @@ Each `jobs` entry requires:
 - `execution_role_arn`: Job execution role ARN.
 - `task_role_arn`: Job application task role ARN.
 
-An empty `jobs` map creates no managed IAM, SQS, DynamoDB, or CloudWatch log-group resources.
+An empty `jobs` map creates no managed IAM, SQS, DynamoDB, CloudWatch log-group, or Lambda resources. A nonempty `jobs` map alone does not create a Lambda function.
 
 ## Outputs
 
@@ -110,6 +127,7 @@ An empty `jobs` map creates no managed IAM, SQS, DynamoDB, or CloudWatch log-gro
 - `broker_request_queue`: SQS queue ARN, URL, and name, or `null` when no jobs are configured.
 - `execution_ledger`: DynamoDB table ARN and name, or `null` when no jobs are configured.
 - `broker_log_group`: CloudWatch log group ARN and name, or `null` when no jobs are configured.
+- `broker_lambda`: Lambda function ARN and name, or `null` when no package is configured.
 
 ## Security Responsibilities
 
@@ -121,7 +139,7 @@ Effective permissions also depend on the approved IAM boundary policy, trust rel
 
 The module does not create or authorize those external controls. The queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
 
-Runtime enforcement of private networking, approved security groups, request authentication, durable idempotency, concurrency, lifecycle fencing, and execution outcomes remains outstanding.
+Runtime enforcement of private networking, approved security groups, request authentication, durable idempotency, admission concurrency, lifecycle fencing, and execution outcomes remains outstanding. The Lambda's reserved concurrency of zero disables invocation; it is not the per-job execution-concurrency control required of the eventual broker.
 
 ## Testing
 
@@ -136,6 +154,6 @@ terraform -chdir=modules/ecs_job_broker test \
   -filter=tests/broker_iam.tftest.hcl
 ```
 
-The tests cover empty configuration, a two-job IAM authorization contract, encrypted-queue and TLS-deny settings, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, and rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured.
+The tests cover empty configuration, a two-job IAM authorization contract, encrypted-queue and TLS-deny settings, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured, and optional Lambda creation from a version-pinned S3 artifact with invocation disabled.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.
