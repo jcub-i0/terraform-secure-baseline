@@ -294,7 +294,7 @@ appropriate owner approval before their controls are deployed.
 This checkpoint records platform selection only. It does not
 constitute completed M2-B2 implementation or live qualification.
 
-### C4-A Proposed Runtime Admission Design — Pending Owner Approval
+### C4-A Proposed Runtime Admission Design
 
 **Status:** Proposed architecture; owner approval pending.
 **Scope:** Documentation-only design for M2-B2-I2-C4.
