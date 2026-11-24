@@ -27,3 +27,13 @@ output "launcher_policy_ids" {
     job_name => policy.id
   }
 }
+
+output "broker_request_queue" {
+  description = "Application-owned SQS broker request queue metadata; null when no jobs are configured"
+
+  value = length(aws_sqs_queue.broker_requests) > 0 ? {
+    arn  = aws_sqs_queue.broker_requests[0].arn
+    url  = aws_sqs_queue.broker_requests[0].url
+    name = aws_sqs_queue.broker_requests[0].name
+  } : null
+}
