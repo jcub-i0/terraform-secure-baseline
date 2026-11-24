@@ -18,7 +18,9 @@ variables {
   broker_request_queue_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
   execution_ledger_cmk_arn     = "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
   broker_log_cmk_arn           = "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
-  cloudwatch_retention_days    = 30
+
+  cloudwatch_retention_days = 30
+  alarm_topic_arn           = "arn:aws:sns:us-east-1:123456789012:application-alerts"
 
   jobs = {
     archive = {
@@ -230,6 +232,19 @@ run "two_job_iam_contract" {
     )
 
     error_message = "Configured jobs must have an encrypted processing DLQ; no event-source mapping may exist without a Lambda package."
+  }
+
+  assert {
+    condition = (
+      length(aws_cloudwatch_metric_alarm.broker_processing_dlq_visible) == 1 &&
+      aws_cloudwatch_metric_alarm.broker_processing_dlq_visible[0].metric_name ==
+      "ApproximateNumberOfMessagesVisible" &&
+      aws_cloudwatch_metric_alarm.broker_processing_dlq_visible[0].threshold == 0 &&
+      one(aws_cloudwatch_metric_alarm.broker_processing_dlq_visible[0].alarm_actions) ==
+      var.alarm_topic_arn
+    )
+
+    error_message = "Broker processing DLQ must have an SNS-backed failure alarm."
   }
 }
 
