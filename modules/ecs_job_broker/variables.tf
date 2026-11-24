@@ -34,7 +34,7 @@ variable "jobs" {
       for job in values(var.jobs) :
       can(regex(
         "^arn:(aws|aws-us-gov|aws-cn):ecs:[a-z0-9-]+:[0-9]{12}:task-definition/[A-Za-z0-9_-]+:[1-9][0-9]*$",
-        jobs.task_definition_arn
+        job.task_definition_arn
       ))
     ])
 
