@@ -23,8 +23,8 @@ variable "jobs" {
   description = "Approved standalone jobs, keyed by job name"
   type = map(object({
     task_definition_arn = string
-    execution_role_arn   = string
-    task_role_arn        = string
+    execution_role_arn  = string
+    task_role_arn       = string
   }))
 
   default = {}
