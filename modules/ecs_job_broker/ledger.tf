@@ -16,6 +16,11 @@ resource "aws_dynamodb_table" "execution_ledger" {
     enabled = true
   }
 
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = var.execution_ledger_cmk_arn
+  }
+
   # Protect the ledger from accidental table deletion
   deletion_protection_enabled = true
 
