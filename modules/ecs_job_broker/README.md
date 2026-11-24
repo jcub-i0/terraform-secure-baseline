@@ -8,17 +8,19 @@ The module separates broker execution permissions from job-specific ECS launch p
 
 **Current infrastructure scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm.
 
-**Current runtime source scope:** Three offline helpers implement request-schema-v2 parsing, producer-to-job policy evaluation, and durable request-key derivation. The Lambda handler, authenticated delivery integration, protected catalog loading, atomic admission protocol, ECS dispatch, lifecycle coordination, and runtime reconciliation remain unimplemented.
+**Current runtime source scope:** Five offline helpers implement request-schema-v2 parsing, producer-to-job policy evaluation, durable request-key derivation, producer-catalog section validation, and job execution-identity binding validation. The Lambda handler, authenticated delivery integration, complete catalog loading, network/Fargate configuration validation, atomic admission protocol, ECS dispatch, lifecycle coordination, and runtime reconciliation remain unimplemented.
 
 ## Offline Runtime Helpers
 
-The owner-authorized initial offline increment provides the following Python helpers. They make no AWS calls and do not process queue messages or launch tasks.
+The owner-authorized offline increments provide the following Python helpers. They make no AWS calls and do not process queue messages or launch tasks.
 
 | Source | Implemented behavior |
 |---|---|
 | [request_schema.py](lambda/request_schema.py) | Parses an untrusted JSON body into a `JobRequest`; rejects unsupported fields, duplicate JSON fields, missing required fields, unsupported schema versions, and invalid field types or surrounding whitespace. |
 | [producer_authorization.py](lambda/producer_authorization.py) | Looks up an exact producer role ID in supplied protected policy configuration, checks exact job membership, and returns the stable logical producer ID. Unknown producers and unauthorized jobs are rejected; wildcard permissions are not expanded. |
 | [request_identity.py](lambda/request_identity.py) | Derives a versioned request ledger key from application, environment, logical producer ID, and request key. It does not write a ledger record, reserve execution, or detect conflicting intent. |
+| [catalog_producers.py](lambda/catalog_producers.py) | Validates a decoded producer section against supplied declared job keys and returns an immutable role-ID-to-policy mapping. Rejects malformed entries, duplicate or ambiguous bindings, unsupported role-ID forms, and references to undefined jobs. |
+| [catalog_job_bindings.py](lambda/catalog_job_bindings.py) | Validates one decoded job binding against a supplied approved cluster ARN and returns an immutable `JobBinding`. Requires an exact task-definition revision and consistent partition/account scope, with the task definition also matching the cluster Region. |
 
 ### Request Contract
 
@@ -46,6 +48,16 @@ Each `ProducerPolicy` contains a stable `logical_producer_id` and an immutable `
 `request_ledger_key` uses the ordered tuple `(application_id, environment, logical_producer_id, request_key)`. It serializes those values as a compact ASCII-escaped JSON array, hashes the encoded array with SHA-256, and prefixes the hexadecimal digest with `request:v1:`. This storage-format version is independent of request schema v2. Application and environment must come from stable protected configuration, and the logical producer ID must come from successful producer authorization.
 
 Job key, admission generation, schedule metadata, release version, IAM role ID, and session name are excluded from request uniqueness. Reusing an identity for another job therefore produces the same ledger key; the future admission protocol must compare the original approved execution intent and reject conflicts. Computing a stable key alone does not prevent duplicate launches. Changes to the key format or identity scope require a protocol that preserves existing request history.
+
+### Catalog Section Validation
+
+`load_producer_policies` accepts a decoded list of entries containing exactly `logical_producer_id`, `role_ids`, and `allowed_jobs`. Each logical producer has one entry with one or more role IDs; an approved replacement role can share the same logical identity and permissions. Duplicate logical producers, repeated list values, and role IDs assigned to multiple producers are rejected. Role IDs must use the supported `AROA` form, with 16–128 ASCII word characters in total; role ARNs, session-qualified IDs, and wildcard expressions are rejected.
+
+The caller supplies `declared_job_keys` as a `frozenset` of validated job keys. Every allowed job must be present in that set. An empty producer list or an empty allowed-job list grants no permissions. The result is a read-only mapping containing frozen `ProducerPolicy` values, so later changes to the input lists cannot change loaded permissions. The complete catalog loader must eventually derive the declared keys from validated job entries.
+
+`load_job_binding` accepts exactly `task_definition_arn`, `launcher_role_arn`, `execution_role_arn`, and `task_role_arn`. The approved cluster ARN is supplied separately from protected configuration. The task definition must specify a full revision ARN in the same partition, Region, and account as the cluster; all three IAM role ARNs must match its partition and account. The validator supports `aws`, `aws-us-gov`, and `aws-cn` partitions and IAM role paths, rejects wildcard ARNs and extra fields such as execution overrides, and preserves exact accepted values in a frozen `JobBinding`.
+
+These helpers validate decoded configuration sections only. They do not decode a complete JSON catalog, verify artifact approval or provenance, confirm that AWS resources exist, or establish effective IAM permissions. Job-binding validation also does not verify the roles registered on the actual task definition. Complete catalog composition, network/Fargate validation, and protected deployment qualification remain outstanding.
 
 The helpers do not provide the configured `broker.lambda_handler` entry point or build an approved deployment package. Offline tests use simulated identity and policy inputs. Remaining architecture decisions, implementation work, and activation qualifications are recorded in the [launch authorization record](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md).
 
@@ -240,12 +252,24 @@ python3.12 -m unittest discover \
   -v
 ```
 
-The initial suite contains 26 tests covering positive and negative request parsing, exact producer/job authorization, role replacement, stable request-key encoding, namespace separation, and exclusion of job/generation/schedule changes from request identity. A fixed expected hash guards against accidental changes to the persistent key format.
+The current suite contains 49 offline Python tests:
+
+| Test file | Tests | Coverage |
+|---|---|---|
+| [test_request_schema.py](tests/test_request_schema.py) | 9 | Request parsing, required generation, schema version, duplicate/unsupported fields, schedule metadata completeness, and rejection without normalization. |
+| [test_producer_authorization.py](tests/test_producer_authorization.py) | 9 | Exact producer/job authorization, role replacement, invalid policy values, and rejection of unauthorized requests. |
+| [test_request_identity.py](tests/test_request_identity.py) | 8 | Stable key encoding, namespace separation, role replacement, and exclusion of job/generation/schedule changes from request identity. |
+| [test_catalog_producers.py](tests/test_catalog_producers.py) | 12 | Producer-section structure, role-ID syntax and length bounds, duplicate bindings, undefined jobs, empty permissions, and immutable loaded policies. |
+| [test_catalog_job_bindings.py](tests/test_catalog_job_bindings.py) | 11 | Exact revision and cluster ARNs, partition/Region/account consistency, role paths, rejection of wildcards and extra fields, and immutable loaded bindings. |
+
+A fixed expected hash in the request-identity tests guards against accidental changes to the persistent key format. The two catalog suites add 23 tests to the initial 26-test suite.
 
 The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) runs these tests after successful Python 3.12 setup. It records the interpreter version and test output in `test-evidence/ecs-job-broker-python.log`, included in the `terraform-module-test-evidence` artifact. Shell `pipefail` preserves test failures when output is piped through `tee`.
 
 ### Recorded CI Evidence
 
 [Terraform Module Tests run #105](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/45492053955), for implementation commit `97dbda7f6dc1defd19cab4b565d3e9fc0d53398a` tested through its PR merge commit, passed all 26 broker Python tests under Python 3.12.16 and all seven broker Terraform tests. The complete workflow also passed its other Terraform suites and IAM regressions and uploaded the test evidence.
+
+Run #105 is historical evidence for the initial 26-test suite. It predates the two catalog validators and does not establish CI results for the current 49-test suite.
 
 These results establish offline compatibility and regression coverage. They do not qualify authenticated AWS delivery, protected artifact provenance, transactional admission, durable deduplication, lifecycle fencing, or live execution, and they do not prove zero live drift. Lambda reserved concurrency remains zero and the SQS event-source mapping remains disabled pending implementation and approval of the complete runtime controls.
