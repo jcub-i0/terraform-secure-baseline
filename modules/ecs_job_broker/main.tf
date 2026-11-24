@@ -109,7 +109,7 @@ data "aws_iam_policy_document" "job_launch" {
     condition {
       test     = "StringEquals"
       variable = "iam:PassedToService"
-      values   = ["ecs-tasks.amzonaws.com"]
+      values   = ["ecs-tasks.amazonaws.com"]
     }
   }
 }
