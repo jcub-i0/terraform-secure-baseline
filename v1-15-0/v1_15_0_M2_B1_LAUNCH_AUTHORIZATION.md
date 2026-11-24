@@ -294,6 +294,289 @@ appropriate owner approval before their controls are deployed.
 This checkpoint records platform selection only. It does not
 constitute completed M2-B2 implementation or live qualification.
 
+### C4-A Proposed Runtime Admission Design — Pending Owner Approval
+
+**Status:** Proposed architecture; owner approval pending.
+**Scope:** Documentation-only design for M2-B2-I2-C4.
+C4-A is a working subdivision, not a newly approved roadmap milestone.
+
+This proposal preserves the accepted two-state architecture,
+application-owned broker resources, independently protected platform
+authority, and Lambda + SQS + DynamoDB direction.
+
+It does not authorize Terraform changes, runtime implementation,
+AWS operations, or broker activation.
+
+#### Producer identity and authorization
+
+The initial supported category is trusted infrastructure-level job
+requests authorized by AWS producer-role identity.
+
+The broker verifies the producer and its permission to request a job.
+A trusted application producer remains responsible for required
+application-user and tenant authorization. Jobs requiring the broker
+to independently verify delegated authorization need a separately
+approved contract.
+
+The preferred attribution candidate is the AWS-generated SQS system
+`SenderId`, mapped through protected configuration to a stable logical
+producer identity and its permitted jobs.
+
+Role-session names, request keys, schedule identifiers, message-body
+claims, and custom message attributes are not authentication evidence.
+A recreated IAM role must not inherit authorization solely because its
+name matches a previously approved role.
+
+This mechanism requires an independently protected SQS delivery path.
+A direct Lambda caller can fabricate an SQS-shaped event; inspecting
+its apparent queue ARN, event source, or SenderId cannot authenticate
+that invocation.
+
+Required controls include queue submission restrictions, producer-role
+trust, Scheduler mutation and role-passing restrictions, protected
+Lambda invocation and deployment, protected event-source mappings,
+and prevention of alternate ECS launch paths.
+
+Preserve Scheduler's schedule-group-scoped trust condition. Per-schedule
+authorization also depends on controlling schedule changes and
+execution-role passing.
+
+Actual Scheduler/on-demand attribution, role replacement, and bypass
+prevention require AWS qualification. Operator redrive and replay
+remain unavailable until an approved workflow preserves or
+independently re-establishes authorization and durable request identity.
+
+#### Protected job catalog and deployment sequence
+
+The preferred initial representation is immutable JSON packaged with
+the approved Lambda ZIP.
+
+The catalog defines producer authorization and complete approved
+execution configuration: exact task-definition revision, cluster,
+launcher role, task/execution roles, private subnets, approved security
+groups and their effective rule union, Fargate configuration, and
+execution/concurrency limits.
+
+RunTask uses count one, public IP assignment disabled, and no
+caller-controlled execution overrides.
+
+The proposed staged deployment sequence is:
+
+1. Establish application-owned task definitions and IAM identities
+   while the broker remains inactive.
+2. Resolve and verify the exact identities and approved configuration.
+3. Build and approve the runtime/catalog artifact.
+4. Record artifact/catalog digests, S3 object version, and association
+   with the approved application release and foundation publication.
+5. Update the protected application deployment configuration.
+6. Qualify the complete controls before activation.
+
+The module's existing null package option permits Lambda creation to
+remain omitted during initial resource establishment.
+
+The sequence must preserve one application state, one Terraform writer,
+and no reverse foundation dependency. Actual dependency-cycle and
+deployment-authority checks remain required.
+
+S3 object-version pinning alone does not prove approval or provenance.
+Ordinary application CI must not substitute unauthorized code or catalog
+configuration.
+
+#### Admission generations and durable request identity
+
+The proposed request envelope includes an admission generation.
+The protected gate binds that generation to an approved catalog.
+The caller-supplied generation is only a claim to validate.
+
+Rotate the generation when activating a changed catalog or reopening
+admission after lifecycle closure. Older-generation requests fail
+closed. This intentionally rejects delayed work across those transitions
+and requires coordinated producer configuration.
+
+The current Scheduler envelope lacks this field. Its versioned update
+belongs to a subsequent approved implementation checkpoint.
+
+Durable request uniqueness is scoped to:
+
+`(application/environment, logical_producer_id, request_key)`
+
+Do not include job key, admission generation, release version, IAM role
+ID, or session name in that uniqueness key.
+
+The original record retains the approved job and immutable execution
+intent. A matching duplicate cannot launch again. Reuse of the identity
+with a different job or execution intent is a conflict. A generation
+change cannot create another execution opportunity or rebind an
+existing request to the current catalog.
+
+An approved role replacement may update the mapping to the same logical
+producer without resetting request history. Producer authentication and
+job authorization remain independent of the producer-supplied request key.
+
+Initially retain durable request identities without automatic expiry or
+cleanup. Use opaque identifiers and the minimum non-secret metadata
+necessary for authorization, correlation, and recovery.
+
+Future archival, deletion, restore, and recreation require an approved
+protocol preserving replay protection. Point-in-time recovery alone does
+not establish consistency with protected admission state. Do not add
+automatic TTL-based deletion during C4.
+
+#### Protected admission authority and atomic reservation
+
+The leading candidate is a separate DynamoDB gate table in the same
+account and Region as the application execution ledger.
+
+The proposed ownership split is:
+
+- Existing protected workload foundation state manages table infrastructure.
+- An independently protected coordinator performs eligibility transitions.
+- The application broker receives narrowly scoped read/condition-check access.
+
+The exact root, IAM protection, controller, and authority relationship
+remain unresolved M0 decisions. Foundation ownership alone does not
+establish independent protection.
+
+Foundation Terraform must not consume application outputs or continuously
+manage the coordinator's mutable eligibility records. No third workload
+Terraform state is introduced.
+
+The broker and ordinary application deployment identities must not
+modify protected eligibility, generations, catalog associations, or
+their protective infrastructure. The execution ledger must also be
+protected against unauthorized record or infrastructure changes.
+
+One admission transaction must check the authoritative gate and approved
+generation/catalog, establish request uniqueness, acquire the job slot,
+and durably register exclusive launch-attempt ownership.
+
+Gate closure and admission must be ordered against the same authoritative
+eligibility item. Foundation publication eligibility alone does not
+authorize job admission.
+
+DynamoDB transactions require the same account and Region and cannot
+perform multiple actions against one item. Exact schemas and conditional
+expressions remain implementation work.
+
+Transactional permissions derive from the underlying item actions.
+Do not introduce a speculative standalone `dynamodb:TransactWriteItems`
+IAM permission.
+
+#### Launch ownership and lifecycle fencing
+
+Every launch attempt must be durably registered before dispatch.
+Only the invocation acquiring exclusive launch ownership may dispatch.
+Duplicate delivery must not grant another launch opportunity.
+
+The required lifecycle sequence is:
+
+1. Close admission.
+2. Resolve or safely fence every outstanding launch attempt.
+3. Complete the launch fence.
+4. Drain tracked tasks.
+5. Authorize operations requiring quiescence, including database
+   parking or teardown.
+
+If closure precedes admission, the admission transaction fails.
+If admission precedes closure, the registered attempt remains an
+outstanding obligation.
+
+An already-admitted attempt may complete after admission closes.
+The fence remains incomplete, and draining cannot begin while a late
+launch remains possible.
+
+Discovery must account for every outstanding attempt across relevant
+releases and catalog generations, including interrupted invocations,
+uncertain ECS outcomes, and failed result writes. An empty incomplete
+or eventually consistent result does not establish fence completion.
+
+The later implementation must demonstrate authoritative discovery
+completeness. This proposal does not prematurely select an index,
+counter, or lease mechanism.
+
+A resolved launch attempt is distinct from a released job slot.
+A known running task retains its slot until trustworthy terminal
+resolution. Actual task-start and container-exit outcomes require
+separate correlation and monitoring.
+
+#### Initial dispatch policy and protected recovery
+
+Before dispatch, persist an explicitly chosen ECS clientToken and
+immutable ECS request parameters.
+
+The proposed initial RunTask policy is one Botocore attempt using
+`total_max_attempts = 1`, with explicit connection/read timeouts selected
+within the Lambda execution budget.
+
+Scope this configuration to the ECS launch client. It is a conservative
+initial implementation policy, not an immutable architectural requirement
+or a guarantee of exactly-once ECS execution.
+
+An initial request can create a task even if its response is lost.
+Multiple invocations must still be prevented from independently
+obtaining launch ownership.
+
+ECS client-token protection is time-limited and supplements the durable
+ledger. Do not rely on an SDK-generated token for cross-invocation
+request identity.
+
+No further RunTask call is permitted after an attempt is conclusively
+resolved. SQS redelivery, executor timeout, or lease expiry cannot
+automatically transfer ownership or authorize another dispatch.
+
+A crash after ownership registration but before transmission may leave
+the attempt unresolved. This availability tradeoff requires protected
+recovery; it does not justify automatic reservation release.
+
+Recovery must establish the original outcome and that no remaining
+executor or outstanding dispatch can produce a late launch. A single
+negative task observation, expired credentials, changed epoch, DLQ
+arrival, or elapsed timeout is insufficient on its own.
+
+If safe reconciliation cannot be established, retain the unresolved
+attempt and block fence completion. Exact timeout values, conclusive-error
+classification, and the recovery procedure require subsequent review.
+
+#### Implementation and activation boundaries
+
+Before the first offline decision-logic increment, obtain owner acceptance
+of the applicable request schema, producer mapping, catalog, generation,
+uniqueness/conflict, and override-rejection contracts.
+
+Offline fixtures may supply simulated authenticated identity context.
+They do not prove AWS attribution or effective lifecycle fencing.
+
+Before transactional execution, approve the concrete gate authority,
+transaction protocol, permissions, and lifecycle relationships.
+
+Before activation, implement and qualify producer authentication,
+protected artifact deployment, IAM ceilings, network admission,
+alternate-path prevention, lifecycle fencing, execution monitoring,
+and protected recovery.
+
+Keep Lambda reserved concurrency at zero, the SQS mapping disabled,
+and schedules disabled throughout unqualified development.
+
+#### Focused acceptance cases
+
+| Case | Required outcome |
+|---|---|
+| Unknown producer or unauthorized job | Denied without launch authority |
+| Forged body identity or execution override | Cannot grant authority or alter approved execution |
+| Matching duplicate request | No additional launch |
+| Same request identity with different job or intent | Conflict; no additional launch |
+| Stale generation | Rejected without rebinding to current configuration |
+| New generation with previously admitted identity | No renewed execution opportunity |
+| Gate closure wins the admission race | Admission fails |
+| Admission wins the closure race | Registered attempt blocks fence completion until resolved |
+| Interrupted executor, lost response, or failed result write | No automatic takeover or relaunch |
+| Outstanding attempt from an older release | Included in complete fence accounting |
+| Resolved launch with a running task | Job slot remains occupied |
+| Ledger restore or history removal | No silent restoration of replay authority |
+
+These are acceptance requirements for subsequent focused tests and
+qualification, not claims of implemented or verified behavior.
+
 ## Qualification boundary
 
 M2-B1a establishes a reusable Terraform policy contract only.
