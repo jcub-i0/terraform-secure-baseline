@@ -294,18 +294,34 @@ appropriate owner approval before their controls are deployed.
 This checkpoint records platform selection only. It does not
 constitute completed M2-B2 implementation or live qualification.
 
-### C4-A Proposed Runtime Admission Design
+### C4-A Runtime Admission Design and Initial Offline Implementation
 
-**Status:** Proposed architecture; owner approval pending.
-**Scope:** Documentation-only design for M2-B2-I2-C4.
+**Status:** Owner-authorized initial offline helper increment implemented
+and tested. Outstanding architecture decisions and activation
+qualifications below remain open.
+
+**Scope:** Request-schema-v2 parsing, producer-to-job policy evaluation,
+durable request-key derivation, and offline regression coverage.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
-This proposal preserves the accepted two-state architecture,
+This work preserves the accepted two-state architecture,
 application-owned broker resources, independently protected platform
 authority, and Lambda + SQS + DynamoDB direction.
 
-It does not authorize Terraform changes, runtime implementation,
-AWS operations, or broker activation.
+The helpers do not establish authenticated AWS delivery, load the
+protected catalog, perform transactional admission, or dispatch tasks.
+Terraform changes, AWS operations, and broker activation remain outside
+this completed increment.
+
+**Validation:** Implementation commit
+`97dbda7f6dc1defd19cab4b565d3e9fc0d53398a` passed Terraform Module Tests
+run #105: 26 broker tests under Python 3.12.16, 64 Terraform native tests,
+and 19 IAM regression tests.
+
+[CI evidence](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/45492053955)
+
+These results establish offline compatibility, not live AWS
+qualification or proof of zero drift.
 
 #### Producer identity and authorization
 
