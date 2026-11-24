@@ -13,7 +13,6 @@ def request_ledger_key(
     environment: str,
     logical_producer_id: str,
 ) -> str:
-    
     """Build a stable key using protected scope and an authorized producer ID.
 
     Field order, encoding, and prefix are persistent storage format v1.
