@@ -79,7 +79,7 @@ variable "execution_ledger_cmk_arn" {
 }
 
 variable "broker_log_cmk_arn" {
-  description = "Application-owned CMK ARN for broker Lambda logs."
+  description = "Application-owned CMK ARN for broker Lambda logs"
   type        = string
   default     = null
 
@@ -97,7 +97,7 @@ variable "broker_log_cmk_arn" {
 }
 
 variable "cloudwatch_retention_days" {
-  description = "CloudWatch Logs retention period supplied by the application composition."
+  description = "CloudWatch Logs retention period supplied by the application composition"
   type        = number
   default     = null
 
@@ -108,5 +108,47 @@ variable "cloudwatch_retention_days" {
     )
 
     error_message = "Configured jobs require an explicit CloudWatch Logs retention period."
+  }
+}
+
+variable "broker_lambda_package" {
+  description = "Approved version-pinned S3 ZIP artifact for the broker Lambda function. Null disables function creation"
+
+  type = object({
+    bucket     = string
+    key        = string
+    version_id = string
+  })
+
+  default = null
+
+  validation {
+    condition = var.broker_lambda_package == null ? true : (
+      length(var.jobs) > 0 &&
+      length(trimspace(var.broker_lambda_package.bucket)) > 0 &&
+      length(trimspace(var.broker_lambda_package.key)) > 0 &&
+      length(trimspace(var.broker_lambda_package.version_id)) > 0 &&
+      var.broker_lambda_package.version_id != "null"
+    )
+
+    error_message = "A broker Lambda package requires configured jobs and a nonempty S3 bucket, key, and object version ID."
+  }
+}
+
+variable "broker_lambda_cmk_arn" {
+  description = "Approved customer-managed KMS key ARN for Lambda environment encryption"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      var.broker_lambda_package == null ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
+        var.broker_lambda_cmk_arn
+      ))
+    )
+
+    error_message = "A configured broker Lambda package requires an exact customer-managed KMS key ARN."
   }
 }
