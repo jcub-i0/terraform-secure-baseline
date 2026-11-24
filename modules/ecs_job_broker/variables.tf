@@ -41,3 +41,21 @@ variable "jobs" {
     error_message = "Each job must reference an exact ECS task-definition revision ARN."
   }
 }
+
+variable "broker_request_queue_cmk_arn" {
+  description = "Application-owned CMK ARN for broker request queue encryption"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      length(var.jobs) == 0 ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
+        var.broker_request_queue_cmk_arn
+      ))
+    )
+
+    error_message = "Configured jobs require an exact CMK ARN for the broker request queue."
+  }
+}
