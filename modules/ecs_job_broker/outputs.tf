@@ -37,3 +37,12 @@ output "broker_request_queue" {
     name = aws_sqs_queue.broker_requests[0].name
   } : null
 }
+
+output "execution_ledger" {
+  description = "DynamoDB execution ledger metadata; null when no jobs are configured."
+
+  value = length(aws_dynamodb_table.execution_ledger) > 0 ? {
+    arn  = aws_dynamodb_table.execution_ledger[0].arn
+    name = aws_dynamodb_table.execution_ledger[0].name
+  } : null
+}
