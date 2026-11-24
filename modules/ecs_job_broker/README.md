@@ -6,7 +6,7 @@ The `ecs_job_broker` module provides application-owned IAM, an encrypted SQS req
 
 The module separates broker execution permissions from job-specific ECS launch permissions.
 
-**Current scope:** IAM roles, trust policies, job-launch permissions, a scoped broker runtime IAM policy, an encrypted SQS request queue with a TLS-enforcing resource policy, an encrypted DynamoDB execution ledger table, a CMK-encrypted CloudWatch log group, and an optional, invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact. The SQS event-source mapping, atomic admission protocol, processing dead-letter queue, and runtime monitoring are not yet implemented.
+**Current scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm. The request-processing code, atomic admission protocol, lifecycle coordination, and runtime reconciliation are not yet implemented.
 
 ## IAM Architecture
 
@@ -41,10 +41,23 @@ When `jobs` is nonempty, the module creates one standard SQS queue named `${name
 - **Encryption in transit:** The queue resource policy denies `sqs:*` requests when `aws:SecureTransport` is `false`. This policy does not itself grant producers or consumers queue access.
 - **Visibility timeout:** 180 seconds, a provisional setting to reconcile with the Lambda function timeout and batching configuration when the consumer is implemented.
 - **Message retention:** Four days (345,600 seconds).
+- **Failure redrive:** After repeated unsuccessful receives, messages are eligible to move to the broker processing DLQ when the configured `maxReceiveCount` of 5 is exceeded.
 
 The queue ARN can be passed to `ecs_job_scheduler` as `broker_request_queue_arn`, alongside the same CMK ARN as `broker_request_queue_cmk_arn`. Producer/consumer IAM permissions and effective KMS key-policy authorization must be established through their respective ownership boundaries.
 
 The queue does not authenticate request-body claims, enforce job admission, provide durable deduplication, or process messages. These are future protected-broker responsibilities.
+
+## Processing Dead-Letter Queue and Alarm
+
+When `jobs` is nonempty, the module creates a separate standard SQS DLQ named `${name_prefix}-job-broker-processing-dlq` for requests that repeatedly fail **broker processing**. This is distinct from the per-schedule delivery-failure DLQs managed by `ecs_job_scheduler`.
+
+- **Encryption:** SSE-KMS using the same externally supplied `broker_request_queue_cmk_arn` as the request queue; the module does not create or authorize the key.
+- **Retention:** 14 days (1,209,600 seconds), longer than the request queue's four-day retention.
+- **Redrive admission:** A `byQueue` redrive allow policy restricts the DLQ to the module's broker request queue.
+- **Transport protection:** A queue policy denies requests with `aws:SecureTransport = false`.
+- **Monitoring:** An `aws_cloudwatch_metric_alarm` observes the DLQ's `ApproximateNumberOfMessagesVisible` metric. It uses a five-minute `Maximum`, one evaluation period, and a threshold greater than zero, with missing data treated as `notBreaching`. Alarm actions target the externally supplied `alarm_topic_arn` SNS topic.
+
+The module does not grant operators DLQ read, replay, or redrive permissions, and it does not configure the external SNS topic's delivery permissions. A message arriving in the DLQ is **not proof that an ECS launch failed**; ambiguous launch results and DynamoDB reservations still require protected reconciliation. With the event-source mapping disabled, the broker is not yet consuming messages or exercising this processing-failure path.
 
 ## DynamoDB Execution Ledger
 
@@ -93,7 +106,15 @@ The module optionally creates `aws_lambda_function.broker` when `jobs` is nonemp
 
 The S3 object version pins the referenced package but **does not prove integrity, provenance, or release authorization**. Artifact approval and control of who can update the function, its IAM role, or reserved concurrency are external deployment-security responsibilities.
 
-No SQS event-source mapping, message handler implementation, or active broker invocation path is provided by this checkpoint. The Terraform resource describes infrastructure and cannot establish the correctness of whatever code is contained in a supplied ZIP.
+The Terraform resource describes infrastructure and cannot establish the correctness of whatever code is contained in a supplied ZIP.
+
+## SQS Event-Source Mapping
+
+When the optional broker Lambda function exists, the module creates one `aws_lambda_event_source_mapping` connecting the broker request queue to that function. The mapping is deliberately **disabled** (`enabled = false`) and configured with `batch_size = 1` and `maximum_batching_window_in_seconds = 0`.
+
+Without a configured Lambda artifact, the mapping is absent. Even with an artifact configured, the function retains `reserved_concurrent_executions = 0`, independently preventing invocation. These are deployment safety settings, not an implementation of request authentication or per-job admission.
+
+The mapping must not be enabled, Lambda reserved concurrency raised, or request producers activated until the protected runtime, artifact provenance, IAM/KMS authority, lifecycle fencing, and failure-handling requirements have been independently implemented and approved. The request queue retains messages for only four days while processing remains disabled.
 
 ## Inputs
 
@@ -110,6 +131,7 @@ No SQS event-source mapping, message handler implementation, or active broker in
 | `cloudwatch_retention_days` | Approved CloudWatch log retention period supplied by the application composition | Required when `jobs` is nonempty; otherwise `null` |
 | `broker_lambda_package` | S3 ZIP artifact coordinates (`bucket`, `key`, `version_id`) for optional Lambda creation | `null` (no Lambda) |
 | `broker_lambda_cmk_arn` | Customer-managed KMS key ARN for Lambda environment encryption | Required when `broker_lambda_package` is set; otherwise `null` |
+| `alarm_topic_arn` | Approved SNS topic ARN for processing-DLQ message alarms | Required when `jobs` is nonempty; otherwise `null` |
 
 Each `jobs` entry requires:
 
@@ -117,7 +139,7 @@ Each `jobs` entry requires:
 - `execution_role_arn`: Job execution role ARN.
 - `task_role_arn`: Job application task role ARN.
 
-An empty `jobs` map creates no managed IAM, SQS, DynamoDB, CloudWatch log-group, or Lambda resources. A nonempty `jobs` map alone does not create a Lambda function.
+An empty `jobs` map creates no managed IAM, SQS, DynamoDB, CloudWatch log-group, Lambda, event-source mapping, or alarm resources. A nonempty `jobs` map alone does not create a Lambda function or event-source mapping.
 
 ## Outputs
 
@@ -128,6 +150,8 @@ An empty `jobs` map creates no managed IAM, SQS, DynamoDB, CloudWatch log-group,
 - `execution_ledger`: DynamoDB table ARN and name, or `null` when no jobs are configured.
 - `broker_log_group`: CloudWatch log group ARN and name, or `null` when no jobs are configured.
 - `broker_lambda`: Lambda function ARN and name, or `null` when no package is configured.
+- `broker_processing_dlq`: Processing DLQ ARN, URL, and name, or `null` when no jobs are configured.
+- `broker_event_source_mapping_uuid`: Disabled SQS-to-Lambda mapping UUID, or `null` when no broker Lambda is configured.
 
 ## Security Responsibilities
 
@@ -154,6 +178,6 @@ terraform -chdir=modules/ecs_job_broker test \
   -filter=tests/broker_iam.tftest.hcl
 ```
 
-The tests cover empty configuration, a two-job IAM authorization contract, encrypted-queue and TLS-deny settings, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured, and optional Lambda creation from a version-pinned S3 artifact with invocation disabled.
+The tests cover empty configuration, a two-job IAM authorization contract, encrypted queue and TLS-deny settings, processing-DLQ configuration and its SNS-backed alarm, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured, and optional Lambda creation from a version-pinned S3 artifact with a disabled single-message SQS mapping.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.

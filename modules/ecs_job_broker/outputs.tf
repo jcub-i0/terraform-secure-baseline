@@ -64,3 +64,21 @@ output "broker_lambda" {
     name = aws_lambda_function.broker[0].function_name
   } : null
 }
+
+output "broker_processing_dlq" {
+  description = "Broker processing failure DLQ metadata; null when no jobs are configured."
+
+  value = length(aws_sqs_queue.broker_processing_dlq) > 0 ? {
+    arn  = aws_sqs_queue.broker_processing_dlq[0].arn
+    url  = aws_sqs_queue.broker_processing_dlq[0].url
+    name = aws_sqs_queue.broker_processing_dlq[0].name
+  } : null
+}
+
+output "broker_event_source_mapping_uuid" {
+  description = "SQS-to-Lambda mapping UUID; null when no broker Lambda is configured."
+
+  value = length(aws_lambda_event_source_mapping.broker_requests) > 0 ? (
+    aws_lambda_event_source_mapping.broker_requests[0].uuid
+  ) : null
+}

@@ -152,3 +152,21 @@ variable "broker_lambda_cmk_arn" {
     error_message = "A configured broker Lambda package requires an exact customer-managed KMS key ARN."
   }
 }
+
+variable "alarm_topic_arn" {
+  description = "Existing approved SNS topic for broker processing-failure alarms"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      length(var.jobs) == 0 ||
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):sns:[a-z0-9-]+:[0-9]{12}:[A-Za-z0-9_-]+$",
+        var.alarm_topic_arn
+      ))
+    )
+
+    error_message = "Configured jobs require an exact SNS alarm topic ARN."
+  }
+}

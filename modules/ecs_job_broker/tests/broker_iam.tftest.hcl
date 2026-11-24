@@ -18,7 +18,9 @@ variables {
   broker_request_queue_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
   execution_ledger_cmk_arn     = "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
   broker_log_cmk_arn           = "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
-  cloudwatch_retention_days    = 30
+
+  cloudwatch_retention_days = 30
+  alarm_topic_arn           = "arn:aws:sns:us-east-1:123456789012:application-alerts"
 
   jobs = {
     archive = {
@@ -44,6 +46,12 @@ run "empty_jobs" {
 
   assert {
     condition = (
+      length(aws_sqs_queue.broker_processing_dlq) == 0 &&
+      length(aws_sqs_queue_redrive_allow_policy.broker_processing_dlq) == 0 &&
+      length(aws_sqs_queue_policy.broker_processing_dlq) == 0 &&
+      length(aws_lambda_event_source_mapping.broker_requests) == 0 &&
+      output.broker_processing_dlq == null &&
+      output.broker_event_source_mapping_uuid == null &&
       length(aws_lambda_function.broker) == 0 &&
       output.broker_lambda == null &&
       length(aws_cloudwatch_log_group.broker) == 0 &&
@@ -211,6 +219,33 @@ run "two_job_iam_contract" {
 
     error_message = "The broker Lambda must remain absent without an approved deployment package."
   }
+
+  assert {
+    condition = (
+      length(aws_sqs_queue.broker_processing_dlq) == 1 &&
+      aws_sqs_queue.broker_processing_dlq[0].kms_master_key_id ==
+      var.broker_request_queue_cmk_arn &&
+      aws_sqs_queue.broker_processing_dlq[0].message_retention_seconds == 1209600 &&
+      length(aws_sqs_queue_redrive_allow_policy.broker_processing_dlq) == 1 &&
+      length(aws_sqs_queue_policy.broker_processing_dlq) == 1 &&
+      length(aws_lambda_event_source_mapping.broker_requests) == 0
+    )
+
+    error_message = "Configured jobs must have an encrypted processing DLQ; no event-source mapping may exist without a Lambda package."
+  }
+
+  assert {
+    condition = (
+      length(aws_cloudwatch_metric_alarm.broker_processing_dlq_visible) == 1 &&
+      aws_cloudwatch_metric_alarm.broker_processing_dlq_visible[0].metric_name ==
+      "ApproximateNumberOfMessagesVisible" &&
+      aws_cloudwatch_metric_alarm.broker_processing_dlq_visible[0].threshold == 0 &&
+      one(aws_cloudwatch_metric_alarm.broker_processing_dlq_visible[0].alarm_actions) ==
+      var.alarm_topic_arn
+    )
+
+    error_message = "Broker processing DLQ must have an SNS-backed failure alarm."
+  }
 }
 
 run "reject_missing_broker_queue_cmk" {
@@ -288,5 +323,16 @@ run "versioned_broker_lambda" {
     )
 
     error_message = "Broker Lambda must use an exact S3 artifact version and remain disabled."
+  }
+
+  assert {
+    condition = (
+      length(aws_lambda_event_source_mapping.broker_requests) == 1 &&
+      aws_lambda_event_source_mapping.broker_requests[0].enabled == false &&
+      aws_lambda_event_source_mapping.broker_requests[0].batch_size == 1 &&
+      aws_lambda_event_source_mapping.broker_requests[0].maximum_batching_window_in_seconds == 0
+    )
+
+    error_message = "Broker Lambda event-source mapping must remain disabled and use one-message batches."
   }
 }
