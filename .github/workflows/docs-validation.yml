@@ -90,6 +90,7 @@ jobs:
             --include-fragments
             --files-from changed-docs.txt
           fail: true
+          failIfEmpty: false
 
       - name: Check for Trailing Whitespace in Markdown
         run: |
