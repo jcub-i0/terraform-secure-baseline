@@ -119,6 +119,31 @@ jobs:
             scripts/tests/test-ecs-execution-policy.py \
             -v 2>&1 | tee test-evidence/iam-python.log
 
+      - name: Set up Python for broker tests
+        id: broker_python
+        if: ${{ !cancelled() }}
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Test broker offline runtime contracts
+        if: ${{ !cancelled() && steps.broker_python.outcome == 'success' }}
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPATH: ${{ github.workspace }}/modules/ecs_job_broker/lambda
+        run: |
+          set -euo pipefail
+          mkdir -p test-evidence
+
+          python --version 2>&1 \
+            | tee test-evidence/ecs-job-broker-python.log
+
+          python -m unittest discover \
+            -s modules/ecs_job_broker/tests \
+            -p 'test_*.py' \
+            -v 2>&1 | tee -a test-evidence/ecs-job-broker-python.log
+
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v6
