@@ -16,6 +16,7 @@ variable "approved_cluster_arn" {
 variable "permissions_boundary_arn" {
   description = "Platform-governed IAM permissions boundary for broker and launcher roles"
   type        = string
+  nullable    = false
 }
 
 variable "jobs" {
