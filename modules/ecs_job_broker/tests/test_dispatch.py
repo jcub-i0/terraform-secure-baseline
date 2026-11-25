@@ -145,7 +145,7 @@ class DispatchTests(unittest.TestCase):
         result = self.dispatch()
         transaction = self.transaction(1)
         self.assertEqual([list(action) for action in transaction["TransactItems"]],
-                         [["Update"], ["ConditionCheck"], ["Update"]])
+                         [["Update"], ["ConditionCheck"], ["Update"], ["Put"]])
         request = transaction["TransactItems"][0]["Update"]
         self.assert_request_binding(request, before="DISPATCHING")
         self.assertIn("#dispatch = :dispatch", request["ConditionExpression"])
@@ -175,6 +175,44 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(accounting["UpdateExpression"], "ADD #pending :minus_one, #occupied :minus_one")
         self.assertEqual(accounting["ExpressionAttributeValues"][":minus_one"], {"N": "-1"})
         self.assertNotIn("private detail", json.dumps(self.transaction(1)))
+
+    def test_accepted_launch_creates_an_immutable_lookup_in_the_result_transaction(self):
+        result = self.dispatch()
+        self.assertEqual(len(self.transaction(0)["TransactItems"]), 3)
+        put = self.transaction(1)["TransactItems"][3]["Put"]
+        self.assertEqual(put["TableName"], self.fixture.context["ledger_table_arn"])
+        self.assertEqual(put["ConditionExpression"], "attribute_not_exists(#pk)")
+        self.assertEqual(put["ExpressionAttributeNames"], {"#pk": "pk"})
+        self.assertEqual(put["Item"], {
+            "pk": {"S": "task:v1:7178f23fa3b9d44b1537da0e554a2195713f83d6e01dad0c5fb807bc7c4e2edc"},
+            "schema_version": {"N": "1"}, "record_type": {"S": "TASK_LOOKUP"},
+            "application_id": self.item["application_id"], "environment": self.item["environment"],
+            "task_arn": {"S": self.task_arn}, "request_pk": self.item["pk"],
+            "attempt_id": self.item["attempt_id"], "dispatch_id": {"S": result.dispatch_id},
+        })
+
+    def test_lookup_conflict_cannot_reassign_a_task_or_retry_an_accepted_launch(self):
+        self.ledger.transact_write_items.side_effect = [acknowledged(), ServiceError(
+            "TransactionCanceledException", reasons=["None", "None", "None", "ConditionalCheckFailed"],
+        )]
+        result = self.dispatch()
+        self.assertEqual(result.launch.outcome, Launch.ACCEPTED)
+        self.assertEqual(result.recording.outcome, Write.REJECTED)
+        self.assertEqual(result.recording.cancellation_codes,
+                         ("None", "None", "None", "ConditionalCheckFailed"))
+        self.ecs.run_task.assert_called_once()
+        self.assertEqual(self.ledger.transact_write_items.call_count, 2)
+
+    def test_only_accepted_results_create_a_task_lookup(self):
+        for response in (
+            {"tasks": [], "failures": [{"reason": "RESOURCE:MEMORY"}]},
+            {"tasks": [{"taskArn": self.task_arn}], "failures": [{"reason": "UNKNOWN"}]},
+        ):
+            with self.subTest(response=response):
+                self.ledger.reset_mock()
+                self.ecs.run_task.return_value = acknowledged() | response
+                self.dispatch()
+                self.assertEqual(len(self.transaction(1)["TransactItems"]), 3)
 
     def test_unknown_launch_records_evidence_without_releasing_slot_or_counters(self):
         self.ecs.run_task.side_effect = TimeoutError("private timeout detail")
@@ -342,7 +380,7 @@ class DispatchTests(unittest.TestCase):
 
     def test_a_repeated_result_write_cannot_bypass_the_expected_attempt_and_state(self):
         self.ledger.transact_write_items.side_effect = [acknowledged(), ServiceError(
-            "TransactionCanceledException", reasons=["ConditionalCheckFailed", "None", "None"],
+            "TransactionCanceledException", reasons=["ConditionalCheckFailed", "None", "None", "None"],
         )]
         result = self.dispatch()
         update = self.transaction(1)["TransactItems"][0]["Update"]
@@ -455,14 +493,14 @@ class DispatchTests(unittest.TestCase):
     def test_result_and_persisted_evidence_exclude_service_messages_and_task_payloads(self):
         self.success["tasks"][0]["overrides"] = {"private": "private task payload"}
         self.ledger.transact_write_items.side_effect = [acknowledged(), ServiceError(
-            "TransactionCanceledException", reasons=["ConditionalCheckFailed", "None", "None"],
+            "TransactionCanceledException", reasons=["ConditionalCheckFailed", "None", "None", "None"],
         )]
         result = self.dispatch()
         combined = repr(result) + json.dumps(self.transaction(1))
         for secret in ("private task payload", "private service message", "private cancellation detail"):
             self.assertNotIn(secret, combined)
         self.assertEqual(result.recording.cancellation_codes,
-                         ("ConditionalCheckFailed", "None", "None"))
+                         ("ConditionalCheckFailed", "None", "None", "None"))
 
 
 if __name__ == "__main__":
