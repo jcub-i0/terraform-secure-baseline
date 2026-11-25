@@ -300,13 +300,15 @@ constitute completed M2-B2 implementation or live qualification.
 
 **Status:** The owner approved the four-record admission model, admission
 executor, dispatch ownership and result recording, and the immutable task
-lookup and protected ECS `STOPPED` event contract for offline implementation.
+lookup and protected ECS `STOPPED` event contract for offline implementation,
+followed by integrated broker orchestration and acknowledgement/retry decisions.
 Catalog loading, request resolution, admission preparation and execution,
 conditional dispatch claims, ECS outcome classification, launch-result
-transactions, task lookup creation, and atomic terminal recording/slot release
-are implemented with a 166-test offline suite. Concrete gate authority,
-permissions, runtime integration, protected completion-event delivery,
-recovery, and activation qualification remain open.
+transactions, task lookup creation, atomic terminal recording/slot release,
+and connected request/completion flows are implemented with a 188-test offline
+suite. Concrete gate authority, permissions, authenticated runtime bootstrap,
+protected completion-event delivery, recovery, and activation qualification
+remain open.
 
 **Scope:** Request-schema-v2 parsing, producer-to-job policy evaluation,
 durable request-key derivation, complete schema-v1 catalog loading,
@@ -314,7 +316,9 @@ catalog source digests, four-record admission transaction preparation,
 duplicate/conflict classification, executor result and cancellation
 handling, DynamoDB client configuration, dispatch ownership, one-attempt
 ECS calls, immutable task lookups, conditional launch and terminal-state
-result/accounting updates, and offline regression coverage.
+result/accounting updates, integrated single-message orchestration with
+injected delivery authentication, acknowledgement/retry decisions, and offline
+regression coverage.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
 This work preserves the accepted two-state architecture,
@@ -329,14 +333,17 @@ supplied clients to claim an admitted request, call ECS, and record the
 observed launch outcome with a task lookup for accepted launches. The
 completion helper reads that lookup and original request, then conditionally
 records supplied trusted terminal evidence and releases the matching slot.
+`broker.py` connects these helpers, classifies durable duplicates, and returns
+acknowledgement/retry decisions through an injectable single-message adapter.
 Real clients would perform AWS operations; current tests use scripted clients
 only. The implementation does not establish artifact provenance or authenticated
 AWS delivery, construct runtime SDK clients, enforce invocation deadlines,
-consume completion events from a deployed queue, or perform protected recovery.
+provide the deployable `broker.lambda_handler`, consume completion events from
+a deployed queue, or perform protected recovery.
 Terraform changes, AWS operations, and broker activation remain outside the
 completed offline increment.
 
-**Current coverage:** 166 offline Python tests, including nine admission
+**Current coverage:** 188 offline Python tests, including nine admission
 tests for transaction shape and conditions, persistent key formats,
 launch snapshots, exact catalog-text digests, stable retry payloads,
 fresh attempts on redelivery, duplicate/conflict classification,
@@ -355,7 +362,12 @@ conflicts, and selective diagnostic evidence. Twenty-six completion tests cover
 consistent reads, task/attempt/snapshot binding, atomic slot release and occupied
 accounting, catalog changes, nonterminal events, early or missing records,
 duplicates and competing writes, lost acknowledgements and redelivery, read
-failures, and minimal terminal evidence.
+failures, and minimal terminal evidence. Twenty-two broker tests connect the
+actual helpers with scripted clients and simulated authenticated delivery,
+covering request/duplicate/completion flows, acknowledgement/retry decisions,
+authentication and configuration failures, unresolved and inconsistent duplicates,
+admission/claim/result uncertainty, fresh conditional admission on redelivery,
+early completion, lost acknowledgements, and restricted diagnostics.
 These tests inspect generated operations, supplied records, and scripted
 client behavior. The competing-entry tests model claim/cache and write responses;
 they do not execute DynamoDB conditions or actual SDK retries, launch ECS
@@ -369,7 +381,7 @@ and 19 IAM regression tests.
 [CI evidence](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/45492053955)
 
 That historical run covers the initial 26-test helper increment, not the
-current 166-test suite. Offline results do not establish live AWS
+current 188-test suite. Offline results do not establish live AWS
 qualification or proof of zero drift.
 
 #### Producer identity and authorization
@@ -647,7 +659,7 @@ diagnostic `reason`:
 | `DUPLICATE` | A conclusively rejected submission collides with an original request whose intent matches, and the collision lookup confirms current gate eligibility. Ownership remains with the original record. |
 | `CONFLICT` | A conclusively rejected submission collides with an original request whose intent differs, and the collision lookup confirms current gate eligibility. No original record is changed. |
 | `REJECTED` | The evidence establishes no commit for this submission, not for the request's lifetime. Existing reservations remain untouched. |
-| `UNKNOWN` | A commit or outstanding write remains possible. Do not resubmit, dispatch, release state, or transfer ownership based on this result. |
+| `UNKNOWN` | A commit or outstanding write remains possible. End the current invocation without resubmission, dispatch, state release, or ownership transfer. Later authenticated redelivery follows the conditional admission contract below. |
 
 Recognized service rejections establish `REJECTED` only with an HTTP
 400/403 response and an explicit integer `RetryAttempts = 0`. Missing
@@ -699,8 +711,11 @@ Future runtime wiring must use `Config(**admission_client_config())` and
 qualify actual SDK behavior. Socket timeouts are not an end-to-end deadline;
 integration must budget both admission and collision lookup within the
 Lambda invocation. No wrapper retry may discard an earlier `UNKNOWN`
-result or substitute a fresh token to resolve uncertainty. The protected
-recovery protocol remains a later checkpoint.
+result or substitute a fresh token within the invocation to resolve uncertainty.
+Later authenticated redelivery may prepare a new candidate under the same durable
+request key, as described in the integrated broker contract below; it cannot
+adopt an existing attempt. The protected recovery protocol remains a later
+checkpoint.
 
 #### Dispatch ownership and launch-result recording
 
@@ -836,10 +851,10 @@ model, launch attempt token, and approved ECS parameters remain unchanged.
 
 The intended delivery path is ECS Task State Change events through a protected
 EventBridge rule and encrypted completion queue to the broker. That infrastructure,
-its IAM/invocation protections, retained evidence, and handler integration remain
-unimplemented. Ordinary application producers and direct Lambda callers must
-not be able to inject trusted completion evidence. Checking event `source`,
-type, account, or Region alone does not authenticate delivery.
+its IAM/invocation protections, retained evidence, and deployed authenticated
+handler integration remain unimplemented. Ordinary application producers and
+direct Lambda callers must not be able to inject trusted completion evidence.
+Checking event `source`, type, account, or Region alone does not authenticate delivery.
 
 The helper requires task-level `lastStatus = STOPPED`. A desired stop,
 individual container exit, or missing task observation cannot release capacity.
@@ -884,7 +899,8 @@ or an older accepted record without a lookup; absence cannot distinguish these
 cases. The caller must retain evidence for later processing or protected recovery.
 This helper does not create missing lookups, resolve unknown launches, or release
 their reservations. Queue acknowledgement, retry/failure routing, and retained
-delivery evidence remain runtime integration requirements.
+delivery evidence require deployed runtime integration; the broker adapter below
+implements the offline acknowledgement/retry decisions.
 
 A lost completion acknowledgement may hide a committed transaction. The helper
 performs no separate cleanup or outer retry; a later delivery can consistently
@@ -899,6 +915,71 @@ includes task/cluster/revision identifiers, event ID/time/resource version,
 stopped time/code, and available container names and exit codes. Optional
 diagnostics do not determine release eligibility; full task payloads, overrides,
 and free-form stop/container reasons are excluded.
+
+#### Integrated broker orchestration and delivery disposition
+
+The owner approved the integrated offline contract implemented by
+[broker.py](../modules/ecs_job_broker/lambda/broker.py). `process_delivery`
+connects the existing catalog, admission, dispatch, and completion helpers.
+`handle_sqs_event` accepts exactly one record and uses the current invocation ID
+with supplied protected configuration, clients, and an authentication adapter.
+It is not the configured production `broker.lambda_handler`.
+
+The injected `authenticate_delivery(record)` must establish protected delivery
+provenance and return `AuthenticatedDelivery` with a trusted request/completion
+kind and producer attribution. Body fields cannot select that trusted route or
+identity. Creating this object, matching queue ARN or `SenderId`, or checking
+event shape does not authenticate an invocation. Tests simulate the trusted
+boundary; concrete AWS authentication and bypass prevention remain unimplemented.
+
+Requests load the supplied protected catalog and require its application/environment
+to match runtime scope before admission. Completion uses the original launch
+snapshot and does not load the current catalog, evaluate the admission gate, or
+construct a launcher client. Gate closure and catalog replacement must not prevent
+terminal recording for an already-recorded task.
+
+`DeliveryResult` contains `ACK` or `RETRY`, a diagnostic reason, and available
+request/attempt/dispatch/task identifiers and error code. `ACK` establishes that
+message handling is complete; it does not establish application-job success.
+
+| Condition | Disposition and authority |
+|---|---|
+| ECS `ACCEPTED` or conclusive `REJECTED`, with result recording `CONFIRMED` | `ACK`; the launch outcome is durably recorded. |
+| Eligible matching duplicate with consistent original `LAUNCH_ACCEPTED`, `LAUNCH_REJECTED`, or `TASK_STOPPED` evidence | `ACK`; no dispatch or ownership transfer. |
+| Duplicate `REGISTERED`, `DISPATCHING`, or `LAUNCH_UNKNOWN`; malformed or inconsistent resolved record | `RETRY`; preserve the original attempt. |
+| Invalid, unauthorized, stale, or conflicting request; gate/slot/accounting denial; authentication or infrastructure failure | `RETRY`; retain the reason for bounded failure handling. |
+| Admission `UNKNOWN`, launcher setup failure, unconfirmed dispatch claim, launch `UNKNOWN`, or unconfirmed result recording | `RETRY`; no further dispatch, takeover, or reservation cleanup in this invocation. |
+| Completion `RECORDED`, `ALREADY_RECORDED`, or `IGNORED` | `ACK`; a consistent nonterminal event requires no terminal write. |
+| Completion `DEFERRED`, `REJECTED`, or `UNKNOWN` | `RETRY`; preserve delivery for later processing or investigation. |
+
+A recorded `LAUNCH_UNKNOWN` remains unresolved. Duplicate classification requires
+current producer authorization plus the executor's gate and intent checks. Resolved
+duplicates additionally require original owner/attempt/dispatch identity,
+consistent stored launch parameters and launch observation, and matching terminal
+evidence for `TASK_STOPPED`. The returned duplicate identifiers belong to the
+original attempt. A duplicate never passes to dispatch.
+
+Uncertainty ends the current invocation without an outer retry or replacement
+token. On a later authenticated request delivery, preparation creates a fresh
+candidate attempt under the same durable request key. Conditional creation
+arbitrates admission. If the earlier uncertain operation committed, the original
+record remains owned by its original attempt; unresolved work is retried without
+takeover. If it did not commit and the fresh candidate wins all admission
+conditions, that candidate may proceed through the normal dispatch claim.
+Neither SQS delivery identity nor receive count grants execution authority.
+
+`handle_sqs_event` returns a serializable result only for `ACK` and raises
+`RetryDelivery` otherwise. Authentication failures and unexpected processing
+exceptions fail the invocation with diagnostic codes rather than raw exception
+messages. Results exclude message bodies, catalog contents, and internal ledger
+snapshots; unbound completion-event task fields are not echoed into results.
+
+The adapter follows the existing batch-size-one contract without partial-batch
+responses, manual SQS deletion, or manual failure forwarding. Request delivery
+uses the configured bounded queue-to-DLQ path once integrated and activated.
+Completion-event transport and its failure path remain unimplemented. A DLQ
+arrival does not resolve an execution, release capacity, or complete a lifecycle
+fence; queue retention is finite and protected recovery remains required.
 
 #### Launch ownership and lifecycle fencing
 
@@ -1021,16 +1102,18 @@ The owner accepted the request schema, producer mapping, catalog,
 generation, uniqueness/conflict, and override-rejection contracts for
 the offline helper work, and subsequently approved the four-record
 admission model, executor design, dispatch ownership and result recording,
-and the immutable task lookup and protected ECS `STOPPED` event contract for
-offline implementation. These contracts preserve explicit outcome certainty,
+the immutable task lookup and protected ECS `STOPPED` event contract, and
+integrated orchestration with acknowledgement/retry decisions for offline
+implementation. These contracts preserve explicit outcome certainty,
 operational diagnostics, bounded SDK retries, conditional dispatch ownership,
 and atomic launch/terminal result and accounting transitions.
 
 Offline fixtures may supply simulated authenticated identity context.
 They do not prove AWS attribution or effective lifecycle fencing.
 
-Approval covers admission, dispatch, task lookup, and completion source with
-scripted-client coverage; it does not authorize transactional AWS execution,
+Approval covers admission, dispatch, task lookup, completion, and integrated
+orchestration source with scripted-client coverage and simulated authenticated
+delivery; it does not authorize transactional AWS execution,
 completion-event infrastructure deployment, or ECS task launches.
 Before actual AWS execution, approve the concrete gate authority, permissions,
 initialization, and coordinator lifecycle operations, and integrate the
@@ -1044,10 +1127,11 @@ protected artifact deployment, IAM ceilings, network admission,
 alternate-path prevention, lifecycle fencing, execution monitoring,
 and protected recovery.
 
-The next implementation focus is a cohesive offline execution path connecting
-the existing helpers, trusted delivery boundaries, and explicit message
-acknowledgement/retry decisions. This direction does not settle the outstanding
-protected authority or deployed authentication decisions.
+The cohesive offline execution path is implemented. The next implementation
+focus is protected runtime/deployment authority and bootstrap: settle concrete
+gate and mutation authority, implement authenticated delivery and scoped client
+construction, and enforce invocation budgets. This direction does not approve
+the outstanding authority or authentication decisions, or activate the broker.
 
 Keep Lambda reserved concurrency at zero, the SQS mapping disabled,
 and schedules disabled throughout unqualified development.
@@ -1072,13 +1156,15 @@ and schedules disabled throughout unqualified development.
 | Duplicate completion after slot reuse | No second decrement or release of the new reservation |
 | Completion arrives before launch recording or its write acknowledgement is lost | Preserve uncertainty/evidence; later delivery may observe the durable result |
 | Forged completion delivery or mismatched task/attempt | No release authority; field consistency alone does not authenticate delivery |
+| Admission acknowledgement is lost, then the request is redelivered | Fresh conditional admission under the same durable key; never adopt an existing attempt |
+| Conclusive launch refusal or a failed application task is durably handled | Acknowledgement denotes completed message handling, not application success |
 | Ledger restore or history removal | No silent restoration of replay authority |
 
-The 166-test suite covers offline parsing, authorization, catalog loading,
+The 188-test suite covers offline parsing, authorization, catalog loading,
 key derivation, transaction preparation, supplied-record classification,
 executor responses/cancellations, dispatch claim/result and task-lookup
-contracts, and completion identity/transaction/redelivery behavior relevant
-to these cases.
+contracts, completion identity/transaction/redelivery behavior, and integrated
+acknowledgement/retry flows relevant to these cases.
 The full runtime outcomes in this table remain acceptance requirements
 for subsequent implementation and qualification; offline coverage does
 not establish deployed enforcement.

@@ -8,13 +8,15 @@ The module separates broker execution permissions from job-specific ECS launch p
 
 **Current infrastructure scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm.
 
-**Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions through a supplied client. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome, including an immutable task lookup for an accepted launch. A completion helper uses caller-authenticated ECS `STOPPED` events to record termination and release the matching job slot atomically. Coverage uses offline fixtures and scripted clients. The Lambda handler, authenticated request and completion delivery, protected gate infrastructure and permissions, SDK client construction, invocation-budget enforcement, lifecycle coordination, and protected recovery remain unimplemented. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
+**Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions through a supplied client. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome, including an immutable task lookup for an accepted launch. A completion helper uses caller-authenticated ECS `STOPPED` events to record termination and release the matching job slot atomically. `broker.py` connects these helpers and decides whether to acknowledge or retry each delivery through an injectable single-message adapter. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
+
+Coverage uses offline fixtures, simulated authenticated delivery, and scripted clients. The deployable `broker.lambda_handler`, authenticated request and completion delivery, protected gate infrastructure and permissions, SDK client construction, invocation-budget enforcement, lifecycle coordination, and protected recovery remain unimplemented.
 
 ## Runtime Helpers
 
-These Python modules are intended to be packaged together with the future `broker.py` entry point in one optional broker Lambda function per module instance. That function serves the configured jobs; the application job code runs in ECS Fargate tasks. The handler that connects these components is still unimplemented.
+These Python modules are intended to be packaged together in one optional broker Lambda function per module instance. That function serves the configured jobs; the application job code runs in ECS Fargate tasks. `broker.py` now connects the components through `process_delivery` and `handle_sqs_event`, but does not yet expose the configured `lambda_handler` or implement protected runtime bootstrap.
 
-Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` and `record_task_completion` use supplied DynamoDB clients; `dispatch_admitted` also obtains an ECS client through a supplied factory and can launch tasks when real clients are provided. Current tests use scripted clients only. None of these helpers consumes queue messages.
+Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` and `record_task_completion` use supplied DynamoDB clients; `dispatch_admitted` also obtains an ECS client through a supplied factory and can launch tasks when real clients are provided. Current tests use scripted clients only. The broker adapter accepts a supplied SQS-shaped event; it does not poll or delete queue messages, and the Terraform event-source mapping remains disabled.
 
 | Source | Implemented behavior |
 |---|---|
@@ -30,6 +32,7 @@ Parsing, catalog loading, and transaction preparation make no AWS calls. `execut
 | [admission_executor.py](lambda/admission_executor.py) | Submits one prepared admission through a supplied low-level DynamoDB client, separates outcome certainty from failure reasons, and reads current eligibility and the original record after an established request collision. Defines bounded DynamoDB client settings through `admission_client_config`; it does not construct or configure the supplied client. |
 | [dispatch.py](lambda/dispatch.py) | Conditionally claims dispatch ownership, calls ECS once with the stored launch parameters and token, and records the observed outcome through a separate conditional transaction. Accepted results also create an immutable task-to-request lookup. Keeps claim, ECS observation, and recording certainty separate; it does not construct clients, monitor task completion, or perform recovery. |
 | [completion.py](lambda/completion.py) | Reads the task lookup and original request consistently, checks supplied trusted terminal evidence against the recorded launch, and atomically records `TASK_STOPPED`, frees the matching slot, and decrements occupied capacity. Handles duplicate completion without another write; it does not authenticate or retain event delivery, acknowledge queue messages, or recover unresolved launches. |
+| [broker.py](lambda/broker.py) | Connects catalog loading, admission, dispatch, and completion for a supplied authenticated delivery. Classifies durable duplicates and returns acknowledgement/retry decisions. Its single-message adapter returns normally only for `ACK` and raises `RetryDelivery` otherwise; delivery authentication and protected runtime configuration must be supplied. |
 
 ### Request Contract
 
@@ -149,7 +152,7 @@ The frozen `AdmissionResult` separates `outcome` from the diagnostic `reason`:
 | `DUPLICATE` | This submission was rejected; a collision lookup found an eligible current gate and an original record with matching intent. The original owner remains unchanged. |
 | `CONFLICT` | This submission was rejected; a collision lookup found an eligible current gate and an original record with different intent. |
 | `REJECTED` | The evidence establishes no commit for this submission. It does not establish the absence of an earlier request or authorize releasing existing state. |
-| `UNKNOWN` | The operation may have committed or remain in progress. Do not resubmit, dispatch, transfer ownership, or release reservations based on this result. |
+| `UNKNOWN` | The operation may have committed or remain in progress. End this invocation without resubmitting, dispatching, transferring ownership, or releasing reservations. A later authenticated delivery follows the conditional admission rules described below. |
 
 Reasons distinguish gate ineligibility, slot unavailability, failed accounting conditions, permission/configuration errors, transient service failures, and lookup faults. `SLOT_UNAVAILABLE` does not prove a healthy occupied slot: its condition also rejects malformed slot records. Missing or unfamiliar cancellation details do not become a duplicate or an invented contention diagnosis.
 
@@ -245,7 +248,29 @@ The frozen `CompletionResult` separates its outcome/reason from `recording` writ
 | `REJECTED` | Event/record consistency checks failed, or the write was conclusively rejected. The reason and write evidence distinguish these cases. |
 | `UNKNOWN` | A read failed or returned an unexpected response, or the completion write may have committed without an acknowledgement. |
 
-An early event can be retried after the accepted-launch transaction creates its lookup. A later delivery can also discover that an uncertain completion write committed. Missing lookups, including older accepted records without a lookup, never authorize release or automatic backfill. Queue acknowledgement, retry/failure routing, retained delivery evidence, client/deadline integration, and protected recovery remain caller responsibilities pending implementation.
+An early event can be retried after the accepted-launch transaction creates its lookup. A later delivery can also discover that an uncertain completion write committed. Missing lookups, including older accepted records without a lookup, never authorize release or automatic backfill. The broker adapter below implements acknowledgement/retry decisions; deployed completion delivery and failure routing, retained evidence, client/deadline integration, and protected recovery remain outstanding.
+
+### Integrated Broker and Message Handling
+
+`process_delivery` connects the helpers for one `AuthenticatedDelivery` using supplied protected configuration and clients. Request deliveries load the catalog, resolve the producer's job permissions, submit admission, and dispatch only after confirmed admission and a confirmed dispatch claim. Completion deliveries use the original stored launch and do not load the current catalog, check the admission gate, or construct a launcher client.
+
+`handle_sqs_event` accepts exactly one record and calls a supplied `authenticate_delivery(record)` adapter. That adapter must establish delivery provenance and return the trusted request/completion kind and producer attribution. Constructing `AuthenticatedDelivery`, matching a queue ARN or `SenderId`, or supplying an SQS-shaped event does not establish authentication. Message-body claims cannot select the trusted route or producer identity.
+
+The frozen `DeliveryResult` contains a disposition, diagnostic reason, and available request/attempt/dispatch/task identifiers and error code. `ACK` means message handling is complete, not that the application job succeeded:
+
+| Delivery result | Disposition |
+|---|---|
+| ECS acceptance or conclusive no-task rejection is durably recorded | `ACK` |
+| Eligible matching duplicate has a consistent original `LAUNCH_ACCEPTED`, `LAUNCH_REJECTED`, or `TASK_STOPPED` record | `ACK`; never dispatch again |
+| Duplicate remains `REGISTERED`, `DISPATCHING`, or `LAUNCH_UNKNOWN`, or its resolved evidence is inconsistent | `RETRY`; preserve the original attempt |
+| Invalid, unauthorized, stale, or conflicting request; gate/slot/accounting failure; authentication or infrastructure fault | `RETRY` |
+| Uncertain admission, launcher setup failure, unconfirmed claim, unknown launch, or unconfirmed result recording | `RETRY`; no takeover or reservation cleanup |
+| Completion is `RECORDED`, `ALREADY_RECORDED`, or `IGNORED` | `ACK` |
+| Completion is `DEFERRED`, `REJECTED`, or `UNKNOWN` | `RETRY` |
+
+An uncertain operation ends the current invocation without a wrapper retry. A later authenticated request delivery prepares a fresh candidate attempt under the same durable request key. Conditional creation arbitrates admission: a committed original remains owned by its original attempt, while a fresh candidate may proceed only if it wins a new reservation. Redelivery never adopts an unresolved original or authorizes another dispatch for it. Duplicate acknowledgement also requires current authorization/gate eligibility and consistent stored result evidence.
+
+The single-message adapter returns a serializable result only for `ACK`; otherwise it raises `RetryDelivery`. This matches the existing batch-size-one configuration without partial-batch responses or manual SQS deletion/failure forwarding. Request failures use the configured bounded queue-to-DLQ path once integrated and activated; completion transport and its failure path remain unimplemented. DLQ arrival does not resolve an execution or free its slot. Results exclude raw message bodies, catalog contents, internal ledger snapshots, and service exception messages.
 
 ### Catalog Section Validation
 
@@ -447,7 +472,7 @@ They verify configured Terraform permissions and relationships, not effective AW
 
 ### Offline Python Tests
 
-The offline tests use Python's standard-library `unittest` framework and require no AWS credentials or third-party Python dependencies. Executor, dispatcher, and completion tests supply scripted clients; they do not construct a Boto3 client. Use Python 3.12 to match the configured Lambda runtime.
+The offline tests use Python's standard-library `unittest` framework and require no AWS credentials or third-party Python dependencies. Executor, dispatcher, completion, and broker tests supply scripted clients; they do not construct a Boto3 client. Use Python 3.12 to match the configured Lambda runtime.
 
 ```shell
 PYTHONDONTWRITEBYTECODE=1 \
@@ -458,7 +483,7 @@ python3.12 -m unittest discover \
   -v
 ```
 
-The current suite contains 166 offline Python tests:
+The current suite contains 188 offline Python tests:
 
 | Test file | Tests | Coverage |
 |---|---|---|
@@ -474,8 +499,9 @@ The current suite contains 166 offline Python tests:
 | [test_admission_executor.py](tests/test_admission_executor.py) | 16 | Exact submission payloads, owner checks, client configuration, acknowledgments after SDK retries, duplicate/conflict lookups, current gate eligibility, cancellation reasons, known rejections, preserved uncertainty, lookup failures, malformed responses/records, and exclusion of record contents and service messages from result representations. |
 | [test_dispatch.py](tests/test_dispatch.py) | 27 | Conditional claims and result transactions, exact launcher/launch inputs, SDK retry-policy checks, repeated and competing dispatch entries, claim uncertainty, accepted/refused/unknown launches, slot and counter changes, failed result recording, immutable task-lookup creation and conflicts, retained task identifiers, response binding checks, and selective diagnostic evidence. |
 | [test_completion.py](tests/test_completion.py) | 26 | Consistent lookup/request reads, exact task and launch identity, atomic slot release and occupied-count decrement, completion across catalog changes, nonterminal events, early/missing records, duplicate and competing completion, rejected/uncertain writes, lost-acknowledgement redelivery, read failures, and minimal terminal evidence. |
+| [test_broker.py](tests/test_broker.py) | 22 | Connected request/duplicate/completion flows, acknowledgement/retry decisions, injected authentication failures, invalid batches/routes, authorization and catalog denials, admission/claim/result uncertainty, redelivery without ownership transfer or repeat dispatch, early completion, lost acknowledgements, and restricted diagnostics. |
 
-Fixed expected hashes in the request-identity, catalog, admission, and dispatch tests guard against accidental changes to persistent key formats. Integration tests exercise catalog resolution and admission preparation with a supplied producer identity; completion fixtures also use the actual dispatch-generated lookup. Admission tests inspect generated operations and supplied records. Executor, dispatcher, and completion tests script client responses and exceptions. Competing-entry tests model service outcomes; they do not execute DynamoDB conditions, exercise actual SDK retries, establish AWS transaction atomicity or event authenticity, or launch ECS tasks.
+Fixed expected hashes in the request-identity, catalog, admission, and dispatch tests guard against accidental changes to persistent key formats. Broker integration tests connect the actual helpers with simulated authenticated delivery and scripted AWS clients; completion fixtures use the actual dispatch-generated lookup. Admission tests inspect generated operations and supplied records. Executor, dispatcher, completion, and broker tests script client responses and exceptions. Competing-entry tests model service outcomes; they do not execute DynamoDB conditions, exercise actual SDK retries, establish AWS transaction atomicity or event authenticity, or launch ECS tasks.
 
 The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) runs the same suite with Python 3.12.
 
