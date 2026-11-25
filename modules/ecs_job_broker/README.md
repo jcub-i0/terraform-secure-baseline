@@ -8,7 +8,7 @@ The module separates broker execution permissions from job-specific ECS launch p
 
 **Current infrastructure scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm.
 
-**Current runtime source scope:** Offline Python helpers load a complete schema-v1 catalog and resolve schema-v2 requests to validated job configuration and a durable request key. They combine producer authorization with job identity, network, Fargate, and execution-policy validation. The Lambda handler, authenticated delivery integration, authoritative gate checks, atomic admission protocol, ECS dispatch, lifecycle coordination, and runtime reconciliation remain unimplemented.
+**Current runtime source scope:** Offline Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to validated job configuration and a durable request key, prepare a four-record DynamoDB admission transaction, and classify supplied existing request records as absent, duplicate, or conflicting. They combine producer authorization with job identity, network, Fargate, and execution-policy validation. The Lambda handler, authenticated delivery integration, live gate checks, transaction submission and error handling, ECS dispatch, lifecycle coordination, and runtime reconciliation remain unimplemented. Preparing a transaction does not reserve execution or authorize a launch.
 
 ## Offline Runtime Helpers
 
@@ -23,7 +23,8 @@ The module provides the following Python helpers. They make no AWS calls and do 
 | [catalog_job_bindings.py](lambda/catalog_job_bindings.py) | Validates one decoded job binding against a supplied approved cluster ARN and returns an immutable `JobBinding`. Requires an exact task-definition revision and consistent partition/account scope, with the task definition also matching the cluster Region. |
 | [catalog_job_network.py](lambda/catalog_job_network.py) | Validates one decoded network section against supplied protected approvals and returns an immutable `JobNetwork`. Requires a subset of approved private subnets, the exact reviewed security-group combination, and explicitly disabled public IP assignment. |
 | [catalog_job_fargate.py](lambda/catalog_job_fargate.py) | Validates one decoded Fargate section and returns an immutable `JobFargate`. Requires launch type `FARGATE`, integer task count one, and an explicit platform selector; checks selector syntax without claiming AWS support or task compatibility. |
-| [catalog.py](lambda/catalog.py) | Loads the complete catalog using the section validators, checks execution limits inline, and loads producer policies against validated job keys. Resolves a request against a caller-authenticated producer identity and the loaded catalog, returning the selected job configuration and durable request key. |
+| [catalog.py](lambda/catalog.py) | Loads the complete catalog using the section validators, checks execution limits inline, and loads producer policies against validated job keys. Retains a digest of the supplied catalog text. Resolves a request against a caller-authenticated producer identity and the loaded catalog, returning the selected job configuration and durable request key. |
+| [admission.py](lambda/admission.py) | Prepares a frozen four-record transaction containing the gate condition, new request record, job-slot reservation, and accounting increments. Captures the approved execution intent, launch parameters, proposed owner, and attempt token. Classifies a supplied existing request record without granting launch authority or making AWS calls. |
 
 ### Request Contract
 
@@ -50,7 +51,7 @@ Each `ProducerPolicy` contains a stable `logical_producer_id` and an immutable `
 
 `request_ledger_key` uses the ordered tuple `(application_id, environment, logical_producer_id, request_key)`. It serializes those values as a compact ASCII-escaped JSON array, hashes the encoded array with SHA-256, and prefixes the hexadecimal digest with `request:v1:`. This storage-format version is independent of request schema v2. Application and environment must come from stable protected configuration, and the logical producer ID must come from successful producer authorization.
 
-Job key, admission generation, schedule metadata, release version, IAM role ID, and session name are excluded from request uniqueness. Reusing an identity for another job therefore produces the same ledger key; the future admission protocol must compare the original approved execution intent and reject conflicts. Computing a stable key alone does not prevent duplicate launches. Changes to the key format or identity scope require a protocol that preserves existing request history.
+Job key, admission generation, schedule metadata, release version, IAM role ID, and session name are excluded from request uniqueness. Reusing an identity for another job therefore produces the same ledger key. `classify_existing_request` compares the proposed execution intent with a supplied original request record; enforcing that decision requires the future transaction executor. Computing a stable key alone does not prevent duplicate launches. Changes to the key format or identity scope require a protocol that preserves existing request history.
 
 ### Catalog Loading and Request Resolution
 
@@ -70,6 +71,8 @@ These inputs must come from qualified, protected configuration rather than being
 
 Duplicate JSON fields at any nesting level, nonstandard constants such as `NaN` or `Infinity`, unsupported fields, and invalid sections reject the whole catalog. All jobs must validate, including jobs that a particular producer cannot request. The returned frozen `JobCatalog` contains read-only job and producer-policy mappings with immutable values. Empty job and producer collections are supported and permit no requests.
 
+`JobCatalog.source_sha256` is the SHA-256 digest of the exact supplied string encoded as UTF-8, including whitespace. Admission preparation uses this value in the gate condition and proposed request record. The digest identifies the loaded text; it does not establish artifact approval or provenance. Load the packaged catalog text without rewriting it before comparing its digest with the protected approval.
+
 Once catalog JSON, resource approvals, and an authenticated producer role ID are available, the application can use the helpers as follows:
 
 ```python
@@ -88,7 +91,44 @@ resolved = resolve_request(
 )
 ```
 
-`resolve_request` parses the request, requires its generation to match the loaded catalog, and evaluates the producer's permission for the exact job. It returns a frozen `ResolvedRequest` containing the parsed request, logical producer ID, selected `CatalogJob`, and durable ledger key. It does not authenticate the supplied role ID, check a live admission gate, write the ledger, or authorize dispatch. Repeated resolution can return the same key, including for changed job intent; duplicate suppression and conflict rejection require the future ledger transaction.
+`resolve_request` parses the request, requires its generation to match the loaded catalog, and evaluates the producer's permission for the exact job. It returns a frozen `ResolvedRequest` containing the parsed request, logical producer ID, selected `CatalogJob`, and durable ledger key. It does not authenticate the supplied role ID, check a live admission gate, write the ledger, or authorize dispatch. Repeated resolution can return the same key, including for changed job intent; admission preparation and existing-record classification are described below, while durable enforcement requires transaction execution.
+
+### Admission Transaction Preparation
+
+`prepare_admission` resolves a request against a loaded catalog and prepares a low-level DynamoDB `TransactWriteItems` request. Supply the authenticated producer role ID, owning invocation ID, and distinct gate/ledger table ARNs from protected caller context. The returned frozen `PreparedAdmission` contains the request key, fresh attempt ID, canonical execution-intent JSON, and complete transaction JSON. Its `transaction_request()` method returns a fresh payload copy without submitting it.
+
+The prepared transaction targets four records:
+
+| Record | Key scope | Prepared operation |
+|---|---|---|
+| Gate, in a separate protected table | `gate:v1:<sha256>` of application/environment | Check schema/type, `OPEN` state, admission generation, catalog digest, and execution-ledger ARN. |
+| Request, in the execution ledger | Existing `request:v1:<sha256>` identity | Put a new schema-v1 `REQUEST` with status `REGISTERED`, original intent, exact launch parameters, provenance, and proposed attempt ownership; require that the key does not exist. |
+| Job slot, in the execution ledger | `slot:v1:<sha256>` of application/environment/job | Require an absent slot or a schema-v1 `SLOT` in state `FREE`; set it to `OCCUPIED` by this request and attempt. |
+| Accounting, in the execution ledger | `accounting:v1:<sha256>` of application/environment | Require an existing schema-v1 `ACCOUNTING` record with `unresolved_launches >= 0` and `occupied_slots >= unresolved_launches`; increment both counters by one. |
+
+The additional keys use SHA-256 over ordered, compact ASCII-escaped JSON arrays, as the request identity does. Slot and accounting keys exclude generations and releases so later catalogs cannot bypass outstanding work. The approved design tracks unresolved launch attempts separately from occupied job slots, including slots held by known running tasks. Protected initialization and transactional maintenance of these records remain to be implemented; preparation never initializes missing accounting or releases a slot.
+
+Using the loaded catalog and request from the previous example:
+
+```python
+from admission import prepare_admission
+
+prepared = prepare_admission(
+    request_json,
+    catalog=catalog,
+    producer_role_id=authenticated_producer_role_id,
+    owner_invocation_id=invocation_id,
+    gate_table_arn=gate_table_arn,
+    ledger_table_arn=ledger_table_arn,
+)
+transaction = prepared.transaction_request()
+```
+
+Each preparation generates a fresh attempt ID used as both the DynamoDB `ClientRequestToken` and the stored ECS `clientToken`. Retain the same preparation and unchanged payload for retries of that admission operation; a new delivery receives a new preparation. The request snapshot includes the exact `RunTask` parameters, role bindings, and execution policy. Neither these tokens nor a stored owner ID independently authorize dispatch.
+
+`classify_existing_request(prepared, item)` accepts a supplied low-level DynamoDB `Item`, or `None` for absence. It returns `ABSENT`, `DUPLICATE`, or `CONFLICT`; unexpected record identity or schema raises `InvalidLedgerRecord`. The comparison uses canonical execution intent, excluding generation, catalog provenance, invocation/attempt IDs, generated tokens, and schedule correlation metadata. An unchanged intent across generations is a duplicate; changing the job or approved execution intent conflicts. The original record is not modified, and even a duplicate owned by the same invocation grants no new launch authority.
+
+All classifications require the caller to establish current authentication, authorization, and live generation eligibility. Absence is not a reservation. Transaction submission, concurrent-write handling, uncertain outcomes, and acquisition of dispatch authority remain unimplemented. The [architecture record](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md#approved-four-record-admission-model) describes the approved accounting and lifecycle requirements.
 
 ### Catalog Section Validation
 
@@ -170,7 +210,9 @@ When `jobs` is nonempty, the module creates one DynamoDB table named `${name_pre
 - **Deletion protection:** Enabled to guard against accidental table deletion; deliberate destruction requires a separately authorized protection change.
 - **Retention:** No DynamoDB TTL configured. Durable request identities are initially retained without automatic expiry or cleanup, and expiration must not remove an unresolved execution reservation.
 
-The table provides storage only. The offline identity helper derives `request:v1:<sha256>` request keys, but does not create records. A future protected Lambda broker must implement conditional, atomic DynamoDB transactions that check the authoritative gate and generation/catalog binding, establish request uniqueness, acquire the job slot, and register exclusive launch-attempt ownership. Slot and attempt record schemas, conflict detection, runtime reconciliation, safe slot release, and coordination with the independently protected lifecycle fence remain outstanding. Point-in-time restores also require protected reconciliation before admission resumes.
+The module provisions storage; the offline helpers prepare request, slot, and accounting records without writing them. [Admission transaction preparation](#admission-transaction-preparation) binds those operations to a condition on a separate protected gate. The gate table, eligibility controller, accounting initialization, transaction executor, runtime reconciliation, and safe slot release are not provided by this module's current implementation.
+
+The approved design retains accounting across releases and generations. Unresolved attempts must remain accounted for until their outcomes and absence of further launch authority are established; known running tasks continue to occupy slots. Counter maintenance and lifecycle coordination require subsequent implementation and qualification. Point-in-time restore or table recreation also requires a protected protocol preserving request history and replay protection before admission resumes.
 
 ## Broker Runtime IAM and Logging
 
@@ -299,7 +341,7 @@ python3.12 -m unittest discover \
   -v
 ```
 
-The current suite contains 88 offline Python tests:
+The current suite contains 97 offline Python tests:
 
 | Test file | Tests | Coverage |
 |---|---|---|
@@ -311,8 +353,9 @@ The current suite contains 88 offline Python tests:
 | [test_catalog_job_network.py](tests/test_catalog_job_network.py) | 13 | Approved subnet subsets, exact security-group combinations, explicit public-IP disabling, ID syntax and legacy lengths, list size bounds and duplicates, invalid approval context, unsupported fields, and immutable loaded networks. |
 | [test_catalog_job_fargate.py](tests/test_catalog_job_fargate.py) | 10 | Explicit numeric and `LATEST` platform selectors, syntax-only version validation, fixed Fargate launch type, strict integer task count one, required fields, rejection of extra fields and malformed selectors, and immutable loaded settings. |
 | [test_catalog.py](tests/test_catalog.py) | 16 | Complete catalog loading and request resolution, authorization failures, generation checks, external resource approvals, rejection of duplicate JSON fields and invalid sections, inline execution limits, immutable results, empty catalogs, and stable identity across generation, role, and job-intent changes. |
+| [test_admission.py](tests/test_admission.py) | 9 | Four-record transaction shape and conditions, stable storage keys, exact launch snapshots, catalog-text digests, repeatable retry payloads, fresh delivery attempts, duplicate/conflict classification, identity preservation across generation and role changes, slot/accounting scope, resolution denials, and unexpected-record rejection. |
 
-A fixed expected hash in the request-identity and catalog integration tests guards against accidental changes to the persistent key format. Integration tests exercise the path from a complete catalog and a supplied producer-identity fixture to job configuration and a durable request key.
+Fixed expected hashes in the request-identity, catalog, and admission tests guard against accidental changes to persistent key formats. Integration tests exercise the path from a complete catalog and a supplied producer-identity fixture to job configuration, a durable request key, and a prepared admission transaction. Admission tests inspect the generated operations and compare supplied records; they do not execute DynamoDB conditions or establish atomicity under concurrent AWS requests.
 
 The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) runs the same suite with Python 3.12.
 

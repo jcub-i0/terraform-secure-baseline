@@ -1,5 +1,6 @@
 """Load catalog sections and resolve requests offline; no launch admission."""
 
+import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ class CatalogJob:
 
 @dataclass(frozen=True)
 class JobCatalog:
+    source_sha256: str
     application_id: str
     environment: str
     admission_generation: str
@@ -79,12 +81,14 @@ def load_catalog(
     environment, and qualified protected resource approvals. Do not derive the
     approval arguments from the selections being checked. This function does
     not verify provenance, query AWS, or bind the catalog to an authoritative
-    gate. Resource approvals are checked for each configured job. Empty jobs
+    gate. source_sha256 identifies the supplied UTF-8 text, not its approval.
+    Resource approvals are checked for each configured job. Empty jobs
     and producers are supported and permit no requests.
     """
     if not isinstance(body, str):
         raise InvalidCatalog("Catalog must be a JSON string.")
     try:
+        source_sha256 = hashlib.sha256(body.encode("utf-8")).hexdigest()
         data = json.loads(
             body, object_pairs_hook=_unique_object,
             parse_constant=_reject_constant,
@@ -155,6 +159,7 @@ def load_catalog(
         raise InvalidCatalog("Invalid producer configuration.") from exc
 
     return JobCatalog(
+        source_sha256=source_sha256,
         application_id=data["application_id"],
         environment=data["environment"],
         admission_generation=data["admission_generation"],

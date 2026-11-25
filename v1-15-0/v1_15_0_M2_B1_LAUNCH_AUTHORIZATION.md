@@ -277,7 +277,9 @@ separate runtime state monitoring.
 
 #### Outstanding implementation decisions
 
-The selected platform does not settle:
+The following list records the platform-selection boundary. The C4-A
+section below records subsequent design approvals and offline
+implementation. Platform selection alone did not settle:
 
 - Exact broker execution-role trust and protected deployment identity.
 - Producer authentication and queue authorization policies.
@@ -294,33 +296,49 @@ appropriate owner approval before their controls are deployed.
 This checkpoint records platform selection only. It does not
 constitute completed M2-B2 implementation or live qualification.
 
-### C4-A Runtime Admission Design and Initial Offline Implementation
+### C4-A Runtime Admission Design and Offline Implementation
 
-**Status:** Owner-authorized initial offline helper increment implemented
-and tested. Outstanding architecture decisions and activation
-qualifications below remain open.
+**Status:** The owner approved the four-record admission model as the basis
+for offline implementation. Catalog loading, request resolution,
+transaction preparation, and existing-request classification are
+implemented with a 97-test offline suite. Concrete gate authority,
+permissions, runtime execution, and activation qualification remain open.
 
 **Scope:** Request-schema-v2 parsing, producer-to-job policy evaluation,
-durable request-key derivation, and offline regression coverage.
+durable request-key derivation, complete schema-v1 catalog loading,
+catalog source digests, four-record admission transaction preparation,
+duplicate/conflict classification, and offline regression coverage.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
 This work preserves the accepted two-state architecture,
 application-owned broker resources, independently protected platform
 authority, and Lambda + SQS + DynamoDB direction.
 
-The helpers do not establish authenticated AWS delivery, load the
-protected catalog, perform transactional admission, or dispatch tasks.
+The helpers load supplied catalog text and prepare the conditional
+transaction payload. They do not establish artifact provenance or
+authenticated AWS delivery, read a live gate, submit transactions,
+classify SDK failures, acquire dispatch authority, or launch tasks.
 Terraform changes, AWS operations, and broker activation remain outside
-this completed increment.
+the completed offline increment.
 
-**Validation:** Implementation commit
+**Current coverage:** 97 offline Python tests, including nine admission
+tests for transaction shape and conditions, persistent key formats,
+launch snapshots, exact catalog-text digests, stable retry payloads,
+fresh attempts on redelivery, duplicate/conflict classification,
+generation/role-replacement behavior, slot/accounting scope, resolution
+denials, and unexpected-record rejection. These tests inspect generated
+operations and supplied records; they do not execute DynamoDB conditions
+or prove concurrency, AWS authentication, effective IAM, or fencing.
+
+**Initial increment validation (historical):** Implementation commit
 `97dbda7f6dc1defd19cab4b565d3e9fc0d53398a` passed Terraform Module Tests
 run #105: 26 broker tests under Python 3.12.16, 64 Terraform native tests,
 and 19 IAM regression tests.
 
 [CI evidence](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/45492053955)
 
-These results establish offline compatibility, not live AWS
+That historical run covers the initial 26-test helper increment, not the
+current 97-test suite. Offline results do not establish live AWS
 qualification or proof of zero drift.
 
 #### Producer identity and authorization
@@ -364,8 +382,9 @@ independently re-establishes authorization and durable request identity.
 
 #### Protected job catalog and deployment sequence
 
-The preferred initial representation is immutable JSON packaged with
-the approved Lambda ZIP.
+The initial representation is immutable schema-v1 JSON to be packaged
+with the approved Lambda ZIP. The complete catalog loader is implemented;
+protected artifact packaging and deployment remain outstanding.
 
 The catalog defines producer authorization and complete approved
 execution configuration: exact task-definition revision, cluster,
@@ -375,6 +394,13 @@ execution/concurrency limits.
 
 RunTask uses count one, public IP assignment disabled, and no
 caller-controlled execution overrides.
+
+The loaded `JobCatalog.source_sha256` identifies the exact supplied
+catalog string encoded as UTF-8, including whitespace. Admission
+preparation uses it for the gate comparison and request provenance.
+Computing this digest does not establish approval. The runtime must load
+the packaged text without rewriting it, and the coordinator must bind
+the independently approved digest to the admission generation.
 
 The proposed staged deployment sequence is:
 
@@ -400,7 +426,7 @@ configuration.
 
 #### Admission generations and durable request identity
 
-The proposed request envelope includes an admission generation.
+The implemented schema-v2 request envelope includes an admission generation.
 The protected gate binds that generation to an approved catalog.
 The caller-supplied generation is only a claim to validate.
 
@@ -440,8 +466,10 @@ automatic TTL-based deletion during C4.
 
 #### Protected admission authority and atomic reservation
 
-The leading candidate is a separate DynamoDB gate table in the same
-account and Region as the application execution ledger.
+The approved offline model uses a separate DynamoDB gate table in the
+same account and Region as the application execution ledger. This
+model approval does not establish the concrete gate authority or its
+infrastructure and IAM implementation.
 
 The proposed ownership split is:
 
@@ -471,12 +499,94 @@ eligibility item. Foundation publication eligibility alone does not
 authorize job admission.
 
 DynamoDB transactions require the same account and Region and cannot
-perform multiple actions against one item. Exact schemas and conditional
-expressions remain implementation work.
+perform multiple actions against one item. The offline preparation now
+defines schema-v1 records and admission expressions as described below;
+submission and error handling remain implementation work.
 
 Transactional permissions derive from the underlying item actions.
 Do not introduce a speculative standalone `dynamodb:TransactWriteItems`
 IAM permission.
+
+#### Approved four-record admission model
+
+One admission operation targets a protected gate and three records in
+the existing `pk`-only execution ledger. The launch attempt is embedded
+in the request record for the initial one-attempt policy.
+
+| Record | Key scope | Admission action |
+|---|---|---|
+| Gate | `gate:v1:<sha256>` over `(application_id, environment)` | Condition-check schema/type, `OPEN` state, admission generation, catalog digest, and execution-ledger ARN. |
+| Request | Existing `request:v1:<sha256>` over `(application_id, environment, logical_producer_id, request_key)` | Put the original intent and proposed attempt ownership only if the key does not exist. |
+| Job slot | `slot:v1:<sha256>` over `(application_id, environment, job_key)` | Acquire an absent slot or an existing schema-v1 `SLOT` in state `FREE`; set it to `OCCUPIED` by this request and attempt. |
+| Accounting | `accounting:v1:<sha256>` over `(application_id, environment)` | Require initialized accounting and atomically increment unresolved launch attempts and occupied slots. |
+
+All key hashes use ordered, compact ASCII-escaped JSON arrays and SHA-256.
+Prefixes, tuple field order, and encoding are persistent storage format
+v1. Slot and accounting identities exclude producer, request, release,
+and admission generation. Changing a catalog cannot create a fresh slot
+or reset accounting for an existing job or application scope.
+
+The protocol uses `schema_version = 1` and `record_type` values
+`GATE`, `REQUEST`, `SLOT`, and `ACCOUNTING`. The request has initial
+`status = REGISTERED`. It retains application/environment, logical
+producer and request identity, job, original generation/catalog digest,
+attempt ID, owning invocation ID, canonical `intent_json`, and exact
+`run_task_request_json`. Optional schedule metadata is retained for
+correlation only.
+
+Execution intent includes the job, launcher/task/execution roles,
+approved RunTask parameters, and execution policy. Generation, catalog
+provenance, invocation/attempt IDs, generated tokens, and schedule
+correlation metadata are excluded from intent comparison. Therefore:
+
+- A current-generation request with unchanged original execution intent
+  is a duplicate even if the generation or catalog digest has changed.
+- Reusing the durable identity with a different job or execution intent
+  is a conflict.
+- A stale-generation request remains ineligible; duplicate classification
+  does not bypass current authentication, authorization, or gate checks.
+- The original record is retained without rebinding it to the new catalog.
+
+`prepare_admission` first resolves the request against the supplied
+catalog and authenticated producer context. It produces a frozen
+`PreparedAdmission`, containing four actions in this order:
+
+1. Check the protected gate: schema v1, type `GATE`, state `OPEN`, and
+   exact generation, catalog digest, and execution-ledger ARN matches.
+2. Put the new request using `attribute_not_exists(pk)`.
+3. Update the slot only if absent or explicitly free with the expected
+   schema/type; bind it to the request key and attempt ID.
+4. Update an existing schema-v1 `ACCOUNTING` record only when
+   `unresolved_launches >= 0` and
+   `occupied_slots >= unresolved_launches`; add one to both counters.
+
+The transaction must succeed as a unit for admission to acquire ownership.
+The accounting record requires protected initialization before admission
+opens. Missing accounting must fail closed; neither admission nor a new
+release may silently initialize or reset counters over existing history.
+
+Each preparation generates a fresh attempt ID used as the DynamoDB
+`ClientRequestToken` and the stored ECS `clientToken`. The frozen
+transaction retains its exact parameters; `transaction_request()` returns
+a fresh payload copy. Retries of that operation must retain the same
+preparation. A new delivery gets a new attempt, and must not replay a
+previous invocation's token to acquire its launch authority. Service
+idempotency tokens supplement the durable request record.
+
+`classify_existing_request` accepts a supplied low-level DynamoDB item
+or `None` and returns `ABSENT`, `DUPLICATE`, or `CONFLICT`. Unexpected
+record identity or schema raises `InvalidLedgerRecord`. No result grants
+launch authority, including a duplicate whose stored owner matches the
+current invocation. Absence is not a reservation, and the helper does not
+read the ledger, modify the original record, or resolve concurrent writes.
+
+Only the invocation that successfully acquires the new reservation may
+progress toward dispatch. A request already present in the ledger cannot
+grant a new launch opportunity. Transaction contention or infrastructure
+errors must not be automatically labeled as duplicates or busy jobs.
+If the transaction outcome remains uncertain, do not dispatch or release
+reservations based on that uncertainty. The executor's error handling
+and protected recovery remain to be implemented and reviewed.
 
 #### Launch ownership and lifecycle fencing
 
@@ -506,9 +616,44 @@ releases and catalog generations, including interrupted invocations,
 uncertain ECS outcomes, and failed result writes. An empty incomplete
 or eventually consistent result does not establish fence completion.
 
-The later implementation must demonstrate authoritative discovery
-completeness. This proposal does not prematurely select an index,
-counter, or lease mechanism.
+The approved model uses the application/environment accounting record
+across every release and generation. `unresolved_launches` counts attempts
+whose launch outcome is not conclusively recorded or that may still
+produce a task. `occupied_slots` also includes slots held by known tasks.
+The counters establish whether obligations remain; retained request
+records identify those obligations for investigation and recovery.
+
+The following counter transitions are approved requirements for later
+execution and reconciliation code; only the admission increments are
+currently emitted by the offline preparation helper:
+
+| Transition | `unresolved_launches` | `occupied_slots` |
+|---|---|---|
+| New admission | Add one | Add one |
+| Launch conclusively recorded with a task | Subtract one | Unchanged |
+| Conclusive failure with no remaining launch possibility | Subtract one | Subtract one |
+| Previously recorded task conclusively terminates | Unchanged | Subtract one |
+| Timeout, lost response, or interrupted executor | Unchanged | Unchanged |
+
+Result and terminal-state transitions must update the request, relevant
+slot state, and counters transactionally, conditioning on the expected
+attempt and prior state. Duplicate processing must not decrement counters
+twice. A known running task must retain its occupied slot after its launch
+attempt is resolved.
+
+Fence completion requires the same gate to remain closed for the same
+closure operation and `unresolved_launches == 0`. Subsequent workload
+quiescence additionally requires `occupied_slots == 0`. The coordinator
+must establish these conditions transactionally when recording the
+corresponding lifecycle transition. Concrete coordinator operations and
+the closure-operation binding remain unimplemented.
+
+An empty scan cannot replace these conditions. The later implementation
+must demonstrate complete accounting, trustworthy outcome resolution,
+and protected initialization and restore behavior. Counters must not be
+reset on catalog changes, releases, or role replacement. The shared
+accounting item introduces contention across jobs in the same application;
+that tradeoff is accepted for this initial model.
 
 A resolved launch attempt is distinct from a released job slot.
 A known running task retains its slot until trustworthy terminal
@@ -555,15 +700,20 @@ classification, and the recovery procedure require subsequent review.
 
 #### Implementation and activation boundaries
 
-Before the first offline decision-logic increment, obtain owner acceptance
-of the applicable request schema, producer mapping, catalog, generation,
-uniqueness/conflict, and override-rejection contracts.
+The owner accepted the request schema, producer mapping, catalog,
+generation, uniqueness/conflict, and override-rejection contracts for
+the offline helper work, and subsequently approved the four-record
+admission model for offline implementation.
 
 Offline fixtures may supply simulated authenticated identity context.
 They do not prove AWS attribution or effective lifecycle fencing.
 
-Before transactional execution, approve the concrete gate authority,
-transaction protocol, permissions, and lifecycle relationships.
+Approval covers the admission model and offline transaction preparation;
+it does not authorize transactional AWS execution. Before that execution,
+approve the concrete gate authority, permissions, initialization,
+executor outcome handling, and coordinator lifecycle operations. These
+must implement the approved admission and accounting contract while
+preserving the independent protection described above.
 
 Before activation, implement and qualify producer authentication,
 protected artifact deployment, IAM ceilings, network admission,
@@ -590,8 +740,11 @@ and schedules disabled throughout unqualified development.
 | Resolved launch with a running task | Job slot remains occupied |
 | Ledger restore or history removal | No silent restoration of replay authority |
 
-These are acceptance requirements for subsequent focused tests and
-qualification, not claims of implemented or verified behavior.
+The 97-test suite covers offline parsing, authorization, catalog loading,
+key derivation, transaction preparation, and supplied-record classification
+relevant to these cases. The full runtime outcomes in this table remain
+acceptance requirements for subsequent implementation and qualification;
+offline coverage does not establish deployed enforcement.
 
 ## Qualification boundary
 
