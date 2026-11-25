@@ -8,11 +8,11 @@ The module separates broker execution permissions from job-specific ECS launch p
 
 **Current infrastructure scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm.
 
-**Current runtime source scope:** Seven offline helpers implement request-schema-v2 parsing, producer-to-job policy evaluation, durable request-key derivation, producer-catalog section validation, job execution-identity binding validation, job network validation against supplied protected approvals, and Fargate launch-setting validation. The Lambda handler, authenticated delivery integration, complete catalog loading, atomic admission protocol, ECS dispatch, lifecycle coordination, and runtime reconciliation remain unimplemented.
+**Current runtime source scope:** Offline Python helpers load a complete schema-v1 catalog and resolve schema-v2 requests to validated job configuration and a durable request key. They combine producer authorization with job identity, network, Fargate, and execution-policy validation. The Lambda handler, authenticated delivery integration, authoritative gate checks, atomic admission protocol, ECS dispatch, lifecycle coordination, and runtime reconciliation remain unimplemented.
 
 ## Offline Runtime Helpers
 
-The owner-authorized offline increments provide the following Python helpers. They make no AWS calls and do not process queue messages or launch tasks.
+The module provides the following Python helpers. They make no AWS calls and do not consume queue messages or launch tasks.
 
 | Source | Implemented behavior |
 |---|---|
@@ -23,6 +23,7 @@ The owner-authorized offline increments provide the following Python helpers. Th
 | [catalog_job_bindings.py](lambda/catalog_job_bindings.py) | Validates one decoded job binding against a supplied approved cluster ARN and returns an immutable `JobBinding`. Requires an exact task-definition revision and consistent partition/account scope, with the task definition also matching the cluster Region. |
 | [catalog_job_network.py](lambda/catalog_job_network.py) | Validates one decoded network section against supplied protected approvals and returns an immutable `JobNetwork`. Requires a subset of approved private subnets, the exact reviewed security-group combination, and explicitly disabled public IP assignment. |
 | [catalog_job_fargate.py](lambda/catalog_job_fargate.py) | Validates one decoded Fargate section and returns an immutable `JobFargate`. Requires launch type `FARGATE`, integer task count one, and an explicit platform selector; checks selector syntax without claiming AWS support or task compatibility. |
+| [catalog.py](lambda/catalog.py) | Loads the complete catalog using the section validators, checks execution limits inline, and loads producer policies against validated job keys. Resolves a request against a caller-authenticated producer identity and the loaded catalog, returning the selected job configuration and durable request key. |
 
 ### Request Contract
 
@@ -39,7 +40,7 @@ The parser accepts only integer `schema_version = 2`. A minimal request body is:
 
 The optional fields `schedule_key`, `schedule_arn`, and `scheduled_time` must be supplied together or all omitted. They are correlation metadata; parsing them does not verify schedule provenance or freshness. String fields must be nonempty and have no surrounding whitespace. The parser rejects invalid values rather than normalizing them.
 
-Body identity claims and execution overrides are unsupported fields. The admission generation is an untrusted claim; comparison with the authoritative gate and approved catalog remains outstanding. The current `ecs_job_scheduler` module still emits schema v1 without an admission generation, so its envelope requires a coordinated update before runtime integration. The parser does not accept that legacy envelope.
+Body identity claims and execution overrides are unsupported fields. The admission generation is an untrusted claim. `resolve_request` compares it with the loaded catalog's generation; checking the authoritative gate and its approved catalog binding remains outstanding. The current `ecs_job_scheduler` module still emits schema v1 without an admission generation, so its envelope requires a coordinated update before runtime integration. The parser does not accept that legacy envelope.
 
 ### Producer Policy and Durable Identity
 
@@ -51,11 +52,49 @@ Each `ProducerPolicy` contains a stable `logical_producer_id` and an immutable `
 
 Job key, admission generation, schedule metadata, release version, IAM role ID, and session name are excluded from request uniqueness. Reusing an identity for another job therefore produces the same ledger key; the future admission protocol must compare the original approved execution intent and reject conflicts. Computing a stable key alone does not prevent duplicate launches. Changes to the key format or identity scope require a protocol that preserves existing request history.
 
+### Catalog Loading and Request Resolution
+
+Use `load_catalog` to validate the complete catalog before resolving requests. It accepts a JSON string with exactly `schema_version`, `application_id`, `environment`, `admission_generation`, `cluster_arn`, `jobs`, and `producers`. Catalog `schema_version` must be integer `1`; it is independent of request schema version `2`. Application, environment, generation, cluster, and job-key strings must be nonempty with no surrounding whitespace.
+
+`jobs` is an object keyed by job name. Each job contains exactly `binding`, `network`, `fargate`, and `execution_policy`. The first three sections use the validators described below. `execution_policy` requires exactly `max_active_executions` and `run_task_total_max_attempts`, both integer `1`. These declare one active execution per job and one total SDK attempt per `RunTask` call, including the initial request. The loader validates these values directly; it does not reserve concurrency or configure an SDK client.
+
+Supply resource approvals separately from the catalog:
+
+| Argument | Required relationship |
+|---|---|
+| `approved_cluster_arn` | Must exactly match the catalog's `cluster_arn`. |
+| `approved_private_subnet_ids` | A `frozenset` defining the approved private-subnet pool for configured jobs. |
+| `approved_security_groups_by_job` | A mapping from each catalog job key to its reviewed security-group `frozenset`; no job keys may be missing or extra. |
+
+These inputs must come from qualified, protected configuration rather than being derived from the selections being checked. The caller must establish artifact approval and the intended application and environment. Resource approvals are checked for each configured job.
+
+Duplicate JSON fields at any nesting level, nonstandard constants such as `NaN` or `Infinity`, unsupported fields, and invalid sections reject the whole catalog. All jobs must validate, including jobs that a particular producer cannot request. The returned frozen `JobCatalog` contains read-only job and producer-policy mappings with immutable values. Empty job and producer collections are supported and permit no requests.
+
+Once catalog JSON, resource approvals, and an authenticated producer role ID are available, the application can use the helpers as follows:
+
+```python
+from catalog import load_catalog, resolve_request
+
+catalog = load_catalog(
+    catalog_json,
+    approved_cluster_arn=approved_cluster_arn,
+    approved_private_subnet_ids=approved_private_subnet_ids,
+    approved_security_groups_by_job=approved_security_groups_by_job,
+)
+resolved = resolve_request(
+    request_json,
+    catalog=catalog,
+    producer_role_id=authenticated_producer_role_id,
+)
+```
+
+`resolve_request` parses the request, requires its generation to match the loaded catalog, and evaluates the producer's permission for the exact job. It returns a frozen `ResolvedRequest` containing the parsed request, logical producer ID, selected `CatalogJob`, and durable ledger key. It does not authenticate the supplied role ID, check a live admission gate, write the ledger, or authorize dispatch. Repeated resolution can return the same key, including for changed job intent; duplicate suppression and conflict rejection require the future ledger transaction.
+
 ### Catalog Section Validation
 
 `load_producer_policies` accepts a decoded list of entries containing exactly `logical_producer_id`, `role_ids`, and `allowed_jobs`. Each logical producer has one entry with one or more role IDs; an approved replacement role can share the same logical identity and permissions. Duplicate logical producers, repeated list values, and role IDs assigned to multiple producers are rejected. Role IDs must use the supported `AROA` form, with 16–128 ASCII word characters in total; role ARNs, session-qualified IDs, and wildcard expressions are rejected.
 
-The caller supplies `declared_job_keys` as a `frozenset` of validated job keys. Every allowed job must be present in that set. An empty producer list or an empty allowed-job list grants no permissions. The result is a read-only mapping containing frozen `ProducerPolicy` values, so later changes to the input lists cannot change loaded permissions. The complete catalog loader must eventually derive the declared keys from validated job entries.
+The caller supplies `declared_job_keys` as a `frozenset` of validated job keys. Every allowed job must be present in that set. An empty producer list or an empty allowed-job list grants no permissions. The result is a read-only mapping containing frozen `ProducerPolicy` values, so later changes to the input lists cannot change loaded permissions. `load_catalog` derives the declared keys from the validated job entries before loading producer policies.
 
 `load_job_binding` accepts exactly `task_definition_arn`, `launcher_role_arn`, `execution_role_arn`, and `task_role_arn`. The approved cluster ARN is supplied separately from protected configuration. The task definition must specify a full revision ARN in the same partition, Region, and account as the cluster; all three IAM role ARNs must match its partition and account. The validator supports `aws`, `aws-us-gov`, and `aws-cn` partitions and IAM role paths, rejects wildcard ARNs and extra fields such as execution overrides, and preserves exact accepted values in a frozen `JobBinding`.
 
@@ -65,7 +104,7 @@ Network approvals must come from qualified, protected configuration, including r
 
 `load_job_fargate` accepts exactly `launch_type`, `platform_version`, and `count`. Launch type must be `FARGATE`, and count must be the integer `1`; booleans, floats, and strings are rejected. The platform selector must be explicitly supplied as `LATEST` or three dot-separated nonnegative integers without leading zeros. No fields receive implicit defaults, and extra fields are rejected. The frozen `JobFargate` preserves the accepted selector. Platform validation checks syntax only and does not maintain an AWS version allowlist or establish task-definition compatibility. Count one limits an individual launch call; it does not reserve a per-job concurrency slot.
 
-These helpers validate decoded configuration sections only. They do not decode a complete JSON catalog, verify artifact approval or provenance, confirm that AWS resources exist, or establish effective IAM permissions. Job-binding validation also does not verify the roles registered on the actual task definition. Complete catalog composition, protected deployment qualification, and enforcement of the validated configuration during dispatch remain outstanding.
+These section validators operate on decoded configuration; `load_catalog` composes them into the complete catalog. None of the helpers verify artifact approval or provenance, confirm that AWS resources exist, or establish effective IAM permissions. Job-binding validation also does not verify the roles registered on the actual task definition. Protected deployment qualification and enforcement of the validated configuration during dispatch remain outstanding.
 
 The helpers do not provide the configured `broker.lambda_handler` entry point or build an approved deployment package. Offline tests use simulated identity and policy inputs. Remaining architecture decisions, implementation work, and activation qualifications are recorded in the [launch authorization record](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md).
 
@@ -249,7 +288,7 @@ They verify configured Terraform permissions and relationships, not effective AW
 
 ### Offline Python Tests
 
-The runtime helpers use Python's standard-library `unittest` framework and require no AWS credentials or third-party Python dependencies. CI selects Python 3.12 to match the configured Lambda runtime; use Python 3.12 locally for the same interpreter-version coverage.
+The runtime helpers use Python's standard-library `unittest` framework and require no AWS credentials or third-party Python dependencies. Use Python 3.12 to match the configured Lambda runtime.
 
 ```shell
 PYTHONDONTWRITEBYTECODE=1 \
@@ -260,7 +299,7 @@ python3.12 -m unittest discover \
   -v
 ```
 
-The current suite contains 72 offline Python tests:
+The current suite contains 88 offline Python tests:
 
 | Test file | Tests | Coverage |
 |---|---|---|
@@ -271,15 +310,10 @@ The current suite contains 72 offline Python tests:
 | [test_catalog_job_bindings.py](tests/test_catalog_job_bindings.py) | 11 | Exact revision and cluster ARNs, partition/Region/account consistency, role paths, rejection of wildcards and extra fields, and immutable loaded bindings. |
 | [test_catalog_job_network.py](tests/test_catalog_job_network.py) | 13 | Approved subnet subsets, exact security-group combinations, explicit public-IP disabling, ID syntax and legacy lengths, list size bounds and duplicates, invalid approval context, unsupported fields, and immutable loaded networks. |
 | [test_catalog_job_fargate.py](tests/test_catalog_job_fargate.py) | 10 | Explicit numeric and `LATEST` platform selectors, syntax-only version validation, fixed Fargate launch type, strict integer task count one, required fields, rejection of extra fields and malformed selectors, and immutable loaded settings. |
+| [test_catalog.py](tests/test_catalog.py) | 16 | Complete catalog loading and request resolution, authorization failures, generation checks, external resource approvals, rejection of duplicate JSON fields and invalid sections, inline execution limits, immutable results, empty catalogs, and stable identity across generation, role, and job-intent changes. |
 
-A fixed expected hash in the request-identity tests guards against accidental changes to the persistent key format. The network and Fargate catalog suites add 23 tests to the preceding 49-test suite.
+A fixed expected hash in the request-identity and catalog integration tests guards against accidental changes to the persistent key format. Integration tests exercise the path from a complete catalog and a supplied producer-identity fixture to job configuration and a durable request key.
 
-The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) runs these tests after successful Python 3.12 setup. It records the interpreter version and test output in `test-evidence/ecs-job-broker-python.log`, included in the `terraform-module-test-evidence` artifact. Shell `pipefail` preserves test failures when output is piped through `tee`.
+The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) runs the same suite with Python 3.12.
 
-### Recorded CI Evidence
-
-[Terraform Module Tests run #105](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/45492053955), for implementation commit `97dbda7f6dc1defd19cab4b565d3e9fc0d53398a` tested through its PR merge commit, passed all 26 broker Python tests under Python 3.12.16 and all seven broker Terraform tests. The complete workflow also passed its other Terraform suites and IAM regressions and uploaded the test evidence.
-
-Run #105 is historical evidence for the initial 26-test suite. It predates all four catalog validators and does not establish CI results for the current 72-test suite.
-
-These results establish offline compatibility and regression coverage. They do not qualify authenticated AWS delivery, protected artifact provenance, transactional admission, durable deduplication, lifecycle fencing, or live execution, and they do not prove zero live drift. Lambda reserved concurrency remains zero and the SQS event-source mapping remains disabled pending implementation and approval of the complete runtime controls.
+These tests verify offline contracts and configuration behavior. They do not establish live AWS readiness. Authenticated delivery, artifact provenance, transactional admission, lifecycle fencing, and execution behavior require separate AWS qualification before activation. Lambda reserved concurrency remains zero and the SQS event-source mapping remains disabled until the runtime controls are implemented and approved.
