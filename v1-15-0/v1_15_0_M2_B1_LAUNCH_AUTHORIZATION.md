@@ -298,19 +298,22 @@ constitute completed M2-B2 implementation or live qualification.
 
 ### C4-A Runtime Admission Design and Offline Implementation
 
-**Status:** The owner approved the four-record admission model and the
-executor design separating outcome certainty from operational failure
-reasons, with bounded SDK retries and preserved uncertainty. Catalog
-loading, request resolution, transaction preparation, existing-request
-classification, and the admission executor are implemented with a
-113-test offline suite. Concrete gate authority, permissions, runtime
-integration, protected recovery, and activation qualification remain open.
+**Status:** The owner approved the four-record admission model, admission
+executor, and dispatch ownership and result-recording contract for offline
+implementation. Catalog loading, request resolution, admission preparation
+and execution, conditional dispatch claims, ECS outcome classification,
+and launch-result transactions are implemented with a 137-test offline
+suite. Concrete gate authority, permissions, runtime integration,
+task-completion monitoring, protected recovery, and activation qualification
+remain open.
 
 **Scope:** Request-schema-v2 parsing, producer-to-job policy evaluation,
 durable request-key derivation, complete schema-v1 catalog loading,
 catalog source digests, four-record admission transaction preparation,
 duplicate/conflict classification, executor result and cancellation
-handling, DynamoDB client configuration, and offline regression coverage.
+handling, DynamoDB client configuration, dispatch ownership, one-attempt
+ECS calls, conditional result/accounting updates, and offline regression
+coverage.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
 This work preserves the accepted two-state architecture,
@@ -320,14 +323,16 @@ authority, and Lambda + SQS + DynamoDB direction.
 The helpers load supplied catalog text and prepare the conditional
 transaction payload. The executor submits that payload through a supplied
 DynamoDB client, classifies responses and SDK failures, and reads the gate
-and original request after an established collision. A real client would
-perform AWS operations; the current tests use scripted clients only.
-The implementation does not establish artifact provenance or authenticated
-AWS delivery, construct the runtime SDK client, acquire dispatch authority,
-or launch tasks. Terraform changes, AWS operations, and broker activation
-remain outside the completed offline increment.
+and original request after an established collision. The dispatcher uses
+supplied clients to claim an admitted request, call ECS, and record the
+observed launch outcome. Real clients would perform AWS operations; current
+tests use scripted clients only. The implementation does not establish
+artifact provenance or authenticated AWS delivery, construct runtime SDK
+clients, enforce invocation deadlines, monitor task completion, or perform
+protected recovery. Terraform changes, AWS operations, and broker
+activation remain outside the completed offline increment.
 
-**Current coverage:** 113 offline Python tests, including nine admission
+**Current coverage:** 137 offline Python tests, including nine admission
 tests for transaction shape and conditions, persistent key formats,
 launch snapshots, exact catalog-text digests, stable retry payloads,
 fresh attempts on redelivery, duplicate/conflict classification,
@@ -337,10 +342,15 @@ exact submission payloads, owner checks, client settings, acknowledgments
 after SDK retries, collision lookups, current gate eligibility, cancellation
 reasons, known rejections, preserved uncertainty, lookup failures, malformed
 responses/records, and result representations that exclude sensitive record
-contents and service messages. These tests inspect generated operations,
-supplied records, and scripted client behavior; they do not execute DynamoDB
-conditions or actual SDK retry timing, or prove concurrency, AWS
-authentication, effective IAM, or fencing.
+contents and service messages. Twenty-four dispatcher tests cover conditional
+claims and result writes, exact launcher/launch inputs, the ECS retry-policy
+check, repeated and competing entries, claim uncertainty, accepted/refused/
+unknown launches, slot and counter changes, recording failures, retained
+task identifiers, response binding checks, and selective diagnostic evidence.
+These tests inspect generated operations, supplied records, and scripted
+client behavior. The competing-entry tests model claim/cache responses;
+they do not execute DynamoDB conditions or actual SDK retries, launch ECS
+tasks, or prove AWS concurrency, authentication, effective IAM, or fencing.
 
 **Initial increment validation (historical):** Implementation commit
 `97dbda7f6dc1defd19cab4b565d3e9fc0d53398a` passed Terraform Module Tests
@@ -350,7 +360,7 @@ and 19 IAM regression tests.
 [CI evidence](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/45492053955)
 
 That historical run covers the initial 26-test helper increment, not the
-current 113-test suite. Offline results do not establish live AWS
+current 137-test suite. Offline results do not establish live AWS
 qualification or proof of zero drift.
 
 #### Producer identity and authorization
@@ -679,6 +689,107 @@ Lambda invocation. No wrapper retry may discard an earlier `UNKNOWN`
 result or substitute a fresh token to resolve uncertainty. The protected
 recovery protocol remains a later checkpoint.
 
+#### Dispatch ownership and launch-result recording
+
+The approved dispatcher contract is implemented in
+[dispatch.py](../modules/ecs_job_broker/lambda/dispatch.py), with scripted
+clients only. `dispatch_admitted` receives the original `PreparedAdmission`,
+its `admission_result`, the current invocation ID, a ledger client, and a
+trusted `launcher_client_factory`. Request/attempt evidence and the prepared
+owner must match before client I/O. A nonconfirmed admission does not enter
+the dispatch protocol. Neither a caller-supplied invocation ID nor an
+admission receipt is independently an authentication or launch credential.
+
+The factory receives the stored launcher-role ARN and must return an ECS
+client using that job's launcher identity and approved Region. Client setup
+must not launch tasks. The dispatcher checks an effective integer
+`total_max_attempts = 1` before acquiring the claim. Factory failure or an
+invalid retry policy leaves existing reservations untouched. Role assumption,
+effective IAM verification, explicit timeout selection, and invocation-budget
+enforcement remain runtime integration requirements. The ledger client must
+use the existing bounded DynamoDB configuration.
+
+One dispatch claim transaction targets three existing ledger records:
+
+1. Update the request from `REGISTERED` to `DISPATCHING`, requiring schema/type,
+   the original invocation owner, attempt, execution intent, and exact launch
+   snapshot, plus absence of a prior `dispatch_id`. Store the new dispatch ID.
+2. Condition-check the schema-v1 `SLOT` in `OCCUPIED` state, bound to the same
+   request, attempt, and job.
+3. Condition-check schema-v1 `ACCOUNTING` with `unresolved_launches >= 1`
+   and `occupied_slots >= unresolved_launches`.
+
+The claim changes neither counter and creates no fifth record. The dispatcher
+generates a fresh `dispatch_id` for each entry, using it as the claim's
+`ClientRequestToken`. SDK retries within that entry retain the same token and
+parameters. A new entry receives a new token, so it cannot replay an earlier
+claim's cached success; its conditional write must acquire a still-unclaimed
+request. The claim ID is never accepted as a caller-supplied reusable permit.
+
+Only a confirmed claim proceeds to one `run_task` call with the stored
+parameters and original ECS client token. A rejected or uncertain claim
+stops before ECS and performs no cleanup or ownership-recovering read.
+The claim does not recheck an open gate: the original admission registered
+an obligation that remains accounted for after closure. Fence completion
+must wait for that obligation to be resolved or safely fenced.
+
+`DispatchResult` separates `claim` and `recording` write evidence from the
+`launch` observation. Write outcomes are `NOT_ATTEMPTED`, `CONFIRMED`,
+`REJECTED`, and `UNKNOWN`; launch outcomes are `NOT_ATTEMPTED`, `ACCEPTED`,
+`REJECTED`, and `UNKNOWN`. Claim and recording writes preserve uncertainty
+after unobserved SDK attempts, following the same conservative response
+contract as admission submission.
+
+The initial ECS classifier requires explicit `RetryAttempts = 0` for a
+conclusive observation. An HTTP 200 response with exactly one task ARN and
+no failures can be `ACCEPTED`. The task ARN must match the admitted partition,
+account, and Region; a cluster-qualified ARN must identify the expected
+cluster. Returned cluster/revision fields, when present, must match the
+stored request. Optional task fields are not required to be present.
+
+An HTTP 200 response with an empty tasks list and nonempty failures carrying
+reason codes can be `REJECTED` when no failure identifies a task that may
+need tracking. The supported exception refusals are `AccessDeniedException`,
+`BlockedException`, `ClusterNotFoundException`, `InvalidParameterException`,
+`PlatformTaskDefinitionIncompatibilityException`, `PlatformUnknownException`,
+and `UnsupportedFeatureException`. They require HTTP 400/403, zero SDK
+retries, and absent or empty `resourceIds` before they can resolve the launch
+as rejected.
+
+Timeouts, server errors, generic `ClientException`, `ConflictException`,
+unfamiliar errors, missing/positive retry metadata, and contradictory or
+unexpected responses remain `UNKNOWN`. Available task identifiers from
+task responses, failure resources, and token conflicts are retained for
+reconciliation. HTTP success alone does not establish an accepted task,
+and acceptance does not establish application completion.
+
+After observing ECS, the dispatcher attempts a separate three-item recording
+transaction with a fresh token distinct from admission and claim tokens.
+Every request update requires the same owner, attempt, `dispatch_id`,
+execution intent, launch snapshot, and prior `DISPATCHING` state. Every
+transaction checks matching slot ownership and positive valid accounting:
+
+| Observed launch outcome | Request update | Slot operation | Accounting operation |
+|---|---|---|---|
+| `ACCEPTED` | Set `LAUNCH_ACCEPTED`, `task_arn`, and `launch_observation_json`. | Check the occupied slot; retain its owner. | Subtract one unresolved launch; leave occupied slots unchanged. |
+| `REJECTED` | Set `LAUNCH_REJECTED` and `launch_observation_json`. | Set the matching slot to `FREE`; remove its request and attempt bindings. | Subtract one from both counters. |
+| `UNKNOWN` | Set `LAUNCH_UNKNOWN` and `launch_observation_json`. | Check the occupied slot without changing it. | Check accounting without decrementing either counter. |
+
+These changes commit together or not at all. Expected-state/attempt/claim
+conditions prevent repeated result processing from decrementing counters
+again. The original request identity, intent, and provenance are retained.
+`launch_observation_json` contains structured outcome/reason data, AWS request
+ID and retry count, error/failure codes, and available task/resource ARNs;
+it excludes full task payloads, service messages, and failure-detail text.
+
+An accepted task remains an accepted in-memory observation even if recording
+is rejected or uncertain. A failed recording may leave `DISPATCHING` or an
+already-committed result; no additional ECS call or cleanup follows. Likewise,
+a confirmed write of `LAUNCH_UNKNOWN` records uncertainty without resolving
+the obligation. `NOT_ATTEMPTED` describes this dispatcher entry and does not
+release an existing reservation. Completion monitoring and protected recovery
+must resolve the remaining obligations under separate approved protocols.
+
 #### Launch ownership and lifecycle fencing
 
 Every launch attempt must be durably registered before dispatch.
@@ -715,9 +826,9 @@ The counters establish whether obligations remain; retained request
 records identify those obligations for investigation and recovery.
 
 The following counter transitions are approved requirements for execution
-and reconciliation code. Preparation emits only the admission increments,
-and the executor submits that transaction through its supplied client;
-post-admission transitions remain unimplemented:
+and reconciliation code. Admission increments and dispatch launch-result
+updates have scripted-client coverage. Task-terminal updates and protected
+reconciliation remain unimplemented:
 
 | Transition | `unresolved_launches` | `occupied_slots` |
 |---|---|---|
@@ -757,9 +868,10 @@ separate correlation and monitoring.
 Before dispatch, persist an explicitly chosen ECS clientToken and
 immutable ECS request parameters.
 
-The proposed initial RunTask policy is one Botocore attempt using
-`total_max_attempts = 1`, with explicit connection/read timeouts selected
-within the Lambda execution budget.
+The approved initial RunTask policy is one Botocore attempt using
+`total_max_attempts = 1`. The dispatcher checks the supplied client's retry
+configuration; runtime integration must select explicit connection/read
+timeouts within the Lambda execution budget and enforce the remaining budget.
 
 Scope this configuration to the ECS launch client. It is a conservative
 initial implementation policy, not an immutable architectural requirement
@@ -787,30 +899,32 @@ negative task observation, expired credentials, changed epoch, DLQ
 arrival, or elapsed timeout is insufficient on its own.
 
 If safe reconciliation cannot be established, retain the unresolved
-attempt and block fence completion. Exact ECS timeout values, conclusive
-ECS error classification, and the recovery procedure require subsequent
-review; the admission executor contract does not resolve ECS outcomes.
+attempt and block fence completion. The dispatcher implements the initial
+conclusive ECS classifier described above; effective behavior requires AWS
+qualification. Exact ECS timeout values, deadline integration, terminal-state
+monitoring, and the protected recovery procedure remain outstanding.
 
 #### Implementation and activation boundaries
 
 The owner accepted the request schema, producer mapping, catalog,
 generation, uniqueness/conflict, and override-rejection contracts for
 the offline helper work, and subsequently approved the four-record
-admission model and executor design for offline implementation. The
-executor design preserves explicit outcome certainty, operational
-diagnostics, bounded SDK retries, and separate dispatch ownership.
+admission model, executor design, and dispatch ownership and result-recording
+contract for offline implementation. These contracts preserve explicit
+outcome certainty, operational diagnostics, bounded SDK retries, conditional
+dispatch ownership, and atomic result/accounting transitions.
 
 Offline fixtures may supply simulated authenticated identity context.
 They do not prove AWS attribution or effective lifecycle fencing.
 
-Approval covers the admission model, transaction preparation, and executor
-with scripted-client coverage; it does not authorize transactional AWS
-execution. Before that execution, approve the concrete gate authority,
-permissions, initialization, and coordinator lifecycle operations, and
-integrate the authenticated caller, SDK client configuration, and invocation
-budget. These must implement the approved admission and accounting contract
-while preserving the independent protection described above. Actual SDK
-retries, transaction races, and runtime recovery require AWS qualification.
+Approval covers admission and dispatch source with scripted-client coverage;
+it does not authorize transactional AWS execution or ECS task launches.
+Before actual AWS execution, approve the concrete gate authority, permissions,
+initialization, and coordinator lifecycle operations, and integrate the
+authenticated caller, role-scoped SDK clients, and invocation budget. These
+must implement the approved admission and accounting contract while preserving
+the independent protection described above. Actual SDK retries, transaction
+races, ECS outcomes, and runtime recovery require AWS qualification.
 
 Before activation, implement and qualify producer authentication,
 protected artifact deployment, IAM ceilings, network admission,
@@ -837,9 +951,10 @@ and schedules disabled throughout unqualified development.
 | Resolved launch with a running task | Job slot remains occupied |
 | Ledger restore or history removal | No silent restoration of replay authority |
 
-The 113-test suite covers offline parsing, authorization, catalog loading,
+The 137-test suite covers offline parsing, authorization, catalog loading,
 key derivation, transaction preparation, supplied-record classification,
-and executor responses and cancellation handling relevant to these cases.
+executor responses/cancellations, and dispatch claim/result contracts
+relevant to these cases.
 The full runtime outcomes in this table remain acceptance requirements
 for subsequent implementation and qualification; offline coverage does
 not establish deployed enforcement.
