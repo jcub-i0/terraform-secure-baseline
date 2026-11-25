@@ -9,7 +9,7 @@ from enum import Enum
 import json
 from uuid import uuid4
 
-from admission import PreparedAdmission
+from admission import PreparedAdmission, _key
 from admission_executor import AdmissionOutcome, AdmissionResult
 
 
@@ -33,7 +33,8 @@ class WriteEvidence:
     aws_request_id: str | None = None
     sdk_retry_attempts: int | None = None
     error_code: str | None = None
-    # Request, slot, accounting; service messages/items are never copied.
+    # Transaction action order: request, slot, accounting, then task lookup
+    # for an accepted launch. Service messages/items are never copied.
     cancellation_codes: tuple[str, ...] | None = None
 
 
@@ -119,7 +120,7 @@ def _submit(client, transaction) -> WriteEvidence:
         code = _error_code(error)
         reasons = response.get("CancellationReasons")
         codes = None
-        if isinstance(reasons, list) and len(reasons) == 3:
+        if isinstance(reasons, list) and len(reasons) == len(transaction["TransactItems"]):
             values = tuple(_mapping(reason).get("Code") for reason in reasons)
             if all(isinstance(value, str) for value in values):
                 codes = values
@@ -230,7 +231,7 @@ def _accounting_operation(accounting, *, outcome=None) -> dict:
 
 def _transaction(request, slot, accounting, dispatch_id, *, observation=None) -> dict:
     outcome = observation.outcome if observation else None
-    return {
+    transaction = {
         # The claim ID is generated within this dispatcher entry. Recording is
         # a separate operation with a separate token. Neither is the ECS token.
         "ClientRequestToken": dispatch_id if observation is None else uuid4().hex,
@@ -240,6 +241,23 @@ def _transaction(request, slot, accounting, dispatch_id, *, observation=None) ->
             _accounting_operation(accounting, outcome=outcome),
         ],
     }
+    if outcome is LaunchOutcome.ACCEPTED:
+        item = request["Item"]
+        task_arn = observation.task_arns[0]
+        lookup = {
+            "pk": {"S": _key("task", item["application_id"]["S"],
+                             item["environment"]["S"], task_arn)},
+            "schema_version": {"N": "1"}, "record_type": {"S": "TASK_LOOKUP"},
+            "application_id": item["application_id"], "environment": item["environment"],
+            "task_arn": {"S": task_arn}, "request_pk": item["pk"],
+            "attempt_id": item["attempt_id"], "dispatch_id": {"S": dispatch_id},
+        }
+        transaction["TransactItems"].append({"Put": {
+            "TableName": request["TableName"], "Item": lookup,
+            "ConditionExpression": "attribute_not_exists(#pk)",
+            "ExpressionAttributeNames": {"#pk": "pk"},
+        }})
+    return transaction
 
 
 def _response_observation(response, run_task) -> LaunchObservation:

@@ -8,13 +8,13 @@ The module separates broker execution permissions from job-specific ECS launch p
 
 **Current infrastructure scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm.
 
-**Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions through a supplied client. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome. Coverage uses offline fixtures and scripted clients. The Lambda handler, authenticated delivery integration, protected gate infrastructure and permissions, SDK client construction, invocation-budget enforcement, task-completion monitoring, lifecycle coordination, and protected recovery remain unimplemented. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
+**Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions through a supplied client. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome, including an immutable task lookup for an accepted launch. A completion helper uses caller-authenticated ECS `STOPPED` events to record termination and release the matching job slot atomically. Coverage uses offline fixtures and scripted clients. The Lambda handler, authenticated request and completion delivery, protected gate infrastructure and permissions, SDK client construction, invocation-budget enforcement, lifecycle coordination, and protected recovery remain unimplemented. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
 
 ## Runtime Helpers
 
 These Python modules are intended to be packaged together with the future `broker.py` entry point in one optional broker Lambda function per module instance. That function serves the configured jobs; the application job code runs in ECS Fargate tasks. The handler that connects these components is still unimplemented.
 
-Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` uses a supplied DynamoDB client; `dispatch_admitted` also obtains an ECS client through a supplied factory and can launch tasks when real clients are provided. Current tests use scripted clients only. None of these helpers consumes queue messages.
+Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` and `record_task_completion` use supplied DynamoDB clients; `dispatch_admitted` also obtains an ECS client through a supplied factory and can launch tasks when real clients are provided. Current tests use scripted clients only. None of these helpers consumes queue messages.
 
 | Source | Implemented behavior |
 |---|---|
@@ -28,7 +28,8 @@ Parsing, catalog loading, and transaction preparation make no AWS calls. `execut
 | [catalog.py](lambda/catalog.py) | Loads the complete catalog using the section validators, checks execution limits inline, and loads producer policies against validated job keys. Retains a digest of the supplied catalog text. Resolves a request against a caller-authenticated producer identity and the loaded catalog, returning the selected job configuration and durable request key. |
 | [admission.py](lambda/admission.py) | Prepares a frozen four-record transaction containing the gate condition, new request record, job-slot reservation, and accounting increments. Captures the approved execution intent, launch parameters, proposed owner, and attempt token. Classifies a supplied existing request record without granting launch authority or making AWS calls. |
 | [admission_executor.py](lambda/admission_executor.py) | Submits one prepared admission through a supplied low-level DynamoDB client, separates outcome certainty from failure reasons, and reads current eligibility and the original record after an established request collision. Defines bounded DynamoDB client settings through `admission_client_config`; it does not construct or configure the supplied client. |
-| [dispatch.py](lambda/dispatch.py) | Conditionally claims dispatch ownership, calls ECS once with the stored launch parameters and token, and records the observed outcome through a separate conditional transaction. Keeps claim, ECS observation, and recording certainty separate; it does not construct clients, monitor task completion, or perform recovery. |
+| [dispatch.py](lambda/dispatch.py) | Conditionally claims dispatch ownership, calls ECS once with the stored launch parameters and token, and records the observed outcome through a separate conditional transaction. Accepted results also create an immutable task-to-request lookup. Keeps claim, ECS observation, and recording certainty separate; it does not construct clients, monitor task completion, or perform recovery. |
+| [completion.py](lambda/completion.py) | Reads the task lookup and original request consistently, checks supplied trusted terminal evidence against the recorded launch, and atomically records `TASK_STOPPED`, frees the matching slot, and decrements occupied capacity. Handles duplicate completion without another write; it does not authenticate or retain event delivery, acknowledge queue messages, or recover unresolved launches. |
 
 ### Request Contract
 
@@ -110,7 +111,7 @@ The prepared transaction targets four records:
 | Job slot, in the execution ledger | `slot:v1:<sha256>` of application/environment/job | Require an absent slot or a schema-v1 `SLOT` in state `FREE`; set it to `OCCUPIED` by this request and attempt. |
 | Accounting, in the execution ledger | `accounting:v1:<sha256>` of application/environment | Require an existing schema-v1 `ACCOUNTING` record with `unresolved_launches >= 0` and `occupied_slots >= unresolved_launches`; increment both counters by one. |
 
-The additional keys use SHA-256 over ordered, compact ASCII-escaped JSON arrays, as the request identity does. Slot and accounting keys exclude generations and releases so later catalogs cannot bypass outstanding work. The approved design tracks unresolved launch attempts separately from occupied job slots, including slots held by known tasks. The dispatcher implements launch-result transitions; protected initialization, task-terminal transitions, and recovery remain outstanding. Admission never initializes missing accounting or releases a slot.
+The additional keys use SHA-256 over ordered, compact ASCII-escaped JSON arrays, as the request identity does. Slot and accounting keys exclude generations and releases so later catalogs cannot bypass outstanding work. The approved design tracks unresolved launch attempts separately from occupied job slots, including slots held by known tasks. Dispatch implements launch-result transitions, and completion implements terminal-state slot release through supplied clients. Protected initialization, deployed integration, and recovery remain outstanding. Admission never initializes missing accounting or releases a slot.
 
 Using the loaded catalog and request from the previous example:
 
@@ -191,15 +192,60 @@ After a confirmed claim, the dispatcher attempts to record the observation as fo
 
 | Launch observation | Request state | `unresolved_launches` | `occupied_slots` and slot |
 |---|---|---|---|
-| `ACCEPTED` | `LAUNCH_ACCEPTED`, with `task_arn` | Subtract one | Unchanged; the task retains its slot pending terminal-state monitoring. |
+| `ACCEPTED` | `LAUNCH_ACCEPTED`, with `task_arn` | Subtract one | Unchanged; the task retains its slot until terminal completion is recorded. |
 | `REJECTED` | `LAUNCH_REJECTED` | Subtract one | Subtract one; free only the matching request/attempt's slot. |
 | `UNKNOWN` | `LAUNCH_UNKNOWN` | Unchanged | Unchanged; retain the unresolved obligation. |
+
+An accepted-result transaction also creates a schema-v1 `TASK_LOOKUP` in the same ledger, making four actions in total; rejected and unknown results retain three actions. Its key is `task:v1:<sha256>` over `(application_id, environment, task_arn)`, using the existing compact ASCII-escaped JSON-array encoding. It stores that scope and task ARN, plus `request_pk`, `attempt_id`, and `dispatch_id`. Creation requires an absent key, so an existing task lookup cannot be reassigned. The lookup is retained after completion and leaves the four-record admission transaction unchanged.
 
 The recording transaction requires the same owner, attempt, `dispatch_id`, immutable snapshot, and prior `DISPATCHING` state, with matching slot ownership and valid accounting. These conditions prevent repeated result processing from decrementing counters again. Recording uses a separate transaction token. Failure to record may leave `DISPATCHING` or an already-committed result; it never causes another ECS call or automatic cleanup. A recorded `UNKNOWN` remains unresolved, and `NOT_ATTEMPTED` does not release an existing reservation.
 
 Conclusive ECS observations require `RetryAttempts = 0`. The classifier accepts an unambiguous single-task response, or recognizes an explicit no-task failure response or a supported request/authorization refusal. Timeouts, server errors, generic `ClientException`, token conflicts, missing retry metadata, and contradictory responses remain `UNKNOWN`. Available task identifiers are retained for reconciliation. The [dispatch architecture contract](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md#dispatch-ownership-and-launch-result-recording) specifies the supported refusal set and response checks.
 
-The request retains a structured `launch_observation_json`; full task payloads, service error messages, and failure-detail text are not copied into that evidence. Real client construction, authenticated handler integration, invocation-budget enforcement, completion monitoring, and protected recovery remain prerequisites for runtime activation and qualification.
+The request retains a structured `launch_observation_json`; full task payloads, service error messages, and failure-detail text are not copied into that evidence. Real client construction, authenticated handler integration, invocation-budget enforcement, protected completion-event delivery, and protected recovery remain prerequisites for runtime activation and qualification.
+
+### Task Completion and Slot Release
+
+`record_task_completion` accepts one decoded ECS Task State Change event, protected application/environment identifiers, the ledger table ARN, and a supplied low-level DynamoDB client:
+
+```python
+from completion import record_task_completion
+
+result = record_task_completion(
+    authenticated_ecs_event,
+    application_id=application_id,
+    environment=environment,
+    ledger_table_arn=ledger_table_arn,
+    ledger_client=ledger_client,
+)
+```
+
+The caller must establish that the event came through the approved protected ECS delivery path. Matching `source`, account, Region, or event type is a consistency check, not authentication; a fabricated event must never reach this helper as trusted completion evidence. The completion-event infrastructure and authenticated handler integration are not yet implemented.
+
+Only task-level `lastStatus = STOPPED` can release capacity. A desired stop or an individual container exit is insufficient. The helper consistently reads the immutable lookup and original request, requiring matching scope, attempt, dispatch, task ARN, cluster, and exact task-definition revision. It uses the stored launch snapshot, so a later catalog change or closed admission gate does not prevent completion of an already-recorded launch.
+
+One transaction performs the following changes:
+
+| Record | Condition and update |
+|---|---|
+| Request | Require `LAUNCH_ACCEPTED`, matching ownership and immutable launch identity, and no prior completion evidence. Set `TASK_STOPPED` and `completion_observation_json`. |
+| Job slot | Require the occupied slot to belong to the same request, attempt, and job. Set `FREE` and remove its request/attempt bindings. |
+| Accounting | Require schema/type, `unresolved_launches >= 0`, and `occupied_slots > unresolved_launches`. Subtract one occupied slot; leave unresolved launches unchanged. |
+
+These conditions prevent duplicate processing or a delayed event from releasing another attempt's slot. `TASK_STOPPED` records termination, not application success: a nonzero exit or startup failure can release capacity once the task is conclusively stopped. Evidence retains task identifiers, event ID/time/version, stop time/code, and available container names and exit codes; it excludes full task payloads, overrides, and free-form reasons.
+
+The frozen `CompletionResult` separates its outcome/reason from `recording` write evidence and structured read-failure diagnostics:
+
+| Outcome | Meaning |
+|---|---|
+| `RECORDED` | The completion transaction was acknowledged. |
+| `ALREADY_RECORDED` | The original request already contains matching terminal evidence; no further write is made. |
+| `IGNORED` | A consistent task event is not `STOPPED`; no ledger I/O occurs. |
+| `DEFERRED` | The lookup/request is missing, or the launch remains unresolved. Retain the notification for later processing or protected recovery. |
+| `REJECTED` | Event/record consistency checks failed, or the write was conclusively rejected. The reason and write evidence distinguish these cases. |
+| `UNKNOWN` | A read failed or returned an unexpected response, or the completion write may have committed without an acknowledgement. |
+
+An early event can be retried after the accepted-launch transaction creates its lookup. A later delivery can also discover that an uncertain completion write committed. Missing lookups, including older accepted records without a lookup, never authorize release or automatic backfill. Queue acknowledgement, retry/failure routing, retained delivery evidence, client/deadline integration, and protected recovery remain caller responsibilities pending implementation.
 
 ### Catalog Section Validation
 
@@ -281,9 +327,9 @@ When `jobs` is nonempty, the module creates one DynamoDB table named `${name_pre
 - **Deletion protection:** Enabled to guard against accidental table deletion; deliberate destruction requires a separately authorized protection change.
 - **Retention:** No DynamoDB TTL configured. Durable request identities are initially retained without automatic expiry or cleanup, and expiration must not remove an unresolved execution reservation.
 
-The module provisions storage and includes [transaction preparation](#admission-transaction-preparation), an [admission executor](#admission-executor), and [dispatch/result recording](#dispatch-and-launch-results). Preparation binds admission to a condition on a separate protected gate. The dispatcher uses the existing ledger records for ownership and conditional launch-result updates. The gate table, eligibility controller, protected accounting initialization, deployed runtime integration, terminal-state slot release, and recovery remain unimplemented.
+The module provisions storage and includes [transaction preparation](#admission-transaction-preparation), an [admission executor](#admission-executor), [dispatch/result recording](#dispatch-and-launch-results), and [completion recording](#task-completion-and-slot-release). Preparation binds admission to a condition on a separate protected gate. Accepted launch results add an immutable task lookup in the existing table; terminal recording updates the original request, slot, and accounting together. The gate table, eligibility controller, protected accounting initialization, deployed runtime integration, completion-event delivery, and recovery remain unimplemented.
 
-The approved design retains accounting across releases and generations. Unresolved attempts must remain accounted for until their outcomes and absence of further launch authority are established; known tasks continue to occupy slots. Launch-result counter updates have scripted-client coverage; terminal-state maintenance and lifecycle coordination require subsequent implementation and qualification. Point-in-time restore or table recreation also requires a protected protocol preserving request history and replay protection before admission resumes.
+The approved design retains accounting across releases and generations. Unresolved attempts must remain accounted for until their outcomes and absence of further launch authority are established; known tasks continue to occupy slots until terminal recording. Launch-result and terminal-state counter updates have scripted-client coverage; deployed lifecycle coordination and trustworthy event delivery require subsequent implementation and qualification. Point-in-time restore or table recreation also requires a protected protocol preserving request history, task bindings, and replay protection before admission resumes.
 
 ## Broker Runtime IAM and Logging
 
@@ -401,7 +447,7 @@ They verify configured Terraform permissions and relationships, not effective AW
 
 ### Offline Python Tests
 
-The offline tests use Python's standard-library `unittest` framework and require no AWS credentials or third-party Python dependencies. Executor and dispatcher tests supply scripted clients; they do not construct a Boto3 client. Use Python 3.12 to match the configured Lambda runtime.
+The offline tests use Python's standard-library `unittest` framework and require no AWS credentials or third-party Python dependencies. Executor, dispatcher, and completion tests supply scripted clients; they do not construct a Boto3 client. Use Python 3.12 to match the configured Lambda runtime.
 
 ```shell
 PYTHONDONTWRITEBYTECODE=1 \
@@ -412,7 +458,7 @@ python3.12 -m unittest discover \
   -v
 ```
 
-The current suite contains 137 offline Python tests:
+The current suite contains 166 offline Python tests:
 
 | Test file | Tests | Coverage |
 |---|---|---|
@@ -426,9 +472,10 @@ The current suite contains 137 offline Python tests:
 | [test_catalog.py](tests/test_catalog.py) | 16 | Complete catalog loading and request resolution, authorization failures, generation checks, external resource approvals, rejection of duplicate JSON fields and invalid sections, inline execution limits, immutable results, empty catalogs, and stable identity across generation, role, and job-intent changes. |
 | [test_admission.py](tests/test_admission.py) | 9 | Four-record transaction shape and conditions, stable storage keys, exact launch snapshots, catalog-text digests, repeatable retry payloads, fresh delivery attempts, duplicate/conflict classification, identity preservation across generation and role changes, slot/accounting scope, resolution denials, and unexpected-record rejection. |
 | [test_admission_executor.py](tests/test_admission_executor.py) | 16 | Exact submission payloads, owner checks, client configuration, acknowledgments after SDK retries, duplicate/conflict lookups, current gate eligibility, cancellation reasons, known rejections, preserved uncertainty, lookup failures, malformed responses/records, and exclusion of record contents and service messages from result representations. |
-| [test_dispatch.py](tests/test_dispatch.py) | 24 | Conditional claims and result transactions, exact launcher/launch inputs, SDK retry-policy checks, repeated and competing dispatch entries, claim uncertainty, accepted/refused/unknown launches, slot and counter changes, failed result recording, retained task identifiers, response binding checks, and exclusion of full task payloads and service messages from evidence. |
+| [test_dispatch.py](tests/test_dispatch.py) | 27 | Conditional claims and result transactions, exact launcher/launch inputs, SDK retry-policy checks, repeated and competing dispatch entries, claim uncertainty, accepted/refused/unknown launches, slot and counter changes, failed result recording, immutable task-lookup creation and conflicts, retained task identifiers, response binding checks, and selective diagnostic evidence. |
+| [test_completion.py](tests/test_completion.py) | 26 | Consistent lookup/request reads, exact task and launch identity, atomic slot release and occupied-count decrement, completion across catalog changes, nonterminal events, early/missing records, duplicate and competing completion, rejected/uncertain writes, lost-acknowledgement redelivery, read failures, and minimal terminal evidence. |
 
-Fixed expected hashes in the request-identity, catalog, and admission tests guard against accidental changes to persistent key formats. Integration tests exercise the path from a complete catalog and a supplied producer-identity fixture to job configuration, a durable request key, and a prepared admission transaction. Admission tests inspect generated operations and supplied records. Executor and dispatcher tests script client responses and exceptions. Competing-dispatch tests use a scripted claim/cache model; they do not execute DynamoDB conditions, exercise actual SDK retries, establish AWS transaction atomicity, or launch ECS tasks.
+Fixed expected hashes in the request-identity, catalog, admission, and dispatch tests guard against accidental changes to persistent key formats. Integration tests exercise catalog resolution and admission preparation with a supplied producer identity; completion fixtures also use the actual dispatch-generated lookup. Admission tests inspect generated operations and supplied records. Executor, dispatcher, and completion tests script client responses and exceptions. Competing-entry tests model service outcomes; they do not execute DynamoDB conditions, exercise actual SDK retries, establish AWS transaction atomicity or event authenticity, or launch ECS tasks.
 
 The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) runs the same suite with Python 3.12.
 
