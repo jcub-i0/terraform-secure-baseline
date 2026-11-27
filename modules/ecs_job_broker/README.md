@@ -8,15 +8,15 @@ The module separates broker execution permissions from job-specific ECS launch p
 
 **Current infrastructure scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm.
 
-**Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions through a supplied client. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome, including an immutable task lookup for an accepted launch. A completion helper uses caller-authenticated ECS `STOPPED` events to record termination and release the matching job slot atomically. `broker.py` connects these helpers and decides whether to acknowledge or retry each delivery through an injectable single-message adapter. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
+**Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome, including an immutable task lookup for an accepted launch. A completion helper uses caller-authenticated ECS `STOPPED` events to record termination and release the matching job slot atomically. `broker.lambda_handler` connects these helpers using fixed packaged configuration, queue-based attribution, scoped SDK clients, invocation-budget guards, and acknowledgement/retry decisions. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
 
-Coverage uses offline fixtures, simulated authenticated delivery, and scripted clients. The deployable `broker.lambda_handler`, authenticated request and completion delivery, protected gate infrastructure and permissions, SDK client construction, invocation-budget enforcement, lifecycle coordination, and protected recovery remain unimplemented.
+The 204-test offline suite uses fixtures, simulated protected delivery, scripted clients, and pinned SDK request-model tests. The runtime remains disabled. Independently protected deployment and invocation controls, gate infrastructure and permissions, completion-event delivery, lifecycle coordination, monitoring, protected recovery, and live AWS qualification remain outstanding. Queue metadata checks alone cannot authenticate a direct Lambda invocation.
 
 ## Runtime Helpers
 
-These Python modules are intended to be packaged together in one optional broker Lambda function per module instance. That function serves the configured jobs; the application job code runs in ECS Fargate tasks. `broker.py` now connects the components through `process_delivery` and `handle_sqs_event`, but does not yet expose the configured `lambda_handler` or implement protected runtime bootstrap.
+These Python modules are intended to be packaged together in one optional broker Lambda function per module instance. That function serves the configured jobs; the application job code runs in ECS Fargate tasks. `broker.py` exposes the configured `lambda_handler`, which bootstraps the existing `process_delivery` and `handle_sqs_event` orchestration.
 
-Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` and `record_task_completion` use supplied DynamoDB clients; `dispatch_admitted` also obtains an ECS client through a supplied factory and can launch tasks when real clients are provided. Current tests use scripted clients only. The broker adapter accepts a supplied SQS-shaped event; it does not poll or delete queue messages, and the Terraform event-source mapping remains disabled.
+Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` and `record_task_completion` use supplied DynamoDB clients; `dispatch_admitted` also obtains an ECS client through a supplied factory. The production handler constructs those clients and can perform AWS operations when deployed and invoked. Tests keep those operations offline. The handler processes a single SQS record; it does not poll or delete queue messages, and the Terraform event-source mapping remains disabled.
 
 | Source | Implemented behavior |
 |---|---|
@@ -32,7 +32,7 @@ Parsing, catalog loading, and transaction preparation make no AWS calls. `execut
 | [admission_executor.py](lambda/admission_executor.py) | Submits one prepared admission through a supplied low-level DynamoDB client, separates outcome certainty from failure reasons, and reads current eligibility and the original record after an established request collision. Defines bounded DynamoDB client settings through `admission_client_config`; it does not construct or configure the supplied client. |
 | [dispatch.py](lambda/dispatch.py) | Conditionally claims dispatch ownership, calls ECS once with the stored launch parameters and token, and records the observed outcome through a separate conditional transaction. Accepted results also create an immutable task-to-request lookup. Keeps claim, ECS observation, and recording certainty separate; it does not construct clients, monitor task completion, or perform recovery. |
 | [completion.py](lambda/completion.py) | Reads the task lookup and original request consistently, checks supplied trusted terminal evidence against the recorded launch, and atomically records `TASK_STOPPED`, frees the matching slot, and decrements occupied capacity. Handles duplicate completion without another write; it does not authenticate or retain event delivery, acknowledge queue messages, or recover unresolved launches. |
-| [broker.py](lambda/broker.py) | Connects catalog loading, admission, dispatch, and completion for a supplied authenticated delivery. Classifies durable duplicates and returns acknowledgement/retry decisions. Its single-message adapter returns normally only for `ACK` and raises `RetryDelivery` otherwise; delivery authentication and protected runtime configuration must be supplied. |
+| [broker.py](lambda/broker.py) | Exposes `lambda_handler` with fixed packaged configuration, queue attribution under independently enforced delivery controls, scoped DynamoDB/STS/ECS clients, and budget guards. Connects admission, dispatch, completion, and durable duplicate classification. Returns normally only for `ACK` and raises `RetryDelivery` otherwise. |
 
 ### Request Contract
 
@@ -169,15 +169,15 @@ Results retain the submitted candidate's request key and attempt ID, AWS request
 | Connection timeout | `1` second |
 | Read timeout | `2` seconds |
 
-The helper creates no client. Future runtime wiring must construct the DynamoDB client with `Config(**admission_client_config())`; the executor trusts its supplied client rather than configuring it. These settings are separate from the catalog's one-attempt ECS `RunTask` policy. Socket timeouts are not an end-to-end deadline: integration must budget admission and collision lookup within the Lambda invocation and qualify the behavior in AWS.
+The helper creates no client; `broker.lambda_handler` constructs the DynamoDB client with these settings and disables configured endpoint-URL overrides. The executor trusts its supplied client rather than configuring it. These settings are separate from the catalog's one-attempt ECS `RunTask` policy. Runtime budget guards reserve time before admission and collision lookup; socket timeouts and guards cannot cancel an in-flight operation. Effective timing and retry behavior still require AWS qualification.
 
-This implementation has scripted-client coverage only. Protected gate authority, permissions, initialization, and lifecycle integration must be approved before actual AWS execution. No executor result grants launch authority or permits reservation cleanup.
+Coverage includes scripted responses and the pinned SDK request model. Protected gate permissions, initialization, and lifecycle integration remain prerequisites for actual AWS execution. No executor result grants launch authority or permits reservation cleanup.
 
 ### Dispatch and Launch Results
 
 `dispatch_admitted` takes the original `PreparedAdmission`, its `admission_result`, the current `owner_invocation_id`, a `ledger_client`, and a trusted `launcher_client_factory`. The admission result must be `CONFIRMED` and match the prepared request and attempt. Ownership or evidence mismatches raise `ValueError` before client I/O; a nonconfirmed admission returns without contacting either service.
 
-The factory receives the stored job-specific launcher-role ARN. It must return an ECS client using that role in the approved Region, with explicit timeouts within the invocation budget. The dispatcher checks that the client's effective `total_max_attempts` is integer `1` before acquiring a claim. Client setup failure or a different retry policy prevents dispatch and leaves existing reservations untouched. This check does not establish effective AWS identity, permissions, or deadline enforcement; runtime integration must supply and qualify those controls. The ledger client must use the DynamoDB configuration described above.
+The factory receives the stored job-specific launcher-role ARN. The production handler assumes that exact role and constructs an ECS client in the approved Region using the returned temporary credentials, explicit timeouts, and no credential fallback. The dispatcher checks that the client's effective `total_max_attempts` is integer `1` before acquiring a claim. Client setup failure or a different retry policy prevents dispatch and leaves existing reservations untouched. Effective AWS identity, permissions, and timing require live qualification. The ledger client uses the DynamoDB configuration described above.
 
 The dispatch claim is a three-item transaction against the existing execution ledger. It changes the request from `REGISTERED` to `DISPATCHING`, requiring the original owner, attempt, execution intent, launch snapshot, and absence of a prior `dispatch_id`. It also checks the matching occupied job slot and initialized accounting with a positive unresolved count. The claim leaves both counters unchanged and introduces no additional record.
 
@@ -205,7 +205,7 @@ The recording transaction requires the same owner, attempt, `dispatch_id`, immut
 
 Conclusive ECS observations require `RetryAttempts = 0`. The classifier accepts an unambiguous single-task response, or recognizes an explicit no-task failure response or a supported request/authorization refusal. Timeouts, server errors, generic `ClientException`, token conflicts, missing retry metadata, and contradictory responses remain `UNKNOWN`. Available task identifiers are retained for reconciliation. The [dispatch architecture contract](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md#dispatch-ownership-and-launch-result-recording) specifies the supported refusal set and response checks.
 
-The request retains a structured `launch_observation_json`; full task payloads, service error messages, and failure-detail text are not copied into that evidence. Real client construction, authenticated handler integration, invocation-budget enforcement, protected completion-event delivery, and protected recovery remain prerequisites for runtime activation and qualification.
+The request retains a structured `launch_observation_json`; full task payloads, service error messages, and failure-detail text are not copied into that evidence. The handler supplies client construction and invocation-budget guards. Protected deployment/invocation controls, completion-event delivery, and recovery remain prerequisites for activation and qualification.
 
 ### Task Completion and Slot Release
 
@@ -223,7 +223,7 @@ result = record_task_completion(
 )
 ```
 
-The caller must establish that the event came through the approved protected ECS delivery path. Matching `source`, account, Region, or event type is a consistency check, not authentication; a fabricated event must never reach this helper as trusted completion evidence. The completion-event infrastructure and authenticated handler integration are not yet implemented.
+The caller must establish that the event came through the approved protected ECS delivery path. Matching `source`, account, Region, or event type is a consistency check, not authentication; a fabricated event must never reach this helper as trusted completion evidence. The handler supports a distinct configured completion queue, but the EventBridge/queue infrastructure, delivery permissions, and invocation protections are not yet implemented.
 
 Only task-level `lastStatus = STOPPED` can release capacity. A desired stop or an individual container exit is insufficient. The helper consistently reads the immutable lookup and original request, requiring matching scope, attempt, dispatch, task ARN, cluster, and exact task-definition revision. It uses the stored launch snapshot, so a later catalog change or closed admission gate does not prevent completion of an already-recorded launch.
 
@@ -248,7 +248,7 @@ The frozen `CompletionResult` separates its outcome/reason from `recording` writ
 | `REJECTED` | Event/record consistency checks failed, or the write was conclusively rejected. The reason and write evidence distinguish these cases. |
 | `UNKNOWN` | A read failed or returned an unexpected response, or the completion write may have committed without an acknowledgement. |
 
-An early event can be retried after the accepted-launch transaction creates its lookup. A later delivery can also discover that an uncertain completion write committed. Missing lookups, including older accepted records without a lookup, never authorize release or automatic backfill. The broker adapter below implements acknowledgement/retry decisions; deployed completion delivery and failure routing, retained evidence, client/deadline integration, and protected recovery remain outstanding.
+An early event can be retried after the accepted-launch transaction creates its lookup. A later delivery can also discover that an uncertain completion write committed. Missing lookups, including older accepted records without a lookup, never authorize release or automatic backfill. The handler supplies a ledger client, budget guards, and acknowledgement/retry decisions; deployed completion delivery and failure routing, retained delivery evidence, and protected recovery remain outstanding.
 
 ### Integrated Broker and Message Handling
 
@@ -272,6 +272,38 @@ An uncertain operation ends the current invocation without a wrapper retry. A la
 
 The single-message adapter returns a serializable result only for `ACK`; otherwise it raises `RetryDelivery`. This matches the existing batch-size-one configuration without partial-batch responses or manual SQS deletion/failure forwarding. Request failures use the configured bounded queue-to-DLQ path once integrated and activated; completion transport and its failure path remain unimplemented. DLQ arrival does not resolve an execution or free its slot. Results exclude raw message bodies, catalog contents, internal ledger snapshots, and service exception messages.
 
+### Runtime Bootstrap and Packaged Configuration
+
+`broker.lambda_handler` reads fixed `runtime.json` and, for requests only, `catalog.json` beside `broker.py` in the deployment ZIP. Events cannot choose configuration paths. The protected artifact process must supply both files; Terraform does not generate them or build the ZIP.
+
+The `runtime.json` configuration contains:
+
+| Field | Required value |
+|---|---|
+| `schema_version` | Integer `1`. |
+| `application_id`, `environment` | Stable protected scope identifiers matching the request catalog. |
+| `function_arn` | Exact unqualified Lambda ARN; checked against the invoked function, including invocations through its aliases or versions. |
+| `ledger_table_arn`, `request_queue_arn` | Exact resources in the function's partition, account, and Region. |
+| `completion_queue_arn` | A distinct queue ARN in that scope, or `null` to leave completion routing closed. |
+| `requests.gate_table_arn` | Separate protected gate table in the same scope; required for request processing. |
+| `requests.catalog_approvals` | `approved_cluster_arn`, an `approved_private_subnet_ids` array, and an `approved_security_groups_by_job` map of job keys to arrays of approved security-group IDs. Required for requests. |
+
+Cluster and network approvals must come from independent platform review. Copying catalog-selected values into approval fields does not establish approval. Catalog bytes are decoded as UTF-8 without newline translation or JSON rewriting, preserving the digest used by admission. Completion processing needs only the common configuration and ledger client; it does not read `catalog.json` or request-specific gate/approval configuration, or construct STS/ECS clients.
+
+For the exact request queue, the handler extracts the IAM role ID from the SQS system `SenderId` in `role-id:session-name` form and resolves it through the catalog's exact producer mapping. The session name grants no authority. Only the distinct configured completion queue selects completion processing. Body fields and custom attributes cannot select either producer identity or route. These checks depend on independently enforced queue-submission, event-source-mapping, deployment, and invocation controls: a direct caller can fabricate the same metadata.
+
+Package the Python modules, configuration, and all dependencies pinned in [requirements-sdk.txt](lambda/requirements-sdk.txt) together for Python 3.12. The pins are Boto3/Botocore `1.43.118`, s3transfer `0.19.0`, jmespath `1.1.0`, python-dateutil `2.9.0.post0`, six `1.17.0`, and urllib3 `2.7.0`. Do not rely on an independently changing runtime SDK; review and refresh the pins before release. Artifact publishing, provenance verification, and approval remain external implementation work.
+
+The handler derives the SDK Region from the verified function ARN and disables configured endpoint-URL overrides. DynamoDB and STS use broker credentials. Only dispatch after confirmed admission requests a 900-second STS session for the exact stored launcher role; ECS receives all three returned temporary credential fields. Missing or expiring credentials fail setup without falling back to broker credentials.
+
+| Client | Maximum total attempts per call | Connect timeout | Read timeout |
+|---|---|---|---|
+| DynamoDB | 3 | 1 second | 2 seconds |
+| STS | 1 | 1 second | 2 seconds |
+| ECS | 1 | 1 second | 3 seconds |
+
+All clients use standard retry mode. Lambda has a **60-second timeout** and the request queue has a **360-second visibility timeout**, six times the function timeout, with no batching window. The handler checks remaining invocation time before starting admission, launcher setup, dispatch, result recording, and completion operations. Insufficient budget fails processing for retry while preserving any existing reservation; it never authorizes cleanup or another launch. These checks cannot cancel an in-flight call or prove an uncertain attempt resolved. The [runtime bootstrap contract](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md#runtime-bootstrap-sdk-and-invocation-budget-contract) records the stage thresholds and qualification limits.
+
 ### Catalog Section Validation
 
 `load_producer_policies` accepts a decoded list of entries containing exactly `logical_producer_id`, `role_ids`, and `allowed_jobs`. Each logical producer has one entry with one or more role IDs; an approved replacement role can share the same logical identity and permissions. Duplicate logical producers, repeated list values, and role IDs assigned to multiple producers are rejected. Role IDs must use the supported `AROA` form, with 16–128 ASCII word characters in total; role ARNs, session-qualified IDs, and wildcard expressions are rejected.
@@ -288,7 +320,7 @@ Network approvals must come from qualified, protected configuration, including r
 
 These section validators operate on decoded configuration; `load_catalog` composes them into the complete catalog. They do not verify artifact approval or provenance, confirm that AWS resources exist, or establish effective IAM permissions. Job-binding validation also does not verify the roles registered on the actual task definition. The dispatcher uses the stored approved configuration; protected deployment qualification must establish its effective runtime enforcement.
 
-The helpers do not provide the configured `broker.lambda_handler` entry point or build an approved deployment package. Offline tests use simulated identity and policy inputs. Remaining architecture decisions, implementation work, and activation qualifications are recorded in the [launch authorization record](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md).
+The configured handler loads these helpers from the deployment package; the repository does not yet build or approve that artifact. Offline tests use simulated identity and policy inputs. Remaining architecture decisions, implementation work, and activation qualifications are recorded in the [launch authorization record](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md).
 
 ## IAM Architecture
 
@@ -321,13 +353,13 @@ When `jobs` is nonempty, the module creates one standard SQS queue named `${name
 
 - **Encryption at rest:** SSE-KMS with the externally supplied application-owned customer-managed KMS key (`broker_request_queue_cmk_arn`). The module does not create the key or grant KMS permissions.
 - **Encryption in transit:** The queue resource policy denies `sqs:*` requests when `aws:SecureTransport` is `false`. This policy does not itself grant producers or consumers queue access.
-- **Visibility timeout:** 180 seconds, a provisional setting to reconcile with the Lambda function timeout and batching configuration when the consumer is implemented.
+- **Visibility timeout:** 360 seconds, six times the configured 60-second Lambda timeout, with a zero-second batching window.
 - **Message retention:** Four days (345,600 seconds).
 - **Failure redrive:** After repeated unsuccessful receives, messages are eligible to move to the broker processing DLQ when the configured `maxReceiveCount` of 5 is exceeded.
 
 The queue ARN can be passed to `ecs_job_scheduler` as `broker_request_queue_arn`, alongside the same CMK ARN as `broker_request_queue_cmk_arn`. Producer/consumer IAM permissions and effective KMS key-policy authorization must be established through their respective ownership boundaries.
 
-The queue does not authenticate request-body claims, enforce job admission, provide durable deduplication, or process messages. These are future protected-broker responsibilities.
+The queue does not authenticate request-body claims, enforce job admission, provide durable deduplication, or process messages. The broker implements admission and durable identity handling, subject to the protected delivery and activation requirements above.
 
 ## Processing Dead-Letter Queue and Alarm
 
@@ -381,10 +413,10 @@ These IAM permissions enable future runtime integrations but do not implement re
 
 The module optionally creates `aws_lambda_function.broker` when `jobs` is nonempty and `broker_lambda_package` is supplied. When the package is `null`, **no Lambda function is created**, even if jobs are configured. The configured function:
 
-- Uses the name `${name_prefix}-job-broker`, Python 3.12, the `broker.lambda_handler` entry point, an `x86_64` architecture, 256 MiB memory, and a 30-second timeout.
+- Uses the name `${name_prefix}-job-broker`, Python 3.12, the `broker.lambda_handler` entry point, an `x86_64` architecture, 256 MiB memory, and a 60-second timeout.
 - Loads its ZIP from the supplied S3 bucket and object key, pinned to the exact `version_id`. The module does not build, upload, verify, or approve deployment artifacts.
 - Encrypts its environment configuration using the externally supplied customer-managed key `broker_lambda_cmk_arn`. Appropriate KMS key-policy and deployment permissions must be established separately.
-- Receives `BROKER_QUEUE_URL` and `EXECUTION_LEDGER_NAME` through environment variables derived from the module-managed SQS queue and DynamoDB table.
+- Receives `BROKER_QUEUE_URL` and `EXECUTION_LEDGER_NAME` through environment variables derived from the module-managed SQS queue and DynamoDB table. The implemented bootstrap uses the fixed packaged `runtime.json` instead; these variables do not supply its configuration.
 - Uses the existing broker execution role and depends on the log group and broker IAM policies being provisioned first.
 - Sets `reserved_concurrent_executions = 0` to throttle all function invocations until runtime admission and lifecycle safeguards are independently approved.
 
@@ -445,6 +477,8 @@ The boundary itself must be independently governed by the platform. Application 
 
 Effective permissions also depend on the approved IAM boundary policy, trust relationships, deployment identities, and any applicable organization-level restrictions.
 
+The approved authority split assigns the sole privileged application-state writer to a platform-controlled deployment workflow, with a separate protected controller managing gate transitions. The broker may read/check eligibility and maintain execution state; it must not modify its own deployment or gate authority. This split still requires concrete policy and controller implementation. Broker resources remain application-owned, with no additional workload state or reverse foundation dependency.
+
 The module does not create or authorize those external controls. The queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
 
 Runtime enforcement of private networking, approved security groups, request authentication, durable idempotency, admission concurrency, lifecycle fencing, and execution outcomes remains outstanding. The Lambda's reserved concurrency of zero disables invocation; it is not the per-job execution-concurrency control required of the eventual broker.
@@ -466,24 +500,29 @@ terraform -chdir=modules/ecs_job_broker test \
   -filter=tests/broker_iam.tftest.hcl
 ```
 
-The tests cover empty configuration, a two-job IAM authorization contract, encrypted queue and TLS-deny settings, processing-DLQ configuration and its SNS-backed alarm, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured, and optional Lambda creation from a version-pinned S3 artifact with a disabled single-message SQS mapping.
+The seven plan-only tests cover empty configuration, a two-job IAM authorization contract, encrypted queue and TLS-deny settings, processing-DLQ configuration and its SNS-backed alarm, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured, and optional Lambda creation from a version-pinned S3 artifact with a disabled single-message SQS mapping. They assert the 60-second function timeout and 360-second queue visibility setting.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.
 
 ### Offline Python Tests
 
-The offline tests use Python's standard-library `unittest` framework and require no AWS credentials or third-party Python dependencies. Executor, dispatcher, completion, and broker tests supply scripted clients; they do not construct a Boto3 client. Use Python 3.12 to match the configured Lambda runtime.
+The offline tests use Python's standard-library `unittest` framework and require the pinned SDK dependencies below. No AWS credentials or AWS access are needed. Most tests use scripted clients; a bootstrap test constructs real pinned SDK clients with fake credentials and Botocore `Stubber` to check request-model compatibility with network access blocked. Use Python 3.12 to match the configured Lambda runtime.
 
 ```shell
+python3.12 -m venv /tmp/ecs-job-broker-tests
+. /tmp/ecs-job-broker-tests/bin/activate
+python -m pip install --disable-pip-version-check --only-binary=:all: \
+  -r modules/ecs_job_broker/lambda/requirements-sdk.txt
+
 PYTHONDONTWRITEBYTECODE=1 \
 PYTHONPATH="$PWD/modules/ecs_job_broker/lambda" \
-python3.12 -m unittest discover \
+python -m unittest discover \
   -s modules/ecs_job_broker/tests \
   -p 'test_*.py' \
   -v
 ```
 
-The current suite contains 188 offline Python tests:
+The current suite contains 204 offline Python tests:
 
 | Test file | Tests | Coverage |
 |---|---|---|
@@ -499,10 +538,10 @@ The current suite contains 188 offline Python tests:
 | [test_admission_executor.py](tests/test_admission_executor.py) | 16 | Exact submission payloads, owner checks, client configuration, acknowledgments after SDK retries, duplicate/conflict lookups, current gate eligibility, cancellation reasons, known rejections, preserved uncertainty, lookup failures, malformed responses/records, and exclusion of record contents and service messages from result representations. |
 | [test_dispatch.py](tests/test_dispatch.py) | 27 | Conditional claims and result transactions, exact launcher/launch inputs, SDK retry-policy checks, repeated and competing dispatch entries, claim uncertainty, accepted/refused/unknown launches, slot and counter changes, failed result recording, immutable task-lookup creation and conflicts, retained task identifiers, response binding checks, and selective diagnostic evidence. |
 | [test_completion.py](tests/test_completion.py) | 26 | Consistent lookup/request reads, exact task and launch identity, atomic slot release and occupied-count decrement, completion across catalog changes, nonterminal events, early/missing records, duplicate and competing completion, rejected/uncertain writes, lost-acknowledgement redelivery, read failures, and minimal terminal evidence. |
-| [test_broker.py](tests/test_broker.py) | 22 | Connected request/duplicate/completion flows, acknowledgement/retry decisions, injected authentication failures, invalid batches/routes, authorization and catalog denials, admission/claim/result uncertainty, redelivery without ownership transfer or repeat dispatch, early completion, lost acknowledgements, and restricted diagnostics. |
+| [test_broker.py](tests/test_broker.py) | 38 | 22 orchestration tests covering request/duplicate/completion flows, acknowledgement/retry decisions, denials, uncertainty, redelivery, and restricted diagnostics; 16 runtime tests covering fixed configuration, queue/SenderId attribution, exact catalog bytes and independent approvals, launcher credentials and client settings, budget loss, completion independence, bootstrap failures, and pinned SDK request compatibility. |
 
-Fixed expected hashes in the request-identity, catalog, admission, and dispatch tests guard against accidental changes to persistent key formats. Broker integration tests connect the actual helpers with simulated authenticated delivery and scripted AWS clients; completion fixtures use the actual dispatch-generated lookup. Admission tests inspect generated operations and supplied records. Executor, dispatcher, completion, and broker tests script client responses and exceptions. Competing-entry tests model service outcomes; they do not execute DynamoDB conditions, exercise actual SDK retries, establish AWS transaction atomicity or event authenticity, or launch ECS tasks.
+Fixed expected hashes in the request-identity, catalog, admission, and dispatch tests guard against accidental changes to persistent key formats. Broker tests connect the actual helpers with simulated protected delivery; completion fixtures use the actual dispatch-generated lookup. Admission tests inspect generated operations and supplied records. Scripted and SDK-stubbed responses model service outcomes; they do not execute DynamoDB conditions, exercise actual HTTP retries, establish AWS transaction atomicity or event authenticity, or launch ECS tasks. The SDK test is required rather than skipped when dependencies are missing.
 
-The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) runs the same suite with Python 3.12.
+The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) installs the same pinned dependencies and runs the suite with Python 3.12.
 
 These tests verify offline contracts and configuration behavior. They do not establish live AWS readiness. Authenticated delivery, artifact provenance, transactional admission, lifecycle fencing, and execution behavior require separate AWS qualification before activation. Lambda reserved concurrency remains zero and the SQS event-source mapping remains disabled until the runtime controls are implemented and approved.
