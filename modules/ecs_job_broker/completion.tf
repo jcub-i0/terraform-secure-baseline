@@ -50,20 +50,3 @@ resource "aws_cloudwatch_event_target" "broker_completion" {
 
   depends_on = [aws_sqs_queue_policy.broker_completion]
 }
-
-resource "aws_lambda_event_source_mapping" "broker_completion" {
-  count = local.completion_enabled && length(aws_lambda_function.broker) > 0 ? 1 : 0
-
-  event_source_arn = aws_sqs_queue.broker_completion[0].arn
-  function_name    = aws_lambda_function.broker[0].arn
-  enabled          = false
-
-  batch_size                         = 1
-  maximum_batching_window_in_seconds = 0
-
-  depends_on = [
-    aws_iam_role_policy.broker_runtime,
-    aws_sqs_queue_policy.broker_completion
-  ]
-}
-
