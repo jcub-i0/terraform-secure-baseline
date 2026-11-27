@@ -337,4 +337,3 @@ run "reject_omitted_current_job" {
   }
   expect_failures = [var.completion_delivery]
 }
-
