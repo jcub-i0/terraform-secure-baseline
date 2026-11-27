@@ -309,9 +309,11 @@ transactions, task lookup creation, atomic terminal recording/slot release,
 connected request/completion flows, the configured handler, scoped SDK clients,
 and invocation-budget guards are implemented with a 204-test offline suite.
 Terraform now defines foundation-owned admission gates and keys, scoped broker
-gate permissions, and schema-v2 Scheduler requests. Concrete deployment/invocation
-protections, gate initialization, protected completion-event delivery, lifecycle
-coordination, monitoring, recovery, and live qualification remain open.
+gate permissions, schema-v2 Scheduler requests, and disabled completion-event
+transport with scoped consumer permissions, separate delivery/processing DLQs,
+and failure alarms. Concrete deployment/invocation protections, gate initialization,
+delivery integration and key-policy wiring, lifecycle coordination, runtime
+monitoring, recovery, and live qualification remain open.
 
 **Scope:** Request-schema-v2 parsing, producer-to-job policy evaluation,
 durable request-key derivation, complete schema-v1 catalog loading,
@@ -323,9 +325,10 @@ result/accounting updates, integrated single-message orchestration,
 fixed packaged runtime configuration, queue-based attribution under independently
 enforced delivery controls, scoped SDK construction, invocation-budget guards,
 acknowledgement/retry decisions, and offline regression coverage. Terraform
-configures a 60-second Lambda timeout and 360-second request-queue visibility;
-it also defines per-application foundation gates, their keys, scoped broker
-access, and Scheduler generation inputs. Invocation and consumption remain disabled.
+configures a 60-second Lambda timeout and 360-second request/completion queue
+visibility; it also defines per-application foundation gates, their keys, scoped
+broker access, Scheduler generation inputs, and the ECS EventBridge-to-SQS
+completion path. Invocation, consumption, and the completion rule remain disabled.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
 This work preserves the accepted two-state architecture,
@@ -346,7 +349,7 @@ package files, attributes request/completion records, constructs scoped clients,
 and checks remaining invocation time before operations. Real clients would
 perform AWS operations; tests use scripted clients and pinned SDK stubs without
 network access. This implementation does not establish artifact provenance,
-authenticate a forged direct invocation, provision protected completion delivery,
+authenticate a forged direct invocation, establish effective protected delivery,
 or perform protected recovery. Budget guards do not cancel in-flight calls or
 prove an uncertain attempt resolved. AWS operations and broker activation remain
 outside the completed offline increment.
@@ -387,10 +390,13 @@ network access, and fails rather than skips if dependencies are missing.
 These tests inspect generated operations, supplied records, client construction,
 and scripted or SDK-stubbed responses. They do not execute DynamoDB conditions or
 actual HTTP retries, launch ECS tasks, or prove AWS concurrency, authentication,
-effective IAM, or fencing. Twelve plan-only broker Terraform tests cover the
+effective IAM, or fencing. Nineteen plan-only broker Terraform tests cover the
 infrastructure contract, including scoped gate access, 60/360-second timing,
-and disabled activation. Three gate tests, eight Scheduler tests, and four
-admission-specific baseline tests cover storage, key ownership, foundation
+and disabled activation. Seven completion-delivery tests cover optional creation,
+family routing across revisions, exact-rule queue submission policies, failure
+routing/alarms, scoped consumer permissions, and rejected scope/family inputs.
+Three gate tests, eight Scheduler tests, and four admission-specific baseline
+tests cover storage, key ownership, foundation
 wiring, and schema-v2 request envelopes.
 
 **Initial increment validation (historical):** Implementation commit
@@ -900,12 +906,14 @@ or a ledger scan. It identifies the candidate request; the original request and
 conditional transaction still establish the exact launch binding. The admission
 model, launch attempt token, and approved ECS parameters remain unchanged.
 
-The intended delivery path is ECS Task State Change events through a protected
-EventBridge rule and encrypted completion queue to the broker. That infrastructure,
-its IAM/invocation protections, retained delivery evidence, and deployed wiring
-remain unimplemented. The handler can route a distinct configured completion
-queue, or reject completion routing when its ARN is `null`. Ordinary application
-producers and direct Lambda callers must not be able to inject trusted completion evidence.
+The delivery path is ECS Task State Change events through an EventBridge rule
+and encrypted completion queue to the broker. Terraform now defines this path,
+queue submission restrictions, scoped consumer IAM, and failure handling as
+described below. Protected deployment/invocation controls, key-policy wiring,
+and deployed delivery qualification remain pending. The handler can route a
+distinct configured completion queue, or reject completion routing when its ARN
+is `null`. Ordinary application producers and direct Lambda callers must not be
+able to inject trusted completion evidence.
 Checking event `source`, type, account, or Region alone does not authenticate delivery.
 
 The helper requires task-level `lastStatus = STOPPED`. A desired stop,
@@ -968,6 +976,54 @@ stopped time/code, and available container names and exit codes. Optional
 diagnostics do not determine release eligibility; full task payloads, overrides,
 and free-form stop/container reasons are excluded.
 
+#### Completion-event infrastructure
+
+The application-owned `ecs_job_broker` module accepts optional
+`completion_delivery = { queue_cmk_arn, task_definition_family_arns }`.
+The default `null` creates no completion resources or consumer grants. Configured
+delivery requires jobs, an exact CMK ARN, and revision-free family ARNs in the
+approved cluster's partition, account, and Region, covering every current job.
+
+[events.tf](../modules/ecs_job_broker/events.tf) defines a default-bus rule for
+`aws.ecs` / `ECS Task State Change`, the exact account/Region/cluster, and task-level
+`lastStatus = STOPPED`. Each family uses an ARN prefix ending in `:` so older
+revisions still match without admitting similarly named families. Routing does
+not depend on successful exit codes or the current catalog revision. Retired
+families and broker infrastructure must remain until tasks and pending events
+have drained; Terraform cannot establish that historical drain condition.
+
+The target preserves the complete original event. [queue.tf](../modules/ecs_job_broker/queue.tf)
+defines the distinct encrypted standard completion queue with 360-second
+visibility, four-day retention, and `maxReceiveCount = 5`. Its processing DLQ
+accepts redrive only from that queue. EventBridge uses a separate delivery DLQ
+with a retry policy bounded at 86,400 seconds and 185 attempts. Both DLQs use the
+supplied CMK and 14-day retention. [alarms.tf](../modules/ecs_job_broker/alarms.tf)
+routes either DLQ's visible-message alarm and EventBridge's
+`InvocationsFailedToBeSentToDlq` alarm to the existing `alarm_topic_arn`.
+
+All completion queues deny insecure transport. The completion queue and delivery
+DLQ allow `events.amazonaws.com` to send only for the exact rule and source account;
+separate explicit denies reject non-EventBridge senders and other or absent source
+rule ARNs, including callers with independent same-account IAM send grants.
+The processing DLQ retains SQS-managed redrive and has no EventBridge send grant.
+The broker receives only receive/delete/attribute access to the completion queue
+and decrypt access to its exact CMK through regional SQS with that queue's
+encryption context. No send, DLQ-consumption, or replay grants are added.
+
+The external application-owned CMK policy must separately authorize EventBridge's
+`kms:GenerateDataKey` and `kms:Decrypt` operations. The module neither creates that
+key nor manages its policy. The `broker_completion_delivery` output groups `queue`,
+`dlqs.delivery`, `dlqs.processing`, `rule`, and `event_source_mapping_uuid`;
+the protected runtime package must bind its `completion_queue_arn` to `queue.arn`.
+The mapping exists only when a Lambda package is configured.
+
+The rule is `DISABLED`, both SQS mappings have `enabled = false`, and Lambda
+reserved concurrency stays zero. A disabled rule captures no events. Queue policy
+restrictions do not protect against unauthorized deployment/policy changes or
+forged direct Lambda invocation; independent authority controls and effective
+IAM/KMS/delivery qualification remain required. Finite DLQ retention is not
+automatic recovery or proof permitting slot release, replay, or fence completion.
+
 #### Integrated broker orchestration and delivery disposition
 
 The owner approved the integrated offline contract implemented by
@@ -982,9 +1038,10 @@ provenance and return `AuthenticatedDelivery` with a trusted request/completion
 kind and producer attribution. Body fields cannot select that trusted route or
 identity. Creating this object, matching queue ARN or `SenderId`, or checking
 event shape does not authenticate an invocation. Tests simulate the trusted
-boundary. The production bootstrap checks queue and sender metadata, but concrete
-AWS invocation restrictions, delivery protections, and bypass prevention remain
-unimplemented.
+boundary. The production bootstrap checks queue and sender metadata. Completion
+queue restrictions are now defined, but concrete AWS invocation restrictions,
+deployment protections, and bypass prevention still require implementation and
+qualification.
 
 Requests load the supplied protected catalog and require its application/environment
 to match runtime scope before admission. Completion uses the original launch
@@ -1031,7 +1088,8 @@ snapshots; unbound completion-event task fields are not echoed into results.
 The adapter follows the existing batch-size-one contract without partial-batch
 responses, manual SQS deletion, or manual failure forwarding. Request delivery
 uses the configured bounded queue-to-DLQ path once integrated and activated.
-Completion-event transport and its failure path remain unimplemented. A DLQ
+Completion transport and its separate failure paths are also defined in Terraform
+but remain disabled pending protected integration and qualification. A DLQ
 arrival does not resolve an execution, release capacity, or complete a lifecycle
 fence; queue retention is finite and protected recovery remains required.
 
@@ -1101,8 +1159,8 @@ retries or prove deployed SDK behavior. Packaging does not establish provenance,
 and the protected artifact publishing/approval pipeline remains unimplemented.
 
 Terraform now configures a **60-second Lambda timeout** and **360-second request
-queue visibility timeout**, six times the function timeout. Batch size remains
-one with a zero-second batching window. The handler uses Lambda context's
+and completion queue visibility timeout**, six times the function timeout. Batch
+size remains one with a zero-second batching window. The handler uses Lambda context's
 `get_remaining_time_in_millis()` to guard operation starts:
 
 | Stage about to start | Minimum remaining invocation time |
@@ -1134,8 +1192,8 @@ gate/accounting records, mutate its deployment/IAM, implement the gate controlle
 or recover uncertain attempts. Existing Terraform environment variables
 `BROKER_QUEUE_URL` and `EXECUTION_LEDGER_NAME` remain present; this bootstrap uses
 the packaged configuration instead. Terraform does not generate the package files.
-Reserved concurrency stays zero, the request mapping stays disabled, and
-schedules must remain disabled.
+Reserved concurrency stays zero, both SQS mappings and the completion-event rule
+stay disabled, and schedules must remain disabled.
 
 #### Launch ownership and lifecycle fencing
 
@@ -1175,7 +1233,7 @@ records identify those obligations for investigation and recovery.
 The following counter transitions are approved requirements for execution
 and reconciliation code. Admission increments, dispatch launch-result updates,
 and terminal-state slot release have scripted-client coverage. Protected event
-delivery, deployed coordination, and recovery remain unimplemented:
+delivery integration, deployed coordination, and recovery remain outstanding:
 
 | Transition | `unresolved_launches` | `occupied_slots` |
 |---|---|---|
@@ -1271,8 +1329,9 @@ They do not prove AWS attribution or effective lifecycle fencing.
 Approval covers admission, dispatch, task lookup, completion, orchestration,
 and runtime bootstrap source with scripted and SDK-stubbed coverage and simulated
 protected delivery. Terraform implementation also covers the 60/360-second
-settings, foundation gates and keys, scoped broker gate permissions, and schema-v2
-Scheduler payloads while activation remains disabled. It does not authorize AWS
+settings, foundation gates and keys, scoped broker gate permissions, schema-v2
+Scheduler payloads, and completion-event transport, consumer IAM, failure queues,
+and alarms while activation remains disabled. It does not authorize AWS
 execution, completion-event infrastructure deployment, or ECS task launches.
 Before actual AWS execution, implement and approve the concrete policies and
 provisioning for the accepted deployment/invocation authority split, gate controller
@@ -1291,13 +1350,14 @@ and protected recovery.
 The cohesive offline execution path and runtime bootstrap are implemented.
 Remaining implementation includes enforcing the approved deployment/invocation
 authority split, protected publication, gate initialization and lifecycle
-operations, protected completion delivery and failure routing, runtime monitoring,
-and protected recovery. Artifact approval and live positive/
-negative qualification also remain required. The approved authority split does
+operations, protected request/completion delivery integration and key-policy wiring,
+runtime monitoring beyond the defined failure alarms, and protected recovery.
+Artifact approval and live positive/negative qualification also remain required.
+The approved authority split does
 not by itself provision or qualify these controls, or activate the broker.
 
-Keep Lambda reserved concurrency at zero, the SQS mapping disabled,
-and schedules disabled throughout unqualified development.
+Keep Lambda reserved concurrency at zero, both SQS mappings and the completion
+rule disabled, and schedules disabled throughout unqualified development.
 
 #### Focused acceptance cases
 
