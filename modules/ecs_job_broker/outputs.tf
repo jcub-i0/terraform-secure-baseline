@@ -83,7 +83,7 @@ output "broker_event_source_mapping_uuid" {
   ) : null
 }
 
-output "broker_completion" {
+output "broker_completion_delivery" {
   description = "Disabled completion transport and failure-queue metadata; null when not configured."
   value = local.completion_enabled ? {
     queue = {
