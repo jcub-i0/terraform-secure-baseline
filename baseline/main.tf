@@ -234,7 +234,7 @@ module "job_admission_gate" {
 
   name_prefix            = "${local.name_prefix}-${each.key}"
   environment            = var.environment
-  admission_gate_cmk_arn = aws_kms_key.job_admission_gate[each.key].arn
+  admission_gate_cmk_arn = module.security.job_admission_gate_cmk_arns[each.key]
 }
 
 module "logging" {
