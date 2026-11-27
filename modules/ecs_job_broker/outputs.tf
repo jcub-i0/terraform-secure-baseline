@@ -82,3 +82,28 @@ output "broker_event_source_mapping_uuid" {
     aws_lambda_event_source_mapping.broker_requests[0].uuid
   ) : null
 }
+
+output "broker_completion_queue" {
+  description = "Disabled completion transport and failure-queue metadata; null when not configured."
+  value = local.completion_enabled ? {
+    queue = {
+      arn  = aws_sqs_queue.broker_completion[0].arn
+      url  = aws_sqs_queue.broker_completion[0].url
+      name = aws_sqs_queue.broker_completion[0].name
+    }
+    
+    dlqs = {
+      for purpose, queue in aws_sqs_queue.broker_completion_dlq : purpose => {
+        arn  = queue.arn
+        url  = queue.url
+        name = queue.name
+      }
+    }
+
+    rule = {
+      arn  = aws_cloudwatch_event_rule.broker_completion[0].arn
+      name = aws_cloudwatch_event_rule.broker_completion[0].name
+    }
+    event_source_mapping_uuid = try(aws_lambda_event_source_mapping.broker_completion[0].uuid, null)
+  } : null
+}
