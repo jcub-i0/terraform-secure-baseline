@@ -301,14 +301,16 @@ constitute completed M2-B2 implementation or live qualification.
 **Status:** The owner approved the four-record admission model, admission
 executor, dispatch ownership and result recording, and the immutable task
 lookup and protected ECS `STOPPED` event contract for offline implementation,
-followed by integrated broker orchestration and acknowledgement/retry decisions.
+followed by integrated broker orchestration and acknowledgement/retry decisions,
+and the authority split and disabled runtime bootstrap.
 Catalog loading, request resolution, admission preparation and execution,
 conditional dispatch claims, ECS outcome classification, launch-result
 transactions, task lookup creation, atomic terminal recording/slot release,
-and connected request/completion flows are implemented with a 188-test offline
-suite. Concrete gate authority, permissions, authenticated runtime bootstrap,
-protected completion-event delivery, recovery, and activation qualification
-remain open.
+connected request/completion flows, the configured handler, scoped SDK clients,
+and invocation-budget guards are implemented with a 204-test offline suite.
+The authority split is approved; concrete deployment/invocation protections,
+gate infrastructure and permissions, protected completion-event delivery,
+lifecycle coordination, monitoring, recovery, and live qualification remain open.
 
 **Scope:** Request-schema-v2 parsing, producer-to-job policy evaluation,
 durable request-key derivation, complete schema-v1 catalog loading,
@@ -316,9 +318,12 @@ catalog source digests, four-record admission transaction preparation,
 duplicate/conflict classification, executor result and cancellation
 handling, DynamoDB client configuration, dispatch ownership, one-attempt
 ECS calls, immutable task lookups, conditional launch and terminal-state
-result/accounting updates, integrated single-message orchestration with
-injected delivery authentication, acknowledgement/retry decisions, and offline
-regression coverage.
+result/accounting updates, integrated single-message orchestration,
+fixed packaged runtime configuration, queue-based attribution under independently
+enforced delivery controls, scoped SDK construction, invocation-budget guards,
+acknowledgement/retry decisions, and offline regression coverage. Terraform
+configures a 60-second Lambda timeout and 360-second request-queue visibility;
+invocation and consumption remain disabled.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
 This work preserves the accepted two-state architecture,
@@ -334,16 +339,17 @@ observed launch outcome with a task lookup for accepted launches. The
 completion helper reads that lookup and original request, then conditionally
 records supplied trusted terminal evidence and releases the matching slot.
 `broker.py` connects these helpers, classifies durable duplicates, and returns
-acknowledgement/retry decisions through an injectable single-message adapter.
-Real clients would perform AWS operations; current tests use scripted clients
-only. The implementation does not establish artifact provenance or authenticated
-AWS delivery, construct runtime SDK clients, enforce invocation deadlines,
-provide the deployable `broker.lambda_handler`, consume completion events from
-a deployed queue, or perform protected recovery.
-Terraform changes, AWS operations, and broker activation remain outside the
-completed offline increment.
+acknowledgement/retry decisions. Its configured `lambda_handler` loads fixed
+package files, attributes request/completion records, constructs scoped clients,
+and checks remaining invocation time before operations. Real clients would
+perform AWS operations; tests use scripted clients and pinned SDK stubs without
+network access. This implementation does not establish artifact provenance,
+authenticate a forged direct invocation, provision protected completion delivery,
+or perform protected recovery. Budget guards do not cancel in-flight calls or
+prove an uncertain attempt resolved. AWS operations and broker activation remain
+outside the completed offline increment.
 
-**Current coverage:** 188 offline Python tests, including nine admission
+**Current coverage:** 204 offline Python tests, including nine admission
 tests for transaction shape and conditions, persistent key formats,
 launch snapshots, exact catalog-text digests, stable retry payloads,
 fresh attempts on redelivery, duplicate/conflict classification,
@@ -367,11 +373,20 @@ actual helpers with scripted clients and simulated authenticated delivery,
 covering request/duplicate/completion flows, acknowledgement/retry decisions,
 authentication and configuration failures, unresolved and inconsistent duplicates,
 admission/claim/result uncertainty, fresh conditional admission on redelivery,
-early completion, lost acknowledgements, and restricted diagnostics.
-These tests inspect generated operations, supplied records, and scripted
-client behavior. The competing-entry tests model claim/cache and write responses;
-they do not execute DynamoDB conditions or actual SDK retries, launch ECS
-tasks, or prove AWS concurrency, authentication, effective IAM, or fencing.
+early completion, lost acknowledgements, and restricted diagnostics. Sixteen
+additional runtime tests bring `test_broker.py` to 38 tests: fixed package and
+function/resource scope bindings, role-ID attribution independent of session/body
+claims, queue separation, completion without request configuration or launcher
+credentials, exact catalog bytes and independent approvals, bootstrap error
+redaction, exact role/Region/temporary credential use without fallback, budget
+loss between stages, and pinned SDK request-model compatibility. The SDK test
+constructs real Boto3 clients with fake credentials and Botocore `Stubber`, blocks
+network access, and fails rather than skips if dependencies are missing.
+These tests inspect generated operations, supplied records, client construction,
+and scripted or SDK-stubbed responses. They do not execute DynamoDB conditions or
+actual HTTP retries, launch ECS tasks, or prove AWS concurrency, authentication,
+effective IAM, or fencing. Seven plan-only broker Terraform tests cover the
+infrastructure contract, including 60/360-second timing and disabled activation.
 
 **Initial increment validation (historical):** Implementation commit
 `97dbda7f6dc1defd19cab4b565d3e9fc0d53398a` passed Terraform Module Tests
@@ -381,7 +396,7 @@ and 19 IAM regression tests.
 [CI evidence](https://github.com/jcub-i0/terraform-secure-baseline/actions/runs/45492053955)
 
 That historical run covers the initial 26-test helper increment, not the
-current 188-test suite. Offline results do not establish live AWS
+current 204-test suite. Offline results do not establish live AWS
 qualification or proof of zero drift.
 
 #### Producer identity and authorization
@@ -395,9 +410,11 @@ application-user and tenant authorization. Jobs requiring the broker
 to independently verify delegated authorization need a separately
 approved contract.
 
-The preferred attribution candidate is the AWS-generated SQS system
-`SenderId`, mapped through protected configuration to a stable logical
-producer identity and its permitted jobs.
+The runtime bootstrap implements attribution using the SQS system `SenderId`
+in assumed-role `role-id:session-name` form. It extracts the role ID and maps
+it through the protected catalog to a stable logical producer identity and
+its permitted jobs. This attribution is trustworthy only under the independently
+enforced delivery and invocation controls below.
 
 Role-session names, request keys, schedule identifiers, message-body
 claims, and custom message attributes are not authentication evidence.
@@ -425,9 +442,11 @@ independently re-establishes authorization and durable request identity.
 
 #### Protected job catalog and deployment sequence
 
-The initial representation is immutable schema-v1 JSON to be packaged
-with the approved Lambda ZIP. The complete catalog loader is implemented;
-protected artifact packaging and deployment remain outstanding.
+The initial representation is immutable schema-v1 JSON packaged as `catalog.json`
+beside `broker.py` in the approved Lambda ZIP. The complete loader and fixed-file
+runtime loading are implemented. A separate packaged `runtime.json` supplies
+protected scope and resource approvals. Protected artifact packaging, approval,
+and deployment remain outstanding.
 
 The catalog defines producer authorization and complete approved
 execution configuration: exact task-definition revision, cluster,
@@ -441,9 +460,11 @@ caller-controlled execution overrides.
 The loaded `JobCatalog.source_sha256` identifies the exact supplied
 catalog string encoded as UTF-8, including whitespace. Admission
 preparation uses it for the gate comparison and request provenance.
-Computing this digest does not establish approval. The runtime must load
-the packaged text without rewriting it, and the coordinator must bind
-the independently approved digest to the admission generation.
+Computing this digest does not establish approval. The runtime decodes the
+packaged UTF-8 bytes directly without newline translation or JSON rewriting.
+The coordinator must bind the independently approved digest to the admission
+generation. Runtime cluster/network approval values must come from independent
+review, not from copying the catalog's selections into its own approval inputs.
 
 The proposed staged deployment sequence is:
 
@@ -509,20 +530,26 @@ automatic TTL-based deletion during C4.
 
 #### Protected admission authority and atomic reservation
 
-The approved offline model uses a separate DynamoDB gate table in the
-same account and Region as the application execution ledger. This
-model approval does not establish the concrete gate authority or its
-infrastructure and IAM implementation.
+The approved model uses a separate DynamoDB gate table in the same account
+and Region as the application execution ledger. The owner subsequently approved
+the following authority split for the disabled runtime bootstrap checkpoint:
 
-The proposed ownership split is:
+- A platform-controlled deployment workflow is the sole privileged writer of
+  application state, including protected broker code, configuration, IAM, and
+  delivery resources. Ordinary application CI cannot substitute unapproved
+  artifacts or acquire this authority.
+- A separate independently protected gate controller owns mutable eligibility,
+  generation, catalog-binding, initialization, and lifecycle transitions.
+- The application broker reads/condition-checks the gate and maintains execution
+  records; it cannot mutate gate authority or its own deployment controls.
 
-- Existing protected workload foundation state manages table infrastructure.
-- An independently protected coordinator performs eligibility transitions.
-- The application broker receives narrowly scoped read/condition-check access.
-
-The exact root, IAM protection, controller, and authority relationship
-remain unresolved M0 decisions. Foundation ownership alone does not
-establish independent protection.
+Gate infrastructure remains proposed for the existing protected workload
+foundation state; broker resources remain in application state. The exact
+foundation root, deployment identities and trust policies, gate permissions,
+controller, and protected initialization protocol are not implemented by this
+checkpoint. The existing broad foundation administrative role is not an ordinary
+application deployment identity. Foundation ownership alone does not establish
+independent protection.
 
 Foundation Terraform must not consume application outputs or continuously
 manage the coordinator's mutable eligibility records. No third workload
@@ -544,8 +571,9 @@ authorize job admission.
 DynamoDB transactions require the same account and Region and cannot
 perform multiple actions against one item. Preparation defines schema-v1
 records and admission expressions as described below. Submission and error
-handling are implemented in the supplied-client executor; the protected
-AWS integration and its qualification remain outstanding.
+handling are implemented in the executor, with client construction supplied by
+the runtime bootstrap; protected gate provisioning, IAM integration, and AWS
+qualification remain outstanding.
 
 Transactional permissions derive from the underlying item actions.
 Do not introduce a speculative standalone `dynamodb:TransactWriteItems`
@@ -707,10 +735,11 @@ call, including a collision lookup. This is a DynamoDB policy; it does
 not change the separate one-attempt ECS `RunTask` policy.
 
 The helper creates no client, and the executor trusts its supplied client.
-Future runtime wiring must use `Config(**admission_client_config())` and
-qualify actual SDK behavior. Socket timeouts are not an end-to-end deadline;
-integration must budget both admission and collision lookup within the
-Lambda invocation. No wrapper retry may discard an earlier `UNKNOWN`
+The runtime bootstrap uses these `Config` arguments with
+`ignore_configured_endpoint_urls = true`. It checks the invocation budget before
+admission submission and collision lookup. Socket timeouts are not an end-to-end
+deadline, and actual SDK retry/timing behavior still requires AWS qualification.
+No wrapper retry may discard an earlier `UNKNOWN`
 result or substitute a fresh token within the invocation to resolve uncertainty.
 Later authenticated redelivery may prepare a new candidate under the same durable
 request key, as described in the integrated broker contract below; it cannot
@@ -720,8 +749,8 @@ checkpoint.
 #### Dispatch ownership and launch-result recording
 
 The approved dispatcher contract is implemented in
-[dispatch.py](../modules/ecs_job_broker/lambda/dispatch.py), with scripted
-clients only. `dispatch_admitted` receives the original `PreparedAdmission`,
+[dispatch.py](../modules/ecs_job_broker/lambda/dispatch.py), with offline scripted
+and SDK-stubbed coverage. `dispatch_admitted` receives the original `PreparedAdmission`,
 its `admission_result`, the current invocation ID, a ledger client, and a
 trusted `launcher_client_factory`. Request/attempt evidence and the prepared
 owner must match before client I/O. A nonconfirmed admission does not enter
@@ -732,10 +761,11 @@ The factory receives the stored launcher-role ARN and must return an ECS
 client using that job's launcher identity and approved Region. Client setup
 must not launch tasks. The dispatcher checks an effective integer
 `total_max_attempts = 1` before acquiring the claim. Factory failure or an
-invalid retry policy leaves existing reservations untouched. Role assumption,
-effective IAM verification, explicit timeout selection, and invocation-budget
-enforcement remain runtime integration requirements. The ledger client must
-use the existing bounded DynamoDB configuration.
+invalid retry policy leaves existing reservations untouched. The runtime bootstrap
+implements exact-role assumption, explicit Region and temporary ECS credentials,
+connection/read timeouts, and invocation-budget guards. Effective IAM and actual
+timing behavior remain qualification requirements. The ledger client uses the
+existing bounded DynamoDB configuration.
 
 One dispatch claim transaction targets three existing ledger records:
 
@@ -851,9 +881,10 @@ model, launch attempt token, and approved ECS parameters remain unchanged.
 
 The intended delivery path is ECS Task State Change events through a protected
 EventBridge rule and encrypted completion queue to the broker. That infrastructure,
-its IAM/invocation protections, retained evidence, and deployed authenticated
-handler integration remain unimplemented. Ordinary application producers and
-direct Lambda callers must not be able to inject trusted completion evidence.
+its IAM/invocation protections, retained delivery evidence, and deployed wiring
+remain unimplemented. The handler can route a distinct configured completion
+queue, or reject completion routing when its ARN is `null`. Ordinary application
+producers and direct Lambda callers must not be able to inject trusted completion evidence.
 Checking event `source`, type, account, or Region alone does not authenticate delivery.
 
 The helper requires task-level `lastStatus = STOPPED`. A desired stop,
@@ -923,14 +954,16 @@ The owner approved the integrated offline contract implemented by
 connects the existing catalog, admission, dispatch, and completion helpers.
 `handle_sqs_event` accepts exactly one record and uses the current invocation ID
 with supplied protected configuration, clients, and an authentication adapter.
-It is not the configured production `broker.lambda_handler`.
+The configured `broker.lambda_handler` now bootstraps this adapter as described below.
 
 The injected `authenticate_delivery(record)` must establish protected delivery
 provenance and return `AuthenticatedDelivery` with a trusted request/completion
 kind and producer attribution. Body fields cannot select that trusted route or
 identity. Creating this object, matching queue ARN or `SenderId`, or checking
 event shape does not authenticate an invocation. Tests simulate the trusted
-boundary; concrete AWS authentication and bypass prevention remain unimplemented.
+boundary. The production bootstrap checks queue and sender metadata, but concrete
+AWS invocation restrictions, delivery protections, and bypass prevention remain
+unimplemented.
 
 Requests load the supplied protected catalog and require its application/environment
 to match runtime scope before admission. Completion uses the original launch
@@ -980,6 +1013,108 @@ uses the configured bounded queue-to-DLQ path once integrated and activated.
 Completion-event transport and its failure path remain unimplemented. A DLQ
 arrival does not resolve an execution, release capacity, or complete a lifecycle
 fence; queue retention is finite and protected recovery remains required.
+
+#### Runtime bootstrap, SDK, and invocation-budget contract
+
+The owner approved implementation of the runtime bootstrap with activation
+disabled. The configured `broker.lambda_handler` lives in the existing
+[broker.py](../modules/ecs_job_broker/lambda/broker.py); this checkpoint adds no
+Python modules. It composes the existing helpers rather than creating a second
+execution path.
+
+The handler accepts exactly one SQS record and reads fixed `runtime.json` beside
+its own source. The schema-v1 configuration contains stable `application_id` and
+`environment`, the unqualified `function_arn`, `ledger_table_arn`,
+`request_queue_arn`, and `completion_queue_arn` (a distinct queue or `null`).
+The function ARN must match Lambda context; an alias/version qualifier on the
+invoked ARN may refer to the same configured function. Resource ARNs must match
+the function's partition, account, Region, and expected service. Neither event
+fields nor custom message attributes select configuration files or trusted scope.
+
+Request processing additionally requires `requests.gate_table_arn` and
+`requests.catalog_approvals`, containing `approved_cluster_arn`,
+`approved_private_subnet_ids`, and `approved_security_groups_by_job`. The gate
+must be distinct from the ledger, and the cluster must match function scope.
+The handler reads the fixed `catalog.json` bytes without rewriting them, then
+uses the existing catalog validators with these independently approved values.
+Completion processing needs only common configuration and a ledger client;
+it does not load the catalog or request-specific configuration, inspect gate
+eligibility, or construct STS/ECS clients.
+
+The adapter requires SQS source/Region consistency and exact configured queue
+ARNs. Requests use the system `SenderId` role ID for catalog authorization;
+session names and body/custom-attribute identity claims confer no authority.
+Only the distinct configured completion queue can select completion processing.
+These are consistency and attribution checks under an independently protected
+transport, not proof that a direct invocation came from SQS. Platform controls
+must prevent ordinary direct invocation, unauthorized queue submission/mutation,
+and unauthorized event-source-mapping or Lambda deployment changes before activation.
+
+All SDK clients use the Region derived from the verified function ARN,
+standard retry mode, and `ignore_configured_endpoint_urls = true`:
+
+| Client | Credential authority | Total attempts per API call | Connect/read timeouts |
+|---|---|---|---|
+| DynamoDB | Broker execution role | 3, including the initial request | 1 / 2 seconds |
+| STS | Broker execution role | 1 | 1 / 2 seconds |
+| ECS | Explicit credentials returned for the exact stored launcher role | 1 | 1 / 3 seconds |
+
+After confirmed admission, the launcher factory requests an STS session for
+the stored job-specific role, with `DurationSeconds = 900` and session name
+`broker-<Lambda aws_request_id>`. It requires all three temporary credential
+fields and an expiration more than 65 seconds ahead. Missing, incomplete,
+or expiring credentials fail setup without using broker credentials for ECS.
+There is no cached launcher session or fallback. This establishes client
+construction behavior; live qualification must verify effective role identity,
+permissions, and session behavior.
+
+The deployment package must include the Python 3.12 dependencies in
+[requirements-sdk.txt](../modules/ecs_job_broker/lambda/requirements-sdk.txt):
+Boto3 `1.43.118`, Botocore `1.43.118`, s3transfer `0.19.0`, jmespath `1.1.0`,
+python-dateutil `2.9.0.post0`, six `1.17.0`, and urllib3 `2.7.0`. Package the
+complete pinned set with the source and configuration; review and refresh pins
+before release. The Terraform Module Tests workflow installs this same set
+before the 204-test suite. SDK coverage uses request models and `Stubber` with
+fake credentials and network access blocked; it does not exercise actual HTTP
+retries or prove deployed SDK behavior. Packaging does not establish provenance,
+and the protected artifact publishing/approval pipeline remains unimplemented.
+
+Terraform now configures a **60-second Lambda timeout** and **360-second request
+queue visibility timeout**, six times the function timeout. Batch size remains
+one with a zero-second batching window. The handler uses Lambda context's
+`get_remaining_time_in_millis()` to guard operation starts:
+
+| Stage about to start | Minimum remaining invocation time |
+|---|---|
+| Bootstrap | 15 seconds |
+| New request admission after catalog resolution/preparation | 50 seconds |
+| Admission submission or collision lookup | 15 seconds |
+| Launcher setup, including STS | 35 seconds |
+| Dispatch ownership claim | 32 seconds |
+| Single ECS launch call | 20 seconds |
+| Launch-result recording | 15 seconds |
+| Completion task-lookup read | 45 seconds |
+| Completion original-request read | 30 seconds |
+| Terminal-state transaction | 15 seconds |
+
+The production handler supplies budget callbacks to admission, dispatch, and
+completion; injected/offline callers may omit them. A failed guard stops further
+operations and causes retry handling without releasing state or granting another
+launch. Budget exhaustion after admission can leave `REGISTERED`; after the
+claim or ECS call it can leave `DISPATCHING` with unresolved/occupied accounting.
+Completion budget loss never authorizes speculative release. Guards reserve time
+for subsequent work but cannot cancel in-flight calls or establish that an
+uncertain operation has finished. Actual SDK backoff, network timing, and late
+execution behavior require AWS qualification and protected recovery.
+
+Bootstrap faults return retry diagnostics without raw configuration, credentials,
+message bodies, or service exception text. The handler does not initialize
+gate/accounting records, mutate its deployment/IAM, implement the gate controller,
+or recover uncertain attempts. Existing Terraform environment variables
+`BROKER_QUEUE_URL` and `EXECUTION_LEDGER_NAME` remain present; this bootstrap uses
+the packaged configuration instead. Terraform does not generate the package files.
+Reserved concurrency stays zero, the request mapping stays disabled, and
+schedules must remain disabled.
 
 #### Launch ownership and lifecycle fencing
 
@@ -1062,8 +1197,8 @@ immutable ECS request parameters.
 
 The approved initial RunTask policy is one Botocore attempt using
 `total_max_attempts = 1`. The dispatcher checks the supplied client's retry
-configuration; runtime integration must select explicit connection/read
-timeouts within the Lambda execution budget and enforce the remaining budget.
+configuration; the bootstrap sets explicit connection/read timeouts and checks
+remaining invocation time as specified above.
 
 Scope this configuration to the ECS launch client. It is a conservative
 initial implementation policy, not an immutable architectural requirement
@@ -1093,8 +1228,8 @@ arrival, or elapsed timeout is insufficient on its own.
 If safe reconciliation cannot be established, retain the unresolved
 attempt and block fence completion. The dispatcher implements the initial
 conclusive ECS classifier described above; effective behavior requires AWS
-qualification. Exact ECS timeout values, deadline integration, protected
-completion-event delivery, and the recovery procedure remain outstanding.
+qualification. The configured timeout values and budget guards do not replace
+protected completion-event delivery or the outstanding recovery procedure.
 
 #### Implementation and activation boundaries
 
@@ -1102,36 +1237,41 @@ The owner accepted the request schema, producer mapping, catalog,
 generation, uniqueness/conflict, and override-rejection contracts for
 the offline helper work, and subsequently approved the four-record
 admission model, executor design, dispatch ownership and result recording,
-the immutable task lookup and protected ECS `STOPPED` event contract, and
-integrated orchestration with acknowledgement/retry decisions for offline
-implementation. These contracts preserve explicit outcome certainty,
+the immutable task lookup and protected ECS `STOPPED` event contract,
+integrated orchestration with acknowledgement/retry decisions, and the authority
+split and disabled runtime bootstrap for offline implementation. These contracts
+preserve explicit outcome certainty,
 operational diagnostics, bounded SDK retries, conditional dispatch ownership,
 and atomic launch/terminal result and accounting transitions.
 
 Offline fixtures may supply simulated authenticated identity context.
 They do not prove AWS attribution or effective lifecycle fencing.
 
-Approval covers admission, dispatch, task lookup, completion, and integrated
-orchestration source with scripted-client coverage and simulated authenticated
-delivery; it does not authorize transactional AWS execution,
-completion-event infrastructure deployment, or ECS task launches.
-Before actual AWS execution, approve the concrete gate authority, permissions,
-initialization, and coordinator lifecycle operations, and integrate the
-authenticated request/completion delivery, role-scoped SDK clients, and
-invocation budget. These must implement the approved admission and accounting contract while preserving
-the independent protection described above. Actual SDK retries, transaction
-races, ECS outcomes, and runtime recovery require AWS qualification.
+Approval covers admission, dispatch, task lookup, completion, orchestration,
+and runtime bootstrap source with scripted and SDK-stubbed coverage and simulated
+protected delivery. It also covers the 60/360-second Terraform settings while
+activation remains disabled; it does not authorize AWS execution, completion-event
+infrastructure deployment, or ECS task launches. Before actual AWS execution,
+implement and approve the concrete policies and provisioning for the accepted
+authority split, gate permissions and initialization, coordinator lifecycle
+operations, and protected request/completion delivery. The bootstrap supplies
+role-scoped SDK clients and budget guards, whose effective behavior still requires
+qualification. These controls must preserve the approved admission/accounting
+contract and independent protection. Actual SDK retries, transaction races, ECS
+outcomes, and runtime recovery require AWS qualification.
 
 Before activation, implement and qualify producer authentication,
 protected artifact deployment, IAM ceilings, network admission,
 alternate-path prevention, lifecycle fencing, execution monitoring,
 and protected recovery.
 
-The cohesive offline execution path is implemented. The next implementation
-focus is protected runtime/deployment authority and bootstrap: settle concrete
-gate and mutation authority, implement authenticated delivery and scoped client
-construction, and enforce invocation budgets. This direction does not approve
-the outstanding authority or authentication decisions, or activate the broker.
+The cohesive offline execution path and runtime bootstrap are implemented.
+Remaining implementation includes enforcing the approved deployment/invocation
+authority split, gate provisioning and lifecycle operations, the Scheduler
+schema-v2/generation update, protected completion delivery and failure routing,
+runtime monitoring, and protected recovery. Artifact approval and live positive/
+negative qualification also remain required. The approved authority split does
+not by itself provision or qualify these controls, or activate the broker.
 
 Keep Lambda reserved concurrency at zero, the SQS mapping disabled,
 and schedules disabled throughout unqualified development.
@@ -1158,13 +1298,19 @@ and schedules disabled throughout unqualified development.
 | Forged completion delivery or mismatched task/attempt | No release authority; field consistency alone does not authenticate delivery |
 | Admission acknowledgement is lost, then the request is redelivered | Fresh conditional admission under the same durable key; never adopt an existing attempt |
 | Conclusive launch refusal or a failed application task is durably handled | Acknowledgement denotes completed message handling, not application success |
+| Missing/mismatched packaged scope or unapproved queue | Fail bootstrap without admitting work |
+| Launcher assumption fails or credentials are incomplete/expiring | No ECS credential fallback or dispatch; preserve any admitted reservation |
+| Insufficient invocation budget between stages | Stop new operations; preserve unresolved work and occupied capacity |
+| Current catalog or request-specific configuration is unavailable for completion | Completion can still use common protected configuration and the original stored launch |
 | Ledger restore or history removal | No silent restoration of replay authority |
 
-The 188-test suite covers offline parsing, authorization, catalog loading,
+The 204-test suite covers offline parsing, authorization, catalog loading,
 key derivation, transaction preparation, supplied-record classification,
 executor responses/cancellations, dispatch claim/result and task-lookup
-contracts, completion identity/transaction/redelivery behavior, and integrated
-acknowledgement/retry flows relevant to these cases.
+contracts, completion identity/transaction/redelivery behavior, integrated
+acknowledgement/retry flows, fixed runtime configuration, attribution consistency,
+scoped client construction, budget guards, and pinned SDK request compatibility
+relevant to these cases.
 The full runtime outcomes in this table remain acceptance requirements
 for subsequent implementation and qualification; offline coverage does
 not establish deployed enforcement.
