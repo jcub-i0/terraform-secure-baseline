@@ -292,3 +292,8 @@ output "backup_vault_configuration" {
   description = "Validator-relevant Terraform-managed Backup vault configuration."
   value       = module.baseline.backup_vault_configuration
 }
+
+output "job_admission_gates" {
+  description = "Foundation-owned gate table and key ARNs by application ID, for protected publication."
+  value       = module.baseline.job_admission_gates
+}
