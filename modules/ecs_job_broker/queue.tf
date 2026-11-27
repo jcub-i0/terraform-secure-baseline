@@ -1,3 +1,13 @@
+locals {
+  completion_enabled = var.completion_delivery != null
+
+  completion_queues = local.completion_enabled ? {
+    main       = aws_sqs_queue.broker_completion[0]
+    delivery   = aws_sqs_queue.broker_completion_dlq["delivery"]
+    processing = aws_sqs_queue.broker_completion_dlq["processing"]
+  } : {}
+}
+
 resource "aws_sqs_queue" "broker_requests" {
   count = length(var.jobs) > 0 ? 1 : 0
 
