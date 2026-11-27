@@ -83,7 +83,7 @@ output "broker_event_source_mapping_uuid" {
   ) : null
 }
 
-output "broker_completion_queue" {
+output "broker_completion" {
   description = "Disabled completion transport and failure-queue metadata; null when not configured."
   value = local.completion_enabled ? {
     queue = {
@@ -91,7 +91,7 @@ output "broker_completion_queue" {
       url  = aws_sqs_queue.broker_completion[0].url
       name = aws_sqs_queue.broker_completion[0].name
     }
-    
+
     dlqs = {
       for purpose, queue in aws_sqs_queue.broker_completion_dlq : purpose => {
         arn  = queue.arn
