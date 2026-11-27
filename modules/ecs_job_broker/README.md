@@ -10,7 +10,7 @@ The module separates broker execution permissions from job-specific ECS launch p
 
 **Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome, including an immutable task lookup for an accepted launch. A completion helper uses caller-authenticated ECS `STOPPED` events to record termination and release the matching job slot atomically. `broker.lambda_handler` connects these helpers using fixed packaged configuration, queue-based attribution, scoped SDK clients, invocation-budget guards, and acknowledgement/retry decisions. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
 
-The 204-test offline suite uses fixtures, simulated protected delivery, scripted clients, and pinned SDK request-model tests. The runtime remains disabled. Independently protected deployment and invocation controls, gate infrastructure and permissions, completion-event delivery, lifecycle coordination, monitoring, protected recovery, and live AWS qualification remain outstanding. Queue metadata checks alone cannot authenticate a direct Lambda invocation.
+The 204-test offline suite uses fixtures, simulated protected delivery, scripted clients, and pinned SDK request-model tests. The runtime remains disabled. Independently protected deployment and invocation controls, gate initialization, completion-event delivery, lifecycle coordination, monitoring, protected recovery, and live AWS qualification remain outstanding. Queue metadata checks alone cannot authenticate a direct Lambda invocation.
 
 ## Runtime Helpers
 
@@ -49,7 +49,7 @@ The parser accepts only integer `schema_version = 2`. A minimal request body is:
 
 The optional fields `schedule_key`, `schedule_arn`, and `scheduled_time` must be supplied together or all omitted. They are correlation metadata; parsing them does not verify schedule provenance or freshness. String fields must be nonempty and have no surrounding whitespace. The parser rejects invalid values rather than normalizing them.
 
-Body identity claims and execution overrides are unsupported fields. The admission generation is an untrusted claim. `resolve_request` compares it with the loaded catalog's generation; the prepared transaction condition checks the protected gate and its approved catalog binding when submitted. Deployment and qualification of that gate remain outstanding. The current `ecs_job_scheduler` module still emits schema v1 without an admission generation, so its envelope requires a coordinated update before runtime integration. The parser does not accept that legacy envelope.
+Body identity claims and execution overrides are unsupported fields. The admission generation is an untrusted claim. `resolve_request` compares it with the loaded catalog's generation; the prepared transaction condition checks the protected gate and its approved catalog binding when submitted. The [Scheduler module](../ecs_job_scheduler/README.md) emits schema v2 with the configured admission generation. Gate initialization and live qualification remain pending.
 
 ### Producer Policy and Durable Identity
 
@@ -171,7 +171,7 @@ Results retain the submitted candidate's request key and attempt ID, AWS request
 
 The helper creates no client; `broker.lambda_handler` constructs the DynamoDB client with these settings and disables configured endpoint-URL overrides. The executor trusts its supplied client rather than configuring it. These settings are separate from the catalog's one-attempt ECS `RunTask` policy. Runtime budget guards reserve time before admission and collision lookup; socket timeouts and guards cannot cancel an in-flight operation. Effective timing and retry behavior still require AWS qualification.
 
-Coverage includes scripted responses and the pinned SDK request model. Protected gate permissions, initialization, and lifecycle integration remain prerequisites for actual AWS execution. No executor result grants launch authority or permits reservation cleanup.
+Coverage includes scripted responses and the pinned SDK request model. Protected initialization, lifecycle integration, and effective AWS authorization remain prerequisites for actual AWS execution. No executor result grants launch authority or permits reservation cleanup.
 
 ### Dispatch and Launch Results
 
@@ -330,7 +330,7 @@ The module creates:
 - One dedicated launcher role per approved job.
 - A broker policy granting `sts:AssumeRole` on the configured launcher roles only.
 - Per-job policies granting `ecs:RunTask` and `iam:PassRole` under explicit resource restrictions.
-- A broker runtime policy scoped to its request queue, execution ledger, associated CMKs, and dedicated log group.
+- A broker runtime policy scoped to its request queue, execution ledger, optional foundation admission gate, associated CMKs, and dedicated log group.
 
 The broker execution role trusts `lambda.amazonaws.com` and does not receive direct ECS launch permissions.
 
@@ -384,7 +384,7 @@ When `jobs` is nonempty, the module creates one DynamoDB table named `${name_pre
 - **Deletion protection:** Enabled to guard against accidental table deletion; deliberate destruction requires a separately authorized protection change.
 - **Retention:** No DynamoDB TTL configured. Durable request identities are initially retained without automatic expiry or cleanup, and expiration must not remove an unresolved execution reservation.
 
-The module provisions storage and includes [transaction preparation](#admission-transaction-preparation), an [admission executor](#admission-executor), [dispatch/result recording](#dispatch-and-launch-results), and [completion recording](#task-completion-and-slot-release). Preparation binds admission to a condition on a separate protected gate. Accepted launch results add an immutable task lookup in the existing table; terminal recording updates the original request, slot, and accounting together. The gate table, eligibility controller, protected accounting initialization, deployed runtime integration, completion-event delivery, and recovery remain unimplemented.
+The module provisions storage and includes [transaction preparation](#admission-transaction-preparation), an [admission executor](#admission-executor), [dispatch/result recording](#dispatch-and-launch-results), and [completion recording](#task-completion-and-slot-release). Preparation binds admission to a condition on a separate [foundation-owned gate](../ecs_job_admission_gate/README.md). Accepted launch results add an immutable task lookup in the existing table; terminal recording updates the original request, slot, and accounting together. The eligibility controller, protected accounting initialization, deployed runtime integration, completion-event delivery, and recovery remain unimplemented.
 
 The approved design retains accounting across releases and generations. Unresolved attempts must remain accounted for until their outcomes and absence of further launch authority are established; known tasks continue to occupy slots until terminal recording. Launch-result and terminal-state counter updates have scripted-client coverage; deployed lifecycle coordination and trustworthy event delivery require subsequent implementation and qualification. Point-in-time restore or table recreation also requires a protected protocol preserving request history, task bindings, and replay protection before admission resumes.
 
@@ -403,11 +403,13 @@ The broker execution role receives an inline runtime policy with these permissio
 | Request queue CMK | `kms:Decrypt`, limited by `kms:ViaService` to regional SQS |
 | Execution ledger | `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:ConditionCheckItem` on the exact table ARN |
 | Ledger CMK | `kms:Encrypt`, `kms:Decrypt`, `kms:GenerateDataKey`, `kms:DescribeKey`, limited by `kms:ViaService` to regional DynamoDB |
+| Admission gate, when configured | `dynamodb:GetItem` and `dynamodb:ConditionCheckItem` on the exact foundation table ARN; no gate-write grant |
+| Gate CMK, when configured | `kms:Decrypt` on the exact key, limited to regional DynamoDB and the gate table/account encryption context |
 | Broker log group | `logs:CreateLogStream`, `logs:PutLogEvents` for its log streams |
 
 The runtime policy does not grant `ecs:RunTask` or `iam:PassRole`. Those operations remain restricted to dedicated per-job launcher roles, which the broker may assume through its separately scoped `sts:AssumeRole` policy. The log group is created by Terraform; the broker runtime policy does not grant `logs:CreateLogGroup`.
 
-These IAM permissions enable future runtime integrations but do not implement request authentication, correct job-state transitions, or protected lifecycle coordination. Access to the separate protected gate table remains to be implemented; ledger permissions alone do not enable the complete admission path. No active SQS consumer is created in this checkpoint.
+Supply `admission_gate` with the foundation's protected `{ table_arn, cmk_arn }` references. Both must match the approved cluster's partition, account, and Region, and the gate must be separate from the ledger. The default `null` adds no gate permissions. This input configures IAM only; the protected runtime package must use the same gate table reference. These grants do not initialize the gate or activate the broker.
 
 ## Broker Lambda Infrastructure
 
@@ -441,6 +443,7 @@ The mapping must not be enabled, Lambda reserved concurrency raised, or request 
 | `approved_cluster_arn` | Exact approved ECS cluster ARN | Required |
 | `permissions_boundary_arn` | Platform-governed IAM permissions boundary ARN | Required, non-null |
 | `jobs` | Map of approved standalone jobs | `{}` |
+| `admission_gate` | Foundation gate references: `{ table_arn, cmk_arn }`; adds scoped read/check and decrypt access | `null` (no gate access) |
 | `broker_request_queue_cmk_arn` | Application-owned CMK ARN for SSE-KMS encryption of the broker request queue | Required when `jobs` is nonempty; otherwise `null` |
 | `execution_ledger_cmk_arn` | Application-owned CMK ARN for DynamoDB ledger encryption | Required when `jobs` is nonempty; otherwise `null` |
 | `broker_log_cmk_arn` | Externally supplied CMK ARN for CloudWatch broker logs | Required when `jobs` is nonempty; otherwise `null` |
@@ -477,7 +480,7 @@ The boundary itself must be independently governed by the platform. Application 
 
 Effective permissions also depend on the approved IAM boundary policy, trust relationships, deployment identities, and any applicable organization-level restrictions.
 
-The approved authority split assigns the sole privileged application-state writer to a platform-controlled deployment workflow, with a separate protected controller managing gate transitions. The broker may read/check eligibility and maintain execution state; it must not modify its own deployment or gate authority. This split still requires concrete policy and controller implementation. Broker resources remain application-owned, with no additional workload state or reverse foundation dependency.
+The approved authority split assigns the sole privileged application-state writer to a platform-controlled deployment workflow, with a separate protected controller managing gate transitions. The broker may read/check eligibility and maintain execution state; it must not modify its own deployment or gate authority. Deployment/invocation protections and the controller remain to be implemented. Broker resources remain application-owned, with no additional workload state or reverse foundation dependency.
 
 The module does not create or authorize those external controls. The queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
 
@@ -500,7 +503,7 @@ terraform -chdir=modules/ecs_job_broker test \
   -filter=tests/broker_iam.tftest.hcl
 ```
 
-The seven plan-only tests cover empty configuration, a two-job IAM authorization contract, encrypted queue and TLS-deny settings, processing-DLQ configuration and its SNS-backed alarm, ledger configuration and deletion protection, broker log encryption and configurable retention, the absence of direct ECS launch permissions in the broker runtime policy, rejection of missing queue/ledger/log CMKs or CloudWatch retention when jobs are configured, and optional Lambda creation from a version-pinned S3 artifact with a disabled single-message SQS mapping. They assert the 60-second function timeout and 360-second queue visibility setting.
+The 12 plan-only tests cover resource and IAM contracts, encryption and required settings, scoped gate access and separation from the ledger, and optional Lambda creation with activation disabled. They also assert the 60-second function timeout and 360-second queue visibility setting.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.
 

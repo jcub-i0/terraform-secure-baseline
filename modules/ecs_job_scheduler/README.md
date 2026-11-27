@@ -45,12 +45,13 @@ An empty `schedules` map produces no managed resources.
 | `name_prefix` | Application resource naming prefix | Required |
 | `environment` | Application environment identifier | Required |
 | `schedules` | Map of configured job schedules | `{}` |
+| `admission_generation` | Exact generation from the approved application/environment catalog | `null` |
 | `broker_request_queue_arn` | Existing SQS broker-request queue ARN | `null` |
 | `dlq_kms_key_arn` | Customer-managed KMS key ARN for Scheduler DLQs | `null` |
 | `broker_request_queue_cmk_arn` | KMS key ARN for an SSE-KMS-encrypted broker queue | `null` |
 | `alarm_topic_arn` | Existing SNS topic for delivery-failure alarms | `null` |
 
-The broker-request queue ARN, DLQ CMK ARN, and alarm topic ARN are required when the schedule map is nonempty.
+The admission generation, broker-request queue ARN, DLQ CMK ARN, and alarm topic ARN are required when the schedule map is nonempty.
 
 The broker queue's CMK ARN is supplied when that queue uses SSE-KMS.
 
@@ -70,6 +71,8 @@ Each schedule supports:
 For example:
 
 ```hcl
+admission_generation = "generation-001" # Use the approved catalog's exact value.
+
 schedules = {
   archive = {
     job_key             = "archive"
@@ -114,6 +117,8 @@ Every schedule is created in the `DISABLED` state by default.
 
 Setting `enabled = true` requests an enabled schedule through Terraform. Application deployment controls must independently authorize schedule activation and verify that the protected launch service is operational.
 
+Keep schedules disabled until the protected delivery path and broker runtime have been qualified.
+
 ### Target delivery
 
 Schedules target an existing application-owned SQS broker-request queue.
@@ -122,7 +127,8 @@ Each schedule submits a JSON payload containing:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "admission_generation": "generation-001",
   "job_key": "archive",
   "schedule_key": "archive",
   "schedule_arn": "<aws.scheduler.schedule-arn>",
@@ -135,7 +141,7 @@ Scheduler replaces the supported context attributes at invocation time.
 
 The `request_key` provides a stable logical identifier for a scheduled occurrence, including delivery retries. The protected launch service is responsible for durable idempotency, authorization, concurrency control, and execution tracking.
 
-The payload is request data, not proof of authorization.
+The generation must match the approved catalog and admission gate. It is request data, not proof of authorization, and does not change the durable `request_key`.
 
 ### Retry handling
 
@@ -255,13 +261,7 @@ terraform -chdir=modules/ecs_job_scheduler test \
   -filter=tests/scheduler.tftest.hcl
 ```
 
-The test suite covers:
-
-1. Empty configuration produces no Scheduler resources.
-2. Independent schedules remain disabled by default.
-3. Missing broker-request queue configuration is rejected.
-4. Missing DLQ CMK configuration is rejected.
-5. Invalid schedule configuration is rejected.
+The test suite covers empty and default-disabled configurations, schema-v2 payloads and Scheduler context tokens, required generation and queue/key inputs, invalid schedule configuration, and scoped IAM delivery permissions.
 
 Tests use nonproduction credentials and an overridden AWS caller-identity data source.
 
@@ -277,6 +277,7 @@ Applications integrating this module must provide:
 
 - An existing SQS broker-request queue.
 - A protected job-launch service that consumes and authorizes requests.
+- The exact admission generation from the approved application/environment catalog.
 - Approved KMS keys and compatible key policies.
 - An authorized SNS alarm destination.
 - Application deployment controls governing schedule activation.
