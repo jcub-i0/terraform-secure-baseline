@@ -81,7 +81,7 @@ run "completion_defaults_absent" {
       length(aws_cloudwatch_event_rule.broker_completion) == 0 &&
       length(aws_cloudwatch_event_target.broker_completion) == 0 &&
       length(aws_lambda_event_source_mapping.broker_completion) == 0 &&
-      output.broker_completion == null &&
+      output.broker_completion_delivery == null &&
       alltrue([
         for statement in data.aws_iam_policy_document.broker_runtime[0].statement :
         !contains(["ConsumeBrokerCompletion", "DecryptBrokerCompletion"], statement.sid)
