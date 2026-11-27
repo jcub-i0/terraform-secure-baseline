@@ -138,7 +138,8 @@ resource "aws_scheduler_schedule" "jobs" {
     # Preserve literal Scheduler context tokens while JSON-encoding application-supplied values.
     input = <<-JSON
       {
-        "schema_version": 1,
+        "schema_version": 2,
+        "admission_generation": ${jsonencode(var.admission_generation)},
         "job_key": ${jsonencode(each.value.job_key)},
         "schedule_key": ${jsonencode(each.key)},
         "schedule_arn": "<aws.scheduler.schedule-arn>",
