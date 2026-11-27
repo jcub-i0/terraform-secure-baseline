@@ -156,7 +156,7 @@ run "two_job_iam_contract" {
       aws_sqs_queue.broker_requests[0].fifo_queue == false &&
       aws_sqs_queue.broker_requests[0].kms_master_key_id ==
       var.broker_request_queue_cmk_arn &&
-      aws_sqs_queue.broker_requests[0].visibility_timeout_seconds == 180 &&
+      aws_sqs_queue.broker_requests[0].visibility_timeout_seconds == 360 &&
       aws_sqs_queue.broker_requests[0].message_retention_seconds == 345600 &&
       length(aws_sqs_queue_policy.broker_requests) == 1
     )
@@ -315,7 +315,7 @@ run "versioned_broker_lambda" {
       aws_lambda_function.broker[0].reserved_concurrent_executions == 0 &&
       aws_lambda_function.broker[0].runtime == "python3.12" &&
       aws_lambda_function.broker[0].handler == "broker.lambda_handler" &&
-      aws_lambda_function.broker[0].timeout == 30 &&
+      aws_lambda_function.broker[0].timeout == 60 &&
       aws_lambda_function.broker[0].s3_bucket == var.broker_lambda_package.bucket &&
       aws_lambda_function.broker[0].s3_key == var.broker_lambda_package.key &&
       aws_lambda_function.broker[0].s3_object_version == var.broker_lambda_package.version_id &&

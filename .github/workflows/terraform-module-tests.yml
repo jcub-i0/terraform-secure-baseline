@@ -139,6 +139,9 @@ jobs:
           python --version 2>&1 \
             | tee test-evidence/ecs-job-broker-python.log
 
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            -r modules/ecs_job_broker/lambda/requirements-sdk.txt
+
           python -m unittest discover \
             -s modules/ecs_job_broker/tests \
             -p 'test_*.py' \

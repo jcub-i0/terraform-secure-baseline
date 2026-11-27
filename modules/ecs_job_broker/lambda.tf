@@ -19,7 +19,7 @@ resource "aws_lambda_function" "broker" {
   s3_key            = var.broker_lambda_package.key
   s3_object_version = var.broker_lambda_package.version_id
 
-  timeout     = 30
+  timeout     = 60
   memory_size = 256
 
   # No invocations until runtime admission and lifecycle controls have been implemented and approved

@@ -64,11 +64,12 @@ class AdmissionResult:
 
 
 def admission_client_config() -> dict:
-    """Arguments for botocore.config.Config on the future DynamoDB client.
+    """Arguments for botocore.config.Config on the runtime DynamoDB client.
 
     Standard SDK retries are bounded to three total attempts per API call.
     These socket timeouts are not an end-to-end deadline. Runtime integration
-    must budget admission and lookup within the invocation, and qualify them.
+    budgets admission and lookup within the invocation; live behavior still
+    requires qualification.
     This helper creates no client and performs no AWS or credential lookup.
     """
     return {
@@ -161,13 +162,17 @@ def _failure_reason(code, codes) -> tuple[AdmissionReason, bool]:
 
 def execute_admission(
     prepared: PreparedAdmission, *, client, owner_invocation_id: str,
+    check_budget=None,
 ) -> AdmissionResult:
     """Submit once through a trusted, configured low-level DynamoDB client.
 
     Runtime must use Config(**admission_client_config()), freshly authenticate
     delivery, and prepare once for this invocation. Only the SDK retries this
     submission, using the unchanged payload/token. There is no outer retry loop
-    or cross-invocation recovery API here. Do not re-submit after UNKNOWN.
+    or cross-invocation recovery API here. UNKNOWN ends this invocation; later
+    authenticated delivery follows fresh conditional admission, never takeover.
+    Runtime supplies check_budget before each SDK operation. It cannot cancel
+    an in-flight request or resolve uncertainty.
 
     REJECTED establishes no commit for this submission, not for the request's
     lifetime. UNKNOWN preserves possible commits from unobserved SDK attempts.
@@ -194,6 +199,8 @@ def execute_admission(
             **details,
         )
 
+    if check_budget is not None:
+        check_budget(15000)
     try:
         response = client.transact_write_items(**transaction)
     except Exception as error:
@@ -219,6 +226,8 @@ def execute_admission(
 
     # Only an established collision reaches this read. Check current eligibility
     # and the original record in one snapshot; never acquire or transfer ownership.
+    if check_budget is not None:
+        check_budget(15000)
     try:
         lookup = client.transact_get_items(TransactItems=[
             {"Get": {"TableName": gate["TableName"], "Key": gate["Key"]}},
