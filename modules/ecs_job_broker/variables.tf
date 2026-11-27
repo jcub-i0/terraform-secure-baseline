@@ -170,3 +170,33 @@ variable "alarm_topic_arn" {
     error_message = "Configured jobs require an exact SNS alarm topic ARN."
   }
 }
+
+variable "admission_gate" {
+  description = "Protected foundation gate references. Null adds no gate-access permissions."
+  type = object({
+    table_arn = string
+    cmk_arn   = string
+  })
+  default = null
+
+  validation {
+    condition = var.admission_gate == null ? true : try(
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):dynamodb:[a-z0-9-]+:[0-9]{12}:table/[A-Za-z0-9_.-]+$",
+        var.admission_gate.table_arn
+      )) &&
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
+        var.admission_gate.cmk_arn
+      )) &&
+      alltrue([
+        for arn in [var.admission_gate.table_arn, var.admission_gate.cmk_arn] :
+        regex("^arn:([^:]+):[^:]+:([^:]+):([^:]+):", arn) ==
+        regex("^arn:([^:]+):[^:]+:([^:]+):([^:]+):", var.approved_cluster_arn)
+      ]) &&
+      split("/", var.admission_gate.table_arn)[1] != "${var.name_prefix}-job-execution-ledger",
+      false
+    )
+    error_message = "The gate requires exact table/key ARNs in the approved cluster's partition, account, and Region, and must be separate from the execution ledger."
+  }
+}
