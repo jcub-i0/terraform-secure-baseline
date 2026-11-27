@@ -165,20 +165,30 @@ run "two_job_iam_contract" {
   }
 
   assert {
-    condition = (
-      length(data.aws_iam_policy_document.broker_queue_transport[0].statement) == 1 &&
-      data.aws_iam_policy_document.broker_queue_transport[0].statement[0].effect == "Deny" &&
-      toset(data.aws_iam_policy_document.broker_queue_transport[0].statement[0].actions) ==
-      toset(["sqs:*"]) &&
-      alltrue([
-        for condition in data.aws_iam_policy_document.broker_queue_transport[0].statement[0].condition :
-        condition.test == "Bool" &&
-        condition.variable == "aws:SecureTransport" &&
-        toset(condition.values) == toset(["false"])
-      ])
-    )
+    condition = {
+      for statement in data.aws_iam_policy_document.broker_queue_transport[0].statement :
+      statement.sid => {
+        effect  = statement.effect
+        actions = toset(statement.actions)
+        principals = {
+          for principal in statement.principals :
+          principal.type => toset(principal.identifiers)
+        }
+        conditions = {
+          for condition in statement.condition :
+          "${condition.test}|${condition.variable}" => toset(condition.values)
+        }
+      } if statement.sid == "DenyInsecureTransport"
+      } == {
+      DenyInsecureTransport = {
+        effect     = "Deny"
+        actions    = toset(["sqs:*"])
+        principals = { "*" = toset(["*"]) }
+        conditions = { "Bool|aws:SecureTransport" = toset(["false"]) }
+      }
+    }
 
-    error_message = "Broker request queue must deny insecure transport."
+    error_message = "Broker request queue must retain its TLS deny for every principal."
   }
 
   assert {
