@@ -247,9 +247,9 @@ variable "completion_delivery" {
 
 variable "request_producer_role_arns" {
   description = "Exact IAM roles permitted to submit broker requests. Empty denies all submissions; producers still need their own SQS and KMS permissions."
-  type = set(string)
-  default = []
-  nullable = false
+  type        = set(string)
+  default     = []
+  nullable    = false
 
   validation {
     condition = alltrue([
