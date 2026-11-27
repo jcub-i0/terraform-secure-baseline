@@ -308,9 +308,10 @@ conditional dispatch claims, ECS outcome classification, launch-result
 transactions, task lookup creation, atomic terminal recording/slot release,
 connected request/completion flows, the configured handler, scoped SDK clients,
 and invocation-budget guards are implemented with a 204-test offline suite.
-The authority split is approved; concrete deployment/invocation protections,
-gate infrastructure and permissions, protected completion-event delivery,
-lifecycle coordination, monitoring, recovery, and live qualification remain open.
+Terraform now defines foundation-owned admission gates and keys, scoped broker
+gate permissions, and schema-v2 Scheduler requests. Concrete deployment/invocation
+protections, gate initialization, protected completion-event delivery, lifecycle
+coordination, monitoring, recovery, and live qualification remain open.
 
 **Scope:** Request-schema-v2 parsing, producer-to-job policy evaluation,
 durable request-key derivation, complete schema-v1 catalog loading,
@@ -323,7 +324,8 @@ fixed packaged runtime configuration, queue-based attribution under independentl
 enforced delivery controls, scoped SDK construction, invocation-budget guards,
 acknowledgement/retry decisions, and offline regression coverage. Terraform
 configures a 60-second Lambda timeout and 360-second request-queue visibility;
-invocation and consumption remain disabled.
+it also defines per-application foundation gates, their keys, scoped broker
+access, and Scheduler generation inputs. Invocation and consumption remain disabled.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
 This work preserves the accepted two-state architecture,
@@ -385,8 +387,11 @@ network access, and fails rather than skips if dependencies are missing.
 These tests inspect generated operations, supplied records, client construction,
 and scripted or SDK-stubbed responses. They do not execute DynamoDB conditions or
 actual HTTP retries, launch ECS tasks, or prove AWS concurrency, authentication,
-effective IAM, or fencing. Seven plan-only broker Terraform tests cover the
-infrastructure contract, including 60/360-second timing and disabled activation.
+effective IAM, or fencing. Twelve plan-only broker Terraform tests cover the
+infrastructure contract, including scoped gate access, 60/360-second timing,
+and disabled activation. Three gate tests, eight Scheduler tests, and four
+admission-specific baseline tests cover storage, key ownership, foundation
+wiring, and schema-v2 request envelopes.
 
 **Initial increment validation (historical):** Implementation commit
 `97dbda7f6dc1defd19cab4b565d3e9fc0d53398a` passed Terraform Module Tests
@@ -499,8 +504,10 @@ admission after lifecycle closure. Older-generation requests fail
 closed. This intentionally rejects delayed work across those transitions
 and requires coordinated producer configuration.
 
-The current Scheduler envelope lacks this field. Its versioned update
-belongs to a subsequent approved implementation checkpoint.
+Scheduler now emits schema v2 and requires `admission_generation` whenever
+schedules are configured. It preserves the schedule ARN and scheduled-time
+request key; generation changes do not create a new request identity. Schedules
+remain disabled by default and must stay disabled pending qualification.
 
 Durable request uniqueness is scoped to:
 
@@ -543,13 +550,27 @@ the following authority split for the disabled runtime bootstrap checkpoint:
 - The application broker reads/condition-checks the gate and maintains execution
   records; it cannot mutate gate authority or its own deployment controls.
 
-Gate infrastructure remains proposed for the existing protected workload
-foundation state; broker resources remain in application state. The exact
-foundation root, deployment identities and trust policies, gate permissions,
-controller, and protected initialization protocol are not implemented by this
-checkpoint. The existing broad foundation administrative role is not an ordinary
-application deployment identity. Foundation ownership alone does not establish
-independent protection.
+The existing `dev`, `staging`, and `prod` foundation roots now accept
+`job_admission_applications`, defaulting to an empty set. `modules/security`
+creates a dedicated CMK and alias per application; `baseline/main.tf` calls
+`modules/ecs_job_admission_gate` with the corresponding key ARN. Each table uses
+on-demand capacity, CMK encryption, point-in-time recovery, and deletion protection,
+with no TTL or Terraform-managed items. The `job_admission_gates` output exposes
+table/key references by application ID for future protected publication.
+
+Broker resources remain in application state. The optional `admission_gate`
+input grants exact-table `GetItem`/`ConditionCheckItem` access and exact-key
+`kms:Decrypt`, restricted to DynamoDB and the gate table/account encryption
+context. Gate and key ARNs must match the approved cluster's partition, account,
+and Region, and the gate must be distinct from the ledger. No gate-write grant
+is added; omitting the input adds no gate access.
+
+These are Terraform implementations, not deployed qualification. Protected
+publication, deployment identities and trust policies, the gate controller,
+and initialization remain pending. An empty gate table authorizes no jobs.
+The existing broad foundation administrative role is not an ordinary application
+deployment identity; foundation ownership alone does not establish independent
+protection.
 
 Foundation Terraform must not consume application outputs or continuously
 manage the coordinator's mutable eligibility records. No third workload
@@ -572,8 +593,8 @@ DynamoDB transactions require the same account and Region and cannot
 perform multiple actions against one item. Preparation defines schema-v1
 records and admission expressions as described below. Submission and error
 handling are implemented in the executor, with client construction supplied by
-the runtime bootstrap; protected gate provisioning, IAM integration, and AWS
-qualification remain outstanding.
+the runtime bootstrap; protected initialization, deployment/invocation controls,
+and effective AWS permission qualification remain outstanding.
 
 Transactional permissions derive from the underlying item actions.
 Do not introduce a speculative standalone `dynamodb:TransactWriteItems`
@@ -1249,12 +1270,14 @@ They do not prove AWS attribution or effective lifecycle fencing.
 
 Approval covers admission, dispatch, task lookup, completion, orchestration,
 and runtime bootstrap source with scripted and SDK-stubbed coverage and simulated
-protected delivery. It also covers the 60/360-second Terraform settings while
-activation remains disabled; it does not authorize AWS execution, completion-event
-infrastructure deployment, or ECS task launches. Before actual AWS execution,
-implement and approve the concrete policies and provisioning for the accepted
-authority split, gate permissions and initialization, coordinator lifecycle
-operations, and protected request/completion delivery. The bootstrap supplies
+protected delivery. Terraform implementation also covers the 60/360-second
+settings, foundation gates and keys, scoped broker gate permissions, and schema-v2
+Scheduler payloads while activation remains disabled. It does not authorize AWS
+execution, completion-event infrastructure deployment, or ECS task launches.
+Before actual AWS execution, implement and approve the concrete policies and
+provisioning for the accepted deployment/invocation authority split, gate controller
+and initialization, coordinator lifecycle operations, and protected request/completion
+delivery. The bootstrap supplies
 role-scoped SDK clients and budget guards, whose effective behavior still requires
 qualification. These controls must preserve the approved admission/accounting
 contract and independent protection. Actual SDK retries, transaction races, ECS
@@ -1267,9 +1290,9 @@ and protected recovery.
 
 The cohesive offline execution path and runtime bootstrap are implemented.
 Remaining implementation includes enforcing the approved deployment/invocation
-authority split, gate provisioning and lifecycle operations, the Scheduler
-schema-v2/generation update, protected completion delivery and failure routing,
-runtime monitoring, and protected recovery. Artifact approval and live positive/
+authority split, protected publication, gate initialization and lifecycle
+operations, protected completion delivery and failure routing, runtime monitoring,
+and protected recovery. Artifact approval and live positive/
 negative qualification also remain required. The approved authority split does
 not by itself provision or qualify these controls, or activate the broker.
 

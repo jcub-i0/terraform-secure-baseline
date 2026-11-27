@@ -113,3 +113,18 @@ variable "alarm_topic_arn" {
     error_message = "Configured schedules require an exact SNS alarm topic ARN."
   }
 }
+
+variable "admission_generation" {
+  description = "Exact admission generation from the approved application/environment catalog. Required when schedules are configured."
+  type        = string
+  default     = null
+
+  validation {
+    condition = length(var.schedules) == 0 ? true : try(
+      length(var.admission_generation) > 0 &&
+      var.admission_generation == trimspace(var.admission_generation),
+      false
+    )
+    error_message = "Configured schedules require a nonempty admission generation without surrounding whitespace."
+  }
+}

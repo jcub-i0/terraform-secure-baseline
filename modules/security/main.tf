@@ -631,6 +631,41 @@ data "aws_iam_policy_document" "ecr_kms" {
   }
 }
 
+# Foundation owns the admission gate and its key independently of application state.
+resource "aws_kms_key" "job_admission_gate" {
+  for_each = var.job_admission_applications
+
+  description             = "Job admission gate CMK for ${var.name_prefix}-${each.key}"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  # Enable account IAM delegation without depending on application role ARNs.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "EnableIAMPermissions"
+      Effect    = "Allow"
+      Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${var.account_id}:root" }
+      Action    = "kms:*"
+      Resource  = "*"
+    }]
+  })
+
+  tags = {
+    Name        = "${var.name_prefix}-${each.key}-job-admission-gate-cmk"
+    Environment = var.environment
+    Application = each.key
+    Terraform   = "true"
+  }
+}
+
+resource "aws_kms_alias" "job_admission_gate" {
+  for_each = var.job_admission_applications
+
+  name          = "alias/${var.name_prefix}/${each.key}/job-admission-gate"
+  target_key_id = aws_kms_key.job_admission_gate[each.key].key_id
+}
+
 # CONFIG BASELINE MODULE
 module "config_baseline" {
   source = "./config_baseline"

@@ -497,3 +497,10 @@ variable "additional_interface_endpoint_services" {
     error_message = "Only bedrock-runtime is currently supported as an additional Interface VPC Endpoint."
   }
 }
+
+variable "job_admission_applications" {
+  description = "Stable application IDs requiring foundation-owned job admission gates. Empty creates no gates or keys."
+  type        = set(string)
+  default     = []
+  nullable    = false
+}

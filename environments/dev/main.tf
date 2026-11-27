@@ -48,6 +48,7 @@ module "baseline" {
   waf_rate_limit_requests                = var.waf_rate_limit_requests
   waf_sampled_requests_enabled           = var.waf_sampled_requests_enabled
   ecs_services                           = var.ecs_services
+  job_admission_applications             = var.job_admission_applications
   fargate_platform_version               = var.fargate_platform_version
   additional_interface_endpoint_services = var.additional_interface_endpoint_services
 }

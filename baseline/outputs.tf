@@ -551,3 +551,11 @@ output "backup_vault_configuration" {
   description = "Validator-relevant Terraform-managed Backup vault configuration."
   value       = module.backup.backup_vault_configuration
 }
+
+output "job_admission_gates" {
+  description = "Foundation-owned gate table and key ARNs by application ID, for protected publication."
+  value = {
+    for application, gate in module.job_admission_gate :
+    application => gate.admission_gate
+  }
+}

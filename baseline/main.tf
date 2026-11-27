@@ -224,6 +224,17 @@ module "security" {
   secops_topic_arn               = module.monitoring.secops_topic_arn
   secops_event_bus_name          = module.automation.secops_event_bus_name
   sec_notifs_eventbridge_dlq_arn = module.monitoring.sec_notifs_eventbridge_dlq_arn
+
+  job_admission_applications = var.job_admission_applications
+}
+
+module "job_admission_gate" {
+  source   = "../modules/ecs_job_admission_gate"
+  for_each = var.job_admission_applications
+
+  name_prefix            = "${local.name_prefix}-${each.key}"
+  environment            = var.environment
+  admission_gate_cmk_arn = module.security.job_admission_gate_cmk_arns[each.key]
 }
 
 module "logging" {

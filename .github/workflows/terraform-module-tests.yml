@@ -50,6 +50,7 @@ jobs:
             modules/ecs_service \
             modules/ecs_task \
             modules/ecs_job_scheduler \
+            modules/ecs_job_admission_gate \
             modules/ecs_job_broker \
             modules/ecs_workload_iam \
             modules/iam \

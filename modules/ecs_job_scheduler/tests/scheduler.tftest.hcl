@@ -8,16 +8,13 @@ provider "aws" {
 }
 
 variables {
-  name_prefix = "unit-test-dev"
-  environment = "dev"
-
-  broker_request_queue_arn = "arn:aws:sqs:us-east-1:123456789012:broker-requests"
-
-  dlq_kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
-
+  name_prefix                  = "unit-test-dev"
+  environment                  = "dev"
+  broker_request_queue_arn     = "arn:aws:sqs:us-east-1:123456789012:broker-requests"
+  dlq_kms_key_arn              = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
   broker_request_queue_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000000"
-
-  alarm_topic_arn = "arn:aws:sns:us-east-1:123456789012:application-alerts"
+  alarm_topic_arn              = "arn:aws:sns:us-east-1:123456789012:application-alerts"
+  admission_generation         = "generation-test"
 }
 
 # Prevent AWS STS calls across all test runs.
@@ -32,6 +29,10 @@ override_data {
 
 run "empty_schedules" {
   command = plan
+
+  variables {
+    admission_generation = null
+  }
 
   assert {
     condition = (
@@ -86,11 +87,13 @@ run "independent_disabled_schedules" {
       for name, schedule in aws_scheduler_schedule.jobs :
       schedule.state == "DISABLED" &&
       schedule.target[0].arn == var.broker_request_queue_arn &&
+      jsondecode(schedule.target[0].input).schema_version == 2 &&
+      jsondecode(schedule.target[0].input).admission_generation == var.admission_generation &&
       jsondecode(schedule.target[0].input).job_key ==
       var.schedules[name].job_key
     ])
 
-    error_message = "Schedules must remain disabled and target the configured broker queue."
+    error_message = "Schedules must remain disabled and send schema-v2 requests with the configured generation to the broker queue."
   }
 
   assert {
@@ -275,4 +278,38 @@ run "scheduler_iam_policy_contract" {
 
     error_message = "Scheduler delivery statements must contain only the approved SQS and KMS grants."
   }
+}
+
+run "reject_missing_admission_generation" {
+  command = plan
+
+  variables {
+    admission_generation = null
+
+    schedules = {
+      archive = {
+        job_key             = "archive"
+        schedule_expression = "rate(1 day)"
+      }
+    }
+  }
+
+  expect_failures = [var.admission_generation]
+}
+
+run "reject_padded_admission_generation" {
+  command = plan
+
+  variables {
+    admission_generation = " generation-test "
+
+    schedules = {
+      archive = {
+        job_key             = "archive"
+        schedule_expression = "rate(1 day)"
+      }
+    }
+  }
+
+  expect_failures = [var.admission_generation]
 }

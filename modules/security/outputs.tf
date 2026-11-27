@@ -64,3 +64,12 @@ output "tamper_detection_rule_name" {
 output "tamper_detection_rule_arn" {
   value = module.tamper_detection.tamper_detection_rule_arn
 }
+
+output "job_admission_gate_cmk_arns" {
+  description = "Foundation-owned job admission CMK ARNs keyed by application ID."
+
+  value = {
+    for application, key in aws_kms_key.job_admission_gate :
+    application => key.arn
+  }
+}

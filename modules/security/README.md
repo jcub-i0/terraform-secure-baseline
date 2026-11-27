@@ -60,8 +60,9 @@ local-ownership flag from true to false can plan deletion of locally owned
 resources. Review the state/ownership migration and central realization before
 applying that change, rather than toggling it as a repair shortcut.
 
-The seven KMS keys, SSM setting, Inspector product subscription, and two child
-module calls are unconditional. Inspector enablement and Config recording have
+The seven shared KMS keys, SSM setting, Inspector product subscription, and two child
+module calls are unconditional. Admission keys are created only for configured
+application IDs. Inspector enablement and Config recording have
 their own flags. The reusable module has no `deployment_profile` or
 `production_retirement_mode` input and cannot infer those controls itself.
 Keep the inherited AWS provider Region consistent with `primary_region` and
@@ -267,10 +268,13 @@ The current key set includes:
 | ECR CMK | ECR repository encryption |
 | Backup Vault CMK | AWS Backup vault encryption |
 | RDS Insights CMK | Performance/Database Insights encryption; separate from DB storage, secrets, and log groups |
+| Job admission CMK, per configured application | Foundation-owned DynamoDB admission gate encryption |
 
-All seven keys have rotation enabled and a 30-day deletion window. Logs, EBS,
+Set `job_admission_applications` to the stable application IDs that need admission gates; its default `[]` creates no admission keys. The module creates a key and alias per ID and exposes `job_admission_gate_cmk_arns`. The baseline uses that map to configure the [admission gate module](../ecs_job_admission_gate/README.md).
+
+All keys have rotation enabled and a 30-day deletion window. Logs, EBS,
 Secrets Manager, ECR, and Backup keys explicitly have `prevent_destroy = false`;
-the Lambda and RDS Insights keys have no `prevent_destroy` guard. These settings do not change with
+the Lambda, RDS Insights, and admission keys have no `prevent_destroy` guard. These settings do not change with
 the workload profile or retirement mode. Source comments are not protection.
 
 The Terraform state CMK is owned by the separate state stack, not this module.
@@ -587,8 +591,9 @@ a notification is not proof that a control was successfully disabled.
 | `manage_securityhub_cspm_locally` | Whether this module owns Security Hub CSPM enablement and standards in the workload account. Defaults to `true`; centrally governed workload roots set it to `false` | No |
 | `manage_securityhub_v2_locally` | Whether this module enables Security Hub V2 directly in the workload account. Defaults to `true`; centrally governed workload roots set it to `false` | No |
 | `manage_guardduty_locally` | Whether this module owns the GuardDuty detector and detector features. Defaults to `true`; centrally governed workload roots set it to `false` | No |
+| `job_admission_applications` | Set of stable application IDs requiring admission keys. Defaults to `[]` | No |
 
-[variables.tf](variables.tf) declares 18 inputs. The 10 required scalar
+[variables.tf](variables.tf) defines these inputs. The 10 required scalar
 identifier/naming fields above are `string`; `guardduty_features` is a required
 `list(string)`, and `enable_config` / `inspector_enabled` are required `bool`.
 `enable_rules` is the eight-boolean object below. Optional ownership flags are
@@ -632,7 +637,7 @@ not proof of successful key evaluations; verify live inventory and freshness.
 
 ## Outputs
 
-The 12 outputs below are defined in [outputs.tf](outputs.tf). Config child outputs
+The outputs below are defined in [outputs.tf](outputs.tf). Config child outputs
 are not forwarded here; nor are state-CMK or Logs/Lambda alias-ARN outputs.
 A caller must explicitly expose a child output before `terraform output` can
 read it at a workload root.
@@ -650,6 +655,7 @@ read it at a workload root.
 | `backup_vault_cmk_alias_arn` | ARN of the AWS Backup vault KMS alias |
 | `ecr_cmk_arn` | ARN of the ECR repository KMS CMK |
 | `ecr_cmk_alias_arn` | ARN of the ECR KMS alias |
+| `job_admission_gate_cmk_arns` | Admission CMK ARNs keyed by application ID; empty when no applications are configured |
 | `tamper_detection_rule_name` | Name of the tamper detection EventBridge rule from the child module |
 | `tamper_detection_rule_arn` | ARN of the tamper detection EventBridge rule from the child module |
 

@@ -336,3 +336,106 @@ run "versioned_broker_lambda" {
     error_message = "Broker Lambda event-source mapping must remain disabled and use one-message batches."
   }
 }
+
+run "default_has_no_gate_permissions" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for statement in data.aws_iam_policy_document.broker_runtime[0].statement :
+      !contains(["ReadAdmissionGate", "DecryptAdmissionGate"], statement.sid)
+    ])
+    error_message = "Omitting the gate must preserve the existing runtime permissions."
+  }
+}
+
+run "scoped_admission_gate_permissions" {
+  command = plan
+
+  variables {
+    admission_gate = {
+      table_arn = "arn:aws:dynamodb:us-east-1:123456789012:table/platform-app-dev-job-admission-gate"
+      cmk_arn   = "arn:aws:kms:us-east-1:123456789012:key/44444444-4444-4444-4444-444444444444"
+    }
+    broker_lambda_package = {
+      bucket     = "unit-test-approved-artifacts"
+      key        = "broker/release-1/broker.zip"
+      version_id = "test-version-001"
+    }
+    broker_lambda_cmk_arn = "arn:aws:kms:us-east-1:123456789012:key/33333333-3333-3333-3333-333333333333"
+  }
+
+  assert {
+    condition = {
+      for statement in data.aws_iam_policy_document.broker_runtime[0].statement :
+      statement.sid => {
+        effect    = statement.effect
+        actions   = toset(statement.actions)
+        resources = toset(statement.resources)
+        conditions = {
+          for condition in statement.condition :
+          "${condition.test}|${condition.variable}" => toset(condition.values)
+        }
+      } if contains(["ReadAdmissionGate", "DecryptAdmissionGate"], statement.sid)
+      } == {
+      ReadAdmissionGate = {
+        effect     = "Allow"
+        actions    = toset(["dynamodb:GetItem", "dynamodb:ConditionCheckItem"])
+        resources  = toset([var.admission_gate.table_arn])
+        conditions = {}
+      }
+      DecryptAdmissionGate = {
+        effect    = "Allow"
+        actions   = toset(["kms:Decrypt"])
+        resources = toset([var.admission_gate.cmk_arn])
+        conditions = {
+          "StringEquals|kms:ViaService"                                  = toset(["dynamodb.us-east-1.amazonaws.com"])
+          "StringEquals|kms:EncryptionContext:aws:dynamodb:tableName"    = toset(["platform-app-dev-job-admission-gate"])
+          "StringEquals|kms:EncryptionContext:aws:dynamodb:subscriberId" = toset(["123456789012"])
+        }
+      }
+    }
+    error_message = "Gate grants must be read/condition-check only, with exact table/key and DynamoDB encryption-context scopes."
+  }
+
+  assert {
+    condition = (
+      aws_lambda_function.broker[0].reserved_concurrent_executions == 0 &&
+      aws_lambda_event_source_mapping.broker_requests[0].enabled == false
+    )
+    error_message = "Gate configuration must not activate the broker."
+  }
+}
+
+run "reject_wildcard_gate" {
+  command = plan
+  variables {
+    admission_gate = {
+      table_arn = "arn:aws:dynamodb:us-east-1:123456789012:table/*"
+      cmk_arn   = "arn:aws:kms:us-east-1:123456789012:key/44444444-4444-4444-4444-444444444444"
+    }
+  }
+  expect_failures = [var.admission_gate]
+}
+
+run "reject_cross_account_gate" {
+  command = plan
+  variables {
+    admission_gate = {
+      table_arn = "arn:aws:dynamodb:us-east-1:999999999999:table/platform-app-dev-job-admission-gate"
+      cmk_arn   = "arn:aws:kms:us-east-1:123456789012:key/44444444-4444-4444-4444-444444444444"
+    }
+  }
+  expect_failures = [var.admission_gate]
+}
+
+run "reject_ledger_as_gate" {
+  command = plan
+  variables {
+    admission_gate = {
+      table_arn = "arn:aws:dynamodb:us-east-1:123456789012:table/unit-test-dev-job-execution-ledger"
+      cmk_arn   = "arn:aws:kms:us-east-1:123456789012:key/44444444-4444-4444-4444-444444444444"
+    }
+  }
+  expect_failures = [var.admission_gate]
+}

@@ -80,6 +80,49 @@ data "aws_iam_policy_document" "broker_runtime" {
       "${aws_cloudwatch_log_group.broker[0].arn}:*"
     ]
   }
+
+  dynamic "statement" {
+    for_each = var.admission_gate == null ? [] : [var.admission_gate]
+
+    content {
+      sid    = "ReadAdmissionGate"
+      effect = "Allow"
+      actions = [
+        "dynamodb:GetItem",
+        "dynamodb:ConditionCheckItem"
+      ]
+      resources = [statement.value.table_arn]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.admission_gate == null ? [] : [var.admission_gate]
+
+    content {
+      sid       = "DecryptAdmissionGate"
+      effect    = "Allow"
+      actions   = ["kms:Decrypt"]
+      resources = [statement.value.cmk_arn]
+
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["dynamodb.${split(":", statement.value.table_arn)[3]}.amazonaws.com"]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "kms:EncryptionContext:aws:dynamodb:tableName"
+        values   = [split("/", statement.value.table_arn)[1]]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "kms:EncryptionContext:aws:dynamodb:subscriberId"
+        values   = [split(":", statement.value.table_arn)[4]]
+      }
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "broker_runtime" {
