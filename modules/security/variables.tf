@@ -106,3 +106,10 @@ variable "manage_guardduty_locally" {
   type        = bool
   default     = true
 }
+
+variable "job_admission_applications" {
+  description = "Stable application IDs requring foundation-owned job admission encryption keys. Empty creates no admission keys."
+  type        = set(string)
+  default     = []
+  nullable    = false
+}
