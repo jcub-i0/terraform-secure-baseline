@@ -309,8 +309,9 @@ transactions, task lookup creation, atomic terminal recording/slot release,
 connected request/completion flows, the configured handler, scoped SDK clients,
 and invocation-budget guards are implemented with a 204-test offline suite.
 Terraform now defines foundation-owned admission gates and keys, scoped broker
-gate permissions, schema-v2 Scheduler requests, and disabled completion-event
-transport with scoped consumer permissions, separate delivery/processing DLQs,
+gate permissions, schema-v2 Scheduler requests, request-queue producer restrictions,
+and disabled completion-event transport with scoped consumer permissions,
+separate delivery/processing DLQs,
 and failure alarms. Concrete deployment/invocation protections, gate initialization,
 delivery integration and key-policy wiring, lifecycle coordination, runtime
 monitoring, recovery, and live qualification remain open.
@@ -327,8 +328,9 @@ enforced delivery controls, scoped SDK construction, invocation-budget guards,
 acknowledgement/retry decisions, and offline regression coverage. Terraform
 configures a 60-second Lambda timeout and 360-second request/completion queue
 visibility; it also defines per-application foundation gates, their keys, scoped
-broker access, Scheduler generation inputs, and the ECS EventBridge-to-SQS
-completion path. Invocation, consumption, and the completion rule remain disabled.
+broker access, Scheduler generation inputs, request-queue producer restrictions,
+and the ECS EventBridge-to-SQS completion path. Invocation, consumption, and the
+completion rule remain disabled.
 C4-A is a working subdivision, not a newly approved roadmap milestone.
 
 This work preserves the accepted two-state architecture,
@@ -390,11 +392,14 @@ network access, and fails rather than skips if dependencies are missing.
 These tests inspect generated operations, supplied records, client construction,
 and scripted or SDK-stubbed responses. They do not execute DynamoDB conditions or
 actual HTTP retries, launch ECS tasks, or prove AWS concurrency, authentication,
-effective IAM, or fencing. Nineteen plan-only broker Terraform tests cover the
+effective IAM, or fencing. Twenty-four plan-only broker Terraform tests cover the
 infrastructure contract, including scoped gate access, 60/360-second timing,
 and disabled activation. Seven completion-delivery tests cover optional creation,
 family routing across revisions, exact-rule queue submission policies, failure
 routing/alarms, scoped consumer permissions, and rejected scope/family inputs.
+Five request-delivery tests cover the unconditional submission deny by default,
+exact role allowlisting without grants or activation, preserved TLS protection,
+and rejection of wildcard, cross-account, and STS session ARNs.
 Three gate tests, eight Scheduler tests, and four admission-specific baseline
 tests cover storage, key ownership, foundation
 wiring, and schema-v2 request envelopes.
@@ -427,6 +432,21 @@ it through the protected catalog to a stable logical producer identity and
 its permitted jobs. This attribution is trustworthy only under the independently
 enforced delivery and invocation controls below.
 
+The request queue now restricts submission through `request_producer_role_arns`,
+a set of exact IAM role ARNs in the approved cluster's account and partition.
+The default empty set produces an unconditional `sqs:SendMessage` deny; existing
+compositions must configure approved producers before submissions can succeed.
+A nonempty set uses `ArnNotEqualsIfExists` on `aws:PrincipalArn` to deny other
+or missing principal identities. The existing insecure-transport deny remains,
+and the policy adds no Allow grants. Scheduler producers use their execution-role
+ARNs; wildcard, STS session, and schedule ARNs are not accepted.
+
+Queue admission by role ARN remains separate from catalog job authorization by
+role ID. A replacement role with the same ARN still needs its new role ID mapped
+in the protected catalog. Producers also require separate SQS/KMS permissions
+and protected role trust. Changing the allowlist does not remove already queued
+messages, close the admission gate, or establish a lifecycle fence.
+
 Role-session names, request keys, schedule identifiers, message-body
 claims, and custom message attributes are not authentication evidence.
 A recreated IAM role must not inherit authorization solely because its
@@ -437,10 +457,10 @@ A direct Lambda caller can fabricate an SQS-shaped event; inspecting
 its apparent queue ARN, event source, or SenderId cannot authenticate
 that invocation.
 
-Required controls include queue submission restrictions, producer-role
-trust, Scheduler mutation and role-passing restrictions, protected
-Lambda invocation and deployment, protected event-source mappings,
-and prevention of alternate ECS launch paths.
+The request submission policy is now defined. Required independent controls
+include protected producer-role trust, Scheduler mutation and role-passing
+restrictions, protected Lambda invocation and deployment, protected event-source
+mappings, and prevention of alternate ECS launch paths.
 
 Preserve Scheduler's schedule-group-scoped trust condition. Per-schedule
 authorization also depends on controlling schedule changes and
@@ -1038,8 +1058,8 @@ provenance and return `AuthenticatedDelivery` with a trusted request/completion
 kind and producer attribution. Body fields cannot select that trusted route or
 identity. Creating this object, matching queue ARN or `SenderId`, or checking
 event shape does not authenticate an invocation. Tests simulate the trusted
-boundary. The production bootstrap checks queue and sender metadata. Completion
-queue restrictions are now defined, but concrete AWS invocation restrictions,
+boundary. The production bootstrap checks queue and sender metadata. Request and
+completion queue restrictions are now defined, but concrete AWS invocation restrictions,
 deployment protections, and bypass prevention still require implementation and
 qualification.
 
@@ -1330,8 +1350,9 @@ Approval covers admission, dispatch, task lookup, completion, orchestration,
 and runtime bootstrap source with scripted and SDK-stubbed coverage and simulated
 protected delivery. Terraform implementation also covers the 60/360-second
 settings, foundation gates and keys, scoped broker gate permissions, schema-v2
-Scheduler payloads, and completion-event transport, consumer IAM, failure queues,
-and alarms while activation remains disabled. It does not authorize AWS
+Scheduler payloads, request-queue producer restrictions, and completion-event
+transport, consumer IAM, failure queues, and alarms while activation remains
+disabled. It does not authorize AWS
 execution, completion-event infrastructure deployment, or ECS task launches.
 Before actual AWS execution, implement and approve the concrete policies and
 provisioning for the accepted deployment/invocation authority split, gate controller
