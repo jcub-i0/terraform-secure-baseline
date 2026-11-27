@@ -140,7 +140,7 @@ run "completion_transport" {
 
   assert {
     condition = (
-      aws_sqs_queue.broker_completion[0].kms_master_key_id == var.completion_delivery_queue.queue_cmk_arn &&
+      aws_sqs_queue.broker_completion[0].kms_master_key_id == var.completion_delivery.queue_cmk_arn &&
       aws_sqs_queue.broker_completion[0].visibility_timeout_seconds == 360 &&
       aws_sqs_queue.broker_completion[0].message_retention_seconds == 345600 &&
       jsondecode(aws_sqs_queue.broker_completion[0].redrive_policy) == {
@@ -153,7 +153,7 @@ run "completion_transport" {
       } &&
       alltrue([
         for queue in values(aws_sqs_queue.broker_completion_dlq) :
-        queue.kms_master_key_id == var.completion_delivery_queue.queue_cmk_arn &&
+        queue.kms_master_key_id == var.completion_delivery.queue_cmk_arn &&
         queue.message_retention_seconds == 1209600 &&
         queue.fifo_queue == false
       ])
@@ -272,7 +272,7 @@ run "completion_consumer_disabled_and_scoped" {
       DecryptBrokerCompletion = {
         effect    = "Allow"
         actions   = toset(["kms:Decrypt"])
-        resources = toset([var.completion_delivery_queue.queue_cmk_arn])
+        resources = toset([var.completion_delivery.queue_cmk_arn])
         conditions = {
           "StringEquals|kms:ViaService"                    = toset(["sqs.us-east-1.amazonaws.com"])
           "StringEquals|kms:EncryptionContext:aws:sqs:arn" = toset([aws_sqs_queue.broker_completion[0].arn])
@@ -295,7 +295,7 @@ run "reject_other_account_family" {
       ]
     }
   }
-  expect_failures = [var.completion_delivery_queue]
+  expect_failures = [var.completion_delivery]
 }
 
 run "reject_wildcard_family" {
@@ -310,7 +310,7 @@ run "reject_wildcard_family" {
       ]
     }
   }
-  expect_failures = [var.completion_delivery_queue]
+  expect_failures = [var.completion_delivery]
 }
 
 run "reject_revision_scoped_completion" {
@@ -324,7 +324,7 @@ run "reject_revision_scoped_completion" {
       ]
     }
   }
-  expect_failures = [var.completion_delivery_queue]
+  expect_failures = [var.completion_delivery]
 }
 
 run "reject_omitted_current_job" {
@@ -335,6 +335,6 @@ run "reject_omitted_current_job" {
       task_definition_family_arns = ["arn:aws:ecs:us-east-1:123456789012:task-definition/archive"]
     }
   }
-  expect_failures = [var.completion_delivery_queue]
+  expect_failures = [var.completion_delivery]
 }
 
