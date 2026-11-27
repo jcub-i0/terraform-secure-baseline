@@ -353,11 +353,16 @@ When `jobs` is nonempty, the module creates one standard SQS queue named `${name
 
 - **Encryption at rest:** SSE-KMS with the externally supplied application-owned customer-managed KMS key (`broker_request_queue_cmk_arn`). The module does not create the key or grant KMS permissions.
 - **Encryption in transit:** The queue resource policy denies `sqs:*` requests when `aws:SecureTransport` is `false`. This policy does not itself grant producers or consumers queue access.
+- **Producer restriction:** `request_producer_role_arns` defaults to `[]`, which explicitly denies every new request submission. When configured, the policy denies submissions from any principal outside that exact role allowlist, including requests without principal identity.
 - **Visibility timeout:** 360 seconds, six times the configured 60-second Lambda timeout, with a zero-second batching window.
 - **Message retention:** Four days (345,600 seconds).
 - **Failure redrive:** After repeated unsuccessful receives, messages are eligible to move to the broker processing DLQ when the configured `maxReceiveCount` of 5 is exceeded.
 
 The queue ARN can be passed to `ecs_job_scheduler` as `broker_request_queue_arn`, alongside the same CMK ARN as `broker_request_queue_cmk_arn`. Producer/consumer IAM permissions and effective KMS key-policy authorization must be established through their respective ownership boundaries.
+
+Configure `request_producer_role_arns` with the Scheduler execution roles and on-demand application producer roles that may submit requests. Use exact IAM role ARNs in the approved cluster's account and partition; wildcard, STS session, and schedule ARNs are not accepted. Existing compositions must explicitly configure this input before submissions can succeed.
+
+Allowlist membership grants no SQS or KMS permissions and does not authorize a job. The broker separately maps the SQS sender's role ID through its protected catalog to a logical producer and permitted jobs. Replacing a role still requires updating that catalog mapping, even if its ARN stays the same.
 
 The queue does not authenticate request-body claims, enforce job admission, provide durable deduplication, or process messages. The broker implements admission and durable identity handling, subject to the protected delivery and activation requirements above.
 
@@ -458,6 +463,7 @@ The mappings and completion rule must not be enabled, Lambda reserved concurrenc
 | `approved_cluster_arn` | Exact approved ECS cluster ARN | Required |
 | `permissions_boundary_arn` | Platform-governed IAM permissions boundary ARN | Required, non-null |
 | `jobs` | Map of approved standalone jobs | `{}` |
+| `request_producer_role_arns` | Set of exact IAM role ARNs in the approved cluster's account and partition permitted to submit requests; SQS/KMS grants and catalog authorization remain separate | `[]` (deny all submissions) |
 | `admission_gate` | Foundation gate references: `{ table_arn, cmk_arn }`; adds scoped read/check and decrypt access | `null` (no gate access) |
 | `completion_delivery` | Completion queue CMK and revision-free task-definition family ARNs; requires configured jobs | `null` (no completion resources) |
 | `broker_request_queue_cmk_arn` | Application-owned CMK ARN for SSE-KMS encryption of the broker request queue | Required when `jobs` is nonempty; otherwise `null` |
@@ -499,7 +505,7 @@ Effective permissions also depend on the approved IAM boundary policy, trust rel
 
 The approved authority split assigns the sole privileged application-state writer to a platform-controlled deployment workflow, with a separate protected controller managing gate transitions. The broker may read/check eligibility and maintain execution state; it must not modify its own deployment or gate authority. Deployment/invocation protections and the controller remain to be implemented. Broker resources remain application-owned, with no additional workload state or reverse foundation dependency.
 
-The module does not create or authorize those external controls. The request queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
+The module does not create or authorize those external controls. The request queue's producer restriction and TLS-deny policy require separate producer-role trust controls, SQS/KMS grants, and catalog job authorization. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
 
 Runtime enforcement of private networking, approved security groups, request authentication, durable idempotency, admission concurrency, lifecycle fencing, and execution outcomes remains outstanding. The Lambda's reserved concurrency of zero disables invocation; it is not the per-job execution-concurrency control required of the eventual broker.
 
@@ -519,7 +525,7 @@ terraform -chdir=modules/ecs_job_broker init \
 terraform -chdir=modules/ecs_job_broker test
 ```
 
-The 19 plan-only tests cover resource and IAM contracts, encryption, scoped gate access, and disabled activation. The seven [completion-delivery tests](tests/completion_delivery.tftest.hcl) cover optional resource creation, family-scoped routing across revisions, queue submission restrictions, failure routing and alarms, scoped consumer permissions, and rejected scope/family configurations. The suite also asserts the 60-second function timeout and 360-second queue visibility settings.
+The 24 plan-only tests cover resource and IAM contracts, encryption, scoped gate access, and disabled activation. The seven [completion-delivery tests](tests/completion_delivery.tftest.hcl) cover optional resource creation, family-scoped routing across revisions, queue submission restrictions, failure routing and alarms, scoped consumer permissions, and rejected scope/family configurations. The five [request-delivery tests](tests/request_delivery.tftest.hcl) cover default-deny submission, exact role allowlisting without grants or activation, and rejection of wildcard, cross-account, and session ARNs. The suite also asserts the 60-second function timeout and 360-second queue visibility settings.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.
 
