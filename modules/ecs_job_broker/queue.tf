@@ -37,7 +37,7 @@ resource "aws_sqs_queue" "broker_requests" {
   }
 }
 
-# Deny requests made without TLS.
+# Deny insecure transport and unapproved request producers.
 data "aws_iam_policy_document" "broker_queue_transport" {
   count = length(var.jobs) > 0 ? 1 : 0
 
@@ -56,6 +56,29 @@ data "aws_iam_policy_document" "broker_queue_transport" {
       test     = "Bool"
       variable = "aws:SecureTransport"
       values   = ["false"]
+    }
+  }
+
+  statement {
+    sid       = "DenyUnapprovedRequestProducers"
+    effect    = "Deny"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.broker_requests[0].arn]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    # No condition for an empty allowlist: deny every sender.
+    dynamic "condition" {
+      for_each = length(var.request_producer_role_arns) > 0 ? [true] : []
+
+      content {
+        test     = "ArnNotEqualsIfExists"
+        variable = "aws:PrincipalArn"
+        values   = sort(tolist(var.request_producer_role_arns))
+      }
     }
   }
 }

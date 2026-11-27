@@ -244,3 +244,25 @@ variable "completion_delivery" {
     error_message = "Completion delivery requires configured jobs, an exact CMK and revision-free family ARNs in the approved cluster's scope, covering every current job."
   }
 }
+
+variable "request_producer_role_arns" {
+  description = "Exact IAM roles permitted to submit broker requests. Empty denies all submissions; producers still need their own SQS and KMS permissions."
+  type = set(string)
+  default = []
+  nullable = false
+
+  validation {
+    condition = alltrue([
+      for arn in var.request_producer_role_arns : try(
+        can(regex(
+          "^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$",
+          arn
+        )) &&
+        split(":", arn)[1] == split(":", var.approved_cluster_arn)[1] &&
+        split(":", arn)[4] == split(":", var.approved_cluster_arn)[4],
+        false
+      )
+    ])
+    error_message = "Request producers must be exact IAM role ARNs in the approved cluster's partition and account; wildcard and session ARNs are not allowed."
+  }
+}
