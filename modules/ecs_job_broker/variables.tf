@@ -200,3 +200,47 @@ variable "admission_gate" {
     error_message = "The gate requires exact table/key ARNs in the approved cluster's partition, account, and Region, and must be separate from the execution ledger."
   }
 }
+
+variable "completion_delivery" {
+  description = "Protected completion transport. Retain job family ARNs until their tasks and pending events have drained. Null creates no completion resources."
+  type = object({
+    queue_cmk_arn               = string
+    task_definition_family_arns = set(string)
+  })
+  default = null
+
+  validation {
+    condition = var.completion_delivery == null ? true : try(
+      length(var.jobs) > 0 &&
+      can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
+        var.completion_delivery.queue_cmk_arn
+      )) &&
+      length(var.completion_delivery.task_definition_family_arns) > 0 &&
+      alltrue([
+        for arn in var.completion_delivery.task_definition_family_arns :
+        can(regex(
+          "^arn:(aws|aws-us-gov|aws-cn):ecs:[a-z0-9-]+:[0-9]{12}:task-definition/[A-Za-z0-9_-]+$",
+          arn
+        ))
+      ]) &&
+      alltrue([
+        for arn in concat(
+          [var.completion_delivery.queue_cmk_arn],
+          tolist(var.completion_delivery.task_definition_family_arns)
+        ) :
+        regex("^arn:([^:]+):[^:]+:([^:]+):([^:]+):", arn) ==
+        regex("^arn:([^:]+):[^:]+:([^:]+):([^:]+):", var.approved_cluster_arn)
+      ]) &&
+      alltrue([
+        for job in values(var.jobs) :
+        contains(
+          var.completion_delivery.task_definition_family_arns,
+          replace(job.task_definition_arn, "/:[0-9]+$/", "")
+        )
+      ]),
+      false
+    )
+    error_message = "Completion delivery requires configured jobs, an exact CMK and revision-free family ARNs in the approved cluster's scope, covering every current job."
+  }
+}

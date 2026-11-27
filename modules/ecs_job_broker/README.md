@@ -2,21 +2,21 @@
 
 ## Overview
 
-The `ecs_job_broker` module provides application-owned IAM, an encrypted SQS request queue, a DynamoDB execution ledger, and CloudWatch Logs infrastructure for protected, standalone ECS Fargate job execution.
+The `ecs_job_broker` module provides application-owned IAM, encrypted SQS queues with optional ECS completion-event routing, a DynamoDB execution ledger, and CloudWatch Logs infrastructure for protected, standalone ECS Fargate job execution.
 
 The module separates broker execution permissions from job-specific ECS launch permissions.
 
-**Current infrastructure scope:** IAM roles, trust policies, job-launch permissions, scoped broker runtime IAM, an encrypted SQS request queue and processing dead-letter queue (DLQ), an encrypted DynamoDB execution ledger, a CMK-encrypted CloudWatch log group, an optional invocation-disabled Lambda function configured from a version-pinned S3 ZIP artifact, a disabled SQS event-source mapping, and an SNS-backed processing-DLQ alarm.
+**Current infrastructure scope:** IAM roles and scoped launch/runtime permissions, encrypted request and optional completion queues with dead-letter queues (DLQs), an encrypted DynamoDB execution ledger, CloudWatch Logs, and failure alarms. An optional Lambda uses a version-pinned S3 ZIP artifact. Lambda invocation, SQS consumption, and the optional ECS completion-event rule remain disabled.
 
 **Current runtime source scope:** Python helpers load a complete schema-v1 catalog, resolve schema-v2 requests to approved job configuration, and prepare and submit four-record admission transactions. A dispatcher conditionally claims an admitted request, makes one ECS launch call, and transactionally records the observed launch outcome, including an immutable task lookup for an accepted launch. A completion helper uses caller-authenticated ECS `STOPPED` events to record termination and release the matching job slot atomically. `broker.lambda_handler` connects these helpers using fixed packaged configuration, queue-based attribution, scoped SDK clients, invocation-budget guards, and acknowledgement/retry decisions. Admission confirmation alone does not authorize dispatch; the dispatcher must acquire its own conditional claim.
 
-The 204-test offline suite uses fixtures, simulated protected delivery, scripted clients, and pinned SDK request-model tests. The runtime remains disabled. Independently protected deployment and invocation controls, gate initialization, completion-event delivery, lifecycle coordination, monitoring, protected recovery, and live AWS qualification remain outstanding. Queue metadata checks alone cannot authenticate a direct Lambda invocation.
+The 204-test offline Python suite uses fixtures, simulated protected delivery, scripted clients, and pinned SDK request-model tests. The runtime remains disabled. Independently protected deployment and invocation controls, gate initialization, completion-delivery integration, lifecycle coordination, runtime monitoring, protected recovery, and live AWS qualification remain outstanding. Queue metadata checks alone cannot authenticate a direct Lambda invocation.
 
 ## Runtime Helpers
 
 These Python modules are intended to be packaged together in one optional broker Lambda function per module instance. That function serves the configured jobs; the application job code runs in ECS Fargate tasks. `broker.py` exposes the configured `lambda_handler`, which bootstraps the existing `process_delivery` and `handle_sqs_event` orchestration.
 
-Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` and `record_task_completion` use supplied DynamoDB clients; `dispatch_admitted` also obtains an ECS client through a supplied factory. The production handler constructs those clients and can perform AWS operations when deployed and invoked. Tests keep those operations offline. The handler processes a single SQS record; it does not poll or delete queue messages, and the Terraform event-source mapping remains disabled.
+Parsing, catalog loading, and transaction preparation make no AWS calls. `execute_admission` and `record_task_completion` use supplied DynamoDB clients; `dispatch_admitted` also obtains an ECS client through a supplied factory. The production handler constructs those clients and can perform AWS operations when deployed and invoked. Tests keep those operations offline. The handler processes a single SQS record; it does not poll or delete queue messages, and the Terraform event-source mappings remain disabled.
 
 | Source | Implemented behavior |
 |---|---|
@@ -223,7 +223,7 @@ result = record_task_completion(
 )
 ```
 
-The caller must establish that the event came through the approved protected ECS delivery path. Matching `source`, account, Region, or event type is a consistency check, not authentication; a fabricated event must never reach this helper as trusted completion evidence. The handler supports a distinct configured completion queue, but the EventBridge/queue infrastructure, delivery permissions, and invocation protections are not yet implemented.
+The caller must establish that the event came through the approved protected ECS delivery path. Matching `source`, account, Region, or event type is a consistency check, not authentication; a fabricated event must never reach this helper as trusted completion evidence. The handler supports a distinct configured completion queue. [Completion-event infrastructure](#completion-event-delivery) is defined in Terraform; protected deployment/invocation controls, external key-policy wiring, and live delivery qualification remain pending.
 
 Only task-level `lastStatus = STOPPED` can release capacity. A desired stop or an individual container exit is insufficient. The helper consistently reads the immutable lookup and original request, requiring matching scope, attempt, dispatch, task ARN, cluster, and exact task-definition revision. It uses the stored launch snapshot, so a later catalog change or closed admission gate does not prevent completion of an already-recorded launch.
 
@@ -270,7 +270,7 @@ The frozen `DeliveryResult` contains a disposition, diagnostic reason, and avail
 
 An uncertain operation ends the current invocation without a wrapper retry. A later authenticated request delivery prepares a fresh candidate attempt under the same durable request key. Conditional creation arbitrates admission: a committed original remains owned by its original attempt, while a fresh candidate may proceed only if it wins a new reservation. Redelivery never adopts an unresolved original or authorizes another dispatch for it. Duplicate acknowledgement also requires current authorization/gate eligibility and consistent stored result evidence.
 
-The single-message adapter returns a serializable result only for `ACK`; otherwise it raises `RetryDelivery`. This matches the existing batch-size-one configuration without partial-batch responses or manual SQS deletion/failure forwarding. Request failures use the configured bounded queue-to-DLQ path once integrated and activated; completion transport and its failure path remain unimplemented. DLQ arrival does not resolve an execution or free its slot. Results exclude raw message bodies, catalog contents, internal ledger snapshots, and service exception messages.
+The single-message adapter returns a serializable result only for `ACK`; otherwise it raises `RetryDelivery`. This matches the existing batch-size-one configuration without partial-batch responses or manual SQS deletion/failure forwarding. Request and completion failures have separate bounded queue-to-DLQ paths defined for use after integration and activation. DLQ arrival does not resolve an execution or free its slot. Results exclude raw message bodies, catalog contents, internal ledger snapshots, and service exception messages.
 
 ### Runtime Bootstrap and Packaged Configuration
 
@@ -302,7 +302,7 @@ The handler derives the SDK Region from the verified function ARN and disables c
 | STS | 1 | 1 second | 2 seconds |
 | ECS | 1 | 1 second | 3 seconds |
 
-All clients use standard retry mode. Lambda has a **60-second timeout** and the request queue has a **360-second visibility timeout**, six times the function timeout, with no batching window. The handler checks remaining invocation time before starting admission, launcher setup, dispatch, result recording, and completion operations. Insufficient budget fails processing for retry while preserving any existing reservation; it never authorizes cleanup or another launch. These checks cannot cancel an in-flight call or prove an uncertain attempt resolved. The [runtime bootstrap contract](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md#runtime-bootstrap-sdk-and-invocation-budget-contract) records the stage thresholds and qualification limits.
+All clients use standard retry mode. Lambda has a **60-second timeout** and both request and completion queues have a **360-second visibility timeout**, six times the function timeout, with no batching window. The handler checks remaining invocation time before starting admission, launcher setup, dispatch, result recording, and completion operations. Insufficient budget fails processing for retry while preserving any existing reservation; it never authorizes cleanup or another launch. These checks cannot cancel an in-flight call or prove an uncertain attempt resolved. The [runtime bootstrap contract](../../v1-15-0/v1_15_0_M2_B1_LAUNCH_AUTHORIZATION.md#runtime-bootstrap-sdk-and-invocation-budget-contract) records the stage thresholds and qualification limits.
 
 ### Catalog Section Validation
 
@@ -373,6 +373,19 @@ When `jobs` is nonempty, the module creates a separate standard SQS DLQ named `$
 
 The module does not grant operators DLQ read, replay, or redrive permissions, and it does not configure the external SNS topic's delivery permissions. A message arriving in the DLQ is **not proof that an ECS launch failed**; ambiguous launch results and DynamoDB reservations still require protected reconciliation. With the event-source mapping disabled, the broker is not yet consuming messages or exercising this processing-failure path.
 
+## Completion-Event Delivery
+
+Set `completion_delivery` to configure an application-owned path from ECS task-state events through EventBridge and a distinct encrypted SQS queue to the existing broker Lambda. The default `null` creates no completion resources or consumer permissions.
+
+- **Configuration:** Supply `queue_cmk_arn` and `task_definition_family_arns`. The key and revision-free family ARNs must match the approved cluster's partition, account, and Region; the family list must cover every configured job.
+- **Routing:** The rule selects task-level `STOPPED` events for that cluster and those families, preserving the full ECS event. Family matching includes older revisions. Keep retired families and the broker infrastructure until their tasks and pending events have drained.
+- **Submission protection:** Queue policies restrict EventBridge submissions to the exact rule and explicitly deny other senders and rules. All completion queues deny insecure transport. The supplied CMK's policy must separately authorize EventBridge to use `kms:GenerateDataKey` and `kms:Decrypt`; this module does not manage that key policy.
+- **Failure handling:** The completion queue uses 360-second visibility, four-day retention, and `maxReceiveCount = 5` with its own processing DLQ. EventBridge has a separate delivery DLQ, with retries bounded at 24 hours and 185 attempts. Both DLQs use the supplied CMK and 14-day retention. Alarms notify `alarm_topic_arn` about either DLQ's messages or EventBridge's failure to write to its delivery DLQ.
+
+The `broker_completion_delivery` output groups `queue`, `dlqs.delivery`, `dlqs.processing`, `rule`, and `event_source_mapping_uuid`. Use its `queue.arn` as the protected package's `runtime.json` `completion_queue_arn`; Terraform does not generate that package. The mapping UUID is `null` without a Lambda package.
+
+The EventBridge rule and completion mapping remain disabled, and Lambda concurrency remains zero. A disabled rule captures no events. Deployment/invocation protections, key authorization, and live qualification are required before activation. DLQs retain evidence for investigation; they do not authorize slot release or automatic replay.
+
 ## DynamoDB Execution Ledger
 
 When `jobs` is nonempty, the module creates one DynamoDB table named `${name_prefix}-job-execution-ledger` with the following infrastructure settings:
@@ -384,7 +397,7 @@ When `jobs` is nonempty, the module creates one DynamoDB table named `${name_pre
 - **Deletion protection:** Enabled to guard against accidental table deletion; deliberate destruction requires a separately authorized protection change.
 - **Retention:** No DynamoDB TTL configured. Durable request identities are initially retained without automatic expiry or cleanup, and expiration must not remove an unresolved execution reservation.
 
-The module provisions storage and includes [transaction preparation](#admission-transaction-preparation), an [admission executor](#admission-executor), [dispatch/result recording](#dispatch-and-launch-results), and [completion recording](#task-completion-and-slot-release). Preparation binds admission to a condition on a separate [foundation-owned gate](../ecs_job_admission_gate/README.md). Accepted launch results add an immutable task lookup in the existing table; terminal recording updates the original request, slot, and accounting together. The eligibility controller, protected accounting initialization, deployed runtime integration, completion-event delivery, and recovery remain unimplemented.
+The module provisions storage and includes [transaction preparation](#admission-transaction-preparation), an [admission executor](#admission-executor), [dispatch/result recording](#dispatch-and-launch-results), and [completion recording](#task-completion-and-slot-release). Preparation binds admission to a condition on a separate [foundation-owned gate](../ecs_job_admission_gate/README.md). Accepted launch results add an immutable task lookup in the existing table; terminal recording updates the original request, slot, and accounting together. The eligibility controller, protected accounting initialization, deployed runtime/delivery integration, and recovery remain outstanding.
 
 The approved design retains accounting across releases and generations. Unresolved attempts must remain accounted for until their outcomes and absence of further launch authority are established; known tasks continue to occupy slots until terminal recording. Launch-result and terminal-state counter updates have scripted-client coverage; deployed lifecycle coordination and trustworthy event delivery require subsequent implementation and qualification. Point-in-time restore or table recreation also requires a protected protocol preserving request history, task bindings, and replay protection before admission resumes.
 
@@ -401,6 +414,8 @@ The broker execution role receives an inline runtime policy with these permissio
 |---|---|
 | Broker request queue | `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:GetQueueAttributes` on the exact queue ARN |
 | Request queue CMK | `kms:Decrypt`, limited by `kms:ViaService` to regional SQS |
+| Completion queue, when configured | `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:GetQueueAttributes` on the exact completion queue ARN |
+| Completion queue CMK, when configured | `kms:Decrypt` on the exact key, limited to regional SQS and the completion queue's encryption context |
 | Execution ledger | `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:ConditionCheckItem` on the exact table ARN |
 | Ledger CMK | `kms:Encrypt`, `kms:Decrypt`, `kms:GenerateDataKey`, `kms:DescribeKey`, limited by `kms:ViaService` to regional DynamoDB |
 | Admission gate, when configured | `dynamodb:GetItem` and `dynamodb:ConditionCheckItem` on the exact foundation table ARN; no gate-write grant |
@@ -426,13 +441,13 @@ The S3 object version pins the referenced package but **does not prove integrity
 
 The Terraform resource describes infrastructure and cannot establish the correctness of whatever code is contained in a supplied ZIP.
 
-## SQS Event-Source Mapping
+## SQS Event-Source Mappings
 
-When the optional broker Lambda function exists, the module creates one `aws_lambda_event_source_mapping` connecting the broker request queue to that function. The mapping is deliberately **disabled** (`enabled = false`) and configured with `batch_size = 1` and `maximum_batching_window_in_seconds = 0`.
+When the optional broker Lambda function exists, the module creates a request-queue mapping and, when `completion_delivery` is configured, a separate completion-queue mapping to the same function. Both are deliberately **disabled** (`enabled = false`) and configured with `batch_size = 1` and `maximum_batching_window_in_seconds = 0`.
 
-Without a configured Lambda artifact, the mapping is absent. Even with an artifact configured, the function retains `reserved_concurrent_executions = 0`, independently preventing invocation. These are deployment safety settings, not an implementation of request authentication or per-job admission.
+Without a configured Lambda artifact, both mappings are absent. Even with an artifact configured, the function retains `reserved_concurrent_executions = 0`, independently preventing invocation. These are deployment safety settings, not an implementation of request authentication or per-job admission.
 
-The mapping must not be enabled, Lambda reserved concurrency raised, or request producers activated until the protected runtime, artifact provenance, IAM/KMS authority, lifecycle fencing, and failure-handling requirements have been independently implemented and approved. The request queue retains messages for only four days while processing remains disabled.
+The mappings and completion rule must not be enabled, Lambda reserved concurrency raised, or request producers activated until the protected runtime, artifact provenance, IAM/KMS authority, lifecycle fencing, and failure-handling requirements have been independently implemented and approved. Request and completion queues retain messages for only four days.
 
 ## Inputs
 
@@ -444,13 +459,14 @@ The mapping must not be enabled, Lambda reserved concurrency raised, or request 
 | `permissions_boundary_arn` | Platform-governed IAM permissions boundary ARN | Required, non-null |
 | `jobs` | Map of approved standalone jobs | `{}` |
 | `admission_gate` | Foundation gate references: `{ table_arn, cmk_arn }`; adds scoped read/check and decrypt access | `null` (no gate access) |
+| `completion_delivery` | Completion queue CMK and revision-free task-definition family ARNs; requires configured jobs | `null` (no completion resources) |
 | `broker_request_queue_cmk_arn` | Application-owned CMK ARN for SSE-KMS encryption of the broker request queue | Required when `jobs` is nonempty; otherwise `null` |
 | `execution_ledger_cmk_arn` | Application-owned CMK ARN for DynamoDB ledger encryption | Required when `jobs` is nonempty; otherwise `null` |
 | `broker_log_cmk_arn` | Externally supplied CMK ARN for CloudWatch broker logs | Required when `jobs` is nonempty; otherwise `null` |
 | `cloudwatch_retention_days` | Approved CloudWatch log retention period supplied by the application composition | Required when `jobs` is nonempty; otherwise `null` |
 | `broker_lambda_package` | S3 ZIP artifact coordinates (`bucket`, `key`, `version_id`) for optional Lambda creation | `null` (no Lambda) |
 | `broker_lambda_cmk_arn` | Customer-managed KMS key ARN for Lambda environment encryption | Required when `broker_lambda_package` is set; otherwise `null` |
-| `alarm_topic_arn` | Approved SNS topic ARN for processing-DLQ message alarms | Required when `jobs` is nonempty; otherwise `null` |
+| `alarm_topic_arn` | Approved SNS topic ARN for request/completion DLQ and delivery-failure alarms | Required when `jobs` is nonempty; otherwise `null` |
 
 Each `jobs` entry requires:
 
@@ -458,7 +474,7 @@ Each `jobs` entry requires:
 - `execution_role_arn`: Job execution role ARN.
 - `task_role_arn`: Job application task role ARN.
 
-An empty `jobs` map creates no managed IAM, SQS, DynamoDB, CloudWatch log-group, Lambda, event-source mapping, or alarm resources. A nonempty `jobs` map alone does not create a Lambda function or event-source mapping.
+An empty `jobs` map with the default optional inputs creates no managed resources. A nonempty `jobs` map alone does not create a Lambda function, event-source mapping, or completion transport.
 
 ## Outputs
 
@@ -471,6 +487,7 @@ An empty `jobs` map creates no managed IAM, SQS, DynamoDB, CloudWatch log-group,
 - `broker_lambda`: Lambda function ARN and name, or `null` when no package is configured.
 - `broker_processing_dlq`: Processing DLQ ARN, URL, and name, or `null` when no jobs are configured.
 - `broker_event_source_mapping_uuid`: Disabled SQS-to-Lambda mapping UUID, or `null` when no broker Lambda is configured.
+- `broker_completion_delivery`: Completion queue, delivery/processing DLQs, rule metadata, and optional mapping UUID; `null` when `completion_delivery` is omitted.
 
 ## Security Responsibilities
 
@@ -482,7 +499,7 @@ Effective permissions also depend on the approved IAM boundary policy, trust rel
 
 The approved authority split assigns the sole privileged application-state writer to a platform-controlled deployment workflow, with a separate protected controller managing gate transitions. The broker may read/check eligibility and maintain execution state; it must not modify its own deployment or gate authority. Deployment/invocation protections and the controller remain to be implemented. Broker resources remain application-owned, with no additional workload state or reverse foundation dependency.
 
-The module does not create or authorize those external controls. The queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
+The module does not create or authorize those external controls. The request queue's TLS-deny policy does not replace separate producer authorization, consumer authorization, or permissions in the external CMK's key policy. The broker runtime IAM policy grants scoped access to the ledger but does not enforce transactional admission or validate request provenance; effective permissions remain subject to the permissions boundary and the external CMK key policies.
 
 Runtime enforcement of private networking, approved security groups, request authentication, durable idempotency, admission concurrency, lifecycle fencing, and execution outcomes remains outstanding. The Lambda's reserved concurrency of zero disables invocation; it is not the per-job execution-concurrency control required of the eventual broker.
 
@@ -499,11 +516,10 @@ terraform -chdir=modules/ecs_job_broker init \
   -backend=false \
   -lockfile=readonly
 
-terraform -chdir=modules/ecs_job_broker test \
-  -filter=tests/broker_iam.tftest.hcl
+terraform -chdir=modules/ecs_job_broker test
 ```
 
-The 12 plan-only tests cover resource and IAM contracts, encryption and required settings, scoped gate access and separation from the ledger, and optional Lambda creation with activation disabled. They also assert the 60-second function timeout and 360-second queue visibility setting.
+The 19 plan-only tests cover resource and IAM contracts, encryption, scoped gate access, and disabled activation. The seven [completion-delivery tests](tests/completion_delivery.tftest.hcl) cover optional resource creation, family-scoped routing across revisions, queue submission restrictions, failure routing and alarms, scoped consumer permissions, and rejected scope/family configurations. The suite also asserts the 60-second function timeout and 360-second queue visibility settings.
 
 They verify configured Terraform permissions and relationships, not effective AWS permissions or deployed runtime behavior.
 
@@ -547,4 +563,4 @@ Fixed expected hashes in the request-identity, catalog, admission, and dispatch 
 
 The [Terraform Module Tests workflow](../../.github/workflows/terraform-module-tests.yml) installs the same pinned dependencies and runs the suite with Python 3.12.
 
-These tests verify offline contracts and configuration behavior. They do not establish live AWS readiness. Authenticated delivery, artifact provenance, transactional admission, lifecycle fencing, and execution behavior require separate AWS qualification before activation. Lambda reserved concurrency remains zero and the SQS event-source mapping remains disabled until the runtime controls are implemented and approved.
+These tests verify offline contracts and configuration behavior. They do not establish live AWS readiness. Authenticated delivery, artifact provenance, transactional admission, lifecycle fencing, and execution behavior require separate AWS qualification before activation. Lambda reserved concurrency remains zero; both SQS mappings and the completion-event rule remain disabled until the runtime controls are implemented and approved.

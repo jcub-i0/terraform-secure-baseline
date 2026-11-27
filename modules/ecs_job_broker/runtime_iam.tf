@@ -123,6 +123,37 @@ data "aws_iam_policy_document" "broker_runtime" {
       }
     }
   }
+
+  dynamic "statement" {
+    for_each = var.completion_delivery == null ? [] : [var.completion_delivery]
+    content {
+      sid       = "ConsumeBrokerCompletion"
+      effect    = "Allow"
+      actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+      resources = [aws_sqs_queue.broker_completion[0].arn]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.completion_delivery == null ? [] : [var.completion_delivery]
+    content {
+      sid       = "DecryptBrokerCompletion"
+      effect    = "Allow"
+      actions   = ["kms:Decrypt"]
+      resources = [statement.value.queue_cmk_arn]
+
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["sqs.${data.aws_region.current.region}.amazonaws.com"]
+      }
+      condition {
+        test     = "StringEquals"
+        variable = "kms:EncryptionContext:aws:sqs:arn"
+        values   = [aws_sqs_queue.broker_completion[0].arn]
+      }
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "broker_runtime" {
