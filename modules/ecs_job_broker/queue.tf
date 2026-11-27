@@ -9,9 +9,8 @@ resource "aws_sqs_queue" "broker_requests" {
   # Application-owned customer-managed KMS key.
   kms_master_key_id = var.broker_request_queue_cmk_arn
 
-  # Initial target: Lambda timeout <= 30 seconds.
-  # Reconcile with the Lambda configuration in I2-C.
-  visibility_timeout_seconds = 180
+  # Six times the configured 60-second Lambda timeout.
+  visibility_timeout_seconds = 360
 
   # Four-day request retention.
   message_retention_seconds = 345600

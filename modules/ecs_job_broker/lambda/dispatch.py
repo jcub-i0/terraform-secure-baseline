@@ -331,6 +331,7 @@ def _launch(client, run_task) -> LaunchObservation:
 def dispatch_admitted(
     prepared: PreparedAdmission, *, admission_result: AdmissionResult,
     owner_invocation_id: str, ledger_client, launcher_client_factory,
+    check_budget=None,
 ) -> DispatchResult:
     """Execute the approved dispatch protocol with trusted injected clients.
 
@@ -339,6 +340,8 @@ def dispatch_admitted(
     the invocation budget. Client construction must not launch tasks. Effective
     identity, IAM, deadlines and SDK behavior require runtime integration and
     AWS qualification. The ledger client uses admission_client_config().
+    Runtime supplies check_budget before client setup, claim, launch and result
+    recording. Budget failure preserves state and does not authorize cleanup.
 
     A fresh claim ID is generated per entry, never supplied by the caller. An
     SDK replay of the current claim is safe within this one sequential call;
@@ -372,6 +375,8 @@ def dispatch_admitted(
     if (run_task["clientToken"] != prepared.attempt_id
             or intent["execution_policy"]["run_task_total_max_attempts"] != 1):
         raise ValueError("Dispatch must retain the admitted token and one-attempt launch policy.")
+    if check_budget is not None:
+        check_budget(35000)
     try:
         client = launcher_client_factory(intent["launcher_role_arn"])
     except Exception as error:
@@ -381,6 +386,8 @@ def dispatch_admitted(
     if type(attempts) is not int or attempts != 1:
         return skipped("INVALID_LAUNCHER_RETRY_POLICY")
 
+    if check_budget is not None:
+        check_budget(32000)
     dispatch_id = uuid4().hex
     claim = _submit(ledger_client, _transaction(request, slot, accounting, dispatch_id))
     if claim.outcome is not WriteOutcome.CONFIRMED:
@@ -388,7 +395,11 @@ def dispatch_admitted(
             prepared.request_pk, prepared.attempt_id, dispatch_id, claim,
             LaunchObservation(LaunchOutcome.NOT_ATTEMPTED, "CLAIM_NOT_CONFIRMED"), not_written,
         )
+    if check_budget is not None:
+        check_budget(20000)
     launch = _launch(client, run_task)
+    if check_budget is not None:
+        check_budget(15000)
     recording = _submit(ledger_client, _transaction(
         request, slot, accounting, dispatch_id, observation=launch,
     ))

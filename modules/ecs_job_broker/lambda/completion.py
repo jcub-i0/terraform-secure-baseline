@@ -160,6 +160,7 @@ def _completion_transaction(table, item, evidence):
 def record_task_completion(
     event: dict, *, application_id: str, environment: str,
     ledger_table_arn: str, ledger_client,
+    check_budget=None,
 ) -> CompletionResult:
     """Consume one caller-authenticated ECS task event through an injected client.
 
@@ -167,8 +168,9 @@ def record_task_completion(
     Matching source/account/Region fields only checks consistency; it does not
     authenticate an event or prevent forged direct invocation. Protected runtime
     context selects the application, environment and ledger. This helper neither
-    authenticates delivery nor implements the queue, handler, client factory,
-    invocation budget, evidence retention, backfill or protected recovery.
+    authenticates delivery nor implements the queue, client factory, evidence
+    retention, backfill or protected recovery. Runtime supplies check_budget
+    before reads and terminal recording; it cannot cancel in-flight requests.
 
     Immutable lookup and request records are read consistently. Only a bound
     LAUNCH_ACCEPTED task can transition. Reads never grant launch authority.
@@ -212,6 +214,8 @@ def record_task_completion(
 
     scope = {"application_id": application_id, "environment": environment}
     lookup_pk = _key("task", application_id, environment, task_arn)
+    if check_budget is not None:
+        check_budget(45000)
     lookup, failure = _read_item(ledger_client, ledger_table_arn, lookup_pk)
     if failure:
         return result(CompletionOutcome.UNKNOWN, "LOOKUP_READ_FAILED", read=failure)
@@ -226,6 +230,8 @@ def record_task_completion(
     request_pk, attempt_id, dispatch_id = (
         _string(lookup, field) for field in ("request_pk", "attempt_id", "dispatch_id")
     )
+    if check_budget is not None:
+        check_budget(30000)
     item, failure = _read_item(ledger_client, ledger_table_arn, request_pk)
     if failure:
         return result(CompletionOutcome.UNKNOWN, "REQUEST_READ_FAILED", read=failure)
@@ -270,6 +276,8 @@ def record_task_completion(
                       "TERMINAL_ALREADY_RECORDED" if recorded else "INVALID_TERMINAL_RECORD")
     if "completion_observation_json" in item:
         return result(CompletionOutcome.REJECTED, "INVALID_TERMINAL_RECORD")
+    if check_budget is not None:
+        check_budget(15000)
     recording = _submit(ledger_client, _completion_transaction(ledger_table_arn, item, evidence))
     outcome, reason = {
         WriteOutcome.CONFIRMED: (CompletionOutcome.RECORDED, "ACKNOWLEDGED"),

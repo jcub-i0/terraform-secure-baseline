@@ -4,7 +4,7 @@ resource "aws_lambda_event_source_mapping" "broker_requests" {
   event_source_arn = aws_sqs_queue.broker_requests[0].arn
   function_name    = aws_lambda_function.broker[0].arn
 
-  # Runtime admission is not yet implemented or approved
+  # Protected deployment/delivery and live qualification remain required
   enabled = false
 
   # Process one request per Lambda invocation
