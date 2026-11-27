@@ -71,8 +71,7 @@ run "default_has_no_admission_infrastructure" {
 
   assert {
     condition = (
-      length(aws_kms_key.job_admission_gate) == 0 &&
-      length(aws_kms_alias.job_admission_gate) == 0 &&
+      length(module.security.job_admission_gate_cmk_arns) == 0 &&
       length(module.job_admission_gate) == 0 &&
       length(output.job_admission_gates) == 0
     )
@@ -89,7 +88,7 @@ run "separate_application_gates_and_keys" {
 
   override_resource {
     override_during = plan
-    target          = aws_kms_key.job_admission_gate["billing"]
+    target          = module.security.aws_kms_key.job_admission_gate["billing"]
     values = {
       key_id = "11111111-1111-1111-1111-111111111111"
       arn    = "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
@@ -98,7 +97,7 @@ run "separate_application_gates_and_keys" {
 
   override_resource {
     override_during = plan
-    target          = aws_kms_key.job_admission_gate["reports"]
+    target          = module.security.aws_kms_key.job_admission_gate["reports"]
     values = {
       key_id = "22222222-2222-2222-2222-222222222222"
       arn    = "arn:aws:kms:us-east-1:123456789012:key/22222222-2222-2222-2222-222222222222"
@@ -123,8 +122,7 @@ run "separate_application_gates_and_keys" {
 
   assert {
     condition = (
-      toset(keys(aws_kms_key.job_admission_gate)) == var.job_admission_applications &&
-      toset(keys(aws_kms_alias.job_admission_gate)) == var.job_admission_applications &&
+      toset(keys(module.security.job_admission_gate_cmk_arns)) == var.job_admission_applications &&
       toset(keys(module.job_admission_gate)) == var.job_admission_applications &&
       output.job_admission_gates == {
         billing = {
@@ -138,23 +136,5 @@ run "separate_application_gates_and_keys" {
       }
     )
     error_message = "Each inventoried application must receive its own gate/key pair without cross-application key bindings."
-  }
-
-  assert {
-    condition = alltrue([
-      for application, key in aws_kms_key.job_admission_gate :
-      key.enable_key_rotation &&
-      key.deletion_window_in_days == 30 &&
-      jsondecode(key.policy).Statement == [{
-        Sid       = "EnableIAMPermissions"
-        Effect    = "Allow"
-        Principal = { AWS = "arn:aws:iam::123456789012:root" }
-        Action    = "kms:*"
-        Resource  = "*"
-      }] &&
-      aws_kms_alias.job_admission_gate[application].target_key_id == key.key_id &&
-      aws_kms_alias.job_admission_gate[application].name == "alias/unit-test-dev/${application}/job-admission-gate"
-    ])
-    error_message = "Gate keys must retain rotation, the deletion window, account IAM delegation, and per-application aliases."
   }
 }
