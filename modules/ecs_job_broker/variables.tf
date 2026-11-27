@@ -201,7 +201,7 @@ variable "admission_gate" {
   }
 }
 
-variable "completion_delivery_queue" {
+variable "completion_delivery" {
   description = "Protected completion transport. Retain job family ARNs until their tasks and pending events have drained. Null creates no completion resources."
   type = object({
     queue_cmk_arn               = string
@@ -210,15 +210,15 @@ variable "completion_delivery_queue" {
   default = null
 
   validation {
-    condition = var.completion_delivery_queue == null ? true : try(
+    condition = var.completion_delivery == null ? true : try(
       length(var.jobs) > 0 &&
       can(regex(
         "^arn:(aws|aws-us-gov|aws-cn):kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$",
-        var.completion_delivery_queue.queue_cmk_arn
+        var.completion_delivery.queue_cmk_arn
       )) &&
-      length(var.completion_delivery_queue.task_definition_family_arns) > 0 &&
+      length(var.completion_delivery.task_definition_family_arns) > 0 &&
       alltrue([
-        for arn in var.completion_delivery_queue.task_definition_family_arns :
+        for arn in var.completion_delivery.task_definition_family_arns :
         can(regex(
           "^arn:(aws|aws-us-gov|aws-cn):ecs:[a-z0-9-]+:[0-9]{12}:task-definition/[A-Za-z0-9_-]+$",
           arn
@@ -226,8 +226,8 @@ variable "completion_delivery_queue" {
       ]) &&
       alltrue([
         for arn in concat(
-          [var.completion_delivery_queue.queue_cmk_arn],
-          tolist(var.completion_delivery_queue.task_definition_family_arns)
+          [var.completion_delivery.queue_cmk_arn],
+          tolist(var.completion_delivery.task_definition_family_arns)
         ) :
         regex("^arn:([^:]+):[^:]+:([^:]+):([^:]+):", arn) ==
         regex("^arn:([^:]+):[^:]+:([^:]+):([^:]+):", var.approved_cluster_arn)
@@ -235,7 +235,7 @@ variable "completion_delivery_queue" {
       alltrue([
         for job in values(var.jobs) :
         contains(
-          var.completion_delivery_queue.task_definition_family_arns,
+          var.completion_delivery.task_definition_family_arns,
           replace(job.task_definition_arn, "/:[0-9]+$/", "")
         )
       ]),
