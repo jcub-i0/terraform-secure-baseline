@@ -16,25 +16,34 @@
 
 This pattern is intended for other SaaS adopters. No ReconoSense job names, models, tenant SQL or application-specific resource names belong in baseline modules.
 
+**Current ownership clarification (through PR #1009):** the following backend model supersedes the earlier shared-bucket/key proposal for new application integrations. The original M0 approvals and historical findings remain design evidence; subsequent implementation does not imply AWS deployment or qualification.
+
 ## 2. Account, state and control boundaries
 
 | Scope | Repository / root | Proposed state and authority | Notes |
-|---|---|---|---|
-| Platform account/bootstrap and security governance | Existing baseline bootstrap/control-plane/security-operations roots | **Existing independent states**, existing protected identities | Remain unchanged; application CI has no access. |
+| --- | --- | --- | --- |
+| Platform account/bootstrap and security governance | Existing baseline bootstrap/control-plane/security-operations roots | **Existing independent states**, platform-controlled identities | Own backend administration, deployment trust and mandatory boundaries; ordinary application CI has no bootstrap administration authority. |
+| Application backend storage | `bootstrap/<env>/state` calls `modules/application_state_backend` | Existing state-bootstrap state owns a dedicated bucket, CMK and resource policies per application/environment | Implemented in PR #1009, default map empty; application Plan/Apply IAM and live qualification remain pending. |
 | Workload foundation | `terraform-secure-baseline/environments/staging` | **Existing:** S3 bucket `tf-secure-baseline-staging-state`, key `baseline/staging.tfstate`; baseline Plan/Apply OIDC roles | No ReconoSense-managed objects in this state. |
-| ReconoSense integration workload | **Proposed new** `reconosense/infra/terraform/environments/baseline-staging` | **Proposed:** distinct key `applications/reconosense/staging.tfstate`; application-only Plan/Apply roles | Same target account/Region as baseline staging for initial synthetic qualification; backend and role authorization must be approved. |
+| ReconoSense integration workload | **Proposed new** `reconosense/infra/terraform/environments/baseline-staging` (illustrative path) | Dedicated application/environment bucket, key `application.tfstate`, native `.tflock`; protected application Plan/Apply roles | One application root/state per environment consumes the bootstrap backend output; actual account, profile and deployment require qualification planning. |
 | Existing standalone ReconoSense staging | `reconosense/infra/terraform/environments/staging`, plus its `bootstrap/` | **Existing separate account/state** | Preserve unchanged. Do not run it against baseline-owned resources or consider it an adopted baseline state. |
 
-A shared S3 state bucket with isolated keys is an **option**, not permission to reuse the foundation's state ACLs. Verify bucket policies, encryption, KMS access, S3 Get/Put/Delete scope and `*.tflock` scope for each role. If key-level isolation cannot be enforced safely, provision an approved application-state bucket instead. State backends and accounts are environment decisions; the illustrated key is not deployed.
+The backend bucket/key resources belong to state-bootstrap; the application state stored in that bucket owns the workload resources. The existing `bootstrap/<env>/state` stack supplies both foundation and application backend infrastructure without combining their workload states. Backend administration stays separate from state-content access. The new module restricts the exact state/lock objects and CMK; account-bootstrap must separately grant scoped Plan/Apply permissions. No existing state migration or additional workload state is implied.
 
-**Initial qualification target:** a disposable, synthetic-data application stack in the existing baseline staging account, after a separate authorized foundation deployment. A subsequent move into ReconoSense's dedicated account requires its own account/governance/bootstrap and migration design. The current standalone root is not overwritten.
+**Qualification target:** the earlier staging-account proposal is historical. The [current roadmap](./ROADMAP_v1_15_0.md) starts with a disposable development-profile exercise and separately qualifies the intended production controls, using synthetic data. Confirm account, profile, budget and deployment authorization for each phase. The existing standalone ReconoSense root remains separate; any later cutover requires an explicit migration design.
+
+### Generic capability versus application ownership
+
+Baseline modules provide configurable infrastructure, protected publication/connectivity, deployment IAM, bounded jobs and release/lifecycle gates. Adopters own their composition, identity provider/MFA configuration, document and audit resources, SQL, task commands, AI settings and retention/offboarding behavior. ReconoSense's requirements are qualification inputs, not hardcoded baseline defaults.
+
+Application SQL objects, tenant users and audit-event semantics remain operationally application-owned. Any archive requiring independently protected retention, keys or policy administration needs an explicit writer/administrator ownership contract; ordinary workload identities must not acquire that authority. The archive design determines whether existing infrastructure modules suffice or a generic extension is needed. No ReconoSense-specific archive mechanism or new Terraform state is selected here.
 
 ## 3. Proposed AWS resource owner matrix
 
 Each AWS resource instance (including independently managed rules, policies, grants and bindings) must belong to **exactly one** Terraform state.
 
 | Resource group | Foundation state | Application state or application operations |
-|---|---|---|
+| --- | --- | --- |
 | VPC, subnets, route tables, NAT/firewall, VPC endpoints | Owns VPC and shared egress/network infrastructure | Reads IDs only; owns narrowly scoped application ENIs/SGs and application-specific rules |
 | RDS, DB subnet group, master credentials, backup/restore | **Exclusively owns instance configuration/deletion**, RDS subnet group, data SG, master secret, monitoring, backups and restore governance. Does **not** own an RDS run-state controller. | **Owner-approved B-5 design (not deployed):** owns one `aws_rds_instance_state` controller for the designated, exclusively used *synthetic staging* DB, plus application runtime/owner secrets and SQL provisioning. No second `aws_db_instance` for the same endpoint; no RDS configuration/deletion authority. |
 | KMS and central security services | Owns baseline CMKs, GuardDuty/Config/Security Hub, central security logging and notification infrastructure | Owns application IAM grants/policies where authorized, application log groups and application alarms; KMS/key-policy compatibility is a gate |
@@ -87,7 +96,7 @@ Constraints:
 Proposed v1 contract fields, all **non-secret**:
 
 | Field group | Candidates | Current baseline availability |
-|---|---|---|
+| --- | --- | --- |
 | Identity | schema version, foundation release/commit, AWS account, Region, environment | Add/assemble a reviewed contract |
 | Networking | VPC ID, compute-private and **ALB ingress-public** subnet IDs, S3 prefix list ID, endpoint SG ID, and approved connectivity grant identifiers | Existing `network_topology` includes both subnet families; endpoint SG ID is available in the VPC endpoints submodule but not the baseline root; grant design pending B-2 |
 | Database | RDS endpoint/port/name, RDS SG ID, **identifier and ARN**, explicit staging lifecycle eligibility and dedicated-use flag | Identifier/ARN exist in `modules/storage/outputs.tf` `rds_configuration` but need a reviewed, purpose-built foundation publication; eligibility is not currently expressed |
@@ -121,7 +130,7 @@ Never publish RDS master password/secret contents, app credentials, or full Terr
 ## 8. Decisions for owner acceptance
 
 | ID | Decision | Status |
-|---|---|---|
+| --- | --- | --- |
 | D1 | Separate foundation and application states, same target account for first synthetic qualification; one-way dependency; app root consumes pinned generic modules | **Owner-approved (2026-11-06)** |
 | D2 | Preserve existing `baseline/` composition and resource addresses; keep integration app ECS/ALB out of foundation state; app-owned root calls generic modules | **Owner-approved (2026-11-06)** |
 | B-1 | Publish a non-secret, versioned output contract rather than giving app CI remote-state access | **Proposed — M0-C detail pending** |
@@ -146,7 +155,7 @@ Never publish RDS master password/secret contents, app credentials, or full Terr
 ## 10. Cross-repository Codex review disposition (against prior head `fd63e47`)
 
 | Finding | Disposition | Required downstream proof |
-|---|---|---|
+| --- | --- | --- |
 | **B1 — BLOCKING at prior head** | **Architecture correction accepted as B-5 (owner-approved design; not implemented):** instance configuration remains foundation-owned; state controller belongs to application for an approved exclusive staging DB. | M0-C contract/lifecycle/drain; M0-D IAM simulations, authorization boundaries and exclusive-use safeguards. |
 | **N1 — NONBLOCKING** | Keep foundation's broad `security_policy` module out of app state; ownership by individual new SG rule, not SG identity alone. No third state. | M0-C app-specific connectivity interfaces; M0-D grant enforcement/negative tests. |
 | **N2 — NONBLOCKING** | New application Plan/Apply/release identities, not baseline admin or standalone ReconoSense PowerUser. Mandatory permissions boundary remains independently platform-owned. | M0-D OIDC trust, PassRole, S3 state/lock access, KMS and boundary-enforcement tests. |

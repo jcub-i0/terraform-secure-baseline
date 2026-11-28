@@ -312,7 +312,9 @@ Terraform now defines foundation-owned admission gates and keys, scoped broker
 gate permissions, schema-v2 Scheduler requests, request-queue producer restrictions,
 and disabled completion-event transport with scoped consumer permissions,
 separate delivery/processing DLQs,
-and failure alarms. Concrete deployment/invocation protections, gate initialization,
+and failure alarms. PR #1009 also implements dedicated application backend
+storage in the existing environment state-bootstrap roots. Concrete
+deployment/invocation protections, gate initialization,
 delivery integration and key-policy wiring, lifecycle coordination, runtime
 monitoring, recovery, and live qualification remain open.
 
@@ -633,7 +635,7 @@ the existing `pk`-only execution ledger. The launch attempt is embedded
 in the request record for the initial one-attempt policy.
 
 | Record | Key scope | Admission action |
-|---|---|---|
+| --- | --- | --- |
 | Gate | `gate:v1:<sha256>` over `(application_id, environment)` | Condition-check schema/type, `OPEN` state, admission generation, catalog digest, and execution-ledger ARN. |
 | Request | Existing `request:v1:<sha256>` over `(application_id, environment, logical_producer_id, request_key)` | Put the original intent and proposed attempt ownership only if the key does not exist. |
 | Job slot | `slot:v1:<sha256>` over `(application_id, environment, job_key)` | Acquire an absent slot or an existing schema-v1 `SLOT` in state `FREE`; set it to `OCCUPIED` by this request and attempt. |
@@ -729,7 +731,7 @@ The frozen `AdmissionResult` separates submission certainty from its
 diagnostic `reason`:
 
 | Outcome | Contract |
-|---|---|
+| --- | --- |
 | `CONFIRMED` | HTTP 200 acknowledges the exact operation, potentially an idempotent SDK replay of an earlier commit. It does not confer a new dispatch permit. |
 | `DUPLICATE` | A conclusively rejected submission collides with an original request whose intent matches, and the collision lookup confirms current gate eligibility. Ownership remains with the original record. |
 | `CONFLICT` | A conclusively rejected submission collides with an original request whose intent differs, and the collision lookup confirms current gate eligibility. No original record is changed. |
@@ -876,7 +878,7 @@ execution intent, launch snapshot, and prior `DISPATCHING` state. Every
 transaction checks matching slot ownership and positive valid accounting:
 
 | Observed launch outcome | Request update | Slot operation | Accounting operation |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `ACCEPTED` | Set `LAUNCH_ACCEPTED`, `task_arn`, and `launch_observation_json`. | Check the occupied slot; retain its owner. | Subtract one unresolved launch; leave occupied slots unchanged. |
 | `REJECTED` | Set `LAUNCH_REJECTED` and `launch_observation_json`. | Set the matching slot to `FREE`; remove its request and attempt bindings. | Subtract one from both counters. |
 | `UNKNOWN` | Set `LAUNCH_UNKNOWN` and `launch_observation_json`. | Check the occupied slot without changing it. | Check accounting without decrementing either counter. |
@@ -1074,7 +1076,7 @@ request/attempt/dispatch/task identifiers and error code. `ACK` establishes that
 message handling is complete; it does not establish application-job success.
 
 | Condition | Disposition and authority |
-|---|---|
+| --- | --- |
 | ECS `ACCEPTED` or conclusive `REJECTED`, with result recording `CONFIRMED` | `ACK`; the launch outcome is durably recorded. |
 | Eligible matching duplicate with consistent original `LAUNCH_ACCEPTED`, `LAUNCH_REJECTED`, or `TASK_STOPPED` evidence | `ACK`; no dispatch or ownership transfer. |
 | Duplicate `REGISTERED`, `DISPATCHING`, or `LAUNCH_UNKNOWN`; malformed or inconsistent resolved record | `RETRY`; preserve the original attempt. |
@@ -1153,7 +1155,7 @@ All SDK clients use the Region derived from the verified function ARN,
 standard retry mode, and `ignore_configured_endpoint_urls = true`:
 
 | Client | Credential authority | Total attempts per API call | Connect/read timeouts |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | DynamoDB | Broker execution role | 3, including the initial request | 1 / 2 seconds |
 | STS | Broker execution role | 1 | 1 / 2 seconds |
 | ECS | Explicit credentials returned for the exact stored launcher role | 1 | 1 / 3 seconds |
@@ -1184,7 +1186,7 @@ size remains one with a zero-second batching window. The handler uses Lambda con
 `get_remaining_time_in_millis()` to guard operation starts:
 
 | Stage about to start | Minimum remaining invocation time |
-|---|---|
+| --- | --- |
 | Bootstrap | 15 seconds |
 | New request admission after catalog resolution/preparation | 50 seconds |
 | Admission submission or collision lookup | 15 seconds |
@@ -1256,7 +1258,7 @@ and terminal-state slot release have scripted-client coverage. Protected event
 delivery integration, deployed coordination, and recovery remain outstanding:
 
 | Transition | `unresolved_launches` | `occupied_slots` |
-|---|---|---|
+| --- | --- | --- |
 | New admission | Add one | Add one |
 | Launch conclusively recorded with a task | Subtract one | Unchanged |
 | Conclusive failure with no remaining launch possibility | Subtract one | Subtract one |
@@ -1380,10 +1382,42 @@ not by itself provision or qualify these controls, or activate the broker.
 Keep Lambda reserved concurrency at zero, both SQS mappings and the completion
 rule disabled, and schedules disabled throughout unqualified development.
 
+#### Application backend and next deployment-authority checkpoint
+
+PR #1009 implements `modules/application_state_backend`, called through the
+default-empty `application_state_backends` map in `bootstrap/<env>/state`.
+Each configured application/environment gets a dedicated bucket and CMK,
+versioning, native locking, and resource policies separating state access from
+backend administration. The backend uses `application.tfstate`; its infrastructure
+belongs to state-bootstrap, while the application state owns workload resources.
+The module and three bootstrap roots have 14 mocked Terraform cases included in
+CI. This is implementation coverage, not AWS authorization or runtime evidence.
+
+**Next checkpoint:** generic protected application deployment IAM and
+account-bootstrap wiring. Provide separate Plan/Apply identities, exact
+state/lock/key permissions, protected workflow trust and independently governed
+deployer, workload, broker and launcher permission ceilings. Enforce boundary
+attachment/protection and prevent unauthorized broker invocation, launcher
+assumption, direct launches, gate writes and deployment-control changes.
+Backend resource policies alone do not grant these identity permissions.
+Protected artifact publication and the application composition remain subsequent
+integration work; no ordinary image-publishing identity becomes the privileged
+application-state writer.
+
+Resolve administrative-operation integration during this design. Applications
+may need per-operation inputs and trustworthy operator attribution; the current
+broker request schema still accepts only the approved job/request/generation
+and optional scheduling metadata. A fixed application runner consuming
+independently authorized operation requests is a candidate, not an implemented
+or approved schema extension. Any selected path must preserve admission,
+accounting and lifecycle fencing without granting arbitrary ECS overrides.
+Application-specific CLI commands and tenant-operation semantics stay outside
+the broker. See the [generic interface reconciliation](./v1_15_0_M0_C2_C4_CONSOLIDATED_INTERFACE_DESIGN.md#9-current-generic-requirements-and-adopter-boundary).
+
 #### Focused acceptance cases
 
 | Case | Required outcome |
-|---|---|
+| --- | --- |
 | Unknown producer or unauthorized job | Denied without launch authority |
 | Forged body identity or execution override | Cannot grant authority or alter approved execution |
 | Matching duplicate request | No additional launch |

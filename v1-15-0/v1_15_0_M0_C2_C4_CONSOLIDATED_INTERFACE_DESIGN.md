@@ -5,6 +5,8 @@
 **Scope:** C2 ECS and background work, C3 database/lifecycle, C4 ingress/security integration
 **Reference application:** ReconoSense (private contract at `infra/terraform/BASELINE_INTEGRATION.md`)
 
+**Current reconciliation (through PR #1009):** the original M0 inventory and acceptance entries below are historical. [Section 9](#9-current-generic-requirements-and-adopter-boundary) records current implementation targets and the separation between reusable capabilities and adopter requirements. It does not authorize deployment or change existing resource ownership.
+
 ## 1. Objective and fixed boundaries
 
 Define the remaining reusable module **interfaces** in one design work package, not three separate approval cycles. ReconoSense exercises the requirements, but jobs, tenant policy, SQL, model access, identity configuration and release commands remain in the adopter's repository. This document records **owner-approved interface design choices** only, not authorization to implement or deploy Terraform or AWS changes.
@@ -16,7 +18,7 @@ The approved [M0-B ownership model](./v1_15_0_M0_B_ARCHITECTURE_AND_TF_OWNERSHIP
 ## 2. Existing modules and non-regression contract
 
 | Source | Verified current behavior | Proposed extension boundary |
-|---|---|---|
+| --- | --- | --- |
 | `modules/ecs_service/variables.tf` and `main.tf` | `services` is a map with a single required digest-pinned `image`, required port, task/execution-role ARNs, CPU/memory and optional scaling; the task definition serializes one essential container. The service and task definition use the existing keyed resource addresses. | Add opt-in sidecar/container composition; preserve the legacy one-container serialization and keys when not configured. |
 | `modules/ecs_service/main.tf` | Fixed-count `aws_ecs_service.services` and autoscaled `aws_ecs_service.autoscaled_services` are separate. Autoscaled services ignore Terraform `desired_count` changes. Fargate tasks run in compute-private subnets with `assign_public_ip = false`. | Do not move existing service addresses or treat `desired_count = 0` as a valid parking control for autoscaled services. |
 | `modules/iam/ecs.tf` | Per-service task and execution roles, ECR pull, GuardDuty agent pull, log write, Secrets Manager read, SSM read and optional execution KMS decrypt; ECS roles currently lack a mandatory permissions boundary. | Expose generic boundaries and per-job policies without reusing platform-wide IAM roles or inadvertently broadening execution roles. |
@@ -34,7 +36,7 @@ The existing `baseline/` root, resource addresses, output names, opt-in defaults
 **Preferred design:** retain the existing `services` map and its primary-container fields (including required digest-pinned `image`, `container_port` and roles) for existing users. Add an optional, default-empty `sidecars` map and optional task-scoped volume/mount/ephemeral-storage configuration. A fully generic `containers` map may be evaluated for new integrations only if its default normalization produces **the exact legacy container** without moving resource addresses.
 
 | New optional field group | Interface contract |
-|---|---|
+| --- | --- |
 | `sidecars` map, keyed by stable container name | Digest-pinned image, `essential` default, optional command/entrypoint, environment and Secrets Manager/SSM references, health check, port mappings, per-container CPU/memory reservations, logging metadata, optional read-only root filesystem, and optional per-container `startTimeout`/`stopTimeout` subject to provider/Fargate limits. Apply supported timeouts to primary and sidecars; preserve their omission defaults. No app-specific names or default images. |
 | `depends_on` per container | List of existing sibling container names and ECS conditions (`START`, `COMPLETE`, `SUCCESS`, `HEALTHY` where valid). Reject missing or conditional/absent dependencies, self/cyclic dependencies, duplicate container names, `HEALTHY` without a prerequisite health check, and `COMPLETE`/`SUCCESS` dependencies on essential containers. `HEALTHY` is a startup condition, not a substitute for ongoing application readiness. Ensure containers that must remain active are essential. |
 | `task_volumes` and container `mount_points` | Optional task-local shared volume references, validated mount names and read-only flags; needed for generic in-task socket/scratch exchange but not tailored to any antivirus implementation. |
@@ -49,7 +51,7 @@ The existing `baseline/` root, resource addresses, output names, opt-in defaults
 Introduce an **opt-in** standalone Fargate task-definition module (new code in M2), separate from `aws_ecs_service`. A task definition does **not** create an ECS service, a second ECS cluster or a permanently running job.
 
 | Input/output | Proposed behavior |
-|---|---|
+| --- | --- |
 | `tasks` keyed map | Stable task-family key, digest-pinned containers, CPU/memory/architecture, optional scratch volumes, secrets, environment, logging, retries/timeouts declared by application orchestration and distinct task/execution-role ARNs. |
 | `cluster_arn` / private network | Consume C1's foundation cluster and private subnets; no task-side public IP. Allow only explicitly approved security-group attachments. |
 | Launch dependencies | Export task-definition ARN and revision, log group metadata, policy attachment readiness and network grant prerequisites before any scheduler or protected release starts jobs. |
@@ -73,8 +75,8 @@ Keep the C1 protected coordination lease across the **full application release**
 ## 4. C3 — RDS version, credentials and staging lifecycle
 
 | Contract | Proposed design | Owning implementation/qualification |
-|---|---|---|
-| RDS engine | Add optional `rds_engine_version` with default `17.10` to `modules/storage` and thread through baseline root. Explicit PostgreSQL 16 is allowed **only for new, separately approved instances**; existing 17.x is never silently downgraded. | M3: input validation, clean PG16 plan/Apply, unchanged default plan and rollback/upgrade policy. |
+| --- | --- | --- |
+| RDS engine | Add optional `rds_engine_version` with default `17.10` to `modules/database` (the current R2 implementation location) and thread through baseline/environment roots. Explicit PostgreSQL 16 is allowed **only for new, separately approved instances**; existing 17.x is never silently downgraded. | M3: meaningful compatibility checks, clean PG16 plan/Apply, unchanged default plan and rollback/upgrade policy; ordinary API constraints remain the provider's responsibility. |
 | Observed version | Foundation C1 contract gets `engine = postgres` and `engine_version` from `aws_db_instance.main.engine_version_actual` **at publication**. It is not a live status probe or continuously fresh patch-level check. | M3/C5: source verification and post-upgrade re-publication/drift qualification. |
 | DB credential roles | Foundation owns master secret and initial privileged provisioning. Application owns distinct DB-owner and runtime credentials, their app secrets and SQL grants, with no master secret ARN/value included in C1. | M3/M0-D: privileged first-install bootstrap and rotation/recovery ownership; prove migrations, `btree_gist`, tenant schema/role creation and grants work under a separate limited DB owner. Preserve write-only/ephemeral secrets, exact KMS decrypt and denied master access. |
 | Delegated run state (B-5) | One application-state `aws_rds_instance_state` controller may manage **only the approved, exclusively assigned synthetic staging DB** identified by C1's exact ARN/identifier/account/Region. Foundation retains `aws_db_instance`/configuration, backup, deletion and master secret. | M3/M0-D: exact ARN-based Start/Stop, dedicated-use approval, read-only status checks, deny Modify/Delete/other DBs. |
@@ -124,7 +126,7 @@ Do not use unconditional module-level dependencies that introduce ALB ↔ SG ↔
 ## 7. Consolidated design decisions and acceptance
 
 | Decision | Proposed default | Status |
-|---|---|---|
+| --- | --- | --- |
 | **C2-D1** | Additive sidecars and optional task storage to existing `ecs_service`; preserve single-container input defaults and service/task addresses. | **Design owner-approved (2026-11-07); not implemented** |
 | **C2-D2** | New optional standalone-task and Scheduler modules; per-job task/execution roles, bounded RunTask, disabled schedules. | **Design owner-approved (2026-11-07); not implemented** |
 | **C2-D3** | Explicit foundation ECR repository inventory independent of image/deployable-service registration; application owns digest publication only. | **Design owner-approved (2026-11-07); not implemented** |
@@ -151,6 +153,8 @@ Do not use unconditional module-level dependencies that introduce ALB ↔ SG ↔
 
 **Status:** Owner-approved architectural direction (2026-11-09).
 Implementation not authorized.
+
+**Subsequent implementation:** R2 extracted the database capability into `modules/database`. The [R3 closeout](./v1_15_0_R3_REFACTOR_CLOSEOUT.md) records its evidence, limitations and pending owner acceptance. The decision below is retained as history; M3 must not repeat the extraction or infer a new state migration from it.
 
 **Decision:**
 
@@ -208,7 +212,7 @@ decision and is not authorized by this decision.
 Local Codex examined the exact PR source and all 17 ReconoSense infrastructure contracts at reviewed head `2f70900` (base `127ecae`; ReconoSense `9ac7139`). Verdict: **ACCEPT WITH DEFERRED ITEMS**; **0 BLOCKING**, six **NONBLOCKING** findings. No Terraform execution, AWS mutation, credential/state inspection or live qualification was performed. Implementation remains prohibited by this documentation approval.
 
 | Finding | Required future handling | Responsibility |
-|---|---|---|
+| --- | --- | --- |
 | **N1 — SG-grant admission** | Attached SG rules form an **allow union**; a restrictive grant SG does not constrain a permissive app SG. Prove independently enforced admission for app ECS create/update, task launch, Scheduler and mutation authority; deny alternate SGs, widened rules and direct bypass. Reject this candidate if controls cannot be enforced. | M0-D design/security authorization; M3–M5 negative testing |
 | **N2 — Container startup/shutdown** | Make primary/sidecar start and stop timeouts optional; validate dependency conditions, naming, cycles and absent containers; test graceful shutdown and sustained readiness after `HEALTHY` startup. | C5 interface completeness; M1/M2 qualification |
 | **N3 — Pause/resume race** | Under the full lifecycle lease, prevent launches **before** draining; disable/reconcile schedules, retries, service scaling and app-specific in-flight jobs; stop the dedicated staging DB only after quiescence and resume it before migrations. Do not copy the existing standalone `staging.py` check-before-disable ordering. | M3/M4 lifecycle implementation; M5 failures |
@@ -217,6 +221,26 @@ Local Codex examined the exact PR source and all 17 ReconoSense infrastructure c
 | **N6 — Listener readiness** | Include HTTPS listener/forwarding-route association readiness as an ECS service creation dependency, in addition to IAM/SG and target-group ARN. Preserve stable resource keys and avoid module cycles. | C5 graph design; M1–M3 executable validation |
 
 **No new M0 checkpoint or separate remediation PR** is needed for these findings. Keep C5 as one graph/default-compatibility package and M0-D/E/F as one combined final architecture/security/economics/licensing closeout. All implementation and negative validation happen under the later explicitly authorized milestones. Dedicated-account migration remains future work.
+
+## 9. Current generic requirements and adopter boundary
+
+This reconciliation uses baseline `322c22d7` (PR #1009 merge) and the contracts in `ReconoSense/reconosense` at `7c0870f7991e89dd9a547257a7d043eee80e436e`, including `infra/terraform/BASELINE_INTEGRATION.md` and the v1.0.0 founder decisions. It treats the approved product capabilities as available for integration planning; it does not claim that revision is a completed or deployed v1.0.0 release.
+
+| Generic baseline work | Implementation boundary |
+| --- | --- |
+| Database version selection | Extend the existing database module; preserve `17.10` defaults, foundation ownership and master-secret isolation. Qualify application migrations/provisioning with a separate limited owner. |
+| Foundation publication and connectivity | Implement the C1 publication/eligibility contract and approved DB/endpoint connectivity. Complete ECS security-group attachment and listener/policy readiness interfaces without reverse state dependencies or broad foundation-rule mutation. |
+| Protected application deployment | State-bootstrap now provides dedicated backend buckets/keys. Account-bootstrap must provide scoped Plan/Apply identities, protected workflow trust and independently governed role boundaries; direct broker invocation and launch bypass remain prohibited. |
+| Reusable ingress controls | Add configurable health matcher and canonical ALB hosted-zone metadata. Provide reviewed route/method-scoped WAF handling for large uploads while preserving unrelated protections; application paths and payload policies remain inputs. |
+| Release and lifecycle controls | Accept approved task/release identities and application-supplied compatibility/recovery policy. Require the intended migration container's successful result, prove drain for incompatible changes, and coordinate interrupted releases through the authoritative application state. |
+
+Production RDS Multi-AZ already exists. Its configuration and live qualification remain required, but it is not a new module feature. Existing multi-container, secret-reference and job interfaces should be reused before adding another abstraction.
+
+**Adopter-owned:** Cognito/TOTP configuration, document/quarantine storage, application-audit archive and integrity processing, tenant SQL and database roles, task commands, retention/offboarding behavior, and Bedrock model/geography. Baseline modules must express the necessary infrastructure permissions and protections without embedding those application semantics. A protected archive needs an explicit resource/writer/key-administration contract; no archive mechanism or additional state is selected by this reconciliation.
+
+**Administrative tasks:** the reference operator CLI takes per-operation arguments and records operator identity. The broker accepts fixed approved execution configuration. Resolve the adapter contract alongside M2 deployment IAM; a fixed application-owned runner consuming authorized operation requests is a candidate. Preserve trusted attribution, scoped permissions and lifecycle fencing. This finding does not approve caller-supplied ECS overrides or unrestricted direct `RunTask`.
+
+**Qualification:** pin the adopter runtime contract before M5, including its actual jobs and credential classes rather than assuming the historical seven-task inventory is exhaustive. Keep hosting region, Bedrock source region and allowed inference destinations separate. Exercise synthetic development integration and the intended production controls, including database failover, MFA, tenant isolation, audit recovery and retention/restore safeguards. Application business acceptance and customer-release authorization remain separate from baseline hosting evidence. The [roadmap](./ROADMAP_v1_15_0.md) assigns these cases to M3–M5 without turning them into baseline defaults.
 
 ## References
 
@@ -229,6 +253,6 @@ Local Codex examined the exact PR source and all 17 ReconoSense infrastructure c
 - [Networking security rules](../modules/networking/security_policy/main.tf)
 - [Application ALB module](../modules/application_load_balancer/main.tf)
 - [WAF implementation](../modules/application_load_balancer/waf.tf)
-- [RDS foundation instance](../modules/storage/main.tf)
+- [RDS foundation instance](../modules/database/main.tf)
 
 **No Terraform code, AWS policies, state files, contracts, deployment workflows or infrastructure were modified by this design PR.**
