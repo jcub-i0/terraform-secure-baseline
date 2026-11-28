@@ -953,7 +953,7 @@ Protect sensitive infrastructure data, operational logs, secrets, and backups.
 
 ## Implementation
 
-The [security module](../../modules/security/main.tf) supplies purpose-specific
+The [security module](../../modules/security/kms.tf) supplies purpose-specific
 KMS keys for logs/notifications, EBS, Lambda environment variables, Secrets
 Manager, ECR, and the backup vault. Terraform state has a separately owned key.
 RDS storage encryption is enabled without an explicit database `kms_key_id`;
