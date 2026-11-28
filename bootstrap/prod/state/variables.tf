@@ -24,3 +24,24 @@ variable "bucket_admin_principals" {
     error_message = "bucket_admin_principals must contain at least one IAM principal ARN."
   }
 }
+
+variable "application_state_backends" {
+  description = "Application backends administered by this bootstrap stack; empty creates none."
+  type = map(object({
+    bucket_name = string
+    access = object({
+      plan_role_arn           = string
+      apply_role_arn          = string
+      administrator_role_arns = set(string)
+    })
+  }))
+  default  = {}
+  nullable = false
+
+  validation {
+    condition = length(distinct([
+      for backend in values(var.application_state_backends) : backend.bucket_name
+    ])) == length(var.application_state_backends)
+    error_message = "Each application must have its own backend bucket."
+  }
+}

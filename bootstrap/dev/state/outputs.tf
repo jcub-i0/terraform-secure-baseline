@@ -17,3 +17,13 @@ output "tf_state_bucket_cmk_arn" {
   description = "ARN of the KMS CMK used to encrypt the Terraform State bucket"
   value       = module.state.tf_state_bucket_cmk_arn
 }
+
+output "application_state_backends" {
+  description = "Application backend settings and exact resources for protected deployment IAM."
+  value = {
+    for application, backend in module.application_state : application => {
+      backend       = backend.backend
+      iam_resources = backend.iam_resources
+    }
+  }
+}
