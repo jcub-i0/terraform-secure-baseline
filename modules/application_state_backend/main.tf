@@ -57,7 +57,7 @@ resource "aws_s3_bucket_public_access_block" "state" {
 
 resource "aws_s3_bucket_ownership_controls" "state" {
   bucket = aws_s3_bucket.state.id
-  
+
   rule {
     object_ownership = "BucketOwnerEnforced"
   }
