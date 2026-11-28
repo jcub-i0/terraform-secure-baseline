@@ -449,7 +449,7 @@ The [logs bucket](../../modules/storage/main.tf) uses encryption and versioning
 but has Object Lock disabled. Normal production sets `force_destroy=false`;
 approved retirement re-enables force deletion, so external log preservation
 and usable-key retention remain necessary. The
-[workload keys](../../modules/security/main.tf) have no effective production
+[workload keys](../../modules/security/kms.tf) have no effective production
 destruction guards. Define independent preservation and usable-key retention,
 access controls, collection timestamps, and custody procedures. Review warnings
 and skipped branches; retain earlier tests under their original provenance rather
@@ -1247,7 +1247,7 @@ Security Hub / GuardDuty findings
 | Themes | Repository authority | Acceptance evidence and unresolved responsibility |
 |---|---|---|
 | Access and privileged identity | [OIDC](../../modules/github_oidc/main.tf), [Identity Center](../../modules/identity_center/main.tf) | Effective grants, assignment principals/membership, approvals, authentication and rights lifecycle; verify deployed Operator publisher authorization and resolve broad-grant decisions |
-| Evidence and records | [Logging](../../modules/logging/main.tf), [storage](../../modules/storage/main.tf), [keys](../../modules/security/main.tf) | Actual delivery, performed integrity verification, retention/custody, independent preservation and usable keys |
+| Evidence and records | [Logging](../../modules/logging/main.tf), [storage](../../modules/storage/main.tf), [keys](../../modules/security/kms.tf) | Actual delivery, performed integrity verification, retention/custody, independent preservation and usable keys |
 | Incident handling | [Automation](../../modules/automation/main.tf), [response code](../../modules/automation/lambda/) | Authentic event path, approved caller/target, pre-state, partial failures, containment/recovery and human decisions |
 | Configuration and monitoring | [Config](../../modules/security/config_baseline/main.tf), [monitoring](../../modules/monitoring/main.tf) | Evaluated resources/freshness, signal gaps, receipt and triage, remediation impact and exceptions |
 | Networks and data movement | [Baseline](../../baseline/main.tf), [security policy](../../modules/networking/security_policy/main.tf) | Selected routing, intended ingress/egress, API grants, transport and application/tenant boundaries |
