@@ -54,6 +54,10 @@ jobs:
             modules/ecs_job_broker \
             modules/ecs_workload_iam \
             modules/iam \
+            modules/application_state_backend \
+            bootstrap/dev/state \
+            bootstrap/staging/state \
+            bootstrap/prod/state \
             baseline \
             environments/dev \
             environments/staging \
