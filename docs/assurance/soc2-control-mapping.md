@@ -1012,7 +1012,7 @@ Examples include:
 
 Encryption and key-change visibility support data protection, but production
 selection does not add workload-key destruction guards. The seven keys in
-[security](../../modules/security/main.tf) have rotation and deletion windows;
+[security](../../modules/security/kms.tf) have rotation and deletion windows;
 five explicitly allow Terraform destruction; the Lambda and RDS Insights keys
 have no guard.
 Scheduling deletion makes a key unavailable for cryptographic operations while
